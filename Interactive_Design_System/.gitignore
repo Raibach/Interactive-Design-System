@@ -1,0 +1,77 @@
+# Runtime infrastructure - NOT for repo
+dsm-console/
+
+# Python virtual environment
+.venv/
+.eggs/
+*.egg-info/
+*.egg/
+__pycache__/
+src/**/__pycache__/
+*/__pycache__/
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Temporary files
+.DS_Store
+*.tmp
+tmp/
+coverage/
+
+# Environment / credentials
+.env
+nvidia_credentials.env
+*.env
+zilliz-cloud-Free-01-username-password.txt
+
+# Milvus local database
+milvus.db/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Frontend build artifacts
+.vite/
+dist/
+
+# Database dumps (keep only manual exports)
+database-backup-*.sql
+db-backups/
+
+# Uploads (runtime data)
+uploads/
+
+# Config files with secrets
+config/milvus_export.json
+
+# External projects
+raibach/
+# Local-only zone — never publish (user's private storage, NOT a GitHub backup)
+_local/
+dsmanager copy/
+*.dmg
+# Dev boot script — stays on disk only, curated off the public repo
+dsmanager/RESTART-LOCAL.sh
+
+# Local-only deploy script (postmortem notes inside) — never commit
+dsmanager/DEPLOY-NORTHFLANK.sh
+
+# Installed apps — never commit
+Cursor.app/
+ZCode.app/
+*.app/
