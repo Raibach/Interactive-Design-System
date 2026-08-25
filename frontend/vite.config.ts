@@ -30,8 +30,20 @@ export default defineConfig({
     // "hidden" means sourceMappingURL comments are omitted from the bundle so
     // end users never see them, but .map files are still emitted for upload.
     sourcemap: "hidden",
-    // Increase chunk-size warning limit to avoid noise from large vendor bundles
     chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        // Vendor-only grouping: no behavioral change, better long-term caching
+        // per library. Targeted families (mui/three/tiptap/recharts) were
+        // removed from package.json on 2026-08-25 after source audit showed
+        // zero imports; add their groups back only if they ever return.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("framer-motion") || /[\\/]motion[\\/]/.test(id)) return "vendor-motion";
+          return "vendor";
+        },
+      },
+    },
   },
   server: {
     host: true,
