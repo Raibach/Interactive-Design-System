@@ -33,13 +33,12 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // Vendor-only grouping: no behavioral change, better long-term caching
-        // per library. Targeted families (mui/three/tiptap/recharts) were
-        // removed from package.json on 2026-08-25 after source audit showed
-        // zero imports; add their groups back only if they ever return.
+        // Vendor-only grouping: no behavioral change, better long-term caching.
+        // Targeted families (mui/three/tiptap/recharts, then lexical/framer-motion/
+        // serverless) were removed from package.json on 2026-08-25 after source
+        // audits showed zero imports; add groups back only if they return.
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
-          if (id.includes("framer-motion") || /[\\/]motion[\\/]/.test(id)) return "vendor-motion";
           return "vendor";
         },
       },
