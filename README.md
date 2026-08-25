@@ -7,6 +7,8 @@ Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
 > ### 📘 Read this first: [`SPECIFICATIONS.md`](SPECIFICATIONS.md)
 > The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+>
+> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
 
 ---
 
@@ -158,6 +160,7 @@ Docker on **Northflank** (`prompt-composer-console`, us-central). Production dep
 ## Documentation
 
 - [`SPECIFICATIONS.md`](SPECIFICATIONS.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
+- [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
 - [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
 - [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
 - [`A2UI_CARD_CONTRACT.md`](A2UI_CARD_CONTRACT.md) — Card component data contract
