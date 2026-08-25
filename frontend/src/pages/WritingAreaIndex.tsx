@@ -86,7 +86,6 @@ export default function Index({
   // ── Request deduplication: abort previous request if new one comes in ──
   const consoleAssemblyControllerRef = useRef<AbortController | null>(null);
   const isConsoleAssemblyInFlightRef = useRef(false);
-  const spinnerStartRef = useRef<number>(0);
 
   // ── Session loading state (must be declared here, BEFORE any early returns) ──
   const [sessionLoadingState, setSessionLoadingState] = useState<{
@@ -97,75 +96,23 @@ export default function Index({
   }>({ isLoading: false, progress: 0, error: null });
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // INTERSTITIAL LOADING — AI-NATIVE BEST PRACTICE
+  // AI ASSEMBLY LOADING — honest state, no theater.
+  // One real spinner bound to the live request. One true sentence.
+  // No scripted message rotation, no artificial minimum display time, no
+  // withholding completed results. (The previous interstitial faked a
+  // 10-message sequence on a 2.2s timer and held finished responses until a
+  // 10s "floor" elapsed — removed 2026-08-25 per the TRUE-vs-FAKE doctrine.)
   // ═══════════════════════════════════════════════════════════════════════════════
-  // The 10-second loading floor is NOT a bug — it's a feature.
-  // During that time, the interstitial communicates with the user:
-  //   - What the AI is doing right now
-  //   - What A2UI is (educational)
-  //   - What happens next
-  // This is the AI-native pattern: loading time IS communication time.
-  // Games do this. Slack does this. Now we do this.
-  // ═══════════════════════════════════════════════════════════════════════════════
-  const INTERSTITIAL_MIN_MS = 10_000; // 10-second floor — user sees the full message sequence
-  const INTERSTITIAL_TICK_MS = 2_200; // Time between message rotations
-
-  // Interstitial messages: rotate every ~2.2s during the 10s load.
-  // Each message is a step in the communication layer.
-  // The user learns what's happening, what A2UI is, and what to expect.
-  const INTERSTITIAL_MESSAGES = [
-    "Connecting to Grace...",
-    "Reading your Figma design spec...",
-    "Grace is analyzing the layout structure...",
-    "Matching design tokens to components...",
-    "Building the A2UI surface — slots first, then content...",
-    "In A2UI, the React Shell is always visible. AI fills the slots.",
-    "Grace is choosing which prompt blocks go where...",
-    "Assembling your console cards...",
-    "Almost there — Grace is doing final quality checks...",
-    "Surface ready. Welcome to A2UI.",
-  ];
+  const AI_STANDBY_MESSAGE = "Standby — AI is building this interface…";
 
   // ── AI Assembly state ──
   // The header tabs are AI COMMANDS, not webpage links.
   // When user clicks Console, AI assembles the console surface.
   // If AI fails, the surface shows the failure — NO FAKE RENDERING.
   const [isAIAssembling, setIsAIAssembling] = useState(false);
-  const [aiAssemblyMessage, setAiAssemblyMessage] = useState("Assembling your console...");
+  const [aiAssemblyMessage, setAiAssemblyMessage] = useState(AI_STANDBY_MESSAGE);
   const [aiAssemblyFailed, setAiAssemblyFailed] = useState(false); // STRICT: blocks rendering when true
   const [assembledConsoleCards, setAssembledConsoleCards] = useState<any[] | null>(null); // null = not loaded, [] would be fallback
-
-  // ── Interstitial rotation state ──
-  // Tracks which message in the INTERSTITIAL_MESSAGES sequence is currently shown.
-  // Rotates forward every INTERSTITIAL_TICK_MS while isAIAssembling is true.
-  const [interstitialIndex, setInterstitialIndex] = useState(0);
-
-  // ── Pending result from fast AI response ──
-  // If the AI responds in <10s, we hold the result here and only apply it
-  // after the interstitial floor is reached. The user sees the full message
-  // sequence, and the surface appears at the end of the sequence — not before.
-  const pendingResultRef = useRef<{
-    resolve: (value: void) => void;
-    timer: ReturnType<typeof setTimeout>;
-  } | null>(null);
-
-  // ── Interstitial rotation effect ──
-  // While isAIAssembling is true, rotate through the message sequence
-  // every INTERSTITIAL_TICK_MS. When assembly stops, reset to 0.
-  useEffect(() => {
-    if (!isAIAssembling) {
-      setInterstitialIndex(0);
-      return;
-    }
-    const interval = setInterval(() => {
-      setInterstitialIndex(prev => {
-        const next = prev + 1;
-        // Don't go past the last message — hold on it until assembly finishes
-        return next >= INTERSTITIAL_MESSAGES.length ? prev : next;
-      });
-    }, INTERSTITIAL_TICK_MS);
-    return () => clearInterval(interval);
-  }, [isAIAssembling]);
 
   const [_rightColumnView, _setRightColumnView] = useState<"chat" | "trace">("chat"); // Chat = TeacherEditorChat, Trace = SCE panel
   const [_isPromptPortalOpen, _setIsPromptPortalOpen] = useState<boolean>(false); // Show prompt portal in first column
@@ -1114,32 +1061,22 @@ export default function Index({
 
     console.log(`🤖 [A2UI] Assembling surface with intent: ${intent}`, context ? `context: ${JSON.stringify(context)}` : '');
     isConsoleAssemblyInFlightRef.current = true;
-    spinnerStartRef.current = Date.now();
     setIsAIAssembling(true);
     setAiAssemblyFailed(false);
-
-    // Set the initial interstitial message (index 0)
-    // The rotation effect will advance through the sequence automatically.
-    setInterstitialIndex(0);
-    if (context?.has_unsaved_changes) {
-      setAiAssemblyMessage("Checking your unsaved work before connecting to Grace...");
-    } else if (intent === 'render-console') {
-      setAiAssemblyMessage(INTERSTITIAL_MESSAGES[0]);
-    } else if (intent === 'render-composer') {
-      setAiAssemblyMessage(INTERSTITIAL_MESSAGES[0]);
-    } else if (intent.startsWith('render-session:')) {
-      setAiAssemblyMessage(INTERSTITIAL_MESSAGES[0]);
-    }
+    setAiAssemblyMessage(AI_STANDBY_MESSAGE);
 
     // Create new abort controller for this request
     const controller = new AbortController();
     consoleAssemblyControllerRef.current = controller;
 
-    // Client-side timeout: 10s hard cap (user requirement — no indefinite hangs)
+    // Client-side timeout: 30s hard cap. Measured cold DeepSeek calls complete
+    // server-side at ~13.5s (PERF TRACE render-console total=13516ms); the old
+    // 10s cap aborted requests the backend went on to finish successfully,
+    // which made first-try assembly fail while warm retries (~3s) succeeded.
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      timeoutId = setTimeout(() => controller.abort(), 10000);
+      timeoutId = setTimeout(() => controller.abort(), 30000);
 
       // ═══════════════════════════════════════════════════════════════════
       // SINGLE UNIFIED ENDPOINT - A2UI v0.9 COMPLIANT
@@ -1291,28 +1228,6 @@ export default function Index({
 
       setAiAssemblyFailed(false);
 
-      // ═══════════════════════════════════════════════════════════════════
-      // INTERSTITIAL FLOOR: Wait until the 10s minimum is reached.
-      // The user sees the full message sequence. The surface appears
-      // at the END of the interstitial — not before.
-      // This is the AI-native loading pattern: load time = communication time.
-      // ═══════════════════════════════════════════════════════════════════
-      const elapsed = Date.now() - spinnerStartRef.current;
-      const remaining = INTERSTITIAL_MIN_MS - elapsed;
-      if (remaining > 0) {
-        console.log(`🤖 [A2UI] AI responded in ${elapsed}ms — holding ${remaining}ms for interstitial floor`);
-        await new Promise<void>(resolve => {
-          pendingResultRef.current = {
-            resolve,
-            timer: setTimeout(() => {
-              pendingResultRef.current = null;
-              setIsAIAssembling(false); // Clear assembling state when floor is reached
-              resolve();
-            }, remaining),
-          };
-        });
-      }
-
     } catch (error) {
       clearTimeout(timeoutId);
       setIsAIAssembling(false);
@@ -1324,18 +1239,18 @@ export default function Index({
       );
       if (isAbort) {
         if (consoleAssemblyControllerRef.current === controller) {
-          // This request itself timed out (10s hard cap)
+          // This request itself timed out (30s hard cap)
           console.error(
             `[A2UI] ASSEMBLY TIMED OUT\n` +
             `  intent: ${intent}\n` +
-            `  timeout: 10000ms\n` +
+            `  timeout: 30000ms\n` +
             `  error.name: ${error instanceof Error ? error.name : 'N/A'}\n` +
             `  error.message: ${errMsg}\n` +
             `  timestamp: ${new Date().toISOString()}\n` +
-            `  CAUSE: Backend did not respond within 10s. Either Z.ai is slow, the Figma spec is empty (causing LLM confusion), or the backend is down.\n` +
-            `  FIX: Check backend logs for the request matching this timestamp. Look for "A2UI FAILURE" or "Figma node" messages.`
+            `  CAUSE: Backend did not respond within 30s. Typical causes: cold DeepSeek call slower than usual, backend down, or network failure.\n` +
+            `  FIX: Check backend logs for the request matching this timestamp. Look for "A2UI FAILURE" or PERF TRACE lines.`
           );
-          setAiAssemblyMessage('Assembly timed out (10s). The AI may be slow or the backend may be unreachable. Check the server logs for details.');
+          setAiAssemblyMessage('Assembly timed out (30s). The AI may be slow or the backend may be unreachable. Check the server logs for details.');
           setAiAssemblyFailed(true);
           setCurrentPromptSession(null);
           setAssembledConsoleCards(null);
@@ -1369,11 +1284,7 @@ export default function Index({
     } finally {
       isConsoleAssemblyInFlightRef.current = false;
       consoleAssemblyControllerRef.current = null;
-      // Only clear the assembling state if there's no pending interstitial floor.
-      // If the floor timer is still running, it will clear the state when it fires.
-      if (!pendingResultRef.current) {
-        setIsAIAssembling(false);
-      }
+      setIsAIAssembling(false);
     }
   }, [setHeaderTab]);
 
@@ -2101,23 +2012,13 @@ export default function Index({
                 is-ai-assembling={isAIAssembling ? '' : undefined}
                 header-tab={headerTab}
               >
-                {/* slot="spinner" — INTERSTITIAL LOADING: AI-NATIVE BEST PRACTICE
-                     The 10s loading floor is a feature, not a bug.
-                     During that time, this panel communicates with the user:
-                     what the AI is doing, what A2UI is, what happens next.
-                     The message rotates every ~2.2s through INTERSTITIAL_MESSAGES.
-                     A progress bar shows elapsed time toward the 10s floor. */}
+                {/* slot="spinner" — honest loading state: one real spinner bound to
+                     the live request via isAIAssembling, one true sentence.
+                     No scripted message rotation, no fake progress bar,
+                     no artificial minimum display time. */}
                 <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: "#E5E1DD" }}>
                   <div className="w-8 h-8 border-4 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-[#507274] text-sm font-medium font-['Inter'] transition-all duration-300">{INTERSTITIAL_MESSAGES[interstitialIndex] || aiAssemblyMessage}</p>
-                  {/* Progress bar: fills over 10s to show the interstitial floor */}
-                  <div className="w-48 h-1 bg-[#507274]/20 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#507274] rounded-full transition-all [transition-duration:2200ms] ease-linear"
-                      style={{ width: `${Math.min(100, ((interstitialIndex + 1) / INTERSTITIAL_MESSAGES.length) * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-[#507274]/60 text-xs font-['Inter']">{interstitialIndex + 1} / {INTERSTITIAL_MESSAGES.length}</p>
+                  <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
                 <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto' }}>
