@@ -5,6 +5,9 @@
 **Raibach Interactive Design Studio** · John Holt  
 Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
+> ### 📘 Read this first: [`SPECIFICATIONS.md`](SPECIFICATIONS.md)
+> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+
 ---
 
 ## Architecture: React Shell + AI Surface
@@ -43,8 +46,8 @@ A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interf
 │  Envelope: createSurface → updateComponents → updateDataModel    │
 └──────────────────────────────────────────────────────────────────┘
          │                    │                     │
-    PostgreSQL          DeepSeek V4          Zilliz Cloud
-    (42 tables)         (AI assembly)       (vector memory)
+    PostgreSQL       LLM providers        Zilliz Cloud
+    (42 tables)      (AI assembly)       (vector memory)
 ```
 
 ---
@@ -65,14 +68,17 @@ A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interf
 
 ## Component Catalog
 
-24 trusted components — 6 A2UI Basic + 18 project-specific — typed with `ChildList` / `DynamicString` per validator rules.
+28 trusted components — 12 A2UI Basic Catalog primitives + 16 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. The live count is asserted at backend startup (`✅ A2UI Catalog loaded — N trusted components`) and specified in [`SPECIFICATIONS.md`](SPECIFICATIONS.md) §4.3.
 
 ```
-A2UI Basic:     Column · Text · Image · Button · ActionGroup · DecisionDialog
-Surface:        ConsoleCardGrid · SectionEditor · CompiledOutput · ChatPanel
-Controls:       ControlBar · AddSectionButton · StatusReadout · TokenCostReadout
-Cards:          AgentCard · FlipCard · FeaturedCard · ApprovalQueueItem
-Layout:         WorkspaceLayout · ResizableSplitter · AiSurfaceSandbox · SidebarNavigation
+A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
+                SectionEditor · DecisionDialog · ConsoleCardGrid
+                CompiledOutput · ChatPanel
+Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer
+                chat-panel · version-trace · token-cost-readout · status-readout
+                output-panel · search-bar · filter-pill · footer-bar
+                chat-navigation-bar · agent-card · featured-card
+                prompt-section · add-section-button
 ```
 
 ---
@@ -81,8 +87,8 @@ Layout:         WorkspaceLayout · ResizableSplitter · AiSurfaceSandbox · Side
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · pnpm · Tailwind · TypeScript |
-| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · DeepSeek V4 |
+| **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · npm · Tailwind · TypeScript |
+| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM providers (Z.ai GLM primary, DeepSeek) |
 | **Components** | Lit Web Components (Shadow DOM) · Figma API spec-driven |
 | **Deploy** | Docker · Northflank (us-central) · Cloudflare Tunnel |
 
@@ -115,13 +121,11 @@ frontend/
 │   ├── App.tsx              # Root app with routes
 │   ├── components/
 │   │   ├── A2UI/            # A2UI surface container
-│   │   ├── lit/             # Lit web components (agent-card, control-bar, workspace-layout, …)
-│   │   └── _old/            # Archived components (excluded from build)
+│   │   └── lit/             # Lit web components (agent-card, workspace-layout, …)
 │   ├── pages/               # WritingAreaIndex (main surface)
 │   ├── hooks/               # React hooks
 │   └── shared/              # Surface contract, tag registry
-├── scripts/                  # Manifest generator, Figma sync
-└── storybook-static/         # Component storybook
+└── scripts/                  # Manifest generator, Figma sync
 ```
 
 ---
@@ -130,7 +134,7 @@ frontend/
 
 ```bash
 # Frontend build (required for local dev)
-cd frontend && pnpm install && pnpm build
+cd frontend && npm install && npm run build
 
 # Start backend + serve UI
 bash RESTART-LOCAL.sh
@@ -147,13 +151,13 @@ open http://localhost:5001
 
 ## Deployment
 
-Docker on **Northflank** (`prompt-composer-console`, us-central). Production deploys via git push to `main` (CI/CD) or the local `DEPLOY-NORTHFLANK.sh` runbook.
+Docker on **Northflank** (`prompt-composer-console`, us-central). Production deploys via git push to `main` (CI/CD) or the local `DEPLOY-NORTHFLANK.sh` runbook. The image is a **multi-stage build**: the frontend compiles inside a Node stage (including manifest generation), so no build artifacts live in the repository.
 
 ---
 
 ## Documentation
 
-- [`SPECIFICATIONS.md`](SPECIFICATIONS.md) — A2UI Protocol v0.9.1 (verbatim from [a2ui.org](https://a2ui.org/))
+- [`SPECIFICATIONS.md`](SPECIFICATIONS.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
 - [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
 - [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
 - [`A2UI_CARD_CONTRACT.md`](A2UI_CARD_CONTRACT.md) — Card component data contract

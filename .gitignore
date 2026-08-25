@@ -1,0 +1,30 @@
+# ── OS noise ──────────────────────────────────────────────
+.DS_Store
+
+# ── Secrets & local credentials ───────────────────────────
+# Never commit key material. Keys/ holds local credential docs.
+Keys/
+.env
+.env.*
+# Exception: client-side build env containing ONLY the public Sentry DSN
+# (loaded by Vite at build time); safe to track, contains no secrets.
+!frontend/.env.production
+
+# ── Node / frontend build output ──────────────────────────
+node_modules/
+frontend/dist/
+frontend/storybook-static/
+coverage/
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ── Runtime logs & traces ─────────────────────────────────
+logs/
+*.log
+
+# ── Agent session tooling ─────────────────────────────────
+.zcode/
