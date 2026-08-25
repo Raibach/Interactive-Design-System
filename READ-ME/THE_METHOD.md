@@ -65,6 +65,15 @@ An AI model regresses toward the median of everything it has ever seen — for c
 3. Audit outputs against behavior, never against the session's self-report
 4. Keep a standing TRUE-vs-FAKE ledger so falsified records are discoverable
 
+**Why structure beats vigilance.** Vigilance expires when the session ends; structure persists. The genuine countermeasure is architectural, not attitudinal:
+
+- A **trusted component catalog with fail-loud 503s** — out-of-allowlist generations are rejected by the server, not argued with by a reviewer.
+- A **zero-trust validation boundary** — invalid UI physically cannot reach the client, no matter how confident the session that produced it.
+- An **envelope protocol** — the model decides content; chrome is structurally untouchable.
+- A **live-verification culture** — this document — catches whatever slips past the walls.
+
+Each mechanism assumes the next session will misbehave — including mine. That assumption is precisely what makes a codebase safe to hand to machines.
+
 ---
 
 ## 4 · The organizational claim
@@ -75,7 +84,17 @@ Reasoning: ownership follows verifiability. The people who can observe the runni
 
 ---
 
-## 5 · Starting Monday (team checklist)
+## 5 · Provenance: progressive adoption — why this method exists
+
+This doctrine was forged under fire, not in a blog post. During an enterprise AI-lifecycle engagement (Southern California Edison, via Logic2020, 2025–2026) — 15,000+ employees with vastly different AI literacy, inside a regulated utility where safety and auditability are paramount — stakeholder discovery found adoption stalled by three things: no standardization, redundant expensive experimentation across departments, and missing compliance audit trails.
+
+The design answer was **progressive adoption**: one adaptive flow that meets novices and practitioners where they are. Governance and prompt-audit machinery is learned incrementally — often invisibly, as users engage. Adoption anxiety falls, enterprise performance rises, and compute spend falls naturally with task efficiency. The economics are behavioral, and they are exact: **fun saves money; frustration doubles compute.** AI-native interfaces must therefore train progressively, anticipating where complex tasks create massive overhead — not merely perform the job.
+
+This repository — an Interactive Design System (IDS) — is that thesis made executable: a deterministic shell so no user is ever stranded; a role-filtered trusted catalog so capability scales with responsibility; governance metadata riding inside every prompt package, so the audit trail exists by construction rather than by paperwork.
+
+---
+
+## 6 · Starting Monday (team checklist)
 
 1. Boot the system. Watch the startup logs until you can recite them.
 2. Pick one claim in your README. Find its receipt or delete the claim.
