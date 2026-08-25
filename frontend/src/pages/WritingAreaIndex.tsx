@@ -2113,7 +2113,7 @@ export default function Index({
                   {/* Progress bar: fills over 10s to show the interstitial floor */}
                   <div className="w-48 h-1 bg-[#507274]/20 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#507274] rounded-full transition-all duration-[2200ms] ease-linear"
+                      className="h-full bg-[#507274] rounded-full transition-all [transition-duration:2200ms] ease-linear"
                       style={{ width: `${Math.min(100, ((interstitialIndex + 1) / INTERSTITIAL_MESSAGES.length) * 100)}%` }}
                     />
                   </div>
