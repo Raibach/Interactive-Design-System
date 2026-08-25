@@ -10,8 +10,8 @@ function MarkdownRenderer({ text, className = '' }: MarkdownRendererProps) {
 
   // Split text into lines for processing
   const lines = text.split('\n');
-  const elements: JSX.Element[] = [];
-  let currentList: JSX.Element[] = [];
+  const elements: React.JSX.Element[] = [];
+  let currentList: React.JSX.Element[] = [];
   let listLevel = 0;
   let listType: 'ul' | 'ol' | null = null;
   let key = 0;
@@ -49,8 +49,8 @@ function MarkdownRenderer({ text, className = '' }: MarkdownRendererProps) {
     }
   };
 
-  const parseInlineMarkdown = (line: string): (string | JSX.Element)[] => {
-    const parts: (string | JSX.Element)[] = [];
+  const parseInlineMarkdown = (line: string): (string | React.JSX.Element)[] => {
+    const parts: (string | React.JSX.Element)[] = [];
     const remaining = line;
     let lastIndex = 0;
     let partKey = 0;
@@ -172,7 +172,7 @@ function MarkdownRenderer({ text, className = '' }: MarkdownRendererProps) {
       flushList();
       const level = trimmed.match(/^#+/)?.[0].length || 1;
       const content = trimmed.replace(/^#+\s/, '');
-      const Tag = `h${Math.min(level, 6)}` as keyof JSX.IntrinsicElements;
+      const Tag = `h${Math.min(level, 6)}` as keyof React.JSX.IntrinsicElements;
       const sizeClass = level === 1 ? 'text-2xl' : level === 2 ? 'text-xl' : level === 3 ? 'text-lg' : 'text-base';
       elements.push(
         <Tag key={`header-${key++}`} className={`${sizeClass} font-bold mt-4 mb-2`}>
