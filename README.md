@@ -24,7 +24,7 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 ---
 
 ## Overview
-Rather than surrendering system control to centralized corporate cloud strategies that capture internal workflows, Raibach Interactive Design System (RIDS) keeps the framework model agnostic. Because your React wrapper shell is a deterministic, local guardrail, an enterprise can swap out a public API for a lightweight, independent model running completely on-premise or within their own private environment.
+Rather than surrendering system control to centralized corporate cloud strategies that capture internal workflows, Raibach Interactive Design System (RIDS) keeps the framework model agnostic. Because the React wrapper shell is a deterministic, local guardrail, an enterprise can swap out a public API for a lightweight, independent model running completely on-premise or within their own private environment.
 
 By keeping the framework model-agnostic, you hand the enterprise total custody back. They don't have to surrender their entire structural design system or machine telemetry to a third-party cloud pipe just to use agentic automation.
 
