@@ -23,8 +23,6 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 
 ---
 
-## Overview
-
 ## Systems Overview: MCP Pipelines and Independent Model Governance
 
 **The External Capture (The MCP Pipelines)**
