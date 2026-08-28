@@ -24,7 +24,13 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 ---
 
 ## Overview
- Sovereign Strategy (Deterministic AI IDS / Open-Source Architecture): Your framework is completely decoupled from the model type. Because your React wrapper shell is a deterministic, local guardrail, an enterprise can swap out a public API for a lightweight, independent model running completely on-premise or within their own private environment.By keeping the framework model-agnostic, you hand the enterprise total custody back. They don't have to surrender their entire structural design system or machine telemetry to a third-party cloud pipe just to use agentic automation.When you present your architecture to an enterprise client, this is the ultimate structural compromise: They can maintain their massive cloud networks, their proprietary MCPs, and their centralized infrastructure, but it must terminate at your zero-trust gateway. Your system acts as the sovereign firewall that hosts, translates, and validates their designs and components locally before any external cloud service can touch them.This directly solves the ultimate corporate fear: it lets them leverage AI capabilities without giving up the keys to their operational kingdom.
+Rather than surrendering system control to centralized corporate cloud strategies that capture internal workflows, Your Sovereign Strategy (DIDS / Open-Source Architecture) keeps your framework completely decoupled from the model type. Because your React wrapper shell is a deterministic, local guardrail, an enterprise can swap out a public API for a lightweight, independent model running completely on-premise or within their own private environment.
+
+By keeping the framework model-agnostic, you hand the enterprise total custody back. They don't have to surrender their entire structural design system or machine telemetry to a third-party cloud pipe just to use agentic automation.
+
+When you present your architecture to an enterprise client, this is the ultimate structural compromise: They can maintain their massive cloud networks, their proprietary MCPs, and their centralized infrastructure, but it must terminate at your zero-trust gateway. Your system acts as the sovereign firewall that hosts, translates, and validates their designs and components locally before any external cloud service can touch them.
+
+This directly solves the ultimate corporate fear: it lets them leverage AI capabilities without giving up the keys to their operational kingdom.
 
 A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
 
