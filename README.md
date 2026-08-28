@@ -24,9 +24,16 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 ---
 
 ## Overview
-Rather than surrendering system control to centralized corporate cloud strategies that capture internal workflows, Raibach Interactive Design System (RIDS) keeps the framework model agnostic. Because the React wrapper shell is a deterministic, local guardrail, an enterprise can swap out a public API for a lightweight, independent model running completely on-premise or within their own private environment.
 
-By keeping the framework model-agnostic, you hand the enterprise total custody back. They don't have to surrender their entire structural design system or machine telemetry to a third-party cloud pipe just to use agentic automation.
+## Systems Overview: MCP Pipelines and Independent Model Governance
+
+**The External Capture (The MCP Pipelines)**
+Massive cloud organizations are rushing to deploy external MCP servers designed to hook into corporate production lines. Their goal is to ingest, map, and capture internal corporate workflows, routing that data directly into their centralized cloud ecosystems.
+
+**The Sovereign Shield (Model-Agnostic RIDS)**
+By building an internal, model-agnostic system that utilizes open standards like A2UI and MCP, the architecture provides the enterprise with a localized control plane. Because the React shell functions as a deterministic gatekeeper, the enterprise can route data through internal pipelines and swap out models seamlessly without surrendering custody of its production logic or component trees to an external provider.
+
+Even though it is currently an open reference implementation without a massive database of production content to assemble yet, the governance architecture and protocol purity are 100% present. The foundational machine is complete; populating the production payloads functions strictly as data ingestion. When enterprise engineering directors evaluate the repository, they will recognize the immediate utility of this exact zero-trust gateway to prevent external cloud services from capturing internal infrastructure. The defensive framework is built before the structural pivot occurs.
 
 A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
 
