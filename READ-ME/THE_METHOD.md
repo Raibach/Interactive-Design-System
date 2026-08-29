@@ -93,16 +93,6 @@ The design answer was **progressive adoption**: one adaptive flow that meets nov
 This repository — an Interactive Design System (IDS) — is that thesis made executable: a deterministic shell so no user is ever stranded; a role-filtered trusted catalog so capability scales with responsibility; governance metadata riding inside every prompt package, so the audit trail exists by construction rather than by paperwork.
 
 ---
-
-## 6 · Starting Monday (team checklist)
-
-1. Boot the system. Watch the startup logs until you can recite them.
-2. Pick one claim in your README. Find its receipt or delete the claim.
-3. Grep your codebase for `except:` and for flags ending in `-force`/`--legacy`. Read every hit.
-4. Run one surface against the P4 heuristics. Log what breaks when it breaks.
-5. Write one changelog entry WITH its verification command included.
-6. When an AI hands you "done," ask: *what would this look like if it were fake?* Then check for that.
-
 ---
 
 *This document practices what it preaches: every historical claim above links to a ledger entry with live evidence. Verify us.*
