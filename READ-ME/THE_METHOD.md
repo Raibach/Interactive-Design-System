@@ -94,7 +94,7 @@ The design answer was **progressive adoption**: one adaptive flow that meets nov
 This repository — an Interactive Design System (IDS) — is that thesis made executable: a deterministic shell so no user is ever stranded; a role-filtered trusted catalog so capability scales with responsibility; governance metadata riding inside every prompt package, so the audit trail exists by construction rather than by paperwork.
 
 
-## Adendum for where develpr sfit intonthis paradignm:
+## Adendum for where developers fit into this paradigm:
 
 The Shift from Slop to Primitives: Instead of writing repetitive ticket boilerplate or babysitting fragmented AI output, engineers shift to operating at a deep craft level, similar to how UI designers use component libraries.   
 
