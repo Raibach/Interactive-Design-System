@@ -1,4 +1,4 @@
-# THE METHOD — Live-Verification Design Engineering
+# THE Philosophy — Design Engineering
 
 **Author:** John Holt, Raibach Interactive Design Studio
 **Status:** Working doctrine — practiced daily in this repository since 2026
