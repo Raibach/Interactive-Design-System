@@ -78,7 +78,7 @@ Each mechanism assumes the next session will misbehave — including mine. That 
 
 ## 4 · The organizational claim
 
-**Engineering should own UX. Product borrows UX from engineering — not the reverse.**
+Product & UX for solutioning — not the reverse.**
 
 Reasoning: ownership follows verifiability. The people who can observe the running surface and judge it against heuristics (P4) are the people who hold truth about the product. A committee that verifies nothing cannot own a discipline; it can only gate-check one. Therefore: embed the UX designer inside the engineering pod, arm both with this procedure, and let product consume verified surfaces rather than author speculative ones. Enterprises buying "AI transformation" are in fact buying this inversion — most have it backwards today.
 
