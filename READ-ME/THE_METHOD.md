@@ -6,6 +6,7 @@
 
 ---
 
+
 ## 1 · The thesis
 
 **A claim about software is a hypothesis. Only observed runtime behavior is knowledge.**
@@ -92,6 +93,16 @@ The design answer was **progressive adoption**: one adaptive flow that meets nov
 
 This repository — an Interactive Design System (IDS) — is that thesis made executable: a deterministic shell so no user is ever stranded; a role-filtered trusted catalog so capability scales with responsibility; governance metadata riding inside every prompt package, so the audit trail exists by construction rather than by paperwork.
 
+
+## Adendum for where develpr sfit intonthis paradignm:
+
+The Shift from Slop to Primitives: Instead of writing repetitive ticket boilerplate or babysitting fragmented AI output, engineers shift to operating at a deep craft level, similar to how UI designers use component libraries.   
+
+Building Hand-Crafted Repositories: Engineers author foundational, hand-crafted code blocks—such as custom functionality, high-performance logic, and novel behaviors that the AI cannot reliably guess from old training data—and package them into clean repositories.   
+
+Deterministic System Integration: Rather than guessing, the deterministic AI and design system calls these specific, pre-vetted code sets to pair directly with the corresponding design components.   
+
+Elevated Collaboration: This aligns engineers and designers as equal craftspeople, where engineers provide the precision modules and designers orchestrate the system through a clean, verifiable pipeline.
 ---
 ---
 
