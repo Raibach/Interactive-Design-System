@@ -98,11 +98,12 @@ This repository — an Interactive Design System (IDS) — is that thesis made e
 
 The Shift from Slop to Primitives: Instead of writing repetitive ticket boilerplate or babysitting fragmented AI output, engineers shift to operating at a deep craft level, similar to how UI designers use component libraries.   
 
-Building Hand-Crafted Repositories: Engineers author foundational, hand-crafted code blocks—such as custom functionality, high-performance logic, and novel behaviors that the AI cannot reliably guess from old training data—and package them into clean repositories.   
+Building Hand-Crafted Repositories: Engineers author foundational, hand-crafted code blocks—such as custom functionality, high-performance logic, novel behaviors or just higly oiptimized curated simple code libraries that the AI cannot reliably guess or optimize from old training data—and package them into clean repositories. 
+This method allows the code base observability for performance and security.
 
 Deterministic System Integration: Rather than guessing, the deterministic AI and design system calls these specific, pre-vetted code sets to pair directly with the corresponding design components.   
 
-Elevated Collaboration: This aligns engineers and designers as equal craftspeople, where engineers provide the precision modules and designers orchestrate the system through a clean, verifiable pipeline.
+## Elevated Collaboration: This aligns engineers and designers as equal craftspeople, where engineers provide the precision modules and designers orchestrate the system through a clean, verifiable pipeline.
 ---
 ---
 
