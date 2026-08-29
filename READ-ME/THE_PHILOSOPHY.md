@@ -12,8 +12,8 @@ Geert Trooskens and this architecture share the exact same conceptual North Star
 
 When you look at your [Interactive Design System](https://github.com/Raibach/Interactive-Design-System) repository through the lens of *Compiled AI*, the mapping becomes fascinating:
 
-* **In Trooskens’s Paper:** They take a high-level YAML specification, pass it through a code foundry with templates and modules, invoke the LLM once during compilation to generate a deterministic Temporal activity, validate it through a strict security/syntax/execution pipeline, and then run it at zero marginal token cost.
-* 
+**In Trooskens’s Paper:** They take a high-level YAML specification, pass it through a code foundry with templates and modules, invoke the LLM once during compilation to generate a deterministic Temporal activity, validate it through a strict security/syntax/execution pipeline, and then run it at zero marginal token cost.
+*
 * **In Your Architecture:**  compilation/determinism ethos to the **design-to-code and UI architecture layer**. Instead of treating design systems as static documentation or leaving UI generation to runtime chat prompts (which drift, hallucinate, and break component tokens), U am treating design tokens and components as strict compilation targets. The intelligence compiles the visual structure and constraints down into a deterministic, predictable code layer (akin to advanced code-gen engines like Figma's token bridges), ensuring that output is governed by the system's rules rather than runtime model variance.
 
 The core philosophy—it’s the **domain boundary and execution target**.  
