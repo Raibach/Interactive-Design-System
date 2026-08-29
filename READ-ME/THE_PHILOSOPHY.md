@@ -1,4 +1,4 @@
-# THE Philosophy — Design Engineering
+# The Philosophy — Designing for Engineering Teams
 
 **Author:** John Holt, Raibach Interactive Design Studio
 **Status:** Working doctrine — practiced daily in this repository since 2026
