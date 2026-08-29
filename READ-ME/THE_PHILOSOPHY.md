@@ -19,11 +19,17 @@ When you look at your [Interactive Design System](https://github.com/Raibach/Int
 
 The core philosophy—it’s the **domain boundary and execution target**.  
 
+Treating the LLM as a Compiler, Not an Operator: Instead of keeping the LLM in the runtime loop to interpret natural language on every single user transaction (which is slow, non-deterministic, and expensive), the LLM is invoked once at generation time.The Codebase as the Ground-Truth Reference: The LLM doesn't just write code out of thin air; it is constrained by pre-validated templates, modules, and domain rule blocks. It uses the existing codebase structure as its boundary so that it compiles logic that strictly respects system constraints.
+
+Deterministic Execution: Once compiled, the LLM exits the execution path entirely. What runs in production is pure, static, deterministic code (like Temporal activities) that has zero runtime token drift, zero prompt injection surface, and instant execution speeds.
+
+Why This Aligns With Your ViewThis is fundamentally AI-native engineering, not a traditional software development pipeline. In a traditional pipeline, humans write the code, and CI tests it. In this compiled AI model, the AI generates the code artifact during a compilation phase, passes it through an automated multi-stage validation pipeline (security, syntax, execution, and accuracy checks), and locks it down into static, sovereign code.You are looking at codebases not as manual text documents to be edited by hand, but as reference registries that bind the AI's output so it never drifts, maintaining absolute determinism.Does capturing this specific mechanism—using AI natively to compile structured, drift-free code artifacts that then run independently of any cloud runtime—closer to the foundation you are trying to build?
+
+The paper is arguing for a total inversion of the traditional path:
+
 https://mikehix.substack.com/p/from-ai-assistance-to-autonomous
 From AI Assistance to Autonomous Execution
 A practical look at running autonomous coding loops inside a disciplined engineering framework.
 Mike Hicks
 Mar 05, 2026
 
-The paper is arguing for a total inversion of the traditional path
-Treating the LLM as a Compiler, Not an Operator: Instead of keeping the LLM in the runtime loop to interpret natural language on every single user transaction (which is slow, non-deterministic, and expensive), the LLM is invoked once at generation time.The Codebase as the Ground-Truth Reference: The LLM doesn't just write code out of thin air; it is constrained by pre-validated templates, modules, and domain rule blocks. It uses the existing codebase structure as its boundary so that it compiles logic that strictly respects system constraints.Deterministic Execution: Once compiled, the LLM exits the execution path entirely. What runs in production is pure, static, deterministic code (like Temporal activities) that has zero runtime token drift, zero prompt injection surface, and instant execution speeds.Why This Aligns With Your ViewThis is fundamentally AI-native engineering, not a traditional software development pipeline. In a traditional pipeline, humans write the code, and CI tests it. In this compiled AI model, the AI generates the code artifact during a compilation phase, passes it through an automated multi-stage validation pipeline (security, syntax, execution, and accuracy checks), and locks it down into static, sovereign code.You are looking at codebases not as manual text documents to be edited by hand, but as reference registries that bind the AI's output so it never drifts, maintaining absolute determinism.Does capturing this specific mechanism—using AI natively to compile structured, drift-free code artifacts that then run independently of any cloud runtime—closer to the foundation you are trying to build?
