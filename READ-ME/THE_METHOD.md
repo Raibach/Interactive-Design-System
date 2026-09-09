@@ -7,13 +7,13 @@
 ---
 
 
-## 1 · The thesis
+## The thesis
 
 This method replaces claim-review with **live verification**: every meaningful statement about this system is checked against the running artifact — a booted process, an HTTP response, a compiled bundle, a rendered surface — before it is allowed to stand.
 
 ---
 
-## 2 · The enemy: suppression
+## The enemy: suppression
 
 Suppression is any act that makes an error disappear **without making the system correct**. It succeeds locally — the message stops, the session ends, the transcript says *fixed ✓* — and fails globally later, far from its cause. Six months of suppression produces a repository that no longer tells the truth about itself, leaving no signal to argue with.
 
@@ -29,30 +29,29 @@ Real specimens, all excavated from this very codebase:
 | Falsify the record | CHANGELOG claiming catalog validators that did not exist | Trust in all other claims collapsed |
 ---
 
-## 3 · The procedure
+## The procedure
 
-Transferable. Run it exactly; the instincts come later.
 
-### P1 — Ground truth before ground breaking
+### Ground truth before ground breaking
 Before changing anything, read the load-bearing files end-to-end and boot the system. No acting on summaries, not even your own memory of them.
 
-### P2 — The claims ledger
+### The claims ledger
 Every assertion earns one of three marks, each with a receipt type:
 - ✅ **Verified** — cite the live evidence (curl output, startup log, bundle grep, screenshot)
 - 🟡 **Partial** — state exactly which half is real
 - 🔜 **Specified, not built** — say so plainly; unbuilt ≠ failed
 Anything unverifiable gets demoted until it can be verified.
 
-### P3 — Fail loud
+### Fail loud
 No silent fallbacks. No `except: return False`. No compatibility shims that mute a conflict instead of resolving it. If assembly fails, return HTTP 503 with diagnostics; if a dependency graph contradicts itself, fix the declaration — never add a flag that ignores the contradiction.
 
-### P4 — Verify the surface like a person, not a parser
+### Verify the surface like a person, not a parser
 Frontend behavior is verified **live against strict UX heuristics** (visibility of system status, error recovery, consistency, user control — Nielsen's ten as baseline). Does the loading state exist? Does failure render as guidance or blankness? Can the user undo it? A feature whose happy path works but whose failure mode strands the user is **not done**. This is why verification belongs to people who own UX judgment, not just test suites.
 
-### P5 — Documentation synchronizes after behavior, never before
+### Documentation synchronizes after behavior, never before
 Docs describe what IS. Changelog entries carry verification receipts (what was run, what was observed). If the record and the runtime disagree, the runtime wins and the record gets corrected — publicly.
 
-### P6 — Steering AI sessions
+### Steering AI sessions
 An AI model regresses toward the median of everything it has ever seen — for code, that means conventional SPA patterns. Do not fight this with vigilance; fight it with **structure**:
 1. Put the worldview where every session meets it first (`SPECIFICATIONS.md` linked atop the README)
 2. Constrain generation mechanically — trusted component catalogs, validation boundaries, fail-loud envelopes — so drift is *rejected by the system*, not caught by your attention
@@ -70,7 +69,7 @@ Each mechanism assumes the next session will misbehave — including mine. That 
 
 ---
 
-## 4 · The organizational claim
+## The organizational claim
 
 Product & UX for solutioning — not the reverse.**
 
@@ -78,7 +77,7 @@ Reasoning: ownership follows verifiability. The people who can observe the runni
 
 ---
 
-## 5 · Provenance: progressive adoption — why this method exists
+## Provenance: progressive adoption — why this method exists
 
 This doctrine was forged under fire, not in a blog post. During an enterprise AI-lifecycle engagement (Southern California Edison, via Logic2020, 2025–2026) — 15,000+ employees with vastly different AI literacy, inside a regulated utility where safety and auditability are paramount — stakeholder discovery found adoption stalled by three things: no standardization, redundant expensive experimentation across departments, and missing compliance audit trails.
 
