@@ -10,11 +10,11 @@
 Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation
 Geert Trooskens and this architecture share the exact same conceptual North Star—**moving away from runtime stochastic interpretation and shifting intelligence to a single generation or compilation phase.** 
 
-When you look at this [Interactive Design System](https://github.com/Raibach/Interactive-Design-System) repository through the lens of *Compiled AI*, the mapping becomes fascinating:
+When we look at this [Interactive Design System](https://github.com/Raibach/Interactive-Design-System) repository through the lens of *Compiled AI*, the mapping becomes fascinating:
 
 **In Trooskens’s Paper:** They take a high-level YAML specification, pass it through a code foundry with templates and modules, invoke the LLM once during compilation to generate a deterministic Temporal activity, validate it through a strict security/syntax/execution pipeline, and then run it at zero marginal token cost.
 *
-* **In Your Architecture:**  compilation/determinism ethos to the **design-to-code and UI architecture layer**. Instead of treating design systems as static documentation or leaving UI generation to runtime chat prompts (which drift, hallucinate, and break component tokens), U am treating design tokens and components as strict compilation targets. The intelligence compiles the visual structure and constraints down into a deterministic, predictable code layer (akin to advanced code-gen engines like Figma's token bridges), ensuring that output is governed by the system's rules rather than runtime model variance.
+* ** Architecture:**  compilation/determinism ethos to the **design-to-code and UI architecture layer**. Instead of treating design systems as static documentation or leaving UI generation to runtime chat prompts (which drift, hallucinate, and break component tokens), U am treating design tokens and components as strict compilation targets. The intelligence compiles the visual structure and constraints down into a deterministic, predictable code layer (akin to advanced code-gen engines like Figma's token bridges), ensuring that output is governed by the system's rules rather than runtime model variance.
 
 The core philosophy—it’s the **domain boundary and execution target**.  
 
@@ -22,7 +22,7 @@ Treating the LLM as a Compiler, Not an Operator: Instead of keeping the LLM in t
 
 Deterministic Execution: Once compiled, the LLM exits the execution path entirely. What runs in production is pure, static, deterministic code (like Temporal activities) that has zero runtime token drift, zero prompt injection surface, and instant execution speeds.
 
-Why This Aligns With Your ViewThis is fundamentally AI-native engineering, not a traditional software development pipeline. In a traditional pipeline, humans write the code, and CI tests it. In this compiled AI model, the AI generates the code artifact during a compilation phase, passes it through an automated multi-stage validation pipeline (security, syntax, execution, and accuracy checks), and locks it down into static, sovereign code.You are looking at codebases not as manual text documents to be edited by hand, but as reference registries that bind the AI's output so it never drifts, maintaining absolute determinism.Does capturing this specific mechanism—using AI natively to compile structured, drift-free code artifacts that then run independently of any cloud runtime—closer to the foundation you are trying to build?
+Why This Aligns With View - This is fundamentally AI-native engineering, not a traditional software development pipeline. In a traditional pipeline, humans write the code, and CI tests it. In this compiled AI model, the AI generates the code artifact during a compilation phase, passes it through an automated multi-stage validation pipeline (security, syntax, execution, and accuracy checks), and locks it down into static, sovereign code. The codebases not as manual text documents to be edited by hand, but as reference registries that bind the AI's output so it never drifts, maintaining absolute determinism.Does capturing this specific mechanism—using AI natively to compile structured, drift-free code artifacts that then run independently of any cloud runtime—closer to the foundational build?
 
 The paper is arguing for a total inversion of the traditional path:
 
