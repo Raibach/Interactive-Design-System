@@ -1,34 +1,30 @@
 /**
- * <prompt-section-editor> — Vanilla Web Component (plain HTML + CSS + JS)
+ * <prompt-section-editor> — assembly host for the prompt-input pattern.
  *
- * NO Lit. NO TypeScript decorators or special syntax required.
- * The AI can emit this tag directly. Humans can copy the source and style it.
+ * Figma source (single source of truth): READ-ME/PROMPT_INPUT_SECTION_SPEC.md
+ *   - Container: node 40000746-6  → <prompt-container>
+ *   - Section:   node 40000746-94 → <prompt-input-section> (composed of
+ *     <gripper-prompt-input>, <role-tile>, functions, <status-bar-prompt-input>,
+ *     <prompt-textarea> — individually named Lit components per the designer's
+ *     Figma layers, registered in tag-registry.ts + component-catalog.json).
  *
- * Preserved contract (exact same behavior as the previous rich implementation):
- * - Role types: System, User, Tool, Agent, Few Shot, Context, Constraints + custom (with icons)
- * - Per-section collapse/expand + left rail (number)
- * - Drag to reorder + ↑ ↓ buttons
- * - Add / Remove sections
- * - Auto-resizing textareas (on input + after structural changes)
- * - data-section-container, data-section-name, data-tag="prompt-section"
- * - Window events CONSUMED (AI can drive it):
- *     set-left-column-text   { content, target }
- *     force-set-section      { sectionName, content }
- *     add-prompt-role        { roleName, placeholder? }
- *     remove-prompt-role     { roleName }
- * - Events EMITTED:
- *     section-update, section-add, section-remove, section-reorder
- *     run-requested   { sections }
- *     save-requested  { sections }
- * - Normalizes any DB shape: name | section | role | type  →  name
- * - Properties: sections (array), session-id, is-running
- * - Can be used from React (via ref + .sections = [...] or attributes)
- * - Can be emitted by AI as pure HTML:
- *     <prompt-section-editor sections='[{"name":"System","content":"...","type":"system"}]'></prompt-section-editor>
+ * DESIGN IS SKIN. CRUD IS STRUCTURE. This file owns ONLY the data flow:
+ *   - Properties: sections (array) · session-id · is-running   (unchanged)
+ *   - Emits: section-update · section-add · section-remove · section-reorder
+ *     (canonical events consumed by WritingAreaIndex → /api/ai/save-surface
+ *      → PostgreSQL → Zilliz — unchanged contract)
+ *   - Window events consumed: set-left-column-text · force-set-section ·
+ *     add-prompt-role · remove-prompt-role                     (unchanged)
  *
- * Styling: All CSS is inside the component (shadow DOM). You can later extract
- * the <style> block and theme it to match your design tokens.
+ * Designer rules: System Role is sticky (first, never changes — no menu, no
+ * drag, no delete); Arrow_drop_down opens/closes the selection menu (types +
+ * "+ Add Section" + "Delete"); selecting a type updates the label; drag is
+ * anchored to the gripper only; role-tile click collapses/expands the body.
  */
+import { LitElement, html, css } from 'lit';
+import './prompt-input/prompt-container';
+import './prompt-input/prompt-input-section';
+import { TYPE_LABELS, SECTION_MENU_TYPES } from './prompt-input/prompt-input-section';
 
 export interface PromptSection {
   name: string;
@@ -38,75 +34,67 @@ export interface PromptSection {
   visible?: boolean;
 }
 
-class PromptSectionEditor extends HTMLElement {
+class PromptSectionEditor extends LitElement {
+  static properties = {
+    sessionId: { type: String, attribute: 'session-id' },
+    isRunning: { type: Boolean, attribute: 'is-running' },
+  };
+
+  // sections is set imperatively (property, not attribute) by the React host
   private _sections: PromptSection[] = [];
   private _sessionId: string | null = null;
   private _isRunning = false;
-  private _dragIndex: number | null = null;
+  private _menu: { idx: number | null; kind: 'types' | 'functions' } = { idx: null, kind: 'types' };
   private _collapsed = new Set<number>();
+  private _dragIndex: number | null = null;
+  private _listenersBound = false;
 
-  static get observedAttributes() {
-    return ['session-id', 'is-running'];
-  }
-
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-  }
+  static styles = css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      background: #ffffff;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .header {
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .sections-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 15px 3px;
+    }
+    .sections-scroll::-webkit-scrollbar { width: 14px; }
+    .sections-scroll::-webkit-scrollbar-track { background: transparent; }
+    .sections-scroll::-webkit-scrollbar-thumb { background: #dadee4; border-radius: 10px; }
+  `;
 
   connectedCallback() {
-    // Support initial sections via attribute (JSON) for pure HTML/AI emission
-    if (this.hasAttribute('sections')) {
-      try {
-        const raw = JSON.parse(this.getAttribute('sections') || '[]');
-        if (Array.isArray(raw)) {
-          this._sections = raw.map((s: any) => this._normalizeSection(s));
-        }
-      } catch {}
-    }
-
-    // Seed real default sections (Figma-matched) so left column is never empty "0 sections"
-    if (this._sections.length === 0) {
-      this._sections = [
-        { name: 'System', content: 'You are an expert in semantic design systems and A2UI protocol.', type: 'system' },
-        { name: 'User', content: '', type: 'user' },
-        { name: 'Constraints', content: 'Match Figma specs exactly: Inter SemiBold 16px, 25px line-height, #000 text, double-shadow rounded-6 cards.', type: 'constraints' }
-      ];
-    }
-
-    this._render();
-
-    window.addEventListener('set-left-column-text', this._onSetText as EventListener);
-    window.addEventListener('force-set-section', this._onForceSet as EventListener);
-    window.addEventListener('add-prompt-role', this._onAddRole as EventListener);
-    window.addEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
+    super.connectedCallback();
+    this._bindOnce();
   }
 
-  disconnectedCallback() {
-    window.removeEventListener('set-left-column-text', this._onSetText as EventListener);
-    window.removeEventListener('force-set-section', this._onForceSet as EventListener);
-    window.removeEventListener('add-prompt-role', this._onAddRole as EventListener);
-    window.removeEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
-  }
-
-  attributeChangedCallback(name: string, _oldValue: string | null, newValue: string | null) {
-    if (name === 'session-id') {
-      this._sessionId = newValue;
-    }
-    if (name === 'is-running') {
-      this._isRunning = newValue === '' || newValue === 'true';
-    }
-    this._render();
-  }
-
-  // Public API — React host and AI can use these
-  set sections(value: any) {
+  // External data ingestion (React host / AI) — canonical normalization
+  set sections(value: unknown) {
     if (Array.isArray(value)) {
       this._sections = value.map((s: any) => this._normalizeSection(s));
     } else {
       this._sections = [];
     }
-    this._render();
+    this._collapsed.clear();
+    this._menu.idx = null;
+    this.requestUpdate();
   }
 
   get sections(): PromptSection[] {
@@ -124,383 +112,164 @@ class PromptSectionEditor extends HTMLElement {
     this._isRunning = !!val;
     if (val) this.setAttribute('is-running', '');
     else this.removeAttribute('is-running');
-    this._render();
   }
   get isRunning() { return this._isRunning; }
 
   private _normalizeSection(s: any): PromptSection {
     if (!s || typeof s !== 'object') return { name: 'Section', content: '' };
+    const type = s.type || s.role || 'custom';
     return {
-      name: s.name || s.section || s.role || s.type || 'Section',
+      name: s.name || s.section || s.role || type,
       content: s.content || '',
-      type: s.type || s.role || s.name || 'custom',
+      type,
       position: typeof s.position === 'number' ? s.position : undefined,
       visible: s.visible !== false,
     };
   }
 
-  private _getName(s: any): string {
-    if (!s || typeof s !== 'object') return 'Section';
-    return s.name || s.section || s.role || s.type || 'Section';
+  private _isSystem(s: PromptSection | undefined): boolean {
+    return !!s && String(s.type || '').toLowerCase().includes('system');
   }
 
-  private _getType(s: any): string {
-    if (!s || typeof s !== 'object') return 'custom';
-    return s.type || s.role || s.name || 'custom';
+  private _bindOnce() {
+    if (this._listenersBound) return;
+    this._listenersBound = true;
+
+    // Seed default sections so the left column is never empty
+    if (this._sections.length === 0) {
+      this._sections = [
+        { name: 'System Role', content: 'You are an expert in semantic design systems and A2UI protocol.', type: 'system' },
+        { name: 'User Role', content: '', type: 'user' },
+        { name: 'Constraints', content: 'Follow the requested output format exactly.', type: 'constraints' },
+      ];
+    }
+
+    const on = <T extends Event>(type: string, fn: (e: T) => void) =>
+      this.addEventListener(type, fn as EventListener);
+
+    on<CustomEvent>('section-content-input', (e) => {
+      const idx = this._indexOfSectionEvent(e);
+      if (idx < 0) return;
+      this._sections[idx] = { ...this._sections[idx], content: (e.detail as { value: string }).value };
+      this._emitUpdate(idx); // no re-render — the textarea owns its caret
+    });
+
+    on<CustomEvent>('section-collapse-toggle', (e) => {
+      const idx = this._indexOfSectionEvent(e);
+      if (idx < 0) return;
+      if (this._collapsed.has(idx)) this._collapsed.delete(idx);
+      else this._collapsed.add(idx);
+      const host = e.target as HTMLElement;
+      if (this._collapsed.has(idx)) host.setAttribute('collapsed', '');
+      else host.removeAttribute('collapsed');
+    });
+
+    on<CustomEvent>('section-menu-select', (e) => {
+      const idx = this._indexOfSectionEvent(e);
+      if (idx < 0) return;
+      const { action, value } = (e.detail || {}) as { action: string; value?: string };
+      this._menu.idx = null;
+
+      if (action === 'type' && value) {
+        const label = TYPE_LABELS[value] || value; // label updates automatically
+        this._sections[idx] = { ...this._sections[idx], type: value, name: label };
+        this._emitUpdate(idx);
+        this.requestUpdate();
+      } else if (action === 'add') {
+        this._addSection();
+      } else if (action === 'delete') {
+        this._removeSection(idx);
+      } else if (action === 'tool' && value) {
+        const prev = this._sections[idx].content || '';
+        this._sections[idx] = { ...this._sections[idx], content: prev ? `${prev} ${value}` : value };
+        this._emitUpdate(idx);
+        this.requestUpdate();
+      }
+    });
+
+    // Window event surface — unchanged contract (AI can drive the editor)
+    window.addEventListener('set-left-column-text', this._onSetText as EventListener);
+    window.addEventListener('force-set-section', this._onForceSet as EventListener);
+    window.addEventListener('add-prompt-role', this._onAddRole as EventListener);
+    window.addEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
   }
 
-  private _render() {
-    if (!this.shadowRoot) return;
-
-    // Snapshot current textarea values so we don't lose typing when we re-render for collapse/move/etc.
-    this.shadowRoot.querySelectorAll('textarea[data-index]').forEach((ta) => {
-      const idx = parseInt((ta as HTMLElement).getAttribute('data-index') || '-1', 10);
-      if (idx >= 0 && this._sections[idx]) {
-        this._sections[idx] = { ...this._sections[idx], content: (ta as HTMLTextAreaElement).value };
-      }
-    });
-
-    const css = `
-      :host {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        min-height: 0;
-        background: #fff;
-        border-right: 1px solid #e5e7eb;
-        font-family: 'Inter', system-ui, sans-serif;
-      }
-      .header {
-        padding: 8px 12px;
-        font-size: 12px;
-        font-weight: 600;
-        color: #374151;
-        border-bottom: 1px solid #e5e7eb;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-    .section {
-      margin: 8px;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      background: #fff;
-      box-shadow: -4px -4px 10px 0px rgba(0,0,0,0.15), 4px 4px 10px 0px rgba(0,0,0,0.15);
-    }
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      font-size: 18px;
-      font-weight: 700;
-      color: #171717;
-      background: #fff;
-      border-bottom: 1px solid #e5e7eb;
-      cursor: grab;
-      font-family: 'Inter', system-ui, sans-serif;
-    }
-    .section-header:active { cursor: grabbing; }
-    .left-rail {
-      width: 28px;
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding-top: 6px;
-      color: #9ca3af;
-      font-size: 10px;
-    }
-    textarea {
-      width: 100%;
-      min-height: 72px;
-      padding: 12px;
-      border: none;
-      font-family: 'Inter', system-ui, sans-serif;
-      font-weight: 600;
-      font-size: 16px;
-      line-height: 25px;
-      color: #000;
-      resize: vertical;
-      background: #fff;
-    }
-      .controls {
-        display: flex;
-        gap: 4px;
-        padding: 4px 8px;
-      }
-      button {
-        font-size: 10px;
-        padding: 2px 6px;
-        border: 1px solid #d1d5db;
-        background: #fff;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      button:hover { background: #f3f4f6; }
-      .footer {
-        padding: 8px;
-        border-top: 1px solid #e5e7eb;
-        display: flex;
-        gap: 8px;
-      }
-      .collapse-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 2px;
-        font-size: 12px;
-      }
-      .role-icon {
-        margin-right: 6px;
-      }
-    `;
-
-    // Proper escaping so user content with < & > " ' does not break the rendered HTML
-    const escapeAttr = (s: string) => String(s || '')
-      .replace(/&/g, '&')
-      .replace(/"/g, '"')
-      .replace(/'/g, '&#39;')
-      .replace(/</g, '<')
-      .replace(/>/g, '>');
-
-    const escapeText = (s: string) => String(s || '')
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>');
-
-    const sectionsHtml = (this._sections || [])
-      .filter((sec: any) => sec && typeof sec === 'object')
-      .map((sec, i) => {
-        const name = this._getName(sec);
-        const type = this._getType(sec);
-        const isCollapsed = this._collapsed.has(i);
-        const t = String(type || 'custom').toLowerCase();
-        const icon = t.includes('system') ? '⚡' :
-                     t.includes('agent') ? '🗄️' :
-                     t.includes('tool') ? '🔧' : '📝';
-        const displayName = String(name || 'Section');
-        const safeDisplayAttr = escapeAttr(displayName);
-        const safeDisplayText = escapeText(displayName);
-        const safeContent = escapeText(sec.content || '');
-        const safePlaceholder = escapeAttr(`Enter ${displayName.toLowerCase()} content...`);
-
-        return `
-          <div class="section"
-               data-index="${i}"
-               draggable="true"
-               data-section-container
-               data-section-name="${safeDisplayAttr}"
-               data-tag="prompt-section">
-            <div class="section-header">
-              <span>
-                <span class="role-icon">${icon}</span>
-                ${safeDisplayText}
-              </span>
-              <div>
-                <button class="collapse-btn" data-action="toggle" data-index="${i}">${isCollapsed ? '▶' : '▼'}</button>
-                <button data-action="up" data-index="${i}">↑</button>
-                <button data-action="down" data-index="${i}">↓</button>
-                <button data-action="remove" data-index="${i}">✕</button>
-              </div>
-            </div>
-            <div style="display:flex;">
-              <div class="left-rail">
-                <span>${i + 1}</span>
-              </div>
-              <textarea
-                data-index="${i}"
-                data-section-name="${safeDisplayAttr}"
-                placeholder="${safePlaceholder}"
-                style="display: ${isCollapsed ? 'none' : 'block'};"
-              >${safeContent}</textarea>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-    this.shadowRoot.innerHTML = `
-      <style>${css}</style>
-      <div class="header">
-        <span>Prompt Sections</span>
-        <span style="font-size:10px; color:#9ca3af;">${this._sections.length} sections</span>
-      </div>
-      ${sectionsHtml}
-      <!-- Internal footer removed — bottom control bar is now the Figma-specified <control-bar> 
-           rendered by WritingAreaIndex inside the left column flex wrapper.
-           Run / Save are triggered exclusively via the bar's save-click / run-click events,
-           which are wired to the existing CRUD paths (handleSavePromptRef + run-requested dispatch).
-           This keeps the visual design exactly as the wireframe while preserving all paid save/run/version logic. -->
-    `;
-
-    this._attachListeners();
+  disconnectedCallback() {
+    window.removeEventListener('set-left-column-text', this._onSetText as EventListener);
+    window.removeEventListener('force-set-section', this._onForceSet as EventListener);
+    window.removeEventListener('add-prompt-role', this._onAddRole as EventListener);
+    window.removeEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
+    super.disconnectedCallback();
   }
 
-  private _attachListeners() {
-    const root = this.shadowRoot;
-    if (!root) return;
-
-    // Event delegation for buttons
-    root.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      const btn = target.closest('button[data-action]');
-      if (!btn) return;
-
-      const action = btn.getAttribute('data-action');
-      const idxAttr = btn.getAttribute('data-index');
-      const idx = idxAttr !== null ? parseInt(idxAttr, 10) : -1;
-
-      if (action === 'add') this._addSection();
-      else if (action === 'run') this._requestRun();
-      else if (action === 'save') this._requestSave();
-      else if (action === 'toggle' && idx >= 0) this._toggleCollapse(idx);
-      else if (action === 'up' && idx >= 0) this._moveSection(idx, idx - 1);
-      else if (action === 'down' && idx >= 0) this._moveSection(idx, idx + 1);
-      else if (action === 'remove' && idx >= 0) this._removeSection(idx);
-    });
-
-    // Live content sync + auto-resize (no full re-render while typing)
-    root.addEventListener('input', (e) => {
-      const ta = e.target as HTMLTextAreaElement;
-      if (!ta || ta.tagName !== 'TEXTAREA') return;
-      const idxAttr = ta.getAttribute('data-index');
-      const idx = idxAttr !== null ? parseInt(idxAttr, 10) : -1;
-      if (idx < 0 || !this._sections[idx]) return;
-
-      this._sections[idx] = { ...this._sections[idx], content: ta.value };
-      this._emitUpdate(idx);
-      this._adjustHeight(ta);
-    });
-
-    // Drag & drop
-    root.querySelectorAll('.section').forEach((el, i) => {
-      const sec = el as HTMLElement;
-      sec.addEventListener('dragstart', (ev) => {
-        this._dragIndex = i;
-        ev.dataTransfer?.setData('text/plain', String(i));
-      });
-      sec.addEventListener('dragover', (ev) => ev.preventDefault());
-      sec.addEventListener('drop', (ev) => {
-        ev.preventDefault();
-        const fromStr = ev.dataTransfer?.getData('text/plain');
-        const from = fromStr ? parseInt(fromStr, 10) : this._dragIndex;
-        if (from != null && from !== i) {
-          this._moveSection(from, i);
-        }
-        this._dragIndex = null;
-      });
-    });
-
-    // Initial auto-size for visible textareas
-    root.querySelectorAll('textarea').forEach((ta) => {
-      this._adjustHeight(ta as HTMLTextAreaElement);
-    });
+  private _indexOfSectionEvent(e: CustomEvent): number {
+    const host = e.target as HTMLElement;
+    const idxAttr = host.getAttribute('data-idx');
+    return idxAttr !== null ? parseInt(idxAttr, 10) : -1;
   }
-
-  // ── Core behaviors ─────────────────────────────────────────────────────────
 
   private _emitUpdate(index: number) {
     this.dispatchEvent(new CustomEvent('section-update', {
-      bubbles: true,
-      composed: true,
+      bubbles: true, composed: true,
       detail: { index, section: this._sections[index] },
     }));
   }
 
-  private _updateContent(index: number, value: string) {
-    if (!this._sections[index]) return;
-    this._sections[index] = { ...this._sections[index], content: value };
-    this._emitUpdate(index);
+  private _addSection() {
+    const newSection: PromptSection = {
+      name: `Custom Role ${this._sections.length + 1}`,
+      content: '', type: 'custom', position: this._sections.length,
+    };
+    this._sections.push(newSection);
+    this.dispatchEvent(new CustomEvent('section-add', {
+      bubbles: true, composed: true, detail: { section: newSection },
+    }));
+    this.requestUpdate();
   }
 
   private _removeSection(index: number) {
     const removed = this._sections[index];
+    if (!removed) return;
+    if (index === 0 && this._isSystem(removed)) return; // System Role is sticky
     this._sections.splice(index, 1);
-    this._collapsed.delete(index);
     this.dispatchEvent(new CustomEvent('section-remove', {
-      bubbles: true,
-      composed: true,
-      detail: { index, name: this._getName(removed) },
+      bubbles: true, composed: true, detail: { index, name: removed.name },
     }));
-    this._render();
-  }
-
-  private _addSection() {
-    const name = `Custom Role ${this._sections.length + 1}`;
-    const newSection: PromptSection = { name, content: '', type: 'custom', position: this._sections.length };
-    this._sections.push(newSection);
-    this.dispatchEvent(new CustomEvent('section-add', {
-      bubbles: true,
-      composed: true,
-      detail: { section: newSection },
-    }));
-    this._render();
+    this.requestUpdate();
   }
 
   private _moveSection(from: number, to: number) {
-    if (to < 0 || to >= this._sections.length) return;
+    if (from < 0 || to < 0 || from >= this._sections.length || to >= this._sections.length) return;
+    if (this._isSystem(this._sections[0]) && (from === 0 || to === 0)) return; // sticky slot 0
     const [item] = this._sections.splice(from, 1);
     this._sections.splice(to, 0, item);
     this.dispatchEvent(new CustomEvent('section-reorder', {
-      bubbles: true,
-      composed: true,
-      detail: { from, to },
+      bubbles: true, composed: true, detail: { from, to },
     }));
-    this._render();
+    this.requestUpdate();
   }
 
-  private _toggleCollapse(index: number) {
-    if (this._collapsed.has(index)) {
-      this._collapsed.delete(index);
-    } else {
-      this._collapsed.add(index);
-    }
-    this._render();
-  }
-
-  private _requestRun() {
-    this.dispatchEvent(new CustomEvent('run-requested', {
-      bubbles: true,
-      composed: true,
-      detail: { sections: this._sections },
-    }));
-  }
-
-  private _requestSave() {
-    this.dispatchEvent(new CustomEvent('save-requested', {
-      bubbles: true,
-      composed: true,
-      detail: { sections: this._sections },
-    }));
-  }
-
-  private _adjustHeight(ta: HTMLTextAreaElement | null) {
-    if (!ta) return;
-    ta.style.height = 'auto';
-    ta.style.height = Math.max(50, ta.scrollHeight) + 'px';
-  }
-
-  // ── AI / external event surface ────────────────────────────────────────────
+  // ── AI / external event surface (unchanged) ────────────────────────────────
 
   private _onSetText = (e: Event) => {
     const { content, target } = (e as CustomEvent).detail || {};
     if (!target || content === undefined) return;
-    const idx = this._sections.findIndex(s => this._getName(s).toLowerCase() === String(target).toLowerCase());
+    const idx = this._sections.findIndex(s => s.name.toLowerCase() === String(target).toLowerCase());
     if (idx >= 0) {
       this._sections[idx] = { ...this._sections[idx], content };
       this._emitUpdate(idx);
-      this._render();
+      this.requestUpdate();
     }
   };
 
   private _onForceSet = (e: Event) => {
     const { sectionName, content } = (e as CustomEvent).detail || {};
     if (!sectionName || content === undefined) return;
-    const idx = this._sections.findIndex(s => this._getName(s) === sectionName);
+    const idx = this._sections.findIndex(s => s.name === sectionName);
     if (idx >= 0) {
       this._sections[idx] = { ...this._sections[idx], content };
       this._emitUpdate(idx);
-      this._render();
+      this.requestUpdate();
     }
   };
 
@@ -510,22 +279,76 @@ class PromptSectionEditor extends HTMLElement {
     const newSec: PromptSection = { name: roleName, content: placeholder || '', type: roleName, position: this._sections.length };
     this._sections.push(newSec);
     this.dispatchEvent(new CustomEvent('section-add', { bubbles: true, composed: true, detail: { section: newSec } }));
-    this._render();
+    this.requestUpdate();
   };
 
   private _onRemoveRole = (e: Event) => {
     const { roleName } = (e as CustomEvent).detail || {};
     if (!roleName) return;
-    const idx = this._sections.findIndex(s => this._getName(s) === roleName);
-    if (idx >= 0) {
-      this._removeSection(idx);
-    }
+    const idx = this._sections.findIndex(s => s.name === roleName);
+    if (idx >= 0) this._removeSection(idx);
   };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  render() {
+    const sectionsHtml = this._sections.map((sec, i) => {
+      const sticky = i === 0 && this._isSystem(sec);
+      const isRag = String(sec.type).toLowerCase().includes('context')
+        || /\{\{\s*(retrieved_context|query|context)\s*\}\}/.test(sec.content || '');
+      // Design receipt: textarea min-heights 45 / 145 / 120 by role family
+      const minHeight = String(sec.type).toLowerCase().includes('system') ? 45 : isRag ? 145 : 45;
+      const menuOpen = this._menu.idx === i ? this._menu.kind : '';
+
+      return html`
+        <prompt-input-section
+          data-idx="${i}"
+          data-section-container
+          data-section-name="${sec.name}"
+          .name=${sticky ? 'System Role' : (TYPE_LABELS[String(sec.type || '').toLowerCase()] || sec.name)}
+          .type=${String(sec.type || 'custom')}
+          .content=${sec.content || ''}
+          .sticky=${sticky}
+          .minHeight=${minHeight}
+          .menuOpen=${menuOpen}
+          ?collapsed=${this._collapsed.has(i)}
+          ?draggable=${!sticky}
+          @dragstart=${(ev: DragEvent) => this._onDragStart(ev, i)}
+          @dragover=${(ev: DragEvent) => ev.preventDefault()}
+          @drop=${(ev: DragEvent) => this._onDrop(ev, i)}
+        ></prompt-input-section>
+      `;
+    });
+
+    return html`
+      <div class="header">
+        <span>Prompt Sections</span>
+        <span style="font-size:10px; color:#9ca3af;">${this._sections.length} sections</span>
+      </div>
+      <div class="sections-scroll">
+        <prompt-container format-label="Response Format A" tokens-label="Tokens: 2022 Cost: $0.00802">
+          ${sectionsHtml}
+        </prompt-container>
+      </div>
+    `;
+  }
+
+  private _onDragStart(ev: DragEvent, i: number) {
+    this._dragIndex = i;
+    ev.dataTransfer?.setData('text/plain', String(i));
+  }
+
+  private _onDrop(ev: DragEvent, i: number) {
+    ev.preventDefault();
+    const fromStr = ev.dataTransfer?.getData('text/plain');
+    const from = fromStr !== undefined && fromStr !== '' ? parseInt(fromStr, 10) : this._dragIndex;
+    if (from != null && from !== i) this._moveSection(from, i);
+    this._dragIndex = null;
+  }
 }
 
 customElements.define('prompt-section-editor', PromptSectionEditor);
 
-// Keep the same global declarations so React JSX and TypeScript tooling still recognize the tag
 declare global {
   interface HTMLElementTagNameMap {
     'prompt-section-editor': PromptSectionEditor;
@@ -546,3 +369,6 @@ declare module 'react' {
     }
   }
 }
+
+// Re-export for downstream typing (menu types are the designer's vocabulary)
+export { SECTION_MENU_TYPES, TYPE_LABELS };

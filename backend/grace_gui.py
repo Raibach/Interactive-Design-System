@@ -86,8 +86,13 @@ def query_llm(
         system_prompt = _build_chat_system(context, memory_context)
 
     # ── Message payload ───────────────────────────────────────────────
+    # surface_assembly gets the SAME bare strict-JSON system prompt as
+    # console_assembly. MISSION_HEADER (XML <a2ui_surface> mandate) is
+    # chat-only — prepending it to assembly requests made the model drift
+    # out of the JSON contract (verified live 2026-09-09: composer 503
+    # KeyError 'components' with envelope-shaped response).
     messages = []
-    if mode == "console_assembly":
+    if mode in ("console_assembly", "surface_assembly"):
         messages.append({"role": "system", "content": system_prompt})
     elif system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": MISSION_HEADER + system_prompt})
@@ -96,7 +101,10 @@ def query_llm(
     messages.append({"role": "user", "content": question})
 
     # ── Token budget ─────────────────────────────────────────────────
-    token_budgets = {"console_assembly": 1200, "prompt_output": 3000}
+    # surface_assembly=3000: a full three-slot composer tree + sections is
+    # ~2x a console response. The old 1500 default truncated the composer
+    # JSON mid-tree (verified live 2026-09-09), which then failed parsing.
+    token_budgets = {"console_assembly": 1200, "surface_assembly": 3000, "prompt_output": 3000}
     max_tokens = token_budgets.get(mode, 1500)
     request_temp = 0.0 if mode == "console_assembly" else temperature
 

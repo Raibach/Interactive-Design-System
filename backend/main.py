@@ -79,9 +79,9 @@ async def startup_event():
     import services
     services.init_services(database_url)
 
-    # Z.ai GLM-4.7 startup verification (primary provider)
+    # DeepSeek startup verification (the assembly provider actually used by query_llm)
     from model_server_manager import ensure_grace_server
-    ensure_grace_server("zai")
+    ensure_grace_server("deepseek")
 
 
 # ── Route modules (extracted during modularization) ─────────────────

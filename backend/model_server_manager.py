@@ -14,6 +14,12 @@ load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
 # ── Provider registry ──────────────────────────────────────────────────
 PROVIDERS = {
+    "deepseek": {
+        "name": "DeepSeek API",
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-v4-flash",
+        "api_key_env": "DEEPSEEK_API_KEY",
+    },
     "zai": {
         "name": "Z.ai API",
         "base_url": "https://api.z.ai/api/paas/v4",
@@ -23,7 +29,7 @@ PROVIDERS = {
 }
 
 
-def load_api_key(provider: str = "zai") -> str:
+def load_api_key(provider: str = "deepseek") -> str:
     """Load API key from env for the given provider."""
     cfg = PROVIDERS.get(provider)
     if not cfg:
@@ -35,7 +41,7 @@ def load_api_key(provider: str = "zai") -> str:
     return key
 
 
-def check_api_connection(provider: str = "zai") -> bool:
+def check_api_connection(provider: str = "deepseek") -> bool:
     """Ping the provider with a minimal chat completion. Returns True on success."""
     cfg = PROVIDERS.get(provider)
     if not cfg:
@@ -63,7 +69,7 @@ def check_api_connection(provider: str = "zai") -> bool:
         return False
 
 
-def test_model_connection(provider: str = "zai") -> dict:
+def test_model_connection(provider: str = "deepseek") -> dict:
     """Return a status dict for a provider — used by /api/health."""
     cfg = PROVIDERS.get(provider)
     if not cfg:
@@ -99,11 +105,11 @@ def test_model_connection(provider: str = "zai") -> dict:
 
 
 # Backwards-compatible aliases used by main.py startup and teacher route
-def ensure_grace_server(provider: str = "zai") -> bool:
+def ensure_grace_server(provider: str = "deepseek") -> bool:
     return check_api_connection(provider)
 
 
 if __name__ == "__main__":
-    result = test_model_connection()
+    result = test_model_connection("deepseek")
     print(f"Status: {result['status']}")
     print(f"Message: {result['message']}")

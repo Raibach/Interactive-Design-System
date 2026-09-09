@@ -3,9 +3,54 @@
 Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
 
 
+**[2026-09-09 14:30:00 UTC] — Rail gripper instrumentation: structural gap closed**
+
+*The problem:*
+The harness compares the Figma tree against the Lit templates by `data-node-id`. The rail (`prompt-container.ts`) carried none of those ids, so its two gripper groups and four meatballs reported as MISSING-IN-CODE — not because the code lacked them, but because the code had never named them.
+
+A harness can only catch the doubling of a thing it can already see. An element that is never registered cannot be caught duplicating; it stays invisible, listed as missing. The doubled-gripper bug — the exact defect the harness was built to detect — was undetectable until the rail was instrumented. The detector existed. The rail was not in it.
+
+*The fix:*
+Named 6 nodes in `prompt-container.ts`, each exactly once:
+- Top gripper group `40000881:373`; meatballs `40000881:374`, `40000881:375`
+- Bottom gripper group `40000881:399`; meatballs `40000881:400`, `40000881:401`
+
+Added `.rail-meatballs > span { display: block; line-height: 0; }` so the wrapper spans that carry the ids do not shift the SVGs.
+
+*Why it matters:*
+The rail scope went from 0 MATCH to 6 MATCH. A future duplicate of any of these six ids now fires a DUPLICATED row instead of hiding as MISSING. The doubled-gripper detector is armed. For the first time a structural defect — a doubled element — is machine-verifiable instead of something a reviewer must notice by eye.
+
+This is the harness doing its job: a constraint that turns the AI's output into work you can check. It names the structure so drift cannot hide.
+
+*What's still open:*
+Three nodes in the rail scope remain unnamed, all outside this bug:
+- `40000880:270` — the rail root
+- `40000746:13`, `40000746:14` — the vertical label and tokens readout
+
+Each unnamed node is another blind spot of the same kind. They should be instrumented next, before they hide a defect the way the grippers almost did.
+
+*How it was verified:*
+- `grep` confirmed all 6 ids in `node-census.json` (12 matches: container + rail scopes).
+- `node scripts/fidelity-check.mjs --scope rail` → `MATCH 6 · MISSING-IN-CODE 3 · DUPLICATED 0 · INSTANCE-OF 0`; calibration `gripper groups: Figma pull 2 · in code 2`.
+- `npm run build` → exit 0 (tsc + vite, 2.39s).
+
+*Addendum by DeepSeek.v.4.pro*
+Yes — and I'd put the mechanism more precisely than "zeroing out drift": you're converting a *semantic* question into a *syntactic* one, and that's the whole trick.
+
+"Does the code match the design?" is semantic. It depends on words — a layer name, a description, a remembered spec — and words are exactly what drifts. A designer renames a frame, a spec gets stale, an AI paraphrases "the blue button" into something plausible but wrong. Semantic checks need a human to look, and even then two humans disagree.
+
+`data-node-id` has no such slack. It's not a word, it's an address. `40000881:373` either appears on both sides with the same count, or it doesn't. There is no paraphrase of an ID. So the harness never asks "does this look right?" — it asks "same address, same multiplicity?" — a boolean a machine answers in a second, and answers identically every time. That's drift, structurally eliminated. Not reduced. Removed.
+
+The count is the part people miss. Presence check would catch a *missing* node, but it wouldn't catch a *doubled* one — two of the same gripper still "present." It's the 1:1 multiplicity that turns a doubled element from a stylistic judgment ("hmm, that looks off") into a structural fact (count = 2). You can't accidentally double an address and stay at count 1.
+
+And the energy point follows directly: every check that used to live in a slow, fallible human loop — reading prose, squinting at pixels, trusting a summary — now lives in a deterministic machine loop. Intelligence is spent *once*, at the moment of naming (Figma → node ID), and after that the system runs free. No tokens re-deriving ground truth every session. No frustration re-arguing what the design is. That's the Compiled-AI promise made concrete: the LLM exits the path, and the structure holds itself honest.
+
+Words are how drift enters and how suppression hides. Addresses are how it leaves. You built a system that talks in addresses.
+
+
 ## 2026-08-01 (PM2): Role-Based Governance Architecture — Multi-Role Access, Milvus Repurposing, Trace System Design
 
-**This is the entry where the system stopped being a prompt builder and became a multi-role enterprise platform.** The insight: everyone in the company opens the same prompt package — governance, UX design, research, product — but they each need to see completely different things. The same data, viewed through completely different lenses, gated by departmental role. This entry documents the architecture that makes that possible, the Milvus governance repurposing, the four user personas for Figma design work, and the role-to-capability matrix that connects them.
+**This is the entry where the system stopped being a prompt builder and became a multi-role enterprise platform.** The insight: everyone in the company opens the same package — governance, UX design, research, product — but they each need to see completely different things. The same data, viewed through completely different lenses, gated by departmental role. This entry documents the architecture that makes that possible, the Milvus governance repurposing, the four user personas for Figma design work, and the role-to-capability matrix that connects them.
 
 ### The Philosophy: Same Package, Different Lenses
 
