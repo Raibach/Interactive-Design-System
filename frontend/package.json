@@ -17,6 +17,8 @@
     "deploy": "gh-pages -d dist",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
+    "fidelity": "node scripts/fidelity-check.mjs --scope all",
+    "fidelity:capture": "node scripts/fidelity-check.mjs --scope all --capture",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "chromatic": "npx chromatic --project-token=${CHROMATIC_PROJECT_TOKEN}"

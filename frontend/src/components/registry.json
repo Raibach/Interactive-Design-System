@@ -1,0 +1,114 @@
+{
+  "_meta": {
+    "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it — do NOT regenerate. If absent, ask before building.",
+    "ruleFile": ".continue/rules/design-system.md",
+    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09)"
+  },
+  "components": [
+    {
+      "figmaName": "prompt-container",
+      "figmaNodeId": "40000746:6",
+      "litComponent": "prompt-container",
+      "file": "frontend/src/components/lit/prompt-input/prompt-container.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "gripper-prompt-input",
+      "figmaNodeId": "40000746:103",
+      "litComponent": "gripper-prompt-input",
+      "file": "frontend/src/components/lit/prompt-input/gripper-prompt-input.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "role-tile",
+      "figmaNodeId": "40000746:106",
+      "litComponent": "role-tile",
+      "file": "frontend/src/components/lit/prompt-input/role-tile.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "functions",
+      "figmaNodeId": "40000879:249",
+      "litComponent": "functions-wrap",
+      "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "status-bar-prompt-input",
+      "figmaNodeId": "40000878:239",
+      "litComponent": "status-bar-prompt-input",
+      "file": "frontend/src/components/lit/prompt-input/status-bar-prompt-input.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "prompt-textarea",
+      "figmaNodeId": "40000746:95",
+      "litComponent": "prompt-textarea",
+      "file": "frontend/src/components/lit/prompt-input/prompt-textarea.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "prompt-input-section",
+      "figmaNodeId": "40000746:94",
+      "litComponent": "prompt-input-section",
+      "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "prompt-section-editor",
+      "figmaNodeId": "40000879:249",
+      "litComponent": "prompt-section-editor",
+      "file": "frontend/src/components/lit/prompt-section-editor.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "workspace-layout",
+      "figmaNodeId": null,
+      "litComponent": "workspace-layout",
+      "file": "frontend/src/components/lit/workspace-layout.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "control-bar",
+      "figmaNodeId": null,
+      "litComponent": "control-bar",
+      "file": "frontend/src/components/lit/control-bar.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "compiled-output-viewer",
+      "figmaNodeId": null,
+      "litComponent": "compiled-output-viewer",
+      "file": "frontend/src/components/lit/compiled-output-viewer.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "chat-navigation-bar",
+      "figmaNodeId": null,
+      "litComponent": "chat-navigation-bar",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "agent-card-element",
+      "figmaNodeId": null,
+      "litComponent": "agent-card-element",
+      "file": "frontend/src/components/lit/agent-card-element.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "a2ui-image-catalog",
+      "figmaNodeId": null,
+      "litComponent": "a2ui-image-catalog",
+      "file": "frontend/src/components/lit/a2ui-image-catalog.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "ai-surface-sandbox",
+      "figmaNodeId": null,
+      "litComponent": "ai-surface-sandbox",
+      "file": "frontend/src/components/lit/ai-surface-sandbox.ts",
+      "status": "built"
+    }
+  ]
+}

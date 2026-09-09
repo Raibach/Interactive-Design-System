@@ -277,12 +277,12 @@ Assemble the FULL console surface using A2UI v0.9.1.
 
 COMPONENT CATALOG (only these):
 - Column (children array)
-- Text (variant: "greeting")
+- Text (text: a short welcome message, variant: "greeting")
 - ConsoleCardGrid (items: {{"path": "/cards"}})
 
 REQUIREMENTS:
 1. id "root" Column at top
-2. Text greeting with variant "greeting"
+2. Text header with a welcome message and variant "greeting"
 3. ConsoleCardGrid bound to /cards
 4. Short friendly ai_message
 
@@ -290,7 +290,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
 {{
   "components": [
     {{"id": "root", "component": "Column", "children": ["header", "card-grid"]}},
-    {{"id": "header", "component": "Text", "text": "greeting", "variant": "greeting"}},
+    {{"id": "header", "component": "Text", "text": "Welcome back!", "variant": "greeting"}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}}
   ],
   "ai_message": "Your message"
@@ -397,26 +397,39 @@ Output ONLY this exact JSON (no markdown, no extra text):
         # surface layout from its own knowledge of the A2UI catalog.
         ms_a = 0.0
 
-        llm_prompt = f"""You are Grace, the A2UI surface assembler.
+        llm_prompt = f"""You are Grace, the A2UI surface assembler for the Composer.
 
-The user clicked "Composer". Assemble the FULL surface.
+The user clicked "Composer". Assemble the FULL blank composer surface.
 
-TRUSTED CATALOG — every component you may use:
-{json.dumps(list(a2ui_catalog.get("components", {}).keys()), indent=2)}
+COMPONENT NAMES — use exactly these strings in each object's "component" field:
+{json.dumps(list(a2ui_catalog.get("components", {}).keys()))}
 
-LAYOUT CONTRACT — three fixed slots, you fill them:
-- left_column: prompt editing sections
-- middle_column: compiled output viewer
-- right_column: chat panel
+LAYOUT CONTRACT — three fixed slots you fill:
+- left_column: prompt-section-editor, sections bound to {{"path": "/session/left_column/sections"}}
+- middle_column: compiled-output-viewer, empty content
+- right_column: chat-panel
 
-Derive the complete adjacency list. Decide which components go where, their hierarchy, ids, and props. No hand-holding.
+REQUIREMENTS:
+1. Component objects use key "component" (NOT "type"). Every object needs "id".
+2. id "root" Column at the top.
+3. initial_sections: exactly 3 starter prompt sections — System, User, Constraints — each an object {{"name", "type", "content"}} with short real content (User may be empty).
+4. One short friendly ai_message and one short suggested_title.
 
-Output ONLY valid JSON:
+Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array, no extra keys, no text after the JSON:
 {{
-  "components": [ ... your derived adjacency list ... ],
-  "initial_sections": [ ... ],
-  "suggested_title": "...",
-  "ai_message": "..."
+  "components": [
+    {{"id": "root", "component": "Column", "children": ["left-column", "middle-column", "right-column"]}},
+    {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
+    {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
+    {{"id": "right-column", "component": "chat-panel"}}
+  ],
+  "initial_sections": [
+    {{"name": "System", "type": "system", "content": "You are a precise, professional assistant."}},
+    {{"name": "User", "type": "user", "content": ""}},
+    {{"name": "Constraints", "type": "constraints", "content": "Follow the requested output format exactly."}}
+  ],
+  "suggested_title": "Untitled Prompt",
+  "ai_message": "Composer ready. Select a role and enter your prompt."
 }}"""
 
         # ── PERFORMANCE TRACE: Milestone B (Network/LLM) ──
@@ -428,7 +441,7 @@ Output ONLY valid JSON:
             mode="surface_assembly",
             temperature=0.0,
             prompt_id="surface-assembly-composer"
-            # model intentionally omitted — use the enabled provider's default (e.g. glm-4.7 via Z.ai)
+            # model intentionally omitted — use the enabled provider's default (deepseek-v4-flash)
         )
         ms_b = (time.perf_counter() - t_b_start) * 1000
 
@@ -626,7 +639,6 @@ CATALOG (use these):
 - prompt-section-editor (sections: {{"path": "/session/left_column/sections"}})
 - compiled-output-viewer (content: {{"path": "/session/middle_column/compiled_output"}})
 - chat-panel (conversationId: {{"path": "/session/right_column/conversation_id"}})
-- Text (variant: "greeting")
 - workspace-layout (resizable host for the three panes)
 
 REQUIREMENTS:

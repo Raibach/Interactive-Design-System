@@ -1,0 +1,473 @@
+{
+  "_meta": {
+    "capturedAt": "2026-09-09T16:40:39.760Z",
+    "mode": "live",
+    "source": "get_design_context census"
+  },
+  "scopes": {
+    "accordion": {
+      "root": "40000880:345",
+      "nodes": {
+        "1:118": {
+          "name": "Arrow_drop_down",
+          "count": 1
+        },
+        "40000880:345": {
+          "name": "prompt-accordion",
+          "count": 1
+        },
+        "40000880:346": {
+          "name": "role-tile",
+          "count": 1
+        },
+        "40000880:347": {
+          "name": "role-label-injection",
+          "count": 1
+        },
+        "40000880:348": {
+          "name": null,
+          "count": 1
+        },
+        "40000880:350": {
+          "name": "functions",
+          "count": 1
+        },
+        "40000880:351": {
+          "name": null,
+          "count": 1
+        }
+      }
+    },
+    "container": {
+      "root": "40000746:6",
+      "nodes": {
+        "1:118": {
+          "name": "Arrow_drop_down",
+          "count": 1
+        },
+        "40000746:6": {
+          "name": "left-column-panel-container",
+          "count": 1
+        },
+        "40000880:338": {
+          "name": "panel-inner-container",
+          "count": 1
+        },
+        "40000880:270": {
+          "name": "right-panel-horiz-tab",
+          "count": 1
+        },
+        "40000881:373": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000881:374": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000881:375": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000746:13": {
+          "name": null,
+          "count": 1
+        },
+        "40000746:14": {
+          "name": null,
+          "count": 1
+        },
+        "40000881:399": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000881:400": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000881:401": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000880:304": {
+          "name": "prompt-input-section",
+          "count": 1
+        },
+        "40000746:94": {
+          "name": "prompt-input-section",
+          "count": 1
+        },
+        "40000878:241": {
+          "name": "responsive-prompt-container",
+          "count": 1
+        },
+        "40000746:102": {
+          "name": "section-header",
+          "count": 1
+        },
+        "40000746:103": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000746:104": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000746:105": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000879:252": {
+          "name": "prompt-accordion",
+          "count": 1
+        },
+        "40000746:106": {
+          "name": "role-tile",
+          "count": 1
+        },
+        "40000879:264": {
+          "name": "role-label-injection",
+          "count": 1
+        },
+        "40000746:107": {
+          "name": null,
+          "count": 1
+        },
+        "40000879:249": {
+          "name": "functions",
+          "count": 1
+        },
+        "40000879:250": {
+          "name": null,
+          "count": 1
+        },
+        "40000878:240": {
+          "name": "prompt-imput",
+          "count": 1
+        },
+        "40000878:239": {
+          "name": "status-bar-prompt-input",
+          "count": 1
+        },
+        "40000746:98": {
+          "name": "Database_fill",
+          "count": 1
+        },
+        "40000746:99": {
+          "name": "Subtract",
+          "count": 1
+        },
+        "40000746:95": {
+          "name": "prompt-textarea",
+          "count": 1
+        },
+        "40000878:234": {
+          "name": "text-input-placeholder",
+          "count": 1
+        },
+        "40000746:96": {
+          "name": null,
+          "count": 1
+        },
+        "40000880:339": {
+          "name": "prompt-input-section",
+          "count": 1
+        },
+        "40000880:340": {
+          "name": "responsive-prompt-container",
+          "count": 1
+        },
+        "40000880:341": {
+          "name": "section-header",
+          "count": 1
+        },
+        "40000880:342": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000880:343": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000880:344": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000880:345": {
+          "name": "prompt-accordion",
+          "count": 1
+        },
+        "40000880:346": {
+          "name": "role-tile",
+          "count": 1
+        },
+        "40000880:347": {
+          "name": "role-label-injection",
+          "count": 1
+        },
+        "40000880:348": {
+          "name": null,
+          "count": 1
+        },
+        "40000880:350": {
+          "name": "functions",
+          "count": 1
+        },
+        "40000880:351": {
+          "name": null,
+          "count": 1
+        },
+        "40000880:352": {
+          "name": "prompt-imput",
+          "count": 1
+        },
+        "40000880:353": {
+          "name": "status-bar-prompt-input",
+          "count": 1
+        },
+        "40000880:354": {
+          "name": "Database_fill",
+          "count": 1
+        },
+        "40000880:355": {
+          "name": "Subtract",
+          "count": 1
+        },
+        "40000880:358": {
+          "name": "Database_fill",
+          "count": 1
+        },
+        "40000880:359": {
+          "name": "Subtract",
+          "count": 1
+        },
+        "40000880:362": {
+          "name": "prompt-textarea",
+          "count": 1
+        },
+        "40000880:363": {
+          "name": "text-input-placeholder",
+          "count": 1
+        },
+        "40000880:364": {
+          "name": null,
+          "count": 1
+        },
+        "40000880:305": {
+          "name": "prompt-input-section",
+          "count": 1
+        },
+        "40000880:306": {
+          "name": "responsive-prompt-container",
+          "count": 1
+        },
+        "40000880:307": {
+          "name": "section-header",
+          "count": 1
+        },
+        "40000880:308": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000880:309": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000880:310": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000880:311": {
+          "name": "prompt-accordion",
+          "count": 1
+        },
+        "40000880:312": {
+          "name": "role-tile",
+          "count": 1
+        },
+        "40000880:313": {
+          "name": "role-label-injection",
+          "count": 1
+        },
+        "40000880:314": {
+          "name": null,
+          "count": 1
+        },
+        "40000880:315": {
+          "name": "Arrow_drop_down",
+          "count": 1
+        },
+        "40000880:316": {
+          "name": "functions",
+          "count": 1
+        },
+        "40000880:317": {
+          "name": null,
+          "count": 1
+        },
+        "40000880:318": {
+          "name": "prompt-imput",
+          "count": 1
+        },
+        "40000880:319": {
+          "name": "status-bar-prompt-input",
+          "count": 1
+        },
+        "40000880:320": {
+          "name": "Database_fill",
+          "count": 1
+        },
+        "40000880:321": {
+          "name": "Subtract",
+          "count": 1
+        },
+        "40000880:324": {
+          "name": "Database_fill",
+          "count": 1
+        },
+        "40000880:325": {
+          "name": "Subtract",
+          "count": 1
+        },
+        "40000880:328": {
+          "name": "prompt-textarea",
+          "count": 1
+        },
+        "40000880:329": {
+          "name": "text-input-placeholder",
+          "count": 1
+        },
+        "40000880:330": {
+          "name": null,
+          "count": 1
+        }
+      }
+    },
+    "rail": {
+      "root": "40000880:270",
+      "nodes": {
+        "40000880:270": {
+          "name": "right-panel-horiz-tab",
+          "count": 1
+        },
+        "40000881:373": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000881:374": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000881:375": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000746:13": {
+          "name": null,
+          "count": 1
+        },
+        "40000746:14": {
+          "name": null,
+          "count": 1
+        },
+        "40000881:399": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000881:400": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000881:401": {
+          "name": "Meatballs_menu",
+          "count": 1
+        }
+      }
+    },
+    "section": {
+      "root": "40000746:94",
+      "nodes": {
+        "1:118": {
+          "name": "Arrow_drop_down",
+          "count": 1
+        },
+        "40000746:94": {
+          "name": "prompt-input-section",
+          "count": 1
+        },
+        "40000878:241": {
+          "name": "responsive-prompt-container",
+          "count": 1
+        },
+        "40000746:102": {
+          "name": "section-header",
+          "count": 1
+        },
+        "40000746:103": {
+          "name": "gripper-prompt-input",
+          "count": 1
+        },
+        "40000746:104": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000746:105": {
+          "name": "Meatballs_menu",
+          "count": 1
+        },
+        "40000879:252": {
+          "name": "prompt-accordion",
+          "count": 1
+        },
+        "40000746:106": {
+          "name": "role-tile",
+          "count": 1
+        },
+        "40000879:264": {
+          "name": "role-label-injection",
+          "count": 1
+        },
+        "40000746:107": {
+          "name": null,
+          "count": 1
+        },
+        "40000879:249": {
+          "name": "functions",
+          "count": 1
+        },
+        "40000879:250": {
+          "name": null,
+          "count": 1
+        },
+        "40000878:240": {
+          "name": "prompt-imput",
+          "count": 1
+        },
+        "40000878:239": {
+          "name": "status-bar-prompt-input",
+          "count": 1
+        },
+        "40000746:98": {
+          "name": "Database_fill",
+          "count": 1
+        },
+        "40000746:99": {
+          "name": "Subtract",
+          "count": 1
+        },
+        "40000746:95": {
+          "name": "prompt-textarea",
+          "count": 1
+        },
+        "40000878:234": {
+          "name": "text-input-placeholder",
+          "count": 1
+        },
+        "40000746:96": {
+          "name": null,
+          "count": 1
+        }
+      }
+    }
+  }
+}

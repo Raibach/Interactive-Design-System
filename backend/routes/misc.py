@@ -96,32 +96,29 @@ async def api_health():
     if not milvus_ok:
         critical_failures.append("milvus")
 
-    # ── Z.ai GLM-4.7 check (primary + fallback) ──
-    zai_ok = False
-    zai_error = None
-    zai_fallback_ok = False
+    # ── Assembly AI check (DeepSeek — the provider query_llm actually uses) ──
+    # 2026-09-09: replaced the Z.ai GLM-4.7 check. grace_gui.MODEL_PROVIDERS is
+    # DeepSeek-only, so Z.ai status said nothing about real assembly health and
+    # degraded the whole surface report for an unused provider.
+    llm_ok = False
+    llm_error = None
     try:
         import os
         from model_server_manager import test_model_connection
-        zai_key = os.getenv("ZAI_API_KEY")
-        if zai_key:
-            result = test_model_connection("zai")
-            zai_ok = result.get("status") == "success"
-            if not zai_ok:
-                zai_error = result.get("message", "unknown error")
+        if os.getenv("DEEPSEEK_API_KEY"):
+            result = test_model_connection("deepseek")
+            llm_ok = result.get("status") == "success"
+            if not llm_ok:
+                llm_error = result.get("message", "unknown error")
         else:
-            zai_error = "ZAI_API_KEY not set"
-        # Check fallback endpoint
-        if os.getenv("ZAI_FALLBACK_API_KEY"):
-            fb = test_model_connection("zai_fallback")
-            zai_fallback_ok = fb.get("status") == "success"
+            llm_error = "DEEPSEEK_API_KEY not set"
     except Exception as e:
-        zai_error = str(e)[:80]
-    health_data["checks"]["zai"] = "connected" if zai_ok else ("fallback" if zai_fallback_ok else "DISCONNECTED")
-    if zai_error and not zai_ok:
-        health_data["checks"]["zai_detail"] = zai_error
-    if not zai_ok and not zai_fallback_ok:
-        critical_failures.append("zai")
+        llm_error = str(e)[:80]
+    health_data["checks"]["assembly_llm"] = "connected" if llm_ok else "DISCONNECTED"
+    if llm_error and not llm_ok:
+        health_data["checks"]["assembly_llm_detail"] = llm_error
+    if not llm_ok:
+        critical_failures.append("assembly_llm")
 
     # ── Figma: DISABLED ──
     # Was pinging api.figma.com/v1/me on EVERY /api/health call — a live

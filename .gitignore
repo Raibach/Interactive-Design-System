@@ -26,5 +26,9 @@ venv/
 logs/
 *.log
 
+# ── Fidelity harness output (regenerated on every run) ────
+# node frontend/scripts/fidelity-check.mjs --out <base> writes <base>.txt/.json
+frontend/scripts/fidelity-report.*
+
 # ── Agent session tooling ─────────────────────────────────
 .zcode/

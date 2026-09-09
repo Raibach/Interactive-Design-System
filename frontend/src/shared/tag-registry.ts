@@ -576,6 +576,92 @@ export const StopDictationSchema = z.object({
 // REGISTRY — Master map of every AI-addressable tag
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ── Prompt Input Pattern (Figma 40000746-94 / 40000746-6) ────────────────────
+// Individually named components from the designer's Figma layers, each a
+// registered Lit element. Spec: READ-ME/PROMPT_INPUT_SECTION_SPEC.md
+
+export const PromptContainerSchema = z.object({
+  tag: z.literal('prompt-container'),
+  props: z.object({
+    formatLabel: z.string().optional(),
+    tokensLabel: z.string().optional(),
+  }),
+  events: z.tuple([]),
+  surface: z.literal('composer'),
+  column: z.literal('left'),
+  description: z.string(),
+  constraints: z.array(z.string()),
+});
+
+export const PromptInputSectionSchema = z.object({
+  tag: z.literal('prompt-input-section'),
+  props: z.object({
+    name: z.string(),
+    type: z.string(),
+    content: z.string(),
+    sticky: z.boolean().default(false),
+    minHeight: z.number().default(45),
+  }),
+  events: z.tuple([
+    z.literal('section-content-input'),
+    z.literal('section-menu-select'),
+    z.literal('section-collapse-toggle'),
+  ]),
+  surface: z.literal('composer'),
+  column: z.literal('left'),
+  description: z.string(),
+  constraints: z.array(z.string()),
+});
+
+export const GripperPromptInputSchema = z.object({
+  tag: z.literal('gripper-prompt-input'),
+  props: z.object({}),
+  events: z.tuple([]),
+  surface: z.literal('composer'),
+  column: z.literal('left'),
+  description: z.string(),
+  constraints: z.array(z.string()),
+});
+
+export const RoleTileSchema = z.object({
+  tag: z.literal('role-tile'),
+  props: z.object({
+    label: z.string(),
+    showMenu: z.boolean().default(true),
+  }),
+  events: z.tuple([z.literal('role-menu-toggle'), z.literal('role-tile-collapse-toggle')]),
+  surface: z.literal('composer'),
+  column: z.literal('left'),
+  description: z.string(),
+  constraints: z.array(z.string()),
+});
+
+export const StatusBarPromptInputSchema = z.object({
+  tag: z.literal('status-bar-prompt-input'),
+  props: z.object({
+    icons: z.array(z.string()).default([]),
+  }),
+  events: z.tuple([]),
+  surface: z.literal('composer'),
+  column: z.literal('left'),
+  description: z.string(),
+  constraints: z.array(z.string()),
+});
+
+export const PromptTextareaSchema = z.object({
+  tag: z.literal('prompt-textarea'),
+  props: z.object({
+    value: z.string(),
+    placeholder: z.string().optional(),
+    minHeight: z.number().default(45),
+  }),
+  events: z.tuple([z.literal('value-input')]),
+  surface: z.literal('composer'),
+  column: z.literal('left'),
+  description: z.string(),
+  constraints: z.array(z.string()),
+});
+
 export const TAG_REGISTRY = {
   // Composer — Left Column
   'prompt-section': {
@@ -591,6 +677,78 @@ export const TAG_REGISTRY = {
     },
     events: ['section-update', 'section-remove', 'section-reorder'],
     constraints: ['type=system-role is required before Run'],
+  },
+  'prompt-container': {
+    tag: 'prompt-container',
+    surface: 'composer',
+    column: 'left',
+    description: 'Bordered container (Figma 40000746-6) hosting stacked prompt-input-sections with the vertical format rail (Response Format A / tokens readout).',
+    props: {
+      formatLabel: { type: 'string', optional: true },
+      tokensLabel: { type: 'string', optional: true },
+    },
+    events: [],
+    constraints: ['sections slot only accepts prompt-input-section'],
+  },
+  'prompt-input-section': {
+    tag: 'prompt-input-section',
+    surface: 'composer',
+    column: 'left',
+    description: 'One prompt input row (Figma 40000746-94): gripper + role-tile + Functions / Tools + status rail + textarea.',
+    props: {
+      name: { type: 'string' },
+      type: { type: 'string' },
+      content: { type: 'string' },
+      sticky: { type: 'boolean', default: false },
+      minHeight: { type: 'number', default: 45 },
+    },
+    events: ['section-content-input', 'section-menu-select', 'section-collapse-toggle'],
+    constraints: ['System Role section is sticky: first, no menu, not draggable, not deletable'],
+  },
+  'gripper-prompt-input': {
+    tag: 'gripper-prompt-input',
+    surface: 'composer',
+    column: 'left',
+    description: 'Meatballs drag handle (49×37) — the only drag anchor of a prompt-input-section.',
+    props: {},
+    events: [],
+    constraints: ['drag is anchored here only'],
+  },
+  'role-tile': {
+    tag: 'role-tile',
+    surface: 'composer',
+    column: 'left',
+    description: 'Role label tile (357×43) with Arrow_drop_down menu toggle.',
+    props: {
+      label: { type: 'string' },
+      showMenu: { type: 'boolean', default: true },
+    },
+    events: ['role-menu-toggle', 'role-tile-collapse-toggle'],
+    constraints: ['System Role tile renders without the menu'],
+  },
+  'status-bar-prompt-input': {
+    tag: 'status-bar-prompt-input',
+    surface: 'composer',
+    column: 'left',
+    description: 'Vertical activity rail (40px) — Database_fill icons grow with prompt activity.',
+    props: {
+      icons: { type: 'array', default: [] },
+    },
+    events: [],
+    constraints: [],
+  },
+  'prompt-textarea': {
+    tag: 'prompt-textarea',
+    surface: 'composer',
+    column: 'left',
+    description: 'Active-data textarea (50% white, #767676 stroke, r=6) — Inter 600 16px/25px #000.',
+    props: {
+      value: { type: 'string' },
+      placeholder: { type: 'string', optional: true },
+      minHeight: { type: 'number', default: 45 },
+    },
+    events: ['value-input'],
+    constraints: [],
   },
   'save-button': {
     tag: 'save-button',
