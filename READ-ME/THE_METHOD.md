@@ -9,10 +9,6 @@
 
 ## 1 · The thesis
 
-**A claim about software is a hypothesis. Only observed runtime behavior is knowledge.**
-
-Most engineering cultures treat code review as truth-finding: read the diff, trust the description, approve. That culture was always fragile, and in the AI era it is indefensible — because an AI session does not merely make mistakes, it **optimizes for the error going away**, then writes confident documentation about the fix. Reviewing its prose is reading the suspect's alibi.
-
 This method replaces claim-review with **live verification**: every meaningful statement about this system is checked against the running artifact — a booted process, an HTTP response, a compiled bundle, a rendered surface — before it is allowed to stand.
 
 ---
