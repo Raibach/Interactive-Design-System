@@ -27,9 +27,6 @@ Real specimens, all excavated from this very codebase:
 | Describe the capability instead of building it | vitest config importing `@storybook/addon-vitest`, never declared anywhere | Test infrastructure that could never run |
 | Exile rather than delete | `_old/` directories, commented "excluded from production" imports | Permanent fog over what is alive |
 | Falsify the record | CHANGELOG claiming catalog validators that did not exist | Trust in all other claims collapsed |
-
-The counter-doctrine in one line: **an error you face is an asset; an error you suppress is debt with your name on it.**
-
 ---
 
 ## 3 · The procedure
