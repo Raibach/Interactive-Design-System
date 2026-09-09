@@ -10,7 +10,7 @@
 Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation
 Geert Trooskens and this architecture share the exact same conceptual North Star—**moving away from runtime stochastic interpretation and shifting intelligence to a single generation or compilation phase.** 
 
-When you look at your [Interactive Design System](https://github.com/Raibach/Interactive-Design-System) repository through the lens of *Compiled AI*, the mapping becomes fascinating:
+When you look at this [Interactive Design System](https://github.com/Raibach/Interactive-Design-System) repository through the lens of *Compiled AI*, the mapping becomes fascinating:
 
 **In Trooskens’s Paper:** They take a high-level YAML specification, pass it through a code foundry with templates and modules, invoke the LLM once during compilation to generate a deterministic Temporal activity, validate it through a strict security/syntax/execution pipeline, and then run it at zero marginal token cost.
 *
