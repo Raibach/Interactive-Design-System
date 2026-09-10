@@ -24,10 +24,6 @@ Real specimens, all excavated from this very codebase:
 
 ## The procedure
 
-
-### Ground truth before ground breaking
-Before changing anything, read the load-bearing files end-to-end and boot the system. No acting on summaries, not even your own memory of them.
-
 ### The claims ledger
 Every assertion earns one of three marks, each with a receipt type:
 - ✅ **Verified** — cite the live evidence (curl output, startup log, bundle grep, screenshot)
@@ -62,21 +58,13 @@ Each mechanism assumes the next session will misbehave — including mine. That 
 
 ---
 
-## The organizational claim
-
-Product & UX for solutioning — not the reverse.**
-
-Reasoning: ownership follows verifiability. The people who can observe the running surface and judge it against heuristics (P4) are the people who hold truth about the product. A committee that verifies nothing cannot own a discipline; it can only gate-check one.  
-
----
-
 ## Provenance: progressive adoption — why this method exists
 
-This doctrine was forged under fire, not in a blog post. During an enterprise AI-lifecycle engagement (Southern California Edison, via Logic2020, 2025–2026) — 15,000+ employees with vastly different AI literacy, inside a regulated utility where safety and auditability are paramount — stakeholder discovery found adoption stalled by three things: no standardization, redundant expensive experimentation across departments, and missing compliance audit trails.
+During an enterprise AI-lifecycle engagement (Southern California Edison, via Logic2020, 2025–2026) — 15,000+ employees with vastly different AI literacy, inside a regulated utility where safety and auditability are paramount — stakeholder discovery found adoption stalled by three things: no standardization, redundant expensive experimentation across departments, and missing compliance audit trails.
 
 The design answer was **progressive adoption**: one adaptive flow that meets novices and practitioners where they are. Governance and prompt-audit machinery is learned incrementally — often invisibly, as users engage. Adoption anxiety falls, enterprise performance rises, and compute spend falls naturally with task efficiency. The economics are behavioral, and they are exact: **fun saves money; frustration doubles compute.** AI-native interfaces must therefore train progressively, anticipating where complex tasks create massive overhead — not merely perform the job.
 
-This repository — an Interactive Design System (IDS) — is that thesis made executable: a deterministic shell so no user is ever stranded; a role-filtered trusted catalog so capability scales with responsibility; governance metadata riding inside every prompt package, so the audit trail exists by construction rather than by paperwork.
+This repository — an Interactive Design System (IDS) — thesis made executable: a deterministic shell so no user is ever stranded; a role-filtered trusted catalog so capability scales with responsibility; governance metadata riding inside every prompt package.
 
 
 ## Adendum for where developers fit into this paradigm:
