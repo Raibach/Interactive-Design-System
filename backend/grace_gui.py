@@ -92,9 +92,7 @@ def query_llm(
     # out of the JSON contract (verified live 2026-09-09: composer 503
     # KeyError 'components' with envelope-shaped response).
     messages = []
-    if mode in ("console_assembly", "surface_assembly", "prompt_output"):
-        # prompt_output executes the compiled prompt and returns RAW output — it must
-        # NOT get the A2UI MISSION_HEADER (which forces <a2ui_surface> XML emission).
+    if mode in ("console_assembly", "surface_assembly"):
         messages.append({"role": "system", "content": system_prompt})
     elif system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": MISSION_HEADER + system_prompt})

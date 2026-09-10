@@ -216,7 +216,7 @@ export default function Index({
       console.log("[WritingAreaIndex] A2UI surface update:", cmd.component, cmd.props);
 
       // Handle console/agent-card - these contain the cards array
-      if (cmd.component === 'console' || cmd.component === 'agent-card' || cmd.component === 'featured-card') {
+      if (cmd.component === 'console' || cmd.component === 'agent-card') {
         if (cmd.props.cards) {
           console.log("[WritingAreaIndex] Setting console cards:", cmd.props.cards.length);
           setAssembledConsoleCards(cmd.props.cards);

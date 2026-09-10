@@ -175,21 +175,6 @@ export const AgentCardSchema = z.object({
   constraints: z.array(z.string()),
 });
 
-export const FeaturedCardSchema = z.object({
-  tag: z.literal('featured-card'),
-  props: z.object({
-    subtitle: z.string(),
-    headline: z.string(),
-    teamHandle: z.string().optional(),
-    teamName: z.string().optional(),
-  }),
-  events: z.tuple([z.literal('featured-click')]),
-  surface: z.literal('console'),
-  column: z.literal('console'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
 export const FilterPillSchema = z.object({
   tag: z.literal('filter-pill'),
   props: z.object({
@@ -883,20 +868,6 @@ export const TAG_REGISTRY = {
     events: ['card-open', 'card-delete', 'card-archive'],
     constraints: ['id must be a valid session UUID'],
   },
-  'featured-card': {
-    tag: 'featured-card',
-    surface: 'console',
-    column: 'console',
-    description: 'Hero/featured card at the top of the console grid.',
-    props: {
-      subtitle: { type: 'string' },
-      headline: { type: 'string' },
-      teamHandle: { type: 'string', optional: true },
-      teamName: { type: 'string', optional: true },
-    },
-    events: ['featured-click'],
-    constraints: [],
-  },
   'filter-pill': {
     tag: 'filter-pill',
     surface: 'console',
@@ -1367,7 +1338,6 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
 export const SHELL_TAGS: TagName[] = [
   'ai-surface-sandbox',  // P5: structural viewport — React shell owns this frame
   'agent-card',
-  'featured-card',
   'filter-pill',
   'search-bar',
 ];
