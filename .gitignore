@@ -40,3 +40,9 @@ frontend/scripts/fidelity-report.*
 RESTART-LOCAL.sh
 architectural_philosophy
 spec-techincal direction doc.pdf
+
+# ── Reference repos (old snapshots — never tracked) ─────
+dsmanager/
+
+# ── Figma import cache (regenerated on every import) ────
+frontend/.figma-cache/

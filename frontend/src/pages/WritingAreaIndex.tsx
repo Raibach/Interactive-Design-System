@@ -82,10 +82,6 @@ export default function Index({
 
   // Composer-specific running state (controls middle column visibility during Run)
   const [isComposerRunning, setIsComposerRunning] = useState(false);
-  // Whether a Run has produced output — keeps the middle column visible after the
-  // run completes. Save must NOT set this: its AI-compilation writes compiledOutput,
-  // but the middle column is for Run output only, not save-compiled text.
-  const [hasRunOutput, setHasRunOutput] = useState(false);
 
   // ── Request deduplication: abort previous request if new one comes in ──
   const consoleAssemblyControllerRef = useRef<AbortController | null>(null);
@@ -1685,7 +1681,6 @@ export default function Index({
       prev ? { ...prev, leftColumnContent, compiledOutput: '' } : prev
     );
     setIsComposerRunning(true);
-    setHasRunOutput(true);
 
     try {
       const { getApiKey } = await import('@/services/authService');
@@ -1693,14 +1688,24 @@ export default function Index({
       const apiKey = getApiKey();
       if (apiKey) headers['X-API-Key'] = apiKey;
 
-      // Build prompt context exactly like the legacy composer did
-      const promptContext = sections
-        .map((s: any) => {
-          const n = s.name || s.section || s.role || s.type || 'Section';
-          const c = (s.content || '').trim();
-          return `## ${n}\n${c}`;
-        })
-        .join('\n\n');
+      // Build the structured context the backend _assemble_prompt_output expects:
+      // { core_roles: { "System Role": ... }, custom_roles: [...] }.
+      // (Previously sent markdown, which json.loads() rejected, so the backend fell
+      // back to a bare "Execute the prompt configuration." with no real prompt.)
+      const CORE_ROLES = ['System Role', 'User Role', 'Context', 'Constraints', 'Few Shot', 'Tool Call'];
+      const coreRoles: Record<string, string> = {};
+      const customRoles: { name: string; content: string }[] = [];
+      for (const s of sections || []) {
+        const name = s.name || s.section || s.role || s.type || 'Section';
+        const content = (s.content || '').trim();
+        if (!content) continue;
+        if (CORE_ROLES.includes(name)) {
+          coreRoles[name] = content;
+        } else {
+          customRoles.push({ name, content });
+        }
+      }
+      const promptContext = JSON.stringify({ core_roles: coreRoles, custom_roles: customRoles });
 
       const apiBase = import.meta.env.VITE_API_URL || '';
       const resp = await fetch(`${apiBase}/api/teacher/query`, {
@@ -1724,41 +1729,14 @@ export default function Index({
         return;
       }
 
-      const reader = resp.body?.getReader();
-      const decoder = new TextDecoder();
-      let output = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const parsed = JSON.parse(line.slice(6));
-                if (parsed.content) {
-                  output += parsed.content;
-                  // Live update so the viewer streams and layout keeps middle visible
-                  setCurrentPromptSession((prev: any) =>
-                    prev ? { ...prev, compiledOutput: output } : prev
-                  );
-                }
-              } catch {
-                // non-JSON data lines are ignored
-              }
-            }
-          }
-        }
-      }
-
-      if (!output.trim()) {
-        setCurrentPromptSession((prev: any) =>
-          prev ? { ...prev, compiledOutput: '(No output returned.)' } : prev
-        );
-      }
+      // The backend returns a single JSON object ({ content, error, conversation_id })
+      // — not a Server-Sent Events stream. Parse it directly instead of expecting
+      // `data: ` lines (which never arrive, so output stayed empty → "(No output returned.)").
+      const data = await resp.json();
+      const output = (data && (data.content || data.error || '')) || '';
+      setCurrentPromptSession((prev: any) =>
+        prev ? { ...prev, compiledOutput: output || '(No output returned.)' } : prev
+      );
     } catch (err: any) {
       console.error('[WritingAreaIndex] Run execution failed', err);
       setCurrentPromptSession((prev: any) =>
@@ -1793,7 +1771,6 @@ export default function Index({
     setCurrentPromptSession((prev: any) =>
       prev ? { ...prev, compiledOutput: '' } : prev
     );
-    setHasRunOutput(false);
   };
 
     console.log('✅ [WritingAreaIndex] Setting up event listeners');
@@ -1869,7 +1846,6 @@ export default function Index({
     // Listen for start-new-prompt from LeftVerticalMenu — clear workspace without DB save
     const handleStartNewPrompt = () => {
       setCurrentPromptSession(null);
-      setHasRunOutput(false);
       setPromptLoadKey(prev => prev + 1);
     };
     window.addEventListener("start-new-prompt", handleStartNewPrompt);
@@ -2064,7 +2040,7 @@ export default function Index({
                     </div>
                   ) : (
                   <workspace-layout 
-                    show-middle={isComposerRunning || hasRunOutput ? '' : undefined}
+                    show-middle={isComposerRunning || !!currentPromptSession?.compiledOutput ? '' : undefined}
                     style={{ height: '100%', width: '100%' }}
                   >
                     <div 
@@ -2114,6 +2090,11 @@ export default function Index({
                       sessionId={currentPromptSession?.id || null}
                       compiledOutput={currentPromptSession?.compiledOutput || ''}
                       isRunning={false}
+                      getLeftColumnSections={() => {
+                        const editor = promptSectionEditorRef.current as any;
+                        return (editor && (editor._sections || editor.sections)) || [];
+                      }}
+                      leftColumnContent={currentPromptSession?.leftColumnContent || ''}
                     />
                   </div>
                   </workspace-layout>

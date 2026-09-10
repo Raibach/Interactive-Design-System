@@ -73,9 +73,13 @@ interface InteractiveChatInterfaceProps {
   compiledOutput?: string;
   /** Whether a Run is currently streaming */
   isRunning?: boolean;
+  /** Live left-column sections (includes unsaved edits) — reads the Lit editor ref */
+  getLeftColumnSections?: () => any[];
+  /** Persisted left-column content (JSON `{ sections: [...] }`) — fallback when the editor isn't mounted */
+  leftColumnContent?: string;
 }
 
-export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning }: InteractiveChatInterfaceProps = {}) {
+export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent }: InteractiveChatInterfaceProps = {}) {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [inputHeight, setInputHeight] = useState(180);
   const [isDragging, setIsDragging] = useState(false);
@@ -474,56 +478,46 @@ ${compiledOutput.slice(0, 3000)}`;
   };
 
   // ── Multi-column context awareness ──────────────────────────────────
-  // Scrapes all textareas across the three-column layout so the model
-  // knows the full workspace state and can update any column.
+  // Reads the authoritative workspace state from props, NOT from DOM scraping.
+  // The left column lives inside <prompt-section-editor>'s shadow DOM, so
+  // querySelectorAll() can't reach its textareas — which is why Grace reported
+  // an empty workspace. Prefer the live editor state (unsaved edits included),
+  // fall back to the persisted leftColumnContent.
   const buildWorkspaceContext = (): string => {
     const parts: string[] = [];
 
-    // Left column: all textareas (both data-section-container and data-section-name patterns)
-    const leftTextareas = document.querySelectorAll('[data-section-container] textarea, textarea[data-section-name]');
-    const leftParts: string[] = [];
-    const seenLabels = new Set<string>();
-    let activeSection = '';
-    leftTextareas.forEach((el) => {
-      const ta = el as HTMLTextAreaElement;
-      // Skip hidden textareas (removed roles)
-      let parent = ta.parentElement;
-      let hidden = false;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if (style.display === 'none' || style.visibility === 'hidden') { hidden = true; break; }
-        parent = parent.parentElement;
+    // Left column: live sections via the callback, else the persisted JSON.
+    let sections: any[] = [];
+    try {
+      if (getLeftColumnSections) sections = getLeftColumnSections() || [];
+      if (!sections.length && leftColumnContent) {
+        const parsed = JSON.parse(leftColumnContent);
+        sections = Array.isArray(parsed?.sections)
+          ? parsed.sections
+          : Array.isArray(parsed) ? parsed : [];
       }
-      if (hidden) return;
-      const label = ta.getAttribute('data-section-name') || ta.getAttribute('placeholder') || ta.getAttribute('aria-label') || '';
-      if (ta === document.activeElement) {
-        activeSection = label || 'unknown';
-      }
-      if (ta.value?.trim() && !seenLabels.has(label)) {
-        seenLabels.add(label);
-        leftParts.push(label ? `${label}: ${ta.value.trim()}` : ta.value.trim());
-      }
-    });
-    if (leftParts.length > 0 || activeSection) {
-      parts.push('=== PROMPT INPUT AREA (what the user is building) ===');
-      if (activeSection) {
-        parts.push(`User is currently focused on: "${activeSection}".`);
-      }
-      if (leftParts.length > 0) {
-        parts.push(...leftParts);
-      }
+    } catch {
+      sections = [];
     }
 
-    // Third column: compiled output (read from editable textarea)
-    const compiledEl = document.querySelector('[data-compiled-output]');
-    if (compiledEl) {
-      const outputTa = compiledEl.querySelector('textarea');
-      const outputText = outputTa?.value?.trim();
-      if (outputText) {
-        parts.push('');
-        parts.push('=== OUTPUT PANEL ===');
-        parts.push(outputText);
-      }
+    const leftParts = sections
+      .filter((s) => s && (s.name || s.section || s.role || s.type))
+      .map((s) => {
+        const name = s.name || s.section || s.role || s.type || 'Section';
+        const content = String(s.content || '').trim();
+        return content ? `${name}: ${content}` : `${name}: (empty)`;
+      });
+
+    if (leftParts.length > 0) {
+      parts.push('=== PROMPT INPUT AREA (what the user is building) ===');
+      parts.push(...leftParts);
+    }
+
+    // Middle column: compiled output from the Run pipeline (authoritative prop).
+    if (compiledOutput && compiledOutput.trim()) {
+      parts.push('');
+      parts.push('=== OUTPUT PANEL ===');
+      parts.push(compiledOutput.trim());
     }
 
     // Grounding & evaluation metrics — always available for AI discussion
