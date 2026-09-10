@@ -32,3 +32,10 @@ frontend/scripts/fidelity-report.*
 
 # ── Agent session tooling ─────────────────────────────────
 .zcode/
+.continue/
+.vscode/
+
+# ── Local-only files (owner-removed from GitHub) ───────────
+RESTART-LOCAL.sh
+architectural_philosophy
+spec-techincal direction doc.pdf
