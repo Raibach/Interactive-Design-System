@@ -412,7 +412,7 @@ LAYOUT CONTRACT — three fixed slots you fill:
 REQUIREMENTS:
 1. Component objects use key "component" (NOT "type"). Every object needs "id".
 2. id "root" Column at the top.
-3. initial_sections: exactly 3 starter prompt sections — System, User, Constraints — each an object {{"name", "type", "content"}} with short real content (User may be empty).
+3. initial_sections: exactly 3 starter prompt sections — System, User, Agent — each an object {{"name", "type", "content"}} with short real content (User and Agent may be empty).
 4. One short friendly ai_message and one short suggested_title.
 
 Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array, no extra keys, no text after the JSON:
@@ -426,7 +426,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
   "initial_sections": [
     {{"name": "System", "type": "system", "content": "You are a precise, professional assistant."}},
     {{"name": "User", "type": "user", "content": ""}},
-    {{"name": "Constraints", "type": "constraints", "content": "Follow the requested output format exactly."}}
+    {{"name": "Agent", "type": "agent", "content": ""}}
   ],
   "suggested_title": "Untitled Prompt",
   "ai_message": "Composer ready. Select a role and enter your prompt."

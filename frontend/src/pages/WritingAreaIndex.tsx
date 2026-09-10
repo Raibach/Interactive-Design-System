@@ -82,6 +82,10 @@ export default function Index({
 
   // Composer-specific running state (controls middle column visibility during Run)
   const [isComposerRunning, setIsComposerRunning] = useState(false);
+  // Whether a Run has produced output — keeps the middle column visible after the
+  // run completes. Save must NOT set this: its AI-compilation writes compiledOutput,
+  // but the middle column is for Run output only, not save-compiled text.
+  const [hasRunOutput, setHasRunOutput] = useState(false);
 
   // ── Request deduplication: abort previous request if new one comes in ──
   const consoleAssemblyControllerRef = useRef<AbortController | null>(null);
@@ -1681,6 +1685,7 @@ export default function Index({
       prev ? { ...prev, leftColumnContent, compiledOutput: '' } : prev
     );
     setIsComposerRunning(true);
+    setHasRunOutput(true);
 
     try {
       const { getApiKey } = await import('@/services/authService');
@@ -1788,6 +1793,7 @@ export default function Index({
     setCurrentPromptSession((prev: any) =>
       prev ? { ...prev, compiledOutput: '' } : prev
     );
+    setHasRunOutput(false);
   };
 
     console.log('✅ [WritingAreaIndex] Setting up event listeners');
@@ -1863,6 +1869,7 @@ export default function Index({
     // Listen for start-new-prompt from LeftVerticalMenu — clear workspace without DB save
     const handleStartNewPrompt = () => {
       setCurrentPromptSession(null);
+      setHasRunOutput(false);
       setPromptLoadKey(prev => prev + 1);
     };
     window.addEventListener("start-new-prompt", handleStartNewPrompt);
@@ -2057,7 +2064,7 @@ export default function Index({
                     </div>
                   ) : (
                   <workspace-layout 
-                    show-middle={isComposerRunning || !!currentPromptSession?.compiledOutput ? '' : undefined}
+                    show-middle={isComposerRunning || hasRunOutput ? '' : undefined}
                     style={{ height: '100%', width: '100%' }}
                   >
                     <div 

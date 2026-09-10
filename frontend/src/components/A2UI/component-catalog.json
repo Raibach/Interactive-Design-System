@@ -1180,6 +1180,21 @@
         "component"
       ]
     },
+    "role-dropdown": {
+      "type": "object",
+      "description": "Role-selector dropdown for a prompt-input-section accordion tile (Figma 40000934-22851). Lists User Role / Agent Role / Tool Call / Custom / Remove; dispatches role-select / role-remove.",
+      "properties": {
+        "component": {
+          "const": "role-dropdown"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
     "role-tile": {
       "type": "object",
       "description": "Role label tile 357x43 with Arrow_drop_down menu toggle (Figma 40000746-94).",
@@ -1204,7 +1219,7 @@
     },
     "status-bar-prompt-input": {
       "type": "object",
-      "description": "Vertical activity rail (40px) — Database_fill icons grow with prompt activity (Figma 40000746-94).",
+      "description": "Vertical activity rail (40px) — Database_fill + lightning_alt_fill_light icons grow with prompt activity (Figma 40000954-23865).",
       "properties": {
         "component": {
           "const": "status-bar-prompt-input"
@@ -1234,6 +1249,24 @@
           "type": "object"
         },
         "minHeight": {
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "model-selector-button": {
+      "type": "object",
+      "description": "Model selector button (Figma 40000909-4322 'Function - Model Selector Button'): white, radius 6, 'button drop' shadow, fixed 171x40, 'Models' label (Inter Bold 16 #8B8B8B).",
+      "properties": {
+        "component": {
+          "const": "model-selector-button"
+        },
+        "label": {
           "type": "object"
         },
         "id": {
@@ -1345,6 +1378,9 @@
         },
         {
           "$ref": "#/components/status-readout"
+        },
+        {
+          "$ref": "#/components/model-selector-button"
         },
         {
           "$ref": "#/components/token-cost-readout"

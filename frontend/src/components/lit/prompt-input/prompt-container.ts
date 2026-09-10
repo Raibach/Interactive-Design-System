@@ -2,7 +2,7 @@
  * <prompt-container> — Figma 40000746-6 / "Frame 143"
  * 643-wide bordered container (#C0BDCF 1px) hosting the stacked
  * prompt-input-sections (left, 602px area) and the vertical format rail
- * (right, 39px): meatballs groups top/bottom, vertical "Response Format A"
+ * (right, 39px): gripper top / meatballs bottom, vertical "Agent Prompting"
  * label (Inter 16px w500 lh19.364 #171717), vertical tokens/cost readout
  * (Inter 12px w600 lh20 #767676).
  *
@@ -10,15 +10,21 @@
  * Sections are provided via the default slot.
  */
 import { LitElement, html, css } from 'lit';
-import { meatballsInstanceSvg } from './prompt-icons';
+import { meatballsInstanceSvg, gripperMeatballsSvg } from './prompt-icons';
 
 export class PromptContainer extends LitElement {
   static properties = {
     formatLabel: { type: String, attribute: 'format-label' },
     tokensLabel: { type: String, attribute: 'tokens-label' },
   };
-  formatLabel = '';
-  tokensLabel = '';
+  declare formatLabel: string;
+  declare tokensLabel: string;
+
+  constructor() {
+    super();
+    this.formatLabel = '';
+    this.tokensLabel = '';
+  }
 
   static styles = css`
     :host {
@@ -43,6 +49,7 @@ export class PromptContainer extends LitElement {
       display: flex;
       flex-direction: column;
       align-items: center;
+      gap: 10px;
       background: #ffffff;
     }
     .rail-meatballs {
@@ -53,6 +60,15 @@ export class PromptContainer extends LitElement {
     .rail-meatballs > :first-child { margin-right: -1px; }
     /* Instrumented wrappers: keep 24×24 meatballs pixel-identical (no inline-SVG baseline gap). */
     .rail-meatballs > span { display: block; line-height: 0; }
+    .rail-gripper {
+      width: 39px;
+      height: 37px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .rail-gripper .rot { transform: rotate(-90deg); display: flex; }
     .vertical-label {
       writing-mode: vertical-rl;
       font-family: 'Inter', system-ui, sans-serif;
@@ -60,7 +76,6 @@ export class PromptContainer extends LitElement {
       font-weight: 500;
       line-height: 19.364px;
       color: #171717;
-      margin-top: 11px;
       white-space: nowrap;
     }
     .vertical-tokens {
@@ -70,7 +85,6 @@ export class PromptContainer extends LitElement {
       font-weight: 600;
       line-height: 20px;
       color: #767676;
-      margin-top: 10px;
       white-space: nowrap;
     }
     .rail-bottom { margin-top: auto; }
@@ -83,9 +97,8 @@ export class PromptContainer extends LitElement {
           <slot></slot>
         </div>
         <div class="format-rail" data-tag="format-rail">
-          <div class="rail-meatballs" data-node-id="40000881:373">
-            <span data-node-id="40000881:374">${meatballsInstanceSvg}</span>
-            <span data-node-id="40000881:375">${meatballsInstanceSvg}</span>
+          <div class="rail-gripper" data-node-id="40000881:373">
+            <span class="rot">${gripperMeatballsSvg}</span>
           </div>
           ${this.formatLabel ? html`<div class="vertical-label">${this.formatLabel}</div>` : ''}
           ${this.tokensLabel ? html`<div class="vertical-tokens">${this.tokensLabel}</div>` : ''}

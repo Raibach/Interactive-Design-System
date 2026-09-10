@@ -65,15 +65,24 @@ export class AISurfaceSandbox extends LitElement {
   };
 
   // ── Defaults ─────────────────────────────────────────────────────────────
-  isAIAssembling: boolean = false;
-  headerTab: string = 'console';
+  declare isAIAssembling: boolean;
+  declare headerTab: string;
 
   /** @internal — error boundary state */
-  _hasRuntimeError: boolean = false;
+  declare _hasRuntimeError: boolean;
   /** @internal — error message for inline display */
-  _errorMessage: string = '';
+  declare _errorMessage: string;
   /** @internal — stack trace for inline display */
-  _errorStack: string = '';
+  declare _errorStack: string;
+
+  constructor() {
+    super();
+    this.isAIAssembling = false;
+    this.headerTab = 'console';
+    this._hasRuntimeError = false;
+    this._errorMessage = '';
+    this._errorStack = '';
+  }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
   connectedCallback(): void {

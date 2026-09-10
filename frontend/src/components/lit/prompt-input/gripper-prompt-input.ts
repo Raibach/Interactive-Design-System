@@ -9,42 +9,29 @@
  * This is the ONLY drag anchor for a prompt-input-section (designer's rule).
  */
 import { LitElement, html, css } from 'lit';
-import meatballs1 from '../../../assets/figma-8b1b452e2cef56cac2782037ad0063fc0fc0b0c7.svg';
-import meatballs2 from '../../../assets/figma-e0e27b50d05223371eaf5e9bc107d6901d0b45be.svg';
+import { gripperMeatballsSvg } from './prompt-icons';
 
 export class GripperPromptInput extends LitElement {
   static styles = css`
     :host {
-      display: block;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       position: relative;
-      width: 49px;
-      height: 37px;
+      width: 40px;
+      height: 40px;
       flex-shrink: 0;
       cursor: grab;
       user-select: none;
       background: #ffffff;
     }
     :host(:active) { cursor: grabbing; }
-    .meatballs {
-      position: absolute;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .meatballs img { display: block; width: 24px; height: 24px; }
-    /* MCP: both instances carry -rotate-90 */
-    .meatballs .rot { transform: rotate(-90deg); }
-    .m0 { left: 9px; top: 6px; }
-    .m1 { left: 16px; top: 6px; }
+    /* Figma 40000941-23074: single Meatballs_menu 37×39, rotated -90°. */
+    .rot { transform: rotate(-90deg); display: flex; }
   `;
 
   render() {
-    return html`
-      <div class="meatballs m0"><div class="rot"><img alt="" src=${meatballs1} /></div></div>
-      <div class="meatballs m1"><div class="rot"><img alt="" src=${meatballs2} /></div></div>
-    `;
+    return html`<div class="rot">${gripperMeatballsSvg}</div>`;
   }
 }
 

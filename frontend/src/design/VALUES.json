@@ -1,7 +1,14 @@
 {
   "_meta": {
     "source": "Figma MCP get_design_context caches",
-    "extractedAt": "2026-09-09T16:37:07.193Z"
+    "extractedAt": "2026-09-10T14:50:40.259Z",
+    "annotationAttributeNames": [
+      "data-development-annotations"
+    ],
+    "stats": {
+      "nodesScanned": 42,
+      "annotationsFound": 2
+    }
   },
   "functions": {
     "assets": [],
@@ -84,6 +91,10 @@
         }
       }
     }
+  },
+  "node-census": {
+    "assets": [],
+    "nodes": {}
   },
   "prompt-accordion": {
     "assets": [
@@ -412,11 +423,21 @@
           "position": "relative",
           "font-size": "16px",
           "white-space": "pre-wrap"
-        }
+        },
+        "annotations": [
+          {
+            "attribute": "data-development-annotations",
+            "value": "this is a textarea - for active data."
+          }
+        ]
       }
     },
     "annotations": [
-      "this is a textarea - for active data."
+      {
+        "attribute": "data-development-annotations",
+        "value": "this is a textarea - for active data.",
+        "nodeId": "40000746:96"
+      }
     ]
   },
   "prompt-textarea": {
@@ -454,11 +475,21 @@
           "position": "relative",
           "font-size": "16px",
           "white-space": "pre-wrap"
-        }
+        },
+        "annotations": [
+          {
+            "attribute": "data-development-annotations",
+            "value": "this is a textarea - for active data."
+          }
+        ]
       }
     },
     "annotations": [
-      "this is a textarea - for active data."
+      {
+        "attribute": "data-development-annotations",
+        "value": "this is a textarea - for active data.",
+        "nodeId": "40000746:96"
+      }
     ]
   },
   "role-tile": {

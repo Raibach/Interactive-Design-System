@@ -106,15 +106,22 @@ export class ChatNavigationBar extends LitElement {
   };
 
   // ── Defaults ─────────────────────────────────────────────────────────────
-  activeTab: TabId = 'chat';
-  collapsed: boolean = false;
+  declare activeTab: TabId;
+  declare collapsed: boolean;
   /**
    * Comma-separated list of tab IDs to show, filtered by the user's
    * departmental role. Set by InteractiveChatInterface from the
    * /api/ai/role-capabilities response.
    * If unset, all tabs are shown (backwards-compatible dev default).
    */
-  allowedTabs: string = '';
+  declare allowedTabs: string;
+
+  constructor() {
+    super();
+    this.activeTab = 'chat';
+    this.collapsed = false;
+    this.allowedTabs = '';
+  }
 
   // ── Drag state (not reactive — no re-render needed) ──────────────────────
   private _isDragging: boolean = false;

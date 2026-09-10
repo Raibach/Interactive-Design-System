@@ -135,12 +135,14 @@ class PromptSectionEditor extends LitElement {
     if (this._listenersBound) return;
     this._listenersBound = true;
 
-    // Seed default sections so the left column is never empty
+    // Seed default sections so the left column is never empty.
+    // Order matches the Figma container (node 40000746-6): System Role,
+    // User Role, Agent Role — no invented sections.
     if (this._sections.length === 0) {
       this._sections = [
         { name: 'System Role', content: 'You are an expert in semantic design systems and A2UI protocol.', type: 'system' },
         { name: 'User Role', content: '', type: 'user' },
-        { name: 'Constraints', content: 'Follow the requested output format exactly.', type: 'constraints' },
+        { name: 'Agent Role', content: '', type: 'agent' },
       ];
     }
 
@@ -159,7 +161,7 @@ class PromptSectionEditor extends LitElement {
       if (idx < 0) return;
       if (this._collapsed.has(idx)) this._collapsed.delete(idx);
       else this._collapsed.add(idx);
-      const host = e.target as HTMLElement;
+      const host = this._sectionHost(e);
       if (this._collapsed.has(idx)) host.setAttribute('collapsed', '');
       else host.removeAttribute('collapsed');
     });
@@ -203,9 +205,19 @@ class PromptSectionEditor extends LitElement {
   }
 
   private _indexOfSectionEvent(e: CustomEvent): number {
-    const host = e.target as HTMLElement;
-    const idxAttr = host.getAttribute('data-idx');
+    const idxAttr = this._sectionHost(e).getAttribute('data-idx');
     return idxAttr !== null ? parseInt(idxAttr, 10) : -1;
+  }
+
+  /**
+   * The <prompt-input-section> that originally dispatched a composed event.
+   * Shadow DOM retargeting rewrites `e.target` to the nearest shadow host
+   * (prompt-container, then prompt-section-editor), so `e.target` loses the
+   * `data-idx` attribute. `composedPath()[0]` is always the real dispatcher.
+   */
+  private _sectionHost(e: CustomEvent): HTMLElement {
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    return (path.length ? path[0] : e.target) as HTMLElement;
   }
 
   private _emitUpdate(index: number) {
@@ -326,7 +338,7 @@ class PromptSectionEditor extends LitElement {
         <span style="font-size:10px; color:#9ca3af;">${this._sections.length} sections</span>
       </div>
       <div class="sections-scroll">
-        <prompt-container format-label="Response Format A" tokens-label="Tokens: 2022 Cost: $0.00802">
+        <prompt-container format-label="Agent Prompting" tokens-label="Tokens: 2022 Cost: $0.00802">
           ${sectionsHtml}
         </prompt-container>
       </div>

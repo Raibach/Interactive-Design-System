@@ -7,11 +7,16 @@
  * Property: icons — ordered list of activity kinds, e.g. ['database', 'database'].
  */
 import { LitElement, html, css } from 'lit';
-import { databaseFillSvg } from './prompt-icons';
+import { databaseFillSvg, lightningAltFillLightSvg, lightningAltFillLight1Svg } from './prompt-icons';
 
 export class StatusBarPromptInput extends LitElement {
   static properties = { icons: { type: Array } };
-  icons: string[] = [];
+  declare icons: string[];
+
+  constructor() {
+    super();
+    this.icons = [];
+  }
 
   static styles = css`
     :host {
@@ -26,7 +31,7 @@ export class StatusBarPromptInput extends LitElement {
     }
     .icon-cell {
       width: 40px;
-      height: 27.5px;
+      height: 40px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -38,7 +43,7 @@ export class StatusBarPromptInput extends LitElement {
     return html`${this.icons.map(
       (kind) => html`
         <span class="icon-cell" title="${kind} activity" data-icon-kind="${kind}">
-          ${kind === 'database' ? databaseFillSvg : ''}
+          ${kind === 'database' ? databaseFillSvg : kind === 'lightning1' ? lightningAltFillLight1Svg : kind === 'lightning' ? lightningAltFillLightSvg : ''}
         </span>`,
     )}`;
   }
