@@ -6,8 +6,9 @@
 
 ---
 
-** https://arxiv.org/html/2604.05150v1** 
-*
+
+https://arxiv.org/html/2604.05150v1
+
 Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation
 Geert Trooskens and this architecture share the exact same conceptual North Star—**moving away from runtime stochastic interpretation and shifting intelligence to a single generation or compilation phase.** 
 
