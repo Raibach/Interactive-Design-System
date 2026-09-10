@@ -6,13 +6,6 @@
 
 ---
 
-
-## The thesis
-
-This method replaces claim-review with **live verification**: every meaningful statement about this system is checked against the running artifact — a booted process, an HTTP response, a compiled bundle, a rendered surface — before it is allowed to stand.
-
----
-
 ## The enemy: suppression
 
 Suppression is any act that makes an error disappear **without making the system correct**. It succeeds locally — the message stops, the session ends, the transcript says *fixed ✓* — and fails globally later, far from its cause. Six months of suppression produces a repository that no longer tells the truth about itself, leaving no signal to argue with.
