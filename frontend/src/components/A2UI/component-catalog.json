@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
   "title": "Raibach Prompt Composer Catalog",
-  "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. 24 trusted components — 6 from the A2UI Basic Catalog plus 18 project-specific Lit/React components. Agent can only render components from this allowlist.",
+  "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. 23 trusted components — 6 from the A2UI Basic Catalog plus 17 project-specific Lit/React components. Agent can only render components from this allowlist.",
   "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
   "components": {
     "Text": {
@@ -391,48 +391,6 @@
             "component",
             "id",
             "title"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "featured-card": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Featured card displayed prominently on the console homepage. Used for team showcases and highlighted content.",
-          "properties": {
-            "component": {
-              "const": "featured-card"
-            },
-            "subtitle": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Subtitle text (e.g., 'Featured Team')."
-            },
-            "headline": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Main headline text."
-            },
-            "teamHandle": {
-              "type": "string",
-              "description": "Team handle (e.g., '@design-systems')."
-            },
-            "teamName": {
-              "type": "string",
-              "description": "Display name of the team."
-            }
-          },
-          "required": [
-            "component",
-            "subtitle",
-            "headline"
           ]
         }
       ],
@@ -1330,9 +1288,6 @@
         },
         {
           "$ref": "#/components/agent-card"
-        },
-        {
-          "$ref": "#/components/featured-card"
         },
         {
           "$ref": "#/components/filter-pill"
