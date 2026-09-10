@@ -69,7 +69,7 @@ This repository — an Interactive Design System (IDS) — thesis made executabl
 
 ## Adendum for where developers fit into this paradigm:
 
-The Shift from Slop to Primitives: Instead of writing repetitive ticket boilerplate or babysitting fragmented AI output, engineers shift to operating at a deep craft level, similar to how UI designers use component libraries.   
+The Shift from Slop to Primitives: Instead of writing repetitive ticket boilerplate or babysitting fragmented AI output, engineers shift to operating at a deep craft level. Code is introduced to the system similar to how UI componentsd.   
 
 Building Hand-Crafted Repositories: Engineers author foundational, hand-crafted code blocks—such as custom functionality, high-performance logic, novel behaviors or just higly oiptimized curated simple code libraries that the AI cannot reliably guess or optimize from old training data—and package them into clean repositories. 
 This method allows the code base observability for performance and security.
