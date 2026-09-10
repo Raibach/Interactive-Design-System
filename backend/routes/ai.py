@@ -224,14 +224,14 @@ async def ai_assemble_surface(
         # ── PERFORMANCE TRACE: Milestone A (Database) ──
         t_a_start = time.perf_counter()
 
-        # Fetch raw session data from PostgreSQL — lightweight: only metadata,
-        # not the full prompt package (left_column_content / compiled_output).
+        # Fetch the FULL prompt package (not lightweight) so each console card is
+        # a true index of its entire prompt — sections, output, versions, chat.
         sessions = state.prompt_sessions_api.get_sessions(
             user_id=uid,
             include_archived=False,
             limit=limit,
             offset=0,
-            lightweight=True,
+            lightweight=False,
             exclude_drafts=True,  # unsigned composer drafts never litter the console
         )
         ms_a = (time.perf_counter() - t_a_start) * 1000
@@ -240,12 +240,54 @@ async def ai_assemble_surface(
         # inference. The A2UI contract remains intact: the surface still binds a
         # ConsoleCardGrid to /cards, but the card data comes straight from
         # PostgreSQL instead of waiting on an expensive reasoning model.
+        def _prompt_section_texts(session):
+            raw = session.get("left_column_content") or ""
+            try:
+                data = json.loads(raw)
+            except Exception:
+                return []
+            sections = data.get("sections", []) if isinstance(data, dict) else data
+            if not isinstance(sections, list):
+                return []
+            out = []
+            for s in sections:
+                if isinstance(s, dict):
+                    c = (s.get("content") or "").strip()
+                else:
+                    c = str(s or "").strip()
+                if c:
+                    out.append(c)
+            return out
+
+        _PLACEHOLDER_TITLES = {
+            "", "untitled", "untitled prompt", "untitled agent",
+            "new prompt (ai assembling...)", "blank canvas prompt", "new prompt agent",
+        }
+
         cards = []
         for session in sessions:
+            title = (session.get("title") or "").strip()
+            description = (session.get("description") or "").strip()
+            texts = _prompt_section_texts(session)
+
+            # The card is an index of the whole prompt package. When the saved
+            # title is a placeholder, derive the card identity from the actual
+            # prompt content so each card reflects its own prompt.
+            if title.lower() in _PLACEHOLDER_TITLES:
+                first = next((t for t in texts), "")
+                if first:
+                    title = first[:48] + ("…" if len(first) > 48 else "")
+                elif description:
+                    title = description[:48] + ("…" if len(description) > 48 else "")
+                else:
+                    title = "Prompt"
+            if not description and texts:
+                description = texts[0][:180] + ("…" if len(texts[0]) > 180 else "")
+
             cards.append({
                 "id": str(session.get("id")),
-                "title": session.get("title") or "Untitled",
-                "description": session.get("description") or "",
+                "title": title,
+                "description": description,
                 "category": session.get("category") or "",
                 "status": (session.get("status") or "Active").lower(),
                 "version": session.get("current_version") or 1,
