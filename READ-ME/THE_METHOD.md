@@ -80,4 +80,4 @@ Deterministic System Integration: Rather than guessing, the deterministic AI and
 ---
 ---
 
-*This document practices what it preaches: every historical claim above links to a ledger entry with live evidence. Verify us.*
+*This document practices what it preaches: every historical claim above links to a ledger entry with live evidence. *
