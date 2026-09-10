@@ -6,7 +6,7 @@
 
 ---
 
-** https://arxiv.org/html/2604.05150v1
+** https://arxiv.org/html/2604.05150v1** 
 Compiled AI: Deterministic Code Generation for LLM-Based Workflow Automation
 Geert Trooskens and this architecture share the exact same conceptual North Star—**moving away from runtime stochastic interpretation and shifting intelligence to a single generation or compilation phase.** 
 
@@ -14,7 +14,7 @@ When we look at this [Interactive Design System](https://github.com/Raibach/Inte
 
 **In Trooskens’s Paper:** They take a high-level YAML specification, pass it through a code foundry with templates and modules, invoke the LLM once during compilation to generate a deterministic Temporal activity, validate it through a strict security/syntax/execution pipeline, and then run it at zero marginal token cost.
 *
-* ** Architecture:**  compilation/determinism ethos to the **design-to-code and UI architecture layer**. Instead of treating design systems as static documentation or leaving UI generation to runtime chat prompts (which drift, hallucinate, and break component tokens), U am treating design tokens and components as strict compilation targets. The intelligence compiles the visual structure and constraints down into a deterministic, predictable code layer (akin to advanced code-gen engines like Figma's token bridges), ensuring that output is governed by the system's rules rather than runtime model variance.
+** Architecture:**  compilation/determinism ethos to the **design-to-code and UI architecture layer**. Instead of treating design systems as static documentation or leaving UI generation to runtime chat prompts (which drift, hallucinate, and break component tokens), U am treating design tokens and components as strict compilation targets. The intelligence compiles the visual structure and constraints down into a deterministic, predictable code layer (akin to advanced code-gen engines like Figma's token bridges), ensuring that output is governed by the system's rules rather than runtime model variance.
 
 The core philosophy—it’s the **domain boundary and execution target**.  
 
