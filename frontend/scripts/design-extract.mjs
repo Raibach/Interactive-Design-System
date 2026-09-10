@@ -88,6 +88,17 @@ function classToCss(cls) {
   return null;
 }
 
+// Annotation attribute matcher — the name is UNTRUSTED across MCP versions.
+// Matches any attribute whose name starts with "data-" and contains "annotation"
+// (case-insensitive): the /^data-.*annotation/i contract applied to attribute
+// names. Captures the full name (group 1) and its value (group 2).
+const ANNOTATION_ATTR = /(data-[a-zA-Z0-9-]*annotation[a-zA-Z0-9-]*)\s*=\s*"([^"]*)"/gi;
+const EXPECTED_ANNOTATION_ATTR = 'data-annotations';
+
+let nodesScanned = 0;
+let annotationsFound = 0;
+const attributeNamesSeen = new Set();
+
 const VALUES = { _meta: { source: 'Figma MCP get_design_context caches', extractedAt: new Date().toISOString() } };
 
 for (const file of readdirSync(DESIGN_DIR).filter(f => f.endsWith('.json') && f !== 'VALUES.json')) {
@@ -103,12 +114,33 @@ for (const file of readdirSync(DESIGN_DIR).filter(f => f.endsWith('.json') && f 
     component.assets.push({ name: m[1], url: m[2], file: 'src/assets/figma-' + m[2].split('/').pop() });
   }
 
-  // every element with a data-name: collect its classes → css
+  // every element with a data-node-id: collect classes → css + annotations
   for (const m of body.matchAll(/<(\w+)([^>]*?)data-node-id="([^"]+)"([^>]*?)>/g)) {
     const allAttrs = m[2] + ' ' + m[4];
+    const nodeId = m[3];
+    nodesScanned++;
+
     const nameMatch = allAttrs.match(/data-name="([^"]+)"/);
-    const classMatch = (m[2] + ' ' + m[4]).match(/className="([^"]*)"/);
-    const styleMatch = (m[2] + ' ' + m[4]).match(/style=\{?\{([^}]*)\}?/);
+    const classMatch = allAttrs.match(/className="([^"]*)"/);
+    const styleMatch = allAttrs.match(/style=\{?\{([^}]*)\}?/);
+
+    // annotations on this node — attribute name is UNTRUSTED, match any data-*-annotation*
+    const nodeAnnotations = [];
+    for (const am of allAttrs.matchAll(ANNOTATION_ATTR)) {
+      const attrName = am[1];
+      const value = am[2];
+      annotationsFound++;
+      attributeNamesSeen.add(attrName);
+      if (attrName !== EXPECTED_ANNOTATION_ATTR) {
+        console.warn(`[design-extract] ${name}: node ${nodeId} matched "${attrName}" (expected "${EXPECTED_ANNOTATION_ATTR}")`);
+      }
+      nodeAnnotations.push({ attribute: attrName, value });
+    }
+    if (nodeAnnotations.length) {
+      component.annotations = component.annotations || [];
+      for (const a of nodeAnnotations) component.annotations.push({ attribute: a.attribute, value: a.value, nodeId });
+    }
+
     if (!nameMatch && !classMatch) continue;
     const css = {};
     if (classMatch) {
@@ -118,26 +150,36 @@ for (const file of readdirSync(DESIGN_DIR).filter(f => f.endsWith('.json') && f 
       }
     }
     if (styleMatch) css._inlineStyle = styleMatch[1].trim();
-    const key = nameMatch ? nameMatch[1] : `node-${m[3]}`;
-    component.nodes[key] = { nodeId: m[3], css };
+    const key = nameMatch ? nameMatch[1] : `node-${nodeId}`;
+    const node = { nodeId, css };
+    if (nodeAnnotations.length) node.annotations = nodeAnnotations;
+    component.nodes[key] = node;
   }
 
   // literal text content per named text node
   for (const m of body.matchAll(/data-name="([^"]+)"[^>]*>\s*<p[^>]*>([^<]*)<\/p>/g)) {
     if (component.nodes[m[1]]) component.nodes[m[1]].text = m[2];
   }
-  // annotation contract (designer channel)
-  for (const m of body.matchAll(/data-development-annotations="([^"]+)"/g)) {
-    component.annotations = component.annotations || [];
-    component.annotations.push(m[1]);
-  }
 
   VALUES[name] = component;
 }
+
+VALUES._meta.annotationAttributeNames = [...attributeNamesSeen].sort();
+VALUES._meta.stats = { nodesScanned, annotationsFound };
 
 writeFileSync(OUT, JSON.stringify(VALUES, null, 2));
 console.log(`extracted ${Object.keys(VALUES).length - 1} components -> ${OUT}`);
 for (const [k, v] of Object.entries(VALUES)) {
   if (k === '_meta') continue;
-  console.log(`  ${k}: ${Object.keys(v.nodes || {}).length} nodes, ${v.assets.length} assets${v.annotations ? ', annotations: ' + v.annotations.join('; ') : ''}`);
+  const ann = v.annotations ? v.annotations.length : 0;
+  console.log(`  ${k}: ${Object.keys(v.nodes || {}).length} nodes, ${v.assets.length} assets, ${ann} annotations`);
+}
+
+// Loud summary + hard fail: zero annotations across the whole file set is never
+// a valid outcome — it means the matcher or the scope is wrong, not that the
+// designers wrote nothing.
+console.log(`${nodesScanned} nodes scanned, ${annotationsFound} annotations found, attribute names seen: [${[...attributeNamesSeen].sort().join(', ') || '(none)'}]`);
+if (annotationsFound === 0) {
+  console.error('[design-extract] FAIL: 0 annotations found across all files. The attribute matcher or the design scope is wrong — not that designers wrote nothing.');
+  process.exit(1);
 }

@@ -29,14 +29,27 @@ export class WorkspaceLayout extends LitElement {
     showMiddle: { type: Boolean, attribute: 'show-middle' },
   };
 
-  leftWidth = 320;
-  rightWidth = 380;
-  isThirdOpen = true;
-  showMiddle = false; // default: composer starts as 2-column (prompt + chat) until Run produces output
+  declare leftWidth: number;
+  declare rightWidth: number;
+  declare isThirdOpen: boolean;
+  declare showMiddle: boolean;
+
+  constructor() {
+    super();
+    this.leftWidth = 320;
+    this.rightWidth = 380;
+    this.isThirdOpen = true;
+    this.showMiddle = false; // default: composer starts as 2-column (prompt + chat) until Run produces output
+  }
 
   private _dragging: 'left' | 'right' | null = null;
   private _startX = 0;
   private _startW = 0;
+  // 2-column composer split weights (1 / 1 = 50/50 equal on first load)
+  private _leftGrow = 1;
+  private _rightGrow = 1;
+  private _startLeftGrow = 1;
+  private _startRightGrow = 1;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -56,12 +69,16 @@ export class WorkspaceLayout extends LitElement {
     this.style.setProperty('--right-width', `${this.rightWidth}px`);
     this.style.setProperty('--right-display', this.isThirdOpen ? 'block' : 'none');
     this.style.setProperty('--middle-display', this.showMiddle ? 'block' : 'none');
+    this.style.setProperty('--left-grow', String(this._leftGrow));
+    this.style.setProperty('--right-grow', String(this._rightGrow));
   }
 
   private _onGripDown = (side: 'left' | 'right', e: MouseEvent): void => {
     this._dragging = side;
     this._startX = e.clientX;
     this._startW = side === 'left' ? this.leftWidth : this.rightWidth;
+    this._startLeftGrow = this._leftGrow;
+    this._startRightGrow = this._rightGrow;
     this.dispatchEvent(new CustomEvent('resize-start', { detail: { side } }));
     e.preventDefault();
   };
@@ -69,6 +86,27 @@ export class WorkspaceLayout extends LitElement {
   private _onMouseMove = (e: MouseEvent): void => {
     if (!this._dragging) return;
     const delta = e.clientX - this._startX;
+
+    if (!this.showMiddle) {
+      // 2-column composer: equal split on first load, resizable via flex-grow.
+      const usable = Math.max(1, this.clientWidth - 5); // 5px = gripper width
+      const totalGrow = this._startLeftGrow + this._startRightGrow;
+      if (this._dragging === 'left') {
+        const leftWidthPx = (this._startLeftGrow / totalGrow) * usable + delta;
+        const newLeftGrow = Math.max(0.2, (leftWidthPx / usable) * totalGrow);
+        this._leftGrow = newLeftGrow;
+        this._rightGrow = totalGrow - newLeftGrow;
+      } else {
+        const rightWidthPx = (this._startRightGrow / totalGrow) * usable - delta;
+        const newRightGrow = Math.max(0.2, (rightWidthPx / usable) * totalGrow);
+        this._rightGrow = newRightGrow;
+        this._leftGrow = totalGrow - newRightGrow;
+      }
+      this.style.setProperty('--left-grow', String(this._leftGrow));
+      this.style.setProperty('--right-grow', String(this._rightGrow));
+      this.dispatchEvent(new CustomEvent('resize', { detail: { side: this._dragging } }));
+      return;
+    }
 
     if (this._dragging === 'left') {
       const w = Math.max(180, this._startW + delta);
@@ -107,6 +145,8 @@ export class WorkspaceLayout extends LitElement {
       --left-width: 320px;
       --right-width: 380px;
       --right-display: block;
+      --left-grow: 1;
+      --right-grow: 1;
     }
 
     .pane {
@@ -147,13 +187,13 @@ export class WorkspaceLayout extends LitElement {
 
   render() {
     // When showMiddle is false (default for composer), render only 2 columns:
-    // left (prompt sections, expands to fill) + gripper + right (narrow chat sidebar).
-    // This matches IDE layout: main editor takes remaining space, chat is fixed/resizable sidebar.
+    // left (prompt sections) + gripper + right (chat). Equal 50/50 on first
+    // load (grow 1/1), resizable via the gripper.
     if (!this.showMiddle) {
       return html`
-        <div class="pane left" style="flex: 1 1 0%;"><slot name="left"></slot></div>
+        <div class="pane left" style="flex: var(--left-grow) 1 0%;"><slot name="left"></slot></div>
         <div class="gripper" @mousedown=${(e: MouseEvent) => this._onGripDown('right', e)}></div>
-        <div class="pane right" style="flex: 0 0 var(--right-width);"><slot name="right"></slot></div>
+        <div class="pane right" style="flex: var(--right-grow) 1 0%;"><slot name="right"></slot></div>
       `;
     }
 

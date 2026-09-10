@@ -28,13 +28,24 @@ export class CompiledOutputViewer extends LitElement {
     viewMode: { type: String, state: true },
   };
 
-  content = '';
-  status = 'empty';
-  model = '';
-  tokens = 0;
-  isRunning = false;
-  sessionId: string | null = null;
-  viewMode: 'rendered' | 'raw' = 'rendered';
+  declare content: string;
+  declare status: string;
+  declare model: string;
+  declare tokens: number;
+  declare isRunning: boolean;
+  declare sessionId: string | null;
+  declare viewMode: 'rendered' | 'raw';
+
+  constructor() {
+    super();
+    this.content = '';
+    this.status = 'empty';
+    this.model = '';
+    this.tokens = 0;
+    this.isRunning = false;
+    this.sessionId = null;
+    this.viewMode = 'rendered';
+  }
 
   private _prevContent = '';
 

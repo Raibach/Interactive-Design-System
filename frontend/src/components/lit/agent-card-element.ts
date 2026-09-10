@@ -43,22 +43,42 @@ export class AgentCardElement extends LitElement {
     categoryTextColor: { type: String, attribute: 'category-text-color' },
   };
 
-  id: string = '';
-  title: string = '';
-  category: string = '';
-  description: string = '';
-  username: string = '';
-  teamName: string = '';
-  version: number = 1;
-  status: string = 'Active';
-  likes: number = 0;
-  modelName: string = '';
-  lastUsed: string = '';
-  createdAt: string = '';
-  avatarUrl: string = '';
-  categoryColor: string = '';
-  categoryTitleColor: string = '';
-  categoryTextColor: string = '';
+  declare id: string;
+  declare title: string;
+  declare category: string;
+  declare description: string;
+  declare username: string;
+  declare teamName: string;
+  declare version: number;
+  declare status: string;
+  declare likes: number;
+  declare modelName: string;
+  declare lastUsed: string;
+  declare createdAt: string;
+  declare avatarUrl: string;
+  declare categoryColor: string;
+  declare categoryTitleColor: string;
+  declare categoryTextColor: string;
+
+  constructor() {
+    super();
+    this.id = '';
+    this.title = '';
+    this.category = '';
+    this.description = '';
+    this.username = '';
+    this.teamName = '';
+    this.version = 1;
+    this.status = 'Active';
+    this.likes = 0;
+    this.modelName = '';
+    this.lastUsed = '';
+    this.createdAt = '';
+    this.avatarUrl = '';
+    this.categoryColor = '';
+    this.categoryTitleColor = '';
+    this.categoryTextColor = '';
+  }
 
   // ── BASE TEMPLATE — static CSS from Figma node 40000717:17091 ────────────
   // This is the foundational card structure. All cards render this immediately.

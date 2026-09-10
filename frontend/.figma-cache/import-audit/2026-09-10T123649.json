@@ -1,0 +1,331 @@
+{
+  "pass": "2026-09-10T123649",
+  "fileKey": "20UPR2KQMsbAxlo5NJb1se",
+  "rootNodes": [
+    "40000746:6",
+    "40000746:103",
+    "40000746:106",
+    "40000879:249",
+    "40000909:4322",
+    "40000878:239",
+    "40000746:95",
+    "40000746:94",
+    "40000879:249",
+    "40000934:22851"
+  ],
+  "tool": "com.figma.mcp/get_design_context",
+  "annotationAttrSeen": [
+    "data-development-annotations"
+  ],
+  "summary": {
+    "STRUCTURAL_ONLY": 9,
+    "MANUAL": 7,
+    "INFERRED": 1,
+    "scanned": 17
+  },
+  "components": [
+    {
+      "figmaNodeId": "40000746:6",
+      "figmaName": "prompt-container",
+      "litTag": "prompt-container",
+      "litFile": "frontend/src/components/lit/prompt-input/prompt-container.ts",
+      "registryEntry": "registry.json#prompt-container",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": [
+        {
+          "nodeId": "40000746:96",
+          "attribute": "data-development-annotations",
+          "value": "this is a textarea - for active data."
+        },
+        {
+          "nodeId": "40000941:23087",
+          "attribute": "data-development-annotations",
+          "value": "this is a textarea - for active data."
+        },
+        {
+          "nodeId": "40000941:23136",
+          "attribute": "data-development-annotations",
+          "value": "this is a textarea - for active data."
+        },
+        {
+          "nodeId": "40000941:23259",
+          "attribute": "data-development-annotations",
+          "value": "this is a textarea - for active data."
+        }
+      ]
+    },
+    {
+      "figmaNodeId": "40000746:103",
+      "figmaName": "gripper-prompt-input",
+      "litTag": "gripper-prompt-input",
+      "litFile": "frontend/src/components/lit/prompt-input/gripper-prompt-input.ts",
+      "registryEntry": "registry.json#gripper-prompt-input",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": []
+    },
+    {
+      "figmaNodeId": "40000746:106",
+      "figmaName": "role-tile",
+      "litTag": "role-tile",
+      "litFile": "frontend/src/components/lit/prompt-input/role-tile.ts",
+      "registryEntry": "registry.json#role-tile",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": []
+    },
+    {
+      "figmaNodeId": "40000879:249",
+      "figmaName": "functions",
+      "litTag": "functions-wrap",
+      "litFile": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
+      "registryEntry": "registry.json#functions-wrap",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": []
+    },
+    {
+      "figmaNodeId": "40000909:4322",
+      "figmaName": "model-selector-button",
+      "litTag": "model-selector-button",
+      "litFile": "frontend/src/components/lit/prompt-input/model-selector-button.ts",
+      "registryEntry": "registry.json#model-selector-button",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": []
+    },
+    {
+      "figmaNodeId": "40000878:239",
+      "figmaName": "status-bar-prompt-input",
+      "litTag": "status-bar-prompt-input",
+      "litFile": "frontend/src/components/lit/prompt-input/status-bar-prompt-input.ts",
+      "registryEntry": "registry.json#status-bar-prompt-input",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": []
+    },
+    {
+      "figmaNodeId": "40000746:95",
+      "figmaName": "prompt-textarea",
+      "litTag": "prompt-textarea",
+      "litFile": "frontend/src/components/lit/prompt-input/prompt-textarea.ts",
+      "registryEntry": "registry.json#prompt-textarea",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": [
+        {
+          "nodeId": "40000746:96",
+          "attribute": "data-development-annotations",
+          "value": "this is a textarea - for active data."
+        }
+      ]
+    },
+    {
+      "figmaNodeId": "40000746:94",
+      "figmaName": "prompt-input-section",
+      "litTag": "prompt-input-section",
+      "litFile": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
+      "registryEntry": "registry.json#prompt-input-section",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": [
+        {
+          "nodeId": "40000746:96",
+          "attribute": "data-development-annotations",
+          "value": "this is a textarea - for active data."
+        }
+      ]
+    },
+    {
+      "figmaNodeId": "40000879:249",
+      "figmaName": "prompt-section-editor",
+      "litTag": "prompt-section-editor",
+      "litFile": "frontend/src/components/lit/prompt-section-editor.ts",
+      "registryEntry": "registry.json#prompt-section-editor",
+      "state": "STRUCTURAL_ONLY",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [
+        "no annotation on this node"
+      ],
+      "descendantAnnotations": []
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "workspace-layout",
+      "litTag": "workspace-layout",
+      "litFile": "frontend/src/components/lit/workspace-layout.ts",
+      "registryEntry": "registry.json#workspace-layout",
+      "state": "MANUAL",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [],
+      "skipped": true
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "control-bar",
+      "litTag": "control-bar",
+      "litFile": "frontend/src/components/lit/control-bar.ts",
+      "registryEntry": "registry.json#control-bar",
+      "state": "MANUAL",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [],
+      "skipped": true
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "compiled-output-viewer",
+      "litTag": "compiled-output-viewer",
+      "litFile": "frontend/src/components/lit/compiled-output-viewer.ts",
+      "registryEntry": "registry.json#compiled-output-viewer",
+      "state": "MANUAL",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [],
+      "skipped": true
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "chat-navigation-bar",
+      "litTag": "chat-navigation-bar",
+      "litFile": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "registryEntry": "registry.json#chat-navigation-bar",
+      "state": "MANUAL",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [],
+      "skipped": true
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "agent-card-element",
+      "litTag": "agent-card-element",
+      "litFile": "frontend/src/components/lit/agent-card-element.ts",
+      "registryEntry": "registry.json#agent-card-element",
+      "state": "MANUAL",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [],
+      "skipped": true
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "a2ui-image-catalog",
+      "litTag": "a2ui-image-catalog",
+      "litFile": "frontend/src/components/lit/a2ui-image-catalog.ts",
+      "registryEntry": "registry.json#a2ui-image-catalog",
+      "state": "MANUAL",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [],
+      "skipped": true
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "ai-surface-sandbox",
+      "litTag": "ai-surface-sandbox",
+      "litFile": "frontend/src/components/lit/ai-surface-sandbox.ts",
+      "registryEntry": "registry.json#ai-surface-sandbox",
+      "state": "MANUAL",
+      "annotation": {
+        "found": false
+      },
+      "inferred": [],
+      "gaps": [],
+      "skipped": true
+    },
+    {
+      "figmaNodeId": "40000934:22851",
+      "figmaName": "Component 24/Frame 886946",
+      "litTag": "role-dropdown",
+      "litFile": "frontend/src/components/lit/prompt-input/role-dropdown.ts",
+      "registryEntry": "registry.json#role-dropdown",
+      "state": "INFERRED",
+      "annotation": {
+        "found": true,
+        "attribute": "data-development-annotations",
+        "text": "This is supposed to be the drop-down for the accordion tiles in the left column where we enter our prompt information. I collect prompt input area for the agents.",
+        "sha256": "ea96266b07c5c624c5f5fbf7e4a571d0c0ccb7b55c01402ad3bac7bd25ccdc2b",
+        "verbatim": true
+      },
+      "inferred": [
+        {
+          "field": "event.name",
+          "value": "role-select",
+          "reason": "annotation is prose, no `On click:` field"
+        },
+        {
+          "field": "event.name",
+          "value": "role-remove",
+          "reason": "annotation is prose, no `On click:` field"
+        }
+      ],
+      "gaps": []
+    }
+  ]
+}

@@ -662,6 +662,18 @@ export const PromptTextareaSchema = z.object({
   constraints: z.array(z.string()),
 });
 
+export const ModelSelectorButtonSchema = z.object({
+  tag: z.literal('model-selector-button'),
+  props: z.object({
+    label: z.string().default('Models'),
+  }),
+  events: z.tuple([z.literal('model-selector-toggle')]),
+  surface: z.literal('composer'),
+  column: z.literal('middle'),
+  description: z.string(),
+  constraints: z.array(z.string()),
+});
+
 export const TAG_REGISTRY = {
   // Composer — Left Column
   'prompt-section': {
@@ -730,7 +742,7 @@ export const TAG_REGISTRY = {
     tag: 'status-bar-prompt-input',
     surface: 'composer',
     column: 'left',
-    description: 'Vertical activity rail (40px) — Database_fill icons grow with prompt activity.',
+    description: 'Vertical activity rail (40px) — Database_fill + lightning_alt_fill_light icons grow with prompt activity.',
     props: {
       icons: { type: 'array', default: [] },
     },
@@ -748,6 +760,17 @@ export const TAG_REGISTRY = {
       minHeight: { type: 'number', default: 45 },
     },
     events: ['value-input'],
+    constraints: [],
+  },
+  'model-selector-button': {
+    tag: 'model-selector-button',
+    surface: 'composer',
+    column: 'middle',
+    description: 'Model selector button (Figma 40000909-4322) — "Models" label in the Prompt Output accordion header.',
+    props: {
+      label: { type: 'string', default: 'Models' },
+    },
+    events: ['model-selector-toggle'],
     constraints: [],
   },
   'save-button': {

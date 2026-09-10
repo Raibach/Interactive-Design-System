@@ -45,11 +45,20 @@ export class ControlBar extends LitElement {
     runShortcut: { type: String, attribute: 'run-shortcut' },
   };
 
-  versionText: string = 'Editing Version 1';
-  isSaving: boolean = false;
-  isRunning: boolean = false;
-  saveShortcut: string = '⌘ S';
-  runShortcut: string = '⌘ ⏎';
+  declare versionText: string;
+  declare isSaving: boolean;
+  declare isRunning: boolean;
+  declare saveShortcut: string;
+  declare runShortcut: string;
+
+  constructor() {
+    super();
+    this.versionText = 'Editing Version 1';
+    this.isSaving = false;
+    this.isRunning = false;
+    this.saveShortcut = '⌘ S';
+    this.runShortcut = '⌘ ⏎';
+  }
 
   // ── Figma-exact CSS — node 40000761:248 ──────────────────────────────────
   static styles = css`

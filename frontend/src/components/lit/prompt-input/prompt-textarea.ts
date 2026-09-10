@@ -19,9 +19,16 @@ export class PromptTextarea extends LitElement {
     placeholder: { type: String },
     minHeight: { type: Number, attribute: 'min-height' },
   };
-  value = '';
-  placeholder = '';
-  minHeight = 45;
+  declare value: string;
+  declare placeholder: string;
+  declare minHeight: number;
+
+  constructor() {
+    super();
+    this.value = '';
+    this.placeholder = '';
+    this.minHeight = 45;
+  }
 
   static styles = css`
     :host {
@@ -29,7 +36,6 @@ export class PromptTextarea extends LitElement {
       flex: 1;
       min-width: 0;
       background: rgba(255, 255, 255, 0.50);
-      border: 1px solid #767676;
       border-radius: 6px;
       box-sizing: border-box;
       box-shadow: 4px 4px 10px rgba(0,0,0,0.15), -4px -4px 10px rgba(0,0,0,0.15);

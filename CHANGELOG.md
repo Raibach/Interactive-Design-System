@@ -3,7 +3,49 @@
 Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
 
 
-**[2026-09-09 14:30:00 UTC] — Rail gripper instrumentation: structural gap closed**
+## ⏳ TODO (carry-forward)
+
+- **[Behavior provenance] Author annotations in structured format, not prose.**
+  `role-dropdown`'s event names (`role-select`, `role-remove`) are `inferred`
+  in `registry.json` because its Figma annotation was a sentence, not the
+  `On click:` template. Fix on the authoring side — write annotations as
+  `On click: dispatch <event> { <payload> }` — so the agent invents nothing and
+  `behavior` flips `inferred → verbatim`. Do this before scaling to the
+  remaining 16 un-annotated components.
+
+**[2026-09-10] — Figma → Lit import pipeline: annotations as the single source of behavior**
+
+Landed today:
+
+1. **Figma Fetch Protocol (§9).** `.clinerules/figma-to-lit.md` gains a permanent §9:
+   parse a Figma URL → `get_design_context` → extract layout/visual/typography + the
+   Dev Mode annotation → write to the three catalogue locations → one-line report.
+   Triggers: `fetch <url>`, `update <component> from figma`, `sync <url>`, or a bare link.
+
+2. **Endpoint reality (documented, not guessed).** Remote MCP
+   (`https://mcp.figma.com/mcp`) is the live source but requires OAuth 2.0 scope
+   `mcp:connect` — a Personal Access Token (`figd_*`) is rejected (401). Desktop MCP
+   (`http://127.0.0.1:3845/mcp`) is the working fallback: no auth, reads
+   `get_design_context`, but serves a stale snapshot until the file is re-opened in the
+   Figma Desktop app (re-sync before each pull).
+
+3. **Annotation channel confirmed.** Dev Mode annotations surface as an untrusted
+   attribute (regex `/^data-.*annotation/i`); observed name `data-development-annotations`.
+   The value is the behavioral spec, tied to its node ID.
+
+4. **Three-space registration.** An annotation lands in: (1) the Lit component
+   (`frontend/src/components/lit/.../*.ts` — visual + events), (2) the catalog allowlist
+   (`component-catalog.json`), (3) the registry (`registry.json` — name → element map,
+   now with a `provenance` field marking `verbatim` vs `inferred`).
+
+5. **First component built end-to-end this way: `role-dropdown`**
+   (Figma node `40000934:22851`, "Component 24/Frame 886946").
+
+6. **Import report.** `frontend/scripts/import-report.mjs` emits a per-component
+   success/failure report (ANNOTATED / MISSING / NO-NODE / PULL-FAIL) + the §5 gap list,
+   so an import can be audited: which components are annotated vs still empty.
+
+
 
 *The problem:*
 The harness compares the Figma tree against the Lit templates by `data-node-id`. The rail (`prompt-container.ts`) carried none of those ids, so its two gripper groups and four meatballs reported as MISSING-IN-CODE — not because the code lacked them, but because the code had never named them.

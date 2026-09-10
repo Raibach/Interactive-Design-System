@@ -2,7 +2,8 @@
   "_meta": {
     "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it — do NOT regenerate. If absent, ask before building.",
     "ruleFile": ".continue/rules/design-system.md",
-    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09)"
+    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09)",
+    "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented — audit against the source annotation)."
   },
   "components": [
     {
@@ -31,6 +32,13 @@
       "figmaNodeId": "40000879:249",
       "litComponent": "functions-wrap",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
+      "status": "built"
+    },
+    {
+      "figmaName": "model-selector-button",
+      "figmaNodeId": "40000909:4322",
+      "litComponent": "model-selector-button",
+      "file": "frontend/src/components/lit/prompt-input/model-selector-button.ts",
       "status": "built"
     },
     {
@@ -66,49 +74,69 @@
       "figmaNodeId": null,
       "litComponent": "workspace-layout",
       "file": "frontend/src/components/lit/workspace-layout.ts",
-      "status": "built"
+      "status": "built",
+      "managed": "manual"
     },
     {
       "figmaName": "control-bar",
       "figmaNodeId": null,
       "litComponent": "control-bar",
       "file": "frontend/src/components/lit/control-bar.ts",
-      "status": "built"
+      "status": "built",
+      "managed": "manual"
     },
     {
       "figmaName": "compiled-output-viewer",
       "figmaNodeId": null,
       "litComponent": "compiled-output-viewer",
       "file": "frontend/src/components/lit/compiled-output-viewer.ts",
-      "status": "built"
+      "status": "built",
+      "managed": "manual"
     },
     {
       "figmaName": "chat-navigation-bar",
       "figmaNodeId": null,
       "litComponent": "chat-navigation-bar",
       "file": "frontend/src/components/lit/chat-navigation-bar.ts",
-      "status": "built"
+      "status": "built",
+      "managed": "manual"
     },
     {
       "figmaName": "agent-card-element",
       "figmaNodeId": null,
       "litComponent": "agent-card-element",
       "file": "frontend/src/components/lit/agent-card-element.ts",
-      "status": "built"
+      "status": "built",
+      "managed": "manual"
     },
     {
       "figmaName": "a2ui-image-catalog",
       "figmaNodeId": null,
       "litComponent": "a2ui-image-catalog",
       "file": "frontend/src/components/lit/a2ui-image-catalog.ts",
-      "status": "built"
+      "status": "built",
+      "managed": "manual"
     },
     {
       "figmaName": "ai-surface-sandbox",
       "figmaNodeId": null,
       "litComponent": "ai-surface-sandbox",
       "file": "frontend/src/components/lit/ai-surface-sandbox.ts",
-      "status": "built"
+      "status": "built",
+      "managed": "manual"
+    },
+    {
+      "figmaName": "Component 24/Frame 886946",
+      "figmaNodeId": "40000934:22851",
+      "litComponent": "role-dropdown",
+      "file": "frontend/src/components/lit/prompt-input/role-dropdown.ts",
+      "status": "built",
+      "annotation": "This is supposed to be the drop-down for the accordion tiles in the left column where we enter our prompt information. I collect prompt input area for the agents.",
+      "provenance": {
+        "annotation": "verbatim",
+        "litComponent": "inferred",
+        "behavior": "inferred"
+      }
     }
   ]
 }

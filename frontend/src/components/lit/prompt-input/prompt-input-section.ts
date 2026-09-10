@@ -27,14 +27,12 @@ import './prompt-textarea';
 export interface MenuType { type: string; label: string }
 
 // System is deliberately absent — it is sticky and has no menu.
+// Menu contents are the Figma component-set (node 40000922:5030, open state):
+// User Role · Agent Role · Tool Call · Remove. No invented entries.
 export const SECTION_MENU_TYPES: MenuType[] = [
   { type: 'user', label: 'User Role' },
   { type: 'agent', label: 'Agent Role' },
   { type: 'tool-call', label: 'Tool Call' },
-  { type: 'few-shot', label: 'Few Shot' },
-  { type: 'context', label: 'Context' },
-  { type: 'constraints', label: 'Constraints' },
-  { type: 'custom', label: 'Custom' },
 ];
 
 export const TYPE_LABELS: Record<string, string> = {
@@ -66,13 +64,24 @@ export class PromptInputSection extends LitElement {
     placeholder: { type: String },
   };
 
-  name = '';
-  type = 'custom';
-  content = '';
-  sticky = false;
-  minHeight = 45;
-  menuOpen: '' | 'types' | 'functions' = '';
-  placeholder = 'Select a role and enter your prompt.';
+  declare name: string;
+  declare type: string;
+  declare content: string;
+  declare sticky: boolean;
+  declare minHeight: number;
+  declare menuOpen: '' | 'types' | 'functions';
+  declare placeholder: string;
+
+  constructor() {
+    super();
+    this.name = '';
+    this.type = 'custom';
+    this.content = '';
+    this.sticky = false;
+    this.minHeight = 45;
+    this.menuOpen = '';
+    this.placeholder = 'Select a role and enter your prompt.';
+  }
 
   static styles = css`
     :host {
@@ -90,15 +99,16 @@ export class PromptInputSection extends LitElement {
     }
     .section-header {
       display: flex;
-      /* Figma 40000746:102: items-center (rows center vertically within the 43px header) */
+      /* Figma 40000954-23927 — gap-[5px] (refined sections 3–4) */
+      gap: 5px;
       align-items: center;
-      height: 43px;
+      height: 40px;
       box-sizing: border-box;
     }
     .prompt-accordion {
       flex: 1;
       min-width: 0;
-      height: 43px;
+      height: 40px;
       display: flex;
       /* Figma 40000880:345 — gap-[10px] + items-center */
       align-items: center;
@@ -122,43 +132,46 @@ export class PromptInputSection extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 177.039px;
-      height: 43px;
+      width: 171px;
+      height: 40px;
       background: #ffffff;
       border-radius: 6px;
       box-sizing: border-box;
       box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
     }
+    /* Figma 40000941-23781 accordion-dropdown — semi-transparent container, 5px gap */
     .selection-menu {
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
       min-width: 200px;
-      background: #ffffff;
-      border: 1px solid #e5e5e5;
+      background: rgba(255, 255, 255, 0.39);
       border-radius: 6px;
-      box-shadow: 4px 4px 10px rgba(0,0,0,0.15), -4px -4px 10px rgba(0,0,0,0.15);
-      padding: 4px;
+      padding: 0;
+      gap: 5px;
       z-index: 40;
       display: flex;
       flex-direction: column;
     }
     .menu-item {
-      background: none;
+      background: #ffffff;
       border: none;
       cursor: pointer;
       text-align: left;
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
       color: #171717;
-      padding: 8px 10px;
-      border-radius: 4px;
+      padding: 10px;
+      height: 40px;
+      border-radius: 6px;
+      box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
+      box-sizing: border-box;
       white-space: nowrap;
     }
-    .menu-item:hover { background: #fff7e6; }
+    .menu-item:hover { background: #f7f7f7; }
     .menu-item.selected { color: #4e68d2; }
-    .menu-item.danger { color: #991b1b; }
+    .menu-item.danger { color: #c50000; }
     .functions-label-text {
       font-size: 16px;
       font-weight: 700;
@@ -167,17 +180,23 @@ export class PromptInputSection extends LitElement {
       background: none;
       border: none;
       cursor: pointer;
-      /* Figma 40000879:250 — centered text inside the 177.039px "functions" shell */
+      /* Figma 40000909-4323 — h-[43px] w-[165px] inside the 40px tile (quirk preserved verbatim) */
+      height: 43px;
+      width: 165px;
       padding: 0;
       font-family: 'Inter', system-ui, sans-serif;
       white-space: nowrap;
     }
+    /* Figma 40000909-4323 — " | " separator is light weight inside "Functions | Tools" */
+    .functions-label-text .functions-sep {
+      font-weight: 300;
+    }
     .prompt-imput {
       display: flex;
       align-items: flex-start;
+      gap: 5px;
       margin-top: 17px;
     }
-    .prompt-imput prompt-textarea { margin-left: 6px; }
     :host([collapsed]) .prompt-imput { display: none; }
   `;
 
@@ -192,11 +211,8 @@ export class PromptInputSection extends LitElement {
           <button class="menu-item${t === mt.type ? ' selected' : ''}" role="menuitem"
                   data-action="type" data-value="${mt.type}"
                   @click=${(e: Event) => this._onMenuSelect(e)}>${mt.label}</button>`)}
-        <div class="menu-separator"></div>
-        <button class="menu-item" role="menuitem" data-action="add"
-                @click=${(e: Event) => this._onMenuSelect(e)}>+ Add Section</button>
         <button class="menu-item danger" role="menuitem" data-action="delete"
-                @click=${(e: Event) => this._onMenuSelect(e)}>Delete</button>
+                @click=${(e: Event) => this._onMenuSelect(e)}>Remove</button>
       </div>` : '';
 
     const functionsMenu = menuOpen === 'functions' ? html`
@@ -206,11 +222,9 @@ export class PromptInputSection extends LitElement {
                   @click=${(e: Event) => this._onMenuSelect(e)}>${tool.name}</button>`)}
       </div>` : '';
 
-    const isRag = t.includes('context') || /\{\{\s*(retrieved_context|query|context)\s*\}\}/.test(this.content || '');
-    const isTool = t.includes('tool') || /\{\{\s*tool:/i.test(this.content || '');
-    const railIcons: string[] = [];
-    if (isRag) railIcons.push('database');
-    if (isTool) railIcons.push('database');
+    // Placeholder rail icons — always rendered, matching Figma's full activity rail
+    // (Database + purple lightning + 2 dark lightnings). Wire to real activity later.
+    const railIcons: string[] = ['database', 'lightning1', 'lightning', 'lightning'];
 
     return html`
       <div class="responsive-prompt-container" data-tag="prompt-section" data-node-id="40000746:94" data-section-name="${this.name}">
@@ -227,8 +241,8 @@ export class PromptInputSection extends LitElement {
               ${typesMenu}
             </div>
             <div class="functions-wrap" data-node-id="40000879:249">
-              <button class="functions-label-text" data-node-id="40000879:250" title="Functions / Tools"
-                      @click=${(e: Event) => this._toggleMenu(e, 'functions')}>Functions / Tools</button>
+              <button class="functions-label-text" data-node-id="40000879:250" title="Functions | Tools"
+                      @click=${(e: Event) => this._toggleMenu(e, 'functions')}>Functions<span class="functions-sep"> | </span>Tools</button>
               ${functionsMenu}
             </div>
           </div>
@@ -249,6 +263,7 @@ export class PromptInputSection extends LitElement {
   private _toggleMenu(e: Event, kind: 'types' | 'functions') {
     e.stopPropagation();
     this.menuOpen = this.menuOpen === kind ? '' : kind;
+    this.requestUpdate();
   }
 
   private _onCollapseToggle(_e: Event) {
