@@ -13,6 +13,52 @@ Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
   `behavior` flips `inferred → verbatim`. Do this before scaling to the
   remaining 16 un-annotated components.
 
+**[2026-09-10] — Grace Edition: assistant + third-column output (Run)**
+
+1. **Run → compiled output fixed.** `handleRunRequested` read the backend's plain-JSON
+   response (`{content, error, conversation_id}`) as a Server-Sent Events stream (waiting
+   for `data:` lines that never arrive), so output stayed empty and the middle column
+   showed "(No output returned.)". It now parses JSON directly.
+
+2. **Middle column was invisible.** `workspace-layout.ts` set the `--middle-display` CSS
+   var only once in `connectedCallback()` (to `none`), so after Run flipped `showMiddle`
+   the pane stayed `display:none`. Added an `updated()` hook to re-sync it.
+
+3. **Panel sliding restored.** Reverted the grow-weight resize (`_leftGrow`/`_rightGrow`)
+   back to pixel-width sliding (`--left-width`/`--right-width`). 2-column mode is again
+   left-expand + fixed/resizable right sidebar; 3-column mode keeps the two grippers.
+
+4. **Model name fixed.** `/api/teacher/query` hardcoded `model="glm-4.7"` (a Z.ai model),
+   which DeepSeek rejected with HTTP 400. Removed the override → uses the provider default
+   `deepseek-v4-flash`.
+
+5. **prompt_output returns real output.** The mode was prepending the A2UI `MISSION_HEADER`
+   (forcing `<a2ui_surface>` XML), and the frontend sent markdown where
+   `_assemble_prompt_output` expects `{core_roles, custom_roles}` JSON. Both fixed — Run now
+   executes the compiled prompt and returns raw output.
+
+6. **Grace = the right-column assistant (`chat-panel`).** Her read/write surface is the
+   `TAG_REGISTRY` (`frontend/src/shared/tag-registry.ts`, ~51 tags, exported as the manifest
+   injected into her system prompt). Fixed her read access: `buildWorkspaceContext()` was
+   scraping DOM textareas (which can't see into the Lit editor's shadow DOM), so Grace reported
+   an empty workspace ("I don't receive the rendered page or the far-left column"). It now
+   reads the live sections via a `getLeftColumnSections` callback (editor ref) with a
+   `leftColumnContent` fallback, and lists empty sections as `(empty)` so Grace can target the
+   right `update_*` tags.
+
+7. **New Lit names for Figma.** `chat-panel` (right column), `response-format-tab`,
+   `response-format-rail`, `section-accordion`, `panel-body` — to be assigned to Figma nodes.
+
+8. **Import report tooling verified live.** `node scripts/import-report.mjs`
+   (ANNOTATED / DESCENDANT-ONLY / MISSING / NO-NODE / PULL-FAIL) and
+   `node scripts/import-audit.mjs` (VERBATIM / STRUCTURAL_ONLY / INFERRED / MANUAL / FAILED)
+   both run against the Figma MCP (`http://127.0.0.1:3845/mcp`).
+
+*Verified live:* clicked **RUN** in the running app (`:5173` + backend `:5001`) → the middle
+column appeared and populated with real DeepSeek output — no "(No output returned.)", no
+HTTP 400, no stray A2UI XML.
+
+
 **[2026-09-10] — Figma → Lit import pipeline: annotations as the single source of behavior**
 
 Landed today:
