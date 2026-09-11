@@ -1561,14 +1561,37 @@ export default function Index({
           headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
           body: JSON.stringify({ intent: 'catalog-health:prompt-composer' }),
         });
-        // NOTE: no `return` on failure here. These used to return out of the
-        // enclosing effect, which was harmless while the check ran LAST — and
-        // silently skipped the surface once Grace moved to the front, so a
-        // failed check meant the console never loaded at all. The check is not
-        // a precondition for the surface; it never gates it.
-        if (res.ok) {
+        // The check must never gate the surface — those `return`s used to skip
+        // the assembly entirely once this block moved ahead of it — and it must
+        // never go quiet either. A silent skip is exactly how a checker that
+        // never ran ends up looking like a clean catalog, so every failure path
+        // below states what happened and then carries on to the surface.
+        if (!res.ok) {
+          let detail = '';
+          try { detail = (await res.json())?.detail?.message || ''; } catch { /* body was not JSON */ }
+          console.error(
+            `[CATALOG HEALTH] CHECK DID NOT RUN\n` +
+            `  status: ${res.status} ${res.statusText}\n` +
+            `  detail: ${detail || '(no detail)'}\n` +
+            `  timestamp: ${new Date().toISOString()}\n` +
+            `  CAUSE: ${res.status === 503
+              ? 'GET /api/catalog/audit reports the checker has not run for this deployment, so there is no report to speak from.'
+              : 'The catalog-health surface could not be assembled.'}\n` +
+            `  FIX: run the checker (node frontend/scripts/catalog-check.mjs) and redeploy, or read the backend log for "A2UI FAILURE" at this timestamp.\n` +
+            `  NOTE: the console surface is NOT blocked by this — it assembles regardless. The chat bar indicator reports this state.`
+          );
+        } else {
           const ops = await res.json();
-          if (Array.isArray(ops)) {
+          if (!Array.isArray(ops)) {
+            console.error(
+              `[CATALOG HEALTH] MALFORMED RESPONSE\n` +
+              `  expected: an A2UI operations array\n` +
+              `  received: ${typeof ops}\n` +
+              `  timestamp: ${new Date().toISOString()}\n` +
+              `  CAUSE: the endpoint answered 200 with something that is not an A2UI payload.\n` +
+              `  NOTE: the console surface is NOT blocked by this.`
+            );
+          } else {
             const value = ops.find((o: any) => o.updateDataModel)?.updateDataModel?.value || {};
             if (Array.isArray(value.findings)) setCatalogFindings(value.findings);
             if (value.usage && typeof value.usage.total_tokens === 'number') {
@@ -1586,8 +1609,16 @@ export default function Index({
             }
           }
         }
-      } catch {
-        /* unreachable — the badge already shows the check could not run */
+      } catch (error) {
+        // Loud, and still not fatal to the surface.
+        console.error(
+          `[CATALOG HEALTH] REQUEST FAILED\n` +
+          `  error.type: ${error instanceof Error ? error.constructor.name : typeof error}\n` +
+          `  error.message: ${error instanceof Error ? error.message : String(error)}\n` +
+          `  timestamp: ${new Date().toISOString()}\n` +
+          `  CAUSE: the catalog-health request never completed — network, timeout, or the backend is down.\n` +
+          `  NOTE: the console surface is NOT blocked by this.`
+        );
       }
 
       // 2) THEN the surface contents. Unconditional: the console does not wait
