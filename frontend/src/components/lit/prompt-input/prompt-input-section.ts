@@ -148,16 +148,21 @@ export class PromptInputSection extends LitElement {
       box-sizing: border-box;
       box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
     }
-    /* Figma 40001003:25249 "accordion-dropdown" (live node, open state) — a 379px
+    /* Figma 40001003:25249 "accordion-dropdown" (live node, open state) — a
        TWO-COLUMN grid of white tile-cards with 5px gaps. Container itself has no
        fill in the design; each tile carries its own white card + drop shadow.
        Tiles: User Role · Agent Role · Tool Call · Custom Data · Remove ·
-       Add Section. */
+       Add Section · Placeholder row.
+
+       SIZING (owner instruction, overrides the node's fixed 379px): the menu is
+       absolutely positioned inside .role-tile-wrap, which is flex:1 0 0. Using
+       width:100% makes it track the role tile exactly, so both the columns and
+       the rows expand with the left column like the role/accordion tiles do. */
     .selection-menu {
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
-      width: 379px;
+      width: 100%;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 5px;
@@ -165,8 +170,9 @@ export class PromptInputSection extends LitElement {
       z-index: 40;
     }
     .menu-item {
-      /* role-dropdown-tile: #FFFFFF, radius 6, "button drop" shadow,
-         40px tall. Text inset = 10px (tile) + 10px (role-label-injection). */
+      /* role-dropdown-tile: #FFFFFF, radius 6, "button drop" shadow.
+         min-height (not height) so the rows expand with their content, and
+         min-width:0 so the tiles can shrink with a narrow column. */
       background: #ffffff;
       border: none;
       cursor: pointer;
@@ -176,7 +182,8 @@ export class PromptInputSection extends LitElement {
       font-weight: 700;
       color: #171717;
       padding: 0 20px;
-      height: 40px;
+      min-height: 40px;
+      min-width: 0;
       border-radius: 6px;
       box-shadow: 4px 4px 10px rgba(0,0,0,0.15), -4px -4px 10px rgba(0,0,0,0.15);
       box-sizing: border-box;
