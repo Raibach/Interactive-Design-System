@@ -19,6 +19,19 @@
 
 import { LitElement, html, css } from 'lit';
 
+// ── The chat button's icon ─────────────────────────────────────────────────
+// From Figma component "chat-button" (node 40001010:25768), image node
+// 40001010:25766, imageRef 48f37fce42b833ad5aac9bd30c9728734b8f4924. It is an
+// IMAGE fill in the design, not a path, so it is carried as an image rather than
+// traced into an approximation. The filename is the imageRef: the provenance.
+import chatButtonIcon from '@/assets/48f37fce42b833ad5aac9bd30c9728734b8f4924.png';
+
+// The trace button's icon, from Figma component "trace-button" (node
+// 40001011:26266), icon instance 40001011:26260. Vector, not raster — it is an
+// SVG INSTANCE of "Model--foundation", so it renders as its own artwork at any
+// size. Read straight off the node's render.
+import traceButtonIcon from '@/assets/figma-trace-button-icon.svg';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types — exported for React consumers (InteractiveChatInterface.tsx)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -44,8 +57,33 @@ interface TabDef {
   id: TabId;
   label: string;
   tooltip: string;
-  /** Inline SVG path for the tab icon. Default viewBox is 0 0 22.75 21.8752. */
-  svgPath: string;
+  /**
+   * The icon as the DESIGN drew it, when that tab's Figma node ships artwork — a
+   * raster fill or an SVG instance. Takes precedence over svgPath.
+   */
+  iconSrc?: string;
+  /**
+   * The button as the DESIGN draws it. Per tab, because the two designs do NOT
+   * share numbers yet: chat is 74 tall with a 38px icon at (18, 8); trace is still
+   * 77 tall with a 42×39 icon at (16, 8). Same frame name in Figma, different
+   * measurements — so they are read per node, never assumed to match.
+   */
+  box?: {
+    /** The button's height. */
+    h: number;
+    iconW: number;
+    iconH: number;
+    /** The icon's position inside the button, as the design places it. */
+    iconX: number;
+    iconY: number;
+    /** The label's top, inside the button. */
+    labelY: number;
+  };
+  /**
+   * Inline SVG path, for tabs with no exported artwork yet. Default viewBox is
+   * 0 0 22.75 21.8752.
+   */
+  svgPath?: string;
   /**
    * Optional per-icon viewBox. The shared default (0 0 22.75 21.8752) is exactly
    * the chat glyph's own extent, so an icon drawn on a 24x24 grid gets clipped
@@ -59,14 +97,26 @@ const TABS: TabDef[] = [
     id: 'chat',
     label: 'Chat',
     tooltip: 'Chat with Grace',
-    // Speech bubble / branching chat icon
+    // Figma "chat-button" 40001010:25768. Geometry comes from the container's
+    // constraint (the :host block in this file), not from here — see the note
+    // there for why. Supersedes the traced glyph below.
+    iconSrc: chatButtonIcon,
+    // Speech bubble / branching chat icon (superseded by iconSrc)
     svgPath: 'M20.3125 13.2813C21.6566 13.2813 22.75 12.2299 22.75 10.9375C22.75 9.6451 21.6566 8.5937 20.3125 8.5937C19.2546 8.5937 18.3612 9.2488 18.0247 10.1563H13.3364L19.2683 4.4525C19.586 4.59898 19.9374 4.6875 20.3125 4.6875C21.6566 4.6875 22.75 3.63617 22.75 2.34375C22.75 1.05133 21.6566 0 20.3125 0C18.9684 0 17.875 1.05133 17.875 2.34375C17.875 2.70461 17.9672 3.04219 18.1192 3.34781L11.375 9.8328V4.68758C11.375 3.82625 12.1038 3.12508 13 3.12508H14.625V1.56258H13C12.0248 1.56258 11.1588 1.98641 10.5625 2.6425C9.9662 1.98641 9.1002 1.56258 8.125 1.56258H7.3125C3.28055 1.56258 0 4.71656 0 8.5938V13.2813C0 17.1586 3.28055 20.3126 7.3125 20.3126H8.125C9.1002 20.3126 9.9662 19.8887 10.5625 19.2327C11.1588 19.8887 12.0248 20.3126 13 20.3126H14.625V18.7501H13C12.1038 18.7501 11.375 18.0489 11.375 17.1876V12.0423L18.1192 18.5273C17.9672 18.8329 17.875 19.1705 17.875 19.5314C17.875 20.8238 18.9684 21.8752 20.3125 21.8752C21.6566 21.8752 22.75 20.8238 22.75 19.5314C22.75 18.239 21.6566 17.1877 20.3125 17.1877C19.9374 17.1877 19.5861 17.2762 19.2683 17.4227L13.3364 11.7189H18.0247C18.3612 12.6264 19.2546 13.2813 20.3125 13.2813Z',
   },
   {
     id: 'trace',
     label: 'Trace',
     tooltip: 'Execution trace and evaluation',
-    // Branching tree / execution flow icon
+    // Figma "trace-button" 40001011:26266. Annotated: "Loads trace for current
+    // activity in the chat widow. On click: dispatch tab-change { tab: 'trace' }"
+    // — which is what the code already emits, so nothing here was invented.
+    //
+    // Geometry comes from the container constraint, NOT from this node. The node
+    // says 42×39 at (16, 6.5) with its label at 51.5 — hand-placed drift. Copying
+    // it would reproduce a difference nobody designed; geometry-drift reports it
+    // instead. The icon art keeps its own aspect and fits the shared box.
+    iconSrc: traceButtonIcon,
     svgPath: 'M23.07 15.6777V4.11016C24.0271 3.81716 24.7178 3.04006 24.7178 2.12013C24.7178 0.951022 23.6091 0 22.2461 0C20.883 0 19.7742 0.951022 19.7742 2.12013C19.7742 2.39688 19.8406 2.6595 19.9533 2.90176L12.3589 8.60167L4.76457 2.90204C4.87736 2.65943 4.94356 2.39688 4.94356 2.12013C4.94356 0.951022 3.83479 0 2.47179 0C1.10877 0 0 0.951022 0 2.12013C0 3.04013 0.690785 3.81723 1.64785 4.10981V15.678C0.690785 15.9707 0 16.7478 0 17.6677C0 18.8368 1.10877 19.7878 2.47179 19.7878C3.83479 19.7878 4.94356 18.8368 4.94356 17.6677C4.94356 17.1967 4.75757 16.7653 4.45317 16.413L8.84758 13.1148L10.7957 16.0389C10.2456 16.4282 9.88716 17.0096 9.88716 17.6677C9.88716 18.8368 10.9959 19.7878 12.3589 19.7878C13.722 19.7878 14.8306 18.8368 14.8306 17.6677C14.8306 17.0096 14.4721 16.4282 13.9221 16.0389L15.8702 13.1148L20.2646 16.413C19.9603 16.7653 19.7742 17.1967 19.7742 17.6677C19.7742 18.8368 20.883 19.7878 22.2461 19.7878C23.6091 19.7878 24.7178 18.8368 24.7178 17.6677C24.7178 16.7478 24.0271 15.9707 23.07 15.6777Z',
   },
   {
@@ -158,6 +208,26 @@ export class ChatNavigationBar extends LitElement {
   // ── Shadow DOM styles — pixel-identical to original compiled component ──
   static styles = css`
     :host {
+      /* ── THE RAIL'S CONSTRAINT ON A DESIGNED BUTTON ─────────────────────────
+         Ingestion may be inconsistent — nodes get hand-placed, sizes drift. The
+         CATALOGUE may not be. So the common constraint lives here, on the
+         container, and every designed button inside this rail inherits it by the
+         cascade rather than each one carrying its own numbers.
+
+         A button can still override any of these, but it now has to SAY SO (a
+         per-tab box override), so an override is a visible exception in a diff
+         instead of an invisible difference in a rail. That is the whole point:
+         the buttons cannot disagree by accident, only on purpose.
+
+         Values read from Figma "chat-button" (40001010:25768). The trace node
+         (40001011:26266) carries different numbers; that is drift, not intent, and
+         the geometry-drift check reports it rather than copying it. */
+      --nb-h: 74px;
+      --nb-icon-w: 38px;
+      --nb-icon-h: 38px;
+      --nb-icon-x: 18px;
+      --nb-icon-y: 8px;
+      --nb-label-y: 46px;
       display: block;
       height: 100%;
       width: 75px;
@@ -328,6 +398,88 @@ export class ChatNavigationBar extends LitElement {
     }
     .nb:not(:hover):not(.na) .lt {
       font-weight: 500;
+    }
+
+    /* ── The designed menu item — geometry per tab, from the node ────────────
+       Every measurement arrives as a custom property set on the button, because
+       these two designs do NOT share numbers: chat is 74 tall with a 38×38 icon at
+       (18, 8) and its label at y=46; trace is 77 tall with a 42×39 icon at (16, 8)
+       and its label at y=53. Same frame name in Figma, different measurements.
+
+       The calcs subtract .ni's own origin (left 7.42, top 10), so the numbers in
+       TABS read as the numbers in Figma rather than as offsets against a nested box.
+
+       The bar's other tabs rest at 67px and grow to 77 on hover/selected, and .ni
+       slides down 5px with them. A designed button has one size and no slide, so
+       both are pinned here instead of inherited. */
+    .nb.nbc,
+    .nb.nbc:hover,
+    .nb.nbc.na {
+      height: var(--nb-h, 74px);
+    }
+    .nb.nbc .ni,
+    .nb.nbc:hover .ni,
+    .nb.nbc.na .ni {
+      top: 10px;
+    }
+    .nb.nbc .iw {
+      left: calc(var(--nb-icon-x, 18px) - 7.42px);
+      top: calc(var(--nb-icon-y, 8px) - 10px);
+      width: var(--nb-icon-w, 38px);
+    }
+    .nb.nbc .ic {
+      height: var(--nb-icon-h, 38px);
+    }
+    .nb.nbc .lw,
+    .nb.nbc .ls,
+    .nb.nbc:hover .lw,
+    .nb.nbc.na .lw {
+      top: calc(var(--nb-label-y, 46px) - 10px);
+    }
+    /* Sized from the same properties as its wrapper, so the artwork and the box
+       can never disagree. object-fit is contain, not fill: the icons are different
+       artwork at different aspect ratios (a 40×40 raster, a 42×39 vector), and
+       forcing them into one box without it would stretch one of them. */
+    .nci {
+      display: block;
+      width: var(--nb-icon-w, 38px);
+      height: var(--nb-icon-h, 38px);
+      object-fit: contain;
+      pointer-events: none;
+    }
+    /* The design's label blue, not the bar's teal. On this button the text sits
+       under a picture rather than a mono glyph, so matching the glyph colour
+       would only make it harder to read. */
+    .nb.nbc .lt {
+      color: #3D8DDE;
+    }
+
+    /* ── Selected vs closed — from the annotation, verbatim ──────────────────
+       "Chat button selected: it's yellow when it's selected and it's transparent
+       when the chat is closed and it's not selected."
+
+       Yellow-on-selected is already this bar's active treatment (.na), so that
+       half costs nothing. Closed = transparent, and the WHOLE BUTTON pulses —
+       motion is what makes it findable in a 75px rail; a tint alone reads as
+       decoration.
+
+       The pulse is NOT in the annotation. It is the motion the health marker
+       already uses, applied to the button instead of the glyph, so the two read
+       as one signal. Marked inferred in registry.json for that reason. */
+    .nb.nbc.nb-closed {
+      background: none;
+      animation: hb-pulse 1.1s ease-in-out infinite;
+    }
+    .nb.nbc.nb-closed:hover {
+      background: rgb(252, 205, 61);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .nb.nbc.nb-closed {
+        animation: none;
+        /* Without the motion the background IS the affordance — dropping both
+           would leave the button with no way to announce itself at all. */
+        background: rgb(252, 205, 61);
+      }
     }
 
     /* ── Tooltip ──────────────────────────────────────────────────────── */
@@ -717,7 +869,10 @@ export class ChatNavigationBar extends LitElement {
           (tab) => html`
             <button
               type="button"
-              class="nb ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''}"
+              class="nb ${tab.iconSrc ? 'nbc' : ''} ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''}"
+              style=${tab.box
+                ? `--nb-h: ${tab.box.h}px; --nb-icon-w: ${tab.box.iconW}px; --nb-icon-h: ${tab.box.iconH}px; --nb-icon-x: ${tab.box.iconX}px; --nb-icon-y: ${tab.box.iconY}px; --nb-label-y: ${tab.box.labelY}px`
+                : ''}
               @click=${() => this._handleTabClick(tab.id)}
               title="${tab.tooltip}"
             >
@@ -725,14 +880,20 @@ export class ChatNavigationBar extends LitElement {
               <div class="ni ${currentTab === tab.id ? 'ns' : ''}">
                 <div class="iw">
                   <div class="ic">
-                    <!-- Monochrome mask layer -->
-                    <svg class="nm" fill="none" viewBox="0 0 26 25">
-                      <path d="M26 0H0V25H26V0Z" fill="white" fill-opacity="0.01" />
-                    </svg>
-                    <!-- Colored icon -->
-                    <svg class="nsv" fill="none" viewBox="${tab.viewBox ?? '0 0 22.75 21.8752'}">
-                      <path fill="#4ECFD5" d="${tab.svgPath}" />
-                    </svg>
+                    <!-- A tab with exported artwork renders the design's own icon;
+                         the rest keep the mask + glyph pair. -->
+                    ${tab.iconSrc
+                      ? html`<img class="nci" src=${tab.iconSrc} alt="" />`
+                      : html`
+                        <!-- Monochrome mask layer -->
+                        <svg class="nm" fill="none" viewBox="0 0 26 25">
+                          <path d="M26 0H0V25H26V0Z" fill="white" fill-opacity="0.01" />
+                        </svg>
+                        <!-- Colored icon -->
+                        <svg class="nsv" fill="none" viewBox="${tab.viewBox ?? '0 0 22.75 21.8752'}">
+                          <path fill="#4ECFD5" d="${tab.svgPath}" />
+                        </svg>
+                      `}
                   </div>
                 </div>
                 <div class="lw ${currentTab === tab.id ? 'ls' : ''}">

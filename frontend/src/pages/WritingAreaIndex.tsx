@@ -2488,6 +2488,7 @@ export default function Index({
                           overflow: hidden constrains the chat within the workspace-layout right pane —
                           prevents the chat column from pushing past the browser right edge. */}
                       <InteractiveChatInterface 
+                      consoleCards={assembledConsoleCards || []}
                       sessionId={currentPromptSession?.id || null}
                       compiledOutput={currentPromptSession?.compiledOutput || ''}
                       isRunning={false}
@@ -2561,6 +2562,7 @@ export default function Index({
                 }}
               >
                 <InteractiveChatInterface
+                  consoleCards={assembledConsoleCards || []}
                   columnCollapsed={isConsoleChatCollapsed}
                   onColumnExpand={handleConsoleChatExpand}
                   onColumnCollapse={handleConsoleChatCollapse}
