@@ -304,10 +304,27 @@ class A2UIRenderer extends LitElement {
     const props = componentProps(comp, this.dataModel);
     const assign = (el: Element | undefined) => {
       if (!el) return;
-      for (const unknown of assignProps(el as HTMLElement, props)) {
-        console.warn(
-          `[a2ui-renderer] ${comp.id} <${comp.component}>: prop "${unknown}" is not declared by the element. ` +
-          `It was not assigned. The payload and the component disagree about the contract.`,
+      try {
+        for (const unknown of assignProps(el as HTMLElement, props)) {
+          console.warn(
+            `[a2ui-renderer] ${comp.id} <${comp.component}>: prop "${unknown}" is not declared by the element. ` +
+            `It was not assigned. The payload and the component disagree about the contract.`,
+          );
+        }
+      } catch (err) {
+        // A property setter can throw — a component that validates its own input
+        // does it mid-assignment, inside Lit's update. Uncaught, that throw
+        // aborts the update and takes down the React subtree that mounted us, so
+        // one bad prop would cost the whole surface. Contained here: one bad
+        // prop costs one component, and the pass still renders.
+        //
+        // This reports to the console only. _errors was already consumed by the
+        // render that assigned this ref, and the list is rebuilt next pass — so
+        // the DOM block cannot show it without a second render. Stated rather
+        // than left to look like the report was forgotten.
+        console.error(
+          `[a2ui-renderer] ${comp.id} <${comp.component}>: assigning props threw — ${(err as Error)?.message ?? String(err)}. ` +
+          `The component was left unset; the rest of the surface rendered.`,
         );
       }
     };
@@ -323,12 +340,54 @@ class A2UIRenderer extends LitElement {
   }
 
   render() {
+    // Guard the SHAPE before touching it. A host assigns `components` through a
+    // ref, so nothing typechecks it at runtime, and the payload crossed a network
+    // boundary on the way in. `this.components.length` on a non-array throws — and
+    // a throw here takes down whatever React subtree mounted us, so a malformed
+    // payload would present as a broken application rather than a bad surface.
+    if (!Array.isArray(this.components)) {
+      return html`<div class="a2ui-errors" role="alert">
+        <div class="hdr">Malformed payload — nothing rendered</div>
+        <div><code>components</code> must be an array; received <code>${typeof this.components}</code>.
+          The surface was NOT drawn, because drawing part of an unreadable payload
+          would look like a successful assembly.</div>
+      </div>`;
+    }
     if (!this.components.length) return nothing;
 
     // Rebuild the error list each pass. Validation runs FIRST so the block below
     // reflects the tree in this same render — no second pass, no loop.
     this._errors = [];
-    const byId = new Map(this.components.map((c) => [c.id, c]));
+
+    const byId = new Map<string, A2UIComponent>();
+    for (const entry of this.components) {
+      // An entry that is not an object with a string id cannot be keyed. Skipped
+      // and reported: keeping it would put `undefined` in the Map and render a
+      // node whose id is the string "undefined".
+      if (!entry || typeof entry !== 'object' || typeof (entry as A2UIComponent).id !== 'string') {
+        this._report(
+          '?',
+          String((entry as A2UIComponent | null)?.component ?? '?'),
+          `Malformed entry (${entry === null ? 'null' : typeof entry}): every entry must be an object with a string "id". Skipped.`,
+        );
+        continue;
+      }
+      const comp = entry as A2UIComponent;
+      // A duplicate id is a protocol error, not a style choice: `children` refers
+      // to entries BY ID, so a duplicate silently redirects every reference to
+      // whichever copy won the Map — one component vanishes and the references
+      // that meant it point at the other. Reported, then overwritten exactly as
+      // before, so visibility is added without changing which node renders.
+      if (byId.has(comp.id)) {
+        this._report(
+          comp.id,
+          comp.component,
+          `Duplicate id "${comp.id}" — ids are the join key for children, so the later entry replaced the earlier one.`,
+        );
+      }
+      byId.set(comp.id, comp);
+    }
+
     this._validate(this.rootId, byId, [], 0);
 
     const errorBlock = this._errors.length
@@ -345,9 +404,21 @@ class A2UIRenderer extends LitElement {
 
     const root = byId.get(this.rootId);
     if (!root) {
+      // Name the LIKELY root instead of only listing what is there. The A2UI spec
+      // does not require the root to be called "root" — only this repository's
+      // prompt does — so a well-formed tree that is still unrenderable is
+      // expected, and the remedy is a single word. The failure stays loud: it
+      // just also says which word.
+      const referenced = new Set<string>();
+      for (const c of byId.values()) for (const childId of c.children ?? []) referenced.add(childId);
+      const candidates = [...byId.keys()].filter((id) => !referenced.has(id));
       return html`<div class="a2ui-errors" role="alert">
         <div class="hdr">No root component</div>
-        <div>Nothing to render: no entry has id <code>${this.rootId}</code>. The list has ${this.components.length} entr${this.components.length === 1 ? 'y' : 'ies'}: ${this.components.map((c) => c.id).join(', ') || '(none)'}.</div>
+        <div>Nothing to render: no entry has id <code>${this.rootId}</code>. The list has ${this.components.length} entr${this.components.length === 1 ? 'y' : 'ies'}: ${[...byId.keys()].join(', ') || '(none)'}.</div>
+        ${candidates.length
+          ? html`<div>Entries nothing lists as a child — the root is normally one of these:
+              ${candidates.map((id) => html`<code>${id}</code> `)}. Set <code>root-id</code> to the right one.</div>`
+          : nothing}
       </div>`;
     }
 

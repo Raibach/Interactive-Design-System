@@ -1305,11 +1305,35 @@ export default function Index({
 
       for (const operation of envelope) {
         if (operation.updateComponents) {
-          assembledComponents = operation.updateComponents.components || [];
-          console.log(`🤖 [A2UI] Model-supplied components:`, assembledComponents.map((c: any) => c.component || c.id));
+          const list = operation.updateComponents.components;
+          // Normalise ONCE, at the boundary. <a2ui-renderer> guards its own input
+          // too, but a non-array carried into React state would be re-checked on
+          // every render — and would throw here first, on the `.map` below, before
+          // the renderer ever saw it.
+          if (list !== undefined && !Array.isArray(list)) {
+            console.error(
+              `🤖 [A2UI] updateComponents.components is ${typeof list}, not an array — discarded.\n` +
+              `  CAUSE: a malformed envelope. The surface renders nothing rather than part of it.`,
+            );
+          }
+          assembledComponents = Array.isArray(list) ? list : [];
+          console.log(`🤖 [A2UI] Model-supplied components:`, assembledComponents.map((c: any) => c?.component || c?.id));
         }
         if (operation.updateDataModel) {
-          dataModel = operation.updateDataModel.value || {};
+          const value = operation.updateDataModel.value;
+          // The data model is an object BY DEFINITION — it is what bindings walk.
+          // A non-object would make every { path } resolve to undefined, so the
+          // surface would render with every bound value missing and nothing would
+          // say why. An empty model is the honest floor.
+          if (value !== undefined && (value === null || typeof value !== 'object' || Array.isArray(value))) {
+            console.error(
+              `🤖 [A2UI] updateDataModel.value is ${
+                value === null ? 'null' : Array.isArray(value) ? 'an array' : typeof value
+              }, not an object — ignored.\n` +
+              `  Every { path } binding would resolve to nothing; using an empty model instead.`,
+            );
+          }
+          dataModel = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
           console.log(`🤖 [A2UI] Data model received:`, Object.keys(dataModel));
         }
       }

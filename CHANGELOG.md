@@ -13,6 +13,199 @@ Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
   `behavior` flips `inferred → verbatim`. Do this before scaling to the
   remaining 16 un-annotated components.
 
+- **[Surface events] `a2ui:user-message` is dispatched and unheard.**
+  The renderer's `message-sent` now routes there (see the entry below). Nothing
+  listens yet, so a message a *rendered* component sends does not reach Grace —
+  the wired-but-inert failure the audit counts as `event-unheard`. Either give it
+  a listener in `InteractiveChatInterface` or fold it into the existing send path.
+  Do not "fix" it by reusing `a2ui:system-message`: that channel carries Grace's
+  words the other way, and sharing it would echo her reply back as input.
+
+**[2026-09-11] — The surface renderer: mounted, bound, and hardened at the boundary**
+
+A2UI is a flat list of components, each naming its type and referring to its
+children **by id**. Nothing in this repository turned that list into elements: the
+payload was received, logged, stashed on `window.__lastA2UIComponents`, and then
+discarded — the console was drawn by React branching on the shape of the *data
+model* instead. So the model's declared components were decorative. This entry
+covers making them real, and the boundaries that keep them honest.
+
+**The protocol-specific work**
+
+1. **The two channels are joined, not merged.** `updateComponents` says what the
+   surface *is*; `updateDataModel` says what it *says*. A prop that is a binding
+   (`{ path: "/cards/0/title" }`) is a pointer into the model, not text.
+   `resolveBinding` walks it and resolves it. Before this, a binding rendered as
+   `[object Object]` — the value was present in the same envelope, one channel
+   away.
+
+2. **Only the object form is a binding.** A bare string is never treated as a
+   path. `/usr/bin` and `/v2/chat` are legitimate copy, and a renderer that
+   guessed would corrupt real content while looking like it was being clever.
+
+3. **A path that overruns the model yields `undefined`, not a throw.** One
+   unresolvable field reads as absent instead of blanking the surface around it.
+
+4. **Name resolution is a lookup, in a deliberate order:** explicit composites →
+   A2UI's six spec primitives → our seven structural composites → the allowlist
+   (`tag-registry.ts`). A name nothing claims returns `null` and is **reported**,
+   never kebab-guessed from casing. `SectionEditor` and `prompt-section-editor`
+   are the same component and only a person knows that — folding the casing would
+   have produced `section-editor`, which resolves to nothing and reads as a
+   *missing component* rather than a *missing mapping*.
+
+5. **Props are assigned as PROPERTIES, coerced by the element's own declared
+   types.** Lit declares `conversationId` while the attribute is
+   `conversation-id`; an attribute assignment would leave the property unset and
+   the component blank. An undeclared prop is reported rather than assigned
+   silently — it means the payload and the component disagree about the contract.
+
+6. **Checked, not assumed: the flat shape is correct.** `STRUCTURAL` treats a
+   nested `props` object as structure and ignores it, which would have dropped
+   every prop without a word. Verified against both catalogs: `"props"` appears
+   **0 times** in `prompt-composer` and **0 times** in `ecommerce`. Props are
+   siblings of `id`, as the spec's `ComponentCommon` has them.
+
+7. **It fails loud.** An unknown component name renders a red block in the DOM
+   *and* logs. A renderer that silently skips what it does not understand
+   produces a blank surface that looks like a successful assembly — the exact
+   failure this whole subsystem exists to prevent.
+
+**Wiring it into the shell**
+
+8. **The `key` that was killing Grace.** `ai-surface-sandbox` carried
+   `key={isAIAssembling ? "assembling" : "idle-or-failed"}`. That value flips
+   twice per assembly — true when the request goes out, false when it lands — and
+   a changed key makes React tear down and rebuild the **entire subtree**. So
+   every assembly destroyed the chat panel mid-conversation *and*
+   `prompt-section-editor` with the composer's unsaved sections. Nothing inside
+   needed a remount: the sandbox routes its slots from the `is-ai-assembling` and
+   `header-tab` **properties**, so a property change already re-slots it. This was
+   also load-bearing in the wrong direction — it is why a correctly wired renderer
+   still looks broken: the wire survives, the state does not, so the failure reads
+   as "the renderer lost my chat" three levels down from the actual cause.
+
+9. **Registered, or it silently does not exist.** `main.tsx` imports each Lit
+   element for its registration side effect. `a2ui-renderer` was in no import
+   list, so the tag would have been an unknown element rendering as an empty
+   inline box — with no error anywhere.
+
+10. **State, not a global.** `window.__lastA2UIComponents` was write-only and
+    outside React's control: nothing could react to it, nothing could diff it,
+    and it outlived the surface it described. Both channels are now state feeding
+    the element through a ref.
+
+11. **React's `.prop=` is Preact, not React.** `<a2ui-renderer .components={...}>`
+    is a **syntax** error in React (TS1003, "Identifier expected"). Objects reach
+    a Lit element through a ref, which is also how every other element in that
+    file is fed. Attributes would be lossy regardless: a component tree and a data
+    model are structures, and both would arrive as the string `[object Object]`.
+    The tag also needed a `JSX.IntrinsicElements` entry — each Lit file declares
+    its own, and without one TS rejects the tag outright.
+
+12. **The events had no listener.** The renderer re-emits a primitive's event as
+    `a2ui-event` tagged with its source id. Nothing consumed it. Routed onto the
+    existing bus: `a2ui-action` → `a2ui:action`, `message-sent` →
+    `a2ui:user-message`, `command-received` → `a2ui:console-command`. The user's
+    words get their **own** channel deliberately — `a2ui:system-message` carries
+    Grace's words the other way, and sharing it would echo her reply back as
+    input. (That new channel is itself unheard; see the TODO above.)
+
+**Hardening the boundary**
+
+13. **A non-array payload no longer throws.** A host assigns `components` through
+    a ref, so nothing typechecks it at runtime, and the value crossed a network
+    boundary — the declared `A2UIComponent[]` is a claim about intent, not a fact
+    about the value. `this.components.length` on a non-array **throws**, and a
+    throw inside `render()` takes down whatever React subtree mounted the element:
+    a malformed payload would present as a broken *application* rather than a bad
+    *surface*. It now renders an explicit error block and says the surface was not
+    drawn.
+
+14. **An entry that cannot be keyed is skipped and reported.** It would otherwise
+    land in the Map under `undefined` and render a node whose id is the string
+    `"undefined"`.
+
+15. **Duplicate ids are reported.** `children` refers to entries **by id**, so a
+    duplicate does not just collide — it silently redirects every reference to
+    whichever copy won the Map. One component disappears and the references that
+    meant it point at the other. Reported, then overwritten exactly as before, so
+    visibility is added without changing which node renders.
+
+16. **A throwing prop setter is contained.** A component that validates its own
+    input does it mid-assignment, inside Lit's update. Uncaught, that aborts the
+    update and costs the whole surface; one bad prop should cost one component.
+    This one reports to the **console only** — `_errors` was already consumed by
+    the render that assigned the ref — and that is stated rather than left to look
+    like the report was forgotten.
+
+17. **The root mismatch names the likely root.** The A2UI spec does **not**
+    require the root to be called `root`; only this repository's prompt does. So a
+    well-formed tree that is still unrenderable is expected, and the remedy is one
+    word. The error stays loud and now also names the entries nothing lists as a
+    child, so it says which word.
+
+18. **Normalised once, at the boundary.** A non-array `components` or a
+    non-object `updateDataModel.value` is coerced at the HTTP response in
+    `WritingAreaIndex`, with a logged cause — not carried into state to be
+    re-checked on every render, and not left to throw on the first `.map` before
+    the renderer ever sees it.
+
+19. **Confirmed already present, and pinned by tests:** cycle detection,
+    `depth > 64`, unknown-component reporting, malformed-id reporting. These
+    existed; they are now held down rather than assumed (18 assertions in
+    `frontend/src/test/a2ui-renderer.test.ts`).
+
+**The check that was checking nothing**
+
+`frontend/tsconfig.json` is a *solution* file — `{ "files": [], "references": [...] }`
+— so `tsc --noEmit -p tsconfig.json` compiled **zero files** and exited 0. Measured
+on a deliberately broken `tag-registry.ts`:
+
+```
+tsc --noEmit -p tsconfig.json   ->  exit 0, nothing checked   (false confidence)
+tsc -b --noEmit                 ->  exit 2, error reported    (the real gate)
+```
+
+Added `npm run typecheck` (`tsc -b --noEmit`) and `scripts/typecheck-guard.mjs`,
+which fails if the solution root or any referenced project declares no inputs, so
+`tsc -b` cannot quietly become vacuous either. The guard reads tsconfig as
+**JSONC** — TypeScript permits comments, and a plain `JSON.parse` rejects every
+config file in this repository.
+
+A measurement note, because it matters for every exit code quoted above: the first
+time I measured `tsc -b --noEmit` I reported it exiting 0 by reading `$?` through a
+pipe to `head`, which discards the real status. Other exit codes earlier in this
+session were read the same wrong way. The conclusion held; the evidence for it did
+not. Pipelines hide status.
+
+**The repository's first committed test**
+
+`vitest` was configured (jsdom, `globals`, a `setup.ts` with jest-dom) and had
+**no test files at all** — `npx vitest run` exited 1 with *"No test files found"*
+before this. `npm test` is watch mode; `npx vitest run` is the gate. 18 assertions
+now cover the renderer's boundary and its two pure functions.
+
+**Not claimed as verified**
+
+- **The renderer painting with a live payload.** It is verified by `tsc -b`,
+  `vite build`, and 18 jsdom assertions — never end-to-end against real Grace
+  output in a browser.
+- **The shadow mount's appearance.** It renders *beside* `ConsolePage`, not in
+  place of it, so both trees are on screen together; that side-by-side has not
+  been looked at. Every node the renderer draws carries `data-a2ui-id`, which is
+  how the two are told apart — and the marker that says when the swap to
+  authoritative is safe. It is **not** safe yet: `ConsolePage` still owns the data
+  refresh and the open/delete/create handlers, which the renderer does not have.
+- **The `catch` around prop assignment** (item 16). The guard is in place; no
+  fixture component throws from a setter, so the catching branch is untested.
+- **`resolveBinding` against a real model.** Its cases are unit-tested; the
+  payload shapes Grace actually emits are not.
+- **The root diagnostic's rendering** (item 17) — asserted as text, not seen.
+- **Grace's seat still moves with the surface.** Wired renderer or not, the chat
+  column is mounted per-surface rather than once per session until the props merge
+  and the third column are resolved; that is a separate pass.
+
 **[2026-09-11] — Catalog health: the report, and the boundaries that keep it honest**
 
 The catalog checker now runs as part of the build and at startup, reports on a
