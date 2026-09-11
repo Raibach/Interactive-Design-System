@@ -61,6 +61,12 @@ If you are an AI session: read this before you touch anything. Three files here 
 |---|---|
 | `Lit-to-figma-trace-plan` | Where this is going: the catalog shape, then the monitoring |
 
+## The register
+
+| File | It is |
+|---|---|
+| `OPEN-ITEMS.md` | Every open discrepancy, with the number to quote it by. Two ID spaces: the **checker** owns `check:component` (regenerate with `cd frontend && npm run catalog:check`); **`#NNN`** covers what no checker can see. An item closes only when the thing that derived it stops deriving it |
+
 ---
 
 *Keep this current. If a file here is renamed or removed, fix this page in the same change — a stale index is worse than none.*

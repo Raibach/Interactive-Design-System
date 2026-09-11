@@ -1491,7 +1491,11 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                 {/* Catalog findings — Grace's report, under the hero, IN the chat's
                     own flow. No frame, no embed, no separate scroll: the list
                     scrolls with the conversation because it belongs to it. */}
-                {catalogFindings && catalogFindings.length > 0 && (
+                {/* Repair items belong to the CHAT view only. Trace, Tools,
+                    Variables and Metadata each report their own thing, and an open
+                    catalog finding is not part of what any of them is showing —
+                    the tab is a filter, and this is what it filters out. */}
+                {selectedNav === 'chat' && catalogFindings && catalogFindings.length > 0 && (
                   <div className="space-y-2">
                     <div className="font-['Inter'] text-[12px] font-semibold text-[#1c2f4e]">
                       Catalog check — {catalogFindings.length} open

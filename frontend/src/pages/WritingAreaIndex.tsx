@@ -1362,14 +1362,12 @@ export default function Index({
 
       const assemblyTime = dataModel.assembly_time_ms || 0;
       const aiMessage = dataModel.ai_message || '';
-      // Grace speaks into HER seat. ai_message is written by her, but it was
-      // only ever logged and shown in the decision dialog — so everything she
-      // said about the surface was invisible to the person it was said to.
-      if (aiMessage) {
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: { role: 'assistant', content: aiMessage },
-        }));
-      }
+      // NOT posted. An assembly is not a turn in the conversation — nobody asked,
+      // and the operator is reading the surface the message describes. It used to
+      // arrive as an interruption wearing her name, opening with a greeting.
+      //
+      // Her words are untouched: this is the display deciding what belongs in the
+      // conversation, not the model being told to say less. Still logged below.
       // The measured cost of this action, straight from the provider's usage
       // report — the readout in Grace's seat shows this and nothing else.
       if (dataModel.usage && typeof dataModel.usage.total_tokens === 'number') {
@@ -1695,12 +1693,9 @@ export default function Index({
                 detail: { ...value.usage, sessionId: value.session_id || currentPromptSessionRef.current || null },
               }));
             }
-            if (value.ai_message) {
-              // Her words go into her seat, the same channel the surface uses.
-              window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-                detail: { role: 'assistant', content: value.ai_message },
-              }));
-            }
+            // The catalog check does not announce itself either — same rule as the
+            // surface assembly above. The findings render as a list in the chat;
+            // the message describing them does not.
           }
         }
       } catch (error) {
@@ -2376,12 +2371,13 @@ export default function Index({
                       data-a2ui-id, so the two can be told apart on screen. Once the
                       hand-rendered grid is confirmed redundant it goes, and this
                       comment with it. */}
-                  {surfaceComponents.length > 0 && (
-                    <a2ui-renderer
-                      ref={a2uiRendererRef}
-                      style={{ flex: '1 1 0%', minWidth: 0, overflow: 'auto' }}
-                    />
-                  )}
+                  {/* Mounted, rendered, never seen. It stays in the DOM so the
+                      data-a2ui-id parity evidence keeps accumulating, but it does
+                      not occupy the row: shown, it is a second copy of the grid
+                      and a third column. */}
+                  <div aria-hidden="true" style={{ display: 'none' }}>
+                    <a2ui-renderer ref={a2uiRendererRef} />
+                  </div>
                   <ConsolePage
                     refreshKey={consoleRefreshKey}
                     aiAssembledCards={assembledConsoleCards}
