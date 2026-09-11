@@ -604,6 +604,25 @@ imagine around.
     block states that a library-scoped description is invisible on this channel, so
     "not found here" is never reported as "the designer wrote none".
 
+    Then the same thing on the live site, after the deploy landed (`f30fd32`,
+    14:13), on the node a real run had failed on — `40000746:6`,
+    `left-column-panel-container`:
+
+    ```
+    POST /api/teacher/query → 200 in 4.76s    tool_warnings: NONE
+
+    "The component is the FRAME "left-column-panel-container" (40000746:6, 672×964)…
+     a stacked column of four "prompt-input-section" accordions — "Prompt Output",
+     "User Role", "Agent Role", and "Tool Call" … over a prompt textarea.
+
+     The only annotations I was given are repeated verbatim on each of the three
+     textarea text nodes: "this is a textarea - for active data.""
+    ```
+
+    It now names the frame, its size, the four accordions by their real labels and
+    quotes the annotations verbatim — and says *"the only annotations I was given"*,
+    drawing the boundary itself instead of filling it.
+
 37. **Security, since it was asked: the token already lives on that server.** This adds
     no secret and no new access. It reads — over the token the deployment already holds
     — files that account can already open, by GET, scope `file_content:read`, writing
