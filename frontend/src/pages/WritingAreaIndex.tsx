@@ -444,33 +444,19 @@ export default function Index({
       setSelectedProjectId(projectIdToSelect);
     }
 
-    // Load conversations for the selected project (use cache, don't force refresh)
+    // Conversations are NOT loaded here, and must not be.
+    //
+    // A conversation is filtered in direct relationship to the package it was
+    // created in, and it is fetched when that container is called — not swept up
+    // for the whole project when the homepage mounts. The one independent set is
+    // the user-wide chats at the top level, and those arrive the same way: when
+    // their own container is called.
+    //
+    // This block used to pull every conversation in the project into
+    // projectConversations — a value nothing ever read. A full
+    // GET /api/conversations?project_id=... on every page load, for nobody.
     const currentProjectId =
       projectIdToSelect || conversationStorage.getCurrentProjectId();
-    if (currentProjectId) {
-      const conversations = await conversationStorage.getProjectConversations(
-        currentProjectId,
-        false,
-      );
-      setProjectConversations(
-        conversations.sort((a, b) => b.updatedAt - a.updatedAt),
-      );
-
-      // PRIORITY: Restore last modified chat for this project
-      const lastModifiedChat = conversationStorage.getLastModifiedChat();
-      if (lastModifiedChat && lastModifiedChat.projectId === currentProjectId) {
-        const chat = conversations.find(
-          (c) => c.id === lastModifiedChat.conversationId,
-        );
-        if (chat) {
-          // The chat exists - it will be selected when the user opens the chat tab
-          console.log(
-            `✅ Found last modified chat: ${chat.id} (modified at ${new Date(lastModifiedChat.timestamp).toLocaleString()})`,
-          );
-          // Note: Chat selection is handled by TeacherEditorChat component
-        }
-      }
-    }
 
     console.log(
       `✅ Loaded ${allProjects.length} project(s), current project: ${currentProjectId}`,
@@ -1620,11 +1606,17 @@ export default function Index({
           `  NOTE: the console surface is NOT blocked by this.`
         );
       }
-
-      // 2) THEN the surface contents. Unconditional: the console does not wait
-      // on her check, and a failed check must never leave it empty.
-      await assembleSurfaceWithAI(initialIntent);
     })();
+
+    // 2) The surface, in PARALLEL — not behind her report.
+    //
+    // Her request is issued first (the block above runs up to its first await
+    // before this line), so the order is still Grace-then-surface. But the
+    // surface must not WAIT on her: her report is an LLM round trip, measured at
+    // ~28s in production, and a sequential await left the console blank for half
+    // a minute. Order is not dependency — and a report about the catalog is not
+    // a precondition for rendering it.
+    await assembleSurfaceWithAI(initialIntent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps = run only on mount
 
