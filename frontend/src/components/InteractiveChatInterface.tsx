@@ -617,6 +617,59 @@ ${compiledOutput.slice(0, 3000)}`;
     });
   }, [sessionId]);
 
+  /**
+   * The chat column IS a conversation.
+   *
+   * Everything in this column hangs off one conversation id: the messages, the
+   * trace, the tab's buttons, the spend. With no id every persistence path below
+   * is a silent no-op — the question is not stored, the reply is not stored, the
+   * title cannot be read — so the column looks dead even though it renders.
+   *
+   * On mount we therefore take the package's most recent conversation, or open
+   * one if the package has none, and bind to it. This ADOPTS an id; it does not
+   * auto-open history. What the user reads is still governed by the dropdown —
+   * the column simply gains the id it cannot work without.
+   */
+  useEffect(() => {
+    if (!sessionId || currentConversationId) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const all = await conversationStorage.getSessionConversations(sessionId);
+        if (cancelled) return;
+
+        const list = (all || [])
+          .filter((c) => c?.id)
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+        if (list.length > 0) {
+          setCurrentConversationId(list[0].id);
+          return;
+        }
+
+        // The package has no conversation yet — open one, so the column has an id.
+        const project = await conversationStorage.getUnassignedProject();
+        const created = await conversationStorage.createConversation(
+          project?.id || '', 'New Conversation', 'grace', 'general', sessionId,
+        );
+        if (!cancelled && created?.id) setCurrentConversationId(created.id);
+      } catch (error) {
+        console.error(
+          `[Chat] NO CONVERSATION ID FOR THIS COLUMN\n` +
+          `  sessionId: ${sessionId}\n` +
+          `  error: ${error instanceof Error ? error.message : String(error)}\n` +
+          `  timestamp: ${new Date().toISOString()}\n` +
+          `  CAUSE: this package's conversations could not be read, and one could not be opened.\n` +
+          `  EFFECT: nothing in this column persists — messages, trace and spend all hang off the id.\n` +
+          `  FIX: check GET/POST /api/conversations, and that the id matches a prompt_sessions row.`
+        );
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [sessionId, currentConversationId]);
+
   const handleDeleteConversation = async (e: React.MouseEvent, convId: string) => {
     e.stopPropagation();
     if (!confirm('Delete this conversation?')) return;
