@@ -1269,6 +1269,17 @@
     },
     "anyComponent": {
       "oneOf": [
+        { "$ref": "#/components/workspace-layout" },
+        { "$ref": "#/components/prompt-section-editor" },
+        { "$ref": "#/components/compiled-output-viewer" },
+        { "$ref": "#/components/chat-panel" },
+        { "$ref": "#/components/prompt-container" },
+        { "$ref": "#/components/prompt-input-section" },
+        { "$ref": "#/components/gripper-prompt-input" },
+        { "$ref": "#/components/role-dropdown" },
+        { "$ref": "#/components/role-tile" },
+        { "$ref": "#/components/status-bar-prompt-input" },
+        { "$ref": "#/components/prompt-textarea" },
         {
           "$ref": "#/components/Text"
         },

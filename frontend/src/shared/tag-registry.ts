@@ -928,6 +928,43 @@ export const TAG_REGISTRY = {
     ],
   },
 
+  // Structural — right-column navigation. A real element (lit/chat-navigation-bar.ts)
+  // that the schema already listed and this allowlist did not, so the gatekeeper
+  // rejected it and the renderer could not resolve the name.
+  'chat-navigation-bar': {
+    tag: 'chat-navigation-bar',
+    surface: 'both',
+    description: 'Right-column tab rail — chat, trace, tools, evaluation, variables, metadata — filtered by the user’s departmental role. Carries the catalog-health marker on the chat tab.',
+    props: {
+      'active-tab': { type: 'string', default: 'chat' },
+      'collapsed': { type: 'boolean', default: false },
+      'allowed-tabs': { type: 'string', default: '' },
+      'health-count': { type: 'number', default: 0 },
+      'health-state': { type: 'enum', values: ['ok', 'loading', 'unknown'], default: 'loading' },
+    },
+    events: ['tab-change', 'collapse-toggle', 'right-column-drag-start', 'right-column-drag-move', 'right-column-drag-end'],
+    constraints: [
+      'Tabs are filtered by allowed-tabs; a list matching no known tab shows all rather than an empty bar',
+      "health-state 'unknown' must never render the same as a clean result",
+      'Never gated on is-ai-assembling — the seat must not disappear while a surface loads',
+    ],
+  },
+
+  // Structural — role selector inside a prompt-input-section. Also a real element
+  // (lit/prompt-input/role-dropdown.ts) that was missing from this list.
+  'role-dropdown': {
+    tag: 'role-dropdown',
+    surface: 'composer',
+    description: 'Role-selector dropdown for a prompt-input-section: lists the available roles plus a remove action.',
+    props: {
+      'id': { type: 'string', default: '' },
+    },
+    events: ['role-select', 'role-remove'],
+    constraints: [
+      'Selecting a role sets it and closes the menu — it does not add a section',
+    ],
+  },
+
   // Universal
   'status-indicator': {
     tag: 'status-indicator',
