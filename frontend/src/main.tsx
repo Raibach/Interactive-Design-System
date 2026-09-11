@@ -18,6 +18,11 @@ import "@/components/lit/agent-card-element";
 import "@/components/lit/chat-navigation-bar";
 import "@/components/lit/ai-surface-sandbox";
 import "@/components/lit/control-bar";
+// The A2UI surface renderer. Registration is a side effect of the import, the
+// same as every element above. It is what turns Grace's updateComponents payload
+// into DOM — without this import the <a2ui-renderer> tag in WritingAreaIndex is
+// an unknown element and renders as an empty inline box, silently.
+import "@/components/lit/a2ui-renderer";
 
 // ── Production Sentry guard ──────────────────────────────────────────────────
 if (import.meta.env.PROD && !isSentryReady()) {
