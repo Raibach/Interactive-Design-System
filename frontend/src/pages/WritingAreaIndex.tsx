@@ -1541,6 +1541,7 @@ export default function Index({
       // function keeps a single in-flight slot (a second call aborts the first —
       // which silently emptied the grid) and it flips is-ai-assembling. This is
       // not a surface; it is a report for her seat.
+      const graceReport = (async () => {
       try {
         const res = await fetch(`${API_BASE}/ai/assemble-surface`, {
           method: 'POST',
@@ -1606,17 +1607,18 @@ export default function Index({
           `  NOTE: the console surface is NOT blocked by this.`
         );
       }
-    })();
+      })();
 
-    // 2) The surface, in PARALLEL — not behind her report.
-    //
-    // Her request is issued first (the block above runs up to its first await
-    // before this line), so the order is still Grace-then-surface. But the
-    // surface must not WAIT on her: her report is an LLM round trip, measured at
-    // ~28s in production, and a sequential await left the console blank for half
-    // a minute. Order is not dependency — and a report about the catalog is not
-    // a precondition for rendering it.
-    await assembleSurfaceWithAI(initialIntent);
+      // 2) The surface, in PARALLEL — not behind her report.
+      //
+      // Her request is issued first: `graceReport` starts above and runs to its
+      // first await before this line is reached, so the order is still
+      // Grace-then-surface. But the surface must not WAIT on her. Her report is
+      // an LLM round trip — 28.5s measured against production — and awaiting it
+      // here left the console blank for half a minute. Order is not dependency,
+      // and a report about the catalog is not a precondition for rendering it.
+      await Promise.allSettled([graceReport, assembleSurfaceWithAI(initialIntent)]);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps = run only on mount
 
