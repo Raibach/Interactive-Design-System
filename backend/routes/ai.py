@@ -29,6 +29,50 @@ from role_caps import get_filtered_manifest, get_user_role, get_role_capabilitie
 router = APIRouter()
 
 
+def _catalog_component_vocabulary() -> str:
+    """The component list for a prompt, GENERATED from the catalog.
+
+    Hand-typed lists drift, and this one had drifted badly: the prompts named
+    three components while the catalog held thirty-five. The model was taught 8%
+    of the design system and had no way to reach the rest — and because the same
+    short list was maintained by hand in two separate prompts, it could only ever
+    agree with the catalog by luck.
+
+    Derived from the schema, the prompt and the validator cannot disagree: the
+    model is never told about a component the server will reject, and never kept
+    ignorant of one it will accept.
+
+    Loud on an empty catalog rather than degrading to a shorter list. A prompt
+    with no vocabulary invites invented components, and every invented component
+    is a 503 at validation — a silent truncation here would turn a load failure
+    into a stream of rejected surfaces.
+    """
+    components = (a2ui_catalog or {}).get("components") or {}
+    if not components:
+        raise RuntimeError(
+            "A2UI catalog is empty — refusing to assemble a prompt with no component "
+            "vocabulary. Every payload is validated against this catalog, so without it "
+            "the model can only invent components that will be rejected with a 503."
+        )
+
+    lines: List[str] = []
+    for name in sorted(components):
+        spec = components[name] or {}
+        props: List[str] = []
+        # Properties live in the `allOf` branches (the component carries one or
+        # more $refs), so walk those as well as the top level.
+        for part in list(spec.get("allOf") or []) + [spec]:
+            for prop in (part.get("properties") or {}):
+                if prop == "component":
+                    continue  # the discriminator, not an argument
+                if prop not in props:
+                    props.append(prop)
+        lines.append(f"- {name}: {', '.join(props) if props else 'no properties'}")
+
+    return f"COMPONENT CATALOG — all {len(components)} (only these; anything else is a 503):\n" + "\n".join(lines)
+
+
+
 def _extract_json_payload(response_text: str) -> Any:
     """Extract a JSON object/array from LLM output without relying on fenced-block parsing."""
     text = (response_text or "").strip()
@@ -318,10 +362,7 @@ Card data (bind ConsoleCardGrid to this):
 
 Assemble the FULL console surface using A2UI v0.9.1.
 
-COMPONENT CATALOG (only these):
-- Column (children array)
-- Text (text: a short welcome message, variant: "greeting")
-- ConsoleCardGrid (items: {{"path": "/cards"}})
+{_catalog_component_vocabulary()}
 
 REQUIREMENTS:
 1. id "root" Column at top
@@ -467,10 +508,7 @@ Findings — raw, from the checker. Do not invent, merge, reorder or drop any:
 
 Assemble the catalog-health surface in A2UI v0.9.1. This is YOUR assembly.
 
-COMPONENT CATALOG (only these):
-- Column       (children: array of component ids)
-- Text         (text: string, variant: optional)
-- ActionGroup  (items: a data-bound list)
+{_catalog_component_vocabulary()}
 
 REQUIREMENTS:
 1. One Column with id "root" at the top.
