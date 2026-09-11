@@ -27,12 +27,16 @@ import './prompt-textarea';
 export interface MenuType { type: string; label: string }
 
 // System is deliberately absent — it is sticky and has no menu.
-// Menu contents are the Figma component-set (node 40000922:5030, open state):
-// User Role · Agent Role · Tool Call · Remove. No invented entries.
+// Menu contents are the Figma component-set. Live node: 40001003:25249
+// ("accordion-dropdown", open state), which carries FOUR role tiles —
+// User Role · Agent Role · Tool Call · Custom Data — plus Remove and Add Section.
+// "Custom Data" is the addition the older three-item menu was missing
+// (the earlier node 40000934:22868 called this tile "Custom").
 export const SECTION_MENU_TYPES: MenuType[] = [
   { type: 'user', label: 'User Role' },
   { type: 'agent', label: 'Agent Role' },
   { type: 'tool-call', label: 'Tool Call' },
+  { type: 'custom-data', label: 'Custom Data' },
 ];
 
 export const TYPE_LABELS: Record<string, string> = {
@@ -41,6 +45,7 @@ export const TYPE_LABELS: Record<string, string> = {
   agent: 'Agent Role',
   assistant: 'Agent Role',
   'tool-call': 'Tool Call',
+  'custom-data': 'Custom Data',
   'few-shot': 'Few Shot',
   context: 'Context',
   constraints: 'Constraints',
@@ -143,21 +148,25 @@ export class PromptInputSection extends LitElement {
       box-sizing: border-box;
       box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
     }
-    /* Figma 40000941-23781 accordion-dropdown — semi-transparent container, 5px gap */
+    /* Figma 40001003:25249 "accordion-dropdown" (live node, open state) — a 379px
+       TWO-COLUMN grid of white tile-cards with 5px gaps. Container itself has no
+       fill in the design; each tile carries its own white card + drop shadow.
+       Tiles: User Role · Agent Role · Tool Call · Custom Data · Remove ·
+       Add Section. */
     .selection-menu {
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
-      min-width: 200px;
-      background: rgba(255, 255, 255, 0.39);
-      border-radius: 6px;
-      padding: 0;
+      width: 379px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 5px;
+      padding: 0;
       z-index: 40;
-      display: flex;
-      flex-direction: column;
     }
     .menu-item {
+      /* role-dropdown-tile: #FFFFFF, radius 6, "button drop" shadow,
+         40px tall. Text inset = 10px (tile) + 10px (role-label-injection). */
       background: #ffffff;
       border: none;
       cursor: pointer;
@@ -166,16 +175,25 @@ export class PromptInputSection extends LitElement {
       font-size: 14px;
       font-weight: 700;
       color: #171717;
-      padding: 10px;
+      padding: 0 20px;
       height: 40px;
       border-radius: 6px;
-      box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
+      box-shadow: 4px 4px 10px rgba(0,0,0,0.15), -4px -4px 10px rgba(0,0,0,0.15);
       box-sizing: border-box;
       white-space: nowrap;
     }
     .menu-item:hover { background: #f7f7f7; }
     .menu-item.selected { color: #4e68d2; }
     .menu-item.danger { color: #c50000; }
+    /* role-dropdown-tile.dropdown-bottom (node 40001003:25282) — a full-width
+       tile, same card/shadow/radius, label in #8B8B8B (fill_fa023af3).
+       Built verbatim from the design; it is not hoverable. */
+    .menu-item.placeholder {
+      grid-column: 1 / -1;
+      color: #8b8b8b;
+      cursor: default;
+    }
+    .menu-item.placeholder:hover { background: #ffffff; }
     .functions-label-text {
       font-size: 16px;
       font-weight: 700;
@@ -218,6 +236,9 @@ export class PromptInputSection extends LitElement {
                   @click=${(e: Event) => this._onMenuSelect(e)}>${mt.label}</button>`)}
         <button class="menu-item danger" role="menuitem" data-action="delete"
                 @click=${(e: Event) => this._onMenuSelect(e)}>Remove</button>
+        <button class="menu-item" role="menuitem" data-action="add"
+                @click=${(e: Event) => this._onMenuSelect(e)}>Add Section</button>
+        <div class="menu-item placeholder" role="presentation">Placeholder row</div>
       </div>` : '';
 
     const functionsMenu = menuOpen === 'functions' ? html`
