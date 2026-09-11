@@ -6,6 +6,31 @@
     "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09)",
     "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented — audit against the source annotation)."
   },
+  "containers": {
+    "chat-menu-item": {
+      "whatThisIs": "The rail nav button. Every designed button inside the navigation rail inherits this — it is a constraint of the CONTAINER, not a property of each button.",
+      "renderedBy": [
+        "chat-navigation-bar"
+      ],
+      "definedIn": "frontend/src/components/lit/chat-navigation-bar.ts — the :host cascade block",
+      "provenance": "inferred",
+      "geometry": {
+        "button": {
+          "w": 74,
+          "h": 74
+        },
+        "icon": {
+          "x": 18,
+          "y": 8,
+          "w": 38,
+          "h": 38
+        },
+        "label": {
+          "y": 46
+        }
+      }
+    }
+  },
   "components": [
     {
       "figmaName": "prompt-container",
@@ -138,6 +163,49 @@
         "litComponent": "inferred",
         "behavior": "inferred"
       }
+    },
+    {
+      "figmaName": "chat-button",
+      "figmaNodeId": "40001010:25768",
+      "litComponent": "chat-navigation-bar",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "status": "built",
+      "annotations": [
+        "Chat Button - Loads last chat activity (last modified) for current activity in the chat widow. This is the same patterns throughout all of my designs. Last modified recent activity is always the default. On click: dispatch tab-change { tab: \"chat conversations\" }",
+        "Chat button selected: it's yellow when it's selected and it's transparent when the chat is closed and it's not selected."
+      ],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "selectedState": "verbatim",
+        "closedState": "verbatim",
+        "onClick": "verbatim",
+        "pulse": "inferred",
+        "litComponent": "inferred",
+        "geometrySharing": "inferred"
+      },
+      "container": "chat-menu-item"
+    },
+    {
+      "figmaName": "trace-button",
+      "figmaNodeId": "40001011:26266",
+      "litComponent": "chat-navigation-bar",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "status": "built",
+      "annotations": [
+        "Loads trace for current activity in the chat widow. On click: dispatch tab-change { tab: \"trace\" }",
+        "Trace icon  (on the icon instance, node 40001011:26260)"
+      ],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "onClick": "verbatim",
+        "litComponent": "inferred",
+        "geometrySharing": "inferred"
+      },
+      "container": "chat-menu-item"
     }
   ]
 }

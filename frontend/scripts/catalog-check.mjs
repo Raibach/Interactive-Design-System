@@ -159,6 +159,28 @@ for (const c of figmaMap.components) {
   }
 }
 
+// Container membership: a component that renders INSIDE a container has to say so.
+//
+// This is the case no geometry check can reach. A button that never claims to
+// belong to the rail cannot be compared against the rail's constraint — it simply
+// has no constraint, and it will keep whatever size it was drawn at. Silence reads
+// as fine, which is the failure mode this whole layer exists to prevent.
+//
+// The container names the elements it renders inside (`renderedBy`); an entry whose
+// component is listed there but which does not declare the container back is the
+// one that slipped in.
+for (const c of figmaMap.components) {
+  if (!c.litComponent) continue;
+  // The element's OWN entry is not a slot in the container — it is the element the
+  // container lives inside. Only components rendered INTO it are checked.
+  if (c.figmaName === c.litComponent) continue;
+  for (const [name, container] of Object.entries(figmaMap.containers || {})) {
+    const renderedBy = container.renderedBy || [];
+    if (renderedBy.includes(c.litComponent) && c.container !== name) {
+      add({ check: 'container-undeclared', stage: 'deliver', owner: 'pipeline', component: c.litComponent, nodeId: c.figmaNodeId || null, file: c.file, what: `Renders inside the "${name}" container but the entry does not declare it, so no constraint applies to it and nothing checks its geometry. It keeps whatever size it was drawn at.`, fix: `Add "container": "${name}" to the registry entry. Until then this component is unchecked by design, not by accident.` });
+    }
+  }
+}
 // Unheard events: a dispatched event nothing listens for is a dead control
 // unless it is explicitly marked as an unimplemented stub.
 for (const [event, by] of dispatched) {
@@ -374,6 +396,63 @@ if (OFFLINE) {
         add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation.`, fix: `Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md` });
       } else if (!isStructured(text)) {
         add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, file: c.file, what: `Node ${id} has a note, but it is prose, not a spec — so behaviour must be invented. "${text.slice(0, 90)}${text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).' });
+      }
+
+      // ── Geometry convergence ────────────────────────────────────────────
+      // A component's numbers live in two places: the Figma node (authoring) and
+      // the code that renders it. When they disagree nothing says so — the code
+      // holds a constant that has quietly stopped matching the design, and the
+      // only way to notice is to look at both side by side, which nobody does.
+      //
+      // This check compares what the NODE says against what the entry DECLARES the
+      // code renders, and reports the difference. It does not pick a winner: a
+      // drift is a question for whoever owns the design, not something the
+      // pipeline gets to settle.
+      //
+      // Only components that belong to a CONTAINER are checked — one that declares
+      // a geometry constraint the catalogue insists on. Everything else cannot
+      // drift, because there is nothing to drift from.
+      //
+      // The constraint is read from the CONTAINER, not from the component: a rail
+      // button's numbers are a property of the rail. That is what keeps ingestion
+      // free to be messy while the catalogue stays consistent — the node is
+      // compared against the container, so a hand-placed node reports as drift
+      // instead of silently becoming the new truth.
+      const container = c.container ? figmaMap.containers?.[c.container] : null;
+      const declared = container?.geometry || (c.declared && c.declared.geometry);
+      const declaredWhere = container?.definedIn || (c.declared && c.declared.source) || 'the registry';
+      if (declared) {
+        const r1 = (n) => Math.round(n * 10) / 10;
+        const frame = (node.children || []).find((n) => n.type === 'FRAME') || node;
+        const kids = frame.children || [];
+        const iconNode = kids.find((n) => n.type === 'RECTANGLE' || n.type === 'INSTANCE' || n.type === 'VECTOR');
+        const labelNode = kids.find((n) => n.type === 'TEXT');
+        const box = (n) => (n && n.absoluteBoundingBox) ? {
+          x: r1(n.absoluteBoundingBox.x - frame.absoluteBoundingBox.x),
+          y: r1(n.absoluteBoundingBox.y - frame.absoluteBoundingBox.y),
+          w: r1(n.absoluteBoundingBox.width),
+          h: r1(n.absoluteBoundingBox.height),
+        } : null;
+        const actual = {
+          button: frame.absoluteBoundingBox ? { w: r1(frame.absoluteBoundingBox.width), h: r1(frame.absoluteBoundingBox.height) } : null,
+          icon: box(iconNode),
+          label: box(labelNode),
+        };
+        const drifts = [];
+        for (const part of ['button', 'icon', 'label']) {
+          const want = declared[part];
+          const got = actual[part];
+          if (!want || !got) continue;
+          for (const prop of Object.keys(want)) {
+            // 0.5px tolerance: sub-pixel differences are rounding, not intent.
+            if (Math.abs(want[prop] - got[prop]) > 0.5) {
+              drifts.push(`${part}.${prop} — node ${got[prop]}, code ${want[prop]}`);
+            }
+          }
+        }
+        if (drifts.length) {
+          add({ check: 'geometry-drift', stage: 'deliver', owner: 'pipeline', component: c.litComponent, nodeId: id, file: c.file, what: `Node ${id} and the rendered button disagree (${drifts.join('; ')}). The constraint is ${declaredWhere}.`, fix: 'Either the node moves to the constraint, or the constraint changes once — in the catalogue, not in this component. Both are answers; silently keeping two sets of numbers is not.' });
+        }
       }
     }
   } catch (e) {

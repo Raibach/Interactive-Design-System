@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T15:17:57.200Z",
+  "generatedAt": "2026-09-11T17:29:57.882Z",
   "catalog": "prompt-composer",
   "status": "complete",
   "fileKey": "20UPR2KQMsbAxlo5NJb1se",
@@ -28,6 +28,7 @@
     "component-missing",
     "element-unclaimed",
     "event-unheard",
+    "geometry-drift",
     "node-id-absent",
     "node-unresolved",
     "provenance-missing",
@@ -267,19 +268,6 @@
       "file": "frontend/src/components/lit/prompt-input/status-bar-prompt-input.ts",
       "what": "Derived from Figma node 40000878:239 but carries no data-node-id anywhere.",
       "fix": "Carry the node id on each mapped element."
-    },
-    {
-      "id": "event-unheard:a2ui-renderer",
-      "check": "event-unheard",
-      "stage": "deliver",
-      "owner": "pipeline",
-      "level": "advisory",
-      "tier": "primitives",
-      "component": "a2ui-renderer",
-      "nodeId": null,
-      "file": "frontend/src/components/lit/a2ui-renderer.ts",
-      "what": "Dispatches \"a2ui-event\" and nothing listens — and it is not marked as a stub.",
-      "fix": "Wire a listener, or mark it: // TODO(behavior): action undefined in Figma"
     },
     {
       "id": "event-unheard:ai-surface-sandbox",
@@ -930,6 +918,19 @@
       "file": "frontend/src/components/lit/prompt-input/role-dropdown.ts",
       "what": "Node 40000934:22851 has a note, but it is prose, not a spec — so behaviour must be invented. \"This is supposed to be the drop-down for the accordion tiles in the left column where we e…\"",
       "fix": "Rewrite using the field format (Data / On click / State / A11y)."
+    },
+    {
+      "id": "geometry-drift:chat-navigation-bar",
+      "check": "geometry-drift",
+      "stage": "deliver",
+      "owner": "pipeline",
+      "level": "advisory",
+      "tier": "primitives",
+      "component": "chat-navigation-bar",
+      "nodeId": "40001011:26266",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "what": "Node 40001011:26266 and the rendered button disagree (icon.x — node 16, code 18; icon.y — node 6.5, code 8; icon.w — node 42, code 38; icon.h — node 39, code 38; label.y — node 51.5, code 46). The constraint is frontend/src/components/lit/chat-navigation-bar.ts — the :host cascade block.",
+      "fix": "Either the node moves to the constraint, or the constraint changes once — in the catalogue, not in this component. Both are answers; silently keeping two sets of numbers is not."
     },
     {
       "id": "clean:no-jsx",

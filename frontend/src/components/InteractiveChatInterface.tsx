@@ -109,9 +109,18 @@ interface InteractiveChatInterfaceProps {
   }> | null;
   /** Fired when a finding's call to action is clicked. The host opens a composer. */
   onRepairFinding?: (findingId: string) => void;
+  /**
+   * The console's prompt packages — the index on the left.
+   *
+   * She could already ACT on the console (filter it, sort it) but could not SEE
+   * it, so "check the index of cards" / "find me a prompt about X" had no answer
+   * and she said so — correctly, and uselessly. These are the same objects the
+   * grid is built from.
+   */
+  consoleCards?: Array<Record<string, any>> | null;
 }
 
-export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent, columnCollapsed, onColumnExpand, onColumnCollapse, catalogFindings, onRepairFinding }: InteractiveChatInterfaceProps = {}) {
+export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent, columnCollapsed, onColumnExpand, onColumnCollapse, catalogFindings, onRepairFinding, consoleCards }: InteractiveChatInterfaceProps = {}) {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [inputHeight, setInputHeight] = useState(180);
   const [isDragging, setIsDragging] = useState(false);
@@ -759,6 +768,32 @@ ${compiledOutput.slice(0, 3000)}`;
       }
     }
 
+    // The console's prompt packages — the index she could not see.
+    //
+    // She could act on the console (filter, sort) but had no view of it, so
+    // "check the index of cards" was unanswerable. One block per package: an id so
+    // she can name one exactly, then the fields that identify it. The description
+    // is truncated because the job here is recognition, not reading.
+    if (consoleCards && consoleCards.length > 0) {
+      parts.push('');
+      parts.push(`=== CONSOLE — PROMPT LIBRARY (${consoleCards.length} packages) ===`);
+      consoleCards.filter(Boolean).forEach((c: any, i: number) => {
+        const facts = [
+          c.category ? `category: ${c.category}` : null,
+          (c.team_name || c.team) ? `team: ${c.team_name || c.team}` : null,
+          (c.model_name || c.model) ? `model: ${c.model_name || c.model}` : null,
+          c.status ? `status: ${c.status}` : null,
+          typeof c.version === 'number' ? `v${c.version}` : null,
+          c.message_count ? `${c.message_count} messages` : null,
+          c.likes ? `${c.likes} likes` : null,
+          c.lastUsed ? `last used ${String(c.lastUsed).slice(0, 10)}` : null,
+        ].filter(Boolean);
+        parts.push(`${i + 1}. "${c.title || '(untitled)'}"${facts.length ? ` — ${facts.join(', ')}` : ''}`);
+        const desc = String(c.description || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+        parts.push(`   id: ${c.id || '(no id)'}${desc ? ` | ${desc}` : ''}`);
+      });
+    }
+
     return parts.join('\n');
   };
 
@@ -1282,6 +1317,15 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
         if (detail.collapsed) {
           setSelectedNav('');
           onColumnCollapse?.();
+        } else {
+          // Expanding FROM the rail. The bar only emits this on that path (it
+          // fires when the previous tab was ''), so this is the icon click that
+          // asks for the column back.
+          //
+          // The WIDTH is the page's, not ours: without this the bar flips its own
+          // state to open while the column stays a 75px rail — the toggle looks
+          // dead because half of it moved.
+          onColumnExpand?.();
         }
       }
     };
