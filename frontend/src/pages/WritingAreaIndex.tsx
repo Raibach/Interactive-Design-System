@@ -2248,7 +2248,18 @@ export default function Index({
                   HTML attribute, which React components do not render on their
                   root elements. */}
               <ai-surface-sandbox
-                key={isAIAssembling ? "assembling" : "idle-or-failed"}
+                // NO `key` here. This carried key={isAIAssembling ? "assembling"
+                // : "idle-or-failed"}, which changes on every assembly — and a
+                // changed key makes React tear down and rebuild the WHOLE
+                // subtree. That killed everything inside on every Grace emission:
+                // the chat panel mid-conversation, and prompt-section-editor with
+                // the composer's unsaved sections. Twice per assembly (true when
+                // it starts, false when it ends).
+                //
+                // Nothing here needed a remount: <ai-surface-sandbox> routes its
+                // slots from the is-ai-assembling and header-tab PROPERTIES, so a
+                // property change already re-slots it. The key was paying for a
+                // capability that was never used, with the state of the app.
                 is-ai-assembling={isAIAssembling ? '' : undefined}
                 header-tab={headerTab}
               >

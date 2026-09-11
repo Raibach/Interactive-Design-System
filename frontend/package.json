@@ -22,7 +22,8 @@
     "fidelity:capture": "node scripts/fidelity-check.mjs --scope all --capture",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "chromatic": "npx chromatic --project-token=${CHROMATIC_PROJECT_TOKEN}"
+    "chromatic": "npx chromatic --project-token=${CHROMATIC_PROJECT_TOKEN}",
+    "typecheck": "node scripts/typecheck-guard.mjs && tsc -b --noEmit"
   },
   "dependencies": {
     "@sentry/react": "^10.65.0",
