@@ -689,7 +689,12 @@ COLUMN_MIGRATIONS = [
     ("ai_suggestions", "updated_at", "TIMESTAMP DEFAULT NOW()"),
     # users table
     ("users", "role", "VARCHAR(20) DEFAULT 'student'"),
-    ("users", "prompt_role", "VARCHAR(20) DEFAULT 'viewer'"),
+    # 'viewer' was never a departmental role: it is SESSION-permission
+    # vocabulary (owner/editor/viewer is what you may DO), while this column
+    # answers what you may SEE. It failed validation, get_user_role() fell back
+    # to 'basic' without a word, and every account ran as the least-privileged
+    # persona. 'basic' is that fallback written down.
+    ("users", "prompt_role", "VARCHAR(20) DEFAULT 'basic'"),
     # user_memories table
     ("user_memories", "title", "VARCHAR(500)"),
     ("user_memories", "source_url", "TEXT"),
@@ -715,6 +720,48 @@ COLUMN_MIGRATIONS = [
 POST_COLUMN_MIGRATION_SQL = [
     "ALTER TABLE public.conversations ALTER COLUMN user_id DROP NOT NULL",
     "ALTER TABLE public.conversation_messages ALTER COLUMN user_id DROP NOT NULL",
+
+    # ── users.prompt_role: TWO DISJOINT VOCABULARIES ────────────────────────
+    #
+    # The CHECK constraint permitted 'contributor', 'curator', 'viewer', 'admin'.
+    # The code's VALID_DEPARTMENTAL_ROLES permits 'governance', 'ux-design',
+    # 'research', 'product', 'basic'. Those two sets do not intersect at all, so
+    # no stored value could ever be accepted: whatever the database held,
+    # get_user_role() rejected it and fell back to 'basic' in silence. The
+    # chat-only nav bar was therefore unavoidable by construction, not a bad
+    # default - and no amount of editing a single row could have fixed it.
+    #
+    # The constraint was also not written down anywhere in this repository, so it
+    # existed only inside one database and would be absent from a fresh one.
+    # Declared here, drop-then-add, so the shape is reproducible and idempotent.
+    "ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_prompt_role_check",
+
+    # ADD COLUMN only runs when the column is missing, so changing the DDL above
+    # fixes fresh databases and reaches no existing one. This does.
+    "ALTER TABLE public.users ALTER COLUMN prompt_role SET DEFAULT 'basic'",
+
+    # The owner account is the one that has to SEE the trace and tools surfaces
+    # while they are built. Guarded on the invalid values, so it repairs a broken
+    # state once and can never overwrite a role chosen deliberately later.
+    "UPDATE public.users SET prompt_role = 'product' "
+    "WHERE id = '00000000-0000-0000-0000-000000000001' "
+    "AND (prompt_role IS NULL OR prompt_role NOT IN "
+    "('governance', 'ux-design', 'research', 'product', 'basic'))",
+
+    # Everyone else: make the stored value say what it was already doing. This
+    # changes no behaviour - they were already resolving to 'basic' through that
+    # silent fallback - it just stops the data lying about it. 'admin' maps to
+    # 'basic' rather than guessing a departmental persona for it; assign real
+    # roles deliberately.
+    "UPDATE public.users SET prompt_role = 'basic' "
+    "WHERE prompt_role IS NULL OR prompt_role NOT IN "
+    "('governance', 'ux-design', 'research', 'product', 'basic')",
+
+    # LAST, and only now: a CHECK cannot be added while a single row still holds
+    # a value it forbids, and every row did. Data first, constraint after - the
+    # reverse order fails with "violated by some row" and used to do so silently.
+    "ALTER TABLE public.users ADD CONSTRAINT users_prompt_role_check "
+    "CHECK (prompt_role IN ('governance', 'ux-design', 'research', 'product', 'basic'))",
 ]
 
 # Indexes to create if they don't exist
@@ -1051,8 +1098,10 @@ def init_database():
             try:
                 cur.execute(sql)
             except Exception as e:
-                # Column might already be nullable
-                pass
+                # Often just "already in that state", since these are idempotent.
+                # Name the skipped statement anyway: a swallowed exception here
+                # makes a correction that never ran look exactly like one that did.
+                print(f"  Note: skipped ({type(e).__name__}: {e})")
 
         # Step 3: Create indexes
         print("Creating indexes...")
