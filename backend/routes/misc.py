@@ -145,6 +145,59 @@ async def api_health():
 
 
 
+# ── Catalog health — the report the console chat shows on load ─────────────
+# Reads the findings written by frontend/scripts/catalog-check.mjs.
+#
+# FAIL LOUD. A missing report is a 503, never an empty list: "no findings" and
+# "the checker never ran" must not look the same to the person relying on this.
+
+_CATALOG_AUDIT_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "catalog-audit")
+)
+DEFAULT_CATALOG = "prompt-composer"
+
+
+def _read_catalog_audit(catalog: str) -> dict:
+    """Read one pipeline's audit report. 503 when the checker has not run."""
+    path = os.path.join(_CATALOG_AUDIT_DIR, f"{catalog}.json")
+    if not os.path.exists(path):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "CATALOG_AUDIT_UNAVAILABLE",
+                "message": f"No audit report for pipeline '{catalog}'. This is NOT a clean result.",
+                "remedy": f"cd frontend && node scripts/catalog-check.mjs --catalog {catalog}",
+                "expected_at": path,
+            },
+        )
+    try:
+        with open(path, "r") as _f:
+            return json.load(_f)
+    except Exception as _e:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "CATALOG_AUDIT_UNREADABLE",
+                "message": f"{type(_e).__name__}: {_e}",
+                "remedy": "Re-run: cd frontend && node scripts/catalog-check.mjs",
+                "expected_at": path,
+            },
+        )
+
+
+@router.get("/api/catalog/audit")
+async def api_catalog_audit():
+    """The default pipeline's catalog health. 503 when the checker has not run."""
+    return _read_catalog_audit(DEFAULT_CATALOG)
+
+
+@router.get("/api/catalog/audit/{catalog}")
+async def api_catalog_audit_named(catalog: str):
+    """A named pipeline's catalog health (e.g. /api/catalog/audit/ecommerce)."""
+    return _read_catalog_audit(catalog)
+
+
+
 @router.post("/api/news/search")
 async def api_search_news(query: NewsQuery):
     memory = retrieve_memory_context(query.query) if query.include_memory else ""

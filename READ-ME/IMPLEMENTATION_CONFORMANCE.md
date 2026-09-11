@@ -5,7 +5,7 @@
 **Canonical sources:**
 - Protocol specification: <https://a2ui.org/specification/v0.9.1-a2ui/>
 - Application component catalog `$id`: `https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json`
-- Source of truth for this implementation: `frontend/src/components/A2UI/component-catalog.json`
+- Source of truth for this implementation: `frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json`
 
 **Status of this document:** Authored 2026-08-25 from source review against the running codebase. Every conformance claim below cites its implementing file. Claims marked ✅ were additionally live-verified on 2026-07-27 during the remediation recorded in [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md). Items not yet built are labeled 🔜 rather than omitted — this document describes the specification *and* the honest distance between specification and current build.
 
@@ -67,7 +67,7 @@ Legend: ✅ implemented & verified · 🟡 partial · 🔜 specified but not yet
 | **R1** `deleteSurface` emission | Single-surface app (`surfaceId: "main"`) today; no lifecycle path requires teardown yet | 🔜 |
 | **R2** `$id` ≡ `catalogId` alignment | Constant `A2UI_CATALOG_ID` in `backend/deps.py` equals the catalog's own `$id` (`https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json`); used in every `createSurface` | ✅ |
 | **R3** Adjacency-list component tree | Assembly prompts require a `root`-anchored tree (`backend/routes/ai.py`: "id 'root' Column at top"); LLM derives ids/hierarchy/props per intent | ✅ (server side) |
-| **R4** Allowlist enforcement before client delivery | `validate_a2ui_components()` runs at all 4 envelope return sites; unknown type or missing `id` → HTTP 503 with §1 error; catalog loads at startup **fail-fast** (`sys.exit(1)` if unreadable) from `component-catalog.json` — currently **28 trusted components**, printed live at boot | ✅ |
+| **R4** Allowlist enforcement before client delivery | `validate_a2ui_components()` runs at all 4 envelope return sites; unknown type or missing `id` → HTTP 503 with §1 error; catalog loads at startup **fail-fast** (`sys.exit(1)` if unreadable) from `catalogs/<pipeline>/catalog.json` — currently **28 trusted components**, printed live at boot | ✅ |
 | **R5** JSON Pointer data binding (emission) | Data-bound props emitted as `{"path": ...}` (e.g. `ConsoleCardGrid items {"path": "/cards"}`, `prompt-section-editor sections {"path": "/session/left_column/sections"}`); data model delivered via `updateDataModel {path: "/", value}` | ✅ (emission) |
 | **R5** Binding resolution by a generic renderer | Envelope parser extracts both operations (`frontend/src/pages/WritingAreaIndex.tsx`), but view composition still keys off data-model shape (decision_type/cards/session); captured trees await the generic renderer | 🔜 (Phase 3) |
 | **R6** Declarative-only, zero executable code | `frontend/src/components/A2UISurfaceContainer.tsx`: `eval()` on button handlers deleted — buttons dispatch declarative `a2ui:action` CustomEvents; `<set-html>`/`<append-html>` innerHTML injection blocked with warnings; tags validated against the registry before mount | ✅ |
@@ -87,7 +87,7 @@ Legend: ✅ implemented & verified · 🟡 partial · 🔜 specified but not yet
 
 - **Single unified endpoint:** `POST /api/ai/assemble-surface` (`backend/routes/ai.py`) is the only surface-assembly path. Intents: `render-console`, `render-composer`, `render-session:{id}`, plus a deterministic unsaved-changes decision surface that the server assembles itself when client context reports unsaved work — still catalog-validated through the same §1 gate before delivery.
 - **Model-as-architect:** the database supplies raw data only; the LLM must return the component adjacency list. If the model is unreachable or returns non-conforming JSON, the endpoint fails with HTTP 503 — the surface does not render without the AI (no hardcoded fallback UI).
-- **Fail-fast boot:** `backend/deps.py` loads `component-catalog.json` at import time; an unreadable or invalid catalog aborts process startup (`sys.exit(1)`), so the validator can never run against an empty allowlist.
+- **Fail-fast boot:** `backend/deps.py` loads `catalogs/<pipeline>/catalog.json` at import time; an unreadable or invalid catalog aborts process startup (`sys.exit(1)`), so the validator can never run against an empty allowlist.
 - **Role governance before inference:** `GET /api/ai/manifest` serves the component manifest filtered by the user's departmental role (`governance`, `ux-design`, `research`, `product`, `basic` — matrix in `backend/role_caps.py`). Filtering happens *before* the LLM call: components outside a role's capability set are never placed in the system prompt. *(Prototype note: role identity rests on the unauthenticated `X-User-ID` header — see scope statement.)*
 - **Persistence:** sessions/versions in PostgreSQL (`prompt_sessions_api`), semantic embeddings in Zilliz Cloud/Milvus (`milvus_save_version` / `milvus_get_versions`); `POST /api/ai/save-surface` has the AI compile section content into a unified prompt + description + tags before persisting.
 
@@ -100,7 +100,7 @@ Legend: ✅ implemented & verified · 🟡 partial · 🔜 specified but not yet
 
 ### 4.3 Component catalog
 
-`frontend/src/components/A2UI/component-catalog.json` — 28 trusted components as of 2026-08-25: base layout/content primitives (`Column`, `Row`, `Text`, `Card`, `Button`, `Image`, `ActionGroup`, `SectionEditor`, `DecisionDialog`, `ConsoleCardGrid`, `CompiledOutput`, `ChatPanel`) plus workspace-specific Lit elements (`workspace-layout`, `prompt-section-editor`, `compiled-output-viewer`, `chat-panel`, `version-trace`, `token-cost-readout`, …). The count is asserted live in the startup log (`✅ A2UI Catalog loaded — N trusted components`), so drift between catalog and docs is self-announcing.
+`frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json` — 28 trusted components as of 2026-08-25: base layout/content primitives (`Column`, `Row`, `Text`, `Card`, `Button`, `Image`, `ActionGroup`, `SectionEditor`, `DecisionDialog`, `ConsoleCardGrid`, `CompiledOutput`, `ChatPanel`) plus workspace-specific Lit elements (`workspace-layout`, `prompt-section-editor`, `compiled-output-viewer`, `chat-panel`, `version-trace`, `token-cost-readout`, …). The count is asserted live in the startup log (`✅ A2UI Catalog loaded — N trusted components`), so drift between catalog and docs is self-announcing.
 
 ### 4.4 Manifest generation
 

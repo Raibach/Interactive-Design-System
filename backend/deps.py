@@ -24,7 +24,8 @@ REASONING_TRACE_PATH = os.getenv(
 # that is not in the catalog is a server bug and fails loud (503).
 A2UI_CATALOG_ID = "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json"
 _A2UI_CATALOG_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "frontend", "src", "components", "A2UI", "component-catalog.json"
+    os.path.dirname(__file__), "..", "frontend", "src", "components", "A2UI",
+    "catalogs", "prompt-composer", "catalog.json",
 )
 a2ui_catalog: Dict[str, Any] = {}
 try:

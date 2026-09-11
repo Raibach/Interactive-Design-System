@@ -14,7 +14,13 @@
  *     (canonical events consumed by WritingAreaIndex → /api/ai/save-surface
  *      → PostgreSQL → Zilliz — unchanged contract)
  *   - Window events consumed: set-left-column-text · force-set-section ·
- *     add-prompt-role · remove-prompt-role                     (unchanged)
+ *     add-prompt-role · remove-prompt-role · a2ui:usage        (unchanged)
+ *
+ * The format rail's TITLE is the last call — whatever `mode` the most recent LLM
+ * call reported through `a2ui:usage`. It is read from that event, never fixed
+ * here: it names where the workspace IS right now, which is simply the last thing
+ * that ran. Before any call there is no last call, so the title stays empty
+ * rather than inventing one.
  *
  * Designer rules: System Role is sticky (first, never changes — no menu, no
  * drag, no delete); Arrow_drop_down opens/closes the selection menu (types +
@@ -48,6 +54,8 @@ class PromptSectionEditor extends LitElement {
   private _collapsed = new Set<number>();
   private _dragIndex: number | null = null;
   private _listenersBound = false;
+  /** Mode of the most recent LLM call — the rail title. '' until a call lands. */
+  private _lastCallMode = '';
 
   static styles = css`
     :host {
@@ -190,6 +198,8 @@ class PromptSectionEditor extends LitElement {
     window.addEventListener('force-set-section', this._onForceSet as EventListener);
     window.addEventListener('add-prompt-role', this._onAddRole as EventListener);
     window.addEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
+    // The rail title is where we are now — the last call.
+    window.addEventListener('a2ui:usage', this._onUsage as EventListener);
   }
 
   disconnectedCallback() {
@@ -197,6 +207,7 @@ class PromptSectionEditor extends LitElement {
     window.removeEventListener('force-set-section', this._onForceSet as EventListener);
     window.removeEventListener('add-prompt-role', this._onAddRole as EventListener);
     window.removeEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
+    window.removeEventListener('a2ui:usage', this._onUsage as EventListener);
     super.disconnectedCallback();
   }
 
@@ -297,6 +308,26 @@ class PromptSectionEditor extends LitElement {
     if (idx >= 0) this._removeSection(idx);
   };
 
+  /**
+   * `a2ui:usage` carries the provider's own measured usage for the last call.
+   * Its `mode` is the rail title: a person needs to know where they are, not
+   * what the call did internally — the last call IS the header.
+   */
+  private _onUsage = (e: Event) => {
+    const detail = (e as CustomEvent).detail || {};
+
+    // Strictly scoped to this rail's own conversation. A call's spend belongs to
+    // the session it came from, so another conversation's call must not change
+    // the title here — the contract scopes the panel to its conversationId.
+    // An unscoped rail (the sandbox) still takes whatever arrives.
+    if (this._sessionId && detail.sessionId !== this._sessionId) return;
+
+    const mode = detail.mode;
+    if (typeof mode !== 'string' || !mode || mode === this._lastCallMode) return;
+    this._lastCallMode = mode;
+    this.requestUpdate();
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   render() {
@@ -330,7 +361,10 @@ class PromptSectionEditor extends LitElement {
 
     return html`
       <div class="sections-scroll">
-        <prompt-container format-label="Agent Prompting" tokens-label="Tokens: 2022 Cost: $0.00802">
+        <prompt-container
+          format-label=${this._lastCallMode}
+          tokens-label="Tokens: 2022 Cost: $0.00802"
+        >
           ${sectionsHtml}
         </prompt-container>
       </div>

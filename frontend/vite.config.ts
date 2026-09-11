@@ -46,7 +46,8 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5001,           // explicit — local site is 5001 (backend serves UI)
+    port: 5001,           // the site — vite serves source LIVE here, never a build
+    strictPort: true,     // if 5001 is taken, fail. Never silently use another port.
     hmr: false,
     allowedHosts: [
       'localhost',
@@ -58,7 +59,7 @@ export default defineConfig({
     ],
     proxy: {
       '/api': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },

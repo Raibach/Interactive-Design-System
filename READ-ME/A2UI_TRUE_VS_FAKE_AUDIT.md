@@ -11,7 +11,7 @@
 
 - Backend booted locally via `RESTART-LOCAL.sh` (port 5173) after the dead-code purge.
 - Live curls: `/api/health`, `/api/ai/manifest`, `/api/ai/assemble-surface` (all intents), legacy endpoints, `/api/milvus/collections`.
-- Source review: `backend/main.py`, `frontend/src/components/A2UISurfaceContainer.tsx`, `frontend/src/components/A2UI/component-catalog.json`, `frontend/src/shared/*`, `frontend/src/pages/WritingAreaIndex.tsx`.
+- Source review: `backend/main.py`, `frontend/src/components/A2UISurfaceContainer.tsx`, `frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json`, `frontend/src/shared/*`, `frontend/src/pages/WritingAreaIndex.tsx`.
 - Data layer: local PostgreSQL `railway` (42 tables, 36 sessions, 4,907 versions — source of truth), Zilliz Cloud `in03-5620992e020c852` (8 collections).
 
 ---

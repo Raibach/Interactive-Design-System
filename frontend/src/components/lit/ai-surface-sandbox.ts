@@ -123,6 +123,13 @@ export class AISurfaceSandbox extends LitElement {
       display: flex;
       flex: 1 1 0%;
       min-height: 0;
+      /* min-width:0 is REQUIRED, not cosmetic. A flex item defaults to
+         min-width:auto, which refuses to shrink below its content's
+         min-content width. Without this the sandbox will not yield any
+         width, and the fixed-width, shrink-0 console chat pane beside it is
+         pushed past the browser's right edge, where the parent's
+         overflow:hidden clips it — visible in the DOM, unreachable by mouse. */
+      min-width: 0;
     }
 
     /* ── Outer boundary — visual frame, containment, border ──────────── */

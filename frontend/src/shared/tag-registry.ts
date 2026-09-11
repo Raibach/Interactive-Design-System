@@ -3,6 +3,22 @@ import { z } from 'zod';
 // ═══════════════════════════════════════════════════════════════════════════════
 // A2UI TAG REGISTRY — Single source of truth for AI-addressable components
 //
+// ── WHAT THIS FILE IS ────────────────────────────────────────────────────────
+// THE ALLOWLIST. It decides what may be rendered.
+//
+// Three files in this repository are called some version of "registry".
+// This is the one that gates the AI. The other two are NOT this:
+//
+//   THE ALLOWLIST  frontend/src/shared/tag-registry.ts            ← you are here
+//                  What may be rendered.
+//   THE FIGMA MAP  frontend/src/components/registry.json
+//                  Which Figma node each component came from.
+//   THE SCHEMA     frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json
+//                  What the server validates a payload against (503 on unknown).
+//                  ONE PER PIPELINE — prompt-composer, ecommerce, ... Each has
+//                  its own catalogId, so a surface can only render its own.
+//
+// ─────────────────────────────────────────────────────────────────────────────
 // Every component the AI can emit, modify, or query must be registered here.
 // The registry serves three purposes:
 //   1. Type-safe validation of AI commands before DOM injection (Gatekeeper)
@@ -1278,6 +1294,40 @@ export const TAG_REGISTRY = {
 
 export type TagName = keyof typeof TAG_REGISTRY;
 export type TagEntry = (typeof TAG_REGISTRY)[TagName];
+
+/**
+ * CATALOG TIERS — the design-system grouping.
+ *
+ * The tier is DERIVED from each entry's `surface`, never restated. One home per
+ * fact: change a component's surface and its tier follows, so the two can't
+ * disagree — which is how the schema and the allowlist drifted apart.
+ *
+ *   primitives        shared by every theme. Renders anywhere, and is FIXED ONCE:
+ *                     it appears in each theme's report, so repairing it clears
+ *                     it from all of them at the same time.
+ *   prompt-composer    theme one
+ *   console            theme two (the console homepage surface)
+ *
+ * Membership is NOT permission. The tier says which catalog OWNS a component;
+ * roles say who may SEE it. Those are deliberately separate questions — some
+ * operators will see components others don't, and that belongs in the role
+ * layer, not here.
+ */
+const TAG_NAMES = Object.keys(TAG_REGISTRY) as TagName[];
+
+export const CATALOG_TIERS = {
+  primitives: TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'both'),
+  'prompt-composer': TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'composer'),
+  console: TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'console'),
+} as const;
+
+export type CatalogTier = keyof typeof CATALOG_TIERS;
+
+/** Which tier owns a tag. Defaults to `primitives` — the shared floor. */
+export function tierOf(tag: TagName): CatalogTier {
+  return (Object.keys(CATALOG_TIERS) as CatalogTier[])
+    .find((tier) => (CATALOG_TIERS[tier] as readonly TagName[]).includes(tag)) ?? 'primitives';
+}
 
 /** Tags the AI is permitted to emit inside the island (composer surface) */
 export const AI_PLAYGROUND_TAGS: TagName[] = [

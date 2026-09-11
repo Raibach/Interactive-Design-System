@@ -1,0 +1,164 @@
+# The plan
+
+*Updated 2026-09-11. Finished work is recorded once below and removed from the steps.
+Every built item carries its receipt. A claim without a receipt is not a built item.*
+
+---
+
+## Already built — not work
+
+| Item | Where | Receipt |
+|---|---|---|
+| Checker audits a **named** catalog | `catalog-check.mjs --catalog` | ran both pipelines |
+| Three stages: ingest / deliver / gap | the report | `stages: [ingest, deliver, gap]` |
+| **Alert, don't block** | every finding `advisory` | `blocking: 0` |
+| Indicator with **three** states | `chat-navigation-bar` `health-state` | ran the mapping across all 5 health states |
+| The list posts on load, **live** | 30s poll + focus refetch | `formatCatalogMessage` executed against the live report |
+| **Fails loudly** | 503 / `partial` / amber `?` | observed 503 when artifacts were missing |
+| Report **out of `dist/`** | `frontend/catalog-audit/` | survived a real `vite build` |
+| Default pass on **build + startup** | `package.json`, `RESTART-LOCAL.sh` step 4b | build verified; startup step written, not yet run |
+| **Tier derived** from `surface` | `CATALOG_TIERS` | `tiers: {prompt-composer: 40, primitives: 31}` |
+| **Drift made visible** | `schema-absent`, `allowlist-absent`, `element-unclaimed` | 11 + 12 + 2, run and counted |
+| Freshness stated; stale is not live | `generatedAt` + `STALE_AFTER_MS` | executed both paths |
+
+---
+
+## Part one - the shape
+
+Three declarative locations, each mirroring the **human** structure - primitives /
+theme one / theme two - not the shape of the code.
+
+```
+                    primitives        theme one           theme two
+ALLOWLIST           surface:'both'    surface:'composer'  surface:'console'
+SCHEMA              primitives.*      prompt-composer/    ecommerce/
+FIGMA MAP           (same three)
+```
+
+**The boundary rule:** the **allowlist is the authority**. The other two reference
+it. The checker fails when they disagree.
+
+### The hierarchy - where a finding belongs
+
+An **index IS a pipeline IS a catalog**. They are one thing under three names.
+
+```
+user
+  └─ their index  =  a RAG pipeline  =  a catalog        <- findings belong HERE
+       └─ package            (prompt_sessions.user_id)
+            └─ card          (one package = one agent-card-element)
+                 └─ components   <- what the checker inspects
+  └─ other indexes the user can reach
+```
+
+The checker already reports per index (`--catalog`), and every report carries
+`catalog: <name>`. `/api/catalog/audit/{index}` already takes a name, so reaching
+a second index needs no new endpoint.
+
+**What is missing is only the association:** `users` has no index column, and
+`DEFAULT_CATALOG = "prompt-composer"` is hardcoded in `routes/misc.py` - so every
+user is served the same index, never their own.
+
+### The recurring shape - mechanisms built, associations unwired
+
+Four times now, the mechanism exists and the link was never made. None of these is
+a missing design; each is a wiring gap. Look for this shape first.
+
+| mechanism | built | association |
+|---|---|---|
+| per-index check + report | yes | works |
+| named-index endpoint | yes | works |
+| **user -> their index** | no column | hardcoded default |
+| `get_allowed_tags(role)` | yes | every role invalid -> `basic` |
+| `project_id` (package -> container) | yes | 0 of 261 linked |
+| allowlist <-> schema | both | disagree (23 entries) |
+
+---
+
+## Part two - the steps
+
+### Step 1 - the `primitives` floor
+
+Write the shared components **once**; themes reference instead of restating.
+Today both theme catalogs carry an identical component list. That restatement is
+where the drift lives.
+
+### Step 2 - settle the drift
+
+23 entries, in two groups:
+
+- **3 duplicates** - `ChatPanel` = `chat-panel`, `SectionEditor` =
+  `prompt-section-editor`, `CompiledOutput` = `compiled-output-viewer`. Resolved by
+  **similarity**, not by eye. Needs a decision on direction (see open questions).
+- **20 mechanical** - 11 `schema-absent` + 9 remaining `allowlist-absent`. Each is
+  either add-to-allowlist (a real element) or remove-from-schema (dead).
+
+### Step 3 - each theme's profile
+
+Knowledge base, persona, tabs, role caps. Configuration only, no components.
+
+### Step 4 - Repair becomes a prompt
+
+Clicking a finding creates a session with the **sections pre-populated**:
+
+| section | type | carries |
+|---|---|---|
+| the rule that failed | `system` | `<check>` on `<component>` |
+| the finding | `user` | `what`, verbatim - never paraphrased |
+| the address | `tool` | `nodeId` / `file` |
+| the instruction | `agent` | `fix`, as the check itself proposes |
+
+Then it opens the Composer and posts one line recording the click.
+**No apply, no verify, no state change.** A finding closes only when the checker
+stops deriving it.
+
+### Step 5 - the store
+
+Components, findings and repair receipts as Postgres tables beside `figma_specs`.
+Similarity via Milvus (live, 8 collections) or pgvector (needs `brew install
+pgvector` - NOT currently available on this server).
+
+---
+
+## Part three - the boundaries (standing record)
+
+Each exists to stop a specific drift. Do not relax one without replacing what it stops.
+
+| Boundary | Stops |
+|---|---|
+| Tier derived from `surface` | a second membership list disagreeing with the first |
+| Allowlist is authority; schema references | the same component under two names |
+| `schema-absent` / `allowlist-absent` checks | two gates silently disagreeing |
+| `unknown` is not a count | a broken checker reading as "1 finding" |
+| `generatedAt` + staleness | a stale report reading as live |
+| Report now; **no verify endpoint** | implying a fix landed when nothing checked |
+| **Milvus for matching, Figma for proof** | a similarity score standing in for evidence |
+| Audit output outside `dist/` | a build deleting the report |
+| A2UI protocol components excluded explicitly | guessing drift from casing |
+
+---
+
+## Open questions
+
+1. **Which way do the 3 duplicates go** - the schema drops PascalCase, or the
+   allowlist adopts it and the Lit tags change with it?
+2. **Similarity: Milvus now, or install pgvector** and keep one store?
+3. **Store: new tables in `railway`, or a dedicated database?**
+4. **The prompt: one session per finding**, or one session listing every open
+   finding for a batch sweep?
+5. **E-commerce**: shares the console and chat surfaces, or a separate product
+   surface with only the primitives in common? Still blocks Step 3.
+
+## Deferred - decide with the permission model
+
+Not blocked on engineering. Each of these is a permission question, so it waits
+until the role/permission layer is settled rather than being guessed now.
+
+1. **How a user binds to their index** - a `default_index` column on `users`, or a
+   join table so one user can be granted access to several? The join table is what
+   "can also access other indexes" needs if access is per-user rather than open.
+2. **What a role may see within an index** - the tier (`primitives` /
+   `prompt-composer` / `console`) is the component half; `get_allowed_tags(role)`
+   is the permission half. They meet here, so they get decided together.
+3. **Whether findings are scoped per-user or per-index** - a finding belongs to the
+   index, but two users on one index may have different visible tiers.
