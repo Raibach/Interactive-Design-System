@@ -5,7 +5,7 @@
 > the component. No re-explaining, no "can you see my notes," no pasting text
 > into a chat.
 
-## Intent — the designer's real job
+## Intent — the designer's job
 
 The designer is responsible for the **intent** of the application. Your
 annotation is not a description of the design — it is the statement of intent
