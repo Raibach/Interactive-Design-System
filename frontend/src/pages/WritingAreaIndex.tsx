@@ -1561,29 +1561,37 @@ export default function Index({
           headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
           body: JSON.stringify({ intent: 'catalog-health:prompt-composer' }),
         });
-        if (!res.ok) return; // the indicator already reports an unreachable check
-        const ops = await res.json();
-        if (!Array.isArray(ops)) return;
-        const value = ops.find((o: any) => o.updateDataModel)?.updateDataModel?.value || {};
-        if (Array.isArray(value.findings)) setCatalogFindings(value.findings);
-        if (value.usage && typeof value.usage.total_tokens === 'number') {
-          // Carries its session id for the same reason: the report is for ONE
-          // seat, not for whatever else happens to be mounted.
-          window.dispatchEvent(new CustomEvent('a2ui:usage', {
-            detail: { ...value.usage, sessionId: value.session_id || currentPromptSessionRef.current || null },
-          }));
-        }
-        if (value.ai_message) {
-          // Her words go into her seat, the same channel the surface uses.
-          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-            detail: { role: 'assistant', content: value.ai_message },
-          }));
+        // NOTE: no `return` on failure here. These used to return out of the
+        // enclosing effect, which was harmless while the check ran LAST — and
+        // silently skipped the surface once Grace moved to the front, so a
+        // failed check meant the console never loaded at all. The check is not
+        // a precondition for the surface; it never gates it.
+        if (res.ok) {
+          const ops = await res.json();
+          if (Array.isArray(ops)) {
+            const value = ops.find((o: any) => o.updateDataModel)?.updateDataModel?.value || {};
+            if (Array.isArray(value.findings)) setCatalogFindings(value.findings);
+            if (value.usage && typeof value.usage.total_tokens === 'number') {
+              // Carries its session id for the same reason: the report is for
+              // ONE seat, not for whatever else happens to be mounted.
+              window.dispatchEvent(new CustomEvent('a2ui:usage', {
+                detail: { ...value.usage, sessionId: value.session_id || currentPromptSessionRef.current || null },
+              }));
+            }
+            if (value.ai_message) {
+              // Her words go into her seat, the same channel the surface uses.
+              window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+                detail: { role: 'assistant', content: value.ai_message },
+              }));
+            }
+          }
         }
       } catch {
         /* unreachable — the badge already shows the check could not run */
       }
 
-      // 2) THEN the surface contents.
+      // 2) THEN the surface contents. Unconditional: the console does not wait
+      // on her check, and a failed check must never leave it empty.
       await assembleSurfaceWithAI(initialIntent);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
