@@ -56,6 +56,14 @@ class PromptSectionEditor extends LitElement {
   private _listenersBound = false;
   /** Mode of the most recent LLM call — the rail title. '' until a call lands. */
   private _lastCallMode = '';
+  /**
+   * The spend, as the backend measured it. `_countedCalls` is keyed on the
+   * backend's `call_id` so a surface that gets applied twice cannot inflate the
+   * total — the same guard the Console's tally uses.
+   */
+  private _countedCalls = new Set<number>();
+  private _totalTokens = 0;
+  private _calls = 0;
 
   static styles = css`
     :host {
@@ -322,11 +330,38 @@ class PromptSectionEditor extends LitElement {
     // An unscoped rail (the sandbox) still takes whatever arrives.
     if (this._sessionId && detail.sessionId !== this._sessionId) return;
 
+    // The tally first. This has to run for EVERY call, including one that
+    // repeats the previous mode — an early return on an unchanged title is
+    // exactly how a running total silently stops adding up.
+    const total = detail.total_tokens;
+    if (typeof total === 'number') {
+      if (typeof detail.call_id === 'number') {
+        if (this._countedCalls.has(detail.call_id)) return; // already counted
+        this._countedCalls.add(detail.call_id);
+      }
+      this._totalTokens += total;
+      this._calls += 1;
+    }
+
     const mode = detail.mode;
-    if (typeof mode !== 'string' || !mode || mode === this._lastCallMode) return;
-    this._lastCallMode = mode;
+    if (typeof mode === 'string' && mode) this._lastCallMode = mode;
+
     this.requestUpdate();
   };
+
+  /**
+   * What the rail reports beneath the title.
+   *
+   * Measured, never estimated — the same rule the Console's tally follows.
+   * There is no cost in the provider's payload, so none is shown: an invented
+   * price above a real action is worse than no price. Before any call there is
+   * nothing to report, so it stays empty rather than printing a placeholder.
+   */
+  private get _tokensLabel(): string {
+    if (this._calls === 0) return '';
+    const tokens = this._totalTokens.toLocaleString();
+    return `Tokens: ${tokens} · ${this._calls} ${this._calls === 1 ? 'call' : 'calls'}`;
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -363,7 +398,7 @@ class PromptSectionEditor extends LitElement {
       <div class="sections-scroll">
         <prompt-container
           format-label=${this._lastCallMode}
-          tokens-label="Tokens: 2022 Cost: $0.00802"
+          tokens-label=${this._tokensLabel}
         >
           ${sectionsHtml}
         </prompt-container>

@@ -477,12 +477,16 @@ export class ChatNavigationBar extends LitElement {
     .nb.hb-x .nsv {
       animation: hb-pulse 1.1s ease-in-out infinite;
     }
-    /* The dot carried two states and both survive on the icon's colour:
-       red = findings open, amber = we could not check. The point is that
-       "cannot check" is LOUD, never quiet — collapsing the two would make a
-       broken pipeline look calm. */
-    .nb.hb-on .nsv path { fill: #C50000; }
-    .nb.hb-x .nsv path { fill: #B45309; }
+    /* No red. The colour follows the BACKGROUND, not the state: on the yellow
+       active tab the icon goes dark blue, so it stays legible instead of
+       washing out; off the yellow it keeps the lime it already uses.
+       The PULSE is the signal — the colour is only there to stay readable on
+       whatever the tab happens to be sitting on. */
+    .nb.hb-on .nsv path,
+    .nb.hb-x .nsv path { fill: #4ECFD5; }
+
+    .nb.na.hb-on .nsv path,
+    .nb.na.hb-x .nsv path { fill: #1c2f4e; }
     @keyframes hb-pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.35; }
