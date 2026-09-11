@@ -34,6 +34,12 @@ COPY --from=frontend-build /build/dist ./frontend/dist
 # Frontend source (A2UI component catalog required by backend at runtime)
 COPY frontend/src ./frontend/src
 
+# The catalog check's reports. GET /api/catalog/audit reads these, and 503s when
+# one is missing — deliberately, so "the checker never ran" can never be
+# mistaken for "no findings". Without this COPY the reports are in the repo but
+# not in the image, so every load reports the check as never-run.
+COPY frontend/catalog-audit ./frontend/catalog-audit
+
 EXPOSE 5001
 
 WORKDIR /app/backend
