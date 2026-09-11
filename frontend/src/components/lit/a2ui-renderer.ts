@@ -129,12 +129,45 @@ export function resolveTag(name: string): string | null {
   return entry?.tag ?? null;
 }
 
-/** The props carried by an entry: everything that is not structure. */
-export function componentProps(c: A2UIComponent): Record<string, unknown> {
+/**
+ * Resolve a binding against the data model.
+ *
+ * A2UI v0.9.1 keeps structure and content on two separate channels:
+ * updateComponents describes the tree, updateDataModel carries the values. A prop
+ * that is a binding — { path: "/cards/0/title" } — is a POINTER into that model,
+ * not text. Rendering it literally is the failure this prevents: the surface shows
+ * "[object Object]" or an empty cell while the value sits one channel away.
+ *
+ * Only the object form is treated as a binding. A bare string is never a path —
+ * "/usr/bin" and "/v2/chat" are legitimate copy, and guessing would corrupt them.
+ */
+export function resolveBinding(value: unknown, dataModel: Record<string, unknown>): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+  const path = (value as { path?: unknown }).path;
+  if (typeof path !== 'string') return value;
+
+  let cursor: unknown = dataModel;
+  for (const segment of path.split('/').filter(Boolean)) {
+    if (cursor === null || typeof cursor !== 'object') {
+      // A path that runs off the end of the model resolves to undefined rather
+      // than throwing: one unresolvable field should read as absent, not blank
+      // the surface around it.
+      return undefined;
+    }
+    cursor = (cursor as Record<string, unknown>)[segment];
+  }
+  return cursor;
+}
+
+/** The props carried by an entry: everything that is not structure, bound. */
+export function componentProps(
+  c: A2UIComponent,
+  dataModel: Record<string, unknown> = {},
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(c)) {
     if (STRUCTURAL.has(k)) continue;
-    out[k] = v;
+    out[k] = resolveBinding(v, dataModel);
   }
   return out;
 }
@@ -145,15 +178,21 @@ class A2UIRenderer extends LitElement {
   static properties = {
     components: { type: Array },
     rootId: { type: String, attribute: 'root-id' },
+    // The other channel of the envelope. updateComponents says what the surface
+    // is; updateDataModel says what it says. Property-only, no attribute: it is a
+    // structure, and serialising it through an attribute would be lossy.
+    dataModel: { type: Object },
   };
 
   declare components: A2UIComponent[];
   declare rootId: string;
+  declare dataModel: Record<string, unknown>;
 
   constructor() {
     super();
     this.components = [];
     this.rootId = 'root';
+    this.dataModel = {};
   }
 
   /** Errors from the pass being rendered. Rebuilt every render, never accumulated. */
@@ -262,7 +301,7 @@ class A2UIRenderer extends LitElement {
       return this._build(child, byId, [...path, comp.id]);
     });
 
-    const props = componentProps(comp);
+    const props = componentProps(comp, this.dataModel);
     const assign = (el: Element | undefined) => {
       if (!el) return;
       for (const unknown of assignProps(el as HTMLElement, props)) {
@@ -318,4 +357,33 @@ class A2UIRenderer extends LitElement {
 
 if (!customElements.get('a2ui-renderer')) {
   customElements.define('a2ui-renderer', A2UIRenderer);
+}
+
+// JSX for React hosts, declared here per element — the pattern every Lit element
+// in this repository follows (see ai-surface-sandbox.ts). Without it the tag is
+// "Property 'a2ui-renderer' does not exist on type 'JSX.IntrinsicElements'" and
+// React cannot mount it at all.
+//
+// Note what is NOT here: `components` and `dataModel`. They are properties, not
+// attributes — React has no way to express that in JSX (its `.prop=` syntax is
+// Preact, and is a syntax error here). A host assigns them through a ref, which
+// is why the surface mount in WritingAreaIndex holds one.
+declare global {
+  interface HTMLElementTagNameMap {
+    'a2ui-renderer': A2UIRenderer;
+  }
+}
+
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'a2ui-renderer': React.DetailedHTMLProps<
+        React.HTMLAttributes<A2UIRenderer> & {
+          'root-id'?: string;
+          ref?: React.Ref<A2UIRenderer>;
+        },
+        A2UIRenderer
+      >;
+    }
+  }
 }

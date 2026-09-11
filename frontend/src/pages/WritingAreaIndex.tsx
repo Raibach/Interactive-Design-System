@@ -165,6 +165,66 @@ export default function Index({
   const [aiAssemblyMessage, setAiAssemblyMessage] = useState(AI_STANDBY_MESSAGE);
   const [aiAssemblyFailed, setAiAssemblyFailed] = useState(false); // STRICT: blocks rendering when true
   const [assembledConsoleCards, setAssembledConsoleCards] = useState<any[] | null>(null); // null = not loaded, [] would be fallback
+  // The surface's two channels, held as React state and handed to
+  // <a2ui-renderer> as props. This is what replaced `window.__lastA2UIComponents`:
+  // a bare global drifted outside React's control — nothing could react to it,
+  // nothing could diff it, and it outlived the surface it described. State
+  // re-renders the renderer on change, which is the whole point of a reactive
+  // surface that is a pure function of Grace's last emission.
+  const [surfaceComponents, setSurfaceComponents] = useState<any[]>([]);
+  const [surfaceDataModel, setSurfaceDataModel] = useState<Record<string, any>>({});
+
+  // Lit receives objects as PROPERTIES, not JSX attributes — React's `.prop=`
+  // syntax is Preact, and in React it is a syntax error (it compiled to
+  // "Identifier expected"). So the two payload channels are assigned onto the
+  // element through a ref, which is how every other Lit element in this file is
+  // fed. Attributes would also be lossy here: a component tree and a data model
+  // are structures, and both would arrive as the string "[object Object]".
+  const a2uiRendererRef = useRef<any>(null);
+  useEffect(() => {
+    const el = a2uiRendererRef.current;
+    if (!el) return;
+    el.components = surfaceComponents;
+    el.dataModel = surfaceDataModel;
+  }, [surfaceComponents, surfaceDataModel]);
+
+  // Route the surface renderer's events onto the bus.
+  //
+  // <a2ui-renderer> catches a primitive's event and re-emits it as `a2ui-event`,
+  // tagged with the id of the component that raised it (see _forward in
+  // a2ui-renderer.ts). It bubbles and is composed, so it crosses the shadow
+  // boundary and arrives at window — no ref, no per-element listener.
+  //
+  // Without this the renderer talks and nobody hears. The catalog audit counts
+  // exactly that as `event-unheard`, and it is how a fully wired component still
+  // looks inert: the wire is connected at one end only.
+  useEffect(() => {
+    const handleA2uiEvent = (event: Event) => {
+      const { sourceId, type, payload } = ((event as CustomEvent).detail || {}) as {
+        sourceId?: string; type?: string; payload?: Record<string, unknown>;
+      };
+      switch (type) {
+        case 'a2ui-action':
+          // The generic action channel A2UISurfaceContainer already uses.
+          window.dispatchEvent(new CustomEvent('a2ui:action', { detail: { ...payload, sourceId } }));
+          break;
+        case 'message-sent':
+          // The user spoke through the surface. Distinct from a2ui:system-message,
+          // which carries Grace's words in the other direction — the two must not
+          // share a channel or her reply would echo back as input.
+          window.dispatchEvent(new CustomEvent('a2ui:user-message', { detail: { ...payload, sourceId } }));
+          break;
+        case 'command-received':
+          // A rendered command IS a console command.
+          window.dispatchEvent(new CustomEvent('a2ui:console-command', { detail: { ...payload, sourceId } }));
+          break;
+        default:
+          console.warn(`[a2ui] surface event "${type}" from ${sourceId} has no listener mapping.`);
+      }
+    };
+    window.addEventListener('a2ui-event', handleA2uiEvent);
+    return () => window.removeEventListener('a2ui-event', handleA2uiEvent);
+  }, []);
   // The catalog check's findings, as Grace assembled them into the data model.
   // null = the surface is not a catalog surface.
   const [catalogFindings, setCatalogFindings] = useState<any[] | null>(null);
@@ -1254,11 +1314,15 @@ export default function Index({
         }
       }
 
-      // Store the model-driven component tree for future dynamic rendering.
-      // (Currently the main layout is still headerTab-driven, but we now respect the model's output.)
-      if (assembledComponents.length > 0) {
-        (window as any).__lastA2UIComponents = assembledComponents;
-      }
+      // Hand both channels to the surface renderer as props.
+      //
+      // The component list is passed even when empty: an empty list is Grace
+      // saying "no surface", and the renderer draws nothing for it. Keeping the
+      // previous tree on screen instead would make a deliberately cleared surface
+      // look stuck — indistinguishable from a renderer that had stopped
+      // listening, which is the exact failure this wiring exists to make visible.
+      setSurfaceComponents(assembledComponents);
+      setSurfaceDataModel(dataModel);
 
       // A2UI v0.9.1: the envelope carries no non-spec "surface" key.
       // The view is inferred from the data model itself: decision payload →
@@ -2273,6 +2337,27 @@ export default function Index({
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
                 <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto' }}>
+                  {/* SHADOW MOUNT — the renderer draws Grace's updateComponents tree.
+                      Both channels of her last envelope arrive here as props: the
+                      tree, and the data model its bindings point into.
+
+                      It sits BESIDE the hand-rendered grid rather than replacing it,
+                      deliberately. The hand-rendered path still owns things the
+                      renderer does not yet: the console's data refresh, and the
+                      open/delete/create handlers. Swapping them in one step would put
+                      a working surface behind an unverified one.
+
+                      So this pass makes the renderer LIVE and observable, not
+                      authoritative. What to look for: every node it draws carries
+                      data-a2ui-id, so the two can be told apart on screen. Once the
+                      hand-rendered grid is confirmed redundant it goes, and this
+                      comment with it. */}
+                  {surfaceComponents.length > 0 && (
+                    <a2ui-renderer
+                      ref={a2uiRendererRef}
+                      style={{ flex: '1 1 0%', minWidth: 0, overflow: 'auto' }}
+                    />
+                  )}
                   <ConsolePage
                     refreshKey={consoleRefreshKey}
                     aiAssembledCards={assembledConsoleCards}
