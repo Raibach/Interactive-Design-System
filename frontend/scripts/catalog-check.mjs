@@ -204,22 +204,66 @@ if (existsSync(PATHS.primitives) && schema.components) {
 // other is one the AI can be told to emit and then have rejected, or one that
 // renders on a surface and 503s on another.
 //
-// The allowlist is the authority: it names the Lit elements that exist.
-for (const a of allowlist) {
-  if (schemaComponents.includes(a.tag)) continue;
-  add({
-    check: 'schema-absent', stage: 'deliver', owner: 'pipeline', tier: tierOfTag(a.tag),
-    component: a.tag, nodeId: null, file: rel(PATHS.allowlist),
-    what: `Allowlist permits "${a.tag}" but the "${CATALOG_NAME}" schema does not list it — the server rejects any payload containing it (503).`,
-    fix: `Add "${a.tag}" to catalogs/${CATALOG_NAME}/catalog.json, or drop it from the allowlist.`,
-  });
-}
+// THREE CHANNELS, NOT TWO — conflating them is what this check got wrong.
+//
+// The allowlist is not only the A2UI component vocabulary. It also carries the
+// tags the CHAT emits as markup — <save-button/>, <prompt-section .../> — which
+// the orchestrator handles over the event bus. A command tag never enters an
+// updateComponents payload, so "is it in the A2UI schema?" is the wrong question
+// for it. Asked anyway, it reported save-button as a 503 waiting to happen while
+// it is a working command wired to the save path.
+//
+// The command tags are read out of the source (every `eventBus.on('<tag>'`)
+// rather than listed here, so this exemption cannot rot the way a hand-kept list
+// does. NOTE the walk: the handlers live in the pages (.tsx), NOT in the Lit
+// sources, so scanning only the component sources silently missed every one of
+// them — save-button was still reported as inert while being wired to the save
+// path. Same walk as the `heard` set above, for the same reason.
+const CHAT_COMMAND_TAGS = new Set(
+  walkSrc(join(ROOT, 'src')).flatMap((p) =>
+    [...read(p).matchAll(/eventBus\.on\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
+  ),
+);
+
 // A2UI PROTOCOL components — defined by the A2UI v0.9.1 spec, not by this
 // repository. They are not Lit elements, so the allowlist is NOT expected to
 // name them; flagging them as drift would be noise that buries the real drift.
 // Declared explicitly rather than guessed from casing, because guessing is how
 // the previous version of this check produced false positives.
 const A2UI_PROTOCOL_COMPONENTS = ['Text', 'Image', 'Row', 'Column', 'Card', 'Button'];
+
+// The tags some source file actually defines an element for.
+const DEFINED_TAGS = new Set(
+  SOURCES
+    .map((s) => (s.src.match(/customElements\.define\(\s*['"]([^'"]+)['"]/) || [])[1])
+    .filter(Boolean),
+);
+
+// The allowlist is the authority: it names the Lit elements that exist.
+for (const a of allowlist) {
+  if (schemaComponents.includes(a.tag)) continue;
+  if (CHAT_COMMAND_TAGS.has(a.tag)) continue; // a command, not a component
+
+  // Neither gate is involved in a name that nothing implements: no element, no
+  // schema, no handler. That failure is worse than a 503, not better — it is
+  // SILENT — so it gets its own finding rather than borrowing a 503's wording.
+  if (!DEFINED_TAGS.has(a.tag)) {
+    add({
+      check: 'tag-inert', stage: 'deliver', owner: 'pipeline', tier: tierOfTag(a.tag),
+      component: a.tag, nodeId: null, file: rel(PATHS.allowlist),
+      what: `Allowlist offers "${a.tag}" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.`,
+      fix: `Implement it (a Lit element plus a catalog entry), or drop "${a.tag}" from the allowlist.`,
+    });
+    continue;
+  }
+
+  add({
+    check: 'schema-absent', stage: 'deliver', owner: 'pipeline', tier: tierOfTag(a.tag),
+    component: a.tag, nodeId: null, file: rel(PATHS.allowlist),
+    what: `Allowlist permits "${a.tag}" and <${a.tag}> IS defined, but the "${CATALOG_NAME}" schema does not list it — the server rejects any payload containing it (503).`,
+    fix: `Add "${a.tag}" to catalogs/${CATALOG_NAME}/catalog.json, or drop it from the allowlist.`,
+  });
+}
 
 for (const tag of schemaComponents) {
   if (allowlistTags.has(tag)) continue;

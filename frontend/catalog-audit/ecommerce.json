@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-09-11T14:04:24.686Z",
+  "generatedAt": "2026-09-11T14:51:38.833Z",
   "catalog": "ecommerce",
   "status": "complete",
   "fileKey": "20UPR2KQMsbAxlo5NJb1se",
   "counts": {
-    "total": 71,
+    "total": 70,
     "blocking": 0,
-    "pipeline": 65,
+    "pipeline": 64,
     "designer": 6,
     "passed": 1
   },
   "tiers": {
-    "prompt-composer": 40,
+    "prompt-composer": 39,
     "primitives": 31
   },
   "stages": [
@@ -31,7 +31,8 @@
     "node-id-absent",
     "node-unresolved",
     "provenance-missing",
-    "schema-absent"
+    "schema-absent",
+    "tag-inert"
   ],
   "findings": [
     {
@@ -490,21 +491,8 @@
       "fix": "Wire a listener, or mark it: // TODO(behavior): action undefined in Figma"
     },
     {
-      "id": "schema-absent:save-button",
-      "check": "schema-absent",
-      "stage": "deliver",
-      "owner": "pipeline",
-      "level": "advisory",
-      "tier": "prompt-composer",
-      "component": "save-button",
-      "nodeId": null,
-      "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"save-button\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"save-button\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
-    },
-    {
-      "id": "schema-absent:run-button",
-      "check": "schema-absent",
+      "id": "tag-inert:run-button",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -512,12 +500,12 @@
       "component": "run-button",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"run-button\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"run-button\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"run-button\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"run-button\" from the allowlist."
     },
     {
-      "id": "schema-absent:layout-row",
-      "check": "schema-absent",
+      "id": "tag-inert:layout-row",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -525,12 +513,12 @@
       "component": "layout-row",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"layout-row\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"layout-row\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"layout-row\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"layout-row\" from the allowlist."
     },
     {
-      "id": "schema-absent:layout-col",
-      "check": "schema-absent",
+      "id": "tag-inert:layout-col",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -538,8 +526,8 @@
       "component": "layout-col",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"layout-col\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"layout-col\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"layout-col\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"layout-col\" from the allowlist."
     },
     {
       "id": "schema-absent:ai-surface-sandbox",
@@ -551,12 +539,12 @@
       "component": "ai-surface-sandbox",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"ai-surface-sandbox\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
+      "what": "Allowlist permits \"ai-surface-sandbox\" and <ai-surface-sandbox> IS defined, but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
       "fix": "Add \"ai-surface-sandbox\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
     },
     {
-      "id": "schema-absent:status-indicator",
-      "check": "schema-absent",
+      "id": "tag-inert:status-indicator",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -564,12 +552,12 @@
       "component": "status-indicator",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"status-indicator\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"status-indicator\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"status-indicator\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"status-indicator\" from the allowlist."
     },
     {
-      "id": "schema-absent:error-banner",
-      "check": "schema-absent",
+      "id": "tag-inert:error-banner",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -577,12 +565,12 @@
       "component": "error-banner",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"error-banner\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"error-banner\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"error-banner\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"error-banner\" from the allowlist."
     },
     {
-      "id": "schema-absent:dynamic-button",
-      "check": "schema-absent",
+      "id": "tag-inert:dynamic-button",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -590,12 +578,12 @@
       "component": "dynamic-button",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"dynamic-button\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"dynamic-button\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"dynamic-button\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"dynamic-button\" from the allowlist."
     },
     {
-      "id": "schema-absent:undo",
-      "check": "schema-absent",
+      "id": "tag-inert:undo",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -603,12 +591,12 @@
       "component": "undo",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"undo\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"undo\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"undo\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"undo\" from the allowlist."
     },
     {
-      "id": "schema-absent:redo",
-      "check": "schema-absent",
+      "id": "tag-inert:redo",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -616,12 +604,12 @@
       "component": "redo",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"redo\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"redo\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"redo\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"redo\" from the allowlist."
     },
     {
-      "id": "schema-absent:export",
-      "check": "schema-absent",
+      "id": "tag-inert:export",
+      "check": "tag-inert",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
@@ -629,8 +617,8 @@
       "component": "export",
       "nodeId": null,
       "file": "frontend/src/shared/tag-registry.ts",
-      "what": "Allowlist permits \"export\" but the \"ecommerce\" schema does not list it — the server rejects any payload containing it (503).",
-      "fix": "Add \"export\" to catalogs/ecommerce/catalog.json, or drop it from the allowlist."
+      "what": "Allowlist offers \"export\" but nothing implements it — no element defines it, no schema accepts it, and no handler listens for it. The model can be told to emit it and it does nothing at all.",
+      "fix": "Implement it (a Lit element plus a catalog entry), or drop \"export\" from the allowlist."
     },
     {
       "id": "allowlist-absent:chat-navigation-bar",
