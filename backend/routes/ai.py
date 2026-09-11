@@ -137,7 +137,7 @@ class AISurfaceRequest(BaseModel):
 
 
 @router.post("/api/ai/assemble-surface")
-async def ai_assemble_surface(
+def ai_assemble_surface(
     request: AISurfaceRequest,
     limit: int = Query(10, ge=1, le=200),
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),

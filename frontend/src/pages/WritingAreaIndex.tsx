@@ -136,7 +136,26 @@ export default function Index({
    * in two places while the abort itself was 30000 and then 10000, so the error
    * told the user a number the code had stopped using.
    */
-  const ASSEMBLY_TIMEOUT_MS = 10000;
+  // Client-side timeout for a surface assembly.
+  //
+  // This has been wrong in both directions, so record the measurements:
+  //   - 10s  → too short. It was set today on the reasoning "warm assemblies run
+  //            1.5-2.7s", which is only true when this is the ONLY model call in
+  //            flight. The catalog check measures 28.5s (production, 2026-09-11)
+  //            and the backend runs query_llm synchronously inside an async
+  //            handler, so it BLOCKS the event loop and this request queues
+  //            behind it. Every load aborted at 10s and the console never
+  //            assembled: "AI Assembly Error - Assembly timed out (10s)".
+  //   - 30s  → also too short for the same reason once the queue is involved.
+  //
+  // So: long enough that a real call is never killed mid-flight. Aborting is
+  // only correct for a request that is genuinely dead, and a model call is not
+  // dead just because it is slow. A hard cap that fires during normal work is
+  // not a safety net, it is an outage.
+  //
+  // The catalog check does NOT come through here — it has its own fetch with no
+  // client cap, because it can legitimately run long.
+  const ASSEMBLY_TIMEOUT_MS = 120000;
 
   // ── AI Assembly state ──
   // The header tabs are AI COMMANDS, not webpage links.
