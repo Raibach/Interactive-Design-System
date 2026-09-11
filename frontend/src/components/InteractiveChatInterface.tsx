@@ -1208,21 +1208,12 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
    * Before any call there is no last call, so it says '—'. Same rule as the
    * tally directly below it: no label, no number, until something real is there.
    */
-  const lastCallMode = usage.last?.mode || '—';
-
-  const tabMetadata = useMemo(() => {
-    const now = new Date();
-    const timestamp = now.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    switch (selectedNav) {
-      case 'variables': return { title: 'Execution Trace', subtitle: 'Complete flow from prompt submission to final response — Milvus snapshots', timestamp, tokens: '1,247', cost: '$0.0062', executions: '15' };
-      case 'tools': return { title: 'Tool Registry & Usage', subtitle: 'Available functions, API integrations, and execution statistics', timestamp, tokens: '1,247', cost: '$0.0057', executions: '1,847' };
-      case 'data': return { title: 'Data Sources & Cross-References', subtitle: 'Connected databases, APIs, and query analytics', timestamp, tokens: '1,103', cost: '$0.0052', executions: '23,323' };
-      case 'evaluation': return { title: 'A/B Testing', subtitle: 'Model comparison, variant testing, and statistical significance', timestamp, tokens: '2,481', cost: '$0.0124', executions: '8' };
-      case 'metadata': return { title: 'Governance & Cost', subtitle: 'Cost per invocation, change history, hallucination rates, audit trail', timestamp, tokens: '—', cost: '$47.82/mo', executions: '3,847' };
-      case 'trace':
-      default: return { title: lastCallMode, subtitle: lastCallMode, timestamp, tokens: '892', cost: '$0.0041', executions: '47' };
-    }
-  }, [selectedNav, lastCallMode]);
+  // The hero is the NUMBERS, and nothing printed above them.
+  //
+  // It used to carry a heading and a subtitle here. Since the heading became the
+  // last call's mode, both lines printed the same word twice — and the grid
+  // below already names the mode in its own "Last Call" cell. So the headers and
+  // the little CHAT badge are gone, and the mode is read where it belongs.
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -1489,14 +1480,7 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                     the provider's usage report; where there is no number yet it
                     says so rather than showing a placeholder. */}
                 <motion.div initial={{ opacity: 0, y: -15, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={motionPresets.header} className="bg-gradient-to-br from-[#f8f9fa] to-[#e9ecef] border-l-4 border-[#507274] rounded-lg p-5 shadow-md">
-                  <div className="flex items-start justify-between mb-3">
-                    <div style={{ minWidth: 300 }}>
-                      <h2 className="font-['Inter'] font-bold text-[20px] text-[#1c2f4e] mb-1">{tabMetadata.title}</h2>
-                      <p className="font-['Inter'] text-[13px] text-[#6c757d] leading-relaxed">{tabMetadata.subtitle}</p>
-                    </div>
-                    <div className="bg-[#507274] text-white px-3 py-1 rounded-full text-[11px] font-['Inter'] font-semibold">{selectedNav.toUpperCase()}</div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-[#dee2e6]" style={{ minWidth: 300 }}>
+                  <div className="grid grid-cols-4 gap-4" style={{ minWidth: 300 }}>
                     <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Total Tokens</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e] tabular-nums">{usage.total.calls > 0 ? usage.total.total_tokens.toLocaleString() : '—'}</div></div>
                     <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">In / Out</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e] tabular-nums">{usage.total.calls > 0 ? `${usage.total.prompt_tokens.toLocaleString()} / ${usage.total.completion_tokens.toLocaleString()}` : '—'}</div></div>
                     <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Calls</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e] tabular-nums">{usage.total.calls > 0 ? usage.total.calls.toLocaleString() : '—'}</div></div>
