@@ -60,6 +60,9 @@ export class WorkspaceLayout extends LitElement {
     this._dragging = side;
     this._startX = e.clientX;
     this._start = { left: this._left, middle: this._middle, right: this._right };
+    // Suspend the .pane transition while dragging (see styles) so the splitter
+    // follows the cursor exactly instead of easing behind it.
+    this.setAttribute('dragging', '');
     this.dispatchEvent(new CustomEvent('resize-start', { detail: { side } }));
     e.preventDefault();
   };
@@ -103,6 +106,8 @@ export class WorkspaceLayout extends LitElement {
       }));
     }
     this._dragging = null;
+    // Restore the transition so the next Run animation still eases open.
+    this.removeAttribute('dragging');
   };
 
   private _toggleThird = (): void => {
@@ -126,6 +131,18 @@ export class WorkspaceLayout extends LitElement {
     }
     .pane.collapsed {
       overflow: hidden;
+    }
+
+    /* The flex-grow transition above exists to animate the middle column open on
+       Run. It must NOT apply while the user is dragging a gripper: every
+       mousemove writes a new flex-grow, and easing each one over 350ms makes the
+       pane chase the cursor and never catch up — which feels like the splitter
+       resisting the drag. While dragging, the transition is off so the pane
+       tracks the pointer 1:1. */
+    :host([dragging]) .pane { transition: none; }
+    :host([dragging]) {
+      user-select: none;
+      cursor: col-resize;
     }
 
     .gripper {
