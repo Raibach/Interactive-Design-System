@@ -276,6 +276,30 @@ for (const tag of schemaComponents) {
   });
 }
 
+// A component the schema lists but its own anyComponent.oneOf does not.
+//
+// The server validates against `components` — validate_a2ui_components reads
+// those KEYS — so a name missing from oneOf does not break THIS server. It
+// breaks the artifact: this file is published as the catalog (see `catalogId`),
+// and a client that validates a payload against $defs.anyComponent would reject
+// a name the server happily accepted. Two lists in one file that disagree is
+// precisely how the next drift starts, so the check is here rather than in a
+// reviewer's memory.
+const oneOfRefs = new Set(
+  (schema.$defs?.anyComponent?.oneOf ?? [])
+    .map((r) => String(r.$ref || '').replace('#/components/', ''))
+    .filter(Boolean),
+);
+for (const name of schemaComponents) {
+  if (oneOfRefs.has(name)) continue;
+  add({
+    check: 'schema-unreachable', stage: 'deliver', owner: 'pipeline', tier: 'primitives',
+    component: name, nodeId: null, file: rel(PATHS.schema),
+    what: `The schema lists "${name}" in components but not in $defs.anyComponent.oneOf — a client validating against anyComponent would reject a payload naming it, though this server accepts it.`,
+    fix: `Add {"$ref": "#/components/${name}"} to $defs.anyComponent.oneOf, or remove "${name}" from components.`,
+  });
+}
+
 // A Lit element in NEITHER gate is genuinely unclaimed: it ships in the bundle
 // and no surface can ever render it. (This replaces a check that compared Lit
 // tags straight to the schema and so mis-reported allowlist-only components.)

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T14:51:38.094Z",
+  "generatedAt": "2026-09-11T15:17:57.200Z",
   "catalog": "prompt-composer",
   "status": "complete",
   "fileKey": "20UPR2KQMsbAxlo5NJb1se",
@@ -11,8 +11,8 @@
     "passed": 1
   },
   "tiers": {
-    "prompt-composer": 39,
-    "primitives": 30
+    "prompt-composer": 42,
+    "primitives": 27
   },
   "stages": [
     "ingest",
@@ -269,6 +269,19 @@
       "fix": "Carry the node id on each mapped element."
     },
     {
+      "id": "event-unheard:a2ui-renderer",
+      "check": "event-unheard",
+      "stage": "deliver",
+      "owner": "pipeline",
+      "level": "advisory",
+      "tier": "primitives",
+      "component": "a2ui-renderer",
+      "nodeId": null,
+      "file": "frontend/src/components/lit/a2ui-renderer.ts",
+      "what": "Dispatches \"a2ui-event\" and nothing listens — and it is not marked as a stub.",
+      "fix": "Wire a listener, or mark it: // TODO(behavior): action undefined in Figma"
+    },
+    {
       "id": "event-unheard:ai-surface-sandbox",
       "check": "event-unheard",
       "stage": "deliver",
@@ -365,7 +378,7 @@
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
-      "tier": "primitives",
+      "tier": "prompt-composer",
       "component": "role-dropdown",
       "nodeId": null,
       "file": "frontend/src/components/lit/prompt-input/role-dropdown.ts",
@@ -378,7 +391,7 @@
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
-      "tier": "primitives",
+      "tier": "prompt-composer",
       "component": "role-dropdown",
       "nodeId": null,
       "file": "frontend/src/components/lit/prompt-input/role-dropdown.ts",
@@ -607,19 +620,6 @@
       "fix": "Implement it (a Lit element plus a catalog entry), or drop \"export\" from the allowlist."
     },
     {
-      "id": "allowlist-absent:chat-navigation-bar",
-      "check": "allowlist-absent",
-      "stage": "deliver",
-      "owner": "pipeline",
-      "level": "advisory",
-      "tier": "primitives",
-      "component": "chat-navigation-bar",
-      "nodeId": null,
-      "file": "frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json",
-      "what": "The \"prompt-composer\" schema lists \"chat-navigation-bar\" but the allowlist does not — the gatekeeper rejects it, so nothing can render it.",
-      "fix": "Add \"chat-navigation-bar\" to src/shared/tag-registry.ts with the right surface, or remove it from the schema."
-    },
-    {
       "id": "allowlist-absent:ConsoleCardGrid",
       "check": "allowlist-absent",
       "stage": "deliver",
@@ -750,17 +750,17 @@
       "fix": "Add \"token-cost-readout\" to src/shared/tag-registry.ts with the right surface, or remove it from the schema."
     },
     {
-      "id": "allowlist-absent:role-dropdown",
-      "check": "allowlist-absent",
+      "id": "element-unclaimed:a2ui-renderer",
+      "check": "element-unclaimed",
       "stage": "deliver",
       "owner": "pipeline",
       "level": "advisory",
       "tier": "primitives",
-      "component": "role-dropdown",
+      "component": "a2ui-renderer",
       "nodeId": null,
-      "file": "frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json",
-      "what": "The \"prompt-composer\" schema lists \"role-dropdown\" but the allowlist does not — the gatekeeper rejects it, so nothing can render it.",
-      "fix": "Add \"role-dropdown\" to src/shared/tag-registry.ts with the right surface, or remove it from the schema."
+      "file": "frontend/src/components/lit/a2ui-renderer.ts",
+      "what": "Defines <a2ui-renderer> but neither the allowlist nor the schema claims it — no surface can render it.",
+      "fix": "Add \"a2ui-renderer\" to the allowlist, or delete the element."
     },
     {
       "id": "element-unclaimed:agent-card-element",
@@ -924,7 +924,7 @@
       "stage": "gap",
       "owner": "designer",
       "level": "advisory",
-      "tier": "primitives",
+      "tier": "prompt-composer",
       "component": "role-dropdown",
       "nodeId": "40000934:22851",
       "file": "frontend/src/components/lit/prompt-input/role-dropdown.ts",
@@ -940,7 +940,7 @@
       "component": null,
       "nodeId": null,
       "file": null,
-      "what": "No React, no JSX, no Tailwind in any of the 17 component sources.",
+      "what": "No React, no JSX, no Tailwind in any of the 19 component sources.",
       "fix": null,
       "tier": "primitives"
     }
