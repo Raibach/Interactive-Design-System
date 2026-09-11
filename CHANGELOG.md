@@ -55,6 +55,79 @@ Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
   sending `X-User-ID: dev` returns 500 `invalid input syntax for type uuid: "dev"`.
   Guard the id and say what is wrong.
 
+**[2026-09-11] — Provenance drift: eight node ids pointing at nothing**
+
+The prompt surface was rebuilt in Figma, and every address captured from the old
+accordion was left behind. Nothing failed loudly, because nothing was watching:
+the ids still looked like provenance.
+
+1. **How it surfaced.** A production Run on `40000746:103` failed on *both* channels —
+   `no spec for node 40000746:103 (source=miss)`. That message is the REST fallback
+   working correctly: it looked, found nothing, and said so instead of inventing.
+
+2. **The scale, measured.** Every `data-node-id` in the source (43 of them), probed
+   one at a time and classified: **36 live, 7 returning nothing, 0 unknown**. The
+   registry independently pointed at 3 dead ids, one of them shared by two entries.
+   All eight are in the prompt-input surface — the same surface the owner was looking
+   at when they asked whether "missing annotations" were causing a styling fault.
+
+3. **Why a dead id is worse than a broken link.** A finding against a ghost can never
+   be cleared. `provenance-missing` on `40000746:103` was unactionable by
+   construction — no annotation, no repair, no amount of clicking resolves it, because
+   there is nothing on the other end to annotate. That is what the owner was feeling
+   when they asked whether findings could be marked as actioned: *some of them could
+   not be actioned at all.*
+
+4. **The mapping — each successor proven structurally, none name-guessed:**
+
+   | dead id | what | live successor | why that one |
+   | --- | --- | --- | --- |
+   | `40000746:103` | gripper-prompt-input | **`40000941:23074`** | published COMPONENT; the live panel instantiates it as `40000941:23177` |
+   | `40000746:106` | role-tile (in accordion) | **`40000909:3999`** | the role-tile FRAME sitting in the live accordion `40000909:3998`, in the old node's exact position |
+   | `40000879:249` | functions | **`40000909:4005`** | same frame name, same 177.039×43 — identical to the third decimal |
+   | `40000879:250` | functions-label | **`40000909:4006`** | its TEXT child |
+   | `40000879:252` | prompt-accordion | **`40000909:3998`** | the FRAME containing both of the above |
+   | `40000879:264` | role-label-injection | **`40000909:4317`** | the live role-tile **SLOT**'s child, same name — the element implements that SLOT |
+   | `40000746:107` | role-label-text | **`40000909:4318`** | the SLOT's label instance, `sample-text-for-role` (`40000909:2186`, the component carrying the designer's description) |
+   | `40000881:373` | rail-gripper | **`40000881:399`** | its two `Meatballs_menu` children at 24×24 are precisely the two the element draws |
+
+   The last row is the one that removes all doubt: the Lit comment written from the
+   old node says "two Meatballs_menu instances, size 24px" — and the live node has
+   exactly that, so the address changed and the design did not.
+
+5. **What changed.** `registry.json` (4 entries), `prompt-input-section.ts` (4
+   `data-node-id` attributes + the geometry receipt comment), `role-tile.ts` (2),
+   `prompt-container.ts` (1), `gripper-prompt-input.ts` (the capture note now records
+   that its source node is gone, and what replaced it). `prompt-section-editor` is set
+   to `null`: it is a *composition* of sections, it never had a node of its own, and it
+   had inherited the adjacent `functions` id by copy-paste — the same convention the
+   other composed elements (`workspace-layout`, `control-bar`) already use.
+
+6. **After.** `catalog-check` now *resolves* every corrected id, so the same findings
+   became addressable: `role-tile 40000909:4316 provenance-missing`,
+   `functions-wrap 40000909:4005`, `gripper-prompt-input 40000941:23074`. Verified:
+   typecheck ✓, 18/18 tests ✓, build ✓, pipeline **64 open · 56 pipeline · 8 designer ·
+   0 blocking**.
+
+7. **Deliberately not changed:** `src/design/*.json` captures and
+   `VALUES.json` / `node-census.json` still name the old ids. Those are a capture and a
+   *baseline* — rewriting them would erase the drift that `fidelity-check` exists to
+   report. History should keep saying what was true when it was written.
+
+8. **M15 — I reported 34 dead ids before I reported 7.** The first sweep counted an
+   API error as an absence, and Figma rate-limited the sweep midway, so everything
+   after the limit was "dead": it flagged `40000746:94` and `40000909:4322`, both of
+   which I had read successfully minutes earlier. Redone with retries that *distinguish*
+   `429` from "no data": 7. Same class of mistake as the `grep -c` miscount two hours
+   before — a measurement tool reporting the wrong thing, twice, in opposite
+   directions.
+
+9. **Carry-forward:** this was found by hand. It should be a check — `stale-node` as a
+   finding kind, so an id that stops resolving is reported *as a stale address* rather
+   than as a designer failing to annotate, and a finding that cannot be actioned says
+   so instead of sitting in the list looking like work.
+
+
 **[2026-09-11] — The repair path: a finding becomes a prompt, and every seam is made visible**
 
 The catalog checker could already *report* a finding. Nothing could act on one. The

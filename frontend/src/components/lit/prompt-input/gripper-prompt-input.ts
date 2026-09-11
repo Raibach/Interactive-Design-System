@@ -2,6 +2,13 @@
  * <gripper-prompt-input> — translated from Figma MCP cache: src/design/gripper-prompt-input.json
  * (node 40000746:103, pulled via get_design_context 2026-09-09)
  *
+ * THAT NODE IS GONE. Re-checked 2026-09-11: 40000746:103 returns nothing from the
+ * MCP and nothing from REST, so the capture above is history, not provenance. The
+ * component moved to 40000941:23074 (published COMPONENT, 40×40, child "Meatballs");
+ * the panel instantiates it as 40000941:23177. The rail's copy is 40000881:399,
+ * whose two Meatballs_menu children (24×24) are the ones this element draws.
+ * Values below were not re-derived from the moved node — only the address changed.
+ *
  * MCP values: two Meatballs_menu instances, size 24px, first at left:9px top:6px,
  * second at left:16px top:6px, each rotated -90deg. Icons are the file's own
  * exported SVGs (downloaded from the MCP asset server to src/assets/).
