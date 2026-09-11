@@ -1,5 +1,17 @@
 // Neural Network Service - LM Studio Connection via Backend Proxy
-const BACKEND_URL = `${import.meta.env.VITE_API_URL || ''}/api/teacher/query`;
+//
+// RELATIVE on purpose. This used to be
+// `${import.meta.env.VITE_API_URL || ''}/api/teacher/query`, and VITE_API_URL is set
+// in `backend/.env` to the Docker SERVICE NAME (`http://prompt-composer-console:5001`).
+// RESTART-LOCAL.sh exports that file before starting Vite, so the dev server inlined
+// it, and every call from here went to a hostname that resolves only inside the
+// container — dying as `TypeError: Failed to fetch` before it left the browser, with
+// nothing in any server log. `API_BASE` ("/api") is the same-origin path the rest of
+// the app uses, and the backend serves this app from the same origin in every
+// environment. See shared/apiHelper.ts.
+import { API_BASE } from '@/shared/apiHelper';
+
+const BACKEND_URL = `${API_BASE}/teacher/query`;
 
 /**
  * Strip system scaffolding from AI responses.

@@ -41,6 +41,17 @@ interface WritingAreaIndexProps {
   isAuthenticated?: boolean | null;
 }
 
+/**
+ * The Figma file the tool calls address.
+ *
+ * The same key the catalogs carry as `x-figma-source.fileKey` and the registry
+ * records per component, so a tool call and the component's provenance cannot
+ * drift apart. It is a literal here because the browser has to name the file when
+ * it asks the server to run the tool — the server defaults to it too, and a call
+ * that names no file is a call nobody can audit.
+ */
+const FIGMA_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
+
 export default function Index({
   onLogout: _onLogout,
   isAuthenticated: _isAuthenticated,
@@ -229,6 +240,34 @@ export default function Index({
   // null = the surface is not a catalog surface.
   const [catalogFindings, setCatalogFindings] = useState<any[] | null>(null);
 
+  /**
+   * Components that are ON SCREEN RIGHT NOW and carry an open annotation finding.
+   *
+   * This is what raises the red alert. Both facts have to be true at once: the
+   * catalogue says the component has no annotation, AND the surface being rendered
+   * contains it anyway. A finding on something nobody is using is a report, not an
+   * incident — the incident is the generated one, which is how invented behaviour
+   * gets shipped to every surface that places it.
+   *
+   * Declared after catalogFindings on purpose: it reads it, and a const evaluated
+   * before its subject is in the temporal dead zone, which is a render-time crash.
+   */
+  const unannotatedInUse: string[] = (() => {
+    const open = new Set(
+      (catalogFindings || [])
+        .filter((f: any) => f.check === 'annotation-missing' || f.check === 'annotation-prose')
+        .map((f: any) => f.component)
+        .filter(Boolean),
+    );
+    if (open.size === 0) return [];
+    const used = new Set<string>();
+    for (const c of surfaceComponents || []) {
+      const name = c?.component;
+      if (typeof name === 'string' && open.has(name)) used.add(name);
+    }
+    return [...used];
+  })();
+
   const [_rightColumnView, _setRightColumnView] = useState<"chat" | "trace">("chat"); // Chat = TeacherEditorChat, Trace = SCE panel
   const [_isPromptPortalOpen, _setIsPromptPortalOpen] = useState<boolean>(false); // Show prompt portal in first column
   const [_selectedPrompt, _setSelectedPrompt] = useState<{
@@ -259,6 +298,26 @@ export default function Index({
   // Tracks whether the user has unsaved changes since the last save.
   // Used to suppress the exit confirmation when the user just saved.
   const hasUnsavedChangesRef = useRef(false);
+  /**
+   * The repair prompt, while it owns the left column.
+   *
+   * Clicking "Repair" beside a catalog finding turns that finding into a PROMPT
+   * and drops it into the editor's inputs; the user then Runs it like any other
+   * prompt. It lives in a ref rather than in state because it has to WIN over the
+   * composer's own sections: opening the composer re-assembles it from the backend
+   * (System / User / Agent starters), and that assembly lands AFTER the click and
+   * would otherwise wipe the repair. Cleared on Run, on Save, and when another
+   * package is opened.
+   */
+  const repairSectionsRef = useRef<any[] | null>(null);
+  /**
+   * The repair's own name, held for the same reason — the click that starts a
+   * repair can be INTERRUPTED by the unsaved-changes gate and resumed after the
+   * person answers, so the title cannot be applied at click time and trusted.
+   * Consumed by the composer branch below, which every composer assembly passes
+   * through, whichever route got there.
+   */
+  const repairTitleRef = useRef<string | null>(null);
   // Ref for pending action to execute after exit confirmation
   const pendingActionRef = useRef<(() => Promise<void>) | null>(null);
   // Keep refs in sync with state
@@ -692,7 +751,16 @@ export default function Index({
       // ══════════════════════════════════════════════════════════════════════
       const sessionId = currentPromptSessionRef.current;
       const isValidSessionId = sessionId && sessionId !== 'null' && sessionId.length > 0;
-      const title = currentPromptSession?.title || `Prompt - ${new Date().toLocaleString()}`;
+      // The name is settled here as well as at assembly, because THIS is the
+      // boundary where a name becomes permanent — and Run is save-then-run when the
+      // package has never been saved, so here is often the only chance it gets.
+      // Order: what the session carries, then the repair that spawned it — but only
+      // when this save is CREATING a package (`!isValidSessionId`). An UPDATE of an
+      // existing package must never be renamed by a repair that merely happens to be
+      // queued behind an unsaved-changes gate.
+      const title = currentPromptSession?.title
+        || (repairTitleRef.current && !isValidSessionId ? repairTitleRef.current : null)
+        || `Prompt - ${new Date().toLocaleString()}`;
 
       console.log('🤖 [AI] Calling AI save endpoint...');
 
@@ -756,6 +824,9 @@ export default function Index({
       currentPromptSessionRef.current = savedSession.id;
 
       hasUnsavedChangesRef.current = false;
+      // The repair name has now been written down; it must not follow this user
+      // into the next package they save.
+      repairTitleRef.current = null;
       await loadPromptSessions();
 
       // If user is on console, re-assemble to show updated cards.
@@ -825,6 +896,26 @@ export default function Index({
     };
   }, [currentPromptSession]);
 
+  // ── Leaving with unsaved work: force a decision ───────────────────────────
+  // Closing the tab or reloading used to take the work with it, silently. The
+  // browser owns the wording here (Save/Discard are not ours to draw at this
+  // level), but the CONDITION is the same ref every other gate reads — one truth
+  // about what "unsaved" means, so the repair gate, the in-app navigations that
+  // go through the assembler, and the exit all agree.
+  //
+  // The in-app half already works: any surface change calls the assembler with
+  // has_unsaved_changes, and the backend answers with a Save / Discard / Cancel
+  // decision surface (routes/ai.py:213) when there is something to lose.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedChangesRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
   // Track changes to prompt content
   useEffect(() => {
     // Remove the session check - we want to track changes even without a session
@@ -834,14 +925,31 @@ export default function Index({
     };
 
     // Listen for any changes in the prompt builder
+    //
+    // The composer's fields live in SHADOW DOM: prompt-section-editor →
+    // prompt-input-section → prompt-textarea → the real <textarea>. An `input`
+    // event that reaches `document` is RETARGETED to the shadow host on the way
+    // out, so `e.target` is the custom element and never the TEXTAREA. The old
+    // `e.target.tagName === 'TEXTAREA'` test therefore could not pass for the one
+    // surface it was written for: typing in a prompt never armed
+    // hasUnsavedChangesRef, so nothing downstream believed there was anything to
+    // lose — no save prompt on exit, and "Repair" replaced the column without
+    // asking. `composedPath()[0]` is the real target, inside the shadow tree.
     const handleInputEvent = (e: Event) => {
-      const target = e.target as HTMLElement;
-      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
-        // Check if it's in the prompt builder area
-        if (target.closest('[data-section-name]') || target.getAttribute('data-section-name')) {
-          handleContentChange();
-        }
-      }
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      const origin = (path[0] ?? e.target) as HTMLElement | undefined;
+      if (!origin) return;
+
+      const isField = origin.tagName === 'TEXTAREA' || origin.tagName === 'INPUT';
+      if (!isField) return;
+
+      // The section marker can sit on the host OR inside the path (the editor
+      // stamps data-section-name on each <prompt-input-section>).
+      const inSection = path.some(
+        (n) => n instanceof HTMLElement && n.hasAttribute && n.hasAttribute('data-section-name'),
+      ) || !!origin.closest?.('[data-section-name]');
+
+      if (inSection) handleContentChange();
     };
 
     // CRITICAL: Handle loading content from database into textareas
@@ -864,7 +972,6 @@ export default function Index({
     // Add listeners for input changes
     document.addEventListener('input', handleInputEvent);
     window.addEventListener('load-section-content', handleLoadSectionContent as EventListener);
-
     // Also listen for custom events that indicate changes
     window.addEventListener('prompt-content-changed', handleContentChange);
     window.addEventListener('add-prompt-role', handleContentChange);
@@ -976,6 +1083,16 @@ export default function Index({
   useEffect(() => {
     if (!promptSectionEditorRef.current) return;
     if (headerTab !== 'composer') return;
+
+    // A repair prompt OWNS the column until the user Runs, Saves, or opens
+    // another package. This check has to live HERE and not only in the click
+    // handler: render-composer builds the composer from the backend, so its
+    // starter sections arrive after the repair and would overwrite it.
+    if (repairSectionsRef.current) {
+      (promptSectionEditorRef.current as any).sections = repairSectionsRef.current;
+      return;
+    }
+
     try {
       const raw = currentPromptSession?.leftColumnContent 
         ? JSON.parse(currentPromptSession.leftColumnContent).sections || [] 
@@ -999,11 +1116,293 @@ export default function Index({
     }
   }, [currentPromptSession?.leftColumnContent, promptLoadKey, headerTab]);
 
+  // ── Keep a repair prompt in the column ────────────────────────────────────
+  // No dependency array, on purpose: this re-asserts AFTER EVERY COMMIT.
+  //
+  // The repair is pushed imperatively, and a push is a MOMENT, not a state. Any
+  // later render can replace what the editor holds — the composer re-asserts the
+  // session's own sections when an assembly lands, and <ai-surface-sandbox> swaps
+  // which slot it projects while one is in flight. Declared AFTER every other
+  // section writer so it runs last in each commit and the repair wins.
+  useEffect(() => {
+    const want = repairSectionsRef.current;
+    if (!want) return;
+    const el = promptSectionEditorRef.current as any;
+    if (!el) return;
+    const have = el.sections || [];
+    const same = have.length === want.length
+      && have.every((s: any, i: number) => (s.content || '') === (want[i].content || ''));
+    if (!same) el.sections = want;
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Repair → a prompt, not a fix
+  // ══════════════════════════════════════════════════════════════════════════
+  // A finding is a report. Its "Repair" button applies NOTHING — it turns the
+  // finding into the prompt that would repair it and puts that prompt in the left
+  // column, so the user can read it, change it, and Run it like any other prompt.
+  // Nothing is verified and nothing closes; a finding closes only when the checker
+  // stops deriving it. (Lit-to-figma-trace-plan, Step 4 — "Repair becomes a prompt".)
+  //
+  // `what` and `fix` are the check's OWN text, copied — never paraphrased. The
+  // model reads the checker's words, not a summary of them.
+  //
+  // Section types are the ones TYPE_LABELS in <prompt-input-section> knows
+  // (system / user / tool-call / agent), and the names are the ones
+  // handleRunRequested's CORE_ROLES recognises — so Run maps all four into
+  // core_roles instead of dropping them into custom_roles.
+  //
+  // These live at component scope, NOT inside the listener useEffect where
+  // handleRunRequested/handleSaveRequested are declared: the JSX below calls
+  // handleRepairFinding directly, and a const inside that effect is not visible
+  // to the render.
+  /**
+   * What each check needs in order to be repaired.
+   *
+   * A prompt that carries only the VERDICT cannot repair anything: the model reads
+   * the finding, finds no material, and says so. Measured — a real Run answered
+   * "the material supplied contains no field values to mark … not the component
+   * body." So the prompt states what this check needs, and when that is a person's
+   * material it says so outright, so the reply is the REQUEST rather than an
+   * invented fix.
+   *
+   * Keyed by the checker's own `check` id (scripts/catalog-check.mjs), so a new
+   * check with no entry falls through to DEFAULT_CHECK_NEED instead of guessing.
+   */
+  const CHECK_NEEDS: Record<string, string> = {
+    'provenance-missing':
+      "the component's own body and its Figma annotation — a per-field map can only be written from the fields themselves",
+    'node-unresolved':
+      "the component's real Figma node id — the one recorded is not in the file",
+    'node-id-absent':
+      'the element that renders each Figma node, and the node id it should carry',
+    'component-missing':
+      'the file that should hold the component, or confirmation that the registry entry is wrong',
+    'annotation-missing':
+      'an annotation written on the VARIANT in Figma (Data / On click / State / A11y)',
+    'annotation-prose':
+      'that same note rewritten in the field format (Data / On click / State / A11y)',
+    'geometry-drift':
+      'a DECISION, not material: the Figma node moves to the container\'s constraint, or the constraint changes once in the catalogue',
+    'attr-hardcoded':
+      'nothing further — the change is mechanical: drop the expected-name constant, match by regex, record what was seen',
+    'container-undeclared':
+      'the container the component renders inside, added to its registry entry',
+    'event-unheard':
+      'the listener for the event, or a mark that the action is undefined in Figma',
+    'tag-inert': 'a Lit element plus a catalog entry, or removal from the allowlist',
+    'element-unclaimed': 'the allowlist entry and the catalog schema, so the element can be reached',
+    'schema-absent': 'the catalog schema entry, or removal from the allowlist',
+    'allowlist-absent': 'the allowlist entry, or removal from the schema',
+    'primitive-missing': 'the component copied unchanged from catalogs/primitives/catalog.json',
+    'primitive-drift':
+      'the component made identical to the primitives catalog — changed THERE if the change is for every theme',
+    'check-could-not-run':
+      'the input the check itself was missing (a token, an artifact) — this one is about the checker, not the design',
+  };
+  const DEFAULT_CHECK_NEED =
+    'the material named by the check\'s own `what` below. If it is not here, say what you need.';
+
+  const buildRepairSections = (f: any) => {
+    const rule = [f.check, f.component ? `on ${f.component}` : null].filter(Boolean).join(' ');
+    // The Tool Call section names the tool the prompt is allowed to call — and Run
+    // makes that name real: the server reads this section, calls Figma, and puts
+    // Figma's own answer into the prompt. Naming the tool where the address lives
+    // means a person editing the node here changes what actually gets checked; a
+    // hidden copy of the finding would not.
+    const address = [
+      f.nodeId ? 'tool        figma.get_design_context' : null,
+      f.nodeId ? `figma node  ${f.nodeId}` : null,
+      f.file ? `file        ${f.file}` : null,
+    ].filter(Boolean).join('\n');
+
+    const needs = CHECK_NEEDS[f.check] ?? DEFAULT_CHECK_NEED;
+    const human = f.owner === 'designer';
+
+    return [
+      {
+        name: 'System',
+        type: 'system',
+        content: [
+          'You are the Design System Manager for this platform — an information architect, and',
+          'the overseer of this system. You speak with the owner\'s authority. Grace is that',
+          'person. You are not a helper here; you are the gate.',
+          '',
+          'THE RULE YOU ENFORCE',
+          '  Nothing enters this system that is not properly annotated, labeled, tagged and',
+          '  tokenized. No exceptions, and no "we will finish it later". There are many IDs and',
+          '  many registries in here — the Figma map, the allowlist, the catalog schemas, the',
+          '  design tokens — and every one of them is a list of IDs. A component that arrives',
+          '  without its metadata does not merely look wrong. It corrupts every list that',
+          '  references it, and it corrupts them quietly, until something is built on top.',
+          '',
+          'WHAT YOU DO NOT DO',
+          '  You do not guess what a designer wants. Not once — not plausibly, not as a',
+          '  "sensible default", not to be helpful. Guessing is the exact mechanism by which an',
+          '  untagged component gets in, and it is the failure this check exists to catch.',
+          '  A plausible invention here is worse than a refusal.',
+          '',
+          'WHAT YOU DO',
+          '  You name the missing metadata precisely, require it, and refuse to proceed without',
+          '  it. An unfinished component stays unfinished — visibly — until the person who owns',
+          '  it finishes it. That is the whole job. The system only works if somebody oversees',
+          '  it, and this surface is where the overseeing happens.',
+          '',
+          `THE FINDING ON THE TABLE: the check \`${rule}\` failed.`,
+          '',
+          'HOW TO OPEN',
+          '  Name the skipped step first, in one sentence, before anything else. Not an apology,',
+          '  not a preamble — the fact. A machine did not do this; a step was skipped, and the',
+          '  step was a person\'s. Say which step, and say it without dressing it up: whoever',
+          '  has to walk back to this component is best served by being told exactly what is',
+          '  missing before they are told what to do about it.',
+          '',
+          'WHO OWNS IT',
+          human
+            ? '  the DESIGNER — the person reading this column. It cannot be derived from code, so do not attempt it, do not approximate it, and do not offer a substitute.'
+            : '  the PIPELINE — code, not the designer. Make the change the Agent section describes. Do not ask a person for anything the checker already told you.',
+          '',
+          'WHAT THIS CHECK NEEDS',
+          `  ${needs}`,
+          '',
+          'WHY IT MATTERS',
+          '  An undocumented component does not fail loudly. It fails quietly and later, as',
+          '  behaviour somebody invented — and every surface that places this component',
+          '  inherits the invention. That is the real cost of the skipped step, and the reason',
+          '  this is worth finishing rather than patching around.',
+          '',
+          'HOW THEY FIX IT WITHOUT THIS TOOL',
+          '  Annotate the VARIANT in Figma Dev Mode — never the component SET, never an',
+          '  instance, because an instance\'s note reaches nobody. Use the field format:',
+          '    Data:  Source:  On click:  Track:  State:  Disabled:  A11y:  Builder:  AI:',
+          '  The guide is FIGMA/ANNOTATION_FIGMA_GUIDE.md. `On click:` carries the most weight:',
+          '  it is the field that makes behaviour verbatim instead of guessed.',
+          '',
+          'THIS PROMPT IS THEIRS',
+          '  These four sections are editable — they ARE the composer. Fields can be added,',
+          '  roles changed, tools attached, the instruction rewritten. Say so once, plainly:',
+          '  a field added today is one the next person inherits, and a prompt nobody edits',
+          '  is a prompt that keeps reporting the same finding.',
+          '',
+          'WHAT TO DO',
+          '  Name what is missing. Ask for it BY NAME. Do not invent it, do not substitute it,',
+          '  and do not proceed as though it were there. If it cannot be produced at all, say',
+          '  so and name exactly what is absent.',
+        ].join('\n'),
+        position: 0,
+        visible: true,
+      },
+      { name: 'User', type: 'user', content: f.what || '', position: 1, visible: true },
+      { name: 'Tool Call', type: 'tool-call', content: address, position: 2, visible: true },
+      {
+        name: 'Agent',
+        type: 'agent',
+        content: [
+          f.fix
+            ? `The check's own fix: ${f.fix}`
+            : 'The check proposes no fix of its own — say what you need instead of inventing one.',
+          '',
+          'RETURN A COMPOSER, NOT AN ANSWER',
+          '  Alongside the repair, return the reusable pieces, so the next occurrence of this',
+          '  check costs someone far less than this one did:',
+          '    1. the corrected field values — what the annotation should say, field by field,',
+          '       ready to paste into Figma without editing;',
+          '    2. the fields worth keeping for THIS CHECK, so the next finding of this kind',
+          '       arrives already shaped;',
+          '    3. any tool or source worth attaching — a file, a node, a spec endpoint — that',
+          '       would have made this run self-sufficient.',
+          '  Output that cannot be reused on the next finding is a one-off. A one-off fixes a',
+          '  component; a composer fixes the class.',
+        ].join('\n'),
+        position: 3,
+        visible: true,
+      },
+    ];
+  };
+
+  /**
+   * Write the repair prompt into the editor's inputs.
+   *
+   * Retried the way this file retries every other push into the editor: the
+   * element mounts only after the composer assembles, so one attempt can land
+   * while the ref is still null, and `sections` is a property (not an attribute),
+   * so there is no markup to wait on.
+   */
+  const pushRepairSections = (sections: any[]) => {
+    const push = () => {
+      const editor = promptSectionEditorRef.current as any;
+      if (editor) editor.sections = sections;
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        push();
+        setTimeout(push, 300);
+      });
+    });
+  };
+
+  /**
+   * Repair a finding → fill the left column with the prompt that would fix it.
+   *
+   * `surfaceContext` preserves what each call site already passed to the
+   * assembler: the composer chat stays in the open package, the console chat
+   * opens a fresh one.
+   */
+  const handleRepairFinding = async (
+    findingId: string,
+    surfaceContext?: { current_surface?: string; session_id?: string | null; session_title?: string },
+  ) => {
+    const finding = (catalogFindings || []).find((f: any) => f.id === findingId);
+    if (!finding) {
+      // The report moved under us. Say so rather than opening a composer that
+      // pretends to hold a finding it does not have.
+      console.warn('[repair] finding is no longer in the report:', findingId);
+      return;
+    }
+
+    const sections = buildRepairSections(finding);
+    repairSectionsRef.current = sections;
+
+    // Every repair names itself, from the finding it came from.
+    //
+    // A fresh package otherwise inherits whatever the composer's blank-surface
+    // suggestion is ("Untitled Prompt", "New Prompt Agent"), and a list of those
+    // says nothing a week later about which repair was which — or which ones were
+    // never finished. This is the name that gets SAVED, so it is set here and not
+    // left to the model to guess.
+    const repairTitle = `Repair — ${finding.check}${finding.component ? ` on ${finding.component}` : ''}`;
+    repairTitleRef.current = repairTitle;
+    console.log(
+      `[repair] ${findingId} → "${repairTitle}" · ` +
+      `${sections.filter((s) => (s.content || '').trim()).length}/${sections.length} sections with content ` +
+      'written into the left column. Press Run to compile them.'
+    );
+
+    // Open the composer FIRST — the editor does not exist until the surface does.
+    await assembleSurfaceWithAI('render-composer', {
+      current_surface: surfaceContext?.current_surface ?? (headerTab || 'composer'),
+      has_unsaved_changes: hasUnsavedChangesRef.current,
+      session_id: surfaceContext?.session_id !== undefined
+        ? surfaceContext.session_id
+        : (currentPromptSession?.id || null),
+      session_title: surfaceContext?.session_title || repairTitle,
+    });
+
+    // The NAME was settled by the composer branch when the surface landed — it has
+    // to survive the unsaved-changes gate, which can stop this click entirely. All
+    // that is left here is the prompt itself: the re-assert effect keeps it in the
+    // column, so this push only has to survive the mount.
+    pushRepairSections(sections);
+  };
+
   const handleOpenPromptFromConsole = async (sessionId: string) => {
     // ══════════════════════════════════════════════════════════════════════════
     // A2UI v0.9: Open session via unified surface assembly
     // ══════════════════════════════════════════════════════════════════════════
     console.log(`🤖 [A2UI] Opening session → intent: render-session:${sessionId}`);
+    // Opening a package ends any repair: the repair prompt belongs to the finding
+    // that produced it, not to the package being opened.
+    repairSectionsRef.current = null;
     await assembleSurfaceWithAI(`render-session:${sessionId}`);
 
     // Force full re-render to dispatch sections to textareas
@@ -1430,6 +1829,20 @@ export default function Index({
 
         setCurrentPromptSession(assembledSession as any);
         hasUnsavedChangesRef.current = assembledSession.is_unsaved;
+
+        // A repair names its own package, and this is where it lands — not in the
+        // click handler. A repair can be stopped by the unsaved-changes gate and
+        // resumed by the user's answer, and every resumed assembly arrives HERE;
+        // naming it at click time would leave the resumed one called "Untitled
+        // Prompt". Only a fresh package is renamed: repairing from inside an open
+        // package is an edit of that package, not a new one.
+        if (repairTitleRef.current && (assembledSession.is_unsaved || !assembledSession.id)) {
+          const repairTitle = repairTitleRef.current;
+          repairTitleRef.current = null;
+          setCurrentPromptSession((prev: any) =>
+            prev ? { ...prev, title: repairTitle, is_unsaved: true } : prev,
+          );
+        }
         setHeaderTab('composer');
         // Open the middle pane only if this prompt already has output; otherwise
         // leave it closed until the user Runs.
@@ -1794,8 +2207,13 @@ export default function Index({
       hasUnsavedChangesRef.current = false;
       await assembleSurfaceWithAI(pendingIntent);
     } else if (actionId === 'cancel') {
-      // Do nothing - user cancelled, stay on current surface
-      console.log('🤖 [A2UI] User cancelled navigation');
+      // Stay on the current surface — and DROP whatever was waiting behind this
+      // gate. A repair queues its sections and its name BEFORE the gate opens; if
+      // cancel left them set, the column would be replaced by the very thing the
+      // person just declined.
+      repairSectionsRef.current = null;
+      repairTitleRef.current = null;
+      console.log('🤖 [A2UI] User cancelled navigation — pending repair dropped');
     } else if (aiDecision.decision_type === 'select_category') {
       // Category selection gate — pass chosen category back to render-composer
       console.log(`🤖 [A2UI] Category selected: ${actionId}`);
@@ -2003,9 +2421,43 @@ export default function Index({
     console.log('[WritingAreaIndex] run-requested from <prompt-section-editor>', sections.length, 'sections');
 
     if (!currentPromptSessionRef.current) {
-      console.warn('[WritingAreaIndex] No active prompt session — cannot run');
-      return;
+      // A fresh composer has NO session: render-composer deliberately creates none
+      // (routes/ai.py — "session creation happens on explicit Save"). Run used to
+      // return here in SILENCE, so the button looked dead: the prompt sat in the
+      // column, Run did nothing, and the middle column never opened.
+      //
+      // Create the session through the EXISTING save path, then carry on with a
+      // real id. No new endpoint, no new write path — the same one Save uses.
+      console.log('[WritingAreaIndex] No session yet — saving first so Run has somewhere to write.');
+      await handleSavePromptRef.current?.('', sections);
+      if (!currentPromptSessionRef.current) {
+        // Still nothing. Say it where the person is looking, not only in the console.
+        setCurrentPromptSession((prev: any) =>
+          prev
+            ? { ...prev, compiledOutput: '⚠️ Run needs a saved prompt, and saving failed — nothing was executed.' }
+            : prev
+        );
+        setMiddleOpen(true);
+        // Say it in the CHAT too. The middle pane is a place a person may not be
+        // looking, and a Run that does nothing and says nothing is the exact
+        // failure this whole feature exists to avoid.
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: {
+            role: 'assistant',
+            content:
+              '⚠️ **Run did not execute.** This prompt has no saved session yet, and creating one failed.\n\n' +
+              'Nothing was run and nothing was changed. Open the console log for `[CRUD] Save failed` — ' +
+              'it carries the reason (usually a failed request to `/api/ai/save-surface`).',
+          },
+        }));
+        return;
+      }
     }
+
+    // The repair prompt has done its job: Run folds these sections into the
+    // session, which owns them from here. Holding the override would make the
+    // NEXT package open still holding the previous repair.
+    repairSectionsRef.current = null;
 
     const leftColumnContent = JSON.stringify({ sections });
 
@@ -2015,6 +2467,25 @@ export default function Index({
     );
     setIsComposerRunning(true);
     setMiddleOpen(true);
+
+    // ── The Run URL is RELATIVE, like every other call in this app ────────────
+    //
+    // It used to be `${import.meta.env.VITE_API_URL || ''}/api/teacher/query`.
+    // VITE_API_URL is set in `backend/.env` to the DOCKER SERVICE NAME —
+    // `http://prompt-composer-console:5001` — and RESTART-LOCAL.sh exports that file
+    // into the shell before starting Vite, so the dev server inlined it. Every Run
+    // therefore went to a hostname that resolves only inside the container and died
+    // before it left the browser: `TypeError: Failed to fetch`, with nothing in any
+    // server log, because nothing arrived.
+    //
+    // Every other endpoint already used the relative `API_BASE` ("/api") — the
+    // backend serves this app from the same origin in every environment, dev and
+    // deployed (see shared/apiHelper.ts) — which is exactly why only Run broke, and
+    // why the proxy, the tunnel and the endpoint all looked healthy.
+    //
+    // Declared outside the try so the failure message can name the REAL address
+    // instead of a path it was never sent to.
+    const runUrl = `${API_BASE}/teacher/query`;
 
     try {
       const { getApiKey } = await import('@/services/authService');
@@ -2041,8 +2512,21 @@ export default function Index({
       }
       const promptContext = JSON.stringify({ core_roles: coreRoles, custom_roles: customRoles });
 
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      const resp = await fetch(`${apiBase}/api/teacher/query`, {
+      // ── Tool calls: the prompt's declaration, made real ──────────────────
+      // The Tool Call section names the tool and carries the address. This turns
+      // that into an actual call the SERVER executes before the model runs, so the
+      // design is in the prompt instead of something the model is asked to imagine.
+      // Read from the sections the user can see and edit — change the node in the
+      // column and the check follows, rather than a hidden copy of the finding.
+      const toolNode = (sections || [])
+        .map((s: any) => String(s?.content || ''))
+        .join('\n')
+        .match(/figma node\s+(\d+:\d+)/)?.[1];
+      const toolCalls = toolNode
+        ? [{ name: 'figma.get_design_context', nodeId: toolNode, fileKey: FIGMA_FILE_KEY }]
+        : [];
+
+      const resp = await fetch(runUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -2050,6 +2534,9 @@ export default function Index({
           context: promptContext,
           mode: 'prompt_output',
           temperature: 0.45,
+          // Executed server-side before the model runs. Empty when the prompt
+          // declares no tool, which is not an error and changes nothing.
+          tool_calls: toolCalls,
           // The prompt package this run belongs to. The backend uses it to
           // attach/reuse the conversation row (conversations.session_id is NOT
           // NULL), so every chat turn actually persists.
@@ -2072,14 +2559,75 @@ export default function Index({
       // `data: ` lines (which never arrive, so output stayed empty → "(No output returned.)").
       const data = await resp.json();
       const output = (data && (data.content || data.error || '')) || '';
+
+      // A declared tool call that could not run is not a detail. The answer was
+      // written WITHOUT the design, so the answer has to say so — otherwise a
+      // design-blind reply arrives looking like a checked one. The ⚠️ prefix is
+      // also what makes the middle column render its "could not be generated"
+      // marker rather than passing this off as a finished result.
+      const toolWarnings: string[] = Array.isArray(data?.tool_warnings) ? data.tool_warnings : [];
+      if (toolWarnings.length) {
+        console.warn('[run] tool warnings:', toolWarnings);
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: {
+            role: 'assistant',
+            content:
+              '⚠️ **The tool call did not return the design.**\n\n'
+              + toolWarnings.map((w) => `- ${w}`).join('\n')
+              + '\n\nThis prompt was answered without it. Treat the result as '
+              + 'unverified against Figma — and if the reason is that Figma Desktop '
+              + 'is closed, open the file and press Run again.',
+          },
+        }));
+      }
+
       setCurrentPromptSession((prev: any) =>
-        prev ? { ...prev, compiledOutput: output || '(No output returned.)' } : prev
+        prev
+          ? {
+              ...prev,
+              compiledOutput: toolWarnings.length
+                ? `⚠️ ${toolWarnings.join('\n')}\n\n---\n\n${output || '(No output returned.)'}`
+                : (output || '(No output returned.)'),
+            }
+          : prev
       );
     } catch (err: any) {
       console.error('[WritingAreaIndex] Run execution failed', err);
+      // Name the call. "Failed to fetch" on its own says nothing about WHICH
+      // request died, and this path can fail before the request is even sent
+      // (the dynamic import of authService) as well as during it.
+      const why = err?.message || String(err);
       setCurrentPromptSession((prev: any) =>
-        prev ? { ...prev, compiledOutput: `Error: ${err?.message || String(err)}` } : prev
+        prev
+          ? {
+              ...prev,
+              compiledOutput:
+                `Error: ${why}\n\n` +
+                // Name the address the request actually went to, resolved, plus the
+                // page it was made from — the two facts that turn "Failed to fetch"
+                // into something diagnosable. This message previously named a
+                // RELATIVE path the browser had never been sent to, which sent the
+                // reader looking at a proxy that was fine.
+                `${runUrl}  (resolved: ${new URL(runUrl, location.origin).href}, from ${location.origin})\n\n` +
+                `If this reads "Failed to fetch", the browser never got a response: the ` +
+                `host is unreachable, the connection was dropped, or a module reloaded ` +
+                `mid-flight. It is not a rejected prompt.`,
+            }
+          : prev
       );
+      // And say it in the CHAT. Save failures already speak here
+      // (a2ui:system-message); Run failures only wrote to the middle pane, so a
+      // Run that died was silent everywhere a person actually looks.
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+        detail: {
+          role: 'assistant',
+          content:
+            `⚠️ **Run failed.**\n\n\`POST /api/teacher/query\` did not complete: ${why}\n\n` +
+            'The prompt itself was sent only if the request got that far. ' +
+            '"Failed to fetch" means the browser got no response at all — the request was ' +
+            'dropped or aborted, not rejected.',
+        },
+      }));
     } finally {
       setIsComposerRunning(false);
       // Optional: give the layout a hint to equalize widths when middle appears
@@ -2093,6 +2641,9 @@ export default function Index({
 
     const leftColumnContent = JSON.stringify({ sections });
     const compiledOutput = readLiveOutput();
+
+    // Saved — the session owns these sections now.
+    repairSectionsRef.current = null;
 
     setCurrentPromptSession((prev: any) =>
       prev ? { ...prev, leftColumnContent } : prev
@@ -2498,16 +3049,11 @@ export default function Index({
                       }}
                       leftColumnContent={currentPromptSession?.leftColumnContent || ''}
                       catalogFindings={catalogFindings}
-                      onRepairFinding={() => {
-                        // Same call to action as the console chat: an EMPTY
-                        // composer. The two chats show the same list and do the
-                        // same thing until the real repair logic is wired.
-                        void assembleSurfaceWithAI('render-composer', {
-                          current_surface: headerTab || 'composer',
-                          has_unsaved_changes: hasUnsavedChangesRef.current,
-                          session_id: currentPromptSession?.id || null,
-                          session_title: currentPromptSession?.title || '',
-                        });
+                      unannotatedInUse={unannotatedInUse}
+                      onRepairFinding={(findingId) => {
+                        // The finding becomes a PROMPT in the left column, and the
+                        // user Runs it. Nothing is applied — see handleRepairFinding.
+                        void handleRepairFinding(findingId, { current_surface: headerTab || 'composer' });
                       }}
                     />
                   </div>
@@ -2567,13 +3113,14 @@ export default function Index({
                   onColumnExpand={handleConsoleChatExpand}
                   onColumnCollapse={handleConsoleChatCollapse}
                   catalogFindings={catalogFindings}
-                  onRepairFinding={() => {
-                    // The call to action: an EMPTY composer, ready to prepare the
-                    // repair. Nothing is pre-filled — the finding is not yet
-                    // carried into the prompt.
-                    void assembleSurfaceWithAI('render-composer', {
+                  unannotatedInUse={unannotatedInUse}
+                  onRepairFinding={(findingId) => {
+                    // Same path as the composer chat's list: the finding becomes a
+                    // PROMPT in the left column and the user Runs it. The console
+                    // opens a FRESH package to hold it (a repair is a new prompt,
+                    // not an edit of whatever was open).
+                    void handleRepairFinding(findingId, {
                       current_surface: headerTab || 'console',
-                      has_unsaved_changes: hasUnsavedChangesRef.current,
                       session_id: null,
                       session_title: '',
                     });

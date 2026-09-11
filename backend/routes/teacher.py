@@ -1,4 +1,5 @@
 """Auto-extracted route module from main.py — zero behavior change."""
+import asyncio
 import json
 import os
 import sentry_sdk
@@ -52,6 +53,12 @@ class TeacherQueryRequest(BaseModel):
     editorial: Optional[Dict[str, Any]] = None
     mode: str = "chat"
     metadata: Optional[Dict[str, Any]] = None
+    # Tool calls the PROMPT declares. Not a suggestion to the model: these are
+    # executed here, server-side, BEFORE it is called — so the design is IN the
+    # prompt rather than something the model is asked to imagine. The browser
+    # cannot make these calls (the desktop MCP has no CORS and needs a session
+    # handshake), which is why a declared tool call becomes a real one here.
+    tool_calls: Optional[List[Dict[str, Any]]] = None
 
 
 class EnsureModelRequest(BaseModel):
@@ -151,8 +158,58 @@ async def api_teacher_query(request: TeacherQueryRequest):
         prompt_output_sources = {"ResponsivePromptBuilder", "prompt_builder", "PromptBuilder"}
         mode = "prompt_output" if (request.mode == "prompt_output" or source in prompt_output_sources) else "chat"
 
+        # ── Tool calls: run them BEFORE the model ───────────────────
+        # A tool call written into a prompt is only real if something executes it.
+        # The repair prompt asks Figma for the design; this is where that happens.
+        #
+        # A failure is never swallowed: it is written into the prompt as a WARNING
+        # (so the model names what is missing instead of inventing it) AND returned
+        # as `tool_warnings` (so the person sees it). A design-blind answer that
+        # reads as authoritative is the exact outcome this prevents.
+        tool_warnings: List[str] = []
+        if request.tool_calls:
+            try:
+                from figma_mcp import run_tool_calls
+
+                # RUN IT OFF THE EVENT LOOP. `requests` is blocking, and this
+                # handler is `async def`: calling it inline froze the ENTIRE server
+                # for as long as Figma took to answer — every other request queued
+                # behind it, so the app looked hung rather than busy.
+                blocks, tool_warnings = await asyncio.to_thread(
+                    run_tool_calls, request.tool_calls
+                )
+
+                if blocks:
+                    full_context = "\n\n".join(blocks) + "\n\n" + full_context
+
+                if tool_warnings:
+                    full_context = (
+                        "=== TOOL WARNING — READ THIS BEFORE ANSWERING ===\n"
+                        + "\n".join(f"- {w}" for w in tool_warnings)
+                        + "\n\nThe tool did not return the design. Do NOT invent it and do "
+                          "NOT proceed as though it were here: name what is missing and ask "
+                          "for it.\n\n"
+                        + full_context
+                    )
+                    print(f"⚠️  [tool_calls] {len(tool_warnings)} warning(s) — prompt carries them")
+            except Exception as e:  # noqa: BLE001 — reported, not raised
+                tool_warnings = [f"Tool execution failed: {type(e).__name__}: {e}"]
+                full_context = (
+                    "=== TOOL WARNING — READ THIS BEFORE ANSWERING ===\n"
+                    + "\n".join(f"- {w}" for w in tool_warnings)
+                    + "\n\nThe tool did not run. Do NOT invent the design.\n\n"
+                    + full_context
+                )
+                print(f"⚠️  [tool_calls] execution failed: {e}")
+
         # ── Call the LLM ────────────────────────────────────────────
-        result = query_llm(
+        # Also off the event loop, for the same reason as the tool call above: this
+        # is a synchronous SDK call and this handler is `async def`, so an inline
+        # call blocked every other request for its whole duration. Pre-existing, and
+        # invisible while the model answered in a couple of seconds — it stopped
+        # being invisible the moment a run legitimately took a minute.
+        result = await asyncio.to_thread(
+            query_llm,
             context=full_context,
             question=request.question,
             reasoning=request.reasoning,
@@ -196,7 +253,15 @@ async def api_teacher_query(request: TeacherQueryRequest):
             except Exception as e:
                 print(f"⚠️  Failed to save assistant response: {e}")
 
-        return {"content": result, "error": None, "conversation_id": conv_id}
+        return {
+            "content": result,
+            "error": None,
+            "conversation_id": conv_id,
+            # What a declared tool call could not do. Empty on a clean run; the UI
+            # shows it rather than letting a run look complete when the design was
+            # never read.
+            "tool_warnings": tool_warnings,
+        }
 
     except Exception as e:
         import traceback

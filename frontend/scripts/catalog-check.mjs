@@ -55,8 +55,18 @@ const DEFAULT_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
 // owner:  pipeline | designer
 // level:  advisory | blocking   — nothing is blocking today; alert, don't block
 const findings = [];
-function add({ check, stage, owner, level = 'advisory', tier = null, component = null, nodeId = null, file = null, what, fix }) {
-  findings.push({ id: `${check}:${component || file || nodeId || 'catalog'}`, check, stage, owner, level, tier, component, nodeId, file, what, fix });
+/**
+ * `key` disambiguates when ONE subject legitimately carries SEVERAL findings.
+ *
+ * A component that dispatches four unheard events has four problems, not one
+ * problem reported four times — but the id was built from the component alone, so
+ * all four collided on one key. The collision was visible rather than theoretical:
+ * the chat rendered them under duplicate React keys ("Encountered two children with
+ * the same key, event-unheard:…"), and a reader could not tell four findings from
+ * one finding printed four times. Pass the thing that makes them different.
+ */
+function add({ check, stage, owner, level = 'advisory', tier = null, component = null, nodeId = null, file = null, what, fix, key = null }) {
+  findings.push({ id: `${check}:${component || file || nodeId || 'catalog'}${key ? `:${key}` : ''}`, check, stage, owner, level, tier, component, nodeId, file, what, fix });
 }
 
 const read = (p) => readFileSync(p, 'utf8');
@@ -110,7 +120,13 @@ const dispatched = new Map(); // event -> [component]
 for (const s of SOURCES) {
   for (const m of s.src.matchAll(/new\s+CustomEvent\(\s*['"]([^'"]+)['"]/g)) {
     if (!dispatched.has(m[1])) dispatched.set(m[1], []);
-    dispatched.get(m[1]).push(s.file);
+    // ONE row per component per event, not one per call site. A component that
+    // raises the same event from five places used to produce five identical
+    // findings: the report counted 69 open under a heading of 58 distinct
+    // problems, and the chat rendered them with duplicate React keys (which is
+    // where "Encountered two children with the same key, event-unheard:…" came
+    // from). The finding's subject is the component, not the line.
+    if (!dispatched.get(m[1]).includes(s.file)) dispatched.get(m[1]).push(s.file);
   }
 }
 const heard = new Set();
@@ -188,7 +204,7 @@ for (const [event, by] of dispatched) {
   for (const comp of by) {
     const s = srcOf(comp);
     if (s && s.src.includes('TODO(behavior)')) continue; // correctly marked
-    add({ check: 'event-unheard', stage: 'deliver', owner: 'pipeline', component: comp, nodeId: null, file: s ? rel(s.path) : null, what: `Dispatches "${event}" and nothing listens — and it is not marked as a stub.`, fix: `Wire a listener, or mark it: // TODO(behavior): action undefined in Figma` });
+    add({ check: 'event-unheard', stage: 'deliver', owner: 'pipeline', component: comp, nodeId: null, file: s ? rel(s.path) : null, key: event, what: `Dispatches "${event}" and nothing listens — and it is not marked as a stub.`, fix: `Wire a listener, or mark it: // TODO(behavior): action undefined in Figma` });
   }
 }
 

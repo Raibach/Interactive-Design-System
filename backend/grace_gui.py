@@ -32,6 +32,15 @@ MODEL_PROVIDERS = [
 
 LLM_TIMEOUT = 10  # HARD 10s cap. A2UI surfaces must render in <=10s or 503.
 
+# Run is NOT a surface. The 10s cap is a UX contract for surface assembly — a canvas
+# that has to appear now. `prompt_output` writes a document: with the design attached
+# it is a multi-KB prompt, and deepseek-flash is a REASONING model that spends
+# completion tokens thinking before it writes a word. The 10s cap was applied to both,
+# so a perfectly good run died as "DeepSeek API request failed: Request timed out"
+# after the prompt had been assembled correctly. Same budget for assembly, room for
+# writing, overridable for a slow provider.
+LLM_TIMEOUT_PROMPT_OUTPUT = int(os.getenv("LLM_TIMEOUT_PROMPT_OUTPUT", "120"))
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # A2UI MISSION HEADER — top-of-context anchor for maximum model attention
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -164,7 +173,11 @@ def query_llm(
         model_name = model or provider["model"]
         print(f"[{provider['name']}] Attempting {model_name}...")
         try:
-            client = OpenAI(base_url=provider["base_url"], api_key=api_key, timeout=LLM_TIMEOUT)
+            # Surfaces keep the tight cap; writing gets room. See the constants above.
+            client_timeout = (
+                LLM_TIMEOUT_PROMPT_OUTPUT if mode == "prompt_output" else LLM_TIMEOUT
+            )
+            client = OpenAI(base_url=provider["base_url"], api_key=api_key, timeout=client_timeout)
             response = client.chat.completions.create(**payload, model=model_name)
             message = response.choices[0].message
             # Capture what this actually cost. Providers report it; guessing it

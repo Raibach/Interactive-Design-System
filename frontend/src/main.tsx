@@ -18,6 +18,10 @@ import "@/components/lit/agent-card-element";
 import "@/components/lit/chat-navigation-bar";
 import "@/components/lit/ai-surface-sandbox";
 import "@/components/lit/control-bar";
+// The error channel. Its tag was in the allowlist, granted to every role, and the
+// backend's own prompt tells the model to report failures through it — with no
+// element behind it, that envelope rendered as an empty box. Now it renders.
+import "@/components/lit/error-banner";
 // The A2UI surface renderer. Registration is a side effect of the import, the
 // same as every element above. It is what turns Grace's updateComponents payload
 // into DOM — without this import the <a2ui-renderer> tag in WritingAreaIndex is
