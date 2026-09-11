@@ -14,7 +14,7 @@
  *   accordion-dropdown #40000934:22852 → 379px column, gap 5px
  *   role-dropdown-tile → white, radius 6px, "button drop" shadow, px 10px
  *   role-label-injection → 40px tall, p 10px
- *   labels → Inter Bold 14px; User Role / Agent Role / Tool Call / Custom in
+ *   labels → Inter Bold 14px; User Role / Agent Role / Tool Call / Custom Data in
  *   #171717; "Remove" in #c50000
  *
  * Events (composed): `role-select` ({ detail: { role } }) · `role-remove`
@@ -25,7 +25,7 @@ const ROLES = [
   { label: 'User Role', tileId: '40000934:22853', textId: '40000934:22856' },
   { label: 'Agent Role', tileId: '40000934:22858', textId: '40000934:22861' },
   { label: 'Tool Call', tileId: '40000934:22863', textId: '40000934:22866' },
-  { label: 'Custom', tileId: '40000934:22868', textId: '40000934:22871' },
+  { label: 'Custom Data', tileId: '40000934:22868', textId: '40000934:22871' },
 ];
 const REMOVE = { label: 'Remove', tileId: '40000934:22895', textId: '40000934:22898' };
 
