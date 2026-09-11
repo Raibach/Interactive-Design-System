@@ -52,6 +52,8 @@ export class PromptTextarea extends LitElement {
       outline: none;
       background: transparent;
       resize: none;
+      /* Grows with the text (see _resize) — never shows an inner scrollbar. */
+      overflow: hidden;
       font-family: 'Inter', system-ui, sans-serif;
       font-weight: 600;
       font-size: 16px;
@@ -100,7 +102,10 @@ export class PromptTextarea extends LitElement {
     }));
   }
 
-  private _resize() {
+  // Auto-grow: the box hugs its text and expands as you type. minHeight is the
+  // design floor (45 / 145 / 120 by role family) — a MINIMUM, never a cap — so
+  // the box never clips and never needs an inner scrollbar.
+  private _resize(): void {
     const ta = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null;
     if (!ta) return;
     ta.style.height = 'auto';

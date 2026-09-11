@@ -58,22 +58,18 @@ class PromptSectionEditor extends LitElement {
       background: #ffffff;
       font-family: 'Inter', system-ui, sans-serif;
     }
-    .header {
-      padding: 8px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #374151;
-      border-bottom: 1px solid #e5e7eb;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-shrink: 0;
-    }
     .sections-scroll {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      padding: 15px 3px;
+      /* No TOP inset — the pane's title sits directly above, so a top pad here
+         just reads as an empty band above the first prompt. The 15px between
+         sections comes from each section's own bottom padding. */
+      padding: 0 3px 15px;
+      /* flex column so <prompt-container> can stretch down and snap its bottom
+         edge to the bottom of the column. The sections inside it still hug. */
+      display: flex;
+      flex-direction: column;
     }
     .sections-scroll::-webkit-scrollbar { width: 14px; }
     .sections-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -333,10 +329,6 @@ class PromptSectionEditor extends LitElement {
     });
 
     return html`
-      <div class="header">
-        <span>Prompt Sections</span>
-        <span style="font-size:10px; color:#9ca3af;">${this._sections.length} sections</span>
-      </div>
       <div class="sections-scroll">
         <prompt-container format-label="Agent Prompting" tokens-label="Tokens: 2022 Cost: $0.00802">
           ${sectionsHtml}

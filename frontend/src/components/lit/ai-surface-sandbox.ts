@@ -131,7 +131,10 @@ export class AISurfaceSandbox extends LitElement {
       width: 100%;
       height: 100%;
       min-height: 0;
-      border: 2px solid #507274;
+      /* Border removed at the owner's request — the surface frame used to draw a
+         2px #507274 outline around everything. Kept as none (not deleted) so the
+         box model is unchanged: the same rule still owns the edge. */
+      border: none;
       border-radius: 8px;
       background-color: #e5e1dd;
       overflow: hidden;
@@ -153,6 +156,13 @@ export class AISurfaceSandbox extends LitElement {
       display: flex;
       flex-direction: column;
     }
+
+    /* ── Scrollbar — same as the left composer column (.sections-scroll) and all
+         three workspace columns: 14px, transparent track, #dadee4 rounded thumb.
+         This is the scroller the CONSOLE uses, so the console matches. ─────── */
+    .viewport::-webkit-scrollbar { width: 14px; }
+    .viewport::-webkit-scrollbar-track { background: transparent; }
+    .viewport::-webkit-scrollbar-thumb { background: #dadee4; border-radius: 10px; }
 
     /* ── Slotted content fills the viewport.
          min-width: 0 is essential to prevent content from expanding

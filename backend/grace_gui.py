@@ -21,7 +21,10 @@ MODEL_PROVIDERS = [
     {
         "name": "DeepSeek API",
         "base_url": "https://api.deepseek.com",
-        "model": "deepseek-v4-flash",
+        # Verified against GET /models with the current key (2026-09-10):
+        # available = ["deepseek-flash"].
+        # "deepseek-v4-flash", "deepseek-chat" and "deepseek-v4-pro" are no longer served.
+        "model": "deepseek-flash",
         "api_key_env": "DEEPSEEK_API_KEY",
     },
 ]
@@ -94,6 +97,18 @@ def query_llm(
     messages = []
     if mode in ("console_assembly", "surface_assembly"):
         messages.append({"role": "system", "content": system_prompt})
+    elif mode == "prompt_output":
+        # RUN executes the USER'S prompt. The A2UI MISSION_HEADER must NOT be
+        # prepended here: it mandates <a2ui_surface> XML, so the model replied
+        # with an error-banner envelope instead of the requested output
+        # (verified live: content = "<a2ui_surface><error-banner .../></a2ui_surface>").
+        if system_prompt and system_prompt.strip():
+            messages.append({"role": "system", "content": system_prompt})
+        else:
+            messages.append({"role": "system", "content": (
+                "You are a production execution engine. Execute the user's request "
+                "and return only the output they asked for. No preamble, no commentary."
+            )})
     elif system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": MISSION_HEADER + system_prompt})
     else:
@@ -101,11 +116,16 @@ def query_llm(
     messages.append({"role": "user", "content": question})
 
     # ── Token budget ─────────────────────────────────────────────────
-    # surface_assembly=3000: a full three-slot composer tree + sections is
-    # ~2x a console response. The old 1500 default truncated the composer
-    # JSON mid-tree (verified live 2026-09-09), which then failed parsing.
-    token_budgets = {"console_assembly": 1200, "surface_assembly": 3000, "prompt_output": 3000}
-    max_tokens = token_budgets.get(mode, 1500)
+    # deepseek-flash is a REASONING model: it spends completion tokens thinking
+    # BEFORE it writes anything (verified live — 18 reasoning tokens to answer
+    # "Say OK"). Budgets must therefore cover reasoning + the actual output, or
+    # `content` comes back empty with finish_reason="length".
+    token_budgets = {
+        "console_assembly": 4000,
+        "surface_assembly": 8000,
+        "prompt_output": 8000,
+    }
+    max_tokens = token_budgets.get(mode, 4000)
     request_temp = 0.0 if mode == "console_assembly" else temperature
 
     payload = {
@@ -135,6 +155,14 @@ def query_llm(
             message = response.choices[0].message
             content = (message.content or "").strip()
             if not content and getattr(message, "reasoning_content", None):
+                # The model ran out of budget mid-thought. Surfacing reasoning as
+                # the answer is a last resort — say so, because the output column
+                # would otherwise show the model's inner monologue as a result.
+                print(
+                    f"[{provider['name']}] ⚠️  empty content (finish_reason="
+                    f"{response.choices[0].finish_reason}) — falling back to "
+                    f"reasoning_content. Raise max_tokens for mode={mode}."
+                )
                 content = message.reasoning_content.strip()
             if not content:
                 raise RuntimeError("Empty response")
@@ -162,10 +190,13 @@ def _assemble_prompt_output(context: str, question: str) -> tuple:
         core = payload.get("core_roles", {})
         custom = payload.get("custom_roles", [])
 
-        system_role = core.get("System Role", "")
-        user_role = core.get("User Role", "Execute the prompt configuration.")
+        system_role = core.get("System Role") or core.get("System") or ""
+        user_role = core.get("User Role") or core.get("User") or "Execute the prompt configuration."
+        agent_role = core.get("Agent Role") or core.get("Agent") or ""
 
         extras = []
+        if agent_role:
+            extras.append(f"AGENT ROLE:\n{agent_role}")
         if core.get("Constraints"):
             extras.append(f"CONSTRAINTS (follow strictly):\n{core['Constraints']}")
         if core.get("Context"):
