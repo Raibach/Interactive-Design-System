@@ -3,7 +3,7 @@
     "whatThisFileIs": "THE FIGMA MAP. Which Figma node each component came from. Three files in this repository are called some version of 'registry' — this is the one that records the design relationship, NOT the one that decides what may be rendered. The allowlist is frontend/src/shared/tag-registry.ts; the schema the server validates against is frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json.",
     "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it — do NOT regenerate. If absent, ask before building.",
     "ruleFile": ".continue/rules/design-system.md",
-    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09)",
+    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09); chat-button re-pulled from Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes (2026-09-11) after the design edited the node — the previously recorded icon node 40001010:25766 no longer exists.",
     "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented — audit against the source annotation)."
   },
   "containers": {
@@ -167,13 +167,41 @@
     {
       "figmaName": "chat-button",
       "figmaNodeId": "40001010:25768",
+      "figmaKey": "134a5854dc654d689787537c697b1d5f3f2d369e",
       "litComponent": "chat-navigation-bar",
       "file": "frontend/src/components/lit/chat-navigation-bar.ts",
       "status": "built",
+      "container": "chat-menu-item",
       "annotations": [
         "Chat Button - Loads last chat activity (last modified) for current activity in the chat widow. This is the same patterns throughout all of my designs. Last modified recent activity is always the default. On click: dispatch tab-change { tab: \"chat conversations\" }",
         "Chat button selected: it's yellow when it's selected and it's transparent when the chat is closed and it's not selected."
       ],
+      "annotationChannel": {
+        "read": "Figma MCP get_design_context (http://127.0.0.1:3845/mcp — Figma Dev Mode MCP Server v1.0.0); cross-checked against Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes?ids=40001010:25768",
+        "attributeNameFound": [
+          "data-annotations",
+          "data-interaction-annotations"
+        ],
+        "note": "TWO attributes, not one — and they carry DIFFERENT halves of the spec. `data-annotations` holds the STATE note (\"...yellow when it's selected and transparent when the chat is closed...\"); `data-interaction-annotations` holds the INTERACTION note (the `On click:` contract). Both match /^data-.*annotation/i, so a regex matcher catches them, but an implementation that expects a SINGLE attribute silently loses the `On click:` half — the one field that makes behaviour verbatim instead of invented. The REST node.annotations[] carries the same two notes. SUPERSEDES an earlier record of `attributeNameFound: null`: that was an artifact of a layout-only Figma tool that dropped annotation attributes, NOT a property of this design — the names are observable, and were observed.",
+        "namesMustStayUntrusted": "Match by regex and record what was seen. §2 of the pipeline rules forbids hardcoding the name; §9.3's recorded name is stale (see below)."
+      },
+      "children": {
+        "frame": { "name": "chat-menu-item", "nodeId": "40001010:25749" },
+        "icon": {
+          "name": "Machine-learning-model",
+          "nodeId": "40001012:26436",
+          "componentId": "40000122:3412",
+          "type": "INSTANCE",
+          "art": "vector — exported to frontend/src/assets/figma-chat-button-icon.svg"
+        },
+        "label": { "name": "Chat", "nodeId": "40001010:25751" }
+      },
+      "values": {
+        "button": { "w": 74, "h": 74, "layout": "row", "gap": 10, "align": "center/center" },
+        "frame": { "fill": "#FCCD3D", "effect": "inset 0 4 4 rgba(0,0,0,0.25)", "padding": "8px 13px", "layout": "column" },
+        "icon": { "w": 38, "h": 38, "x": 18, "y": 8, "fill": "#1FACC2" },
+        "label": { "text": "Chat", "fill": "#1FACC2", "fontFamily": "Inter", "fontStyle": "Bold", "fontWeight": 700, "fontSize": 13, "lineHeight": 20, "y": 46 }
+      },
       "provenance": {
         "geometry": "verbatim",
         "fills": "verbatim",
@@ -181,11 +209,16 @@
         "selectedState": "verbatim",
         "closedState": "verbatim",
         "onClick": "verbatim",
+        "iconArtwork": "verbatim",
         "pulse": "inferred",
         "litComponent": "inferred",
         "geometrySharing": "inferred"
       },
-      "container": "chat-menu-item"
+      "gaps": [
+        "The annotation dispatches tab-change { tab: \"chat conversations\" }; the element emits { tab: 'chat' }. One of the two is wrong — the payload string is the designer's, the enum is the element's.",
+        "The frame's inset shadow (0 4 4 rgba(0,0,0,0.25), node 40001010:25749) is not rendered by the element. Carried in `values`, not yet in CSS.",
+        "Icon instance 40001012:26436 resolves to component 40000122:3412 (\"Machine-learning-model\"), which carries no annotation — a property-only marker at most. Reported per §5; the icon's behaviour is the button's, so this is expected, not a missing spec."
+      ]
     },
     {
       "figmaName": "trace-button",

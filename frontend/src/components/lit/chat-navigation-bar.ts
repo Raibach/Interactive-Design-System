@@ -17,19 +17,29 @@
  * Framework: Lit 3.x — no decorators, static properties + customElements.define()
  */
 
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 
 // ── The chat button's icon ─────────────────────────────────────────────────
-// From Figma component "chat-button" (node 40001010:25768), image node
-// 40001010:25766, imageRef 48f37fce42b833ad5aac9bd30c9728734b8f4924. It is an
-// IMAGE fill in the design, not a path, so it is carried as an image rather than
-// traced into an approximation. The filename is the imageRef: the provenance.
-import chatButtonIcon from '@/assets/48f37fce42b833ad5aac9bd30c9728734b8f4924.png';
+// From Figma "chat-button" (node 40001010:25768), icon instance 40001012:26436
+// — an instance of component "Machine-learning-model" (40000122:3412). The design
+// ships this as VECTOR artwork now (38×38, one path, fill #1FACC2), so it is
+// carried as its own SVG and stays crisp at whatever size the rail asks for.
+//
+// This REPLACES a raster that was imported here from node 40001010:25766. That
+// node no longer exists in the file — the design was edited — so the provenance
+// pointed at nothing, and the artwork behind it (a purple CPU chip) is no longer
+// what this button draws. Re-pulled 2026-09-11; the render of 40001010:25768 is
+// the reference: yellow frame, chat glyph, label in that same teal.
+import chatButtonIcon from '@/assets/figma-chat-button-icon.svg';
 
 // The trace button's icon, from Figma component "trace-button" (node
 // 40001011:26266), icon instance 40001011:26260. Vector, not raster — it is an
 // SVG INSTANCE of "Model--foundation", so it renders as its own artwork at any
 // size. Read straight off the node's render.
+//
+// Artwork re-pulled 2026-09-11: the instance's vector is a single SOLID #1FACC2,
+// so the asset's fill was updated to match (it previously carried a #2689D6 →
+// #AC8CEC gradient — stale artwork from an earlier state of the file).
 import traceButtonIcon from '@/assets/figma-trace-button-icon.svg';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -90,6 +100,20 @@ interface TabDef {
    * by it. Set this when the path's coordinate space differs from the default.
    */
   viewBox?: string;
+  /**
+   * The Figma nodes this tab is drawn from. Carried through to the DOM as
+   * `data-node-id` on the element that renders each one — Figma node → Lit
+   * element, node for node — so a component found in a browser can be traced
+   * back to the node, and a node back to the element. Absent for tabs that have
+   * no designed counterpart yet.
+   *
+   *   nodeId      — the button itself (the Figma component node)
+   *   iconNodeId  — the icon instance inside it
+   *   labelNodeId — the text layer
+   */
+  nodeId?: string;
+  iconNodeId?: string;
+  labelNodeId?: string;
 }
 
 const TABS: TabDef[] = [
@@ -97,11 +121,17 @@ const TABS: TabDef[] = [
     id: 'chat',
     label: 'Chat',
     tooltip: 'Chat with Grace',
-    // Figma "chat-button" 40001010:25768. Geometry comes from the container's
-    // constraint (the :host block in this file), not from here — see the note
-    // there for why. Supersedes the traced glyph below.
+    // Figma "chat-button" 40001010:25768 — component, frame "chat-menu-item"
+    // 40001010:25749 inside it. Geometry comes from the container's constraint
+    // (the :host block in this file), not from here — see the note there for why.
+    // The artwork below supersedes the traced glyph under it, which is the same
+    // glyph drawn on its own 22.75×21.8752 grid.
+    nodeId: '40001010:25768',
+    iconNodeId: '40001012:26436',
+    labelNodeId: '40001010:25751',
     iconSrc: chatButtonIcon,
-    // Speech bubble / branching chat icon (superseded by iconSrc)
+    // Speech bubble / branching chat icon, traced before the design shipped its
+    // artwork. Unused while iconSrc is set; kept as the drawing of record.
     svgPath: 'M20.3125 13.2813C21.6566 13.2813 22.75 12.2299 22.75 10.9375C22.75 9.6451 21.6566 8.5937 20.3125 8.5937C19.2546 8.5937 18.3612 9.2488 18.0247 10.1563H13.3364L19.2683 4.4525C19.586 4.59898 19.9374 4.6875 20.3125 4.6875C21.6566 4.6875 22.75 3.63617 22.75 2.34375C22.75 1.05133 21.6566 0 20.3125 0C18.9684 0 17.875 1.05133 17.875 2.34375C17.875 2.70461 17.9672 3.04219 18.1192 3.34781L11.375 9.8328V4.68758C11.375 3.82625 12.1038 3.12508 13 3.12508H14.625V1.56258H13C12.0248 1.56258 11.1588 1.98641 10.5625 2.6425C9.9662 1.98641 9.1002 1.56258 8.125 1.56258H7.3125C3.28055 1.56258 0 4.71656 0 8.5938V13.2813C0 17.1586 3.28055 20.3126 7.3125 20.3126H8.125C9.1002 20.3126 9.9662 19.8887 10.5625 19.2327C11.1588 19.8887 12.0248 20.3126 13 20.3126H14.625V18.7501H13C12.1038 18.7501 11.375 18.0489 11.375 17.1876V12.0423L18.1192 18.5273C17.9672 18.8329 17.875 19.1705 17.875 19.5314C17.875 20.8238 18.9684 21.8752 20.3125 21.8752C21.6566 21.8752 22.75 20.8238 22.75 19.5314C22.75 18.239 21.6566 17.1877 20.3125 17.1877C19.9374 17.1877 19.5861 17.2762 19.2683 17.4227L13.3364 11.7189H18.0247C18.3612 12.6264 19.2546 13.2813 20.3125 13.2813Z',
   },
   {
@@ -116,6 +146,9 @@ const TABS: TabDef[] = [
     // says 42×39 at (16, 6.5) with its label at 51.5 — hand-placed drift. Copying
     // it would reproduce a difference nobody designed; geometry-drift reports it
     // instead. The icon art keeps its own aspect and fits the shared box.
+    nodeId: '40001011:26266',
+    iconNodeId: '40001011:26260',
+    labelNodeId: '40001011:26259',
     iconSrc: traceButtonIcon,
     svgPath: 'M23.07 15.6777V4.11016C24.0271 3.81716 24.7178 3.04006 24.7178 2.12013C24.7178 0.951022 23.6091 0 22.2461 0C20.883 0 19.7742 0.951022 19.7742 2.12013C19.7742 2.39688 19.8406 2.6595 19.9533 2.90176L12.3589 8.60167L4.76457 2.90204C4.87736 2.65943 4.94356 2.39688 4.94356 2.12013C4.94356 0.951022 3.83479 0 2.47179 0C1.10877 0 0 0.951022 0 2.12013C0 3.04013 0.690785 3.81723 1.64785 4.10981V15.678C0.690785 15.9707 0 16.7478 0 17.6677C0 18.8368 1.10877 19.7878 2.47179 19.7878C3.83479 19.7878 4.94356 18.8368 4.94356 17.6677C4.94356 17.1967 4.75757 16.7653 4.45317 16.413L8.84758 13.1148L10.7957 16.0389C10.2456 16.4282 9.88716 17.0096 9.88716 17.6677C9.88716 18.8368 10.9959 19.7878 12.3589 19.7878C13.722 19.7878 14.8306 18.8368 14.8306 17.6677C14.8306 17.0096 14.4721 16.4282 13.9221 16.0389L15.8702 13.1148L20.2646 16.413C19.9603 16.7653 19.7742 17.1967 19.7742 17.6677C19.7742 18.8368 20.883 19.7878 22.2461 19.7878C23.6091 19.7878 24.7178 18.8368 24.7178 17.6677C24.7178 16.7478 24.0271 15.9707 23.07 15.6777Z',
   },
@@ -437,9 +470,10 @@ export class ChatNavigationBar extends LitElement {
       top: calc(var(--nb-label-y, 46px) - 10px);
     }
     /* Sized from the same properties as its wrapper, so the artwork and the box
-       can never disagree. object-fit is contain, not fill: the icons are different
-       artwork at different aspect ratios (a 40×40 raster, a 42×39 vector), and
-       forcing them into one box without it would stretch one of them. */
+       can never disagree. object-fit is contain, not fill: the two icons are
+       different artwork at different aspect ratios (chat's 38×38 glyph, trace's
+       42×39), and forcing them into one box without it would stretch one of
+       them. */
     .nci {
       display: block;
       width: var(--nb-icon-w, 38px);
@@ -447,11 +481,16 @@ export class ChatNavigationBar extends LitElement {
       object-fit: contain;
       pointer-events: none;
     }
-    /* The design's label blue, not the bar's teal. On this button the text sits
-       under a picture rather than a mono glyph, so matching the glyph colour
-       would only make it harder to read. */
+    /* The label's colour, straight off the node: #1FACC2 — the same value the
+       icon's vector carries, so the glyph and its word read as one mark.
+
+       This corrects #3D8DDE, which the source claimed was "the design's label
+       blue". It appears nowhere in the file, on this node or any other — an
+       invention wearing the designer's authority, which is the exact thing the
+       provenance rule exists to stop. Figma 40001010:25768, text node
+       40001010:25751: fill #1FACC2, Inter Bold 700 / 13px / 20px. */
     .nb.nbc .lt {
-      color: #3D8DDE;
+      color: #1FACC2;
     }
 
     /* ── Selected vs closed — from the annotation, verbatim ──────────────────
@@ -869,6 +908,7 @@ export class ChatNavigationBar extends LitElement {
           (tab) => html`
             <button
               type="button"
+              data-node-id=${tab.nodeId ?? nothing}
               class="nb ${tab.iconSrc ? 'nbc' : ''} ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''}"
               style=${tab.box
                 ? `--nb-h: ${tab.box.h}px; --nb-icon-w: ${tab.box.iconW}px; --nb-icon-h: ${tab.box.iconH}px; --nb-icon-x: ${tab.box.iconX}px; --nb-icon-y: ${tab.box.iconY}px; --nb-label-y: ${tab.box.labelY}px`
@@ -883,7 +923,7 @@ export class ChatNavigationBar extends LitElement {
                     <!-- A tab with exported artwork renders the design's own icon;
                          the rest keep the mask + glyph pair. -->
                     ${tab.iconSrc
-                      ? html`<img class="nci" src=${tab.iconSrc} alt="" />`
+                      ? html`<img class="nci" src=${tab.iconSrc} alt="" data-node-id=${tab.iconNodeId ?? nothing} />`
                       : html`
                         <!-- Monochrome mask layer -->
                         <svg class="nm" fill="none" viewBox="0 0 26 25">
@@ -897,7 +937,7 @@ export class ChatNavigationBar extends LitElement {
                   </div>
                 </div>
                 <div class="lw ${currentTab === tab.id ? 'ls' : ''}">
-                  <span class="lt">${tab.label}</span>
+                  <span class="lt" data-node-id=${tab.labelNodeId ?? nothing}>${tab.label}</span>
                 </div>
               </div>
             </button>

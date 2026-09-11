@@ -265,6 +265,53 @@ export class CompiledOutputViewer extends LitElement {
       .progress-stripe { animation-duration: 3s; }
     }
 
+    /* ── Could not be generated ─────────────────────────────────────────────
+       When a Run dies there is nothing to show — and blank space is the one
+       thing this pane must never answer with. An empty frame reads as "still
+       working" or "nothing to say"; neither is true. So a failure gets a MARK:
+       big, unmistakable, impossible to mistake for content — with the raw
+       reason underneath, selectable, so it can be quoted back. */
+    .failed {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 24px 18px;
+      background: #fff;
+      text-align: center;
+    }
+    .failed-mark {
+      font-size: 64px;
+      line-height: 1;
+      color: #dc2626;
+    }
+    .failed-text {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: #991b1b;
+    }
+    .failed-detail {
+      margin: 0;
+      padding: 10px 12px;
+      max-width: 100%;
+      overflow: auto;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #7f1d1d;
+      white-space: pre-wrap;
+      word-break: break-word;
+      text-align: left;
+    }
+
     /* ── Rendered markdown (no innerHTML — Lit templates only) ───────────── */
     .md {
       flex: 1;
@@ -362,6 +409,22 @@ export class CompiledOutputViewer extends LitElement {
     }
   }
 
+  /**
+   * Did the output FAIL to be generated, as opposed to not existing yet?
+   *
+   * The two look identical in a pane and mean opposite things, so they are
+   * separated here rather than left to the reader. The markers are the ones this
+   * app itself writes when a Run cannot complete — matched at the START of the
+   * content so a ⚠️ the model happens to use mid-sentence is not mistaken for a
+   * dead Run.
+   */
+  private get _failed(): boolean {
+    const t = (this.content || '').trimStart();
+    return t.startsWith('Error:')
+      || t.startsWith('⚠️')
+      || t === '(No output returned.)';
+  }
+
   render() {
     const header = html`
       <div class="header">
@@ -386,9 +449,17 @@ export class CompiledOutputViewer extends LitElement {
     // the position the "running" pill used to occupy.
     const display = this.viewMode === 'raw'
       ? html`<pre class="output raw">${this.content || '(no output yet)'}</pre>`
-      : (this.content
-          ? html`<div class="md">${this._parse(this.content).map((b) => this._block(b))}</div>`
-          : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? 'Running…' : '(no output yet)'}</p></div>`);
+      : ((this._failed && !this.isRunning)
+          ? html`
+              <div class="failed" role="alert">
+                <div class="failed-mark" aria-hidden="true">&#9888;</div>
+                <div class="failed-text">This could not be generated.</div>
+                <pre class="failed-detail">${this.content}</pre>
+              </div>
+            `
+          : (this.content
+              ? html`<div class="md">${this._parse(this.content).map((b) => this._block(b))}</div>`
+              : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? 'Running…' : '(no output yet)'}</p></div>`));
 
     return html`${header}${display}`;
   }

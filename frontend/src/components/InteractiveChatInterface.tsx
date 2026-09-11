@@ -107,6 +107,15 @@ interface InteractiveChatInterfaceProps {
     file?: string | null;
     what?: string;
   }> | null;
+  /**
+   * Components ON SCREEN RIGHT NOW that carry an open annotation finding.
+   *
+   * Set by the host, which is the only place that can see both halves: the catalog
+   * check and the components the surface actually contains. Non-empty means
+   * something was generated without its metadata, and that gets a red alert — the
+   * person who answers for the catalogue sees it on arrival, not in an audit later.
+   */
+  unannotatedInUse?: string[];
   /** Fired when a finding's call to action is clicked. The host opens a composer. */
   onRepairFinding?: (findingId: string) => void;
   /**
@@ -120,7 +129,7 @@ interface InteractiveChatInterfaceProps {
   consoleCards?: Array<Record<string, any>> | null;
 }
 
-export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent, columnCollapsed, onColumnExpand, onColumnCollapse, catalogFindings, onRepairFinding, consoleCards }: InteractiveChatInterfaceProps = {}) {
+export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent, columnCollapsed, onColumnExpand, onColumnCollapse, catalogFindings, unannotatedInUse, onRepairFinding, consoleCards }: InteractiveChatInterfaceProps = {}) {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [inputHeight, setInputHeight] = useState(180);
   const [isDragging, setIsDragging] = useState(false);
@@ -456,6 +465,33 @@ ${compiledOutput.slice(0, 3000)}`;
       window.removeEventListener('focus', poll);
     };
   }, []);
+
+  // ── The red alert: components generated without their annotation ──────────
+  // Held as a dismissal keyed on WHICH alert was dismissed, not as a boolean. A
+  // boolean would silence the next one too, and the next one is a different
+  // incident — the whole point is that nobody gets to stop being told.
+  const alertKey = (unannotatedInUse || []).join(',');
+  const [dismissedAlert, setDismissedAlert] = useState<string>('');
+
+  /**
+   * The banner's own two affordances.
+   *
+   * Both events bubble and compose off the element, so a window listener hears
+   * them across the shadow boundary — the same route `a2ui-event` takes out of the
+   * renderer. Dismiss hides THIS alert; Retry re-runs the catalog check the alert
+   * is derived from, because the likeliest reason it is still up is that the
+   * designer has just annotated the variant and nothing has re-read the catalog.
+   */
+  useEffect(() => {
+    const onDismiss = () => setDismissedAlert(alertKey);
+    const onRetry = () => { fetchCatalogHealth().then(setCatalogHealth); };
+    window.addEventListener('error-dismiss', onDismiss);
+    window.addEventListener('error-retry', onRetry);
+    return () => {
+      window.removeEventListener('error-dismiss', onDismiss);
+      window.removeEventListener('error-retry', onRetry);
+    };
+  }, [alertKey]);
 
   // ── Edit activity log (circular buffer of last 10 actions) ──────────
   const editLogRef = useRef<Array<{ts: number; action: string; section: string; preview: string}>>([]);
@@ -1516,6 +1552,29 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                     )}
                   </div>
                 </motion.div>
+
+                {/* ── ALERT — components generated WITHOUT their annotation ───────
+                    The gate is not a suggestion. When a surface is built that
+                    contains a component the catalogue says has no annotation, the
+                    person who answers for that catalogue finds out HERE, on
+                    arrival — not in an audit next week, by which time whatever was
+                    invented downstream is load-bearing.
+
+                    Deliberately NOT gated on selectedNav: the findings LIST below
+                    is a filter and belongs to the chat view, but an alert is not a
+                    list item — it belongs to whoever is looking, whatever tab they
+                    are on. Alert, don't block: the surface renders underneath. */}
+                {unannotatedInUse && unannotatedInUse.length > 0 && dismissedAlert !== alertKey && (
+                  <error-banner
+                    code="UNANNOTATED-IN-USE"
+                    message={
+                      `${unannotatedInUse.length} component${unannotatedInUse.length === 1 ? '' : 's'} `
+                      + `generated WITHOUT an annotation: ${unannotatedInUse.join(', ')}. `
+                      + 'Their behaviour is being invented downstream, on every surface that places them. '
+                      + 'Annotate the VARIANT in Figma — the set holds one note and reaches nobody, and an instance is not where the contract lives.'
+                    }
+                  ></error-banner>
+                )}
 
                 {/* The chat hero — ABOVE the repairs, so it reads first and the
                     conversation flows down from it. Grace reports her own spend

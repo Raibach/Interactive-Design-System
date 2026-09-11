@@ -650,6 +650,13 @@
     },
     "chat-navigation-bar": {
       "type": "object",
+      "x-figma-source": {
+        "fileKey": "20UPR2KQMsbAxlo5NJb1se",
+        "nodeId": "40001010:25768",
+        "nodeName": "chat-button",
+        "specEndpoint": "/api/figma/spec/20UPR2KQMsbAxlo5NJb1se/40001010:25768",
+        "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] — the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
+      },
       "allOf": [
         {
           "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
@@ -659,19 +666,21 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <chat-navigation-bar>. Right column navigation with tabs: Chat, Trace, Variables, Approval. Features gripper drag resize, collapse/expand, and logo slot. Replaces React SidebarNavigation + NavigationButton.",
+          "description": "Lit web component <chat-navigation-bar>. Right-column tab rail — chat, trace, tools, evaluation, variables, metadata — filtered by the user's departmental role, carrying the catalog-health marker on the chat tab. Renders the designed buttons (Figma chat-button 40001010:25768, trace-button 40001011:26266). Replaces React SidebarNavigation + NavigationButton.",
           "properties": {
             "component": {
               "const": "chat-navigation-bar"
             },
             "activeTab": {
               "type": "string",
-              "description": "The currently active tab.",
+              "description": "The currently active tab. Matches the element's TabId union — 'approval' was listed here and is not one.",
               "enum": [
                 "chat",
                 "trace",
+                "tools",
+                "evaluation",
                 "variables",
-                "approval"
+                "metadata"
               ],
               "default": "chat"
             },
@@ -679,10 +688,68 @@
               "type": "boolean",
               "description": "Whether the navigation panel is collapsed.",
               "default": false
+            },
+            "allowedTabs": {
+              "type": "string",
+              "description": "Comma-separated tab IDs to show, filtered by the user's departmental role (element property 'allowed-tabs'). Empty shows every tab rather than an empty rail.",
+              "default": ""
+            },
+            "healthCount": {
+              "type": "number",
+              "description": "Open catalog findings (element property 'health-count'). Above zero the chat tab's icon pulses; zero is quiet.",
+              "default": 0
+            },
+            "healthState": {
+              "type": "string",
+              "description": "Whether healthCount can be trusted (element property 'health-state'). 'unknown' must never render the same as a clean result.",
+              "enum": [
+                "ok",
+                "loading",
+                "unknown"
+              ],
+              "default": "loading"
             }
           },
           "required": [
             "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "error-banner": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Lit web component <error-banner>. The system's error channel — the tag the runtime model is already instructed to report failures through (backend/grace_gui.py: 'Use <error-banner message=\"...\"/> only'). Rendered LOUD on purpose: it also carries the case where a component is generated WITHOUT its annotation, which means behaviour is being invented downstream on every surface that places it. Alert, don't block — the surface still renders underneath.",
+          "properties": {
+            "component": {
+              "const": "error-banner"
+            },
+            "message": {
+              "type": "string",
+              "description": "What went wrong, in a sentence a person can act on."
+            },
+            "code": {
+              "type": "string",
+              "description": "Short machine-ish label above the message, e.g. UNANNOTATED-IN-USE."
+            },
+            "retry": {
+              "type": "boolean",
+              "description": "Offer a Retry affordance. Off unless the caller can actually retry something.",
+              "default": false
+            }
+          },
+          "required": [
+            "component",
+            "message"
           ]
         }
       ],
@@ -1302,6 +1369,7 @@
     },
     "anyComponent": {
       "oneOf": [
+        { "$ref": "#/components/error-banner" },
         { "$ref": "#/components/chat-panel" },
         { "$ref": "#/components/compiled-output-viewer" },
         { "$ref": "#/components/gripper-prompt-input" },
