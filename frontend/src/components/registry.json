@@ -41,21 +41,21 @@
     },
     {
       "figmaName": "gripper-prompt-input",
-      "figmaNodeId": "40000746:103",
+      "figmaNodeId": "40000941:23074",
       "litComponent": "gripper-prompt-input",
       "file": "frontend/src/components/lit/prompt-input/gripper-prompt-input.ts",
       "status": "built"
     },
     {
       "figmaName": "role-tile",
-      "figmaNodeId": "40000746:106",
+      "figmaNodeId": "40000909:4316",
       "litComponent": "role-tile",
       "file": "frontend/src/components/lit/prompt-input/role-tile.ts",
       "status": "built"
     },
     {
       "figmaName": "functions",
-      "figmaNodeId": "40000879:249",
+      "figmaNodeId": "40000909:4005",
       "litComponent": "functions-wrap",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
       "status": "built"
@@ -90,7 +90,7 @@
     },
     {
       "figmaName": "prompt-section-editor",
-      "figmaNodeId": "40000879:249",
+      "figmaNodeId": null,
       "litComponent": "prompt-section-editor",
       "file": "frontend/src/components/lit/prompt-section-editor.ts",
       "status": "built"

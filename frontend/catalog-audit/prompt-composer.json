@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-09-11T18:52:52.648Z",
+  "generatedAt": "2026-09-11T19:27:50.291Z",
   "catalog": "prompt-composer",
   "status": "complete",
   "fileKey": "20UPR2KQMsbAxlo5NJb1se",
   "counts": {
-    "total": 66,
+    "total": 64,
     "blocking": 0,
-    "pipeline": 60,
-    "designer": 6,
+    "pipeline": 56,
+    "designer": 8,
     "passed": 1
   },
   "tiers": {
-    "prompt-composer": 40,
+    "prompt-composer": 38,
     "primitives": 26
   },
   "stages": [
@@ -30,7 +30,6 @@
     "event-unheard",
     "geometry-drift",
     "node-id-absent",
-    "node-unresolved",
     "provenance-missing",
     "tag-inert"
   ],
@@ -56,7 +55,7 @@
       "level": "advisory",
       "tier": "prompt-composer",
       "component": "gripper-prompt-input",
-      "nodeId": "40000746:103",
+      "nodeId": "40000941:23074",
       "file": "frontend/src/components/lit/prompt-input/gripper-prompt-input.ts",
       "what": "No provenance block. Nothing marks which fields came from the design and which were invented.",
       "fix": "Add a \"provenance\" object marking each field verbatim or inferred."
@@ -69,7 +68,7 @@
       "level": "advisory",
       "tier": "prompt-composer",
       "component": "role-tile",
-      "nodeId": "40000746:106",
+      "nodeId": "40000909:4316",
       "file": "frontend/src/components/lit/prompt-input/role-tile.ts",
       "what": "No provenance block. 2 event name(s) are unmarked inventions: role-menu-toggle, role-tile-collapse-toggle.",
       "fix": "Add a \"provenance\" object marking each field verbatim or inferred."
@@ -82,7 +81,7 @@
       "level": "advisory",
       "tier": "primitives",
       "component": "functions-wrap",
-      "nodeId": "40000879:249",
+      "nodeId": "40000909:4005",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
       "what": "No provenance block. Nothing marks which fields came from the design and which were invented.",
       "fix": "Add a \"provenance\" object marking each field verbatim or inferred."
@@ -147,7 +146,7 @@
       "level": "advisory",
       "tier": "prompt-composer",
       "component": "prompt-section-editor",
-      "nodeId": "40000879:249",
+      "nodeId": null,
       "file": "frontend/src/components/lit/prompt-section-editor.ts",
       "what": "No provenance block. 5 event name(s) are unmarked inventions: section-update, section-add, section-remove, section-reorder, section-add.",
       "fix": "Add a \"provenance\" object marking each field verbatim or inferred."
@@ -251,7 +250,7 @@
       "level": "advisory",
       "tier": "primitives",
       "component": "functions-wrap",
-      "nodeId": "40000879:249",
+      "nodeId": "40000909:4005",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
       "what": "Registry entry names a component source that does not exist.",
       "fix": "Correct the registry entry or restore the file."
@@ -764,43 +763,30 @@
       "fix": "Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md"
     },
     {
-      "id": "node-unresolved:gripper-prompt-input",
-      "check": "node-unresolved",
-      "stage": "ingest",
-      "owner": "pipeline",
-      "level": "advisory",
-      "tier": "prompt-composer",
-      "component": "gripper-prompt-input",
-      "nodeId": "40000746:103",
-      "file": "frontend/src/components/lit/prompt-input/gripper-prompt-input.ts",
-      "what": "Address 40000746:103 is not in the file. The pull returns nothing, so this component reports as \"no annotation\" when really the address is dead.",
-      "fix": "Point the registry at the component’s real node id."
-    },
-    {
-      "id": "node-unresolved:role-tile",
-      "check": "node-unresolved",
-      "stage": "ingest",
-      "owner": "pipeline",
+      "id": "annotation-missing:role-tile",
+      "check": "annotation-missing",
+      "stage": "gap",
+      "owner": "designer",
       "level": "advisory",
       "tier": "prompt-composer",
       "component": "role-tile",
-      "nodeId": "40000746:106",
+      "nodeId": "40000909:4316",
       "file": "frontend/src/components/lit/prompt-input/role-tile.ts",
-      "what": "Address 40000746:106 is not in the file. The pull returns nothing, so this component reports as \"no annotation\" when really the address is dead.",
-      "fix": "Point the registry at the component’s real node id."
+      "what": "Node 40000909:4316 (\"role-tile\", SLOT) resolves but carries no annotation.",
+      "fix": "Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md"
     },
     {
-      "id": "node-unresolved:functions-wrap",
-      "check": "node-unresolved",
-      "stage": "ingest",
-      "owner": "pipeline",
+      "id": "annotation-missing:functions-wrap",
+      "check": "annotation-missing",
+      "stage": "gap",
+      "owner": "designer",
       "level": "advisory",
       "tier": "primitives",
       "component": "functions-wrap",
-      "nodeId": "40000879:249",
+      "nodeId": "40000909:4005",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
-      "what": "Address 40000879:249 is not in the file. The pull returns nothing, so this component reports as \"no annotation\" when really the address is dead.",
-      "fix": "Point the registry at the component’s real node id."
+      "what": "Node 40000909:4005 (\"functions\", FRAME) resolves but carries no annotation.",
+      "fix": "Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md"
     },
     {
       "id": "annotation-missing:model-selector-button",
@@ -853,19 +839,6 @@
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
       "what": "Node 40000746:94 (\"prompt-input-section\", FRAME) resolves but carries no annotation.",
       "fix": "Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md"
-    },
-    {
-      "id": "node-unresolved:prompt-section-editor",
-      "check": "node-unresolved",
-      "stage": "ingest",
-      "owner": "pipeline",
-      "level": "advisory",
-      "tier": "prompt-composer",
-      "component": "prompt-section-editor",
-      "nodeId": "40000879:249",
-      "file": "frontend/src/components/lit/prompt-section-editor.ts",
-      "what": "Address 40000879:249 is not in the file. The pull returns nothing, so this component reports as \"no annotation\" when really the address is dead.",
-      "fix": "Point the registry at the component’s real node id."
     },
     {
       "id": "annotation-prose:role-dropdown",

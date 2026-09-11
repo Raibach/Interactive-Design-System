@@ -109,7 +109,7 @@ export class PromptContainer extends LitElement {
           <slot></slot>
         </div>
         <div class="format-rail" data-tag="format-rail">
-          <div class="rail-gripper" data-node-id="40000881:373">
+          <div class="rail-gripper" data-node-id="40000881:399">
             <span class="rot">${gripperMeatballsSvg}</span>
           </div>
           ${this.formatLabel ? html`<div class="vertical-label">${this.formatLabel}</div>` : ''}

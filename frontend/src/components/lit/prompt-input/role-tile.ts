@@ -59,7 +59,12 @@ export class RoleTile extends LitElement {
       user-select: none;
       min-width: 0;
     }
-    /* Figma 40000746:107 — text node inside role-label-injection (40000879:264).
+    /* Figma 40000909:4317 — role-label-injection inside the role-tile SLOT
+       (40000909:4316). The old ids (40000746:107 / 40000879:264) were dead:
+       the accordion was rebuilt and they return nothing on either channel.
+       Its children are the live label instance 40000909:4318
+       ("sample-text-for-role", the component that carries the designer's
+       description) and the chevron instance 40000922:4878. */
        Inline text child so ellipsis/nowrap live on the real text element. */
     .role-label-text {
       display: block;
@@ -84,8 +89,8 @@ export class RoleTile extends LitElement {
 
   render() {
     return html`
-      <span class="role-label-injection" data-node-id="40000879:264" @click=${this._onMenuToggle}>
-        <span class="role-label-text" data-node-id="40000746:107">${this.label}</span>
+      <span class="role-label-injection" data-node-id="40000909:4317" @click=${this._onMenuToggle}>
+        <span class="role-label-text" data-node-id="40000909:4318">${this.label}</span>
       </span>
       ${this.showMenu ? html`
         <button class="arrow-drop-down" data-node-id="1:118" title="Select role type" aria-haspopup="menu"

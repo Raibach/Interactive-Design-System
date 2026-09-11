@@ -132,9 +132,12 @@ export class PromptInputSection extends LitElement {
       min-width: 0;
       display: flex;
     }
-    /* Figma 40000879:249 "functions" — 177.039×43, bg #fff, radius 6,
+    /* Figma 40000909:4005 "functions" — 177.039×43, bg #fff, radius 6,
        shadow -4px -4px 5px rgba(0,0,0,.15) + 4px 4px 5px rgba(0,0,0,.15).
-       This is the exact shell the "Functions / Tools" label sits in. */
+       This is the exact shell the "Functions / Tools" label sits in.
+       (Rebuilt in Figma 2026-09-11: this tile and its accordion moved from the
+       40000879 / 40000746 namespace to 40000909; the old ids now return nothing
+       from either channel. Geometry is unchanged, to the third decimal.) */
     .functions-wrap {
       position: relative;
       flex-shrink: 0;
@@ -266,8 +269,8 @@ export class PromptInputSection extends LitElement {
       <div class="responsive-prompt-container" data-tag="prompt-section" data-node-id="40000746:94" data-section-name="${this.name}">
         <div class="section-header" data-node-id="40000746:102">
           <gripper-prompt-input ?active=${!isSticky}></gripper-prompt-input>
-          <div class="prompt-accordion" data-node-id="40000879:252">
-            <div class="role-tile-wrap" data-node-id="40000746:106">
+          <div class="prompt-accordion" data-node-id="40000909:3998">
+            <div class="role-tile-wrap" data-node-id="40000909:3999">
               <role-tile
                 .label=${this.name}
                 .showMenu=${!isSticky}
@@ -276,8 +279,8 @@ export class PromptInputSection extends LitElement {
               ></role-tile>
               ${typesMenu}
             </div>
-            <div class="functions-wrap" data-node-id="40000879:249">
-              <button class="functions-label-text" data-node-id="40000879:250" title="Functions | Tools"
+            <div class="functions-wrap" data-node-id="40000909:4005">
+              <button class="functions-label-text" data-node-id="40000909:4006" title="Functions | Tools"
                       @click=${(e: Event) => this._toggleMenu(e, 'functions')}>Functions<span class="functions-sep"> | </span>Tools</button>
               ${functionsMenu}
             </div>
