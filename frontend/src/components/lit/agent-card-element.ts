@@ -41,6 +41,8 @@ export class AgentCardElement extends LitElement {
     categoryColor: { type: String, attribute: 'category-color' },
     categoryTitleColor: { type: String, attribute: 'category-title-color' },
     categoryTextColor: { type: String, attribute: 'category-text-color' },
+    // Owner-instructed control (not in the Figma pull): arm → confirm.
+    _deleteArmed: { state: true },
   };
 
   declare id: string;
@@ -59,6 +61,10 @@ export class AgentCardElement extends LitElement {
   declare categoryColor: string;
   declare categoryTitleColor: string;
   declare categoryTextColor: string;
+  /** First confirmation step: trash clicked once, waiting for the second click. */
+  declare _deleteArmed: boolean;
+  /** Auto-disarm timer so an armed trash never stays armed. */
+  private _deleteTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
     super();
@@ -78,6 +84,7 @@ export class AgentCardElement extends LitElement {
     this.categoryColor = '';
     this.categoryTitleColor = '';
     this.categoryTextColor = '';
+    this._deleteArmed = false;
   }
 
   // ── BASE TEMPLATE — static CSS from Figma node 40000717:17091 ────────────
@@ -350,6 +357,47 @@ export class AgentCardElement extends LitElement {
       width: 30px;
       height: 28px;
     }
+
+    /* ── card-delete — owner-instructed control (NOT in the Figma pull) ──── */
+    /* Progressive: hidden until the card is hovered/focused, then trash
+       icon top-right. First click arms it; second click confirms. */
+    .card-delete {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 3;
+      height: 26px;
+      min-width: 26px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.38);
+      color: #FFFFFF;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 120ms ease, background 120ms ease;
+    }
+    .card:hover .card-delete,
+    .card-delete:focus-visible { opacity: 1; }
+    .card-delete:hover { background: rgba(0, 0, 0, 0.65); }
+    .card-delete svg { display: block; width: 14px; height: 14px; }
+    .card-delete.armed {
+      opacity: 1;
+      padding: 0 8px;
+      background: #B91C1C;
+      border-color: #FFFFFF;
+    }
+    .card-delete-label {
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1;
+    }
   `;
 
   private _validateColor(val: string): string {
@@ -360,6 +408,43 @@ export class AgentCardElement extends LitElement {
     // If browser accepts it, s.color will be a normalized value
     // If not, it remains empty — fall back to safe default
     return s.color ? val : '';
+  }
+
+  /**
+   * Owner-instructed delete control. Confirmation step 1 lives here (arm →
+   * confirm). Confirmation step 2 is the host dialog that ConsolePage shows on
+   * the `card-delete` event, so nothing is removed on a single click.
+   * This control is NOT in the Figma pull for node 40000717:17091.
+   */
+  private _onDeleteClick(e: Event) {
+    // Never let this reach the wrapper's card-open handler.
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (!this._deleteArmed) {
+      this._deleteArmed = true;
+      if (this._deleteTimer) clearTimeout(this._deleteTimer);
+      this._deleteTimer = setTimeout(() => { this._deleteArmed = false; }, 4000);
+      return;
+    }
+
+    if (this._deleteTimer) clearTimeout(this._deleteTimer);
+    this._deleteArmed = false;
+
+    // Event name declared in the tag contract:
+    // frontend/src/shared/tag-registry.ts → AgentCardSchema.events: 'card-delete'
+    this.dispatchEvent(
+      new CustomEvent('card-delete', {
+        detail: { sessionId: this.id, id: this.id },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  disconnectedCallback() {
+    if (this._deleteTimer) clearTimeout(this._deleteTimer);
+    super.disconnectedCallback();
   }
 
   render() {
@@ -378,6 +463,21 @@ export class AgentCardElement extends LitElement {
            style="${safeColor ? `--card-bg: ${safeColor};` : ''}
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}
                   ${safeTextColor ? `--card-text-color: ${safeTextColor};` : ''}">
+
+        <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
+             Not in the Figma pull for node 40000717:17091. -->
+        <button
+          class="card-delete ${this._deleteArmed ? 'armed' : ''}"
+          type="button"
+          data-a2ui-id="card-delete"
+          title=${this._deleteArmed ? 'Click again to confirm delete' : 'Delete this prompt package'}
+          aria-label=${this._deleteArmed ? 'Confirm delete' : 'Delete prompt package'}
+          @click=${this._onDeleteClick}
+        >
+          ${this._deleteArmed
+            ? html`<span class="card-delete-label">CONFIRM</span>`
+            : html`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+        </button>
 
         <!-- card-header -->
         <div class="card-header">

@@ -689,7 +689,7 @@ export const conversationStorage = {
   },
 
   // Create a new conversation (API-first with localStorage sync)
-  createConversation: async (projectId: string, title: string = 'New Conversation', chatMode: 'grace' | 'keeper' = 'grace', tag?: 'trace' | 'variables' | 'tools' | 'general'): Promise<Conversation> => {
+  createConversation: async (projectId: string, title: string = 'New Conversation', chatMode: 'grace' | 'keeper' = 'grace', tag?: 'trace' | 'variables' | 'tools' | 'general', sessionId?: string): Promise<Conversation> => {
     const finalTitle = chatMode === 'keeper' ? `Keeper Chat: ${title}` : title;
 
     // ── API-first: PostgreSQL is the source of truth ──
@@ -706,6 +706,9 @@ export const conversationStorage = {
         method: 'POST',
         body: JSON.stringify({
           project_id: projectId,
+          // conversations.session_id is NOT NULL — the prompt package this chat
+          // belongs to. Without it the insert is rejected and nothing saves.
+          session_id: sessionId || undefined,
           title: finalTitle,
           metadata: { chat_mode: chatMode },
         }),

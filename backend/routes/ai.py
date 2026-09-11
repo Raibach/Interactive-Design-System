@@ -1023,9 +1023,12 @@ Output ONLY valid JSON:
             except Exception as e:
                 print(f"[AI Save] LLM compilation warning: {e}")
 
-        # Use AI-compiled output if available, otherwise keep original
+        # Use AI-compiled output ONLY to fill a gap. It must never replace output
+        # the user actually produced — a Run's output was being overwritten by
+        # the compiled prompt on every Save, so the middle column lost its
+        # content the moment the user saved.
         if ai_compilation:
-            if ai_compilation.get("compiled_output"):
+            if not (compiled_output or "").strip() and ai_compilation.get("compiled_output"):
                 compiled_output = ai_compilation["compiled_output"]
             # Update title if AI suggested a better one
             if ai_compilation.get("suggested_title") and request.title in [None, "", "Untitled", "New Prompt Agent"]:

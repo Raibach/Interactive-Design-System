@@ -85,7 +85,9 @@ export class PromptInputSection extends LitElement {
 
   static styles = css`
     :host {
+      /* Hugs its content — no forced height. */
       display: block;
+      flex: 0 0 auto;
       width: 100%;
       background: #ffffff;
       border-radius: 6px;
@@ -93,8 +95,10 @@ export class PromptInputSection extends LitElement {
     }
     :host([draggable]) { cursor: grab; }
     .responsive-prompt-container {
-      /* Figma 40000878:241 — padding top/bottom 15px, left/right 3px (px-3 py-4.5 … py-[15px]) */
-      padding: 15px 3px;
+      /* Figma 40000878:241 — px-3 py-[15px]. The top pad is dropped: the first
+         section must sit flush under the pane title. The bottom 15px still gives
+         the gap between stacked sections. */
+      padding: 0 3px 15px;
       box-sizing: border-box;
     }
     .section-header {
@@ -193,6 +197,7 @@ export class PromptInputSection extends LitElement {
     }
     .prompt-imput {
       display: flex;
+      /* flex-start: the textarea hugs its own auto-grown height. */
       align-items: flex-start;
       gap: 5px;
       margin-top: 17px;
@@ -222,9 +227,12 @@ export class PromptInputSection extends LitElement {
                   @click=${(e: Event) => this._onMenuSelect(e)}>${tool.name}</button>`)}
       </div>` : '';
 
-    // Placeholder rail icons — always rendered, matching Figma's full activity rail
-    // (Database + purple lightning + 2 dark lightnings). Wire to real activity later.
-    const railIcons: string[] = ['database', 'lightning1', 'lightning', 'lightning'];
+    // Activity rail — a SINGLE lightning. The Figma rail (40000746-94) carries a
+    // database glyph on top plus three lightnings ("Database + purple lightning +
+    // 2 dark lightnings"); the owner asked for those to be trimmed down to one
+    // lightning. This is an intentional deviation from the Figma source, not a
+    // design-system value — re-add kinds here if the full rail is wanted back.
+    const railIcons: string[] = ['lightning'];
 
     return html`
       <div class="responsive-prompt-container" data-tag="prompt-section" data-node-id="40000746:94" data-section-name="${this.name}">

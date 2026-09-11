@@ -37,6 +37,7 @@ router = APIRouter()
 
 class CreateConversationRequest(BaseModel):
     project_id: Optional[str] = None
+    session_id: Optional[str] = None   # required by the DB (conversations.session_id NOT NULL)
     title: Optional[str] = None
     metadata: Optional[dict] = None
 
@@ -138,6 +139,7 @@ async def create_conversation(
             project_id=request.project_id,
             title=request.title,
             metadata=request.metadata,
+            session_id=request.session_id,
         )
         return {"id": conversation_id, "success": True}
     except ConnectionError as e:

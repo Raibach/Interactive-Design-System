@@ -265,9 +265,17 @@ class ConversationAPI:
         user_id: str,
         project_id: Optional[str] = None,
         title: Optional[str] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        session_id: Optional[str] = None,
+        tab: str = "chat",
     ) -> str:
-        """Create a new conversation"""
+        """Create a new conversation.
+
+        `conversations.session_id` is NOT NULL (and `tab` carries a default), so
+        the prompt-package id MUST be supplied — a conversation rolls up under
+        the prompt session it belongs to. Omitting it made every insert fail with
+        'null value in column "session_id" ... violates not-null constraint'.
+        """
         conn = self.get_db()
         cursor = conn.cursor()
         self.set_user_context(cursor, user_id)
@@ -279,10 +287,14 @@ class ConversationAPI:
                 conv_metadata.update(metadata)
 
             cursor.execute("""
-                INSERT INTO conversations (user_id, project_id, title, message_count, metadata)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO conversations
+                    (user_id, project_id, title, message_count, metadata, session_id, tab)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (user_id, project_id, title or "New Chat", 0, json.dumps(conv_metadata)))
+            """, (
+                user_id, project_id, title or "New Chat", 0,
+                json.dumps(conv_metadata), session_id, tab,
+            ))
 
             conversation_id = cursor.fetchone()['id']
             conn.commit()

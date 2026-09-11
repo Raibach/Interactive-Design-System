@@ -28,7 +28,13 @@ export class PromptContainer extends LitElement {
 
   static styles = css`
     :host {
-      display: block;
+      /* Stretches to the BOTTOM of the column so the panel's border snaps to the
+         bottom edge. The slotted prompt sections inside still hug their own
+         content — only the panel fills, never the textareas. */
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      min-height: 0;
       background: #ffffff;
       border: 1px solid #c0bdcf;
       /* Figma 40000746:6 "left-column-panel-container": rounded-tl-[10px] (TOP-LEFT ONLY) */
@@ -37,11 +43,16 @@ export class PromptContainer extends LitElement {
     }
     .inner {
       display: flex;
+      flex: 1;
+      min-height: 0;
       margin: 1px;
     }
     .sections-area {
       flex: 1;
       min-width: 0;
+      /* Deliberately NOT a flex column — the sections must hug their content
+         (and auto-grow as you type), not stretch to fill the panel. */
+      min-height: 0;
     }
     .format-rail {
       width: 39px;

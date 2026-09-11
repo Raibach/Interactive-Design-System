@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { FlipCard } from "./FlipCard";
+import { FeaturedCard } from "./FeaturedCard";
 import imgImage359 from "@/assets/5e6d8c1ff1f88eac724c57dccba01dde4c5a1bba.png";
 import imgImage390 from "@/assets/a0c698671eb795bc84024e87ad7c0b231c53115c.png";
 import moleculeLogo from "@/assets/Molecule_fill.svg";
@@ -789,7 +790,12 @@ export function Toolbar({
 
 // ── Agent card row — renders real DesignCards in a flex row ──────────────────
 //
-// Every row: 5 narrow FlipCards (278px each).
+// ROW 0 (featured): 1 wide FeaturedCard (877px) + 2 narrow FlipCards (278px each)
+//   Figma node: 40000177:6883
+//   Slot 0 = FeaturedCard (hero, always visible)
+//   Slot 1 = first agent (narrow FlipCard)
+//   Slot 2 = second agent (narrow FlipCard)
+// ROWS 1+: 5 narrow FlipCards per row
 function AgentCardRow({ 
   agents, 
   startIdx, 
@@ -824,8 +830,10 @@ function AgentCardRow({
 }) {
   const isFirstRow = startIdx === 0;
   
-  // 5 narrow agent cards per row.
-  const narrowCount = 5;
+  // Row 0: FeaturedCard (slot 0) + 2 narrow agent cards (slots 1-2)
+  // Agents for narrow slots come from startIdx..startIdx+2 (first 2 agents)
+  // Rows 1+: 5 narrow agent cards from startIdx..startIdx+4
+  const narrowCount = isFirstRow ? 2 : 5;
   const narrowAgents = agents.slice(startIdx, startIdx + narrowCount);
   
   // Pad narrow slots
@@ -850,6 +858,16 @@ function AgentCardRow({
           <p className="text-gray-400 font-medium text-sm">No active prompt sessions</p>
           <p className="text-gray-300 text-xs">Create your first agent package to get started</p>
         </div>
+      ) : isFirstRow ? (
+        // Slot 0: FeaturedCard — hero card, always shown when agents exist
+        <FeaturedCard
+          id=""
+          subtitle="Enterprise Prompt Portal"
+          headline="Unlock ChatGPT God‑Mode in 20 Minutes"
+          teamHandle={agents[0]?.username}
+          teamName={agents[0]?.teamName}
+          onOpenPrompt={onOpenPrompt}
+        />
       ) : null}
       {narrowSlots.map((agent, i) => {
         if (!agent) {
@@ -955,7 +973,7 @@ export function Frame29({ onOpenPrompt, searchValue, agents, onCreateNew, onSear
     toolbarRef.current?.scrollBy({ left: dir === "left" ? -300 : 300, behavior: "smooth" });
   }, []);
 
-  // Build rows for AgentRow: 5 narrow cards per row
+  // Build rows for AgentRow: row 0 has FeaturedCard + 2 narrow, rest have 5 narrow
   const rows: Array<{ agents: typeof pageAgents; startIdx: number }> = [];
   rows.push({ agents: pageAgents, startIdx: 0 });
   if (pageAgents.length > 2) rows.push({ agents: pageAgents, startIdx: 2 });
@@ -989,12 +1007,21 @@ export function Frame29({ onOpenPrompt, searchValue, agents, onCreateNew, onSear
       ) : (
       <>
       <div className="content-stretch flex flex-wrap gap-[20px] items-start justify-center w-full">
-        {pageAgents.length === 0 ? (
+        {pageAgents.length > 0 ? (
+          <FeaturedCard
+            id=""
+            subtitle="Enterprise Prompt Portal"
+            headline="Unlock ChatGPT God‑Mode in 20 Minutes"
+            teamHandle={pageAgents[0]?.username}
+            teamName={pageAgents[0]?.teamName}
+            onOpenPrompt={onOpenPrompt}
+          />
+        ) : (
           <div className="h-[359px] w-[877px] max-w-full bg-white border-2 border-dashed border-gray-300 rounded-[10px] flex flex-col items-center justify-center gap-4">
             <p className="text-gray-400 font-medium text-sm">No active prompt sessions</p>
             <p className="text-gray-300 text-xs">Create your first agent package to get started</p>
           </div>
-        ) : null}
+        )}
         {pageAgents.map((agent, i) => (
           <FlipCard
             key={agent.id}

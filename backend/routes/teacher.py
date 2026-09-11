@@ -40,6 +40,9 @@ class TeacherQueryRequest(BaseModel):
     question: str
     context: Optional[str] = None
     conversation_id: Optional[str] = None
+    # The prompt package this chat belongs to. Conversations roll up under it
+    # (conversations.session_id is NOT NULL), so it is required to persist chat.
+    session_id: Optional[str] = None
     project_id: Optional[str] = None
     reasoning: bool = False
     reasoning_style: str = "chain_of_thought"
@@ -79,14 +82,33 @@ async def api_teacher_query(request: TeacherQueryRequest):
             sentry_sdk.set_tag("ai.reasoning_style", request.reasoning_style)
 
         # ── Persistent conversation ──────────────────────────────────
-        # Ensure a conversation exists in PostgreSQL (auto-create if needed)
-        if state.conversation_api and not conv_id:
+        # Every chat turn must persist. `conversations.session_id` is NOT NULL,
+        # so resolve the package's existing conversation for this prompt first
+        # and only create one when there genuinely isn't one. Creating with a
+        # null session_id was rejected by Postgres on every single call, so
+        # nothing was ever saved.
+        if state.conversation_api and not conv_id and request.session_id:
             try:
-                pid = request.project_id
-                title = request.question[:80] if request.question else "New Chat"
-                conv_id = state.conversation_api.create_conversation(uid, pid, title)
+                existing = state.conversation_api.get_conversations_by_session(
+                    request.session_id, uid
+                )
+                if existing:
+                    conv_id = str(existing[0].get("id"))
+                    print(f"✅ Reusing conversation {conv_id} for session {request.session_id}")
             except Exception as e:
-                print(f"⚠️  Failed to create conversation: {e}")
+                print(f"⚠️  Conversation lookup failed: {e}")
+
+            if not conv_id:
+                try:
+                    title = request.question[:80] if request.question else "New Chat"
+                    conv_id = state.conversation_api.create_conversation(
+                        uid, request.project_id, title, session_id=request.session_id
+                    )
+                    print(f"✅ Created conversation {conv_id} for session {request.session_id}")
+                except Exception as e:
+                    print(f"⚠️  Failed to create conversation: {e}")
+        elif state.conversation_api and not conv_id:
+            print("ℹ️  No session_id supplied — this turn will not be persisted.")
 
         # Save user message to PostgreSQL
         if state.conversation_api and conv_id:

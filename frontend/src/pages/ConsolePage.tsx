@@ -6,8 +6,12 @@
  * This component ONLY renders what the AI assembles.
  * If AI fails, show the error. If no data, show "Waiting for AI Event".
  */
+import { useEffect, useState } from "react";
 import { Frame29 } from "@/components/PromptDashboardCanvas";
 import { getStoredUserId } from "@/services/authService";
+
+// A card id is only a real prompt-package key when it is a UUID.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * A2UI re-assembly request — dispatched when the user asks for a fresh
@@ -20,6 +24,7 @@ const requestReassembly = () => {
 
 interface ConsolePageProps {
   onOpenPrompt?: (sessionId: string) => void;
+  onDeletePrompt?: (sessionId: string) => void | Promise<void>;
   onCreateNew?: (title: string) => void;
   refreshKey?: number;
   aiAssembledCards?: any[] | null;
@@ -30,12 +35,38 @@ interface ConsolePageProps {
 
 export default function ConsolePage({
   onOpenPrompt,
+  onDeletePrompt,
   onCreateNew,
   aiAssembledCards = null,
   isParentLoading = false,
   errorMessage = null,
   loadingMessage = "Assembling your console..."
 }: ConsolePageProps) {
+
+  // ── Delete · step 2 of 2 — host confirmation ──────────────────────────────
+  // <agent-card-element> dispatches `card-delete` only after its own arm→confirm
+  // (step 1). Nothing is removed until this dialog is confirmed (step 2).
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onCardDelete = (e: Event) => {
+      const sessionId = (e as CustomEvent).detail?.sessionId;
+      if (typeof sessionId === 'string' && UUID_RE.test(sessionId)) {
+        setPendingDelete(sessionId);
+      }
+    };
+    window.addEventListener('card-delete', onCardDelete);
+    return () => window.removeEventListener('card-delete', onCardDelete);
+  }, []);
+
+  const confirmDelete = async () => {
+    const id = pendingDelete;
+    setPendingDelete(null);
+    if (id) {
+      console.log('[ConsolePage] card-delete confirmed:', id);
+      await onDeletePrompt?.(id);
+    }
+  };
 
   // ✅ STRICT A2UI RULE #1: If parent is loading, show spinner INSIDE this surface only
   if (isParentLoading) {
@@ -130,7 +161,7 @@ export default function ConsolePage({
   };
 
   return (
-    <div className="flex-1 w-full overflow-x-auto relative min-h-0" style={{ backgroundColor: "#E5E1DD" }}>
+    <div className="flex-1 w-full overflow-x-auto relative min-h-0 [&::-webkit-scrollbar]:h-[14px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#dadee4] [&::-webkit-scrollbar-thumb]:rounded-[10px]" style={{ backgroundColor: "#E5E1DD" }}>
       <div className="w-full px-4 pt-[54px] pb-6">
         <Frame29
           onOpenPrompt={handleOpen}
@@ -140,6 +171,44 @@ export default function ConsolePage({
           agents={aiAssembledCards}
         />
       </div>
+
+      {/* Delete · step 2 of 2 — host confirmation. Step 1 was the card's
+          arm→confirm; nothing is removed until this dialog is confirmed. */}
+      {pendingDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm delete prompt package"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+          onClick={() => setPendingDelete(null)}
+        >
+          <div
+            className="bg-white rounded-2xl border-2 border-[#234354] p-6 max-w-md w-full text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[#234354] text-lg font-bold mb-2">Delete this prompt package?</h2>
+            <p className="text-gray-600 text-sm mb-1">
+              This removes the prompt, its versions, and its linked chat.
+            </p>
+            <p className="text-gray-500 text-xs mb-5 font-mono break-all">{pendingDelete}</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setPendingDelete(null)}
+                className="px-5 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-5 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

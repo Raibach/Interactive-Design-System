@@ -82,6 +82,11 @@ export default function Index({
 
   // Composer-specific running state (controls middle column visibility during Run)
   const [isComposerRunning, setIsComposerRunning] = useState(false);
+  // Sticky middle-pane state. Once it opens (Run, or opening a prompt that has
+  // output) it STAYS open — only the user's Clear (or opening a prompt with no
+  // output) closes it. Previously it was derived from compiledOutput, so the
+  // pane auto-collapsed the moment a Run cleared the field.
+  const [middleOpen, setMiddleOpen] = useState(false);
 
   // ── Request deduplication: abort previous request if new one comes in ──
   const consoleAssemblyControllerRef = useRef<AbortController | null>(null);
@@ -135,6 +140,9 @@ export default function Index({
   const [promptLoadKey, setPromptLoadKey] = useState(0);
   // Ref for currentPromptSession ID — avoids stale closure in event listeners
   const currentPromptSessionRef = useRef<string | null>(null);
+  // Same reason: listeners registered once must be able to read the LIVE session
+  // object (the effect that wires them does not re-run on session change).
+  const currentPromptSessionObjRef = useRef<any>(null);
   // Ref for handleSavePrompt — always points to latest function, used by event listeners
   // Accepts optional compiledOutput + optional sections (from Lit editor) so Save after Run persists full state.
   const handleSavePromptRef = useRef<(compiledOutput?: string, providedSections?: any[]) => Promise<void>>(async () => {});
@@ -146,7 +154,27 @@ export default function Index({
   // Keep refs in sync with state
   useEffect(() => {
     currentPromptSessionRef.current = currentPromptSession?.id ?? null;
+    currentPromptSessionObjRef.current = currentPromptSession ?? null;
   }, [currentPromptSession]);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // The middle column is the source of truth for the run output.
+  // Save used to read the output from a ref, which can be stale by the time the
+  // click arrives — so Save posted compiled_output:"" and the backend wrote that
+  // empty string over the output the user was looking at, wiping the column on
+  // every save. Read the LIVE viewer instead: whatever is on screen is what gets
+  // saved. (Falls back to the ref / state if the viewer isn't mounted.)
+  // ══════════════════════════════════════════════════════════════════════════
+  const readLiveOutput = (): string => {
+    const viewer = document.querySelector('compiled-output-viewer') as any;
+    const live = viewer?.content;
+    if (typeof live === 'string' && live.trim().length > 0) return live;
+    return (
+      currentPromptSessionObjRef.current?.compiledOutput ||
+      currentPromptSession?.compiledOutput ||
+      ''
+    );
+  };
 
   // My Story Editor state — NOTE: MyStory editor and SaveProjectModal are retired.
   // State kept for legacy compatibility with remaining save function references.
@@ -1200,6 +1228,9 @@ export default function Index({
         setCurrentPromptSession(assembledSession as any);
         hasUnsavedChangesRef.current = assembledSession.is_unsaved;
         setHeaderTab('composer');
+        // Open the middle pane only if this prompt already has output; otherwise
+        // leave it closed until the user Runs.
+        setMiddleOpen(!!(session.middle_column?.compiled_output || '').trim());
 
         console.log(`✅ [A2UI] Composer assembled with ${sections.length} sections`);
 
@@ -1373,19 +1404,27 @@ export default function Index({
   // STRICT: No fallbacks, no cache, no static rendering.
   // ══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    // Determine initial intent based on context
-    let initialIntent = 'render-console'; // Default to console
+    // The front page IS the console.
+    //
+    // The persisted tab (localStorage "activeHeaderTab") must NOT dictate what
+    // the front page assembles. `handleTabChangeWithGate` persists every tab
+    // switch, so a stale saved tab ("composer") made a reload of "/" re-assemble
+    // the Composer and the Console never assembled at all — no cards, no hero.
+    //
+    // Only a session id in the URL changes the initial intent. The assembled
+    // surface still sets the tab that matches it (see the `setHeaderTab` calls
+    // in the surface handlers).
+    const initialIntent = routeSessionId
+      ? `render-session:${routeSessionId}`
+      : 'render-console';
 
-    // If there's a session ID in the URL (from bookmark/link), load that session
-    if (routeSessionId) {
-      initialIntent = `render-session:${routeSessionId}`;
-      console.log(`🤖 [A2UI] Initial mount with session ID: ${routeSessionId}`);
-    } else if (headerTab === 'composer') {
-      initialIntent = 'render-composer';
-      console.log('🤖 [A2UI] Initial mount on Composer tab');
-    } else {
-      console.log('🤖 [A2UI] Initial mount on Console - commanding AI to assemble surface');
+    // Align the visible tab with the intent BEFORE assembling, so the console
+    // renders instead of a stale composer workspace.
+    if (!routeSessionId && headerTab !== 'console') {
+      setHeaderTab('console');
     }
+
+    console.log(`🤖 [A2UI] Initial mount → intent: ${initialIntent}`);
 
     assembleSurfaceWithAI(initialIntent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1669,7 +1708,7 @@ export default function Index({
     const { sections = [] } = (e as CustomEvent).detail || {};
     console.log('[WritingAreaIndex] run-requested from <prompt-section-editor>', sections.length, 'sections');
 
-    if (!currentPromptSession) {
+    if (!currentPromptSessionRef.current) {
       console.warn('[WritingAreaIndex] No active prompt session — cannot run');
       return;
     }
@@ -1681,6 +1720,7 @@ export default function Index({
       prev ? { ...prev, leftColumnContent, compiledOutput: '' } : prev
     );
     setIsComposerRunning(true);
+    setMiddleOpen(true);
 
     try {
       const { getApiKey } = await import('@/services/authService');
@@ -1692,7 +1732,7 @@ export default function Index({
       // { core_roles: { "System Role": ... }, custom_roles: [...] }.
       // (Previously sent markdown, which json.loads() rejected, so the backend fell
       // back to a bare "Execute the prompt configuration." with no real prompt.)
-      const CORE_ROLES = ['System Role', 'User Role', 'Context', 'Constraints', 'Few Shot', 'Tool Call'];
+      const CORE_ROLES = ['System Role', 'User Role', 'Agent Role', 'System', 'User', 'Agent', 'Context', 'Constraints', 'Few Shot', 'Tool Call'];
       const coreRoles: Record<string, string> = {};
       const customRoles: { name: string; content: string }[] = [];
       for (const s of sections || []) {
@@ -1716,7 +1756,11 @@ export default function Index({
           context: promptContext,
           mode: 'prompt_output',
           temperature: 0.45,
-          model: 'deepseek-chat',
+          // The prompt package this run belongs to. The backend uses it to
+          // attach/reuse the conversation row (conversations.session_id is NOT
+          // NULL), so every chat turn actually persists.
+          session_id: currentPromptSessionRef.current || undefined,
+          // No `model` — let the provider's configured default apply.
         }),
       });
 
@@ -1754,7 +1798,7 @@ export default function Index({
     console.log('[WritingAreaIndex] save-requested from <prompt-section-editor>', sections.length, 'sections');
 
     const leftColumnContent = JSON.stringify({ sections });
-    const compiledOutput = currentPromptSession?.compiledOutput || '';
+    const compiledOutput = readLiveOutput();
 
     setCurrentPromptSession((prev: any) =>
       prev ? { ...prev, leftColumnContent } : prev
@@ -1771,6 +1815,8 @@ export default function Index({
     setCurrentPromptSession((prev: any) =>
       prev ? { ...prev, compiledOutput: '' } : prev
     );
+    // The ONLY thing (besides opening a prompt with no output) that closes it.
+    setMiddleOpen(false);
   };
 
     console.log('✅ [WritingAreaIndex] Setting up event listeners');
@@ -1784,8 +1830,8 @@ export default function Index({
     const handleSaveTemplateEvent = () => {
       const editor = promptSectionEditorRef.current as any;
       const sections = (editor && (editor._sections || editor.sections)) || [];
-      const compiledOutput = currentPromptSession?.compiledOutput || '';
-      console.log('[save-template] Reading', sections.length, 'sections from Lit editor ref');
+      const compiledOutput = readLiveOutput();
+      console.log('[save-template] Reading', sections.length, 'sections +', compiledOutput.length, 'chars of output from live DOM');
       handleSavePromptRef.current?.(compiledOutput, sections);
     };
     window.addEventListener("save-template", handleSaveTemplateEvent);
@@ -1800,8 +1846,8 @@ export default function Index({
     const handleControlBarSave = () => {
       const editor = promptSectionEditorRef.current as any;
       const sections = (editor && (editor._sections || editor.sections)) || [];
-      const compiledOutput = currentPromptSession?.compiledOutput || '';
-      console.log('[control-bar] save-click →', sections.length, 'sections from Lit editor ref');
+      const compiledOutput = readLiveOutput();
+      console.log('[control-bar] save-click →', sections.length, 'sections +', compiledOutput.length, 'chars of output from live DOM');
       handleSavePromptRef.current?.(compiledOutput, sections);
     };
     const handleControlBarRun = () => {
@@ -2027,6 +2073,17 @@ export default function Index({
                         session_title: currentPromptSession?.title || '',
                       });
                     }}
+                    onDeletePrompt={async (sessionId) => {
+                      // Both confirmations already happened: step 1 in
+                      // <agent-card-element> (arm → confirm), step 2 in the
+                      // ConsolePage dialog. Now delete, then re-assemble so the
+                      // grid reflects the removal.
+                      await promptService.deletePromptSession(sessionId, true);
+                      if (currentPromptSession?.id === sessionId) {
+                        setCurrentPromptSession(null);
+                      }
+                      await assembleSurfaceWithAI('render-console');
+                    }}
                   />
                 </div>
                 {/* slot="workspace" — AI-driven Lit tree (A2UI v0.9.1).
@@ -2040,11 +2097,19 @@ export default function Index({
                     </div>
                   ) : (
                   <workspace-layout 
-                    show-middle={isComposerRunning || !!currentPromptSession?.compiledOutput ? '' : undefined}
+                    data-a2ui-id="workspace"
+                    data-column="workspace"
+                    data-tag="workspace-layout"
+                    data-session-id={currentPromptSession?.id || undefined}
+                    show-middle={middleOpen ? '' : undefined}
                     style={{ height: '100%', width: '100%' }}
                   >
                     <div 
                       slot="left"
+                      data-a2ui-id="left-column"
+                      data-column="left"
+                      data-tag="prompt-section-editor"
+                      data-session-id={currentPromptSession?.id || undefined}
                       style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}
                     >
                       <prompt-section-editor
@@ -2076,11 +2141,20 @@ export default function Index({
                   </div>
                     <compiled-output-viewer
                       slot="middle"
+                      data-a2ui-id="middle-column"
+                      data-column="middle"
+                      data-tag="compiled-output-viewer"
+                      data-session-id={currentPromptSession?.id || undefined}
                       content={currentPromptSession?.compiledOutput || ''}
                       session-id={currentPromptSession?.id || undefined}
                       is-running={isComposerRunning ? '' : undefined}
                     />
-                    <div slot="right" style={{ height: '100%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div slot="right"
+                      data-a2ui-id="right-column"
+                      data-column="right"
+                      data-tag="chat-panel"
+                      data-session-id={currentPromptSession?.id || undefined}
+                      style={{ height: '100%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                       {/* chat-panel target for the AI layout; bridge existing chat for composer surfaces.
                           Pass sessionId so conversations are strictly scoped to this prompt package (prompt_session).
                           Pass compiledOutput + isRunning so the assistant can auto-analyze on Run.

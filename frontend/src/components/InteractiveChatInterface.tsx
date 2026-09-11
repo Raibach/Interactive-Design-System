@@ -1101,7 +1101,7 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
       >
         {/* Chat messages area */}
         <div 
-          className={`flex-1 min-h-0 rounded-tr-[10px] shadow-[inset_5px_5px_10px_0px_rgba(0,0,0,0.25)] border border-[#8e98a8] overflow-y-auto overflow-x-hidden p-6 transition-colors duration-200 ease-out [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-track]:bg-white [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-white hover:[&::-webkit-scrollbar-thumb]:bg-gray-400 ${showApprovalQueue ? 'bg-[#B5C3C6]' : 'bg-white'}`}
+          className={`flex-1 min-h-0 rounded-tr-[10px] shadow-[inset_5px_5px_10px_0px_rgba(0,0,0,0.25)] border border-[#8e98a8] overflow-y-auto overflow-x-hidden p-6 transition-colors duration-200 ease-out [&::-webkit-scrollbar]:w-[14px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#dadee4] [&::-webkit-scrollbar-thumb]:rounded-[10px] ${showApprovalQueue ? 'bg-[#B5C3C6]' : 'bg-white'}`}
           ref={chatContainerRef}
           onScroll={handleScroll}
         >
