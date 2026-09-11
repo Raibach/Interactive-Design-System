@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raibach.net/a2ui/catalogs/primitives/v0_9_1/catalog.json",
+  "title": "Raibach Primitives Catalog",
+  "whatThisFileIs": "THE SHARED FLOOR. Components every theme renders. Written ONCE here; each theme's catalog must contain these definitions byte-identical, and the checker fails when a theme drifts from this file. Three declarative locations mirror the design-system tiers: primitives / prompt-composer / console.",
+  "description": "Primitives: the A2UI protocol components plus the surface-agnostic Lit elements shared by every theme.",
+  "catalogId": "https://raibach.net/a2ui/catalogs/primitives/v0_9_1/catalog.json",
+  "components": {
+    "Text": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "component": {
+              "const": "Text"
+            },
+            "text": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+              "description": "The text content to display. Simple Markdown supported (no HTML, images, or links)."
+            },
+            "variant": {
+              "type": "string",
+              "description": "A hint for the base text style. 'greeting' is the Grace welcome-message style used at the top of assembled surfaces.",
+              "enum": [
+                "h1",
+                "h2",
+                "h3",
+                "h4",
+                "h5",
+                "caption",
+                "body",
+                "greeting"
+              ],
+              "default": "body"
+            }
+          },
+          "required": [
+            "component",
+            "text"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Image": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "component": {
+              "const": "Image"
+            },
+            "url": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+              "description": "The URL of the image. Must be a registered catalog ID from the A2UI Image Catalog (raibach-logo, card-bg-design-system, card-img-default, molecule-logo)."
+            },
+            "description": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+              "description": "Accessibility text for the image (WCAG 2.1 AA required)."
+            },
+            "fit": {
+              "type": "string",
+              "enum": [
+                "contain",
+                "cover",
+                "fill",
+                "none",
+                "scaleDown"
+              ],
+              "default": "cover"
+            },
+            "variant": {
+              "type": "string",
+              "enum": [
+                "icon",
+                "avatar",
+                "smallFeature",
+                "mediumFeature",
+                "largeFeature",
+                "header"
+              ],
+              "default": "mediumFeature"
+            }
+          },
+          "required": [
+            "component",
+            "url"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Row": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "A layout component that arranges its children horizontally.",
+          "properties": {
+            "component": {
+              "const": "Row"
+            },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "description": "Defines the children by ID reference. Use explicitList for fixed children or template for data-driven lists."
+            },
+            "justify": {
+              "type": "string",
+              "enum": [
+                "center",
+                "end",
+                "spaceAround",
+                "spaceBetween",
+                "spaceEvenly",
+                "start",
+                "stretch"
+              ],
+              "default": "start"
+            },
+            "align": {
+              "type": "string",
+              "enum": [
+                "start",
+                "center",
+                "end",
+                "stretch"
+              ],
+              "default": "stretch"
+            }
+          },
+          "required": [
+            "component",
+            "children"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Column": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "A layout component that arranges its children vertically.",
+          "properties": {
+            "component": {
+              "const": "Column"
+            },
+            "children": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "description": "Defines the children by ID reference."
+            },
+            "justify": {
+              "type": "string",
+              "enum": [
+                "start",
+                "center",
+                "end",
+                "spaceBetween",
+                "spaceAround",
+                "spaceEvenly",
+                "stretch"
+              ],
+              "default": "start"
+            },
+            "align": {
+              "type": "string",
+              "enum": [
+                "center",
+                "end",
+                "start",
+                "stretch"
+              ],
+              "default": "stretch"
+            }
+          },
+          "required": [
+            "component",
+            "children"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Card": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "component": {
+              "const": "Card"
+            },
+            "child": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId",
+              "description": "The ID of the single child component to be rendered inside the card."
+            }
+          },
+          "required": [
+            "component",
+            "child"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "Button": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "component": {
+              "const": "Button"
+            },
+            "child": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId",
+              "description": "The ID of the child component (typically a Text for the label)."
+            },
+            "variant": {
+              "type": "string",
+              "enum": [
+                "default",
+                "primary",
+                "borderless"
+              ],
+              "default": "default"
+            },
+            "action": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/Action"
+            }
+          },
+          "required": [
+            "component",
+            "child",
+            "action"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "chat-panel": {
+      "type": "object",
+      "description": "Lit chat panel (right column + console). Binds to conversationId.",
+      "properties": {
+        "component": {
+          "const": "chat-panel"
+        },
+        "conversationId": {
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    }
+  }
+}

@@ -20,6 +20,7 @@ from deps import (
 from grace_gui import (
     evaluate_source, query_llm, retrieve_memory_context, search_news,
     summarize_pdfs, milvus_save_version, milvus_get_versions,
+    LAST_USAGE,
 )
 from agent_rpc_handler import AgentRpcHandler
 from milvus_rest import MilvusREST
@@ -421,10 +422,153 @@ Output ONLY this exact JSON (no markdown, no extra text):
                         "cards": cards,
                         "assembly_time_ms": elapsed_ms,
                         "llm_used": True,
+                        "usage": dict(LAST_USAGE),  # measured, straight from the provider
                         "ai_message": ai_message
                     }
                 }
             }
+        ]
+
+    # ═══════════════════════════════════════════════════════════════
+    # INTENT: catalog-health[:<index>] — the index's condition, assembled by Grace
+    # ═══════════════════════════════════════════════════════════════
+    # Grace reads the check HERSELF. The shell sends only the intent; the state is
+    # hers to fetch — the same report GET /api/catalog/audit serves. If the shell
+    # fetched it and passed it in, the shell would be deciding again.
+    elif intent.startswith("catalog-health"):
+        from routes.misc import _read_catalog_audit
+
+        catalog = intent.split(":", 1)[1] if ":" in intent else "prompt-composer"
+        # _read_catalog_audit raises 503 when the checker has not run, so an unrun
+        # check can never be assembled into a surface that looks like a clean one.
+        audit = _read_catalog_audit(catalog)
+        if audit.get("status") != "complete":
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"A2UI FAILURE: the catalog check for '{catalog}' reports "
+                    f"'{audit.get('status')}' — the findings are not current, so it "
+                    f"cannot be assembled as if they were."
+                ),
+            )
+
+        findings = [f for f in audit.get("findings", []) if f.get("level") != "pass"]
+        generated_at = audit.get("generatedAt", "")
+        index_name = audit.get("catalog", catalog)
+        findings_for_prompt = json.dumps(findings)
+
+        llm_prompt = f"""You are Grace, the A2UI surface assembler for the catalog check.
+
+The user's index is "{index_name}". The checker ran at {generated_at} and found
+{len(findings)} open findings.
+
+Findings — raw, from the checker. Do not invent, merge, reorder or drop any:
+{findings_for_prompt}
+
+Assemble the catalog-health surface in A2UI v0.9.1. This is YOUR assembly.
+
+COMPONENT CATALOG (only these):
+- Column       (children: array of component ids)
+- Text         (text: string, variant: optional)
+- ActionGroup  (items: a data-bound list)
+
+REQUIREMENTS:
+1. One Column with id "root" at the top.
+2. A Text header naming the index and the open count.
+3. ONE ActionGroup bound to the findings. Do NOT emit a component per finding —
+   the surface binds to data, it does not enumerate. The findings ride in the
+   data model, where the shell paints them.
+4. ai_message is what you SAY. This is the point of the whole thing: greet the
+   user by time of day, tell them plainly how many of their Figma components have
+   problems, and offer to take care of them. One short, warm paragraph — not a
+   list, not a summary of every finding. The surface carries the detail.
+
+Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
+{{
+  "components": [
+    {{"id": "root", "component": "Column", "children": ["header", "findings"]}},
+    {{"id": "header", "component": "Text", "text": "Catalog check — {index_name}: {len(findings)} open", "variant": "h2"}},
+    {{"id": "findings", "component": "ActionGroup", "items": {{"path": "/findings", "componentId": "finding-action"}}}},
+    {{"id": "finding-action", "component": "Button", "child": "finding-action-label", "action": {{"name": "open-repair-composer"}}}},
+    {{"id": "finding-action-label", "component": "Text", "text": "Repair"}}
+  ],
+  "ai_message": "Your greeting"
+}}
+"""
+
+        llm_response = query_llm(
+            question=llm_prompt,
+            mode="catalog_health_assembly",
+            temperature=0.0,
+            prompt_id="surface-assembly-catalog-health",
+            # model intentionally omitted — use the enabled provider's default
+        )
+
+        if not llm_response or not llm_response.strip():
+            raise HTTPException(
+                status_code=503,
+                detail="A2UI FAILURE: AI did not respond. The AI must be active to render this surface.",
+            )
+        if llm_response.strip().startswith("Error:"):
+            raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
+
+        response_text = llm_response.strip()
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            parsed = _extract_json_payload(response_text)
+            components = parsed["components"]
+            ai_message = parsed.get("ai_message", f"{len(findings)} open in {index_name}.")
+            if not isinstance(components, list) or len(components) == 0:
+                raise ValueError("components must be non-empty array")
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+            print(
+                f"[A2UI CatalogHealth] AI RESPONSE PARSE FAILED:\n"
+                f"  error_type: {type(e).__name__}\n"
+                f"  error_message: {e}\n"
+                f"  llm_response_first_500: {response_text[:500]}\n"
+                f"  FIX: The LLM returned something that isn't valid A2UI JSON."
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"A2UI FAILURE: AI returned invalid JSON for catalog-health — "
+                    f"{type(e).__name__}: {str(e)}. Raw (first 300 chars): {response_text[:300]}"
+                ),
+            )
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        print(f"[PERF TRACE] POST /api/ai/assemble-surface | intent=catalog-health | total={elapsed_ms}ms")
+
+        # What this call ACTUALLY cost, from the provider's own usage report.
+        # Measured, never estimated — an invented number above a real action is
+        # worse than no number.
+        usage = dict(LAST_USAGE)
+
+        validate_a2ui_components(components)
+        return [
+            {"version": "v0.9.1", "createSurface": {"surfaceId": "main", "catalogId": A2UI_CATALOG_ID}},
+            {"version": "v0.9.1", "updateComponents": {"surfaceId": "main", "components": components}},
+            {
+                "version": "v0.9.1",
+                "updateDataModel": {
+                    "surfaceId": "main",
+                    "path": "/",
+                    "value": {
+                        "catalog": index_name,
+                        "generated_at": generated_at,
+                        "counts": audit.get("counts", {}),
+                        "findings": findings,
+                        "assembly_time_ms": elapsed_ms,
+                        "llm_used": True,
+                        "ai_message": ai_message,
+                        "usage": usage,
+                    },
+                },
+            },
         ]
 
     # ═══════════════════════════════════════════════════════════════
@@ -602,7 +746,8 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                         "grace_greeting": True,
                         "suggested_title": suggested_title,  # AI-generated
                         "assembly_time_ms": elapsed_ms,
-                        "llm_used": True
+                        "llm_used": True,
+                        "usage": dict(LAST_USAGE)  # measured, straight from the provider
                     }
                 }
             }

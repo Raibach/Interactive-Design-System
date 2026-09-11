@@ -6,6 +6,7 @@ Providers are tried in priority order; DeepSeek drives all A2UI paths.
 Assembly/chat hard-fail if ALL providers are down — no fake surfaces.
 """
 
+import itertools
 import os
 from typing import Any, Dict, List, Optional
 
@@ -48,6 +49,19 @@ ERROR HANDLING: Use <error-banner message="..."/> only. Never create debug pages
 # ═══════════════════════════════════════════════════════════════════════════════
 # Public API — one call that routes everything
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# The REAL token spend of the most recent query_llm() call, captured from the
+# provider's own response.usage. It lives here rather than as a second return
+# value because query_llm returns a string and every existing caller expects
+# one. Read it immediately after the call; the next call overwrites it.
+LAST_USAGE: Dict[str, Any] = {}
+
+# Every query_llm() call gets a monotonically increasing id so the client can
+# tell one measured cost from the next. Without it, a surface that gets applied
+# twice dispatches its usage twice and the running tally double-counts.
+# itertools.count() is atomic in CPython — no lock, and no `global` needed.
+_CALL_SEQ = itertools.count(1)
+
 
 def query_llm(
     context: str = "",
@@ -153,6 +167,20 @@ def query_llm(
             client = OpenAI(base_url=provider["base_url"], api_key=api_key, timeout=LLM_TIMEOUT)
             response = client.chat.completions.create(**payload, model=model_name)
             message = response.choices[0].message
+            # Capture what this actually cost. Providers report it; guessing it
+            # would put an invented number above a real action.
+            _usage = getattr(response, "usage", None)
+            if _usage is not None:
+                LAST_USAGE.clear()
+                LAST_USAGE.update({
+                    "call_id": next(_CALL_SEQ),
+                    "provider": provider["name"],
+                    "model": model_name,
+                    "mode": mode,
+                    "prompt_tokens": getattr(_usage, "prompt_tokens", None),
+                    "completion_tokens": getattr(_usage, "completion_tokens", None),
+                    "total_tokens": getattr(_usage, "total_tokens", None),
+                })
             content = (message.content or "").strip()
             if not content and getattr(message, "reasoning_content", None):
                 # The model ran out of budget mid-thought. Surfacing reasoning as

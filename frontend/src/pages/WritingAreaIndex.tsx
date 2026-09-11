@@ -72,12 +72,32 @@ export default function Index({
   const COLLAPSED_WIDTH = 75;
   const DEFAULT_EXPANDED_WIDTH = 380;
   const SIDEBAR_GRIP_OFFSET = 40;
+  // How far the Chat tab opens the column: a third of the shell. One constant so
+  // the click-expand and the resize observer cannot drift apart.
+  const CONSOLE_CHAT_OPEN_FRACTION = 1 / 3;
   const [consoleChatWidth, setConsoleChatWidth] = useState(COLLAPSED_WIDTH);
   const [isConsoleChatResizing, setIsConsoleChatResizing] = useState(false);
+  // The operator's motion preference is a runtime setting, not a build-time
+  // constant, so it has to be read from the client. Mirrors the identical hook
+  // in InteractiveChatInterface.
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const preCollapseWidthRef = useRef(DEFAULT_EXPANDED_WIDTH);
   const consoleChatContainerRef = useRef<HTMLDivElement>(null);
   const isSidebarDraggingRef = useRef(false);
+  // True while the column's width is derived from the shell (set by the Chat tab)
+  // and hasn't been dragged since. A ref, not state: the observer below reads it
+  // without needing a re-render.
+  const isConsoleChatProportionalRef = useRef(false);
+  const consoleChatObserverRef = useRef<ResizeObserver | null>(null);
   const isConsoleChatCollapsed = consoleChatWidth <= COLLAPSED_WIDTH;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+    updatePreference();
+    mediaQuery.addEventListener('change', updatePreference);
+    return () => { mediaQuery.removeEventListener('change', updatePreference); };
+  }, []);
   const promptSectionEditorRef = useRef<any>(null);
 
   // Composer-specific running state (controls middle column visibility during Run)
@@ -110,6 +130,14 @@ export default function Index({
   // ═══════════════════════════════════════════════════════════════════════════════
   const AI_STANDBY_MESSAGE = "Standby — AI is building this interface…";
 
+  /**
+   * THE assembly timeout — one home. The abort, the console error, and the
+   * message the user reads all come from here. It used to be hardcoded as "30s"
+   * in two places while the abort itself was 30000 and then 10000, so the error
+   * told the user a number the code had stopped using.
+   */
+  const ASSEMBLY_TIMEOUT_MS = 10000;
+
   // ── AI Assembly state ──
   // The header tabs are AI COMMANDS, not webpage links.
   // When user clicks Console, AI assembles the console surface.
@@ -118,6 +146,9 @@ export default function Index({
   const [aiAssemblyMessage, setAiAssemblyMessage] = useState(AI_STANDBY_MESSAGE);
   const [aiAssemblyFailed, setAiAssemblyFailed] = useState(false); // STRICT: blocks rendering when true
   const [assembledConsoleCards, setAssembledConsoleCards] = useState<any[] | null>(null); // null = not loaded, [] would be fallback
+  // The catalog check's findings, as Grace assembled them into the data model.
+  // null = the surface is not a catalog surface.
+  const [catalogFindings, setCatalogFindings] = useState<any[] | null>(null);
 
   const [_rightColumnView, _setRightColumnView] = useState<"chat" | "trace">("chat"); // Chat = TeacherEditorChat, Trace = SCE panel
   const [_isPromptPortalOpen, _setIsPromptPortalOpen] = useState<boolean>(false); // Show prompt portal in first column
@@ -956,8 +987,30 @@ export default function Index({
     session_id: string | null;
   } | null>(null);
 
+  // Attach the resize observer from the ref callback rather than an effect: the
+  // console panel mounts conditionally (headerTab === "console"), so a mount-time
+  // effect would run while the element is still null and silently never observe it.
+  const attachConsoleChatContainer = useCallback((el: HTMLDivElement | null) => {
+    consoleChatContainerRef.current = el;
+    consoleChatObserverRef.current?.disconnect();
+    consoleChatObserverRef.current = null;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      // Follow the shell ONLY while the width is proportional. A width the
+      // operator dragged is theirs — it must not move under them.
+      if (!isConsoleChatProportionalRef.current) return;
+      const openWidth = Math.max(COLLAPSED_WIDTH, Math.floor(el.getBoundingClientRect().width * CONSOLE_CHAT_OPEN_FRACTION));
+      preCollapseWidthRef.current = openWidth;
+      setConsoleChatWidth(openWidth);
+    });
+    observer.observe(el);
+    consoleChatObserverRef.current = observer;
+  }, []);
+
   const handleConsoleChatResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    // Dragging is the operator taking manual control — stop following the shell.
+    isConsoleChatProportionalRef.current = false;
     setIsConsoleChatResizing(true);
   }, []);
 
@@ -969,6 +1022,38 @@ export default function Index({
       setConsoleChatWidth(COLLAPSED_WIDTH);
     }
   }, [isConsoleChatCollapsed, consoleChatWidth]);
+
+  // Clicking the Chat tab in the collapsed rail is the operator asking for the
+  // column back. It opens to CONSOLE_CHAT_OPEN_FRACTION of the shell, computed
+  // from the live row width so it scales with the window instead of landing on a
+  // fixed pixel count.
+  const handleConsoleChatExpand = useCallback(() => {
+    const container = consoleChatContainerRef.current;
+    if (!container) {
+      // Not mounted yet — fall back to the remembered width rather than guessing.
+      setConsoleChatWidth(preCollapseWidthRef.current);
+      return;
+    }
+    const openWidth = Math.max(COLLAPSED_WIDTH, Math.floor(container.getBoundingClientRect().width * CONSOLE_CHAT_OPEN_FRACTION));
+    // Proportional mode: the observer keeps this fraction as the shell resizes,
+    // until the operator drags it somewhere they chose.
+    isConsoleChatProportionalRef.current = true;
+    preCollapseWidthRef.current = openWidth;
+    setConsoleChatWidth(openWidth);
+  }, []);
+
+  // Clicking the already-active tab again puts the column away. Remember the
+  // width first, so the next expand restores what the operator actually had.
+  const handleConsoleChatCollapse = useCallback(() => {
+    // MUST clear proportional mode BEFORE narrowing: otherwise the observer would
+    // see the collapsed width, recompute the fraction, and re-open the column by
+    // itself.
+    isConsoleChatProportionalRef.current = false;
+    setConsoleChatWidth((w) => {
+      if (w > COLLAPSED_WIDTH) preCollapseWidthRef.current = w;
+      return COLLAPSED_WIDTH;
+    });
+  }, []);
 
   // Console chat resize mouse move/up handlers
   useEffect(() => {
@@ -999,6 +1084,8 @@ export default function Index({
   useEffect(() => {
     const handleSidebarDragStart = () => {
       isSidebarDraggingRef.current = true;
+      // Same as the strip drag: manual control ends proportional mode.
+      isConsoleChatProportionalRef.current = false;
       setIsConsoleChatResizing(true);
     };
     const handleSidebarDrag = (event: Event) => {
@@ -1017,11 +1104,11 @@ export default function Index({
       });
     };
     window.addEventListener('right-column-drag-start', handleSidebarDragStart);
-    window.addEventListener('right-column-drag', handleSidebarDrag as EventListener);
+    window.addEventListener('right-column-drag-move', handleSidebarDrag as EventListener);
     window.addEventListener('right-column-drag-end', handleSidebarDragEnd);
     return () => {
       window.removeEventListener('right-column-drag-start', handleSidebarDragStart);
-      window.removeEventListener('right-column-drag', handleSidebarDrag as EventListener);
+      window.removeEventListener('right-column-drag-move', handleSidebarDrag as EventListener);
       window.removeEventListener('right-column-drag-end', handleSidebarDragEnd);
     };
   }, []);
@@ -1097,14 +1184,20 @@ export default function Index({
     const controller = new AbortController();
     consoleAssemblyControllerRef.current = controller;
 
-    // Client-side timeout: 30s hard cap. Measured cold DeepSeek calls complete
-    // server-side at ~13.5s (PERF TRACE render-console total=13516ms); the old
-    // 10s cap aborted requests the backend went on to finish successfully,
-    // which made first-try assembly fail while warm retries (~3s) succeeded.
+    // Client-side timeout: 10s hard cap.
+    //
+    // This was previously raised to 30s after a COLD DeepSeek call was measured
+    // at ~13.5s, and the old 10s cap aborted requests the backend went on to
+    // finish. Re-measured 2026-09-11: warm assemblies run 1.5–2.7s, so 10s is
+    // comfortable, and a stalled request now fails in ten seconds, not thirty.
+    //
+    // The catalog check does NOT come through here — it has its own fetch with
+    // no client cap, because it can legitimately run long (measured 5.4–17.4s on
+    // a 12 KB prompt). If it ever moves back onto this path, revisit this number.
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     try {
-      timeoutId = setTimeout(() => controller.abort(), 30000);
+      timeoutId = setTimeout(() => controller.abort(), ASSEMBLY_TIMEOUT_MS);
 
       // ═══════════════════════════════════════════════════════════════════
       // SINGLE UNIFIED ENDPOINT - A2UI v0.9 COMPLIANT
@@ -1176,6 +1269,25 @@ export default function Index({
 
       const assemblyTime = dataModel.assembly_time_ms || 0;
       const aiMessage = dataModel.ai_message || '';
+      // Grace speaks into HER seat. ai_message is written by her, but it was
+      // only ever logged and shown in the decision dialog — so everything she
+      // said about the surface was invisible to the person it was said to.
+      if (aiMessage) {
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: { role: 'assistant', content: aiMessage },
+        }));
+      }
+      // The measured cost of this action, straight from the provider's usage
+      // report — the readout in Grace's seat shows this and nothing else.
+      if (dataModel.usage && typeof dataModel.usage.total_tokens === 'number') {
+        // The spend belongs to the surface it came from, so it carries that
+        // surface's session id. Without it, every listener in every open
+        // conversation pulls the same number — the contract scopes a chat panel
+        // to its own conversationId (catalog.json -> ChatPanel).
+        window.dispatchEvent(new CustomEvent('a2ui:usage', {
+          detail: { ...dataModel.usage, sessionId: dataModel.session_id || currentPromptSessionRef.current || null },
+        }));
+      }
       console.log(`🤖 [A2UI] Surface assembled in ${assemblyTime}ms`);
       console.log(`🤖 [A2UI] Grace says: ${aiMessage}`);
 
@@ -1270,18 +1382,18 @@ export default function Index({
       );
       if (isAbort) {
         if (consoleAssemblyControllerRef.current === controller) {
-          // This request itself timed out (30s hard cap)
+          // This request itself timed out — see ASSEMBLY_TIMEOUT_MS.
           console.error(
             `[A2UI] ASSEMBLY TIMED OUT\n` +
             `  intent: ${intent}\n` +
-            `  timeout: 30000ms\n` +
+            `  timeout: ${ASSEMBLY_TIMEOUT_MS}ms\n` +
             `  error.name: ${error instanceof Error ? error.name : 'N/A'}\n` +
             `  error.message: ${errMsg}\n` +
             `  timestamp: ${new Date().toISOString()}\n` +
-            `  CAUSE: Backend did not respond within 30s. Typical causes: cold DeepSeek call slower than usual, backend down, or network failure.\n` +
+            `  CAUSE: Backend did not respond within ${ASSEMBLY_TIMEOUT_MS / 1000}s. Typical causes: a cold model call slower than usual, backend down, or network failure.\n` +
             `  FIX: Check backend logs for the request matching this timestamp. Look for "A2UI FAILURE" or PERF TRACE lines.`
           );
-          setAiAssemblyMessage('Assembly timed out (30s). The AI may be slow or the backend may be unreachable. Check the server logs for details.');
+          setAiAssemblyMessage(`Assembly timed out (${ASSEMBLY_TIMEOUT_MS / 1000}s). The AI may be slow or the backend may be unreachable. Check the server logs for details.`);
           setAiAssemblyFailed(true);
           setCurrentPromptSession(null);
           setAssembledConsoleCards(null);
@@ -1416,6 +1528,9 @@ export default function Index({
     // Only a session id in the URL changes the initial intent. The assembled
     // surface still sets the tab that matches it (see the `setHeaderTab` calls
     // in the surface handlers).
+    // The console page shows the CARDS. The catalog check is a SECOND call —
+    // it puts Grace's findings and her greeting in her own seat, and
+    // deliberately does not touch the console surface.
     const initialIntent = routeSessionId
       ? `render-session:${routeSessionId}`
       : 'render-console';
@@ -1428,7 +1543,49 @@ export default function Index({
 
     console.log(`🤖 [A2UI] Initial mount → intent: ${initialIntent}`);
 
-    assembleSurfaceWithAI(initialIntent);
+    // GRACE FIRST, then the surface contents.
+    //
+    // This order used to be the reverse (cards first, her report afterwards), so
+    // the thing that SPEAKS had to wait on the thing it narrates. She goes first
+    // now: her seat is already mounted — see the operator shell below, which no
+    // longer waits on the assembly either — and her report lands before the
+    // surface fills in around her. The orchestra is present before the content.
+    void (async () => {
+      // 1) Grace. Her OWN request, deliberately NOT assembleSurfaceWithAI: that
+      // function keeps a single in-flight slot (a second call aborts the first —
+      // which silently emptied the grid) and it flips is-ai-assembling. This is
+      // not a surface; it is a report for her seat.
+      try {
+        const res = await fetch(`${API_BASE}/ai/assemble-surface`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
+          body: JSON.stringify({ intent: 'catalog-health:prompt-composer' }),
+        });
+        if (!res.ok) return; // the indicator already reports an unreachable check
+        const ops = await res.json();
+        if (!Array.isArray(ops)) return;
+        const value = ops.find((o: any) => o.updateDataModel)?.updateDataModel?.value || {};
+        if (Array.isArray(value.findings)) setCatalogFindings(value.findings);
+        if (value.usage && typeof value.usage.total_tokens === 'number') {
+          // Carries its session id for the same reason: the report is for ONE
+          // seat, not for whatever else happens to be mounted.
+          window.dispatchEvent(new CustomEvent('a2ui:usage', {
+            detail: { ...value.usage, sessionId: value.session_id || currentPromptSessionRef.current || null },
+          }));
+        }
+        if (value.ai_message) {
+          // Her words go into her seat, the same channel the surface uses.
+          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+            detail: { role: 'assistant', content: value.ai_message },
+          }));
+        }
+      } catch {
+        /* unreachable — the badge already shows the check could not run */
+      }
+
+      // 2) THEN the surface contents.
+      await assembleSurfaceWithAI(initialIntent);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps = run only on mount
 
@@ -2029,7 +2186,7 @@ export default function Index({
         />
 
         {/* ── OPERATOR SHELL + AI SURFACE — 2UI architecture ── */}
-        <div ref={consoleChatContainerRef} className="flex flex-row overflow-hidden flex-1 min-h-0" style={{ minWidth: 0 }}>
+        <div ref={attachConsoleChatContainer} className="flex flex-row overflow-hidden flex-1 min-h-0" style={{ minWidth: 0 }}>
             {/* ── AI SURFACE — Lit Shadow DOM sandbox for A2UI content rendering ── */}
             <SentryErrorBoundary scope="ai-surface" onError={(error) => console.error("AI Surface error:", error.message)}>
               {/* P1+MIGRATION: React AISurfaceSandbox → Lit <ai-surface-sandbox>.
@@ -2171,6 +2328,18 @@ export default function Index({
                         return (editor && (editor._sections || editor.sections)) || [];
                       }}
                       leftColumnContent={currentPromptSession?.leftColumnContent || ''}
+                      catalogFindings={catalogFindings}
+                      onRepairFinding={() => {
+                        // Same call to action as the console chat: an EMPTY
+                        // composer. The two chats show the same list and do the
+                        // same thing until the real repair logic is wired.
+                        void assembleSurfaceWithAI('render-composer', {
+                          current_surface: headerTab || 'composer',
+                          has_unsaved_changes: hasUnsavedChangesRef.current,
+                          session_id: currentPromptSession?.id || null,
+                          session_title: currentPromptSession?.title || '',
+                        });
+                      }}
                     />
                   </div>
                   </workspace-layout>
@@ -2179,8 +2348,13 @@ export default function Index({
             </ai-surface-sandbox>
           </SentryErrorBoundary>
 
-          {/* ── OPERATOR SHELL: Resize handle + Chat panel — outside AI Surface ── */}
-          {headerTab === "console" && !isAIAssembling && (
+          {/* ── OPERATOR SHELL: Resize handle + Chat panel — outside AI Surface ──
+              Present FIRST and unconditionally. Grace's seat and the orchestrator
+              must not wait on a surface assembly: gating this on !isAIAssembling
+              removed her exactly while the thing she narrates was loading, so the
+              console arrived and the seat that speaks for it did not. The surface
+              contents fill in around her — not the other way round. */}
+          {headerTab === "console" && (
             <>
               <div
                 onMouseDown={handleConsoleChatResizeStart}
@@ -2196,12 +2370,45 @@ export default function Index({
                 )}
               </div>
               <div
-                className="shrink-0 h-full overflow-hidden"
+                className="h-full overflow-hidden"
                 style={{
                   width: consoleChatWidth,
+                  // The pane keeps its width, but must be ABLE to give width
+                  // back. shrink-0 made it refuse, so when the row was a few
+                  // pixels over, the pane's right edge landed past the browser
+                  // edge and its content was clipped outside the viewport.
+                  minWidth: 0,
+                  flexShrink: 1,
+                  // Same curve and duration as the panes: the chat arrives with
+                  // everything else instead of snapping open. Landed, not slapped.
+                  //
+                  // MUST be off while dragging. The drag handlers write a new
+                  // width on EVERY mousemove, so easing each one leaves the column
+                  // permanently chasing the cursor — it reads as the gripper
+                  // fighting back against you. workspace-layout guards its panes
+                  // the same way, with :host([dragging]) .pane { transition: none }.
+                  transition: prefersReducedMotion || isConsoleChatResizing
+                    ? 'none'
+                    : 'width 520ms cubic-bezier(0.22, 1, 0.36, 1)',
                 }}
               >
-                <InteractiveChatInterface />
+                <InteractiveChatInterface
+                  columnCollapsed={isConsoleChatCollapsed}
+                  onColumnExpand={handleConsoleChatExpand}
+                  onColumnCollapse={handleConsoleChatCollapse}
+                  catalogFindings={catalogFindings}
+                  onRepairFinding={() => {
+                    // The call to action: an EMPTY composer, ready to prepare the
+                    // repair. Nothing is pre-filled — the finding is not yet
+                    // carried into the prompt.
+                    void assembleSurfaceWithAI('render-composer', {
+                      current_surface: headerTab || 'console',
+                      has_unsaved_changes: hasUnsavedChangesRef.current,
+                      session_id: null,
+                      session_title: '',
+                    });
+                  }}
+                />
               </div>
             </>
           )}

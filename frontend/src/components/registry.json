@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "whatThisFileIs": "THE FIGMA MAP. Which Figma node each component came from. Three files in this repository are called some version of 'registry' — this is the one that records the design relationship, NOT the one that decides what may be rendered. The allowlist is frontend/src/shared/tag-registry.ts; the schema the server validates against is frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json.",
     "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it — do NOT regenerate. If absent, ask before building.",
     "ruleFile": ".continue/rules/design-system.md",
     "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09)",

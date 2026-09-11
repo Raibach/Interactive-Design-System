@@ -68,7 +68,7 @@ A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interf
 |-----------|---------------|
 | **Shell Always Visible** | The deterministic React shell renders unconditionally — nav, frame, error states, slot containers. The user never stares at a blank page. AI failure = shell shows the failure, not nothing. |
 | **AI Fills Slots** | Slots are the loading contract (left/middle/right). AI decides which prompt blocks, data, and chat populate them. It does not create or remove slots. |
-| **Zero-Trust Catalog** | Every component validated against `component-catalog.json`. Unknown → HTTP 503. No silent failures. |
+| **Zero-Trust Catalog** | Every component validated against `catalogs/<pipeline>/catalog.json`. Unknown → HTTP 503. No silent failures. |
 | **Fail Loud** | Invalid AI responses → 503 with diagnostics. Database down → 503. Empty Figma spec → 503 with exact reason. Never silently degrade. |
 | **No Executable Code** | `eval()` eliminated. `innerHTML` blocked. Buttons dispatch declarative `a2ui:action` events only. |
 | **Package-First** | A composer creates the draft package row on mount. Chat is scoped from keystroke one. |

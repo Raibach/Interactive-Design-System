@@ -148,13 +148,25 @@ export class WorkspaceLayout extends LitElement {
       width: 100%;
       height: 100%;
       min-height: 0;
+      /* Same reason as the sandbox: a flex item that won't shrink below its
+         content will push its siblings out of the viewport instead of
+         yielding. The three panes must be able to give width back. */
+      min-width: 0;
+
+      /* ── Motion language ────────────────────────────────────────────────
+         One curve, one duration, for every pane move in the shell.
+         Ease accelerates and stops — it lands like a slap. This curve
+         leaves fast and decelerates hard into the stop, so a pane arrives
+         rather than halts. Slow enough to read as movement, not as a jump. */
+      --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+      --dur-pane: 520ms;
     }
 
     .pane {
       overflow: auto;
       min-height: 0;
       min-width: 0;
-      transition: flex-grow 0.35s ease;
+      transition: flex-grow var(--dur-pane) var(--ease-settle);
     }
     .pane.collapsed {
       overflow: hidden;
@@ -187,13 +199,21 @@ export class WorkspaceLayout extends LitElement {
       background: #d1d5db;
       cursor: col-resize;
       flex-shrink: 0;
-      transition: background 0.1s, width 0.35s ease;
+      transition: background 0.1s, width var(--dur-pane) var(--ease-settle);
     }
     .gripper.collapsed {
       width: 0;
     }
     .gripper:hover { background: #9ca3af; }
     .gripper:active { background: #6b7280; }
+
+    /* Motion is a courtesy, never a requirement. This MUST stay last: it and
+       the .pane / .gripper rules share specificity 0,1,0, so only source order
+       lets this win. Placed above them, the gripper's own transition would
+       override it and the opt-out would be dead for the gripper only. */
+    @media (prefers-reduced-motion: reduce) {
+      .pane, .gripper { transition: none; }
+    }
   `;
 
   render() {

@@ -44,8 +44,14 @@ interface TabDef {
   id: TabId;
   label: string;
   tooltip: string;
-  /** Inline SVG path for the tab icon (viewBox 0 0 22.75 21.8752) */
+  /** Inline SVG path for the tab icon. Default viewBox is 0 0 22.75 21.8752. */
   svgPath: string;
+  /**
+   * Optional per-icon viewBox. The shared default (0 0 22.75 21.8752) is exactly
+   * the chat glyph's own extent, so an icon drawn on a 24x24 grid gets clipped
+   * by it. Set this when the path's coordinate space differs from the default.
+   */
+  viewBox?: string;
 }
 
 const TABS: TabDef[] = [
@@ -67,8 +73,10 @@ const TABS: TabDef[] = [
     id: 'tools',
     label: 'Tools',
     tooltip: 'Tool registry and usage',
-    // Wrench / tools icon
-    svgPath: 'M20.3125 13.2813C21.6566 13.2813 22.75 12.2299 22.75 10.9375C22.75 9.6451 21.6566 8.5937 20.3125 8.5937C19.2546 8.5937 18.3612 9.2488 18.0247 10.1563H13.3364L19.2683 4.4525C19.586 4.59898 19.9374 4.6875 20.3125 4.6875C21.6566 4.6875 22.75 3.63617 22.75 2.34375C22.75 1.05133 21.6566 0 20.3125 0C18.9684 0 17.875 1.05133 17.875 2.34375C17.875 2.70461 17.9672 3.04219 18.1192 3.34781L11.375 9.8328V4.68758C11.375 3.82625 12.1038 3.12508 13 3.12508H14.625V1.56258H13C12.0248 1.56258 11.1588 1.98641 10.5625 2.6425C9.9662 1.98641 9.1002 1.56258 8.125 1.56258H7.3125C3.28055 1.56258 0 4.71656 0 8.5938V13.2813C0 17.1586 3.28055 20.3126 7.3125 20.3126H8.125C9.1002 20.3126 9.9662 19.8887 10.5625 19.2327C11.1588 19.8887 12.0248 20.3126 13 20.3126H14.625V18.7501H13C12.1038 18.7501 11.375 18.0489 11.375 17.1876V12.0423L18.1192 18.5273C17.9672 18.8329 17.875 19.1705 17.875 19.5314C17.875 20.8238 18.9684 21.8752 20.3125 21.8752C21.6566 21.8752 22.75 20.8238 22.75 19.5314C22.75 18.239 21.6566 17.1877 20.3125 17.1877C19.9374 17.1877 19.5861 17.2762 19.2683 17.4227L13.3364 11.7189H18.0247C18.3612 12.6264 19.2546 13.2813 20.3125 13.2813Z',
+    // Wrench / tools icon — Material Design "build". Drawn on a 24x24 grid, so
+    // it declares its own viewBox; the shared default would clip its handle.
+    viewBox: '0 0 24 24',
+    svgPath: 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z',
   },
   {
     id: 'evaluation',
@@ -103,11 +111,28 @@ export class ChatNavigationBar extends LitElement {
     activeTab: { type: String, attribute: 'active-tab' },
     collapsed: { type: Boolean },
     allowedTabs: { type: String, attribute: 'allowed-tabs' },
+    healthCount: { type: Number, attribute: 'health-count' },
+    healthState: { type: String, attribute: 'health-state' },
   };
 
   // ── Defaults ─────────────────────────────────────────────────────────────
   declare activeTab: TabId;
   declare collapsed: boolean;
+  /**
+   * Open catalog findings. When above zero the chat tab's ICON pulses red, so
+   * the condition is visible on arrival. Set by InteractiveChatInterface from
+   * the catalog check (/api/catalog/audit). Zero means quiet.
+   */
+  declare healthCount: number;
+  /**
+   * Whether the count can be trusted.
+   *   'ok'      — the check ran; healthCount is real
+   *   'loading' — not fetched yet; say nothing
+   *   'unknown' — the check could not run. This must NEVER render the same as an
+   *               open finding: "cannot check" and "one problem" are different
+   *               claims, and collapsing them makes a broken pipeline look calm.
+   */
+  declare healthState: 'ok' | 'loading' | 'unknown';
   /**
    * Comma-separated list of tab IDs to show, filtered by the user's
    * departmental role. Set by InteractiveChatInterface from the
@@ -121,6 +146,8 @@ export class ChatNavigationBar extends LitElement {
     this.activeTab = 'chat';
     this.collapsed = false;
     this.allowedTabs = '';
+    this.healthCount = 0;
+    this.healthState = 'loading';
   }
 
   // ── Drag state (not reactive — no re-render needed) ──────────────────────
@@ -443,6 +470,42 @@ export class ChatNavigationBar extends LitElement {
       width: 100%;
       height: 100%;
     }
+    /* Catalog health marker — visible on arrival, silent when the count is 0.
+       There is no separate dot laid over the icon any more: the ICON itself
+       pulses, so the signal rides the thing the person is already looking at. */
+    .nb.hb-on .nsv,
+    .nb.hb-x .nsv {
+      animation: hb-pulse 1.1s ease-in-out infinite;
+    }
+    /* The dot carried two states and both survive on the icon's colour:
+       red = findings open, amber = we could not check. The point is that
+       "cannot check" is LOUD, never quiet — collapsing the two would make a
+       broken pipeline look calm. */
+    .nb.hb-on .nsv path { fill: #C50000; }
+    .nb.hb-x .nsv path { fill: #B45309; }
+    @keyframes hb-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .nb.hb-on .nsv,
+      .nb.hb-x .nsv { animation: none; }
+    }
+    /* The marker is a signal, not decoration — so it is still announced even
+       though it is no longer shown. Visually hidden, screen-reader audible. */
+    .hb-sr {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+
   `;
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -575,6 +638,47 @@ export class ChatNavigationBar extends LitElement {
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // Health marker
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * The chat tab's health marker. Three conditions, three different renderings —
+   * the point is that a person can tell them apart at a glance:
+   *
+   *   findings open            → the icon pulses red
+   *   the check could not run  → the icon pulses amber
+   *   clean, or still loading  → nothing
+   *
+   * These used to share one "!" because the caller passed 1 as a sentinel for
+   * "not ok". So a checker that never ran looked like a single open finding, and
+   * the label asserted a count that was not true.
+   *
+   * The marker now rides the icon instead of a dot laid over it — no second
+   * element to keep in register with the first, and the signal sits on the thing
+   * the person is already looking at.
+   */
+  private _healthClass(): '' | 'hb-on' | 'hb-x' {
+    if (this.healthState === 'unknown') return 'hb-x';
+    if (this.healthState === 'ok' && this.healthCount > 0) return 'hb-on';
+    return '';
+  }
+
+  /**
+   * The same three states, spoken. The marker is a signal, not decoration, so
+   * hiding it visually must not silence it — a screen reader still hears the
+   * fact, and the count with it.
+   */
+  private _healthStatus() {
+    if (this.healthState === 'unknown') {
+      return html`<span class="hb-sr" role="status">The catalog check did not run. This is not a clean result.</span>`;
+    }
+    if (this.healthState === 'ok' && this.healthCount > 0) {
+      return html`<span class="hb-sr" role="status">${this.healthCount} open catalog findings</span>`;
+    }
+    return '';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // Render
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -583,9 +687,15 @@ export class ChatNavigationBar extends LitElement {
 
     // Filter tabs by role — if allowedTabs is set, only show those.
     // If unset (dev mode / no role), show all (backwards-compatible).
-    const visibleTabs = this.allowedTabs
-      ? TABS.filter(tab => this.allowedTabs.split(',').includes(tab.id))
+    // A set that matches no known tab would render an empty bar, and an empty bar
+    // reads as "the nav bar is broken", not "this role has no tabs" — fail open.
+    const allowed = this.allowedTabs
+      ? this.allowedTabs.split(',').map((id) => id.trim()).filter(Boolean)
+      : [];
+    const filtered = allowed.length
+      ? TABS.filter((tab) => allowed.includes(tab.id))
       : TABS;
+    const visibleTabs = filtered.length ? filtered : TABS;
 
     return html`
       <div class="sb">
@@ -603,10 +713,11 @@ export class ChatNavigationBar extends LitElement {
           (tab) => html`
             <button
               type="button"
-              class="nb ${currentTab === tab.id ? 'na' : ''}"
+              class="nb ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''}"
               @click=${() => this._handleTabClick(tab.id)}
               title="${tab.tooltip}"
             >
+              ${tab.id === 'chat' ? this._healthStatus() : ''}
               <div class="ni ${currentTab === tab.id ? 'ns' : ''}">
                 <div class="iw">
                   <div class="ic">
@@ -615,7 +726,7 @@ export class ChatNavigationBar extends LitElement {
                       <path d="M26 0H0V25H26V0Z" fill="white" fill-opacity="0.01" />
                     </svg>
                     <!-- Colored icon -->
-                    <svg class="nsv" fill="none" viewBox="0 0 22.75 21.8752">
+                    <svg class="nsv" fill="none" viewBox="${tab.viewBox ?? '0 0 22.75 21.8752'}">
                       <path fill="#4ECFD5" d="${tab.svgPath}" />
                     </svg>
                   </div>
@@ -738,8 +849,18 @@ declare module 'react' {
       'chat-navigation-bar': React.DetailedHTMLProps<
         React.HTMLAttributes<ChatNavigationBar> & {
           'active-tab'?: TabId | '';
-          collapsed?: 'true' | 'false';
+          /**
+           * Lit declares this as `{ type: Boolean }`. React 19 sets the
+           * matching *property* on the element, so a real boolean is correct
+           * here — never the string "false", which Lit's boolean converter
+           * would read as true (any non-null attribute value is truthy).
+           * `'' | boolean` matches the convention used by the sibling Lit
+           * components (prompt-section-editor, workspace-layout, ...).
+           */
+          collapsed?: '' | boolean;
           'allowed-tabs'?: string;
+          'health-count'?: number | string;
+          'health-state'?: 'ok' | 'loading' | 'unknown';
           ref?: React.Ref<ChatNavigationBar>;
         },
         ChatNavigationBar

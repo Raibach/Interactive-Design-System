@@ -13,6 +13,64 @@ Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
   `behavior` flips `inferred → verbatim`. Do this before scaling to the
   remaining 16 un-annotated components.
 
+**[2026-09-11] — Catalog health: the report, and the boundaries that keep it honest**
+
+The catalog checker now runs as part of the build and at startup, reports on a
+**named** catalog, and posts its findings into the console chat on arrival. This
+entry is as much about what each piece *refuses* to do as what it does. Every
+item below is a boundary that stops a specific drift — do not relax one without
+replacing what it stops.
+
+1. **The report lives outside `dist/`.** It was written to
+   `frontend/dist/catalog-audit/`, and `vite build` empties `dist/` — so every
+   production build silently deleted it and turned `/api/catalog/audit` into a
+   503. Moved to `frontend/catalog-audit/`. Verified by generating it, running a
+   real `vite build`, and confirming it survived.
+
+2. **The check runs by itself.** `npm run build` now ends with `catalog:check`,
+   and `RESTART-LOCAL.sh` step 4b runs both catalogs before the servers start.
+   Before this the report was only as fresh as the last time somebody remembered
+   the command — nothing re-ran it.
+
+3. **Freshness is stated, so stale cannot read as live.** Every message leads with
+   `Generated <age>`, and past 6 hours it says `STALE REPORT` and prints the
+   re-run command. A week-old file used to render identically to a fresh one.
+
+4. **A broken checker no longer looks like one open finding.** The indicator
+   carried `health-count` alone, and the caller passed the count `1` to mean
+   "not ok" — so a check that never ran rendered the same red `!` as a single
+   finding, and its `aria-label` asserted a count that was not true. Split into
+   `health-count` (a quantity) and `health-state` (`ok`/`loading`/`unknown`);
+   `unknown` renders amber `?`. A number cannot carry a quantity and a flag.
+
+5. **The tier is derived, never restated.** `CATALOG_TIERS` reads each entry's
+   `surface`. A second membership list is a second truth, and two truths drift —
+   which is exactly what produced the allowlist/schema disagreement below.
+
+6. **The two gates are now compared.** `tag-registry.ts` (the gatekeeper's
+   allowlist) and `catalog.json` (the server's schema) both decide what may
+   render, and nothing checked that they agreed. Added `schema-absent` and
+   `allowlist-absent`. First run: 11 and 12. `ChatPanel`/`chat-panel`,
+   `SectionEditor`/`prompt-section-editor` and `CompiledOutput`/
+   `compiled-output-viewer` are each one component under two names.
+
+7. **A2UI protocol components are excluded explicitly.** `Text`, `Image`, `Row`,
+   `Column`, `Card`, `Button` are spec components, not Lit elements, so the
+   allowlist is not expected to name them. Excluded by an explicit list rather
+   than guessed from casing — casing-guessing is what made the previous version
+   of this check report false positives.
+
+8. **Repair stays a report.** Clicking a finding does not verify, apply or close
+   anything. A finding closes only when the checker stops deriving it. A
+   "verified" state without a real check would imply a fix landed when nothing
+   looked — the failure this whole subsystem exists to prevent.
+
+**Not claimed as verified:** the `RESTART-LOCAL.sh` startup pass (written, never
+run), and the `chat-navigation-bar` badge *render* — its state mapping was run
+across all five health states, but the Lit render was checked statically, not in
+a browser.
+
+
 **[2026-09-10] — Grace Edition: assistant + third-column output (Run)**
 
 1. **Run → compiled output fixed.** `handleRunRequested` read the backend's plain-JSON

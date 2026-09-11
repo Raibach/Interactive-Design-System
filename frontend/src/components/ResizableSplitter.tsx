@@ -281,12 +281,12 @@ export const ResizableSplitter: React.FC<ResizableSplitterProps> = ({
     };
 
     window.addEventListener('right-column-drag-start', handleSidebarDragStart);
-    window.addEventListener('right-column-drag', handleSidebarDrag as EventListener);
+    window.addEventListener('right-column-drag-move', handleSidebarDrag as EventListener);
     window.addEventListener('right-column-drag-end', handleSidebarDragEnd);
 
     return () => {
       window.removeEventListener('right-column-drag-start', handleSidebarDragStart);
-      window.removeEventListener('right-column-drag', handleSidebarDrag as EventListener);
+      window.removeEventListener('right-column-drag-move', handleSidebarDrag as EventListener);
       window.removeEventListener('right-column-drag-end', handleSidebarDragEnd);
     };
   }, [

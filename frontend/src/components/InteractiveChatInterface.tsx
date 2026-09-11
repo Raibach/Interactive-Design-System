@@ -1,4 +1,5 @@
 import { API_BASE } from "@/shared/apiHelper";
+import { fetchCatalogHealth, badgeState, badgeCount, type CatalogHealth } from "@/shared/catalogHealth";
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import * as Sentry from "@sentry/react";
 import { motion, AnimatePresence } from 'motion/react';
@@ -77,13 +78,47 @@ interface InteractiveChatInterfaceProps {
   getLeftColumnSections?: () => any[];
   /** Persisted left-column content (JSON `{ sections: [...] }`) — fallback when the editor isn't mounted */
   leftColumnContent?: string;
+  /**
+   * When the host owns the column width, it also owns "collapsed". The console
+   * column's width lives in WritingAreaIndex, so without this the nav bar's own
+   * collapsed flag drifts out of sync with the real column — and the bar's click
+   * logic ("already collapsed → expand") takes the wrong branch, so clicking the
+   * Chat tab collapses instead of opening.
+   */
+  columnCollapsed?: boolean;
+  /** Fired when the operator clicks the nav bar to bring the column back. */
+  onColumnExpand?: () => void;
+  /**
+   * Fired when the operator clicks the already-active tab to put the column
+   * away. Without this the bar's collapse toggle is a no-op: `columnCollapsed`
+   * takes precedence over the internal state, so only the host can narrow it.
+   */
+  onColumnCollapse?: () => void;
+  /**
+   * Findings from the catalog check, as Grace assembled them into the data model.
+   * They render INSIDE her seat: the list is about the packages in the console
+   * grid, so it belongs to the conversation, not to the grid.
+   */
+  catalogFindings?: Array<{
+    id: string;
+    check?: string;
+    component?: string | null;
+    nodeId?: string | null;
+    file?: string | null;
+    what?: string;
+  }> | null;
+  /** Fired when a finding's call to action is clicked. The host opens a composer. */
+  onRepairFinding?: (findingId: string) => void;
 }
 
-export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent }: InteractiveChatInterfaceProps = {}) {
+export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent, columnCollapsed, onColumnExpand, onColumnCollapse, catalogFindings, onRepairFinding }: InteractiveChatInterfaceProps = {}) {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [inputHeight, setInputHeight] = useState(180);
   const [isDragging, setIsDragging] = useState(false);
   const [isRightColumnCollapsed, setIsRightColumnCollapsed] = useState(false);
+  // The host's flag wins when the host owns the column width (the console
+  // column lives in WritingAreaIndex). Otherwise fall back to local state.
+  const isColumnCollapsed = columnCollapsed ?? isRightColumnCollapsed;
   const startYRef = useRef<number>(0);
   const startHeightRef = useRef<number>(0);
   const [chatInput, setChatInput] = useState('');
@@ -102,6 +137,11 @@ export function InteractiveChatInterface({ onConversationChange, sessionId, comp
   // ── Prevent infinite loop: track last reported conversation ID + throttle ──
   const lastReportedConvIdRef = useRef<string | null>(null);
   const convChangeThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Live values for the once-bound listeners below. They bind with an empty
+  //    dep list, so reading state directly inside them captures first-render
+  //    values — which is how a handler ends up acting on the wrong conversation.
+  const currentConversationIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
 
   const handleScroll = () => {
     const container = chatContainerRef.current;
@@ -220,32 +260,68 @@ ${compiledOutput.slice(0, 3000)}`;
   // ── Ref to the Lit <chat-navigation-bar> element ──────────────────────
   const navBarRef = useRef<ChatNavigationBar | null>(null);
 
+  /**
+   * Hand the conversation we are in back to the list before we leave it.
+   *
+   * Selecting New Chat used to just CLEAR the panel: the conversation was never
+   * written back, so the default conversation could not be reopened — it stayed
+   * reachable only until you looked away. This saves it first, under a real name
+   * derived from what was actually asked, then refreshes the list so the
+   * conversation we just left is sitting there to reopen.
+   */
+  const endCurrentConversation = async () => {
+    const id = currentConversationIdRef.current;
+    if (id) {
+      // autosaveConversation renames only a conversation still carrying a
+      // default title; one the user has already named is left exactly as it is.
+      await conversationStorage.autosaveConversation(id).catch((err) => {
+        console.error('[Chat] Could not save the conversation before leaving it:', err);
+      });
+    }
+
+    const sid = sessionIdRef.current;
+    if (!sid || isConversationsLoadingRef.current) return;
+
+    isConversationsLoadingRef.current = true;
+    try {
+      const all = await conversationStorage.getSessionConversations(sid);
+      setConversations((all || []).filter(Boolean).sort((a: Conversation, b: Conversation) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      ));
+      conversationsLoadedRef.current = true;
+    } catch (error) {
+      console.error('[Chat] Could not refresh conversations after ending one:', error);
+    } finally {
+      isConversationsLoadingRef.current = false;
+    }
+  };
+
+  /**
+   * New Chat — start a fresh conversation in this window. Whatever we are
+   * leaving is saved first, so starting a new chat never costs you the one you
+   * were in. (This event had no listener at all: the button dispatched it and
+   * nothing answered.)
+   */
+  useEffect(() => {
+    const handler = async () => {
+      await endCurrentConversation();
+      setChatMessages([]);
+      setCurrentConversationId(null);
+      setChatInput('');
+    };
+    window.addEventListener('new-chat', handler);
+    return () => window.removeEventListener('new-chat', handler);
+    // endCurrentConversation reads refs only, so the first-render closure is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Listen for collapse-chat event — save closes into list item ──
   useEffect(() => {
     const handler = async () => {
-      // ✅ DEDUP: Skip if already loading conversations
-      if (isConversationsLoadingRef.current) {
-        console.log('[Chat] Skipping conversation reload - already in flight');
-        setChatMessages([]);
-        setCurrentConversationId(null);
-        return;
-      }
-
-      // Reload the package's conversations so the saved one appears in the list
-      isConversationsLoadingRef.current = true;
-      try {
-        const all = sessionId
-          ? await conversationStorage.getSessionConversations(sessionId)
-          : [];
-        setConversations((all || []).filter(Boolean).sort((a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        ));
-        conversationsLoadedRef.current = true;
-      } catch (error) {
-        console.error('Failed to reload conversations after collapse-chat:', error);
-      } finally {
-        isConversationsLoadingRef.current = false;
-      }
+      // SAVE FIRST. This handler's own comment said "save closes into list item",
+      // but it only ever reloaded the list — the conversation being closed was
+      // never written back, so it dropped out of reach instead of into the list.
+      await endCurrentConversation();
       // Collapse: clear messages and reset conversation
       setChatMessages([]);
       setCurrentConversationId(null);
@@ -274,6 +350,102 @@ ${compiledOutput.slice(0, 3000)}`;
     };
     window.addEventListener('a2ui:system-message', handler);
     return () => window.removeEventListener('a2ui:system-message', handler);
+  }, []);
+
+  // ── Catalog check — the console reports the catalog's condition on arrival ──
+  // Alert, don't block: nothing here stops the app. It tells the truth on load
+  // so a design user can see what is wrong and go correct it in Figma.
+  const [catalogHealth, setCatalogHealth] = useState<CatalogHealth>({ state: 'loading' });
+  /**
+   * Her token usage, as she reports it — measured by the backend from the
+   * provider's own usage report, never estimated.
+   *
+   * `last` is the most recent call. `total` is every call this session added
+   * up — the tally. Each call is counted once, keyed on the backend's `call_id`,
+   * so a surface that gets applied twice cannot inflate the number.
+   */
+  const [usage, setUsage] = useState<{
+    last: {
+      total_tokens?: number;
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      mode?: string;
+      model?: string;
+      provider?: string;
+      call_id?: number;
+    } | null;
+    total: {
+      total_tokens: number;
+      prompt_tokens: number;
+      completion_tokens: number;
+      calls: number;
+    };
+  }>({
+    last: null,
+    total: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0, calls: 0 },
+  });
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId ?? null;
+  }, [sessionId]);
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    // Which calls are already in the tally. A plain Set, not state — it is a
+    // guard against double-counting, not render data.
+    const counted = new Set<number>();
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || typeof detail.total_tokens !== 'number') return;
+      // Strictly scoped: this call's spend belongs to the conversation it came
+      // from, so it cannot be pulled into another one. The contract binds a chat
+      // panel to its own conversationId — a number from a different session is
+      // not this session's number. An unscoped panel still takes what arrives.
+      if (sessionIdRef.current && detail.sessionId !== sessionIdRef.current) return;
+      if (typeof detail.call_id === 'number') {
+        if (counted.has(detail.call_id)) return; // already counted
+        counted.add(detail.call_id);
+      }
+      setUsage(prev => ({
+        last: detail,
+        total: {
+          total_tokens: prev.total.total_tokens + (detail.total_tokens || 0),
+          prompt_tokens: prev.total.prompt_tokens + (detail.prompt_tokens || 0),
+          completion_tokens: prev.total.completion_tokens + (detail.completion_tokens || 0),
+          calls: prev.total.calls + 1,
+        },
+      }));
+    };
+    window.addEventListener('a2ui:usage', handler);
+    return () => window.removeEventListener('a2ui:usage', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const apply = (health: CatalogHealth) => {
+      if (cancelled) return;
+      setCatalogHealth(health);
+      // The shell no longer writes the report. The LIST is Grace's — she
+      // assembles the surface and says her piece via `ai_message` →
+      // `a2ui:system-message`. What remains here is the indicator's count,
+      // which is the only part of this the shell should own.
+    };
+
+    const poll = () => { fetchCatalogHealth().then(apply); };
+
+    poll();
+    // Live: poll, and re-check the moment the operator comes back to the window.
+    const id = setInterval(poll, 30_000);
+    window.addEventListener('focus', poll);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      window.removeEventListener('focus', poll);
+    };
   }, []);
 
   // ── Edit activity log (circular buffer of last 10 actions) ──────────
@@ -859,6 +1031,46 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
           <button
             key={i}
             onClick={() => {
+              // Catalog repair — the button next to a finding in the health report.
+              // Starts the repair by turning the finding into an explicit, recorded
+              // request. Applying an edit from inside the app is not wired yet, and
+              // this says so rather than implying the fix happened.
+              if (action.startsWith('catalog-repair:')) {
+                const findingId = decodeURIComponent(action.slice('catalog-repair:'.length));
+                const f = catalogHealth.state === 'ok'
+                  ? catalogHealth.report.findings.find((x) => x.id === findingId)
+                  : undefined;
+                if (!f) {
+                  setChatMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: `⚠️ Repair not started. Finding ${findingId} is no longer in the report — the catalog changed since this was posted. Re-run the check.`,
+                  }]);
+                  return;
+                }
+                const owner = f.owner === 'designer'
+                  ? 'designer — needs a note written in Figma'
+                  : 'pipeline — needs a code change';
+                setChatMessages(prev => [...prev,
+                  { role: 'user', content: `Repair: ${f.check}` },
+                  {
+                    role: 'assistant',
+                    content: [
+                      `Repair requested — ${f.check}`,
+                      '',
+                      `component   ${f.component || '—'}`,
+                      `figma node  ${f.nodeId || '—'}`,
+                      `file        ${f.file || '—'}`,
+                      `owner       ${owner}`,
+                      '',
+                      `What's wrong:  ${f.what}`,
+                      f.fix ? `The fix:  ${f.fix}` : '',
+                      '',
+                      'NOT YET APPLIED. Editing the catalog from inside the app is not wired. This request is recorded as a turn so it can be handed off.',
+                    ].filter(Boolean).join('\n'),
+                  },
+                ]);
+                return;
+              }
               // Handle remove_role actions directly — dispatch DOM event
               if (action.startsWith('remove_role:')) {
                 const roleName = decodeURIComponent(action.replace('remove_role:', ''));
@@ -933,6 +1145,18 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
     return () => { mediaQuery.removeEventListener('change', updatePreference); };
   }, []);
 
+  /**
+   * The hero header names WHERE WE ARE NOW — and where we are is the last call.
+   *
+   * This is NOT a fixed string. It is whatever `mode` the backend reported for
+   * the most recent LLM call, taken straight off the `a2ui:usage` detail —
+   * whatever ran last IS the name. Nothing in this file names a mode.
+   *
+   * Before any call there is no last call, so it says '—'. Same rule as the
+   * tally directly below it: no label, no number, until something real is there.
+   */
+  const lastCallMode = usage.last?.mode || '—';
+
   const tabMetadata = useMemo(() => {
     const now = new Date();
     const timestamp = now.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -943,9 +1167,9 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
       case 'evaluation': return { title: 'A/B Testing', subtitle: 'Model comparison, variant testing, and statistical significance', timestamp, tokens: '2,481', cost: '$0.0124', executions: '8' };
       case 'metadata': return { title: 'Governance & Cost', subtitle: 'Cost per invocation, change history, hallucination rates, audit trail', timestamp, tokens: '—', cost: '$47.82/mo', executions: '3,847' };
       case 'trace':
-      default: return { title: 'Chat History', subtitle: 'Conversations, past chats, and new chat', timestamp, tokens: '892', cost: '$0.0041', executions: '47' };
+      default: return { title: lastCallMode, subtitle: lastCallMode, timestamp, tokens: '892', cost: '$0.0041', executions: '47' };
     }
-  }, [selectedNav]);
+  }, [selectedNav, lastCallMode]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -1000,6 +1224,10 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
       const detail = (e as CustomEvent<TabChangeEventDetail>).detail;
       if (detail?.tab !== undefined) {
         setSelectedNav(detail.tab);
+        // Clicking the Chat tab is the operator asking for the column back.
+        // The bar only emits this on the expand path, so when the column is
+        // already open this is a no-op.
+        if (detail.tab === 'chat') onColumnExpand?.();
       }
     };
 
@@ -1009,6 +1237,7 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
         setIsRightColumnCollapsed(detail.collapsed);
         if (detail.collapsed) {
           setSelectedNav('');
+          onColumnCollapse?.();
         }
       }
     };
@@ -1020,7 +1249,7 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
       el.removeEventListener('tab-change', onTabChange);
       el.removeEventListener('collapse-toggle', onCollapseToggle);
     };
-  }, []);
+  }, [onColumnExpand, onColumnCollapse]);
 
   // ── Push initial React state → Lit component on mount ─────────────────
   // The Lit component defaults to collapsed=false, activeTab=''.
@@ -1079,9 +1308,11 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
       {/* Lit A2UI chat navigation bar — replaces React SidebarNavigation */}
       <chat-navigation-bar
         ref={navBarRef}
-        active-tab={isRightColumnCollapsed ? '' : (selectedNav === 'trace' || selectedNav === 'tools' || selectedNav === 'evaluation' || selectedNav === 'variables' || selectedNav === 'metadata' ? selectedNav : 'chat')}
-        collapsed={isRightColumnCollapsed ? 'true' : 'false'}
+        active-tab={isColumnCollapsed ? '' : (selectedNav === 'trace' || selectedNav === 'tools' || selectedNav === 'evaluation' || selectedNav === 'variables' || selectedNav === 'metadata' ? selectedNav : 'chat')}
+        collapsed={isColumnCollapsed}
         allowed-tabs={allowedTabs}
+        health-count={badgeCount(catalogHealth)}
+        health-state={badgeState(catalogHealth)}
       >
         <img slot="logo" alt={getImageAlt('card-img-default')} loading="lazy" data-a2ui-id="card-img-default" src={getImageUrl('card-img-default')} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </chat-navigation-bar>
@@ -1091,13 +1322,13 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
         className="flex flex-col h-full min-h-0 min-w-0"
         style={{
           flex: '1 1 0%',
-          opacity: isRightColumnCollapsed ? 0 : 1,
-          transform: isRightColumnCollapsed ? 'translateX(14px)' : 'translateX(0)',
-          pointerEvents: isRightColumnCollapsed ? 'none' : 'auto',
+          opacity: isColumnCollapsed ? 0 : 1,
+          transform: isColumnCollapsed ? 'translateX(14px)' : 'translateX(0)',
+          pointerEvents: isColumnCollapsed ? 'none' : 'auto',
           overflow: 'hidden',
-          transition: prefersReducedMotion ? 'none' : 'opacity 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+          transition: prefersReducedMotion ? 'none' : 'opacity 400ms cubic-bezier(0.22, 1, 0.36, 1), transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
         }}
-        aria-hidden={isRightColumnCollapsed}
+        aria-hidden={isColumnCollapsed}
       >
         {/* Chat messages area */}
         <div 
@@ -1198,6 +1429,57 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                   </div>
                 </motion.div>
 
+                {/* The chat hero — ABOVE the repairs, so it reads first and the
+                    conversation flows down from it. Grace reports her own spend
+                    here: TOTAL first, because that is the number that adds up
+                    over the session. All of it is MEASURED by the backend from
+                    the provider's usage report; where there is no number yet it
+                    says so rather than showing a placeholder. */}
+                <motion.div initial={{ opacity: 0, y: -15, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={motionPresets.header} className="bg-gradient-to-br from-[#f8f9fa] to-[#e9ecef] border-l-4 border-[#507274] rounded-lg p-5 shadow-md">
+                  <div className="flex items-start justify-between mb-3">
+                    <div style={{ minWidth: 300 }}>
+                      <h2 className="font-['Inter'] font-bold text-[20px] text-[#1c2f4e] mb-1">{tabMetadata.title}</h2>
+                      <p className="font-['Inter'] text-[13px] text-[#6c757d] leading-relaxed">{tabMetadata.subtitle}</p>
+                    </div>
+                    <div className="bg-[#507274] text-white px-3 py-1 rounded-full text-[11px] font-['Inter'] font-semibold">{selectedNav.toUpperCase()}</div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-[#dee2e6]" style={{ minWidth: 300 }}>
+                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Total Tokens</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e] tabular-nums">{usage.total.calls > 0 ? usage.total.total_tokens.toLocaleString() : '—'}</div></div>
+                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">In / Out</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e] tabular-nums">{usage.total.calls > 0 ? `${usage.total.prompt_tokens.toLocaleString()} / ${usage.total.completion_tokens.toLocaleString()}` : '—'}</div></div>
+                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Calls</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e] tabular-nums">{usage.total.calls > 0 ? usage.total.calls.toLocaleString() : '—'}</div></div>
+                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Last Call</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e] tabular-nums">{usage.last ? `${usage.last.total_tokens?.toLocaleString()} · ${usage.last.mode || '—'}` : '—'}</div></div>
+                  </div>
+                </motion.div>
+
+                {/* Catalog findings — Grace's report, under the hero, IN the chat's
+                    own flow. No frame, no embed, no separate scroll: the list
+                    scrolls with the conversation because it belongs to it. */}
+                {catalogFindings && catalogFindings.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="font-['Inter'] text-[12px] font-semibold text-[#1c2f4e]">
+                      Catalog check — {catalogFindings.length} open
+                    </div>
+                    <ul className="space-y-1.5">
+                      {catalogFindings.map((f) => (
+                        <li key={f.id} className="flex items-start gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onRepairFinding?.(f.id)}
+                            className="shrink-0 px-2 py-0.5 rounded bg-[#4066e3] text-white text-[10px] font-semibold hover:bg-[#3051c0] transition-colors cursor-pointer"
+                          >
+                            Repair
+                          </button>
+                          <span className="font-['Inter'] text-[13px] text-gray-800 leading-snug">
+                            <span className="font-semibold">{f.component || f.file || '(catalog)'}</span>
+                            {f.nodeId ? ` ${f.nodeId}` : ''}
+                            {f.what ? ` — ${f.what.slice(0, 110)}` : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {chatMessages.length > 0 && (
                   <div className="space-y-3">
                     {chatMessages.map((msg, i) => (
@@ -1216,22 +1498,6 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                     )}
                   </div>
                 )}
-
-                <motion.div initial={{ opacity: 0, y: -15, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={motionPresets.header} className="bg-gradient-to-br from-[#f8f9fa] to-[#e9ecef] border-l-4 border-[#507274] rounded-lg p-5 shadow-md">
-                  <div className="flex items-start justify-between mb-3">
-                    <div style={{ minWidth: 300 }}>
-                      <h2 className="font-['Inter'] font-bold text-[20px] text-[#1c2f4e] mb-1">{tabMetadata.title}</h2>
-                      <p className="font-['Inter'] text-[13px] text-[#6c757d] leading-relaxed">{tabMetadata.subtitle}</p>
-                    </div>
-                    <div className="bg-[#507274] text-white px-3 py-1 rounded-full text-[11px] font-['Inter'] font-semibold">{selectedNav.toUpperCase()}</div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-[#dee2e6]" style={{ minWidth: 300 }}>
-                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Last Updated</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e]">{tabMetadata.timestamp}</div></div>
-                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Tokens Used</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e]">{tabMetadata.tokens}</div></div>
-                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Est. Cost</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e]">{tabMetadata.cost}</div></div>
-                    <div><div className="text-[11px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-1">Executions</div><div className="text-[13px] font-['Inter'] font-semibold text-[#1c2f4e]">{tabMetadata.executions}</div></div>
-                  </div>
-                </motion.div>
 
                 {(() => {
                   switch (selectedNav) {
@@ -1602,7 +1868,24 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
             GPT-4.1
             {hoveredButton === 'gpt' && (<div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[#BCCBCE] text-black p-[3px] rounded shadow-[0px_2px_8px_rgba(0,0,0,0.25)] whitespace-nowrap text-[10pt] font-['Inter'] font-normal z-50">Select AI model<div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#BCCBCE]"></div></div>)}
           </button>
-          <div className="text-[#10455f] text-sm opacity-60">{isDragging ? `${inputHeight}px` : ''}</div>
+          {/* The readout — bottom-right, under the input, where no button goes.
+              The running total leads, because that is the number that adds up.
+              Every value is MEASURED by the backend from the provider's own
+              usage report. No estimate, no placeholder, no fake counter. */}
+          <div className="text-[#10455f] text-[11px] opacity-70 font-['Inter'] tabular-nums text-right leading-tight">
+            {isDragging ? (
+              `${inputHeight}px`
+            ) : usage.last ? (
+              <>
+                <div className="font-semibold">{usage.total.total_tokens.toLocaleString()} tokens total</div>
+                <div className="opacity-70">
+                  +{usage.last.total_tokens?.toLocaleString()} this call · {usage.total.calls.toLocaleString()} {usage.total.calls === 1 ? 'call' : 'calls'}
+                </div>
+              </>
+            ) : (
+              ''
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
-  "title": "Raibach Prompt Composer Catalog",
-  "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. 23 trusted components — 6 from the A2UI Basic Catalog plus 17 project-specific Lit/React components. Agent can only render components from this allowlist.",
-  "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
+  "$id": "https://raibach.net/a2ui/catalogs/ecommerce/v0_9_1/catalog.json",
+  "title": "Raibach E-Commerce Catalog",
+  "whatThisFileIs": "THE SCHEMA for the e-commerce pipeline. Same job as the prompt-composer catalog: what the server validates an A2UI payload against. One file per pipeline — the pipelines never share a catalogId, so a surface can only render its own components.",
+  "description": "SCAFFOLD — a straight copy of the prompt-composer catalog, relabeled, to establish the per-pipeline structure. NOT yet pruned to what an e-commerce surface actually needs. Everything prompt-composer-specific (prompt-section-editor, role-tile, model-selector-button, ...) is still in here and will be removed as the catalog is worked down. See Lit-to-figma-trace-plan.",
+  "catalogId": "https://raibach.net/a2ui/catalogs/ecommerce/v0_9_1/catalog.json",
   "components": {
     "Text": {
       "type": "object",

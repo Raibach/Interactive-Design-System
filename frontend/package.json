@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run catalog:check",
+    "catalog:check": "node scripts/catalog-check.mjs --catalog prompt-composer && node scripts/catalog-check.mjs --catalog ecommerce",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
