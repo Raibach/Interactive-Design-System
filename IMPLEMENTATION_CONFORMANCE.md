@@ -1,6 +1,6 @@
 # SPECIFICATIONS — A2UI Protocol v0.9.1 Implementation & Conformance
 
-**Project:** Deterministic Design System Manager ("Grace AI") — Raibach Interactive Design Studio
+**Project:** Deterministic Design System Manager — Raibach Interactive Design Studio
 **Protocol:** A2UI v0.9.1 (Agent-to-User Interface), the current production release published by the A2UI project (Google, Apache 2.0)
 **Canonical sources:**
 - Protocol specification: <https://a2ui.org/specification/v0.9.1-a2ui/>
@@ -141,5 +141,5 @@ Claims in this document can be reproduced without trusting it:
 - Official A2UI v0.9.1 protocol specification: <https://a2ui.org/specification/v0.9.1-a2ui/>
 - A2A extension spec: <https://a2ui.org/specification/v0.9.1-a2ui-extension-specification/> · Evolution guide: <https://a2ui.org/specification/v0.9.1-evolution-guide/> · Basic catalog guide: <https://a2ui.org/specification/v0.9.1-basic-catalog-implementation-guide/>
 - [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — live-verified compliance ledger and Phase-2 remediation record
-- [`A2UI_CARD_CONTRACT.md`](A2UI_CARD_CONTRACT.md) — Figma→Lit card component data contract
+- [`CONSOLE_CONTRACTS.md`](CONSOLE_CONTRACTS.md) — Figma→Lit console card component data contract
 - [`CHANGELOG.md`](CHANGELOG.md) — day-by-day release history

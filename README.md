@@ -171,7 +171,7 @@ Docker on **Northflank** (`prompt-composer-console`, us-central). Production dep
 - [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
 - [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
 - [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
-- [`A2UI_CARD_CONTRACT.md`](A2UI_CARD_CONTRACT.md) — Card component data contract
+- [`CONSOLE_CONTRACTS.md`](CONSOLE_CONTRACTS.md) — Console surface data contract
 
 ---
 

@@ -48,6 +48,7 @@ export class PromptContainer extends LitElement {
       margin: 1px;
     }
     .sections-area {
+      display: var(--left-sections-display, block);
       flex: 1;
       min-width: 0;
       /* Deliberately NOT a flex column — the sections must hug their content
