@@ -6,6 +6,39 @@
   "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. Agent can only render components from this allowlist.",
   "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
   "components": {
+    "ai-surface-sandbox": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The bounded surface Grace assembles A2UI content into. <ai-surface-sandbox> is defined (components/lit/ai-surface-sandbox.ts) and named by the allowlist, but this schema did not list it - so any payload naming it was rejected with a 503.",
+          "properties": {
+            "component": {
+              "const": "ai-surface-sandbox"
+            },
+            "isAiAssembling": {
+              "type": "boolean",
+              "default": false,
+              "description": "True while an assembly is in flight; the sandbox shows its spinner slot."
+            },
+            "headerTab": {
+              "type": "string",
+              "enum": ["console", "composer", "evaluation", "variables", "metadata"],
+              "default": "console",
+              "description": "Which slot the sandbox exposes."
+            }
+          },
+          "required": ["component"]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
     "Text": {
       "type": "object",
       "allOf": [
@@ -1269,6 +1302,7 @@
     },
     "anyComponent": {
       "oneOf": [
+        { "$ref": "#/components/ai-surface-sandbox" },
         {
           "$ref": "#/components/Text"
         },
