@@ -558,7 +558,81 @@ imagine around.
     now in place, and nothing was ever removed from the design, the registry or the
     catalogs: only duplicate report rows, which is what the count drop was.
 
+**The tool call now answers where no Figma Desktop exists — the REST channel**
+
+33. **"Make it work in production" turned out to be a field, not a feature.** The tool
+    call could only talk to the MCP, and the MCP is a *desktop process* on
+    `127.0.0.1:3845` — present on a designer's machine, never on a server. The tempting
+    reading is "so the design cannot be read in production", and that reading is wrong:
+    `figma_service` has been serving node specs from REST + `FIGMA_TOKEN` behind
+    `/api/figma/spec/{key}/{node}`, cached in Postgres, all along. `run_tool_calls` now
+    asks the MCP first and falls back to that channel, and the block it hands the model
+    **names which channel answered** — `via the MCP channel` / `via the REST channel` —
+    because the two do not carry the same things, and the model must never be told it
+    saw generated reference code that REST never sends.
+
+34. **`extract_node_spec` was dropping annotations — the field the pipeline exists to
+    read.** Fills, bounds, effects, per-node type styles: all captured. `annotations`:
+    never touched. So the REST channel returned a component's *geometry* and could not
+    answer what it *does*. Fixed at the extractor, so every consumer of a spec gains
+    them — children included, because a container's behaviour is usually written on its
+    parts rather than on the container.
+
+35. **The written intent arrives on a second channel this repository had never named:
+    the component DESCRIPTION.** `model-btn-label` (`40000973:24205`) carries *"testing
+    to see if Deepseek can see the note"* — it is the "note about a note" from the
+    extraction pass, and it is **not** an annotation. The MCP says so in its own
+    heading: *"Component descriptions: The following components have usage
+    descriptions…"*. `GET /files/{key}/components` carries descriptions and `/nodes`
+    does not; `/nodes` carries annotations and `/components` does not. Both are now
+    read, and labelled separately in the block the model receives.
+
+36. **What production can see, measured rather than assumed** — file
+    `20UPR2KQMsbAxlo5NJb1se`, **dead MCP address** (the production condition), four
+    nodes:
+
+    ```
+    gripper-prompt-input 40000941:23074 → ANNOTATION + DESCRIPTION
+    model-btn-label      40000973:24205 → DESCRIPTION: "testing to see if Deepseek…"
+    chat-button          40001010:25768 → ANNOTATION ×2 (incl. yellow-when-selected)
+    chevron-blue-closed  40000922:4875  → geometry only — CORRECT: its description
+                                          lives in a LIBRARY file, which Dev Mode
+                                          resolves and neither REST endpoint reaches
+    ```
+
+    Four of four read, zero warnings. The bare node came back bare **honestly**: the
+    block states that a library-scoped description is invisible on this channel, so
+    "not found here" is never reported as "the designer wrote none".
+
+37. **Security, since it was asked: the token already lives on that server.** This adds
+    no secret and no new access. It reads — over the token the deployment already holds
+    — files that account can already open, by GET, scope `file_content:read`, writing
+    nothing to Figma. Read-only access to a design is the same access as opening the
+    prototype, which is what makes the fallback acceptable rather than merely
+    convenient. What it adds is request volume: one `/nodes` pull per tool call, and one
+    `/components` pull per file per 5 minutes — a failed pull is never cached, so a
+    Figma outage cannot decay into "no descriptions were written".
+
+**Mistakes, continued**
+
+M13. **I reported a component description as an annotation.** The extraction pass that
+     found the placeholder `"Used to indicate a grphic"` read it off the **description**
+     channel and recorded it as a Dev Mode annotation — a provenance error in precisely
+     the category this pipeline exists to prevent, caught only by reading the MCP's own
+     section heading. Nothing durable carried the error (not the registry, not the
+     guide, not the commit message), and `.clinerules/figma-to-lit.md` §2 now states the
+     two channels separately, with each one's REST coverage.
+
+M14. **I then denied the annotations twice, using a flag that counts the wrong thing.**
+     `grep -c` counts *lines*, and a Figma JSON payload is one line: it reported "1
+     occurrence" in a 3.2 MB payload that holds **25**, across 21 nodes. From the same
+     habit I concluded `/nodes` *strips* annotations; the controlled test (same node,
+     both endpoints) showed the opposite — `/nodes` carries them, and the node I had
+     sampled genuinely had none. Two conclusions, both wrong, in opposite directions,
+     from a flag that does not mean what it looks like it means.
+
 **Carry-forward (for the status board)**
+
 
 - **`LLM_TIMEOUT = 10`** (`backend/grace_gui.py:33`, *"HARD 10s cap"*). Chosen for A2UI
   surface assembly; the repair prompt is a *document-writing* task and one of two live
@@ -574,11 +648,14 @@ imagine around.
 - **`/api/ai/save-surface` requires a valid UUID `X-User-ID`** — a probe sending `dev`
   returns 500 `invalid input syntax for type uuid`. Worth a guard that fails with a
   sentence instead of a Postgres error.
-- **The tool call runs on every Run and is not cached.** `figma_mcp.py` goes to the
-  MCP live each time (25s cap) and the LLM call follows behind it (10s cap), so one
-  Run can occupy ~35s and the same node is re-fetched for every Run against it. The
-  REST path already caches in Postgres `figma_specs`; this one caches nothing. Cache
-  it, or at least hold it for the life of the package.
+- **The tool call still runs on every Run.** `figma_mcp.py` goes to the MCP live each
+  time (its cap is now 15s, down from 25s) and the LLM call follows behind it, so one
+  Run can occupy tens of seconds and the same node is re-fetched for every Run against
+  it. Partly addressed since this was written: the REST fallback pulls the node with
+  `refresh=True` — deliberately, because a cached spec written before point 34 carries
+  no annotations and would answer the one question the call exists to ask — and the
+  `/components` description pull is held for 5 minutes per file. What is still missing
+  is a cross-run cache for the MCP answer itself.
 - **`fidelity-check.mjs` has no scope covering the right-column nav rail** (`rail` is
   the prompt-input rail, `40000880:270`), so the `data-node-id` census for
   `<chat-navigation-bar>` — the mapping added in point 4 — is unchecked.

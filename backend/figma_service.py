@@ -103,6 +103,61 @@ def get_dev_resources(file_key: str, node_id: Optional[str] = None) -> Optional[
     except Exception as e:
         return {"error": str(e)}
 
+#: component descriptions are per-FILE and change on a designer's timescale, not a
+#: run's. One pull serves every Run inside the window, and a failed pull is never
+#: cached (a Figma outage must not look like "no descriptions were written").
+_DESC_CACHE: Dict[str, tuple[float, Dict[str, str]]] = {}
+_DESC_TTL = 300.0
+
+
+def get_component_descriptions(file_key: str) -> Dict[str, str]:
+    """node_id → a component's usage DESCRIPTION, for components defined in this file.
+
+    `GET /v1/files/{key}/components`. This is the REST surface that carries what a
+    designer WROTE about a component, and it is a different channel from the Dev Mode
+    annotation that /nodes returns — verified 2026-09-11:
+
+      /files/{key}/nodes?ids=X     → annotations: yes (for nodes in this file)
+                                     description: absent
+      /files/{key}/components      → description: yes ("testing to see if Deepseek
+                                     can see the note" lives here, and so does the
+                                     "Data:/Source:" spec on gripper-prompt-input)
+
+    That distinction matters because collapsing the two is how a finding gets a
+    wrong provenance. A description says what a component is FOR; an annotation says
+    what it DOES at run time. They are written in different places, they disagree in
+    practice, and Dev Mode shows both.
+
+    LIMIT, measured and not guessed: Dev Mode also shows descriptions for LIBRARY
+    components, resolved from the library's own file. This endpoint only knows the
+    components defined in THIS file — chevron-blue-closed (40000922:4875) is not in
+    it. So a missing description here is NOT proof the designer wrote none.
+    """
+    if not FIGMA_TOKEN:
+        return {}
+    hit = _DESC_CACHE.get(file_key)
+    if hit and (time.time() - hit[0]) < _DESC_TTL:
+        return hit[1]
+    try:
+        r = requests.get(
+            f"{FIGMA_BASE}/files/{file_key}/components",
+            headers=_headers(),
+            timeout=30,
+        )
+        if r.status_code != 200:
+            return hit[1] if hit else {}
+        rows = (r.json().get("meta") or {}).get("components") or []
+        out = {
+            c["node_id"]: c["description"].strip()
+            for c in rows
+            if c.get("node_id") and (c.get("description") or "").strip()
+        }
+        _DESC_CACHE[file_key] = (time.time(), out)
+        return out
+    except Exception:
+        return hit[1] if hit else {}
+
+
 def get_node(file_key: str, node_id: str) -> Optional[Dict]:
     """Get a specific node from a Figma file (e.g., a frame or component instance)."""
     if not FIGMA_TOKEN:
@@ -219,6 +274,27 @@ def extract_node_spec(node: Dict) -> Dict:
         "name": node.get("name"),
         "type": node.get("type"),
     }
+
+    # ── Dev Mode annotations — the BEHAVIOURAL spec ────────────────────────────
+    # The most valuable thing on a node, and until now the one field this extractor
+    # silently dropped: fills and bounds say what a component LOOKS like, the
+    # annotation says what it DOES. Carried verbatim (labelMarkdown preferred —
+    # the designer's markdown — falling back to `label`) so no consumer has to
+    # re-derive it, and carried for children too, because a container's behaviour
+    # is usually documented on the parts rather than on the container.
+    #
+    # It is also the field the repair path reads to decide what was documented and
+    # what was invented, which is not a decision that can be made from geometry.
+    anns = node.get("annotations") or []
+    if anns:
+        spec["annotations"] = [
+            {
+                k: a.get(k)
+                for k in ("label", "labelMarkdown", "categoryId", "properties")
+                if a.get(k) is not None
+            }
+            for a in anns
+        ]
 
     bb = node.get("absoluteBoundingBox")
     if bb:
