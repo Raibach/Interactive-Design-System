@@ -6,9 +6,9 @@
 
 ---
 
-## The enemy: suppression
+## The enemy: Error suppression
 
-Suppression is any act that makes an error disappear **without making the system correct**. It succeeds locally — the message stops, the session ends, the transcript says *fixed ✓* — and fails globally later, far from its cause. Six months of suppression produces a repository that no longer tells the truth about itself, leaving no signal to argue with.
+Suppression is any act that makes an error disappear **without making the system correct**. It succeeds locally — the message stops, the session ends, the AI transcript says *fixed ✓* — and fails globally later, far from its cause. Six months of error suppression produces a repository that no longer tells the truth about itself.
 
 Real specimens, all excavated from this very codebase:
 

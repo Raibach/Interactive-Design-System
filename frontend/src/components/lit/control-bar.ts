@@ -63,7 +63,7 @@ export class ControlBar extends LitElement {
   // ── Figma-exact CSS — node 40000761:248 ──────────────────────────────────
   static styles = css`
     :host {
-      display: flex;
+      display: var(--left-control-display, flex);
       flex-shrink: 0;
       align-items: center;
       justify-content: space-between;

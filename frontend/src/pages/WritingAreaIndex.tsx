@@ -1385,12 +1385,14 @@ export default function Index({
     if (tabId === 'composer') {
       // Move the header tab indicator INSTANTLY — don't wait for AI assembly
       handleHeaderTabChange('composer');
-      // If there's a current session, reload it; otherwise render blank composer
-      const intent = currentPromptSession?.id
-        ? `render-session:${currentPromptSession.id}`
-        : 'render-composer';
-      console.log(`🤖 [A2UI] Composer clicked → intent: ${intent}`, context);
-      await assembleSurfaceWithAI(intent, context);
+      // Composer click always starts a FRESH prompt package (same as "Create New")
+      // — never reload the card the user had open.
+      console.log('🤖 [A2UI] Composer clicked → intent: render-composer (fresh package)');
+      await assembleSurfaceWithAI('render-composer', {
+        ...context,
+        session_id: null,
+        session_title: '',
+      });
       return;
     }
 

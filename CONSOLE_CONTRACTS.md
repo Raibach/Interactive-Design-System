@@ -1,6 +1,6 @@
-# A2UI Agent Card — Figma Template Contract
+# Console Contracts
 
-> **Purpose:** This document gives you the exact tagging, data injection paths, and schema contracts needed to build the `agent-card` Figma template so the AI can call it and the Lit component can render it pixel-identical.
+> **Purpose:** This document gives you the exact tagging, data injection paths, and schema contracts for the **console surface** — the `agent-card` Figma template (`<agent-card-element>`), the A2UI catalog contract the AI must emit, and the `render-console` surface-assembly flow — so the AI can call it and the Lit component can render it pixel-identical.
 
 ---
 
@@ -109,6 +109,7 @@ The catalog restricts `category` to:
 - `Graphics`
 - `Writing`
 - `Coding`
+- `Sales Service Design Accounts Team`
 
 ---
 
@@ -118,7 +119,6 @@ This is the **exact JSON schema** the AI must emit when including an `agent-card
 
 ```json
 {
-  "id": "card-001",
   "component": "agent-card",
   "id": "uuid-here",
   "title": "API Documentation Writer",
