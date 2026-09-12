@@ -36,7 +36,7 @@ If you are an AI session: read this before you touch anything. Three files here 
 | File | It is |
 |---|---|
 | `backend/deps.py` | Loads the schema at startup; validates every AI payload against it |
-| `backend/role_caps.py` + `frontend/src/shared/role-caps.ts` | Role → what you see (tabs, components, tables). The two must agree |
+| `backend/role_caps.py` + `frontend/src/shared/role-caps.ts` | Role → what you see (tabs, components, tables). The two must agree. **The TypeScript half does not exist** — `role_caps.py` cites it in four places and there is no such file (`OPEN-ITEMS.md` #019) |
 | `backend/routes/*.py` | The endpoints |
 
 ## Running it
@@ -63,7 +63,7 @@ If you are an AI session: read this before you touch anything. Three files here 
 
 | File | It is |
 |---|---|
-| `ignore-this-work-catalog-audit/OPEN-ITEMS.md` | Every open discrepancy, with the number to quote it by. Two ID spaces: the **checker** owns `check:component` (regenerate with `cd frontend && npm run catalog:check`); **`#NNN`** covers what no checker can see. An item closes only when the thing that derived it stops deriving it |
+| `OPEN-ITEMS.md` | **THE REGISTER** — every open discrepancy, with the thing to cite it by. At the repository root and **tracked by git since 2026-09-12**; before that it lived in an excluded directory, where nothing showed it as changed and no clone had it. Three citation spaces: the **checker** owns `check:<class>` and `check:<class>:<subject>` (regenerate with `cd frontend && npm run catalog:check`), and **`#NNN`** covers what no checker can see. An item closes only when the thing that derived it stops deriving it — and `check:open-items-register` fails the build when a recorded count, a cited `#NNN`, a check's accounting, or the file's own tracked status drifts |
 
 ## The notes — where a session with no memory re-orients
 

@@ -57,6 +57,7 @@ What was broken (evidence, not description)
 2	They disagreed on screen. Renaming a package patched only the copy: the card you look at kept the old title while the copy (and the library the chat describes to Grace) said the new one.	handlePromptTitleChange → setAssembledConsoleCards(prev => prev.map(...)); renderer only re-binds on dataModel change
 3	A dead second channel wrote the copy. The a2ui:surface-update listener set cards from cmd.props.cards and never touched the surface — and stopped the spinner, so the console could report "arrived" with nothing drawn.	grep -rn surface-update src/ → add + remove only, no sender
 4	The contract asserted the duplication. The catalog handed to the assembling model said the grid was "Backed by LitCardGrid + PromptDashboardCanvas in the React shell."	both catalog.json:734 / :767
+
 What I changed
 pages/WritingAreaIndex.tsx — assembledConsoleCards is now derived, not state: Array.isArray(surfaceDataModel.cards) ? surfaceDataModel.cards : null. Deleted the dead listener (+ its add/remove), deleted the assembly and both failure writers, redirected the rename into /cards so the write lands on the card you look at, corrected the diagnostic line (assembledConsoleCards=null → surfaceDataModel={} (cards cleared with it)) and two comments that would have gone stale.
 components/lit/a2ui-primitives.ts — the grid's comment no longer cites the removed React console as its backing.
@@ -66,8 +67,54 @@ Gates: tsc 0 · vitest 32/32 (31 + 1) · catalog:check exit 0 · npm run build e
 
 Final state: one producer (/cards), three readers (ConsolePage states, both chats), zero writers of a second list. "Two consoles exist at once" is now false.
 
-Honest limitations
+a failure was being swallowed (and two of them were lying)
+RESTART-LOCAL.sh had 8 || true sites; three of them converted a failure into a success claim:
 
+site	the lie
+brew services start … || true (×2)	start silently did nothing (guarded downstream by pg_isready, but the why was invisible)
+kill … || true then echo "✅ Freed port $P"	the success line was unconditional — printed even if the kill failed
+CF_URL=$(grep … || true) then "Cloudflare tunnel started but URL not captured"	asserted the tunnel started without ever asking the process; cloudflared can die at launch
+Now: brew failures are reported; ✅ Freed port is only printed after a probe that still finds the port empty, and a port that survives kill -9 exits 1; the tunnel branch asks the process (kill -0) and prints the log tail when it died; and the catalog check no longer discards its output, so "loud" now names which blocking finding (proved end-to-end: ⚠️ … blocking 1 / VERDICT: RED — 1 blocking finding(s)). The 7 remaining || true are all "may legitimately match nothing / process already gone", documented at each site.
+
+#20b — the document: it was wrong and the mechanism was fiction
+README.md §Component Catalog and IMPLEMENTATION_CONFORMANCE.md R4/§4.3 stated 28 trusted components and claimed the count "is asserted live at the startup log … so drift between catalog and docs is self-announcing."
+
+The catalog defines 37 (12 Basic + 25 Lit, not 16). Nine components of drift, unnoticed.
+deps.py prints the number and compares it to nothing (grep EXPECTED\|assert → empty). Nothing asserted anything.
+The README list also carried a phantom (featured-card, which the catalog has never defined) and omitted 10 real components.
+Fixed by correcting the numbers/lists and implementing the claimed mechanism: new blocking check doc-claim-drift (inventory 19 → 20) reads the count and the enumerated name list out of README + the conformance doc and holds them against the catalog. Proved both directions: README back to 28 → blocking 1, VERDICT: RED, exit 1; phantom name → blocking 1, RED, exit 1; README restored byte-identical (md5 bebe7f1b… vs pristine).
+
+Also found: INDEX.md named the health report frontend/dist/catalog-audit.json — a path that has never existed (the checker writes frontend/catalog-audit/<pipeline>.json; backend/routes/misc.py reads it there). A second, unfixed instance for the retro: frontend/src/storybook/documentation/A2UI_SPEC_COMPLIANCE.md claims a verified compliance matrix but cites main.py lines 2670–2799 — backend/main.py is now 134 lines (endpoint is in routes/ai.py); it's dated "Last verified: 2026-07-20", i.e. pre-dates the A2UI restoration.
+
+#19 — saved
+Three commits, journal in history for the first time:
+(Corrected 2026-09-12, in the session that fixed #20b: this line said "working tree
+clean". It was not. This very file was modified and uncommitted, and the register sat
+in an excluded directory, so `git status` could not show either one of them. A sentence
+stating a tree state nobody re-read is the same defect as a README stating a count
+nobody re-measured.)
+
+493d932 fix(catalog): the checker's own integrity + the facts it checks (#10/#11/#13/#16/#17/#18/#20b)
+28425c7 wip(carried): the rest of the tree — gate-verified only, labelled as such
+cb06bbb docs(tracking): journal + spec text + what is deliberately untracked
+The stash is preserved as a real ref rescued/stash-2026-09-12 (86eb79c) — it holds work not in the tree (InteractiveChatInterface.tsx +161, compiled-output-viewer.ts +105, tag-registry.ts +5, larger teacher.py/grace_gui.py). Not pushed — origin is 3 behind and README says a push to main auto-deploys to production; that's your call.
+
+#19b — the register gains a mechanism, and open items stop being session-local numbers
+OPEN-ITEMS.md moves to the repository root and is TRACKED. It had lived in ignore-this-work-catalog-audit/, excluded by .git/info/exclude: `git status` never showed it as changed, no clone had it at all, and its counts had aged — event-unheard 17→12, tag-inert 9→8, element-unclaimed 3→0 — while the file still stated the old ones. Every defect number this project quotes at another person resolved to a file git could not see.
+
+Every count was re-measured against a live run, which closed two entries that editing could not (the closure rule working): #007 (check:annotation-prose stopped deriving chat-navigation-bar; selectedState/closedState are verbatim and collapsedState is gone from the tree) and #021 (no 0.6 anywhere in backend/ — the four calls are back at 0.0). Two were rewritten because their premise no longer matches the tree (#014/#015: the hidden shadow mount — <a2ui-renderer> is mounted visibly at WritingAreaIndex.tsx:3085 inside slot="console"). One is new and mine: #024 — 493d932 pointed the `functions` entry at prompt-input-section.ts, which cleared check:component-missing and left two registry entries for one source file, so the run reports 45 open findings with only 43 distinct ids.
+
+DECIDED, recorded with its closure test: check:tag-inert → implement the 8 (run-button, layout-row, layout-col, status-indicator, dynamic-button, undo, redo, export), not remove them from the allowlist. The five actions cannot be implemented honestly without an On click: — an element with no annotation ships invented behaviour, which is the finding class in section A of the register.
+
+The retired session-local numbers (#7, #8, #12, #16…) are mapped once, with the three that shadowed existing #NNN entries called out: a number that lives in neither the run nor the register gets quoted out of position within a week.
+
+New blocking check open-items-register (inventory 20 → 21): exactly one ledger row per check in CHECK_INVENTORY; every recorded count equal to the count this run derived; every #NNN cited in README, INDEX, the conformance doc, the journal or this change log resolving to a row; and the register present, tracked, and not matched by an ignore rule. Proved seven ways — stale count, missing ledger row, dangling citation, ignore rule re-added, a number written into the environment-scoped row, a `—` used to hide a compared class, and a status outside the vocabulary — each blocking, VERDICT: RED, exit 1, each restored byte-identical (md5 checked).
+
+**Two of those proofs found faults in the check itself, and both were mine.** It first recorded `check:check-could-not-run` as `0`, because that is what it derives on the machine that wrote it. In a fresh `git clone` with no token it derives `1`, so the check made a clean clone RED over a missing credential — the "a number nobody re-measures" defect the ledger exists to catch, with the number mine and the machine the variable. That class counts whether the environment answered, so it now records `—`, and `—` is allowed for exactly that class: anywhere else it would be a way to hide a stale number by deleting it, which the check blocks. The rule that forbids it was itself broken one branch deep — nested inside the "recorded is not a number" test, so a *number* in that row skipped it. I found that because the proof I wrote for it read GREEN, and the green was also a lie: the `sed` that was supposed to inject the number never matched (U+2014 is not the dash I typed), so "the rule held" was really "the edit never happened". Both are in the journal as M17/M18. Verified after: a real clone run exits 1 on exactly one blocking finding, the missing credential, and prints the list of classes it did not compare rather than passing over them in silence.
+
+Gates: npm run build exit 0 (both catalogs COMPLETE, 21/21, VERDICT GREEN) · npm run typecheck 0, run through its guard (`tsc -p tsconfig.json` inspects ZERO files — which is #018's point) · vitest 43/43 · eslint unchanged at 10 errors / 22 warnings · bash -n RESTART-LOCAL.sh OK · a fresh clone with no token: exit 1, one blocking finding (`check-could-not-run`), the four Figma classes and the one machine class named as uncompared · ecommerce run GREEN, with the count scoping stated as a pass rather than assumed.
+
+Not claimed: #022–#027 are open, the 45 advisory findings are untouched, and nothing is pushed (origin is behind, and README says a push to main auto-deploys).
 
 **[2026-09-10] — Figma → Lit import pipeline: annotations as the single source of behavior**
 
