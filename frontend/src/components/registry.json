@@ -56,7 +56,7 @@
     {
       "figmaName": "functions",
       "figmaNodeId": "40000909:4005",
-      "litComponent": "functions-wrap",
+      "litComponent": "prompt-input-section",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
       "status": "built"
     },

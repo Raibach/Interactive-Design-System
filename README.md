@@ -78,7 +78,7 @@ A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interf
 
 ## Component Catalog
 
-28 trusted components — 12 A2UI Basic Catalog primitives + 16 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. The live count is asserted at backend startup (`✅ A2UI Catalog loaded — N trusted components`) and specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+37 trusted components — 12 A2UI Basic Catalog primitives + 25 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 37 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
@@ -87,8 +87,11 @@ A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
 Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer
                 chat-panel · version-trace · token-cost-readout · status-readout
                 output-panel · search-bar · filter-pill · footer-bar
-                chat-navigation-bar · agent-card · featured-card
-                prompt-section · add-section-button
+                chat-navigation-bar · agent-card · prompt-section
+                add-section-button · ai-surface-sandbox · error-banner
+                prompt-container · prompt-input-section · gripper-prompt-input
+                role-dropdown · role-tile · status-bar-prompt-input
+                prompt-textarea · model-selector-button
 ```
 
 ---
