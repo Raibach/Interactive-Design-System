@@ -1,0 +1,14 @@
+# Build outputs, host-platform binaries and local credentials do not belong in a
+# build context. `.git` is deliberately NOT listed: the catalog checker asks git
+# whether OPEN-ITEMS.md is tracked, and fails the build when it cannot answer.
+
+**/node_modules
+frontend/dist
+frontend/storybook-static
+**/__pycache__
+*.pyc
+.venv
+venv
+*.venv
+Keys
+backend/logs
