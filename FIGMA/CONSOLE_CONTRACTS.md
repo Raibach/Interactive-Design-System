@@ -179,8 +179,7 @@ The AI returns an array of protocol messages. The card grid is declared as a `Co
     "updateComponents": {
       "surfaceId": "main",
       "components": [
-        {"id": "root", "component": "Column", "children": ["header", "card-grid"]},
-        {"id": "header", "component": "Text", "text": "Welcome back!", "variant": "greeting"},
+        {"id": "root", "component": "Column", "children": ["card-grid"]},
         {"id": "card-grid", "component": "ConsoleCardGrid", "items": {"path": "/cards"}}
       ]
     }

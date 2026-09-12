@@ -2,6 +2,37 @@
 
 Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
 
+**[2026-09-12] — The session prompt stopped teaching a greeting, and two findings stopped sharing one id.**
+
+## A greeting was still in a template, and the chat's finding list was keyed off a collision
+
+Two defects of the same shape — words the system typed and then attributed to someone else — closed at their sources.
+
+- **The session prompt still printed a greeting, and the model copied it.** `backend/routes/ai.py:888` (was `:885`) carried `"ai_message": "Welcome back..."` as its output example, at `temperature=0.0` with no schema but the example. Measured against the running endpoint: `POST {"intent":"render-session:d94c58a8-…"}` returned `ai_message: "Welcome back — restored '…'"`. It is **not displayed** — `WritingAreaIndex.tsx:1864-1883` reads it, deliberately does not post it, and logs it only — which is exactly why it survived the console fix one layer over. Requirement 4 now asks for a message that says what is on screen, the prompt forbids the salutation by name, and the example is a statement of the surface. The fallback (`:924`) was the last typed greeting — `"Welcome back to your session."` — and is now data-derived like the console's (`"<title> is open."`). Neither edit suppresses her words: the prompt stopped asking for them.
+
+- **The chat's finding list was rendered under duplicate React keys, every poll.** Live console, measured: `Encountered two children with the same key, provenance-missing:prompt-input-section` and `…annotation-missing:prompt-input-section`, twice per 30s cycle — 183 occurrences in one log, 0 in any log from before this window. The root is neither in the shell nor in the list: `frontend/src/components/registry.json` holds **two rows that resolve to one file** (`functions` → `40000909:4005`, `prompt-input-section` → `40000746:94`, both `prompt-input-section.ts` — open item `#024`), and the checker built a finding's id from the component alone (`catalog-check.mjs:151`).
+
+- **They were two different defects, and one `key` would have got one of them wrong.** `provenance-missing`'s subject is the **file** — which fields are design and which were invented — so a file without a provenance block is one problem however many rows point at it: counted once per file, derived **16 → 15**, and the row that speaks for a file is the row whose `figmaName` **is** that component (`40000746:94`, the section root) rather than whichever row the loop reached first — the finding's node id is what a repair is told to open (`WritingAreaIndex.tsx:1270` writes it into the brief), so a file-level finding has to name the node the file answers to. `annotation-missing`'s subject is the **node**, and each node makes its own statement (`Node 40000909:4005 ("functions", FRAME)…` is not the statement about `40000746:94`): the id now carries the node through `add()`'s `key`, **7 findings, unchanged — both nodes are still reported**. This matters beyond the console: `handleRepairFinding` finds a finding *by id*, so two findings sharing one id repaired whichever came first. A `key` was the wrong tool for provenance and the right one for the nodes; the report now says **44 open findings, 44 distinct ids** (ecommerce: 45/45).
+
+- **Verified by running it.** `npm run catalog:check` — the register's own check caught the count before any document drifted ("the register records 16, this run derives 15", blocking, RED), the row was corrected, and both catalogs now report **VERDICT: GREEN — 21 checks ran**. `POST {"intent":"catalog-health:prompt-composer"}` returns the payload the chat paints from with **0 duplicate ids**. `npx vitest run` 43/43. Backend restarted (uvicorn runs without `--reload`, so prompt edits need one).
+
+- **Re-measured, not assumed:** `prompt-input-section.ts` draws `40000909:4005` on its **inner** `.functions-wrap` div (`:282`) and `40000746:94` on the section root (`.responsive-prompt-container`, `:269`). Which of the two registry rows is the honest claim is `#024`'s open question and stays open — this change removes the id collision, it does not decide the claim.
+
+- **Not touched, and named here so it is not mistaken for an oversight:** the `catalog-health` prompt *asks* for a greeting (`ai.py:520-523`, "greet the user by time of day… and offer to take care of them"). That one is the surface's design — an invitation to act, not a line over the content — and it is displayed, unlike the two above. `#009` remains open for the system-typed `ai_message` values (`:252`, fallbacks `:414`, `:562`, `:924`).
+
+**[2026-09-12] — The console carries no greeting, and the instruction that made one is gone.**
+## The sentence above the cards was the model's, not the shell's
+
+The console opened with a line over its cards — *"Welcome back! Your console is ready."* Nothing in the React shell says that, and nothing in it ever did. The line was a `Text` node in the component tree Grace returned, and she returned it because her assembly prompt asked for it.
+
+- The instruction is in the persona prompt, `backend/routes/ai.py:356` — *"You are Grace, the A2UI surface assembler for the console."* Requirement 2 read **"Text header with a welcome message and variant \"greeting\""**, and the output template printed the node verbatim: `{"id":"header","component":"Text","text":"Welcome back!","variant":"greeting"}`. With `temperature=0.0` and no schema but the example, the model did the obvious thing — it copied it.
+
+- Two other layers were read and cleared, and it matters that they were: `grace_gui.py:100–106` gives both assembly modes a bare strict-JSON system prompt with no greeting in it, and `role_caps.py` holds role filtering only — no persona text, no prompts (there is no `frontend/src/shared/manifest.json` either, so `/api/ai/manifest` has nothing to inject).
+
+- Fixed at that source: the requirement is gone, the template tree is `root Column → ["card-grid"]`, and the prompt now says the console *is* the cards — no greeting, no header, no `Text` above them. The `greeting` **variant** stays in the catalog untouched; it is a deliberate `Text` enum entry that belongs to other surfaces.
+
+- Verified against the running endpoint, not the file: `POST /api/ai/assemble-surface {"intent":"render-console"}` returns `root` + `card-grid` and nothing else, with `ai_message: "Your 10 prompt packages are ready — pick one to open."` Note this needed a backend restart — uvicorn was running without `--reload`, so the old prompt sat in memory and kept greeting long after the file was corrected.
+
 **[2026-09-10] — A2UI AI-native compliance verified.**
 ## The reactive shell is real, and it is the A2UI contract
 

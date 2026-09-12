@@ -242,7 +242,33 @@ for (const s of SOURCES) {
 // Provenance: every registry entry must say which fields came from the design
 // and which were invented. An unmarked invention passes as the designer's word.
 checkRan('provenance-missing');
+// The subject here is the SOURCE FILE, not the registry row that names it.
+//
+// Provenance is a property of the file — which fields came from the design and which
+// were invented — so a file with no provenance block is ONE problem however many rows
+// resolve to it. Two rows do resolve to `prompt-input-section.ts` (#024), and reporting
+// the same sentence once per row put two findings under one id: the chat rendered them
+// under duplicate React keys ("Encountered two children with the same key,
+// `provenance-missing:prompt-input-section`"), and a repair click repaired whichever
+// came first. Counted once per file. The node that made it visible is not lost — the
+// node-scoped findings below name it.
+// Which row speaks for a file: the row whose figmaName IS the component.
+//
+// Two rows can resolve to one file (#024). This finding is about the file, but its node
+// id is what a repair is told to open (`WritingAreaIndex.tsx:1270` writes it into the
+// brief), so it has to be the component's own node — not whichever row the iteration
+// yields first. Order-independent: the canonical row wins wherever it sits.
+const provenanceSubjects = new Map();
 for (const c of figmaMap.components) {
+  if (!c.provenance) {
+    const subject = c.file || c.litComponent || c.figmaNodeId;
+    const known = provenanceSubjects.get(subject);
+    if (!known || (c.figmaName === c.litComponent && known.figmaName !== known.litComponent)) {
+      provenanceSubjects.set(subject, c);
+    }
+  }
+}
+for (const c of provenanceSubjects.values()) {
   if (!c.provenance) {
     const s = srcOf(c.litComponent);
     const invented = s ? [...s.src.matchAll(/new\s+CustomEvent\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]) : [];
@@ -904,20 +930,28 @@ if (OFFLINE) {
     checkRan('annotation-missing');
     checkRan('annotation-prose');
     checkRan('geometry-drift');
+    // ── The node is the subject ────────────────────────────────────────────
+    // Every finding in this loop is about ONE NODE, and two registry rows can
+    // resolve to one component file (#024: `functions` and `prompt-input-section`
+    // both resolve to `prompt-input-section.ts`). The id is assembled from the
+    // component alone, so both nodes' findings arrived under one id — and these are
+    // NOT the same statement: each names its own node. Pass the node as `key`; it is
+    // what makes them different. (The same collision under `provenance-missing` is
+    // not a key problem: there the subject is the file, so it is counted once.)
     for (const c of figmaMap.components) {
       const id = c.figmaNodeId;
       if (!id) continue;
       const node = data.nodes?.[id]?.document;
       if (!node) {
-        add({ check: 'node-unresolved', stage: 'ingest', owner: 'pipeline', component: c.litComponent, nodeId: id, file: c.file, what: `Address ${id} is not in the file. The pull returns nothing, so this component reports as "no annotation" when really the address is dead.`, fix: 'Point the registry at the component\u2019s real node id.' });
+        add({ check: 'node-unresolved', stage: 'ingest', owner: 'pipeline', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Address ${id} is not in the file. The pull returns nothing, so this component reports as "no annotation" when really the address is dead.`, fix: 'Point the registry at the component\u2019s real node id.' });
         continue;
       }
       const anns = node.annotations || [];
       const text = anns.map((a) => a.labelMarkdown || a.label || '').filter(Boolean).join('\n');
       if (!anns.length || !text.trim()) {
-        add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation.`, fix: `Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md` });
+        add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation.`, fix: `Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md` });
       } else if (!isStructured(text)) {
-        add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, file: c.file, what: `Node ${id} has a note, but it is prose, not a spec — so behaviour must be invented. "${text.slice(0, 90)}${text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).' });
+        add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} has a note, but it is prose, not a spec — so behaviour must be invented. "${text.slice(0, 90)}${text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).' });
       }
 
       // ── Geometry convergence ────────────────────────────────────────────
@@ -973,7 +1007,7 @@ if (OFFLINE) {
           }
         }
         if (drifts.length) {
-          add({ check: 'geometry-drift', stage: 'deliver', owner: 'pipeline', component: c.litComponent, nodeId: id, file: c.file, what: `Node ${id} and the rendered button disagree (${drifts.join('; ')}). The constraint is ${declaredWhere}.`, fix: 'Either the node moves to the constraint, or the constraint changes once — in the catalogue, not in this component. Both are answers; silently keeping two sets of numbers is not.' });
+          add({ check: 'geometry-drift', stage: 'deliver', owner: 'pipeline', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} and the rendered button disagree (${drifts.join('; ')}). The constraint is ${declaredWhere}.`, fix: 'Either the node moves to the constraint, or the constraint changes once — in the catalogue, not in this component. Both are answers; silently keeping two sets of numbers is not.' });
         }
       }
     }

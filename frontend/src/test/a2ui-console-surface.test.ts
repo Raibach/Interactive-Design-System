@@ -21,9 +21,13 @@ import { describe, it, expect } from 'vitest';
 import '@/components/lit/agent-card-element';
 import '@/components/lit/a2ui-renderer';
 
+// No `header` Text above the grid. The console is the cards, and the sentence
+// that used to sit over them — "Welcome back! Your console is ready." — was the
+// model's own, written to satisfy a greeting requirement in the prompt, so
+// removing the node here without removing the requirement there would have left
+// a fixture describing a tree the backend no longer asks for.
 const CONSOLE_TREE = [
-  { id: 'root', component: 'Column', children: ['header', 'card-grid'] },
-  { id: 'header', component: 'Text', text: 'Welcome back!', variant: 'greeting' },
+  { id: 'root', component: 'Column', children: ['card-grid'] },
   { id: 'card-grid', component: 'ConsoleCardGrid', items: { path: '/cards' } },
 ];
 

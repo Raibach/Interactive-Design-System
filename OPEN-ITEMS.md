@@ -24,8 +24,10 @@ below and *asserted* against the live run, so a stale number fails the build
 instead of aging in silence. This is the space for anything the checker can see.
 
 **2 · `check:<class>:<subject>` — one finding.** E.g.
-`annotation-missing:prompt-textarea`, `tag-inert:run-button`. This is the checker's
-own per-finding id, and it is what the console chat shows. Regenerate with:
+`annotation-missing:prompt-textarea:40000746:95`, `tag-inert:run-button`. This is the
+checker's own per-finding id, and it is what the console chat shows. A subject that is
+a **node** carries the node, because two registry rows can resolve to one file (`#024`)
+— and two nodes make two statements, so their ids must differ. Regenerate with:
 
     cd frontend && npm run catalog:check
 
@@ -58,7 +60,7 @@ cannot be added without a status.
 | `check:annotation-missing` | open | designer | a resolved node carrying no annotation at all | 7 | `check:annotation-missing` → 0 |
 | `check:annotation-prose` | open | designer | an annotation that says what the thing *is*, not what it *does* | 1 | `check:annotation-prose` → 0 |
 | `check:event-unheard` | open | pipeline | a component dispatches an event nothing listens for | 12 | `check:event-unheard` → 0 |
-| `check:provenance-missing` | open | pipeline | a built element with no `provenance` block | 16 | `check:provenance-missing` → 0 |
+| `check:provenance-missing` | open | pipeline | a built element with no `provenance` block | 15 | `check:provenance-missing` → 0 — **re-measured 2026-09-12: 16 → 15 when the check began counting the FILE once (`#024`), not once per registry row that resolves to it** |
 | `check:tag-inert` | decided | pipeline | the allowlist offers the tag; nothing implements it — **see DECIDED below: implement** | 8 | `check:tag-inert` → 0, each of the 8 with an element + catalog entry |
 | `check:geometry-drift` | open | pipeline | the node and the rendering disagree (`chat-navigation-bar`) | 1 | `check:geometry-drift` → 0 |
 | `check:schema-absent` | open | pipeline | in one gate, missing from the other (`ai-surface-sandbox`, **ecommerce only**) | 0 | `check:schema-absent` → 0 in both catalogs |
@@ -94,15 +96,15 @@ comparison only holds a class that has a number to hold. A second environment-sc
 class cannot slip in silently either — it shows up as a count mismatch the first time
 anyone runs `--offline`.
 
-| `#001` | open | designer | `annotation-missing:prompt-container` — `40000746:6` "left-column-panel-container" | — | `check:annotation-missing` → 0 |
-| `#002` | open | designer | `annotation-missing:model-selector-button` — `40000909:4322` | — | `check:annotation-missing` → 0 |
-| `#003` | open | designer | `annotation-missing:status-bar-prompt-input` — `40000878:239` | — | `check:annotation-missing` → 0 |
-| `#004` | open | designer | `annotation-missing:prompt-textarea` — `40000746:95` | — | `check:annotation-missing` → 0 |
-| `#005` | open | designer | `annotation-missing:prompt-input-section` — two nodes at once; see `#024` | — | `check:annotation-missing` → 0 |
-| `#006` | open | designer | `annotation-prose:role-dropdown` — `40000934:22851`; rewrite as fields: Data / On click / State / A11y | — | `check:annotation-prose` → 0 |
+| `#001` | open | designer | `annotation-missing:prompt-container:40000746:6` "left-column-panel-container" | — | `check:annotation-missing` → 0 |
+| `#002` | open | designer | `annotation-missing:model-selector-button:40000909:4322` | — | `check:annotation-missing` → 0 |
+| `#003` | open | designer | `annotation-missing:status-bar-prompt-input:40000878:239` | — | `check:annotation-missing` → 0 |
+| `#004` | open | designer | `annotation-missing:prompt-textarea:40000746:95` | — | `check:annotation-missing` → 0 |
+| `#005` | open | designer | `annotation-missing:prompt-input-section:40000909:4005` + `…:40000746:94` — two nodes claim one file; see `#024` | — | `check:annotation-missing` → 0 |
+| `#006` | open | designer | `annotation-prose:role-dropdown:40000934:22851`; rewrite as fields: Data / On click / State / A11y | — | `check:annotation-prose` → 0 |
 | `#007` | closed | designer | `annotation-prose:chat-navigation-bar` — the note said only *"Chat button selected"* | — | **closed 2026-09-12: `check:annotation-prose` stopped deriving it.** The entry now carries both halves of the spec, `selectedState`/`closedState` are `verbatim`, and `collapsedState` — the field this item existed for — is gone from the tree entirely |
 | `#008` | open | pipeline | `grace_greeting: True` is set and read by nothing (`routes/ai.py:784`) | — | `no check is possible today` — a flag nothing reads has no derivation; closes when it is wired or deleted |
-| `#009` | open | pipeline | `ai_message` values typed by the system and attributed to her (`ai.py:252`; fallbacks `:414`, `:562`) | — | `no check is possible today` — needs the decision first: which of these are the system speaking, and labelled as such |
+| `#009` | open | pipeline | `ai_message` values typed by the system and attributed to her (`ai.py:252`; fallbacks `:414`, `:562`, `:924`) — the two prompt **templates** that made her greet are gone (2026-09-12: console `:381`, session `:888`) | — | `no check is possible today` — needs the decision first: which of these are the system speaking, and labelled as such |
 | `#010` | open | pipeline | `a2ui:user-message` is dispatched (`WritingAreaIndex.tsx:264`) and heard by nothing | — | `no check is possible today` — `check:event-unheard` covers the allowlist, not window channels; closes when the listener exists or a window-channel audit does |
 | `#011` | open | pipeline | the annotation attribute names disagree across three records | — | `no check is possible today` — the contract file this item would fix (`.clinerules/figma-to-lit.md`) is **not in the tree**; see the entry for the three-way split |
 | `#012` | open | pipeline | `chat-panel` has no element — both catalogs reserve the name and `COMPOSITE_MAP` resolves it | — | no check sees a reserved name with no element — closes when a `customElements.define('chat-panel'` is in the tree, or the name maps to whatever owns that seat now |
@@ -118,7 +120,7 @@ anyone runs `--offline`.
 | `#021` | closed | pipeline | WATCH: temperature `0.6` raises the 503-on-unparseable risk at assembly | — | no check is possible — a temperature is a dial a person sets. **Closed 2026-09-12: re-measured — no `0.6` anywhere in `backend/`**; the four calls it named are back at `0.0` (`ai.py:390`, `:540`, `:666`, `:895`) |
 | `#022` | open | designer | `chat-button` dispatches `tab-change { tab: "chat conversations" }`; the element emits `{ tab: 'chat' }` | — | `no check is possible — both sides emit the same event name`; closes when the payload string is chosen. Detail recorded in `registry.json` → `gaps` |
 | `#023` | open | pipeline | the `chat-menu-item` frame's inset shadow is carried in `values` and rendered by nothing (`node 40001010:25749`) | — | no check holds a `values` entry against the CSS — closes when the inset shadow is in the CSS, or dropped from `values`. Detail recorded in `registry.json` → `gaps` |
-| `#024` | open | pipeline | two registry entries resolve to one component file — one of them from a node named `functions` | — | `check:annotation-missing` and `check:provenance-missing` each name this source file twice — closes when one entry remains per file: merge the two source nodes' claims, or correct the node id. **Created by `493d932`** (this session's fix) |
+| `#024` | open | pipeline | two registry entries resolve to one component file — one of them from a node named `functions` | — | closes when one entry remains per file: merge the two source nodes' claims, or correct the node id. The duplicate ids it caused are fixed (2026-09-12: node-scoped ids carry the node; `check:provenance-missing` counts the file once) — what stays open is the claim itself, and no check can decide it: `check:annotation-missing` and `check:provenance-missing` see two rows, not which one is honest. **Created by `493d932`** |
 | `#025` | open | designer | the `chat-menu-item` rail-button constraint has two homes and `provenance: inferred` | — | the designer supplies the constraint as an annotation, or the split is confirmed wanted. `no check is possible today` — `check:geometry-drift` compares rendered geometry against a named node, not a container rule |
 
 | `#026` | open | pipeline | `RESTART-LOCAL.sh` is gitignored, so a fix to the launcher never enters history | — | no check can see a `.gitignore` rule's consequence — closes when the launcher is tracked, or the fix it carries moves into tracked code. **`#20a`'s fix is in this file and nowhere else** — it exists on one machine |
@@ -229,13 +231,32 @@ holds both of these (verified this session):
       "litComponent": "prompt-input-section",
       "file": ".../lit/prompt-input/prompt-input-section.ts", "status": "built" }
 
-Consequence, measured: the run reports **45 open findings but only 43 distinct
+Consequence, measured: the run reported **45 open findings but only 43 distinct
 ids** — `annotation-missing:prompt-input-section` and
-`provenance-missing:prompt-input-section` each appear twice, because the finding's
-subject is the source file and two entries resolve to it. That is the exact
-collision the `key` parameter exists to prevent (`add()`'s comment), and it cannot
-be fixed by a `key`: the two findings genuinely are the same problem seen through
-two source nodes. `493d932` created this by pointing the `functions` entry at
+`provenance-missing:prompt-input-section` each appeared twice — and the chat rendered
+that list under duplicate React keys on every 30s poll. **The collisions are fixed
+(2026-09-12)** — the run now reports **44 open findings with 44 distinct ids** — **and they
+were two different defects:**
+
+- `provenance-missing`'s subject is the **FILE** — which fields came from the design and
+  which were invented. Two rows resolving to one file is one problem, so it is counted
+  once per file: the run derives **15**, not 16. Which row speaks for the file is the row
+  whose `figmaName` **is** the component — `40000746:94`, the section root — and not
+  whichever row the iteration reaches first. The node id is not decoration: a repair is
+  told to open it (`WritingAreaIndex.tsx:1270` writes `figma node <id>` into the brief), so
+  a file-level finding has to name the node the file answers to.
+- `annotation-missing`'s subject is the **NODE**. Each node makes its own statement —
+  *"Node 40000909:4005 ("functions", FRAME) resolves but carries no annotation"* is not
+  the statement about `40000746:94` — so the id carries the node, through `add()`'s `key`
+  parameter. **7 findings, unchanged: both nodes are still reported.** It matters that it
+  is an id and not a display choice: a repair click looks a finding up *by id*, so two
+  findings sharing one id repaired whichever came first (`WritingAreaIndex.tsx:1410`).
+
+What the tree says, measured — the two rows name two different nodes of one file:
+`prompt-input-section.ts` draws `40000909:4005` on its **inner** `.functions-wrap` div
+(`:282`) and `40000746:94` on the section's root (`.responsive-prompt-container`, `:269`).
+
+`493d932` created this by pointing the `functions` entry at
 `prompt-input-section.ts` (it had named `functions-wrap`, which had no source —
 `check:component-missing`). The open question is not mechanical: **is the
 `functions` frame the section editor, or is that node id wrong?** One of the two

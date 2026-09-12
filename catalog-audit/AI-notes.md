@@ -1191,7 +1191,11 @@ matches the tree and is rewritten rather than closed.
 designer's string vs the element's enum), `#023` (the `chat-menu-item` inset shadow, carried in
 `values`, rendered by nothing), `#024` — **mine**: `493d932` pointed the `functions` entry at
 `prompt-input-section.ts`, which cleared `check:component-missing` and left two registry
-entries for one source file, so the run reports 45 open findings with only 43 distinct ids;
+entries for one source file, so the run reported 45 open findings with only 43 distinct ids
+**— the duplicate React keys that put in the chat are fixed 2026-09-12** (node-scoped ids
+carry the node; `provenance-missing` counts the file once: 15 — now **44 findings, 44
+ids**; ecommerce is untouched at 45/45).
+Which of the two rows is the honest claim is still open;
 `#025` (the `chat-menu-item` constraint, two homes, `provenance: inferred`), `#026`
 (`RESTART-LOCAL.sh` is gitignored — the `#20a` fix exists on one machine), `#027`
 (`A2UI_SPEC_COMPLIANCE.md` cites `backend/main.py` lines 2670–2799; that file is 134 lines).
