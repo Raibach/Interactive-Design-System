@@ -9,7 +9,7 @@ than in whether the design's annotations come through — both carry those:
                            OAuth-interactive remote — neither of which exists on a
                            server.
   _rest_design_block       REST + token through figma_service, cached in Postgres
-                           `figma_specs` — the render-time path behind
+                           `figma_specs` — the DESIGNER/MCP read path behind
                            `/api/figma/spec/{key}/{node}`. Carries the same annotations
                            (`nodes[].annotations[]`), and no generated code.
 

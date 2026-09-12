@@ -35,6 +35,15 @@ import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { getStoredUserId } from "@/services/authService";
 import { aiOrchestrator } from "@/utils/aiOrchestrator";
+// The frontend half of the fail-loud boundary. Every failure the shell can observe gets
+// named, pointed at, and shown — see shared/error-registry.ts for why this is a hardcoded
+// ledger rather than a heuristic.
+import { classifyFailure, parseValidationEnvelope, type FailureReport } from "@/shared/error-registry";
+// The A2UI envelope boundary — the version and surface labels on every operation,
+// read instead of assumed. See shared/a2ui-envelope.ts: a version this shell does
+// not implement, or a response describing more than one surface, is refused here
+// rather than parsed as v0.9.1-and-one-surface.
+import { readA2UIEnvelope, envelopeRefusalError } from "@/shared/a2ui-envelope";
 
 interface WritingAreaIndexProps {
   onLogout?: () => void;
@@ -175,7 +184,15 @@ export default function Index({
   const [isAIAssembling, setIsAIAssembling] = useState(false);
   const [aiAssemblyMessage, setAiAssemblyMessage] = useState(AI_STANDBY_MESSAGE);
   const [aiAssemblyFailed, setAiAssemblyFailed] = useState(false); // STRICT: blocks rendering when true
-  const [assembledConsoleCards, setAssembledConsoleCards] = useState<any[] | null>(null); // null = not loaded, [] would be fallback
+  // The structured failure — read off the response, never inferred from a status number
+  // alone. Rendered in the workspace slot whenever aiAssemblyFailed is true.
+  const [aiAssemblyReport, setAiAssemblyReport] = useState<FailureReport | null>(null);
+  // The ✕ acknowledges the HEADLINE. It deliberately does not clear the diagnostics: being
+  // told a failure happened is not the same as the failure being resolved, and the pane
+  // stays until a successful assembly replaces it.
+  const [isFailureAcknowledged, setIsFailureAcknowledged] = useState(false);
+  // Retry re-runs the assembly that actually failed, not a guess at one.
+  const lastAssemblyIntentRef = useRef<string>('render-console');
   // The surface's two channels, held as React state and handed to
   // <a2ui-renderer> as props. This is what replaced `window.__lastA2UIComponents`:
   // a bare global drifted outside React's control — nothing could react to it,
@@ -184,6 +201,27 @@ export default function Index({
   // surface that is a pure function of Grace's last emission.
   const [surfaceComponents, setSurfaceComponents] = useState<any[]>([]);
   const [surfaceDataModel, setSurfaceDataModel] = useState<Record<string, any>>({});
+
+  // ONE authority for the console's prompt packages: /cards in that data model —
+  // the same array Grace's ConsoleCardGrid binds to, which is what the renderer
+  // draws on screen.
+  //
+  // There used to be a second copy in React state (`assembledConsoleCards`),
+  // written by four different paths — the assembly, both failure branches, a
+  // rename, and an `a2ui:surface-update` listener that nothing in this repo
+  // dispatched — and read by two others (ConsolePage's states, and both chat
+  // panels). Nothing kept it in step with what was drawn: renaming a package
+  // updated the copy and left the card on screen showing the old title, and the
+  // dead listener set the copy while the surface was never told anything. Two
+  // consoles, free to disagree — and the one the operator reads is the drawn one,
+  // so the copy could only ever be the one that was wrong.
+  // Derived, so it cannot drift. null = no console surface has specified cards yet
+  // (ConsolePage states that as "waiting"); [] = assembled, and there are none
+  // (stated as "zero packages"). The old variable carried the same distinction in
+  // a comment; now the model itself makes it.
+  const assembledConsoleCards = Array.isArray(surfaceDataModel.cards)
+    ? (surfaceDataModel.cards as any[])
+    : null;
 
   // Lit receives objects as PROPERTIES, not JSX attributes — React's `.prop=`
   // syntax is Preact, and in React it is a syntax error (it compiled to
@@ -407,41 +445,49 @@ export default function Index({
   // These are the "ears" that hear when the AI has assembled something
   // ══════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    // SINGLE handler for ALL a2ui events - uses the generic surface-update
-    const handleSurfaceUpdate = (e: CustomEvent) => {
-      const cmd = e.detail.command;
-      console.log("[WritingAreaIndex] A2UI surface update:", cmd.component, cmd.props);
-
-      // Handle console/agent-card - these contain the cards array
-      if (cmd.component === 'console' || cmd.component === 'agent-card') {
-        if (cmd.props.cards) {
-          console.log("[WritingAreaIndex] Setting console cards:", cmd.props.cards.length);
-          setAssembledConsoleCards(cmd.props.cards);
-        }
-        setIsAIAssembling(false);
-      }
-      // Handle composer-related components - stop spinner
-      else if (cmd.component === 'composer' || cmd.component === 'left-column' ||
-               cmd.component === 'middle-column' || cmd.component === 'right-column') {
-        console.log("[WritingAreaIndex] Composer update - stopping spinner");
-        setIsAIAssembling(false);
-      }
-    };
+    // The generic `a2ui:surface-update` handler that used to open this effect is
+    // GONE, along with the channel it listened on: nothing in this repo ever
+    // dispatched that event (grep for `surface-update` finds only prose — no
+    // sender). What it did was write a second copy of the console's cards from
+    // `cmd.props.cards` while never telling the surface anything, so it could only
+    // ever have produced a console that disagreed with the one on screen. The
+    // console's cards are read from the surface's data model now (see
+    // `assembledConsoleCards` above); a legacy second channel feeding a deleted copy
+    // is not kept on the chance that it comes back.
 
     // Handler for errors
     const handleError = (e: CustomEvent) => {
-      console.error("[WritingAreaIndex] A2UI error", e.detail.props);
-      setAiAssemblyMessage(e.detail.props?.message || "Assembly failed");
+      const props = e.detail?.props ?? {};
+      console.error("[WritingAreaIndex] A2UI error", props);
+      // This used to set the MESSAGE and stop the spinner, and nothing else. The failure
+      // arrived on the error channel and was announced on the LOADING channel — then
+      // discarded when the spinner unmounted, because the workspace only renders the
+      // failure when aiAssemblyFailed is true. A failure that leaves no surface behind is
+      // suppression by definition, so the flag is set here.
+      //
+      // NOTE: nothing in this repo currently DISPATCHES `a2ui-update-error-banner` —
+      // this listener has no sender (verified by grep: the add and the remove, and
+      // no dispatch anywhere else). Wiring a sender is separate work; this handler is
+      // made honest now so that when the sender lands the failure is already visible
+      // rather than already swallowed.
+      const report = classifyFailure(
+        new Error(props.message || 'A2UI component reported an error'),
+        { intent: props.intent || 'component-error', body: props },
+      );
+      setAiAssemblyReport({ ...report, code: props.code || report.code });
+      setAiAssemblyMessage(props.message || report.headline);
+      setIsFailureAcknowledged(false);
+      setAiAssemblyFailed(true);
       setIsAIAssembling(false);
     };
 
-    // Attach the generic surface update listener - catches ALL commands
-    window.addEventListener('a2ui:surface-update', handleSurfaceUpdate as EventListener);
+    // `a2ui-update-error-banner` has no sender either (see the note on handleError
+    // above) — but that listener is kept deliberately, so that the first component
+    // which reports an error is already visible when the sender lands.
     window.addEventListener('a2ui-update-error-banner', handleError as EventListener);
 
     // Cleanup
     return () => {
-      window.removeEventListener('a2ui:surface-update', handleSurfaceUpdate as EventListener);
       window.removeEventListener('a2ui-update-error-banner', handleError as EventListener);
     };
   }, []);
@@ -1033,12 +1079,21 @@ export default function Index({
       });
       // Merge new title into existing session — don't replace entire object
       setCurrentPromptSession(prev => prev ? { ...prev, title: newTitle, updatedAt: new Date().toISOString() } : prev);
-      // Update the console card title so it reflects immediately
-      setAssembledConsoleCards(prev => {
-        if (!prev) return prev;
-        return prev.map(card =>
-          card.id === currentPromptSession.id ? { ...card, title: newTitle } : card
-        );
+      // The card on screen is drawn from the surface's data model, so that is where
+      // a rename has to land to be visible at all. This used to patch a React copy
+      // of the card list instead — so the title on screen kept the old value while
+      // the copy (and the picture of the library in Grace's seat) said otherwise.
+      // Writing /cards re-resolves the grid's binding, and the drawn card states
+      // the new title immediately.
+      setSurfaceDataModel(prev => {
+        const cards = Array.isArray(prev.cards) ? prev.cards : null;
+        if (!cards) return prev; // no console surface to update
+        return {
+          ...prev,
+          cards: cards.map((card: any) =>
+            card?.id === currentPromptSession.id ? { ...card, title: newTitle } : card
+          ),
+        };
       });
       console.log('✅ [CRUD] Renamed session:', currentPromptSession.id);
     } catch (error) {
@@ -1642,6 +1697,10 @@ export default function Index({
     isConsoleAssemblyInFlightRef.current = true;
     setIsAIAssembling(true);
     setAiAssemblyFailed(false);
+    setAiAssemblyReport(null);
+    setIsFailureAcknowledged(false);
+    // Recorded so Retry re-runs the request that actually failed rather than a guess.
+    lastAssemblyIntentRef.current = intent;
     setAiAssemblyMessage(AI_STANDBY_MESSAGE);
 
     // Create new abort controller for this request
@@ -1659,6 +1718,12 @@ export default function Index({
     // no client cap, because it can legitimately run long (measured 5.4–17.4s on
     // a 12 KB prompt). If it ever moves back onto this path, revisit this number.
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    // Transport facts, carried to the catch as FACTS rather than re-derived from the thrown
+    // message. The message is for humans; this is for the reader (shared/error-registry).
+    // Declared here because the catch is the only place that classifies a failure, and by
+    // then `response` is long out of scope.
+    let failureTransport: { httpStatus?: number; body?: unknown; rawBody?: string } = {};
 
     try {
       timeoutId = setTimeout(() => controller.abort(), ASSEMBLY_TIMEOUT_MS);
@@ -1679,63 +1744,95 @@ export default function Index({
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        let errorDetail = `${response.status}`;
+        // Read the body as TEXT first.
+        //
+        // The previous version called response.json() inside a bare `catch {}` and fell back
+        // to the bare status string. Two consequences, both live and both verified: a
+        // non-JSON error page was discarded entirely, and the §1 envelope — an OBJECT —
+        // stringified to "[object Object]", so all four of its fields were lost at the last
+        // meter. That is also why the "A2UI FAILURE:" branch in the catch below could never
+        // match: the throw site emitted a different prefix. text() cannot fail that way.
+        const rawBody = await response.text();
+        let parsedBody: unknown;
         try {
-          const errorData = await response.json();
-          errorDetail = errorData.detail || errorData.message || errorDetail;
-          console.error('🔴 [A2UI] Backend error:', errorData);
-        } catch {}
-        throw new Error(`A2UI Assembly Failed: ${errorDetail}`);
+          parsedBody = JSON.parse(rawBody);
+        } catch {
+          // Not JSON. rawBody already holds the truth; parsedBody stays undefined and the
+          // classifier falls back to status + raw text instead of inventing a shape.
+        }
+        failureTransport = {
+          httpStatus: response.status,
+          body: parsedBody,
+          rawBody,
+        };
+        console.error('🔴 [A2UI] Backend error', response.status, parsedBody ?? rawBody);
+
+        // §1 says the envelope's `message` is the human sentence — prefer it. Never let its
+        // absence collapse the status into a bare number: the raw body is the fallback.
+        const envelope = parseValidationEnvelope(parsedBody);
+        const detailFromBody =
+          typeof parsedBody === 'object' && parsedBody !== null
+            ? (parsedBody as { detail?: unknown }).detail
+            : undefined;
+        throw new Error(
+          envelope?.message
+            ?? (typeof detailFromBody === 'string' ? detailFromBody : undefined)
+            ?? (rawBody.trim() || `${response.status} ${response.statusText}`),
+        );
       }
 
       const rawData = await response.json();
 
       // ═══════════════════════════════════════════════════════════════════
-      // A2UI v0.9 ENVELOPE PARSER
-      // Response is an array of protocol messages.
-      // The MODEL is the architect — we now capture BOTH updateComponents and updateDataModel.
-      // We no longer ignore the components list returned by the LLM.
+      // A2UI v0.9.1 ENVELOPE BOUNDARY — version and surface are read, not assumed.
+      //
+      // Every operation is labeled with the format version it is written in and
+      // the surface it belongs to. Both labels used to be ignored: the operations
+      // were piled together, the last updateComponents and the last
+      // updateDataModel won, and *which surface was on screen* was guessed from
+      // the shape of the data model. So a v1.0 answer drew silently as v0.9.1,
+      // and an answer carrying two surfaces became one pile holding parts of
+      // each. readA2UIEnvelope() reads both labels and REFUSES rather than
+      // guessing — see src/shared/a2ui-envelope.ts for the wire shape.
       // ═══════════════════════════════════════════════════════════════════
-      const envelope = Array.isArray(rawData) ? rawData : [rawData];
-
-      // Extract from A2UI envelope operations
-      let dataModel: any = {};
-      let assembledComponents: any[] = [];
-
-      for (const operation of envelope) {
-        if (operation.updateComponents) {
-          const list = operation.updateComponents.components;
-          // Normalise ONCE, at the boundary. <a2ui-renderer> guards its own input
-          // too, but a non-array carried into React state would be re-checked on
-          // every render — and would throw here first, on the `.map` below, before
-          // the renderer ever saw it.
-          if (list !== undefined && !Array.isArray(list)) {
-            console.error(
-              `🤖 [A2UI] updateComponents.components is ${typeof list}, not an array — discarded.\n` +
-              `  CAUSE: a malformed envelope. The surface renders nothing rather than part of it.`,
-            );
-          }
-          assembledComponents = Array.isArray(list) ? list : [];
-          console.log(`🤖 [A2UI] Model-supplied components:`, assembledComponents.map((c: any) => c?.component || c?.id));
-        }
-        if (operation.updateDataModel) {
-          const value = operation.updateDataModel.value;
-          // The data model is an object BY DEFINITION — it is what bindings walk.
-          // A non-object would make every { path } resolve to undefined, so the
-          // surface would render with every bound value missing and nothing would
-          // say why. An empty model is the honest floor.
-          if (value !== undefined && (value === null || typeof value !== 'object' || Array.isArray(value))) {
-            console.error(
-              `🤖 [A2UI] updateDataModel.value is ${
-                value === null ? 'null' : Array.isArray(value) ? 'an array' : typeof value
-              }, not an object — ignored.\n` +
-              `  Every { path } binding would resolve to nothing; using an empty model instead.`,
-            );
-          }
-          dataModel = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-          console.log(`🤖 [A2UI] Data model received:`, Object.keys(dataModel));
-        }
+      const read = readA2UIEnvelope(rawData);
+      // `read.ok === false`, not `!read.ok`: this project compiles with
+      // strictNullChecks off, where truthiness does not narrow a union — only
+      // equality against the literal does.
+      if (read.ok === false) {
+        const { code, message, detail } = read.refusal;
+        console.error(
+          `🤖 [A2UI] ENVELOPE REFUSED — ${code}\n` +
+          `  ${message}\n` +
+          `  detail: ${JSON.stringify(detail)}\n` +
+          `  CAUSE: ${
+            code === 'UNSUPPORTED-VERSION'
+              ? 'the answer is written in a format version this shell does not implement'
+              : 'the answer describes surfaces this shell cannot hold at once'
+          }.\n` +
+          `  Refusing beats guessing: parsing it anyway draws an empty or wrong\n` +
+          `  surface, and says nothing about why.`,
+        );
+        // Thrown into the assembly failure path on purpose: the surface is
+        // cleared, the assembly is marked failed, and the reason is NAMED and
+        // shown. A refusal nobody sees is the same defect as the silent
+        // mis-reading it replaces.
+        throw envelopeRefusalError(read.refusal);
       }
+
+      const reading = read.reading;
+      const assembledComponents = reading.components as any[];
+      // The page reads a few well-known keys off the model (cards, usage,
+      // session) — the same keys the server puts there. The renderer is handed
+      // the model as it is; it walks paths, it does not read this shape.
+      const dataModel = reading.dataModel as Record<string, any>;
+      for (const note of reading.notes) console.warn(`🤖 [A2UI] ${note}`);
+      console.log(
+        `🤖 [A2UI] Envelope surface: "${reading.surfaceId ?? '(unnamed)'}"` +
+        `${reading.catalogId ? ` · catalog ${reading.catalogId}` : ''}`,
+      );
+      console.log(`🤖 [A2UI] Model-supplied components:`, assembledComponents.map((c: any) => c?.component || c?.id));
+      console.log(`🤖 [A2UI] Data model received:`, Object.keys(dataModel));
 
       // Hand both channels to the surface renderer as props.
       //
@@ -1747,9 +1844,13 @@ export default function Index({
       setSurfaceComponents(assembledComponents);
       setSurfaceDataModel(dataModel);
 
-      // A2UI v0.9.1: the envelope carries no non-spec "surface" key.
-      // The view is inferred from the data model itself: decision payload →
-      // decision dialog, cards → console grid, session payload → composer.
+      // A2UI v0.9.1: the surface LABEL is the spec's `surfaceId`, and it is read by
+      // the envelope boundary above (readA2UIEnvelope) — it names which surface these
+      // operations belong to. It is not the same question as WHICH VIEW to show:
+      // the server mounts the console, the composer and the decision dialog all on
+      // the one surface `main`, so the view is still inferred from the data model
+      // itself — decision payload → decision dialog, cards → console grid, session
+      // payload → composer. Two questions, two answers; this used to be one guess.
       const surface = dataModel.decision_type
         ? 'decision'
         : Array.isArray(dataModel.cards)
@@ -1789,7 +1890,10 @@ export default function Index({
         if (!Array.isArray(cards)) {
           throw new Error("AI did not return valid cards - surface cannot render without AI");
         }
-        setAssembledConsoleCards(cards);
+        // No setState here. These cards ARE `dataModel.cards`, and the data model was
+        // handed to the renderer two lines up — the console's one authority. A React
+        // copy kept in step beside them is what let the drawn console and the console
+        // this file believed in differ in the first place.
         setHeaderTab('console');
         console.log(`✅ [A2UI] Console assembled with ${cards.length} cards`);
 
@@ -1874,6 +1978,7 @@ export default function Index({
       }
 
       setAiAssemblyFailed(false);
+      setAiAssemblyReport(null);
 
     } catch (error) {
       clearTimeout(timeoutId);
@@ -1897,10 +2002,23 @@ export default function Index({
             `  CAUSE: Backend did not respond within ${ASSEMBLY_TIMEOUT_MS / 1000}s. Typical causes: a cold model call slower than usual, backend down, or network failure.\n` +
             `  FIX: Check backend logs for the request matching this timestamp. Look for "A2UI FAILURE" or PERF TRACE lines.`
           );
-          setAiAssemblyMessage(`Assembly timed out (${ASSEMBLY_TIMEOUT_MS / 1000}s). The AI may be slow or the backend may be unreachable. Check the server logs for details.`);
+          // Classified, not hand-written. The client cap fired — but classifyFailure reads the
+          // actual thrown error and the transport facts, so a real 503 that raced the cap is
+          // reported as a 503 rather than being re-labelled a timeout by proximity.
+          const report = classifyFailure(error, { intent, ...failureTransport });
+          setAiAssemblyReport(report);
+          setAiAssemblyMessage(report.headline);
+          setIsFailureAcknowledged(false);
           setAiAssemblyFailed(true);
           setCurrentPromptSession(null);
-          setAssembledConsoleCards(null);
+          // The surface goes with them. <a2ui-renderer> holds its last tree until it
+          // is handed a new one, so a failure that left the previous components in
+          // state would draw a stale console beside the error — the one thing that
+          // looks like a renderer that stopped listening. No envelope, no surface.
+          // The console's cards are READ from this model, so clearing it is also what
+          // clears them: there is no second list left holding the failed assembly.
+          setSurfaceComponents([]);
+          setSurfaceDataModel({});
         } else {
           // Previous request was aborted because a newer user action (tab click, etc.) superseded it
           console.log('[A2UI] Previous assembly superseded by newer request (normal)');
@@ -1915,18 +2033,25 @@ export default function Index({
           `  error.message: ${errorMessage}\n` +
           `  error.stack: ${error instanceof Error && error.stack ? error.stack.split('\n').slice(0, 5).join('\n    ') : 'N/A'}\n` +
           `  timestamp: ${new Date().toISOString()}\n` +
-          `  state: aiAssemblyFailed=true, currentPromptSession=null, assembledConsoleCards=null`
+          `  state: aiAssemblyFailed=true, currentPromptSession=null, surfaceDataModel={} (cards cleared with it)`
         );
-        // If the backend gave us a structured 503 detail (starts with "A2UI FAILURE:"),
-        // show it directly — it already says exactly what went wrong.
-        // Otherwise, prefix with context about what failed.
-        const displayMessage = errorMessage.startsWith('A2UI FAILURE:')
-          ? errorMessage
-          : `Assembly failed: ${errorMessage}`;
-        setAiAssemblyMessage(displayMessage);
+        // The branch that used to live here tested `errorMessage.startsWith('A2UI FAILURE:')`
+        // against a message the throw site prefixed differently ("A2UI Assembly Failed: "), so
+        // it could never match and the structured payload was never shown directly. The
+        // classifier replaces it: the §1 envelope travels in `failureTransport` as an OBJECT,
+        // so its code / surfaceId / path / message survive instead of becoming "[object Object]".
+        const report = classifyFailure(error, { intent, ...failureTransport });
+        setAiAssemblyReport(report);
+        setAiAssemblyMessage(report.headline);
+        setIsFailureAcknowledged(false);
         setAiAssemblyFailed(true);
         setCurrentPromptSession(null);
-        setAssembledConsoleCards(null);
+        // Same reason as the timeout branch above: the renderer paints its last
+        // tree until it is handed another, and a stale surface beside a failure
+        // reads as a live one. Cleared, so the error is the only thing on screen —
+        // and with the model cleared there are no cards left to disagree with it.
+        setSurfaceComponents([]);
+        setSurfaceDataModel({});
       }
     } finally {
       isConsoleAssemblyInFlightRef.current = false;
@@ -1942,6 +2067,37 @@ export default function Index({
       return assembleSurfaceWithAI(`render-session:${sessionId}`);
     }
     return assembleSurfaceWithAI('render-composer');
+  }, [assembleSurfaceWithAI]);
+
+  // ── error-banner's own events ────────────────────────────────────────────────
+  //
+  // error-banner emits `error-dismiss` / `error-retry` as bubble+composed CustomEvents
+  // precisely so a window listener hears them across the shadow boundary
+  // (error-banner.ts:18-19). Both are wired to something REAL here, because a control that
+  // renders and does nothing is the `tag-inert` finding this banner was written to fix:
+  //
+  //   error-retry   → re-run the assembly that actually failed (lastAssemblyIntentRef),
+  //                   so Retry re-issues the failing request instead of a guess.
+  //   error-dismiss → acknowledge the HEADLINE only. It clears neither aiAssemblyFailed nor
+  //                   the diagnostics pane: the record of what happened stays on screen
+  //                   until a successful assembly replaces it.
+  //
+  // This effect sits BELOW assembleSurfaceWithAI on purpose — a useEffect above its
+  // definition would evaluate the dependency array before the const is initialised.
+  useEffect(() => {
+    const handleRetry = () => {
+      console.log(`🤖 [A2UI] Retry requested → re-running intent: ${lastAssemblyIntentRef.current}`);
+      void assembleSurfaceWithAI(lastAssemblyIntentRef.current);
+    };
+    const handleDismiss = () => {
+      setIsFailureAcknowledged(true);
+    };
+    window.addEventListener('error-retry', handleRetry);
+    window.addEventListener('error-dismiss', handleDismiss);
+    return () => {
+      window.removeEventListener('error-retry', handleRetry);
+      window.removeEventListener('error-dismiss', handleDismiss);
+    };
   }, [assembleSurfaceWithAI]);
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -2906,27 +3062,26 @@ export default function Index({
                   <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
-                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto' }}>
-                  {/* SHADOW MOUNT — the renderer draws Grace's updateComponents tree.
+                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#E5E1DD' }}>
+                  {/* THE SURFACE — the renderer draws Grace's updateComponents tree.
                       Both channels of her last envelope arrive here as props: the
                       tree, and the data model its bindings point into.
 
-                      It sits BESIDE the hand-rendered grid rather than replacing it,
-                      deliberately. The hand-rendered path still owns things the
-                      renderer does not yet: the console's data refresh, and the
-                      open/delete/create handlers. Swapping them in one step would put
-                      a working surface behind an unverified one.
+                      This IS the console. There is no second, hand-rendered grid
+                      beside it: rebuilding the same grid in React from
+                      `dataModel.cards` was the duplication that had this mount kept
+                      off-screen, and that grid is gone. What surrounds it is the
+                      host's and stays the host's — the loading / failed / waiting /
+                      zero-package states and the delete confirmation, which live in
+                      <ConsolePage> because a component tree cannot state them.
 
-                      So this pass makes the renderer LIVE and observable, not
-                      authoritative. What to look for: every node it draws carries
-                      data-a2ui-id, so the two can be told apart on screen. Once the
-                      hand-rendered grid is confirmed redundant it goes, and this
-                      comment with it. */}
-                  {/* Mounted, rendered, never seen. It stays in the DOM so the
-                      data-a2ui-id parity evidence keeps accumulating, but it does
-                      not occupy the row: shown, it is a second copy of the grid
-                      and a third column. */}
-                  <div aria-hidden="true" style={{ display: 'none' }}>
+                      The two card behaviours that had to come with the swap, since
+                      they used to live in the React grid: a click on a card is
+                      dispatched as `card-open` by a2ui-console-card-grid and routed
+                      by ConsolePage to the render-session intent, and `card-delete`
+                      was already emitted by <agent-card-element> and already
+                      confirmed by the host dialog. */}
+                  <div style={{ flex: '1 1 0%', minWidth: 0, padding: '54px 16px 24px' }}>
                     <a2ui-renderer ref={a2uiRendererRef} />
                   </div>
                   <ConsolePage
@@ -2935,6 +3090,7 @@ export default function Index({
                     isParentLoading={isAIAssembling}
                     loadingMessage={aiAssemblyMessage}
                     errorMessage={aiAssemblyFailed ? aiAssemblyMessage : null}
+                    errorReport={aiAssemblyFailed ? aiAssemblyReport : null}
                     onCreateNew={async (_title) => {
                       await assembleSurfaceWithAI('render-composer', {
                         current_surface: headerTab || 'console',
@@ -2969,9 +3125,55 @@ export default function Index({
                     When assembly FAILS, show the error — no hiding. */}
                 <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
                   {aiAssemblyFailed ? (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px', overflow: 'auto' }}>
-                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#991B1B', margin: '0 0 8px' }}>Assembly failed</h3>
-                      <pre style={{ fontSize: '11px', fontFamily: 'monospace', color: '#7F1D1D', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{aiAssemblyMessage}</pre>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
+                      {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc
+                          <pre>, while <error-banner> sat in the catalog, granted to every role,
+                          accepted by a schema — and rendered by nothing on this path. A
+                          component that exists and is never reached is the same finding
+                          (`tag-inert`) the banner was written to fix.
+
+                          ALERT, DON'T BLOCK: the ✕ acknowledges the HEADLINE only. The
+                          diagnostics below stay until a successful assembly replaces them. */}
+                      {!isFailureAcknowledged && (
+                        <error-banner
+                          code={aiAssemblyReport?.code || 'ASSEMBLY-FAILED'}
+                          message={aiAssemblyMessage}
+                          {...(aiAssemblyReport?.retryable ? { retry: true } : {})}
+                        ></error-banner>
+                      )}
+
+                      {aiAssemblyReport && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {/* THE POINTER. A literal glyph plus the exact region — "an error
+                              occurred" is not a location, and this pane exists to give one. */}
+                          {(() => {
+                            const parts = aiAssemblyReport.arrow.split(' ');
+                            const glyph = parts.shift() ?? '';
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                                <span aria-hidden="true" style={{ fontSize: '22px', lineHeight: 1, color: '#B45309' }}>{glyph}</span>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: '#92400E' }}>{parts.join(' ')}</span>
+                              </div>
+                            );
+                          })()}
+                          <div>
+                            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6B7280', marginBottom: '3px' }}>What happened</div>
+                            <div style={{ fontSize: '13px', color: '#111827', fontWeight: 600 }}>{aiAssemblyReport.headline}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6B7280', marginBottom: '3px' }}>Why</div>
+                            <div style={{ fontSize: '13px', color: '#374151' }}>{aiAssemblyReport.cause}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6B7280', marginBottom: '3px' }}>What to do now</div>
+                            <div style={{ fontSize: '13px', color: '#374151' }}>{aiAssemblyReport.fix}</div>
+                          </div>
+                          <details style={{ marginTop: '2px' }}>
+                            <summary style={{ fontSize: '11px', fontWeight: 700, color: '#6B7280', cursor: 'pointer' }}>Raw diagnostics — verbatim, nothing filtered</summary>
+                            <pre style={{ fontSize: '11px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: '#374151', margin: '6px 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '4px', padding: '10px' }}>{aiAssemblyReport.detail}</pre>
+                          </details>
+                        </div>
+                      )}
                     </div>
                   ) : (
                   <workspace-layout 

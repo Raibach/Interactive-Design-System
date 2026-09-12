@@ -9,10 +9,16 @@
  *
  * This maps the list to real elements:
  *
- *   name  -> tag      primitives first, then the allowlist (tag-registry.ts).
- *                     The CATALOG cannot answer this: it is a JSON Schema and
- *                     carries no `tag` — the allowlist is the name-to-element
- *                     authority, which is also what the server validates against.
+ *   name  -> tag      the renderer's own tables first (COMPOSITE_MAP,
+ *                     A2UI_PRIMITIVES, A2UI_STRUCTURAL), then the allowlist
+ *                     (tag-registry.ts). The CATALOG cannot answer this: it is a
+ *                     JSON Schema and carries no `tag` — and the allowlist is NOT
+ *                     what the server validates against either. The server's gate
+ *                     is the catalog itself (backend/deps.py::
+ *                     validate_a2ui_components reads its `components` keys), a
+ *                     different list from this one. Reading the two as one list is
+ *                     how the catalog audit came to report ten renderable
+ *                     components as "the gatekeeper rejects it".
  *   ids   -> tree     resolve each `children` entry through the flat list.
  *   props -> props    assigned as PROPERTIES, camelCase, coerced by the element's
  *                     own declared types. Not attributes: Lit declares
@@ -259,7 +265,8 @@ class A2UIRenderer extends LitElement {
       this._report(id, comp.component, `Depth exceeded 64 at "${id}" — refusing to recurse further.`);
       return;
     }
-    if (!resolveTag(comp.component)) {
+    const tag = resolveTag(comp.component);
+    if (!tag) {
       this._report(
         id,
         comp.component,
@@ -267,6 +274,19 @@ class A2UIRenderer extends LitElement {
       );
       // Reported, but its children are still walked: one unknown component must
       // not hide the rest of the surface's problems.
+    } else if (!customElements.get(tag)) {
+      // The name RESOLVED — it is in the catalog, and this shell's own tables
+      // map it to a tag — but no element defines that tag, so it would render as
+      // an unknown element: an empty box, silently. That is the case a
+      // name-resolution check cannot see, and the one the audit called "blocked
+      // on the server" while the server was accepting the name.
+      this._report(
+        id,
+        comp.component,
+        `Resolved to <${tag}>, which no element defines — nothing was drawn.`
+        + ` No gate refuses the name (the catalog accepts it and this shell resolves it);`
+        + ` the element itself does not exist yet.`,
+      );
     }
     for (const childId of comp.children ?? []) {
       this._validate(childId, byId, [...path, id], depth + 1);
@@ -288,10 +308,17 @@ class A2UIRenderer extends LitElement {
    */
   private _build(comp: A2UIComponent, byId: Map<string, A2UIComponent>, path: string[]): TemplateResult {
     const tag = resolveTag(comp.component);
+    // Resolved is not the same as defined: a name can map to a tag that no
+    // element registers, and that tag draws an empty box with nothing to explain
+    // it. _validate has already reported it; the same error block is drawn here
+    // so the gap is visible where the component should have been drawn.
+    const defined = tag ? Boolean(customElements.get(tag)) : false;
 
-    if (!tag) {
+    if (!tag || !defined) {
       return html`<div class="a2ui-error" data-a2ui-missing=${comp.id}>
-        <strong>${comp.component}</strong> (${comp.id}) — not in the catalog
+        <strong>${comp.component}</strong> (${comp.id}) — ${tag
+          ? `resolved to <${tag}>, which no element defines`
+          : 'not in the catalog'}
       </div>`;
     }
 

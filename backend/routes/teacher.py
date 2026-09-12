@@ -65,6 +65,30 @@ class EnsureModelRequest(BaseModel):
     model_type: str = "grace"  # "grace" (Z.ai GLM-4.7), "karen", "lm_studio", or "zai"
 
 
+def _with_tool_results(context: str, blocks: List[str], warnings: List[str]) -> str:
+    """Fold executed tool results into the structured prompt config.
+
+    prompt_output mode hands grace_gui._assemble_prompt_output a JSON config and
+    that function json.loads() it. Prepending prose to that string makes the
+    parse throw, and its `except` substitutes a generic system prompt — so the
+    design and the warning have to arrive as FIELDS, never as a prefix. A
+    context that is not the structured config is returned untouched rather than
+    mangled, because a chat-mode context is prose by design.
+    """
+    try:
+        payload = json.loads(context) if context and context.strip() else {}
+        if not isinstance(payload, dict):
+            return context
+    except Exception:
+        return context
+
+    if blocks:
+        payload["tool_context"] = "\n\n".join(blocks)
+    if warnings:
+        payload["tool_warnings"] = list(warnings)
+    return json.dumps(payload)
+
+
 @router.post("/api/teacher/query")
 async def api_teacher_query(request: TeacherQueryRequest):
     """Main AI query endpoint — context-aware with conversation persistence"""
@@ -162,10 +186,11 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # A tool call written into a prompt is only real if something executes it.
         # The repair prompt asks Figma for the design; this is where that happens.
         #
-        # A failure is never swallowed: it is written into the prompt as a WARNING
+        # A failure is never swallowed: it is carried into the prompt as a WARNING
         # (so the model names what is missing instead of inventing it) AND returned
         # as `tool_warnings` (so the person sees it). A design-blind answer that
         # reads as authoritative is the exact outcome this prevents.
+        tool_blocks: List[str] = []
         tool_warnings: List[str] = []
         if request.tool_calls:
             try:
@@ -175,32 +200,40 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 # handler is `async def`: calling it inline froze the ENTIRE server
                 # for as long as Figma took to answer — every other request queued
                 # behind it, so the app looked hung rather than busy.
-                blocks, tool_warnings = await asyncio.to_thread(
+                tool_blocks, tool_warnings = await asyncio.to_thread(
                     run_tool_calls, request.tool_calls
                 )
+                if tool_warnings:
+                    print(f"⚠️  [tool_calls] {len(tool_warnings)} warning(s) — carried into the prompt")
+            except Exception as e:  # noqa: BLE001 — reported, not raised
+                tool_warnings = [f"Tool execution failed: {type(e).__name__}: {e}"]
+                print(f"⚠️  [tool_calls] execution failed: {e}")
 
-                if blocks:
-                    full_context = "\n\n".join(blocks) + "\n\n" + full_context
-
+        # ── Deliver the tool results WITHOUT breaking the prompt config ─────
+        # These used to be PREPENDED to `full_context`. In prompt_output mode
+        # `full_context` IS the structured JSON config the frontend built, and
+        # grace_gui._assemble_prompt_output runs json.loads() over it — so
+        # prefixing the design (or a warning) made that parse throw, and its
+        # `except` silently substituted a generic "Execute the prompt
+        # configuration.". Every repair declares a tool call, so every repair
+        # lost its System/User/Agent prompt at exactly the moment the design
+        # arrived, and answered a generic question against a blob of raw Figma
+        # JSON. Fold the results in as FIELDS so the load cannot be broken.
+        if tool_blocks or tool_warnings:
+            if mode == "prompt_output":
+                full_context = _with_tool_results(full_context, tool_blocks, tool_warnings)
+            else:
+                # chat mode never parses the context, so the heading form is
+                # still the clearest way to put the design in front of the model.
+                if tool_blocks:
+                    full_context = "\n\n".join(tool_blocks) + "\n\n" + full_context
                 if tool_warnings:
                     full_context = (
                         "=== TOOL WARNING — READ THIS BEFORE ANSWERING ===\n"
                         + "\n".join(f"- {w}" for w in tool_warnings)
-                        + "\n\nThe tool did not return the design. Do NOT invent it and do "
-                          "NOT proceed as though it were here: name what is missing and ask "
-                          "for it.\n\n"
+                        + "\n\nThe tool did not return the design. Do NOT invent it.\n\n"
                         + full_context
                     )
-                    print(f"⚠️  [tool_calls] {len(tool_warnings)} warning(s) — prompt carries them")
-            except Exception as e:  # noqa: BLE001 — reported, not raised
-                tool_warnings = [f"Tool execution failed: {type(e).__name__}: {e}"]
-                full_context = (
-                    "=== TOOL WARNING — READ THIS BEFORE ANSWERING ===\n"
-                    + "\n".join(f"- {w}" for w in tool_warnings)
-                    + "\n\nThe tool did not run. Do NOT invent the design.\n\n"
-                    + full_context
-                )
-                print(f"⚠️  [tool_calls] execution failed: {e}")
 
         # ── Call the LLM ────────────────────────────────────────────
         # Also off the event loop, for the same reason as the tool call above: this

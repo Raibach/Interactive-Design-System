@@ -253,20 +253,69 @@ class A2UIConsoleCardGrid extends LitElement {
     }
   `;
 
+  /**
+   * The card's DECLARED open event — the wrapper's `card-open` handler that
+   * <agent-card-element> stops its delete click from reaching (see that file's
+   * `_onDeleteClick`).
+   *
+   * `agent-card` declares three events and this grid is the component that
+   * receives them: frontend/src/shared/tag-registry.ts → AgentCardSchema.events =
+   * ['card-open', 'card-delete', 'card-archive']. Only `card-delete` was ever
+   * emitted by anyone, and nothing anywhere listened for `card-open` — the
+   * declared wire was connected at neither end.
+   *
+   * Dispatched, not handled here. Opening a package re-assembles a surface through
+   * the AI (`render-session:{id}`), and a card grid has no business running an
+   * assembly. The host owns that; this only says which package was chosen.
+   */
+  private _open(sessionId: string) {
+    if (!sessionId) return; // a card with no session id has nothing to open
+    this.dispatchEvent(
+      new CustomEvent('card-open', {
+        detail: { sessionId, id: sessionId },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   render() {
     // `items` arrives already resolved by the renderer's binding pass. Until that
     // pass exists it is still a {path} object, so this paints nothing — correct,
     // and visible rather than silently empty.
     const cards = Array.isArray(this.items) ? this.items : [];
-    return html`${cards.map(
-      (item: any) => html`<agent-card-element
-        data-a2ui-id=${item?.id ?? ''}
+    // The same prop set the hand-rendered console grid used to pass to
+    // <agent-card-element> before the console became the AI's own surface. That grid
+    // is gone and this is the only console now, so /cards is the single list of
+    // packages any part of the app reads. The card is a designed component with its
+    // own provenance; this grid only forwards the model's fields, so nothing here
+    // invents a look.
+    //
+    // `id` is set deliberately: <agent-card-element> dispatches `card-delete` with
+    // `this.id`, so a card rendered without one deletes nothing.
+    return html`${cards.map((item: any) => {
+      const sessionId = item?.id ?? '';
+      return html`<agent-card-element
+        id=${sessionId}
+        data-a2ui-id=${sessionId}
         title=${item?.title ?? ''}
         category=${item?.category ?? ''}
-        model-name=${item?.model_name ?? item?.modelName ?? ''}
+        description=${item?.description ?? ''}
+        username=${item?.username ?? item?.author ?? ''}
+        team-name=${item?.team_name ?? item?.teamName ?? ''}
+        version=${item?.version || item?.message_count || 1}
+        status=${item?.status || 'Active'}
         likes=${item?.likes ?? 0}
-      ></agent-card-element>`,
-    )}<slot></slot>`;
+        model-name=${item?.model_name ?? item?.modelName ?? ''}
+        avatar-url=${item?.avatar_url ?? ''}
+        category-color=${item?.category_color ?? ''}
+        category-title-color=${item?.category_title_color ?? ''}
+        category-text-color=${item?.category_text_color ?? ''}
+        last-used=${item?.lastUsed ?? ''}
+        created-at=${item?.createdAt ?? ''}
+        @click=${() => this._open(sessionId)}
+      ></agent-card-element>`;
+    })}<slot></slot>`;
   }
 }
 
