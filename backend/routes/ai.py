@@ -366,15 +366,16 @@ Assemble the FULL console surface using A2UI v0.9.1.
 
 REQUIREMENTS:
 1. id "root" Column at top
-2. Text header with a welcome message and variant "greeting"
-3. ConsoleCardGrid bound to /cards
-4. Short friendly ai_message
+2. ConsoleCardGrid bound to /cards
+3. Short friendly ai_message
+
+The console IS the cards and nothing else: do NOT emit a greeting, a header,
+or any other Text component above them.
 
 Output ONLY this exact JSON (no markdown, no extra text):
 {{
   "components": [
-    {{"id": "root", "component": "Column", "children": ["header", "card-grid"]}},
-    {{"id": "header", "component": "Text", "text": "Welcome back!", "variant": "greeting"}},
+    {{"id": "root", "component": "Column", "children": ["card-grid"]}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}}
   ],
   "ai_message": "Your message"
@@ -870,7 +871,10 @@ REQUIREMENTS:
 1. id "root" Column
 2. 3-column workspace layout
 3. Bind editors to the paths above
-4. Short ai_message
+4. Short ai_message that says what is on screen
+
+The session IS the three panes: do NOT greet. Not "Welcome back", no time of day,
+no return salutation — the operator is already in the session they opened.
 
 Output ONLY this JSON (no markdown):
 {{
@@ -881,7 +885,7 @@ Output ONLY this JSON (no markdown):
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
     {{"id": "right-col", "component": "chat-panel", "conversationId": {{"path": "/session/right_column/conversation_id"}}}}
   ],
-  "ai_message": "Welcome back..."
+  "ai_message": "Session open — your three panes are loaded."
 }}
 """
 
@@ -917,7 +921,7 @@ Output ONLY this JSON (no markdown):
         try:
             parsed = _extract_json_payload(response_text)
             components = parsed["components"]
-            ai_message = parsed.get("ai_message", "Welcome back to your session.")
+            ai_message = parsed.get("ai_message", f"{session.get('title') or 'Untitled'} is open.")
             if not isinstance(components, list) or len(components) == 0:
                 raise ValueError("components must be non-empty array")
             ms_c = (time.perf_counter() - t_c_start) * 1000
