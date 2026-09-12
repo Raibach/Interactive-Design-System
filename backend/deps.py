@@ -44,9 +44,10 @@ def validate_a2ui_components(components: List[Dict[str, Any]]) -> None:
     """
     Zero-trust validation of an updateComponents payload against the catalog.
 
-    Implements the spec's prompt → generate → validate loop contract (SPECIFICATIONS.md
-    §1 — Standard validation error format): any component whose type is not
-    registered in the trusted catalog is rejected with VALIDATION_FAILED.
+    Implements the spec's prompt → generate → validate loop contract
+    (READ-ME/IMPLEMENTATION_CONFORMANCE.md §1 — Standard validation error format):
+    any component whose type is not registered in the trusted catalog is rejected
+    with VALIDATION_FAILED.
     Raises HTTPException(503) — never passes invalid UI to the client.
     """
     allowed = set(a2ui_catalog.get("components", {}).keys())

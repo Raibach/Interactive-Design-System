@@ -7,7 +7,7 @@
 - Application component catalog `$id`: `https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json`
 - Source of truth for this implementation: `frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json`
 
-**Status of this document:** Authored 2026-08-25 from source review against the running codebase. Every conformance claim below cites its implementing file. Claims marked ✅ were additionally live-verified on 2026-07-27 during the remediation recorded in [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md). Items not yet built are labeled 🔜 rather than omitted — this document describes the specification *and* the honest distance between specification and current build.
+**Status of this document:** Authored 2026-08-25 from source review against the running codebase. Every conformance claim below cites its implementing file. Claims marked ✅ were additionally live-verified on 2026-07-27 during the remediation recorded in [`A2UI_TRUE_VS_FAKE_AUDIT.md`](A2UI_TRUE_VS_FAKE_AUDIT.md). Items not yet built are labeled 🔜 rather than omitted — this document describes the specification *and* the honest distance between specification and current build.
 
 ---
 
@@ -140,6 +140,6 @@ Claims in this document can be reproduced without trusting it:
 
 - Official A2UI v0.9.1 protocol specification: <https://a2ui.org/specification/v0.9.1-a2ui/>
 - A2A extension spec: <https://a2ui.org/specification/v0.9.1-a2ui-extension-specification/> · Evolution guide: <https://a2ui.org/specification/v0.9.1-evolution-guide/> · Basic catalog guide: <https://a2ui.org/specification/v0.9.1-basic-catalog-implementation-guide/>
-- [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — live-verified compliance ledger and Phase-2 remediation record
-- [`CONSOLE_CONTRACTS.md`](CONSOLE_CONTRACTS.md) — Figma→Lit console card component data contract
-- [`CHANGELOG.md`](CHANGELOG.md) — day-by-day release history
+- [`A2UI_TRUE_VS_FAKE_AUDIT.md`](A2UI_TRUE_VS_FAKE_AUDIT.md) — live-verified compliance ledger and Phase-2 remediation record
+- [`CONSOLE_CONTRACTS.md`](../FIGMA/CONSOLE_CONTRACTS.md) — Figma→Lit console card component data contract
+- [`CHANGELOG.md`](../CHANGELOG.md) — day-by-day release history
