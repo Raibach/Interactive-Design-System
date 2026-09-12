@@ -2,7 +2,7 @@
 
 **Author:** John Holt, Raibach Interactive Design Studio
 **Status:** Working doctrine — practiced daily in this repository since 2026
-**Companion documents:** [`SPECIFICATIONS.md`](../SPECIFICATIONS.md) (protocol conformance) · [`A2UI_TRUE_VS_FAKE_AUDIT.md`](A2UI_TRUE_VS_FAKE_AUDIT.md) (the method applied under fire)
+**Companion documents:** [`IMPLEMENTATION_CONFORMANCE.md`](IMPLEMENTATION_CONFORMANCE.md) (protocol conformance) · [`A2UI_TRUE_VS_FAKE_AUDIT.md`](A2UI_TRUE_VS_FAKE_AUDIT.md) (the method applied under fire)
 
 ---
 

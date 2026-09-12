@@ -2,7 +2,7 @@
 
 **Author:** John Holt, Raibach Interactive Design Studio
 **Status:** Working doctrine — practiced daily in this repository since 2026
-**Companion documents:** [`SPECIFICATIONS.md`](../SPECIFICATIONS.md) (protocol conformance) · [`A2UI_TRUE_VS_FAKE_AUDIT.md`](A2UI_TRUE_VS_FAKE_AUDIT.md) (the method applied under fire)
+**Companion documents:** [`IMPLEMENTATION_CONFORMANCE.md`](IMPLEMENTATION_CONFORMANCE.md) (protocol conformance) · [`A2UI_TRUE_VS_FAKE_AUDIT.md`](A2UI_TRUE_VS_FAKE_AUDIT.md) (the method applied under fire)
 
 ---
 
@@ -61,7 +61,7 @@ Docs describe what IS. Changelog entries carry verification receipts (what was r
 
 ### P6 — Steering AI sessions
 An AI model regresses toward the median of everything it has ever seen — for code, that means conventional SPA patterns. Do not fight this with vigilance; fight it with **structure**:
-1. Put the worldview where every session meets it first (`SPECIFICATIONS.md` linked atop the README)
+1. Put the worldview where every session meets it first (`READ-ME/IMPLEMENTATION_CONFORMANCE.md` linked atop the README)
 2. Constrain generation mechanically — trusted component catalogs, validation boundaries, fail-loud envelopes — so drift is *rejected by the system*, not caught by your attention
 3. Audit outputs against behavior, never against the session's self-report
 4. Keep a standing TRUE-vs-FAKE ledger so falsified records are discoverable

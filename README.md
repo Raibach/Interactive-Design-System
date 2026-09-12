@@ -5,7 +5,7 @@
 **Raibach Interactive Design Studio** · John Holt  
 Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
-> ### 📘 Read this first: [`SPECIFICATIONS.md`](SPECIFICATIONS.md)
+> ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
 > The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
 >
 > **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
@@ -78,7 +78,7 @@ A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interf
 
 ## Component Catalog
 
-28 trusted components — 12 A2UI Basic Catalog primitives + 16 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. The live count is asserted at backend startup (`✅ A2UI Catalog loaded — N trusted components`) and specified in [`SPECIFICATIONS.md`](SPECIFICATIONS.md) §4.3.
+28 trusted components — 12 A2UI Basic Catalog primitives + 16 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. The live count is asserted at backend startup (`✅ A2UI Catalog loaded — N trusted components`) and specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
@@ -167,11 +167,11 @@ Docker on **Northflank** (`prompt-composer-console`, us-central). Production dep
 
 ## Documentation
 
-- [`SPECIFICATIONS.md`](SPECIFICATIONS.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
+- [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
 - [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
 - [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
 - [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
-- [`CONSOLE_CONTRACTS.md`](CONSOLE_CONTRACTS.md) — Console surface data contract
+- [`FIGMA/CONSOLE_CONTRACTS.md`](FIGMA/CONSOLE_CONTRACTS.md) — Console surface data contract
 
 ---
 

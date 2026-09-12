@@ -10,7 +10,7 @@ const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(file
 // removed: it referenced @storybook/addon-vitest — never declared in
 // package.json — and .storybook/vitest.setup.ts, which did not exist.
 // Browser-mode story tests return as a deliberate Vitest 4 + addon-vitest
-// migration; see SPECIFICATIONS.md status map.
+// migration; see READ-ME/IMPLEMENTATION_CONFORMANCE.md status map.
 
 export default defineConfig({
   plugins: [react()],
