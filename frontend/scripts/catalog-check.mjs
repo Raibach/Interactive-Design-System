@@ -18,10 +18,22 @@
  * FAIL LOUD: if a check cannot run, that is itself a finding. An empty list
  * and a check that never ran must never look the same.
  *
+ * SEVERITY: a finding is `advisory` (a person still has to author something) or
+ * `blocking` (the pipeline's own ability to see, or to stay consistent, is
+ * broken). BLOCKING findings exit 1. Every severity has one home: BLOCKING below.
+ *
+ * CENSUS: every check in CHECK_INVENTORY reports whether it RAN and how many
+ * findings it raised. Green means "every check ran and nothing blocked" — never
+ * "the catalog is clean". A check that should have run and did not run is turned
+ * into a blocking finding, because a check that produced nothing used to be
+ * indistinguishable from a check that passed.
+ *
  * Usage: node scripts/catalog-check.mjs [--catalog NAME] [--offline]
+ *        --offline declares the live Figma checks skipped on purpose: the run is
+ *        reported INCOMPLETE and is not treated as a missing check.
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..'); // frontend/
@@ -43,6 +55,14 @@ const PATHS = {
   extractor: join(ROOT, 'scripts', 'design-extract.mjs'),
   audit: join(ROOT, 'scripts', 'import-audit.mjs'),
   envFile: join(REPO, 'backend', '.env'),
+  // The documents that state facts about this catalog. `doc-claim-drift` reads them,
+  // which is what turns "drift between catalog and docs is self-announcing" from a
+  // sentence into a mechanism.
+  readme: join(REPO, 'README.md'),
+  conformance: join(REPO, 'READ-ME', 'IMPLEMENTATION_CONFORMANCE.md'),
+  // The pipeline the documents describe. deps.py loads exactly this one, so "the
+  // count stated in the docs" means this catalog even during an ecommerce run.
+  defaultSchema: join(ROOT, 'src', 'components', 'A2UI', 'catalogs', 'prompt-composer', 'catalog.json'),
   // NOT under dist/. `vite build` empties dist/, which silently deleted this
   // report and turned /api/catalog/audit into a 503 on every production build.
   out: join(ROOT, 'catalog-audit', `${CATALOG_NAME}.json`),
@@ -53,8 +73,56 @@ const DEFAULT_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
 // ── Finding shape ──────────────────────────────────────────────────────────
 // stage:  ingest (pull) | deliver (reached the component) | gap (person's job)
 // owner:  pipeline | designer
-// level:  advisory | blocking   — nothing is blocking today; alert, don't block
+// level:  pass | advisory | blocking — resolved from BLOCKING below, one home.
 const findings = [];
+
+// ── The inventory: every check this script knows how to run ────────────────
+// The point is the DENOMINATOR. The report used to list only the checks that
+// raised something (`checks` was built FROM the findings), so "ran and passed"
+// and "never ran" were the same absence — six checks could be dead for months
+// and the readout would look identical. Each check marks itself through
+// checkRan(); the census in the report carries ran + counts per check.
+//   live: true → needs Figma; skipped in --offline runs and when no token exists.
+const CHECK_INVENTORY = [
+  { id: 'component-missing', stage: 'deliver', live: false, asserts: 'every registry entry names a component source that exists' },
+  { id: 'node-id-absent', stage: 'deliver', live: false, asserts: 'every node-derived component carries its node id' },
+  { id: 'provenance-missing', stage: 'deliver', live: false, asserts: 'every entry says which fields are design and which are invented' },
+  { id: 'container-undeclared', stage: 'deliver', live: false, asserts: 'a component drawn inside a container declares it' },
+  { id: 'event-unheard', stage: 'deliver', live: false, asserts: 'every dispatched event is heard or marked a stub' },
+  { id: 'primitive-missing', stage: 'deliver', live: false, asserts: 'the theme carries every shared primitive' },
+  { id: 'primitive-drift', stage: 'deliver', live: false, asserts: 'the shared primitives are referenced, not restated' },
+  { id: 'tag-inert', stage: 'deliver', live: false, asserts: 'every allowlist tag is implemented (element + schema + handler)' },
+  { id: 'schema-absent', stage: 'deliver', live: false, asserts: 'every implemented allowlist tag is in the schema' },
+  { id: 'allowlist-absent', stage: 'deliver', live: false, asserts: 'every schema component is drawable' },
+  { id: 'schema-unreachable', stage: 'deliver', live: false, asserts: 'every schema component is reachable through anyComponent' },
+  { id: 'element-unclaimed', stage: 'deliver', live: false, asserts: 'every shipped element is claimed by a gate or mounted by the app' },
+  { id: 'attr-hardcoded', stage: 'ingest', live: false, asserts: 'the untrusted annotation attribute name is not hardcoded' },
+  { id: 'node-unresolved', stage: 'ingest', live: true, asserts: 'every registry node address resolves in the file' },
+  { id: 'annotation-missing', stage: 'gap', live: true, asserts: 'every resolved node carries an annotation' },
+  { id: 'annotation-prose', stage: 'gap', live: true, asserts: 'every annotation is a spec, not prose' },
+  { id: 'geometry-drift', stage: 'deliver', live: true, asserts: 'the node and the rendering agree' },
+  { id: 'check-could-not-run', stage: 'ingest', live: false, asserts: 'no check was skipped' },
+  { id: 'clean-no-jsx', stage: 'clean', live: false, asserts: 'no React/JSX/Tailwind in the component sources' },
+  { id: 'doc-claim-drift', stage: 'deliver', live: false, asserts: 'the component count and names the documents state are the catalog\'s' },
+];
+
+// Severity, one home. A finding about the pipeline's own ability to SEE or to stay
+// CONSISTENT blocks the run. A finding about work a person still has to author is
+// advisory: it must be visible and must not stop a build. Nothing is advisory by
+// accident — it is advisory because someone else, not this script, can fix it.
+const BLOCKING = new Set([
+  'check-could-not-run',   // the report does not know what it is talking about
+  'attr-hardcoded',        // the reader depends on a name the protocol calls untrusted
+  'node-unresolved',       // the address is dead: everything said about it is fiction
+  'component-missing',     // the map names a component source that is not there
+  'primitive-drift',       // one component, two definitions
+  'primitive-missing',     // a theme that silently drops the shared floor
+  'schema-unreachable',    // a published catalog a client would reject
+  'doc-claim-drift',       // a document states something about this catalog that is false
+]);
+
+const ran = new Set();
+const checkRan = (id) => { ran.add(id); };
 /**
  * `key` disambiguates when ONE subject legitimately carries SEVERAL findings.
  *
@@ -65,8 +133,11 @@ const findings = [];
  * the same key, event-unheard:…"), and a reader could not tell four findings from
  * one finding printed four times. Pass the thing that makes them different.
  */
-function add({ check, stage, owner, level = 'advisory', tier = null, component = null, nodeId = null, file = null, what, fix, key = null }) {
-  findings.push({ id: `${check}:${component || file || nodeId || 'catalog'}${key ? `:${key}` : ''}`, check, stage, owner, level, tier, component, nodeId, file, what, fix });
+function add({ check, stage, owner, level = null, tier = null, component = null, nodeId = null, file = null, what, fix, key = null }) {
+  // Severity is resolved, not passed: BLOCKING is the single home for the rule.
+  // A caller may still force a level — that is what the `pass` entries use.
+  const resolved = level || (BLOCKING.has(check) ? 'blocking' : 'advisory');
+  findings.push({ id: `${check}:${component || file || nodeId || 'catalog'}${key ? `:${key}` : ''}`, check, stage, owner, level: resolved, tier, component, nodeId, file, what, fix });
 }
 
 const read = (p) => readFileSync(p, 'utf8');
@@ -144,10 +215,22 @@ function walkSrc(dir, acc = []) {
 for (const p of walkSrc(join(ROOT, 'src'))) {
   for (const m of read(p).matchAll(/addEventListener\(\s*['"]([^'"]+)['"]/g)) heard.add(m[1]);
 }
+// Listeners reached through a LOCAL HELPER — `const on = <T extends Event>(type, fn)
+// => this.addEventListener(type, fn)` followed by `on<CustomEvent>('section-add', …)`.
+// The event's name never appears next to addEventListener, so the sweep above cannot
+// see it: three events in this app are heard exactly this way, and were reported as
+// "nothing listens" while a listener was attached a few lines away. A helper is only
+// trusted in a file that itself binds addEventListener, which keeps this from
+// matching unrelated `on(` calls elsewhere.
+for (const s of SOURCES) {
+  if (!/\.addEventListener\s*\(/.test(s.src)) continue;
+  for (const m of s.src.matchAll(/\bon(?:<[^>()]*>)?\(\s*['"]([a-z][a-z0-9-]+)['"]/g)) heard.add(m[1]);
+}
 
 // ═══ DELIVER — did the spec reach the component? ═══════════════════════════
 // Provenance: every registry entry must say which fields came from the design
 // and which were invented. An unmarked invention passes as the designer's word.
+checkRan('provenance-missing');
 for (const c of figmaMap.components) {
   if (!c.provenance) {
     const s = srcOf(c.litComponent);
@@ -163,6 +246,8 @@ for (const c of figmaMap.components) {
 
 // Node IDs: a component derived from Figma must carry its node id, or it cannot
 // be traced back to the design it came from.
+checkRan('component-missing');
+checkRan('node-id-absent');
 for (const c of figmaMap.components) {
   if (!c.figmaNodeId) continue;
   const s = srcOf(c.litComponent);
@@ -185,6 +270,7 @@ for (const c of figmaMap.components) {
 // The container names the elements it renders inside (`renderedBy`); an entry whose
 // component is listed there but which does not declare the container back is the
 // one that slipped in.
+checkRan('container-undeclared');
 for (const c of figmaMap.components) {
   if (!c.litComponent) continue;
   // The element's OWN entry is not a slot in the container — it is the element the
@@ -199,6 +285,7 @@ for (const c of figmaMap.components) {
 }
 // Unheard events: a dispatched event nothing listens for is a dead control
 // unless it is explicitly marked as an unimplemented stub.
+checkRan('event-unheard');
 for (const [event, by] of dispatched) {
   if (heard.has(event)) continue;
   for (const comp of by) {
@@ -214,6 +301,11 @@ for (const [event, by] of dispatched) {
 // stop, so the difference fails HERE rather than surfacing later as two surfaces
 // rendering the same component two ways.
 if (existsSync(PATHS.primitives) && schema.components) {
+  // Marked INSIDE the guard: a missing primitives catalog means these two checks
+  // never ran, and the census below turns that into a blocking finding instead of
+  // a silence that reads as a pass.
+  checkRan('primitive-missing');
+  checkRan('primitive-drift');
   const primitives = JSON.parse(read(PATHS.primitives));
   for (const [name, spec] of Object.entries(primitives.components || {})) {
     const mine = schema.components[name];
@@ -277,7 +369,44 @@ const DEFINED_TAGS = new Set(
     .filter(Boolean),
 );
 
+// The renderer's own resolution tables. resolveTag() consults these BEFORE the
+// allowlist is ever read (a2ui-renderer.ts): an explicit composite alias, the six
+// spec primitives, then the renderer-owned structural composites.
+//
+// This is the correction that matters in this file. The check below used to
+// compare the schema to the allowlist alone and report every difference as "the
+// gatekeeper rejects it, so nothing can render it" — wrong twice over:
+//
+//   * the server's gate is not the allowlist. It is this catalog: deps.py::
+//     validate_a2ui_components validates against these `components` keys, so
+//     every name in this schema is accepted by it;
+//   * the renderer draws COMPOSITE_MAP / A2UI_STRUCTURAL names without the
+//     allowlist being consulted at all.
+//
+// Ten names were reported that way — ActionGroup, ChatPanel, CompiledOutput,
+// ConsoleCardGrid, DecisionDialog, SectionEditor, footer-bar, add-section-button,
+// status-readout, token-cost-readout — and every one of them resolved. Nine still
+// do. (ChatPanel resolves to <chat-panel>, which no element defines — a real gap,
+// and a different one: it is the element that is missing, not a gate that blocks
+// it. The renderer now reports that case itself.)
+//
+// Read out of the tables rather than listed here, so this exemption cannot rot
+// the way a hand-kept list would.
+const tableKeys = (src, name) => {
+  const block = src.match(
+    new RegExp(`(?:const|export const)\\s+${name}\\b[^=]*=\\s*\\{([\\s\\S]*?)\\n\\};`),
+  );
+  if (!block) return [];
+  return [...block[1].matchAll(/(?:'([^']+)'|([A-Za-z_$][\w$]*))\s*:/g)].map((m) => m[1] || m[2]);
+};
+const RENDERER_OWNED = new Set([
+  ...tableKeys(read(join(ROOT, 'src/components/lit/a2ui-renderer.ts')), 'COMPOSITE_MAP'),
+  ...tableKeys(read(join(ROOT, 'src/components/lit/a2ui-primitives.ts')), 'A2UI_STRUCTURAL'),
+]);
+
 // The allowlist is the authority: it names the Lit elements that exist.
+checkRan('tag-inert');
+checkRan('schema-absent');
 for (const a of allowlist) {
   if (schemaComponents.includes(a.tag)) continue;
   if (CHAT_COMMAND_TAGS.has(a.tag)) continue; // a command, not a component
@@ -303,14 +432,18 @@ for (const a of allowlist) {
   });
 }
 
+checkRan('allowlist-absent');
 for (const tag of schemaComponents) {
   if (allowlistTags.has(tag)) continue;
   if (A2UI_PROTOCOL_COMPONENTS.includes(tag)) continue;
+  // Resolved by the renderer's own tables, which are consulted first. The
+  // allowlist is not its authority and the server does not gate on it.
+  if (RENDERER_OWNED.has(tag)) continue;
   add({
     check: 'allowlist-absent', stage: 'deliver', owner: 'pipeline', tier: 'primitives',
     component: tag, nodeId: null, file: rel(PATHS.schema),
-    what: `The "${CATALOG_NAME}" schema lists "${tag}" but the allowlist does not — the gatekeeper rejects it, so nothing can render it.`,
-    fix: `Add "${tag}" to src/shared/tag-registry.ts with the right surface, or remove it from the schema.`,
+    what: `The "${CATALOG_NAME}" schema lists "${tag}", and nothing draws it: not a spec primitive (${A2UI_PROTOCOL_COMPONENTS.join(', ')}), not one of the renderer's own composites (${[...RENDERER_OWNED].join(', ')}), and not an allowlist tag. The server ACCEPTS the name — its gate is this file — so the model can be told to emit it and the surface answers with a "not in the catalog" block.`,
+    fix: `Implement it (a Lit element plus a COMPOSITE_MAP / A2UI_STRUCTURAL entry, or an allowlist entry), or remove "${tag}" from the schema.`,
   });
 }
 
@@ -328,6 +461,7 @@ const oneOfRefs = new Set(
     .map((r) => String(r.$ref || '').replace('#/components/', ''))
     .filter(Boolean),
 );
+checkRan('schema-unreachable');
 for (const name of schemaComponents) {
   if (oneOfRefs.has(name)) continue;
   add({
@@ -341,6 +475,22 @@ for (const name of schemaComponents) {
 // A Lit element in NEITHER gate is genuinely unclaimed: it ships in the bundle
 // and no surface can ever render it. (This replaces a check that compared Lit
 // tags straight to the schema and so mis-reported allowlist-only components.)
+//
+// BUT "no surface claims it" is not "nothing can draw it". Three elements were
+// reported here on every run — <a2ui-renderer> (which IS the drawing code),
+// <control-bar> (placed by the page) and <agent-card-element> (created by the
+// renderer's own card grid). None of them is an A2UI SURFACE component: the app
+// mounts them directly, so no surface has to claim them. Read the mounts from the
+// APP sources — never from the element's own file, which only names itself, and
+// never from the tests or the stories, which mount elements for their own sake.
+const APP_SOURCES = walkSrc(join(ROOT, 'src')).filter(
+  (p) => !p.startsWith(PATHS.litDir) && !p.split(sep).includes('test') && !/\.stories\./.test(p),
+);
+const mountedBy = (tag) => APP_SOURCES.find((p) => {
+  const src = read(p);
+  return src.includes(`<${tag}`) || src.includes(`createElement('${tag}'`) || src.includes(`createElement("${tag}"`);
+});
+checkRan('element-unclaimed');
 const definesElement = (src) => {
   const m = src.match(/customElements\.define\(\s*['"]([^'"]+)['"]/);
   return m ? m[1] : null;
@@ -349,17 +499,33 @@ for (const s of SOURCES) {
   const tag = definesElement(s.src);
   if (!tag) continue; // a helper module, not an element — nothing to claim
   if (allowlistTags.has(tag) || schemaComponents.includes(tag)) continue;
+  const mount = mountedBy(tag);
+  if (mount) {
+    // Claimed by the app itself. Recorded as a PASS with its mounting site, so the
+    // exemption is on the record and reasoned about, not silently dropped — and so
+    // the check still shows as having run.
+    findings.push({
+      id: `clean:app-mounted:${tag}`, check: 'element-unclaimed', stage: 'clean', owner: 'pipeline',
+      level: 'pass', tier: 'primitives', component: s.file, nodeId: null, file: rel(mount),
+      what: `Defines <${tag}> and the app mounts it directly (${rel(mount)}) — it is not an A2UI surface component, so no surface has to claim it.`,
+      fix: null,
+    });
+    continue;
+  }
   add({
     check: 'element-unclaimed', stage: 'deliver', owner: 'pipeline', tier: 'primitives',
     component: s.file, nodeId: null, file: rel(s.path),
-    what: `Defines <${tag}> but neither the allowlist nor the schema claims it — no surface can render it.`,
-    fix: `Add "${tag}" to the allowlist, or delete the element.`,
+    what: `Defines <${tag}> but neither the allowlist nor the schema claims it, and the app never mounts it — nothing can render it.`,
+    fix: `Add "${tag}" to the allowlist, mount it in the app, or delete the element.`,
   });
 }
 
 // ═══ INGEST — the pipeline's own health ════════════════════════════════════
 // The annotation attribute name is untrusted; hardcoding it is forbidden.
 if (existsSync(PATHS.extractor)) {
+  // Inside the guard for the same reason as the primitives pair: no extractor
+  // means this check never ran, which the census reports as blocking.
+  checkRan('attr-hardcoded');
   const ex = read(PATHS.extractor);
   const m = ex.match(/EXPECTED_ANNOTATION_ATTR\s*=\s*['"]([^'"]+)['"]/);
   if (m) {
@@ -370,6 +536,97 @@ if (existsSync(PATHS.extractor)) {
       what: `Hardcodes the annotation attribute name as "${m[1]}"${mismatch ? ` but the pull emits "${seenInCaches.join(', ')}"` : ''}. The protocol says treat that name as untrusted.`,
       fix: 'Drop the expected-name constant; match by regex and record what was seen.',
     });
+  }
+}
+
+// ═══ DELIVER — do the documents still describe this catalog? ══════════════
+// README §Component Catalog and IMPLEMENTATION_CONFORMANCE §4.3/R4 both state a
+// component count, and both claimed that count was "asserted live ... so drift
+// between catalog and docs is self-announcing". Nothing asserted anything: deps.py
+// prints the number and compares it to nothing, and by the time this check existed
+// the claim had already drifted from 28 to 37 — nine components, no announcement.
+// The assertion belongs where the documents and the catalog are both readable, so it
+// lives here, and a stale number fails the run like every other false claim.
+//
+// The documents describe the DEFAULT pipeline (deps.py loads prompt-composer), so
+// this compares against that catalog even during an --catalog ecommerce run.
+//
+// A sentence that is not there cannot be false; a sentence that IS there is checked.
+// A missing count or a missing list is therefore reported differently from a wrong
+// one: a document that stops enumerating its catalog has lost the thing a reader can
+// hold against the code, which is a regression, but it is not a lie.
+checkRan('doc-claim-drift');
+const countOf = (p) => { try { return Object.keys(JSON.parse(read(p)).components || {}).length; } catch { return null; } };
+// Raw, on purpose: the fence that delimits the README's list is made of backticks,
+// so stripping markdown anywhere near it deletes the thing being looked for. Emphasis
+// is stripped at the one place it matters — the count match.
+const docText = (p) => { try { return read(p); } catch { return null; } };
+const catalogCount = countOf(PATHS.defaultSchema);
+const docFiles = [PATHS.readme, PATHS.conformance].filter(existsSync);
+
+if (catalogCount === null) {
+  add({
+    check: 'doc-claim-drift', stage: 'deliver', owner: 'pipeline', file: rel(PATHS.defaultSchema), key: 'unreadable',
+    what: 'Cannot read the default pipeline\'s catalog, so the count the documents state cannot be checked against anything.',
+    fix: 'Restore catalogs/prompt-composer/catalog.json.',
+  });
+} else {
+  for (const p of docFiles) {
+    const text = docText(p);
+    if (text === null) continue;
+    // "28 trusted components", "currently **28 trusted components**" — emphasis is
+    // stripped here, so one pattern reads both forms.
+    for (const m of text.replace(/[*_`]/g, '').matchAll(/(\d+)\s+trusted components/g)) {
+      if (Number(m[1]) === catalogCount) continue;
+      add({
+        check: 'doc-claim-drift', stage: 'deliver', owner: 'pipeline', file: rel(p), key: `count:${m.index}`,
+        what: `States ${m[1]} trusted components. The default pipeline's catalog defines ${catalogCount}, so this sentence describes a catalog that no longer exists.`,
+        fix: `Update the number to ${catalogCount} — or fix the catalog, if the number is the one that is right.`,
+      });
+    }
+  }
+}
+
+// The README enumerates the catalog, so the NAMES are compared as a set. A count
+// alone lets a phantom survive (the list carried `featured-card`, which the catalog
+// has never defined) and lets a new component arrive unannounced — neither of which
+// changes the total.
+if (catalogCount !== null) {
+  const text = docText(PATHS.readme) || '';
+  const listing = text.match(/^A2UI Basic:([\s\S]*?)```/m);
+  if (!listing) {
+    add({
+      check: 'doc-claim-drift', stage: 'deliver', owner: 'pipeline', file: rel(PATHS.readme), key: 'list-gone',
+      what: 'The README no longer enumerates the catalog, so no document states the component names a reader could hold against the catalog. The count is still checked; the names are not.',
+      fix: 'Restore the fenced list in README §Component Catalog — it starts with a line `A2UI Basic:`, then names separated by ·, one block for `Workspace:` too. Or delete this check deliberately, and accept that the names are then unverified.',
+    });
+  } else {
+    const actual = Object.keys(JSON.parse(read(PATHS.defaultSchema)).components || {});
+    const stated = [...listing[1].matchAll(/[A-Za-z][A-Za-z0-9-]*/g)]
+      .map((m) => m[0])
+      .filter((t) => !['A2UI', 'Basic', 'Workspace'].includes(t));
+    const missing = actual.filter((n) => !stated.includes(n));
+    const phantom = stated.filter((n) => !actual.includes(n));
+    if (missing.length || phantom.length) {
+      add({
+        check: 'doc-claim-drift', stage: 'deliver', owner: 'pipeline', file: rel(PATHS.readme), key: 'names',
+        what: `${missing.length ? `${missing.length} component(s) the catalog defines are not listed: ${missing.join(', ')}. ` : ''}${phantom.length ? `${phantom.length} name(s) are listed that the catalog does not define: ${phantom.join(', ')}.` : ''}`.trim(),
+        fix: 'Update the list in README §Component Catalog so it names the catalog exactly.',
+      });
+    }
+    // The split sentence is optional prose, but it is a claim: when it is present it
+    // has to add up. Counted by name case, which is what the two headings mean —
+    // PascalCase are the A2UI Basic Catalog primitives, kebab-case the project's own.
+    const basic = actual.filter((n) => /^[A-Z]/.test(n)).length;
+    const lit = actual.length - basic;
+    const split = text.match(/(\d+)\s+A2UI Basic Catalog primitives\s*\+\s*(\d+)\s+project-specific Lit elements/);
+    if (split && (Number(split[1]) !== basic || Number(split[2]) !== lit)) {
+      add({
+        check: 'doc-claim-drift', stage: 'deliver', owner: 'pipeline', file: rel(PATHS.readme), key: 'split',
+        what: `States ${split[1]} A2UI Basic Catalog primitives + ${split[2]} project-specific Lit elements; the catalog holds ${basic} + ${lit}.`,
+        fix: `Update the split to ${basic} + ${lit}.`,
+      });
+    }
   }
 }
 
@@ -392,12 +649,19 @@ if (OFFLINE) {
   liveStatus = 'partial';
 } else if (!token) {
   liveStatus = 'partial';
-  add({ check: 'check-could-not-run', stage: 'ingest', owner: 'pipeline', level: 'advisory', what: 'Cannot reach Figma — no token found. The live checks (node addresses, annotations) did not run.', fix: 'Set FIGMA_TOKEN in backend/.env. Until then this report is incomplete, not clean.' });
+  add({ check: 'check-could-not-run', stage: 'ingest', owner: 'pipeline', what: 'Cannot reach Figma — no token found. The live checks (node addresses, annotations) did not run.', fix: 'Set FIGMA_TOKEN in backend/.env. Until then this report is incomplete, not clean.' });
 } else {
   try {
     const res = await fetch(`https://api.figma.com/v1/files/${fileKey}/nodes?ids=${nodeIds.join(',')}`, { headers: { 'X-Figma-Token': token } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    // The live checks ran: mark all four HERE, so a failed fetch leaves them
+    // un-run — and then the census and the check-could-not-run finding say so,
+    // instead of the report claiming "no annotations" about a file nobody read.
+    checkRan('node-unresolved');
+    checkRan('annotation-missing');
+    checkRan('annotation-prose');
+    checkRan('geometry-drift');
     for (const c of figmaMap.components) {
       const id = c.figmaNodeId;
       if (!id) continue;
@@ -473,14 +737,42 @@ if (OFFLINE) {
     }
   } catch (e) {
     liveStatus = 'partial';
-    add({ check: 'check-could-not-run', stage: 'ingest', owner: 'pipeline', level: 'advisory', what: `Cannot reach Figma (${e.message}). The live checks did not run.`, fix: 'Restore Figma access. Until then this report is incomplete, not clean.' });
+    add({ check: 'check-could-not-run', stage: 'ingest', owner: 'pipeline', what: `Cannot reach Figma (${e.message}). The live checks did not run.`, fix: 'Restore Figma access. Until then this report is incomplete, not clean.' });
   }
 }
 
 // ═══ CLEAN — what passes, so the readout shows when things get fixed ═══════
+checkRan('clean-no-jsx');
 const dirty = SOURCES.filter((s) => /className=|import React|useState/.test(s.src));
 if (!dirty.length) {
   findings.push({ id: 'clean:no-jsx', check: 'clean-no-jsx', stage: 'clean', owner: 'pipeline', level: 'pass', component: null, nodeId: null, file: null, what: `No React, no JSX, no Tailwind in any of the ${SOURCES.length} component sources.`, fix: null });
+}
+
+// ═══ CENSUS — did every check actually run? ════════════════════════════════
+// The report used to answer this by accident: `checks` was the set of check names
+// present in the findings, so a check that ran clean and a check that never ran
+// were both simply ABSENT, and the six that can vanish (primitive-missing,
+// primitive-drift, schema-unreachable, container-undeclared, node-unresolved,
+// check-could-not-run) could have been broken for months with an identical readout.
+//
+// A census check is its own implementation, so it marks itself as run. A NON-live
+// check that did not run is a blocking finding: this script skipped a question it
+// claims to ask. Live checks that did not run are reported as INCOMPLETE —
+// --offline declares that on purpose, and a missing token already raises
+// check-could-not-run.
+checkRan('check-could-not-run');
+const notRun = CHECK_INVENTORY.filter((c) => !c.live && !ran.has(c.id));
+const skippedLive = CHECK_INVENTORY.filter((c) => c.live && !ran.has(c.id));
+const cleanChecks = CHECK_INVENTORY.filter(
+  (c) => ran.has(c.id) && !findings.some((f) => f.check === c.id && f.level !== 'pass'),
+);
+if (notRun.length) {
+  add({
+    check: 'check-could-not-run', stage: 'ingest', owner: 'pipeline',
+    file: rel(join(ROOT, 'scripts', 'catalog-check.mjs')), key: 'census',
+    what: `${notRun.length} check(s) did not run at all: ${notRun.map((c) => c.id).join(', ')}. Nothing in this report says whether they passed, because nothing asked.`,
+    fix: 'Fix the check itself — a check that produced no output is not a check that passed.',
+  });
 }
 
 // ═══ OUTPUT ════════════════════════════════════════════════════════════════
@@ -498,6 +790,11 @@ const counts = {
   pipeline: open.filter((f) => f.owner === 'pipeline').length,
   designer: open.filter((f) => f.owner === 'designer').length,
   passed: findings.filter((f) => f.level === 'pass').length,
+  // The denominator, next to the tally. `blocking` is the only count that decides
+  // the exit code; the rest is a work list.
+  checksKnown: CHECK_INVENTORY.length,
+  checksRan: ran.size,
+  checksDidNotRun: CHECK_INVENTORY.length - ran.size,
 };
 
 const report = {
@@ -514,7 +811,21 @@ const report = {
     return t;
   })(),
   stages: ['ingest', 'deliver', 'gap'],
+  // `checks` is unchanged: the checks that RAISED something. The census is the
+  // honest inventory — every check this script knows, whether it ran, and what it
+  // found — so "ran and passed" can never read as "never ran" again.
   checks: [...new Set(findings.map((f) => f.check))].sort(),
+  checksKnown: CHECK_INVENTORY.length,
+  checksRan: ran.size,
+  checkCensus: CHECK_INVENTORY.map((c) => ({
+    id: c.id,
+    stage: c.stage,
+    live: c.live,
+    asserts: c.asserts,
+    ran: ran.has(c.id),
+    findings: findings.filter((f) => f.check === c.id && f.level !== 'pass').length,
+    passed: findings.filter((f) => f.check === c.id && f.level === 'pass').length,
+  })),
   findings,
 };
 
@@ -526,6 +837,12 @@ const lines = [];
 lines.push(`CATALOG CHECK — ${CATALOG_NAME} — ${report.status.toUpperCase()}`);
 lines.push('='.repeat(64));
 lines.push(`  open ${counts.total}   ·   pipeline ${counts.pipeline}   ·   designer ${counts.designer}   ·   blocking ${counts.blocking}`);
+// The denominator. Without this line a check that never ran is invisible: it
+// produces no row below, which is exactly what a check that passed produces.
+lines.push(`  checks ${ran.size}/${CHECK_INVENTORY.length} ran   ·   ${cleanChecks.length} ran clean   ·   ${notRun.length + skippedLive.length} did not run`);
+if (cleanChecks.length) lines.push(`  ✓ ran clean: ${cleanChecks.map((c) => c.id).join(', ')}`);
+if (skippedLive.length) lines.push(`  · skipped (live): ${skippedLive.map((c) => c.id).join(', ')}${OFFLINE ? ' — declared by --offline' : ''}`);
+if (notRun.length) lines.push(`  ✖ did not run: ${notRun.map((c) => c.id).join(', ')}`);
 if (report.status === 'partial') lines.push('  ⚠ INCOMPLETE — a live check did not run. This is NOT a clean result.');
 lines.push('');
 for (const stage of ['ingest', 'deliver', 'gap']) {
@@ -545,11 +862,31 @@ if (passed.length) {
   for (const f of passed) lines.push(`  ✓ ${f.what}`);
   lines.push('');
 }
+// The verdict, not the tally. GREEN means "every check that should have run did,
+// and nothing blocking was found" — it does NOT mean the catalog is clean. The
+// advisory findings are a work list owned by people, and they are printed above.
+if (counts.blocking) {
+  lines.push(`VERDICT: RED — ${counts.blocking} blocking finding(s)${notRun.length ? `, ${notRun.length} check(s) that never ran` : ''}.`);
+} else if (report.status === 'partial') {
+  lines.push(`VERDICT: INCOMPLETE — ${counts.total} advisory finding(s), ${skippedLive.length} live check(s) skipped. Not a clean result.`);
+} else {
+  lines.push(`VERDICT: GREEN — ${ran.size} checks ran; ${counts.total} advisory finding(s) remain, all owned by a person.`);
+}
 lines.push(`report → ${rel(PATHS.out)}`);
 console.log(lines.join('\n'));
 
 // A check that produced nothing at all is a broken check, not a clean catalog.
 if (!findings.length) {
   console.error('\n[catalog-check] FAIL: zero findings of any kind. The matcher or the paths are wrong — not a perfect catalog.');
+  process.exit(1);
+}
+
+// ── The exit contract ──────────────────────────────────────────────────────
+// This is what makes a green exit mean something. The script used to finish 0 no
+// matter what it found, so its exit code only ever said "the script ran" — a red
+// report and a clean one were the same result to anything downstream. Blocking
+// findings now fail the run; advisory ones do not, on purpose.
+if (counts.blocking) {
+  console.error(`\n[catalog-check] FAIL: ${counts.blocking} blocking finding(s)${notRun.length ? `, ${notRun.length} check(s) did not run` : ''}. Advisory findings do not fail the run; these do.`);
   process.exit(1);
 }

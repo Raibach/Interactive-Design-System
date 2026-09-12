@@ -92,8 +92,16 @@ function classToCss(cls) {
 // Matches any attribute whose name starts with "data-" and contains "annotation"
 // (case-insensitive): the /^data-.*annotation/i contract applied to attribute
 // names. Captures the full name (group 1) and its value (group 2).
+//
+// There is deliberately NO expected-name constant. A hardcoded expectation makes
+// the reader depend on ONE spelling of a name the protocol says to treat as
+// untrusted, and the pulls disagree with each other already:
+//   · `data-development-annotations`  — MCP get_design_context
+//   · `data-annotations`              — REST /v1/files/.../nodes (the STATE note)
+//   · `data-interaction-annotations`  — REST nodes (the `On click:` contract)
+// Three names, one contract. Names actually seen are RECORDED instead of assumed:
+// `_meta.annotationAttributeNames` + the run summary, both from this same pull.
 const ANNOTATION_ATTR = /(data-[a-zA-Z0-9-]*annotation[a-zA-Z0-9-]*)\s*=\s*"([^"]*)"/gi;
-const EXPECTED_ANNOTATION_ATTR = 'data-annotations';
 
 let nodesScanned = 0;
 let annotationsFound = 0;
@@ -131,9 +139,6 @@ for (const file of readdirSync(DESIGN_DIR).filter(f => f.endsWith('.json') && f 
       const value = am[2];
       annotationsFound++;
       attributeNamesSeen.add(attrName);
-      if (attrName !== EXPECTED_ANNOTATION_ATTR) {
-        console.warn(`[design-extract] ${name}: node ${nodeId} matched "${attrName}" (expected "${EXPECTED_ANNOTATION_ATTR}")`);
-      }
       nodeAnnotations.push({ attribute: attrName, value });
     }
     if (nodeAnnotations.length) {
