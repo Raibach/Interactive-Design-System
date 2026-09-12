@@ -283,7 +283,6 @@
         "fileKey": "20UPR2KQMsbAxlo5NJb1se",
         "nodeId": "40000717:17091",
         "nodeName": "console-card",
-        "specEndpoint": "/api/figma/spec/20UPR2KQMsbAxlo5NJb1se/40000717:17091",
         "description": "Design source of truth. The extracted style spec (every fill, stroke, effect, font, weight, size, line height, bounding box) is cached in PostgreSQL figma_specs and served by the spec endpoint."
       },
       "allOf": [
@@ -621,7 +620,6 @@
         "fileKey": "20UPR2KQMsbAxlo5NJb1se",
         "nodeId": "40001010:25768",
         "nodeName": "chat-button",
-        "specEndpoint": "/api/figma/spec/20UPR2KQMsbAxlo5NJb1se/40001010:25768",
         "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] — the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
       },
       "allOf": [
@@ -733,7 +731,7 @@
         },
         {
           "type": "object",
-          "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Backed by LitCardGrid + PromptDashboardCanvas in the React shell.",
+          "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Implemented by a2ui-console-card-grid in src/components/lit/a2ui-primitives.ts, and it is the only renderer of this component — nothing in the React shell draws a second copy, so /cards is the single list of packages in play.",
           "properties": {
             "component": {
               "const": "ConsoleCardGrid"

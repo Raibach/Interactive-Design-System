@@ -352,13 +352,18 @@ def extract_node_spec(node: Dict) -> Dict:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CACHE-FIRST SPEC ACCESSOR
-# Single source of truth for "give me a usable spec for this node." Used by
-# both the spec endpoint (figma.py /api/figma/spec) and runtime A2UI surface
-# assembly (ai.py render-* handlers). Runtime rendering must NEVER block on
-# live Figma — it reads the PostgreSQL figma_specs cache first and only falls
-# back to Figma on miss. This is the foundation of Figma-as-source-of-truth
-# for the Lit catalog: design is synced at authoring time, consumed from
-# cache at render time.
+# Single source of truth for "give me a usable spec for this node."
+#
+# DESIGNER- AND MCP-ONLY. This is not on a user-facing path and must never be
+# put on one. The only callers are the spec endpoint (figma.py /api/figma/spec)
+# and the chat tool channel (figma_mcp.py) — both authoring side. A2UI surface
+# assembly does NOT read this cache: see routes/ai.py:617, where the Figma step
+# is disabled and assembly proceeds without it.
+#
+# Delivery rule: everything a user renders comes from the committed catalog
+# (frontend/src/components/A2UI/catalogs/*/catalog.json) and the Lit sources.
+# figma_specs exists so a DESIGNER can re-read what was imported. It is not a
+# render source, and it carries no guarantee to a user.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _spec_has_design_data(spec: Optional[Dict]) -> bool:
@@ -454,23 +459,27 @@ def get_cached_spec(
     allow_stale_fallback: bool = True,
 ) -> tuple[Optional[Dict], Optional[str], str]:
     """
-    Cache-first spec accessor — the single entry point for render time.
+    Cache-first spec accessor for DESIGNER and MCP callers — never a render path.
 
     Resolution order:
       1. Cache (PostgreSQL figma_specs) — unless refresh=True or DEV mode.
          In DEV mode the cache is bypassed for read so every pull is fresh.
       2. Live Figma pull + cache upsert.
       3. Stale-cache fallback — if the live pull fails/returns an empty spec
-         AND allow_stale_fallback is True, serve whatever is in the cache so
-         runtime rendering survives transient Figma outages or dead nodes.
+         AND allow_stale_fallback is True, serve whatever is in the cache so an
+         authoring read survives a transient Figma outage or a dead node. This
+         is a designer convenience only; nothing user-facing may depend on it,
+         so no rendered surface can go stale behind a user's back.
       4. Give up.
 
     Returns (spec, error_detail, source) where source is one of:
       "cache" | "figma" | "stale-cache" | "miss".
 
-    Figma is the source of truth for surface layout, but runtime assembly
-    consumes it via this cache so a designer closing Figma, a network
-    blip, or a momentarily-empty node never takes down a surface.
+    Figma is the source of truth for surface layout at AUTHORING time. The
+    import pulls it, the catalog records it, and delivery reads the catalog.
+    This accessor exists so a designer closing Figma, a network blip, or a
+    momentarily-empty node never blinds the import — it is not how a user's
+    surface is produced.
     """
     node_id = node_id.replace("-", ":")
 

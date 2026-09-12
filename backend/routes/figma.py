@@ -122,13 +122,16 @@ def _spec_db():
 @router.get("/api/figma/spec/{file_key}/{node_id:path}")
 async def api_figma_spec(file_key: str, node_id: str, refresh: bool = Query(False)):
     """
-    Serve the extracted design spec for a Figma node.
+    Serve the extracted design spec for a Figma node — DESIGNER/MCP-ONLY.
 
-    Delegates to get_cached_spec (figma_service) — the same cache-first
-    accessor runtime A2UI assembly uses. Cache read first; on miss or
-    ?refresh=true, pull from Figma, extract, upsert, return. With
-    allow_stale_fallback the endpoint also serves a stale cache row when
-    a live pull fails, so the Lit catalog feed survives Figma outages.
+    This endpoint is an authoring tool, not a render source. Nothing in
+    frontend/src calls it, and it must stay that way: users are served from
+    the committed catalog, never from this cache.
+
+    Delegates to get_cached_spec (figma_service). Cache read first; on miss
+    or ?refresh=true, pull from Figma, extract, upsert, return. With
+    allow_stale_fallback it also serves a stale cache row when a live pull
+    fails, so an authoring read survives a Figma outage.
     """
     spec, err, source = get_cached_spec(
         file_key, node_id, refresh=refresh, allow_stale_fallback=True,

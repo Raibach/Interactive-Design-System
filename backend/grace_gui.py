@@ -224,12 +224,22 @@ def query_llm(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _assemble_prompt_output(context: str, question: str) -> tuple:
-    """Build system + user messages from structured JSON prompt config."""
+    """Build system + user messages from structured JSON prompt config.
+
+    Also carries the results of any tool call the prompt declared: routes/
+    teacher.py executes those before the model runs and folds them into the
+    config as `tool_context` / `tool_warnings`. They arrive as FIELDS so that
+    the _json.loads() below cannot be broken by them.
+    """
     try:
         import json as _json
         payload = _json.loads(context) if context and context.strip() else {}
         core = payload.get("core_roles", {})
         custom = payload.get("custom_roles", [])
+        # The design the tool call actually read, and what it failed to read.
+        # Empty on a prompt that declares no tool call.
+        tool_context = payload.get("tool_context") or ""
+        tool_warnings = payload.get("tool_warnings") or []
 
         system_role = core.get("System Role") or core.get("System") or ""
         user_role = core.get("User Role") or core.get("User") or "Execute the prompt configuration."
@@ -254,7 +264,24 @@ def _assemble_prompt_output(context: str, question: str) -> tuple:
             tc = core["Tool Call"]
             if len(tc) > 3000:
                 tc = tc[:3000] + "\n\n[...truncated...]"
-            user_role = user_role + "\n\n--- SOURCE CODE TO ANALYZE ---\n" + tc
+            # This section is the run's DECLARED TOOL and its address; Figma's
+            # own answer to it is in `tool_context`, injected below. Labeling
+            # three lines of node ids "SOURCE CODE TO ANALYZE" only invited the
+            # model to analyse the address instead of the fix it was asked for.
+            user_role = user_role + "\n\n--- DECLARED TOOL FOR THIS RUN ---\n" + tc
+
+        if tool_warnings:
+            system_role = (
+                "=== TOOL WARNING — READ THIS BEFORE ANSWERING ===\n"
+                + "\n".join(f"- {w}" for w in tool_warnings)
+                + "\n\nThe tool did not return the design. Do NOT invent it and do NOT "
+                  "proceed as though it were here: name what is missing and ask for it.\n\n"
+                + system_role
+            )
+        if tool_context:
+            system_role = (
+                system_role + "\n\n" + tool_context if system_role.strip() else tool_context
+            )
 
         system = system_role or (
             "You are a production execution engine. Execute the user's request "

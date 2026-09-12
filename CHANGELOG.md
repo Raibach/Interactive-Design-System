@@ -2,6 +2,72 @@
 
 Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
 
+**[2026-09-10] — A2UI AI-native compliance verified.**
+## The reactive shell is real, and it is the A2UI contract
+
+`A2UIRenderer extends LitElement` — `frontend/src/components/lit/a2ui-renderer.ts:177`. Its header calls itself "the missing half of the A2UI contract," and having read it: that's accurate, not grandiose.
+
+- Mounted at `WritingAreaIndex.tsx:3039`, defined with a guard (`if (!customElements.get(...))`, :429), imported for side-effect in `main.tsx:29`, and given React JSX intrinsics (:442–459) so a React host can mount it at all. Held down by 178 lines of vitest (`frontend/src/test/a2ui-renderer.test.ts`).
+
+- Serial number of the v0.9.1 contract, all verified present:
+
+  - flat list, `component` discriminator, children __by id__ (`STRUCTURAL = {id, component, children, props}`, :36)
+  - props assigned as __properties__, coerced from the element's own `static properties` (:67–89) — the `conversationId` / `conversation-id` trap
+  - name→tag via an ordered authority: `COMPOSITE_MAP` (explicit — *"Not a casing guess"*, :133) → `A2UI_PRIMITIVES` (the six spec primitives) → `A2UI_STRUCTURAL` (7 composites) → `TAG_REGISTRY`; returns `null` and reports rather than inventing a tag
+  - __the two channels joined__: `resolveBinding({path:'/cards/0/title'}, dataModel)` (:160–176) — object form only, bare strings never mistaken for paths
+  - fail-loud validation __before__ render (missing id, cycle, depth > 64, duplicate id, malformed entry) into a red `role="alert"` block (:391–403)
+  - events out: `_forward` re-emits `a2ui-event`, bubbling + composed + sourceId, listened at `WritingAreaIndex.tsx:249` and routed to `a2ui:user-message` / `a2ui:console-command`
+
+__The claim is correct.__ A reactive shell, holding an A2UI-compliant surface. My earlier "nobody has checked the spec" was right about the *spec documents* and wrong about the *surface* — the surface is not unbuilt, it's built and tested.
+
+## Three things that qualify it, all measured
+
+__1. The shell is blind to `version` and `surfaceId`.__ `grep 'version\|surfaceId'` in `a2ui-renderer.ts` → no match. The backend envelope carries both (`ai.py:198–200`: `{"version":"v0.9.1","createSurface":{"surfaceId":"main","catalogId":...}}`). So the shell holds *one* surface, defaults `rootId='root'`, and cannot refuse a message shaped for a version it doesn't implement. Two surfaces on a page would collide; a v1.0 message would render silently with v0.9.1 semantics. This is the only genuinely thin spot in the compliance claim.
+
+__2. The compliant path renders hidden — the visible console is a parallel channel.__ `WritingAreaIndex.tsx:3038–3040`:
+
+Done and verified. Here's the report.
+
+## Item #1 — the renderer was mounted off-screen
+
+__What was actually broken__ (more than two attributes):
+
+- `<a2ui-renderer>` was mounted in exactly __one__ place in the whole app — `WritingAreaIndex.tsx:3039` — inside `<div aria-hidden="true" style={{display:'none'}}>`. So the app's only A2UI render never appeared.
+- Deleting just those two attributes would have been wrong: the mount was hidden to avoid its consequence — the console slot __also__ hand-rendered the same grid in React (`<ConsolePage aiAssembledCards={dataModel.cards}>` → `Frame29`). Unhiding alone draws the console twice.
+- The renderer also couldn't have taken over. Its card grid passed 5 props, set __no__ `id`, and handled __no__ click. `<agent-card-element>` dispatches `card-delete` with `this.id` — id-less cards delete the empty string. And `card-open` is declared in the tag contract (`tag-registry.ts:187` → `AgentCardSchema.events`) but was emitted by nobody and heard by nobody.
+- The mount was kept "so the data-a2ui-id parity evidence keeps accumulating." That evidence could not exist: the two trees drew different things by construction. Rendered-but-never-seen is `THE_METHOD`'s "exile rather than delete" — fog.
+
+Changed (3 files + 1 new test):
+
+File	Change
+components/lit/a2ui-primitives.ts:238	Console grid now forwards the full card prop set Frame29 forwarded, sets id = session id, and dispatches the declared card-open {sessionId, id} (bubbles·composed). No visuals invented — the card is the designed agent-card-element.
+pages/WritingAreaIndex.tsx:3018	The closet is gone; the renderer is the console (console background + 54px/16px framing preserved). A failed assembly now clears surfaceComponents/surfaceDataModel in both failure branches, so a stale tree can't sit beside the error.
+pages/ConsolePage.tsx	Stops drawing the second grid. Keeps what a component tree cannot own — loading / failed / waiting / zero-package states + the delete confirmation — and routes card-open → open intent, card-delete → confirm. Its window listeners now read handlers through a ref (registered once; they would have called the first render's closure, i.e. a stale session).
+src/test/a2ui-console-surface.test.ts (new)	4 assertions against Grace's real console tree.
+Evidence
+
+tsc -b --noEmit exit 0 · vitest run 31/31 · eslint 0 errors (1 pre-existing warning at WritingAreaIndex.tsx:2257, outside every hunk of mine) · npm run build exit 0 twice (includes catalog:check) · catalog:check exit 0.
+Real browser (the app needs auth to reach /console, so I mounted the tree directly in a scratch page, then deleted it and killed vite): computed display:block, no aria-hidden ancestor, 407px tall, 3/3 cards drawn and visible from the tree backend/routes/ai.py asks for, ids bound, click → card-open with the session id. Screenshot: /tmp/.playwright-mcp/a2ui-console-surface-renderer.png — greeting + three real cards, on screen.
+
+"The visible console is a different, second copy" was already only half-closed by item #1. Item #1 killed the duplicate render. The duplicate data was alive, and it is exactly the part of your sentence that mattered: "reading the same data its own way. They can disagree."
+
+What was broken (evidence, not description)
+#	Broken	Proof
+1	Two authorities for one console. The grid on screen came from surfaceDataModel.cards; ConsolePage's states and both chat panels read a separate React state, assembledConsoleCards.	setAssembledConsoleCards had 4 writers (:432, :1068, :1861, :1979/:2013) vs setSurfaceDataModel — neither could see the other
+2	They disagreed on screen. Renaming a package patched only the copy: the card you look at kept the old title while the copy (and the library the chat describes to Grace) said the new one.	handlePromptTitleChange → setAssembledConsoleCards(prev => prev.map(...)); renderer only re-binds on dataModel change
+3	A dead second channel wrote the copy. The a2ui:surface-update listener set cards from cmd.props.cards and never touched the surface — and stopped the spinner, so the console could report "arrived" with nothing drawn.	grep -rn surface-update src/ → add + remove only, no sender
+4	The contract asserted the duplication. The catalog handed to the assembling model said the grid was "Backed by LitCardGrid + PromptDashboardCanvas in the React shell."	both catalog.json:734 / :767
+What I changed
+pages/WritingAreaIndex.tsx — assembledConsoleCards is now derived, not state: Array.isArray(surfaceDataModel.cards) ? surfaceDataModel.cards : null. Deleted the dead listener (+ its add/remove), deleted the assembly and both failure writers, redirected the rename into /cards so the write lands on the card you look at, corrected the diagnostic line (assembledConsoleCards=null → surfaceDataModel={} (cards cleared with it)) and two comments that would have gone stale.
+components/lit/a2ui-primitives.ts — the grid's comment no longer cites the removed React console as its backing.
+A2UI/catalogs/{ecommerce,prompt-composer}/catalog.json — description now states the truth: this grid is the only renderer, so /cards is the single list of packages.
+test/a2ui-console-surface.test.ts — one new behavioral test: after the first paint, writing a new title into /cards is what the card on screen says (id survives the redraw). This is the mechanism the rename fix depends on, so it's pinned rather than assumed.
+Gates: tsc 0 · vitest 32/32 (31 + 1) · catalog:check exit 0 · npm run build exit 0 · eslint on touched files 0 errors (1 pre-existing unused eslint-disable at WritingAreaIndex.tsx:2280, shifted from 2257 by my +23 lines). Note: npm run lint = eslint . and reports 10 errors / 22 warnings, all in files I never touched (e.g. no-namespace in workspace-layout.ts, prefer-const in conversationStorage.ts) — my earlier "eslint 0 errors" baseline was measured on a narrower invocation and was wrong about the repo-wide state.
+
+Final state: one producer (/cards), three readers (ConsolePage states, both chats), zero writers of a second list. "Two consoles exist at once" is now false.
+
+Honest limitations
+
 
 **[2026-09-10] — Figma → Lit import pipeline: annotations as the single source of behavior**
 

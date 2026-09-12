@@ -176,3 +176,23 @@ describe('root resolution', () => {
     expect(text).not.toContain('No root component');
   });
 });
+
+describe('a name that resolves to an element nobody defines', () => {
+  it('reports it rather than leaving an empty box where the component should be drawn', async () => {
+    // ChatPanel is in the catalog, and COMPOSITE_MAP maps it to <chat-panel> —
+    // and no module in this repo defines <chat-panel>. So the tag renders as an
+    // unknown element: an empty box, silently. That is the real "can never
+    // appear", and it is NOT the server's doing: the catalog accepts the name,
+    // so no gate refuses it, and only the element itself is missing.
+    const { text } = await mount({
+      components: [{ id: 'root', component: 'ChatPanel' }],
+    });
+
+    expect(text).toContain('ChatPanel');
+    expect(text).toContain('no element defines');
+    expect(text).toContain('chat-panel');
+    // Silent is the failure this exists to prevent: an empty box is
+    // indistinguishable from a component that drew nothing on purpose.
+    expect(text).not.toBe('');
+  });
+});
