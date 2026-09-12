@@ -1112,3 +1112,91 @@ a browser.
 *Verified live:* clicked **RUN** in the running app (`:5173` + backend `:5001`) → the middle
 column appeared and populated with real DeepSeek output — no "(No output returned.)", no
 HTTP 400, no stray A2UI XML.
+---
+
+# 2026-09-12 — the register gains a mechanism, and the mechanism catches me
+
+**What was added.** `OPEN-ITEMS.md`, at the repository root and tracked. Before this the
+register lived in `ignore-this-work-catalog-audit/`, excluded locally: `git status` never
+showed it as changed, no clone had it, and its counts had aged — `event-unheard` 17→12,
+`tag-inert` 9→8, `element-unclaimed` 3→0 — while the file still stated the old ones. A new
+blocking check, `check:open-items-register` (inventory **20 → 21**), reads it: every check in
+`CHECK_INVENTORY` needs exactly one ledger row; every recorded count must equal the count
+this run derived; every `#NNN` cited in README / INDEX / conformance / this journal / the
+change log must resolve to a row; and the file must be tracked and not matched by an ignore
+rule. Proved
+four ways — each blocking, RED, exit 1, each restored byte-identical by md5: a count made
+stale (`tag-inert` 8→7), a ledger row removed (`primitive-drift`), a citation added to INDEX
+that resolves to no registered number, and an ignore rule re-added.
+
+**Decided:** `check:tag-inert` → **implement the 8** (`run-button`, `layout-row`,
+`layout-col`, `status-indicator`, `dynamic-button`, `undo`, `redo`, `export`), not remove
+them from the allowlist. Reasoning and the per-element requirements are in `OPEN-ITEMS.md`
+under DECIDED; the five actions cannot be implemented honestly without an `On click:`.
+
+M15. **I nearly recorded a false finding, because `| head` made my search finite.** Checking
+     whether a comment was stale, I grepped for `<a2ui-renderer`, capped it at `head -6`, and
+     concluded the tag was mounted nowhere but the tests. The seventh match was the mount —
+     `WritingAreaIndex.tsx:3085`. The rule is written in bold at the end of this file and was
+     earned the same way; I broke it hours after reading it. `main.tsx:27` was accurate and
+     needed no edit, and the register entry that said otherwise was corrected before it
+     shipped.
+
+M16. **The new check first reported eight live classes as "the register records N, this run
+     derives 0" — because I compared the ledger before the checks that derive it.** The
+     register block sits with the documents, which execute before the live Figma pass, so
+     `findings` was half-built when it was read. The fix was order, not a special case:
+     `compareRegisterCounts()` is called at the end of the run, beside the census. Recorded
+     because the failure mode is the one the census exists for — a report believing a number
+     derived from nothing — except that this time the report said so itself.
+
+M17. **My new check made a clean clone RED for something nobody could fix — and the register had
+     claimed otherwise.** The register recorded `check:check-could-not-run → 0`, a number taken
+     from my own live run. In a fresh `git clone` with no token that class derives 1, so
+     `open-items-register` failed the build over a missing credential — the exact "a number nobody
+     re-measures" defect this ledger exists to catch, except the number was mine and the machine
+     was the variable. That class counts whether the environment answered, so it now records `—`,
+     and `—` is allowed for exactly that one class (`ENV_SCOPED`); anywhere else a `—` would be a
+     way to hide a stale number by deleting it, which the check blocks. Found only by cloning —
+     which is how a reader meets this file. Running the check in the directory that wrote it
+     cannot see this class of fault.
+
+M18. **One layer further in, a rule of mine could not fire at all.** The env-scoped requirement
+     was nested inside the *recorded is not a number* branch, so writing a number into that row
+     skipped the rule entirely. I found it because a proof I had written to demonstrate the rule
+     said the run was GREEN — and that first green was itself a lie: my `sed` never matched (the
+     file's `—` is U+2014 and the edit silently did nothing), so "the rule passed" was really "the
+     edit never happened". Re-run with a dash-free `perl` pattern, the row went red as intended,
+     and one branch later the nested bug surfaced. Two lessons in one proof: an unverified edit
+     produces a green reading indistinguishable from a real one, and a branch that is only ever
+     exercised by verdicts I expect is a branch I cannot tell I built wrong.
+
+**The clone run, after the fix** (a real `git clone`, no `node_modules`, no token): exit 1 with
+exactly **one** blocking finding — `check-could-not-run`, which is the true problem. The register
+emits a visible note naming what it did not compare: `annotation-missing`, `annotation-prose`,
+`geometry-drift`, `node-unresolved` need Figma; `check-could-not-run` is recorded `—` because its
+count is the machine's. Nothing is skipped in silence — a class that cannot be held against a run
+says so, out loud, in the run.
+
+
+**Two entries closed by measurement rather than by editing** (the closure rule working):
+`#007` — `check:annotation-prose` stopped deriving `chat-navigation-bar`; `selectedState`
+and `closedState` are `verbatim`, `collapsedState` is gone from the tree. `#021` — no `0.6`
+anywhere in `backend/`; the four calls it named are back at `0.0`. Re-measured and still
+true: `#008`, `#009`, `#010`, `#013`, `#017`, `#018`, `#019` (4 references to a file that
+does not exist), `#020` (5 `async def`, zero `await`). `#014`/`#015`'s premise no longer
+matches the tree and is rewritten rather than closed.
+
+**Items this session created or found:** `#022` (the `chat-button` `tab-change` payload — the
+designer's string vs the element's enum), `#023` (the `chat-menu-item` inset shadow, carried in
+`values`, rendered by nothing), `#024` — **mine**: `493d932` pointed the `functions` entry at
+`prompt-input-section.ts`, which cleared `check:component-missing` and left two registry
+entries for one source file, so the run reports 45 open findings with only 43 distinct ids;
+`#025` (the `chat-menu-item` constraint, two homes, `provenance: inferred`), `#026`
+(`RESTART-LOCAL.sh` is gitignored — the `#20a` fix exists on one machine), `#027`
+(`A2UI_SPEC_COMPLIANCE.md` cites `backend/main.py` lines 2670–2799; that file is 134 lines).
+
+**Retired:** the session-local numbers (`#7`, `#8`, `#12`, `#16`) this and the previous session
+quoted at each other, mapped once in `OPEN-ITEMS.md` so the collisions stay dead — three of
+them shadowed existing `#NNN` entries meaning something else.
+

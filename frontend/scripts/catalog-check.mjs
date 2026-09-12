@@ -33,6 +33,7 @@
  *        reported INCOMPLETE and is not treated as a missing check.
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join, dirname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,6 +61,14 @@ const PATHS = {
   // sentence into a mechanism.
   readme: join(REPO, 'README.md'),
   conformance: join(REPO, 'READ-ME', 'IMPLEMENTATION_CONFORMANCE.md'),
+  // The register of what is still open — at the repository ROOT and TRACKED. It used
+  // to live in a locally excluded directory, where nothing showed it as changed and a
+  // clone did not have it, so every defect number quoted from it was unverifiable.
+  openItems: join(REPO, 'OPEN-ITEMS.md'),
+  // The two other tracked documents that cite register numbers.
+  index: join(REPO, 'INDEX.md'),
+  notes: join(REPO, 'catalog-audit', 'AI-notes.md'),
+  changelog: join(REPO, 'CHANGELOG.md'),
   // The pipeline the documents describe. deps.py loads exactly this one, so "the
   // count stated in the docs" means this catalog even during an ecommerce run.
   defaultSchema: join(ROOT, 'src', 'components', 'A2UI', 'catalogs', 'prompt-composer', 'catalog.json'),
@@ -104,6 +113,7 @@ const CHECK_INVENTORY = [
   { id: 'check-could-not-run', stage: 'ingest', live: false, asserts: 'no check was skipped' },
   { id: 'clean-no-jsx', stage: 'clean', live: false, asserts: 'no React/JSX/Tailwind in the component sources' },
   { id: 'doc-claim-drift', stage: 'deliver', live: false, asserts: 'the component count and names the documents state are the catalog\'s' },
+  { id: 'open-items-register', stage: 'deliver', live: false, asserts: 'the register is tracked and agrees with the findings this run derived' },
 ];
 
 // Severity, one home. A finding about the pipeline's own ability to SEE or to stay
@@ -119,6 +129,7 @@ const BLOCKING = new Set([
   'primitive-missing',     // a theme that silently drops the shared floor
   'schema-unreachable',    // a published catalog a client would reject
   'doc-claim-drift',       // a document states something about this catalog that is false
+  'open-items-register',   // the register and the run disagree — one of them is lying
 ]);
 
 const ran = new Set();
@@ -630,6 +641,237 @@ if (catalogCount !== null) {
   }
 }
 
+// ═══ DELIVER — the register of what is still open ══════════════════════════
+// The numbers this project quotes at each other lived in a file git could not see
+// (`ignore-this-work-catalog-audit/`, excluded locally): `git status` never showed it
+// as changed, so nothing ever prompted an update, a clone did not have it at all, and
+// its counts had drifted — `event-unheard` 17→12, `tag-inert` 9→8, `element-unclaimed`
+// 3→0 — while the file still stated the old ones. It is now OPEN-ITEMS.md at the
+// repository root, tracked, and this check is what keeps it honest, because "someone
+// will notice" is not a mechanism:
+//
+//   · every check in CHECK_INVENTORY has exactly one ledger row, so a new check
+//     cannot be added without accounting for it;
+//   · the `Recorded` count of every class IS the count this run derived;
+//   · every `#NNN` cited in a tracked document (README, INDEX, the conformance doc,
+//     this journal, the change log) resolves to a row;
+//   · the one class whose count is a property of the machine rather than the tree
+//     records `—`, and no other class may — deleting a stale number is how a stale
+//     number hides (see ENV_SCOPED below);
+//   · the register is present, tracked, and not excluded by a rule — the failure
+//     that started all this.
+//
+// Structural faults block: the register and the run contradict each other, and one of
+// the two is lying. The count comparison is written for ONE catalog — the register is
+// scoped to the pipeline `deps.py` loads, so an `--catalog ecommerce` run checks the
+// register's structure without failing on the other catalog's numbers.
+checkRan('open-items-register');
+const REGISTER_STATUSES = new Set(['open', 'decided', 'in-progress', 'watching', 'closed']);
+const REGISTER_OWNERS = new Set(['pipeline', 'designer', 'both']);
+// The one class whose count is a property of the MACHINE, not the tree. It counts whether
+// Figma answered: 0 with a token, 1 without. Recording a number for it makes a run RED for
+// something no reader can fix — found by running this check in a fresh clone, where it read 0
+// against a run that derived 1. Such a class records `—` instead, and `—` is allowed for
+// EXACTLY this set: anywhere else it would be a way to hide a stale number by deleting it,
+// which is the failure this ledger exists to stop. The set can only grow deliberately, and a
+// new environment-scoped class cannot hide — the first offline run reports the mismatch.
+const ENV_SCOPED = new Set(['check-could-not-run']);
+const onDefaultPipeline = PATHS.schema === PATHS.defaultSchema;
+const registerFile = rel(PATHS.openItems);
+const registerText = (() => { try { return read(PATHS.openItems); } catch { return null; } })();
+
+// The counts are compared at the END of this file, not here — deliberately. `findings`
+// is appended to as the script executes, so a comparison written at this point would
+// run before the live Figma checks have raised anything, and would report every one of
+// their classes as "the register records 7, this run derives 0". That is the same trap
+// as a half-built report reading clean; the fix is order, not a special case.
+let registerRows = [];
+/** Open findings for one class — `pass` entries are not findings, by definition. */
+const liveOf = (cls) => findings.filter((f) => f.check === cls && f.level !== 'pass').length;
+function compareRegisterCounts() {
+  if (!onDefaultPipeline || !registerRows.length) return;
+  // A class whose check needs Figma cannot be compared on a run that skipped Figma:
+  // its count would read 0 for a reason that is not a fix, and the ledger would be
+  // accused of being stale for it. (`--offline`, or no token — the same "half-built
+  // run" trap this function already moved to the end of the file to avoid.)
+  const uncomparable = [];
+  for (const r of registerRows) {
+    if (!r.id.startsWith('check:')) continue;
+    const cls = r.id.slice(6);
+    // This check reports on the register itself; comparing its own count would be
+    // circular — its findings ARE the signal.
+    if (cls === 'open-items-register') continue;
+    // `—` rows are the environment-scoped ones (see ENV_SCOPED): there is no number to
+    // compare, and their absence from the comparison is reported below rather than
+    // passed over in silence.
+    if (!/^\d+$/.test(r.recorded)) { uncomparable.push(cls); continue; }
+    const inventory = CHECK_INVENTORY.find((c) => c.id === cls);
+    if (inventory && inventory.live && liveStatus !== 'complete') { uncomparable.push(cls); continue; }
+    const recorded = Number(r.recorded);
+    const live = liveOf(cls);
+    if (recorded === live) continue;
+    add({
+      check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: `count:${cls}`,
+      what: `${cls}: the register records ${recorded}, this run derives ${live}. A number nobody re-measures is how 28 stayed in the README while the catalog held 37.`,
+      fix: live === 0
+        ? `The thing that derived this stopped deriving it: ${cls} → 0. Set the count to 0 and close (or re-class) the row.`
+        : `Set the recorded count to ${live}, or fix what changed it.`,
+    });
+  }
+  if (uncomparable.length) {
+    const live_ = uncomparable.filter((c) => (CHECK_INVENTORY.find((i) => i.id === c) || {}).live);
+    const env = uncomparable.filter((c) => !live_.includes(c));
+    const parts = [];
+    if (live_.length) parts.push(`${live_.join(', ')} need Figma and did not run`);
+    if (env.length) parts.push(`${env.join(', ')} is recorded \`—\` because its count is a property of the machine`);
+    add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, level: 'pass',
+      what: `${parts.join('; ')}, so their recorded counts (${registerFile}) were not compared to anything in this run.` });
+  }
+}
+
+if (registerText === null) {
+  add({
+    check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'gone',
+    what: 'The register is not where it is read from, so every number quoted from it — in commits, in documents, in review — resolves to nothing.',
+    fix: `Restore ${registerFile} at the repository root, and keep it somewhere git can see.`,
+  });
+} else {
+  // The ledger table only: a row whose first cell is `check:<class>` or `#NNN`. The
+  // prose tables (the retired numbers) are deliberately not parsed — a register is
+  // checked where it is machine-readable.
+  const rows = registerText.split('\n')
+    .filter((l) => /^\|\s*`?(?:check:[a-z0-9-]+|#\d{3})`?\s*\|/.test(l))
+    .map((l) => {
+      const c = l.split('|').slice(1, -1).map((x) => x.trim().replace(/`/g, ''));
+      return { id: c[0], status: c[1], owner: c[2], recorded: c[4], witness: c[5] || '' };
+    });
+  const ids = new Set(rows.map((r) => r.id));
+
+  if (!rows.length) {
+    add({
+      check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'table-unreadable',
+      what: 'The register exists but no ledger row parsed. The six-column table is its machine-readable half; without it this file is prose that nothing can be held against.',
+      fix: 'Restore the ledger table: | ID | Status | Owner | What it is | Recorded | Witness |.',
+    });
+  }
+
+  // Handed to compareRegisterCounts(), which runs at the end of the file.
+  registerRows = rows;
+  if (!onDefaultPipeline) {
+    add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, level: 'pass',
+      what: `${registerFile} is scoped to the default pipeline, so an --catalog ${CATALOG_NAME} run checks its structure but does not hold its counts against this catalog.` });
+  }
+
+  const duplicated = [...ids].filter((id) => rows.filter((r) => r.id === id).length > 1);
+  if (duplicated.length) {
+    add({
+      check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'duplicate',
+      what: `${duplicated.join(', ')} carry more than one ledger row. Two rows for one thing is the register contradicting itself about its own status.`,
+      fix: 'One row per id. A second row means the first one was not updated.',
+    });
+  }
+
+  const unknown = rows.filter((r) => r.id.startsWith('check:') && !CHECK_INVENTORY.some((c) => c.id === r.id.slice(6)));
+  if (unknown.length) {
+    add({
+      check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'unknown-class',
+      what: `${unknown.map((r) => r.id).join(', ')} name check classes this script does not run, so a reader would think they are being watched.`,
+      fix: 'Correct the class name, or add the check to CHECK_INVENTORY.',
+    });
+  }
+
+  const unaccounted = CHECK_INVENTORY.filter((c) => !ids.has(`check:${c.id}`));
+  if (unaccounted.length) {
+    add({
+      check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'unaccounted',
+      what: `The script runs ${unaccounted.length} check(s) the register does not account for: ${unaccounted.map((c) => c.id).join(', ')}. Nothing here says whether what they find is being tracked.`,
+      fix: 'Add a ledger row for each — open, decided, or watching.',
+    });
+  }
+
+  for (const r of rows) {
+    if (!REGISTER_STATUSES.has(r.status)) {
+      add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: `status:${r.id}`,
+        what: `${r.id} has status "${r.status}", which is not one of ${[...REGISTER_STATUSES].join(' / ')}.`,
+        fix: 'Use the vocabulary, or extend it here so the meaning lives in one place.' });
+    }
+    if (!REGISTER_OWNERS.has(r.owner)) {
+      add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: `owner:${r.id}`,
+        what: `${r.id} is owned by "${r.owner}", which is nobody: the register cannot say who closes it.`,
+        fix: 'pipeline, designer, or both.' });
+    }
+    // The closure rule, enforced: an entry that cannot name the check which would
+    // retire it has to say why none is possible. That sentence is the difference
+    // between an item and a wish.
+    if (!/check:[a-z0-9-]+/.test(r.witness) && !/no check/i.test(r.witness)) {
+      add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: `witness:${r.id}`,
+        what: `${r.id} does not name the check that would close it, and does not say why no check is possible.`,
+        fix: 'Name the check, or write "no check is possible" and the reason.' });
+    }
+    if (r.id.startsWith('check:')) {
+      const cls = r.id.slice(6);
+      if (ENV_SCOPED.has(cls)) {
+        // Required to stay `—`: a number here is a claim about the machine that wrote
+        // it, not about this tree.
+        if (r.recorded !== '—') {
+          add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: `recorded:${r.id}`,
+            what: `${r.id} records "${r.recorded}". This class counts whether the environment answered, so the number is about the machine, not the tree — it is 0 with a Figma token and 1 without.`,
+            fix: 'Record `—`, and say why in the Witness column.' });
+        }
+      } else if (!/^\d+$/.test(r.recorded)) {
+        add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: `recorded:${r.id}`,
+          what: `${r.id} records its count as "${r.recorded}", so there is nothing to hold against the run. This class is compared on every run, so \`—\` would hide whatever it stopped deriving.`,
+          fix: 'Put the number of open findings this class derives, as a plain integer.' });
+      }
+    }
+  }
+
+  // The per-class count comparison used to live here. It moved to the end of the run
+  // (compareRegisterCounts) because at this point the live Figma checks have not run —
+  // see the note where that function is declared.
+
+
+  // A `#NNN` a document cites is a claim that the thing is registered. One that
+  // resolves to nothing is the same defect as a document stating a false count. The
+  // change log is in this list because it is where a new number is most likely to be
+  // written down first — and the least likely to be typed into a test.
+  const dangling = new Set();
+  for (const p of [PATHS.readme, PATHS.index, PATHS.conformance, PATHS.notes, PATHS.changelog].filter(existsSync)) {
+    let text; try { text = read(p); } catch { continue; }
+    for (const m of text.matchAll(/#(\d{3})(?![0-9])/g)) if (!ids.has(`#${m[1]}`)) dangling.add(`#${m[1]} in ${rel(p)}`);
+  }
+  if (dangling.size) {
+    add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'dangling-citation',
+      what: `Cited but not registered: ${[...dangling].join(', ')}.`,
+      fix: 'Give it a ledger row, or correct the citation — a number that resolves to nothing is worse than no number.' });
+  }
+
+  // The failure that started all this: the register existed, and git could not see it.
+  if (existsSync(join(REPO, '.git'))) {
+    try {
+      execFileSync('git', ['ls-files', '--error-unmatch', registerFile], { cwd: REPO, stdio: 'pipe' });
+    } catch {
+      add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'untracked',
+        what: 'The register is not tracked by git. It exists on this machine and in no clone — which is exactly how its numbers drifted unnoticed for months.',
+        fix: `git add ${registerFile}` });
+    }
+    const rules = [join(REPO, '.gitignore'), join(REPO, '.git', 'info', 'exclude')].filter(existsSync).flatMap((p) => {
+      let text = ''; try { text = read(p); } catch { return []; }
+      // Comments are skipped on purpose: this check's own explanation of WHY the
+      // register is no longer excluded names the file, and a scan that counted that
+      // would fire on its own documentation.
+      return text.split('\n').map((l) => l.trim())
+        .filter((l) => l && !l.startsWith('#') && l.includes('OPEN-ITEMS.md'))
+        .map((l) => `${rel(p)}: ${l}`);
+    });
+    if (rules.length) {
+      add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'excluded',
+        what: `An ignore rule matches the register (${rules.join('; ')}), so the next edit to it would not show up in git status.`,
+        fix: 'Remove the rule. A register nothing can see is the defect this check exists for.' });
+    }
+  }
+}
+
 // ═══ INGEST + GAP — the live file ══════════════════════════════════════════
 // One REST call, joined locally. Unresolved addresses are a pipeline fault;
 // a resolved node with no (or prose) annotation is the designer's job.
@@ -760,6 +1002,9 @@ if (!dirty.length) {
 // claims to ask. Live checks that did not run are reported as INCOMPLETE —
 // --offline declares that on purpose, and a missing token already raises
 // check-could-not-run.
+// The register's recorded counts, held against what this run actually derived. Last,
+// on purpose: every finding has to exist before the ledger can be compared to it.
+compareRegisterCounts();
 checkRan('check-could-not-run');
 const notRun = CHECK_INVENTORY.filter((c) => !c.live && !ran.has(c.id));
 const skippedLive = CHECK_INVENTORY.filter((c) => c.live && !ran.has(c.id));
