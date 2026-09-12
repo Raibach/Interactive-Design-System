@@ -1,7 +1,5 @@
 # INDEX — what everything is
 
-The first thing anyone opens. One line per load-bearing file: what it is, and who reads it.
-
 If you are an AI session: read this before you touch anything. Three files here are called some version of "registry" and they are not the same thing.
 
 ---
