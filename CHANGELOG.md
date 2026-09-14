@@ -2,6 +2,11 @@
 
 Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
 
+**[2026-09-14] — Deploy: one model, and Figma stops being a build gate.**
+
+- **The model is `deepseek-v4-pro`, and only that.** `deepseek-flash` timed out under the surface budget, so it is removed everywhere the runtime chooses a model: `grace_gui.py` (`MODEL_PROVIDERS`) and `model_server_manager.py` (`PROVIDERS["deepseek"]`), which is also what un-stuck `/api/health` (it had been pointing at a `deepseek-v4-flash` id DeepSeek no longer serves).
+- **Figma is an import tool, not a build gate.** Production carries no `FIGMA_TOKEN`, and the catalog check treated "no token" as a blocking `check-could-not-run` finding — so every push to `main` died at `npm run build` (exit 1) and production kept serving the previous image. The live Figma checks (node addresses, annotations) are optional: a missing or unreachable token now skips them as INCOMPLETE, exactly like `--offline`. The census (a NON-live check that never ran) still blocks — that one is a broken check, not an absent credential.
+
 **[2026-09-14] — The list she was standing in front of, and a view that had stopped following her.**
 
 ## Two defects with one symptom: the answer was there, and it could not be read
