@@ -301,3 +301,59 @@ export const DECLARED_BUT_UNSHIPPED: string[] = SECTION_TYPES.filter(
 export const SHIPPED_BUT_UNDECLARED: string[] = SECTION_TYPES.filter(
   (t) => t.inMenu && !t.inSchema,
 ).map((t) => t.id);
+
+/**
+ * Every spelling by which a WRITE can name one seat: the canonical label, the id, and
+ * the short names the repair flow writes (`System`, `User`, `Agent`).
+ *
+ * `SECTION_TYPES` already carries those short names as `legacyNames`, because the
+ * repair path writes them; this is the same list, read from the same declaration, for
+ * the direction the write travels in.
+ */
+export function sectionNameVariants(requested: string): string[] {
+  const raw = String(requested ?? '').trim().toLowerCase();
+  if (!raw) return [];
+  const out = [raw];
+  const resolved = resolveSectionType(requested);
+  if (resolved.kind === 'seat') {
+    const def = SECTION_TYPES.find((t) => t.id === resolved.id);
+    if (def) {
+      for (const name of [def.label, def.id, ...(def.legacyNames ?? [])]) {
+        const low = name.toLowerCase();
+        if (!out.includes(low)) out.push(low);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Which of `names` the requested seat IS — the index, or -1 when this column holds no
+ * such seat.
+ *
+ * Why this exists. Two writers put text into the left column — the window events
+ * `set-left-column-text` / `force-set-section`, and the AI's `<update_*>` tags — and
+ * both used to compare the requested name to each section's name EXACTLY. A repair
+ * prompt names its seats `System` / `User` / `Tool Call` / `Agent`; a composer names
+ * them `System Role` / `User Role` / `Tool Call` / `Agent Role`. So "write the User
+ * Role" against a repair prompt matched nothing, fell through, and the write vanished
+ * with no error anywhere — the failure mode that makes a surface feel uncontrollable.
+ *
+ * The requested name wins if it is literally present, so an exact match can never be
+ * displaced by a variant. Beyond that the spellings are the ones this file already
+ * declares: the label, the id, and the legacy short names.
+ *
+ * A seat this column does not have stays UNRESOLVED — `Constraints` in a repair
+ * prompt is not a `User`, and guessing would write a value into a seat nobody named.
+ * The caller reports the miss (prompt-section-editor dispatches `section-write-failed`).
+ */
+export function resolveSectionName(requested: string, names: string[]): number {
+  const want = sectionNameVariants(requested);
+  if (!want.length) return -1;
+  const have = (names ?? []).map((n) => String(n ?? '').trim().toLowerCase());
+  for (const spelling of want) {
+    const idx = have.indexOf(spelling);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}

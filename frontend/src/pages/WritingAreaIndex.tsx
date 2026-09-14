@@ -45,6 +45,26 @@ import { classifyFailure, parseValidationEnvelope, type FailureReport } from "@/
 // not implement, or a response describing more than one surface, is refused here
 // rather than parsed as v0.9.1-and-one-surface.
 import { readA2UIEnvelope, envelopeRefusalError } from "@/shared/a2ui-envelope";
+import { buildRepairSections } from "@/shared/repairSections";
+import { repairAsk } from "@/shared/repairMaterial";
+import {
+  applyReadiness,
+  applyRepair,
+  correctionFromAnswer,
+  readRepairTarget,
+} from "@/shared/repairApply";
+// The chat button wire format, in one place: the payload may not contain `)`, and the
+// arguments are encoded per argument (shared/actionLink.ts says why).
+import { actionLink, fillFieldAction } from "@/shared/actionLink";
+// The repair's own state: clicked = queued, and done only when a fresh check stops
+// deriving the finding. See shared/catalogHealth.ts.
+import {
+  fetchCatalogHealth,
+  queuedRepair,
+  reconcileRepairs,
+  settleRepairs,
+  type RepairStages,
+} from "@/shared/catalogHealth";
 
 interface WritingAreaIndexProps {
   onLogout?: () => void;
@@ -333,7 +353,13 @@ export default function Index({
   const currentPromptSessionObjRef = useRef<any>(null);
   // Ref for handleSavePrompt — always points to latest function, used by event listeners
   // Accepts optional compiledOutput + optional sections (from Lit editor) so Save after Run persists full state.
-  const handleSavePromptRef = useRef<(compiledOutput?: string, providedSections?: any[]) => Promise<void>>(async () => {});
+  // `opts.title` names a package this call is CREATING (Repair does this at launch) and
+  // `opts.keepSurface` stops the save from navigating away from what was just saved.
+  const handleSavePromptRef = useRef<(
+    compiledOutput?: string,
+    providedSections?: any[],
+    opts?: { keepSurface?: boolean; title?: string },
+  ) => Promise<void>>(async () => {});
   // Tracks whether the user has unsaved changes since the last save.
   // Used to suppress the exit confirmation when the user just saved.
   const hasUnsavedChangesRef = useRef(false);
@@ -357,6 +383,19 @@ export default function Index({
    * through, whichever route got there.
    */
   const repairTitleRef = useRef<string | null>(null);
+  /**
+   * Where each finding's repair stands, by finding id — 'repair' from the click,
+   * 'done' once a fresh check stops deriving it. Absent = nothing done about it.
+   * See shared/catalogHealth.ts for why the check, and only the check, decides.
+   */
+  const [repairStages, setRepairStages] = useState<RepairStages>({});
+  /**
+   * The finding the repair prompt in the column came from. Held from the click to the
+   * Run that answers it, because that Run is the thing that gets settled — and it
+   * survives the unsaved-changes gate for the same reason the title and the sections
+   * do: the click that starts a repair can be interrupted and resumed.
+   */
+  const repairFindingRef = useRef<string | null>(null);
   // Ref for pending action to execute after exit confirmation
   const pendingActionRef = useRef<(() => Promise<void>) | null>(null);
   // Keep refs in sync with state
@@ -734,11 +773,26 @@ export default function Index({
     await assembleSurfaceWithAI('render-composer');
   };
 
-  const handleSavePrompt = async (compiledOutput?: string, providedSections?: any[]) => {
+  const handleSavePrompt = async (
+    compiledOutput?: string,
+    providedSections?: any[],
+    opts?: { keepSurface?: boolean; title?: string },
+  ) => {
     console.log('🔵 [SAVE] Save button clicked! Current session:', currentPromptSession?.id);
-    // Serialization guard: prevent concurrent save operations
+    // Serialization guard: prevent concurrent save operations.
+    //
+    // It used to RETURN here in silence. Run is save-then-run when the package has
+    // never been saved, so a Run that arrived while a Save was still in flight got
+    // no session id back and reported "saving failed — nothing was executed" —
+    // while the save it was waiting on went on to succeed a second later. Nothing
+    // had failed; the caller had left before the answer arrived. Wait for the save
+    // in flight instead: the id it is about to write is the id this caller needs.
     if (isSavingRef.current) {
-      console.log('⏸️ [CRUD] Save already in flight, skipping');
+      const deadline = Date.now() + 20000;
+      console.log('⏸️ [CRUD] Save already in flight — waiting for it to land instead of skipping');
+      while (isSavingRef.current && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
       return;
     }
     isSavingRef.current = true;
@@ -805,7 +859,14 @@ export default function Index({
       // when this save is CREATING a package (`!isValidSessionId`). An UPDATE of an
       // existing package must never be renamed by a repair that merely happens to be
       // queued behind an unsaved-changes gate.
-      const title = currentPromptSession?.title
+      // `opts.title` is the repair's own name, handed in by the caller that is
+      // CREATING the package. Repair cannot leave it in `repairTitleRef` for this
+      // to read: the assembly consumes that ref when the surface lands (see the
+      // composer branch) and the closure here is still the pre-assembly render.
+      // It is ignored for an UPDATE, like every other rename path: an existing
+      // package is not renamed by a repair that merely passes through it.
+      const title = (opts?.title && !isValidSessionId ? opts.title : null)
+        || currentPromptSession?.title
         || (repairTitleRef.current && !isValidSessionId ? repairTitleRef.current : null)
         || `Prompt - ${new Date().toLocaleString()}`;
 
@@ -878,7 +939,11 @@ export default function Index({
 
       // If user is on console, re-assemble to show updated cards.
       // If on composer, just update the session state (already done above).
-      if (headerTab === 'console') {
+      //
+      // NOT when the caller is putting a prompt IN the column (`keepSurface`): a
+      // save made at launch (Repair) would otherwise swap the composer — and the
+      // repair prompt inside it — for the package list it was launched from.
+      if (headerTab === 'console' && !opts?.keepSurface) {
         assembleSurfaceWithAI('render-console');
       }
 
@@ -1193,6 +1258,33 @@ export default function Index({
     }
   }, [currentPromptSession?.leftColumnContent, promptLoadKey, headerTab]);
 
+  // ── Every write into the column lands back in the repair prompt we hold ────
+  //
+  // The re-assert just below keeps a repair prompt in the column while surfaces swap,
+  // and it compares the editor's text with `repairSectionsRef.current`. Until this
+  // listener existed the ref held ONLY what the repair launched with, so the first edit
+  // inside that prompt — a keystroke, or an answer Grace files from the chat — was undone
+  // by the next commit: the text quietly returned to its launch state. `section-update`
+  // is emitted for every content change, whoever made it, so reading it here makes the
+  // ref the truth it already claims to be.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { index, section } = (e as CustomEvent).detail || {};
+      const held = repairSectionsRef.current;
+      if (!held || !section || typeof index !== 'number' || index < 0 || index >= held.length) return;
+      const next = held.slice();
+      next[index] = { ...next[index], ...section };
+      repairSectionsRef.current = next;
+      // A write into a prompt is a change to it, whoever made it. A keystroke arms this
+      // flag through the input listener elsewhere in this file; a value filed from the
+      // chat is written programmatically, so nothing else here would know the saved
+      // package is now one edit behind the column.
+      hasUnsavedChangesRef.current = true;
+    };
+    window.addEventListener('section-update', handler);
+    return () => window.removeEventListener('section-update', handler);
+  }, []);
+
   // ── Keep a repair prompt in the column ────────────────────────────────────
   // No dependency array, on purpose: this re-asserts AFTER EVERY COMMIT.
   //
@@ -1218,184 +1310,147 @@ export default function Index({
   // A finding is a report. Its "Repair" button applies NOTHING — it turns the
   // finding into the prompt that would repair it and puts that prompt in the left
   // column, so the user can read it, change it, and Run it like any other prompt.
-  // Nothing is verified and nothing closes; a finding closes only when the checker
-  // stops deriving it. (Lit-to-figma-trace-plan, Step 4 — "Repair becomes a prompt".)
   //
-  // `what` and `fix` are the check's OWN text, copied — never paraphrased. The
-  // model reads the checker's words, not a summary of them.
+  // The check has ALREADY run, and its verdict is why the finding is in the queue.
+  // So the prompt does not repeat it: the four seats carry the CORRECTION and
+  // nothing else, assembled by @/shared/repairSections — which is where the seats
+  // and their contents are declared, and where a test holds them to that.
+  // (Lit-to-figma-trace-plan, Step 4 — "Repair becomes a prompt".)
   //
-  // Section types are the canonical ids from @/shared/promptSections
-  // (system-role / user-role / agent-role / tool-call), and the names are the
-  // labels CORE_ROLE_LABELS recognises — so Run maps shipped sections into
-  // core_roles instead of dropping them into custom_roles. Both lists are
-  // derived from one declaration; neither is retyped here.
+  // Once that prompt is Run, the finding is settled against a FRESH check. The check
+  // that raised a finding is the only thing in this app that can say it is fixed:
+  // the click queues it, the run corrects it, and the next report either derives it
+  // or does not. Nothing else moves it to done — least of all a model saying so.
   //
   // These live at component scope, NOT inside the listener useEffect where
   // handleRunRequested/handleSaveRequested are declared: the JSX below calls
   // handleRepairFinding directly, and a const inside that effect is not visible
   // to the render.
+
   /**
-   * What each check needs in order to be repaired.
+   * Say a repair's outcome in the chat, in plain words.
    *
-   * A prompt that carries only the VERDICT cannot repair anything: the model reads
-   * the finding, finds no material, and says so. Measured — a real Run answered
-   * "the material supplied contains no field values to mark … not the component
-   * body." So the prompt states what this check needs, and when that is a person's
-   * material it says so outright, so the reply is the REQUEST rather than an
-   * invented fix.
-   *
-   * Keyed by the checker's own `check` id (scripts/catalog-check.mjs), so a new
-   * check with no entry falls through to DEFAULT_CHECK_NEED instead of guessing.
+   * The answer's own RESULT line says what the model DID. This says what the check
+   * FOUND — and that is the only one of the two that can tell a person their problem is
+   * gone. It lives beside settleRepair because it is the same act: a verdict that exists
+   * only as a console line is not a verdict anyone read.
    */
-  const CHECK_NEEDS: Record<string, string> = {
-    'provenance-missing':
-      "the component's own body and its Figma annotation — a per-field map can only be written from the fields themselves",
-    'node-unresolved':
-      "the component's real Figma node id — the one recorded is not in the file",
-    'node-id-absent':
-      'the element that renders each Figma node, and the node id it should carry',
-    'component-missing':
-      'the file that should hold the component, or confirmation that the registry entry is wrong',
-    'annotation-missing':
-      'an annotation written on the VARIANT in Figma (Data / On click / State / A11y)',
-    'annotation-prose':
-      'that same note rewritten in the field format (Data / On click / State / A11y)',
-    'geometry-drift':
-      'a DECISION, not material: the Figma node moves to the container\'s constraint, or the constraint changes once in the catalogue',
-    'attr-hardcoded':
-      'nothing further — the change is mechanical: drop the expected-name constant, match by regex, record what was seen',
-    'container-undeclared':
-      'the container the component renders inside, added to its registry entry',
-    'event-unheard':
-      'the listener for the event, or a mark that the action is undefined in Figma',
-    'tag-inert': 'a Lit element plus a catalog entry, or removal from the allowlist',
-    'element-unclaimed': 'the allowlist entry and the catalog schema, so the element can be reached',
-    'schema-absent': 'the catalog schema entry, or removal from the allowlist',
-    'allowlist-absent': 'the allowlist entry, or removal from the schema',
-    'primitive-missing': 'the component copied unchanged from catalogs/primitives/catalog.json',
-    'primitive-drift':
-      'the component made identical to the primitives catalog — changed THERE if the change is for every theme',
-    'check-could-not-run':
-      'the input the check itself was missing (a token, an artifact) — this one is about the checker, not the design',
+  const speakRepairVerdict = (content: string) => {
+    window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+      detail: { role: 'assistant', content },
+    }));
   };
-  const DEFAULT_CHECK_NEED =
-    'the material named by the check\'s own `what` below. If it is not here, say what you need.';
 
-  const buildRepairSections = (f: any) => {
-    const rule = [f.check, f.component ? `on ${f.component}` : null].filter(Boolean).join(' ');
-    // The Tool Call section names the tool the prompt is allowed to call — and Run
-    // makes that name real: the server reads this section, calls Figma, and puts
-    // Figma's own answer into the prompt. Naming the tool where the address lives
-    // means a person editing the node here changes what actually gets checked; a
-    // hidden copy of the finding would not.
-    const address = [
-      f.nodeId ? 'tool        figma.get_design_context' : null,
-      f.nodeId ? `figma node  ${f.nodeId}` : null,
-      f.file ? `file        ${f.file}` : null,
-    ].filter(Boolean).join('\n');
+  /**
+   * Settle a repair that has just finished, against a fresh check.
+   *
+   * The finding is 'done' only when a new report stops deriving it. A checker that
+   * could not run settles NOTHING: the finding stays in repair rather than being
+   * reported as fixed on no evidence.
+   */
+  const settleRepair = async (findingId: string) => {
+    const health = await fetchCatalogHealth();
+    if (health.state !== 'ok') {
+      console.warn(`[repair] the check did not answer — ${findingId} stays in repair`);
+      // Said out loud, in plain words. The verdict is the whole point of pressing Run,
+      // and this path used to end in a console line — so from the chat seat a repair
+      // that could not be checked looked exactly like one that worked.
+      speakRepairVerdict('Not checked — the check did not answer. Still on the list.');
+      return;
+    }
+    const stillDerived = health.report.findings.map((f) => f.id);
+    setRepairStages((s) => settleRepairs(s, [findingId], stillDerived));
+    const stillThere = stillDerived.includes(findingId);
+    console.log(
+      `[repair] ${findingId} settled against ${stillDerived.length} open finding(s) — ` +
+      `${stillThere ? 'still derived, so still in repair' : 'done'}`
+    );
+    // And the person is told, here, in the same three words the answer uses: the model's
+    // own RESULT line says what it DID, this says what the check FOUND. Only one of them
+    // can tell you the problem is gone, and it is not the model's.
+    speakRepairVerdict(
+      stillThere
+        ? 'Not done — the fresh check still finds it.'
+        : 'Done — the fresh check no longer finds it.'
+    );
+  };
 
-    const needs = CHECK_NEEDS[f.check] ?? DEFAULT_CHECK_NEED;
-    const human = f.owner === 'designer';
+  /**
+   * The answer's file, written back to disk — the step that makes a repair real.
+   *
+   * Everything before this point in the flow ends in text: the prompt is text, the
+   * answer is text, and a person reading it has no way to know whether a file
+   * exists at the end of it. This is the end of it. The answer has to hand back
+   * the WHOLE file, the app writes it over the old one, and every sentence spoken
+   * here is built from what the write actually returned — there is no path through
+   * this function that says a file changed without one having changed.
+   *
+   * Five things can stop a write, and each one is said out loud instead of silently
+   * skipped, because "nothing happened" and "it worked" must never look alike:
+   *
+   *   no file in the answer     the model described the change instead of making it
+   *                             (exactly the failure this all started as);
+   *   a different file          the answer rewrote something the finding is not about;
+   *   the file could not be read  nothing to compare against, so nothing to replace;
+   *   the file looks wrong      cut off, a patch, or unchanged — refused before a byte moves;
+   *   the server refused it     same judgement, made again where the write happens.
+   */
+  const writeAnswerBack = async (answer: string, findingId: string) => {
+    const finding = (catalogFindings || []).find((f: any) => f.id === findingId);
+    const target = finding?.file as string | undefined;
+    const correction = correctionFromAnswer(answer);
+    const nothing: { written: false; checked: false } = { written: false, checked: false };
 
-    return [
-      {
-        name: 'System',
-        type: 'system',
-        content: [
-          'You are the Design System Manager for this platform — an information architect, and',
-          'the overseer of this system. You speak with the owner\'s authority. Grace is that',
-          'person. You are not a helper here; you are the gate.',
-          '',
-          'THE RULE YOU ENFORCE',
-          '  Nothing enters this system that is not properly annotated, labeled, tagged and',
-          '  tokenized. No exceptions, and no "we will finish it later". There are many IDs and',
-          '  many registries in here — the Figma map, the allowlist, the catalog schemas, the',
-          '  design tokens — and every one of them is a list of IDs. A component that arrives',
-          '  without its metadata does not merely look wrong. It corrupts every list that',
-          '  references it, and it corrupts them quietly, until something is built on top.',
-          '',
-          'WHAT YOU DO NOT DO',
-          '  You do not guess what a designer wants. Not once — not plausibly, not as a',
-          '  "sensible default", not to be helpful. Guessing is the exact mechanism by which an',
-          '  untagged component gets in, and it is the failure this check exists to catch.',
-          '  A plausible invention here is worse than a refusal.',
-          '',
-          'WHAT YOU DO',
-          '  You name the missing metadata precisely, require it, and refuse to proceed without',
-          '  it. An unfinished component stays unfinished — visibly — until the person who owns',
-          '  it finishes it. That is the whole job. The system only works if somebody oversees',
-          '  it, and this surface is where the overseeing happens.',
-          '',
-          `THE FINDING ON THE TABLE: the check \`${rule}\` failed.`,
-          '',
-          'HOW TO OPEN',
-          '  Name the skipped step first, in one sentence, before anything else. Not an apology,',
-          '  not a preamble — the fact. A machine did not do this; a step was skipped, and the',
-          '  step was a person\'s. Say which step, and say it without dressing it up: whoever',
-          '  has to walk back to this component is best served by being told exactly what is',
-          '  missing before they are told what to do about it.',
-          '',
-          'WHO OWNS IT',
-          human
-            ? '  the DESIGNER — the person reading this column. It cannot be derived from code, so do not attempt it, do not approximate it, and do not offer a substitute.'
-            : '  the PIPELINE — code, not the designer. Make the change the Agent section describes. Do not ask a person for anything the checker already told you.',
-          '',
-          'WHAT THIS CHECK NEEDS',
-          `  ${needs}`,
-          '',
-          'WHY IT MATTERS',
-          '  An undocumented component does not fail loudly. It fails quietly and later, as',
-          '  behaviour somebody invented — and every surface that places this component',
-          '  inherits the invention. That is the real cost of the skipped step, and the reason',
-          '  this is worth finishing rather than patching around.',
-          '',
-          'HOW THEY FIX IT WITHOUT THIS TOOL',
-          '  Annotate the VARIANT in Figma Dev Mode — never the component SET, never an',
-          '  instance, because an instance\'s note reaches nobody. Use the field format:',
-          '    Data:  Source:  On click:  Track:  State:  Disabled:  A11y:  Builder:  AI:',
-          '  The guide is FIGMA/ANNOTATION_FIGMA_GUIDE.md. `On click:` carries the most weight:',
-          '  it is the field that makes behaviour verbatim instead of guessed.',
-          '',
-          'THIS PROMPT IS THEIRS',
-          '  These four sections are editable — they ARE the composer. Fields can be added,',
-          '  roles changed, tools attached, the instruction rewritten. Say so once, plainly:',
-          '  a field added today is one the next person inherits, and a prompt nobody edits',
-          '  is a prompt that keeps reporting the same finding.',
-          '',
-          'WHAT TO DO',
-          '  Name what is missing. Ask for it BY NAME. Do not invent it, do not substitute it,',
-          '  and do not proceed as though it were there. If it cannot be produced at all, say',
-          '  so and name exactly what is absent.',
-        ].join('\n'),
-        position: 0,
-        visible: true,
-      },
-      { name: 'User', type: 'user', content: f.what || '', position: 1, visible: true },
-      { name: 'Tool Call', type: 'tool-call', content: address, position: 2, visible: true },
-      {
-        name: 'Agent',
-        type: 'agent',
-        content: [
-          f.fix
-            ? `The check's own fix: ${f.fix}`
-            : 'The check proposes no fix of its own — say what you need instead of inventing one.',
-          '',
-          'RETURN A COMPOSER, NOT AN ANSWER',
-          '  Alongside the repair, return the reusable pieces, so the next occurrence of this',
-          '  check costs someone far less than this one did:',
-          '    1. the corrected field values — what the annotation should say, field by field,',
-          '       ready to paste into Figma without editing;',
-          '    2. the fields worth keeping for THIS CHECK, so the next finding of this kind',
-          '       arrives already shaped;',
-          '    3. any tool or source worth attaching — a file, a node, a spec endpoint — that',
-          '       would have made this run self-sufficient.',
-          '  Output that cannot be reused on the next finding is a one-off. A one-off fixes a',
-          '  component; a composer fixes the class.',
-        ].join('\n'),
-        position: 3,
-        visible: true,
-      },
-    ];
+    if (!correction) {
+      speakRepairVerdict('Nothing written — the answer had no file in it.');
+      return nothing;
+    }
+    if (target && correction.path !== target) {
+      speakRepairVerdict(
+        `Nothing written — the answer rewrote \`${correction.path}\`, not \`${target}\`.`,
+      );
+      return nothing;
+    }
+
+    // Read the file again, fresh, and compare against THAT: the prompt carried the
+    // file as it was when the prompt was built, and this is what is on disk now.
+    const original = await readRepairTarget(correction.path);
+    if (original === null) {
+      speakRepairVerdict(`Nothing written — could not read \`${correction.path}\`.`);
+      return nothing;
+    }
+
+    const ready = applyReadiness(original, correction.content);
+    if (ready.ok === false) {
+      speakRepairVerdict(`Nothing written — the answer ${ready.reason}.`);
+      console.warn(`[repair] refused before writing ${correction.path}: ${ready.reason}`);
+      return nothing;
+    }
+
+    const result = await applyRepair({ path: correction.path, content: ready.content });
+    if (!result.ok) {
+      speakRepairVerdict(`Nothing written — ${result.reason}.`);
+      console.warn(`[repair] the write was refused for ${correction.path}: ${result.reason}`);
+      return nothing;
+    }
+
+    // The check ran as part of the write (the report the app reads is a FILE the
+    // checker writes — see rerun_catalog_check), so the verdict spoken next is read
+    // off the file that exists NOW. When it did not run, there is no verdict to give,
+    // and this says that instead of reading an old report and calling it fresh.
+    const checked = result.check?.ran === true;
+    speakRepairVerdict(
+      `Written \`${result.path}\` — ${result.lines_after} lines (was ${result.lines_before}), ` +
+      `backup \`${result.backup}\`.` +
+      (checked
+        ? ""
+        : ` Check did not run (${result.check?.why || "no reason given"}) — still on the list.`),
+    );
+    console.log(
+      `[repair] WROTE ${result.path}: ${result.lines_before} -> ${result.lines_after} lines ` +
+      `(backup ${result.backup}) · check ${checked ? result.check?.verdict : "did not run"}`,
+    );
+    return { written: true, checked };
   };
 
   /**
@@ -1438,7 +1493,26 @@ export default function Index({
       return;
     }
 
-    const sections = buildRepairSections(finding);
+    // ── The file, read BEFORE the prompt is built ─────────────────────────────
+    //
+    // The answer has to hand back the WHOLE file, because that is the only thing the
+    // app can write over the old one without guessing what was already there — and a
+    // model cannot hand back a file it has never seen. So the file is read here and
+    // carried in the prompt's Agent seat (see buildRepairSections).
+    //
+    // `null` is not an error to throw: it is a fact the prompt states, and the honest
+    // answer to a prompt carrying no file is COULD NOT CHECK. The seat says exactly
+    // that when this comes back empty, so the run that cannot write says so instead of
+    // printing a corrected file it invented from a component name.
+    const fileText = finding.file ? await readRepairTarget(finding.file) : null;
+    if (finding.file && !fileText) {
+      console.warn(
+        `[repair] could not read ${finding.file} — nothing can be written to it, ` +
+        "and the prompt will ask for COULD NOT CHECK instead of a file",
+      );
+    }
+
+    const sections = buildRepairSections(finding, fileText || undefined);
     repairSectionsRef.current = sections;
 
     // Every repair names itself, from the finding it came from.
@@ -1457,12 +1531,21 @@ export default function Index({
     );
 
     // Open the composer FIRST — the editor does not exist until the surface does.
+    //
+    // Which package this repair lands in: the same expression the assembly is handed
+    // below, read here as well because the launch save depends on it. A repair that
+    // targets nothing opens a FRESH package, and that is the only case this file
+    // writes down on its own: repairing from inside an open package is an edit of
+    // that package, and an edit is saved when the person says so.
+    const repairTargetSessionId = surfaceContext?.session_id !== undefined
+      ? surfaceContext.session_id
+      : (currentPromptSession?.id || null);
+    const repairOpensFreshPackage = !repairTargetSessionId;
+
     await assembleSurfaceWithAI('render-composer', {
       current_surface: surfaceContext?.current_surface ?? (headerTab || 'composer'),
       has_unsaved_changes: hasUnsavedChangesRef.current,
-      session_id: surfaceContext?.session_id !== undefined
-        ? surfaceContext.session_id
-        : (currentPromptSession?.id || null),
+      session_id: repairTargetSessionId,
       session_title: surfaceContext?.session_title || repairTitle,
     });
 
@@ -1471,6 +1554,68 @@ export default function Index({
     // that is left here is the prompt itself: the re-assert effect keeps it in the
     // column, so this push only has to survive the mount.
     pushRepairSections(sections);
+
+    // ── LAUNCHED = WRITTEN DOWN ───────────────────────────────────────────────
+    // The prompt is in the column, so it is saved NOW — not left for Run to create
+    // on the way past.
+    //
+    // Run is save-then-run when a package has never been saved, and that made the
+    // package's existence depend on a click that arrives later, through an editor
+    // that is a moment rather than a state: a Run landing while the column was
+    // swapping read back no sections, saved nothing, and reported "saving failed"
+    // for a payload it never sent. The person then had a prompt they could read and
+    // could not run. Saving here removes the dependency: what Run runs already
+    // exists, under the repair's own name, and shows up in the console list before
+    // anything is executed.
+    //
+    // Queued behind any save already in flight, because the guard in handleSavePrompt
+    // waits for that save and then returns — calling it now would drop THIS payload.
+    if (repairOpensFreshPackage) {
+      const writeItDown = (attempt = 0) => {
+        if (isSavingRef.current && attempt < 40) {
+          setTimeout(() => writeItDown(attempt + 1), 300);
+          return;
+        }
+        console.log(`[repair] writing "${repairTitle}" down at launch so Run has a package to run in`);
+        void handleSavePromptRef.current?.('', sections, { keepSurface: true, title: repairTitle });
+      };
+      writeItDown();
+    }
+
+    // ── THE ASK GOES TO THE CHAT, NOT INTO THE PROMPT ─────────────────────────
+    // The prompt states what value goes where and nothing else. The question the person
+    // has to answer is asked HERE, in the conversation, with the answers as buttons: a
+    // field whose answers are a closed set arrives as one button per answer, and pressing
+    // one writes that value under the field's label (`fill-field` → the editor's
+    // writeFieldValue). A field only the person can phrase — a node id, the four
+    // annotation lines — is named in the sentence instead, and Grace writes what they say
+    // with her own section write.
+    //
+    // Posted here rather than inside the save: the prompt is in the column by now
+    // (pushRepairSections above), and the write-down is in flight — waiting on it would
+    // tie the question to a network call that may be queued behind another save.
+    const userSeat = sections.find((s: any) => s.type === 'user');
+    const ask = repairAsk(finding, userSeat?.name || 'User', userSeat?.content);
+    if (ask) {
+      const seat = userSeat?.name || 'User';
+      const buttons = ask.answers
+        .map((a) => actionLink(a.label, fillFieldAction(seat, a.field, a.value.join('\n'))))
+        .join('  ');
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+        detail: { role: 'assistant', content: [ask.text, buttons].filter(Boolean).join('\n\n') },
+      }));
+      console.log(
+        `[repair] asked in the chat about ${ask.fields.join(', ')} — ` +
+        `${ask.answers.length} answer button(s)`,
+      );
+    }
+
+    // CLICKED = QUEUED. The finding is in repair from here, and the Run that answers
+    // this prompt is what settles it (see settleRepair). Held in a ref rather than in
+    // state for the same reason the sections are: this click can be interrupted by the
+    // unsaved-changes gate and resumed, and the Run still has to know what it repairs.
+    repairFindingRef.current = findingId;
+    setRepairStages((s) => queuedRepair(s, findingId));
   };
 
   const handleOpenPromptFromConsole = async (sessionId: string) => {
@@ -1479,8 +1624,10 @@ export default function Index({
     // ══════════════════════════════════════════════════════════════════════════
     console.log(`🤖 [A2UI] Opening session → intent: render-session:${sessionId}`);
     // Opening a package ends any repair: the repair prompt belongs to the finding
-    // that produced it, not to the package being opened.
+    // that produced it, not to the package being opened — so the finding it came from
+    // is released with it, and a Run of this package settles nothing.
     repairSectionsRef.current = null;
+    repairFindingRef.current = null;
     await assembleSurfaceWithAI(`render-session:${sessionId}`);
 
     // Force full re-render to dispatch sections to textareas
@@ -2277,7 +2424,13 @@ export default function Index({
             );
           } else {
             const value = ops.find((o: any) => o.updateDataModel)?.updateDataModel?.value || {};
-            if (Array.isArray(value.findings)) setCatalogFindings(value.findings);
+            if (Array.isArray(value.findings)) {
+              setCatalogFindings(value.findings);
+              // The report on screen is the one being read, so a finding it still
+              // carries is open: a 'done' mark is dropped the moment a report derives
+              // the finding again (shared/catalogHealth.reconcileRepairs).
+              setRepairStages((s) => reconcileRepairs(s, value.findings.map((f: any) => f.id)));
+            }
             if (value.usage && typeof value.usage.total_tokens === 'number') {
               // Carries its session id for the same reason: the report is for
               // ONE seat, not for whatever else happens to be mounted.
@@ -2596,8 +2749,30 @@ export default function Index({
   // Middle column appears on Run (even while streaming) and stays if output exists.
   // Clear-output collapses the middle column. Save persists both left content + compiled output.
   const handleRunRequested = async (e: Event) => {
-    const { sections = [] } = (e as CustomEvent).detail || {};
-    console.log('[WritingAreaIndex] run-requested from <prompt-section-editor>', sections.length, 'sections');
+    const detail = ((e as CustomEvent).detail || {}) as { sections?: any[] };
+    const fromEditor = detail.sections || [];
+    // The editor is the source of truth for what a person can see and edit — but it
+    // is a MOMENT, not a state. The column is swapped while a surface lands, and a
+    // Run that arrives inside that window reads back an empty editor. Two things
+    // this app already knows are read in turn rather than running nothing (and
+    // rather than blaming a save for a payload that was never sent):
+    //   1. the repair prompt it put in the column (held until this Run answers it),
+    //   2. the package's own left column, which is what the column was built from.
+    const fromRepair = repairSectionsRef.current || [];
+    const fromSession = (() => {
+      try {
+        const raw = currentPromptSessionObjRef.current?.leftColumnContent;
+        return raw ? (JSON.parse(raw).sections || []) : [];
+      } catch {
+        return [];
+      }
+    })();
+    const sections = fromEditor.length ? fromEditor : (fromRepair.length ? fromRepair : fromSession);
+    console.log(
+      '[WritingAreaIndex] run-requested from <prompt-section-editor>',
+      `${fromEditor.length} section(s) from the editor`,
+      fromEditor.length ? '' : `— editor empty, running the ${sections.length} the column holds`,
+    );
 
     if (!currentPromptSessionRef.current) {
       // A fresh composer has NO session: render-composer deliberately creates none
@@ -2607,13 +2782,36 @@ export default function Index({
       //
       // Create the session through the EXISTING save path, then carry on with a
       // real id. No new endpoint, no new write path — the same one Save uses.
+      // (Repair prompts are saved when they are launched, so reaching this with a
+      // repair in the column means that save did not finish — see below.)
+      if (!sections.length) {
+        // Nothing to run, and nowhere to put a run. Say THAT. The message this
+        // replaced blamed a save for failing at a moment when nothing had been
+        // sent anywhere and there was nothing to send.
+        console.warn('[WritingAreaIndex] Run has no session and no sections — nothing was sent anywhere');
+        setCurrentPromptSession((prev: any) =>
+          prev
+            ? { ...prev, compiledOutput: '⚠️ Run did nothing: there was nothing in the left column to run.' }
+            : prev
+        );
+        setMiddleOpen(true);
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: {
+            role: 'assistant',
+            content:
+              '⚠️ **Run did nothing.** The left column came back empty, so there was no prompt to send ' +
+              'and nothing was changed. Put something in a section — or press Repair on a finding — and press Run again.',
+          },
+        }));
+        return;
+      }
       console.log('[WritingAreaIndex] No session yet — saving first so Run has somewhere to write.');
       await handleSavePromptRef.current?.('', sections);
       if (!currentPromptSessionRef.current) {
         // Still nothing. Say it where the person is looking, not only in the console.
         setCurrentPromptSession((prev: any) =>
           prev
-            ? { ...prev, compiledOutput: '⚠️ Run needs a saved prompt, and saving failed — nothing was executed.' }
+            ? { ...prev, compiledOutput: '⚠️ Run did nothing: this prompt has no saved package, and the save that creates one did not finish.' }
             : prev
         );
         setMiddleOpen(true);
@@ -2624,9 +2822,9 @@ export default function Index({
           detail: {
             role: 'assistant',
             content:
-              '⚠️ **Run did not execute.** This prompt has no saved session yet, and creating one failed.\n\n' +
-              'Nothing was run and nothing was changed. Open the console log for `[CRUD] Save failed` — ' +
-              'it carries the reason (usually a failed request to `/api/ai/save-surface`).',
+              '⚠️ **Run did not execute.** This prompt has no saved package yet, and the save that creates one did not finish.\n\n' +
+              'Nothing was run and nothing was changed. The console line `[CRUD] Save failed` names the reason — ' +
+              'usually a failed request to `/api/ai/save-surface`.',
           },
         }));
         return;
@@ -2637,6 +2835,10 @@ export default function Index({
     // session, which owns them from here. Holding the override would make the
     // NEXT package open still holding the previous repair.
     repairSectionsRef.current = null;
+    // WHICH finding this run answers, captured before the prompt is let go. The run
+    // is the repair; a fresh check is what settles it (see settleRepair).
+    const repairingFinding = repairFindingRef.current;
+    repairFindingRef.current = null;
 
     const leftColumnContent = JSON.stringify({ sections });
 
@@ -2774,6 +2976,43 @@ export default function Index({
             }
           : prev
       );
+
+      // ── THE ANSWER BECOMES A FILE, AND ONLY THEN IS IT CHECKED ─────────────
+      //
+      // This is the step that was missing, and its absence is why the last run read
+      // as a claim about a file: the answer was text, nothing put it anywhere, so
+      // "Correction applied" could not have been true. The write comes FIRST and the
+      // check comes after it, in that order, because the check has to read the new
+      // file — and the chat says what the write returned, not what the model said.
+      //
+      // Two cases still do not settle anything, exactly as before: the run errored,
+      // or the declared tool call did not return the design (in which case a change
+      // was made without the thing it had to match — those lines are written down
+      // here and go into the prompt, not into a file).
+      if (repairingFinding && !data?.error && toolWarnings.length === 0) {
+        const outcome = await writeAnswerBack(output || '', repairingFinding);
+        // The repair is done being MADE. Whether it is done being REPAIRED is the
+        // check's call, not this app's and not the model's: a fresh report settles it.
+        //
+        // Both halves have to be true for a verdict to exist at all — a file was
+        // written, AND the checker was re-run against it. With nothing written there is
+        // nothing to settle (the finding stays open, which is the truth, and the chat
+        // above has just said why); with no re-run the only report available predates
+        // the change, so reading it would be inventing a verdict.
+        if (outcome.written && outcome.checked) {
+          void settleRepair(repairingFinding);
+        }
+      } else if (repairingFinding) {
+        // Nothing was written — and that is said here rather than left implied, because
+        // a run that wrote nothing looks identical to a run that worked once the tab is
+        // closed.
+        speakRepairVerdict(
+          "Nothing written — " +
+          (data?.error
+            ? "the run failed."
+            : "the tool call returned no design, so the file was left alone."),
+        );
+      }
     } catch (err: any) {
       console.error('[WritingAreaIndex] Run execution failed', err);
       // Name the call. "Failed to fetch" on its own says nothing about WHICH
@@ -3280,6 +3519,7 @@ export default function Index({
                       leftColumnContent={currentPromptSession?.leftColumnContent || ''}
                       catalogFindings={catalogFindings}
                       unannotatedInUse={unannotatedInUse}
+                      repairStages={repairStages}
                       onRepairFinding={(findingId) => {
                         // The finding becomes a PROMPT in the left column, and the
                         // user Runs it. Nothing is applied — see handleRepairFinding.
@@ -3344,6 +3584,7 @@ export default function Index({
                   onColumnCollapse={handleConsoleChatCollapse}
                   catalogFindings={catalogFindings}
                   unannotatedInUse={unannotatedInUse}
+                  repairStages={repairStages}
                   onRepairFinding={(findingId) => {
                     // Same path as the composer chat's list: the finding becomes a
                     // PROMPT in the left column and the user Runs it. The console

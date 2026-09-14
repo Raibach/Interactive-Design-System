@@ -1,4 +1,5 @@
 """Auto-extracted route module from main.py — zero behavior change."""
+import asyncio
 import json
 import os
 import sys
@@ -27,8 +28,42 @@ from figma_service import (
     get_dev_resources, search_file,
 )
 from milvus_rest import MilvusREST
+# The write a repair performs, and the read that makes it possible. Kept in its
+# own small module because it is the only code in this project that overwrites
+# source, and because /api/files/write below cannot do it: that endpoint allows
+# only .md/.mdx under three documentation directories, so no component could ever
+# be corrected by any path in the app (see repair_apply's docstring).
+from repair_apply import Refused, apply_repair, read_source, rerun_catalog_check
 
 router = APIRouter()
+
+# ── Where "the project" is, for the paths in this module ───────────────────────
+#
+# These handlers were extracted out of main.py, which sat at backend/ — and every
+# path in them was written relative to THAT: os.path.join(dirname(__file__), "..").
+# Here dirname(__file__) is backend/routes, so ".." is backend/, and every path
+# resolved one level too deep: 'frontend/src/prompts' became
+# backend/frontend/src/prompts. The read and write handlers therefore could only
+# ever see files under backend/ — every request for a real document was a 403 or a
+# 404, and a write would have created a stray file inside backend/. One constant
+# fixes all eight of them, and names the thing they all meant.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+# Secrets are not documents. With the base above corrected, these handlers reach
+# the whole project — which is what they were written for — and `path=.env` would
+# return the API keys to anyone who can reach the port (this route carries no
+# authentication; it only reads an X-User-ID header). Nothing legitimate asks for a
+# dotfile or a key through a documentation endpoint, so they are refused outright.
+_SECRET_SUFFIXES = (".pem", ".key", ".p12", ".pfx", ".crt")
+
+
+def _is_not_a_document(rel_path: str) -> bool:
+    """True for anything that is configuration or a credential, not a document."""
+    parts = rel_path.replace("\\", "/").split("/")
+    return (
+        any(p.startswith(".") and p not in (".", "..") for p in parts)
+        or any(p.endswith(_SECRET_SUFFIXES) for p in parts)
+    )
 
 # ============================================
 # FILE OPERATIONS ENDPOINTS (for DocumentationQueryTool)
@@ -48,6 +83,11 @@ async def read_file(
 ):
     """Read a documentation file - restricted to specific directories"""
     try:
+        if _is_not_a_document(path):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: '{path}' is configuration or a credential, not a document",
+            )
         # Security: Only allow reading from specific directories
         allowed_dirs = [
             "frontend/src/storybook",
@@ -59,8 +99,8 @@ async def read_file(
         # Check if the path is within allowed directories
         is_allowed = False
         for allowed_dir in allowed_dirs:
-            full_allowed_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", allowed_dir))
-            full_requested_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", path))
+            full_allowed_path = os.path.abspath(os.path.join(_REPO_ROOT, allowed_dir))
+            full_requested_path = os.path.abspath(os.path.join(_REPO_ROOT, path))
             if full_requested_path.startswith(full_allowed_path):
                 is_allowed = True
                 break
@@ -72,7 +112,7 @@ async def read_file(
             )
 
         # Construct the full path
-        file_path = os.path.join(os.path.dirname(__file__), "..", path)
+        file_path = os.path.join(_REPO_ROOT, path)
 
         # Check if file exists
         if not os.path.isfile(file_path):
@@ -110,6 +150,14 @@ async def write_file(
 ):
     """Write/update a documentation file - restricted to specific directories"""
     try:
+        if _is_not_a_document(request.path):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Access denied: '{request.path}' is configuration or a credential, "
+                    "not a document"
+                ),
+            )
         # Security: Only allow writing to specific directories
         allowed_dirs = [
             "frontend/src/storybook",
@@ -121,8 +169,8 @@ async def write_file(
         # Check if the path is within allowed directories
         is_allowed = False
         for allowed_dir in allowed_dirs:
-            full_allowed_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", allowed_dir))
-            full_requested_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", request.path))
+            full_allowed_path = os.path.abspath(os.path.join(_REPO_ROOT, allowed_dir))
+            full_requested_path = os.path.abspath(os.path.join(_REPO_ROOT, request.path))
             if full_requested_path.startswith(full_allowed_path):
                 # Additional check: only allow .md, .mdx, and .stories.mdx files
                 if request.path.endswith(('.md', '.mdx', '.stories.mdx')):
@@ -136,7 +184,7 @@ async def write_file(
             )
 
         # Construct the full path
-        file_path = os.path.join(os.path.dirname(__file__), "..", request.path)
+        file_path = os.path.join(_REPO_ROOT, request.path)
 
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -194,7 +242,7 @@ async def list_files(
 
         files = []
         for allowed_dir in allowed_dirs:
-            dir_path = os.path.join(os.path.dirname(__file__), "..", allowed_dir)
+            dir_path = os.path.join(_REPO_ROOT, allowed_dir)
             if os.path.isdir(dir_path):
                 # Find all matching files
                 search_pattern = os.path.join(dir_path, "**", pattern)
@@ -202,7 +250,7 @@ async def list_files(
 
                 # Convert to relative paths
                 for file_path in matched_files:
-                    rel_path = os.path.relpath(file_path, os.path.join(os.path.dirname(__file__), ".."))
+                    rel_path = os.path.relpath(file_path, _REPO_ROOT)
                     files.append(rel_path)
 
         print(f"✅ [File API] Listed {len(files)} files matching '{pattern}'")
@@ -219,5 +267,82 @@ async def list_files(
             status_code=500,
             detail=f"Error listing files: {str(e)}"
         )
+
+
+# ============================================
+# REPAIR ENDPOINTS — the write a repair performs
+# ============================================
+#
+# A repair used to be a description: the run answered with text saying what to
+# change, and nothing in the app could put that text into a file — the only tool a
+# run may execute is a Figma read, and /api/files/write allows only documentation
+# files. So a component could not be corrected anywhere in this codebase, and an
+# answer that said "Correction applied" was describing a write that never
+# happened. These two endpoints are that missing half:
+#
+#   GET  /api/repair/read   the file as it is now, so the prompt can carry it and
+#                           the model can hand back the whole corrected file;
+#   POST /api/repair/apply  writes that file back, with a backup, refusing
+#                           anything that does not look like a complete file.
+#
+# Both are restricted to the app's own source by repair_apply.target_path, which
+# is the only place that decides what a repair may touch.
+
+class RepairApplyRequest(BaseModel):
+    path: str
+    content: str
+
+
+@router.get("/api/repair/read")
+async def repair_read(
+    path: str = Query(..., description="The app source file a repair is about"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+):
+    """The file a repair is about, as it is now. Read half of the apply pair."""
+    try:
+        return read_source(path)
+    except Refused as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        print(f"❌ [Repair] Error reading {path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+
+
+@router.post("/api/repair/apply")
+async def repair_apply_endpoint(
+    request: RepairApplyRequest,
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+):
+    """Write a corrected file over its current version, keeping a backup.
+
+    Returns what happened (path, size, backup, line counts) so the caller can SAY
+    it in the chat rather than assert it. Anything that cannot be applied comes
+    back as 403 with `detail` written as a sentence a person can read — that
+    sentence is what the chat shows, so a refusal costs a sentence, never a file.
+
+    The check is re-run BEFORE the response, on purpose: the report the app reads
+    is a file the checker writes, so without this the verdict after a repair is
+    read off a report that predates the change (see rerun_catalog_check).
+    """
+    try:
+        result = apply_repair(request.path, request.content)
+        print(
+            f"✅ [Repair] Applied to {result['path']}: "
+            f"{result['lines_before']} -> {result['lines_after']} lines "
+            f"(backup {result['backup']})"
+        )
+        check = await asyncio.to_thread(rerun_catalog_check)
+        if check.get("ran"):
+            print(f"🔎 [Repair] re-checked: {check.get('verdict')}")
+        else:
+            print(f"⚠️  [Repair] the check did not run: {check.get('why')}")
+        return {"ok": True, **result, "check": check}
+    except Refused as e:
+        print(f"⚠️  [Repair] Not applied to {request.path}: {e}")
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        print(f"❌ [Repair] Error applying to {request.path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error applying the change: {str(e)}")
+
 
 

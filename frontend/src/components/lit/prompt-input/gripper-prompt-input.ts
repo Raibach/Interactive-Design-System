@@ -18,6 +18,14 @@
 import { LitElement, html, css } from 'lit';
 import { gripperMeatballsSvg } from './prompt-icons';
 
+/**
+ * Provenance for this element's registry entry.
+ * Marking is taken exactly from the Provenance line ("inferred"); nothing here is invented.
+ */
+export const provenance = {
+  registryEntry: 'inferred',
+} as const;
+
 export class GripperPromptInput extends LitElement {
   static styles = css`
     :host {

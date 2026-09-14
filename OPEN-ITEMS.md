@@ -59,8 +59,8 @@ cannot be added without a status.
 
 | `check:annotation-missing` | open | designer | a resolved node carrying no annotation at all | 7 | `check:annotation-missing` → 0 |
 | `check:annotation-prose` | open | designer | an annotation that says what the thing *is*, not what it *does* | 1 | `check:annotation-prose` → 0 |
-| `check:event-unheard` | open | pipeline | a component dispatches an event nothing listens for | 12 | `check:event-unheard` → 0 |
-| `check:provenance-missing` | open | pipeline | a built element with no `provenance` block | 15 | `check:provenance-missing` → 0 — **re-measured 2026-09-12: 16 → 15 when the check began counting the FILE once (`#024`), not once per registry row that resolves to it** |
+| `check:event-unheard` | open | pipeline | a component dispatches an event nothing listens for | 11 | `check:event-unheard` → 0 — **re-measured 2026-09-14: 12 → 11 when the chat gained a listener for `section-write-failed` (the editor's write-miss report)** |
+| `check:provenance-missing` | open | pipeline | a built element with no `provenance` block | 14 | `check:provenance-missing` → 0 — **re-measured 2026-09-12: 16 → 15 when the check began counting the FILE once (`#024`), not once per registry row that resolves to it** · **re-measured 2026-09-14: 15 → 14 when `prompt-container` got its `provenance` block through `/api/repair/apply` — the write re-ran this check and said so** |
 | `check:tag-inert` | decided | pipeline | the allowlist offers the tag; nothing implements it — **see DECIDED below: implement** | 8 | `check:tag-inert` → 0, each of the 8 with an element + catalog entry |
 | `check:geometry-drift` | open | pipeline | the node and the rendering disagree (`chat-navigation-bar`) | 1 | `check:geometry-drift` → 0 |
 | `check:schema-absent` | open | pipeline | in one gate, missing from the other (`ai-surface-sandbox`, **ecommerce only**) | 0 | `check:schema-absent` → 0 in both catalogs |

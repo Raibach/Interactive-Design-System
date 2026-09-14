@@ -1,4 +1,5 @@
 """Auto-extracted route module from main.py — zero behavior change."""
+import asyncio
 import json
 import os
 import sys
@@ -104,6 +105,25 @@ def _extract_json_payload(response_text: str) -> Any:
             except json.JSONDecodeError:
                 continue
         raise
+
+
+def _compose_sections(sections: List[Dict[str, Any]]) -> str:
+    """Join a prompt's sections into one piece of text, in order, as written.
+
+    This is what the output column holds when a Save carries no output at all:
+    the sections themselves, labelled. It used to be whatever the save-time LLM
+    wrote back inside its JSON envelope — a second, invented copy of text the row
+    already had, and the field that pushed that reply past the token budget and
+    left it unparseable (see the compile call in ai_save_surface).
+    """
+    parts: List[str] = []
+    for s in sections or []:
+        content = (s.get("content") or "").strip()
+        if not content:
+            continue
+        name = s.get("section") or s.get("role") or "Section"
+        parts.append(f"### {name}:\n{content}")
+    return "\n\n".join(parts)
 
 
 # ============================================
@@ -636,7 +656,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             mode="surface_assembly",
             temperature=0.0,
             prompt_id="surface-assembly-composer"
-            # model intentionally omitted — use the enabled provider's default (deepseek-v4-flash)
+            # model intentionally omitted — use the enabled provider's default (deepseek-v4-pro)
         )
         ms_b = (time.perf_counter() - t_b_start) * 1000
 
@@ -1025,11 +1045,16 @@ Output ONLY valid JSON:
     ai_message = "Hold on — you've got unsaved work here. Want me to save it before you go?"
 
     try:
-        llm_response = query_llm(
+        # Off the event loop, like the save-time summary call: this route is
+        # `async def` and query_llm blocks for up to 10s per attempt, so an
+        # inline call stalls every other request in the process behind a
+        # sentence asking whether to save.
+        llm_response = await asyncio.to_thread(
+            query_llm,
             question=llm_prompt,
             mode="console_assembly",
             temperature=0.8,  # More personality
-            prompt_id="confirm-exit"
+            prompt_id="confirm-exit",
         )
 
         if llm_response and llm_response.strip():
@@ -1133,34 +1158,49 @@ async def ai_save_surface(
                     for s in sections if s.get("content", "").strip()
                 ])
 
+                # What only a model can write is the SUMMARY the semantic index
+                # needs. This call used to be asked for the whole compiled prompt
+                # inside its JSON envelope as well — a second copy of text the row
+                # already holds, produced at a 4000-token budget. It came back 4228
+                # characters long and unparseable ("Expecting value: line 1 column
+                # 1 (char 0)"), so ai_compilation stayed None and the caller was
+                # told "AI compilation FAILED" about a save that had already been
+                # written. The row's output column is not this call's business: it
+                # is the caller's, or the sections joined (see _compose_sections).
                 llm_prompt = f"""You are Grace, the AI assistant for a prompt engineering workspace.
-The user is saving their prompt template. Analyze the sections and generate a COMPILATION for semantic storage.
+The user is saving their prompt template. Read the sections and write down what the prompt is for.
 
 Generate:
 
-1. compiled_output: Combine all sections into a single, clean prompt that could be sent to an LLM.
-   Format it properly with clear section separators if needed.
-
-2. description: A 1-2 sentence semantic summary of what this prompt does.
+1. description: A 1-2 sentence semantic summary of what this prompt does.
    This will be used for SEMANTIC SEARCH — write it so that searching "prompt about X" will find it.
 
-3. suggested_title: If the current title "{request.title or 'Untitled'}" is generic or doesn't
+2. suggested_title: If the current title "{request.title or 'Untitled'}" is generic or doesn't
    describe the prompt well, suggest a better descriptive title (max 6 words). Otherwise, keep the current title.
 
-4. tags: Extract 5-10 semantic keywords/tags that describe this prompt's purpose, domain, and techniques.
+3. tags: Extract 5-10 semantic keywords/tags that describe this prompt's purpose, domain, and techniques.
    These enable search like "find prompts about customer service" or "prompts using chain-of-thought".
 
 Current sections:
 {sections_text}
 
 Output ONLY valid JSON:
-{{"compiled_output": "The full compiled prompt here...", "description": "Brief summary of the prompt's purpose", "suggested_title": "A descriptive title", "tags": ["tag1", "tag2", "tag3"]}}"""
+{{"description": "Brief summary of the prompt's purpose", "suggested_title": "A descriptive title", "tags": ["tag1", "tag2", "tag3"]}}"""
 
-                llm_response = query_llm(
+                # OFF THE EVENT LOOP. `query_llm` is a BLOCKING call — up to 10s
+                # per attempt, one retry — and this route is `async def`. Called
+                # inline it froze every other request in the process for the whole
+                # provider call: the next assemble, the catalog check, the chat,
+                # the next Save. That is what "it is still saving, it is still
+                # compiling" was, and why the app could not be touched while a
+                # description was being written. A database write does not get to
+                # hold the server while a model thinks.
+                llm_response = await asyncio.to_thread(
+                    query_llm,
                     question=llm_prompt,
                     mode="console_assembly",
                     temperature=0.3,  # Low creativity for consistent compilation
-                    prompt_id="save-surface-compile"
+                    prompt_id="save-surface-compile",
                 )
 
                 if llm_response and llm_response.strip():
@@ -1174,11 +1214,15 @@ Output ONLY valid JSON:
                     try:
                         ai_compilation = _extract_json_payload(response_text)
                         llm_used = True
-                        print(f"[AI Save] LLM compiled surface: {len(ai_compilation.get('compiled_output', ''))} chars")
+                        print(
+                            f"[AI Save] LLM summary: "
+                            f"{len(ai_compilation.get('description', ''))} chars, "
+                            f"{len(ai_compilation.get('tags') or [])} tags"
+                        )
                     except (json.JSONDecodeError, ValueError) as e:
-                        print(f"[AI Save] LLM response not valid JSON: {e}")
+                        print(f"[AI Save] LLM response not valid JSON (save continues without a summary): {e}")
             except Exception as e:
-                print(f"[AI Save] LLM compilation warning: {e}")
+                print(f"[AI Save] LLM summary warning: {e}")
 
         # The client's middle_column is authoritative whenever it carries a
         # compiled_output key at all: an explicit value — including an explicitly
@@ -1186,19 +1230,21 @@ Output ONLY valid JSON:
         #
         # Clearing the output column and then saving used to be silently undone
         # right here. An intentionally empty value was indistinguishable from
-        # "this caller said nothing about output", so the LLM's freshly compiled
-        # text was written over the Clear — and the response still reported the
-        # save as a success. The gap-fill below is kept for the case it was
-        # written for: a Save that carries no output at all must not blank out
-        # the result of a Run.
+        # "this caller said nothing about output", so freshly compiled text was
+        # written over the Clear — and the response still reported the save as a
+        # success. The gap-fill below is kept for the case it was written for: a
+        # Save that carries no output at all must not blank out the result of a
+        # Run. What fills it is now the sections joined in order rather than a
+        # model's second copy of them: same text it was written for, no tokens,
+        # and no way for a model's formatting to decide what a saved row holds.
         output_was_sent = "compiled_output" in (request.middle_column or {})
-        if ai_compilation:
-            if (not output_was_sent and not (compiled_output or "").strip()
-                    and ai_compilation.get("compiled_output")):
-                compiled_output = ai_compilation["compiled_output"]
-            # Update title if AI suggested a better one
-            if ai_compilation.get("suggested_title") and request.title in [None, "", "Untitled", "New Prompt Agent"]:
-                request.title = ai_compilation["suggested_title"]
+        if not output_was_sent and not (compiled_output or "").strip():
+            compiled_output = _compose_sections(sections)
+
+        # Update title if AI suggested a better one
+        if (ai_compilation and ai_compilation.get("suggested_title")
+                and request.title in [None, "", "Untitled", "New Prompt Agent"]):
+            request.title = ai_compilation["suggested_title"]
 
         # The row keeps the model's description, or none at all. There is
         # deliberately no fallback string: the caller used to receive
@@ -1302,8 +1348,11 @@ Output ONLY valid JSON:
                         "output cleared" if not (compiled_output or "").strip()
                         else "output saved"
                     )
-                elif llm_used:
-                    reason.append("compiled prompt generated")
+                elif (compiled_output or "").strip():
+                    # Not the model's doing any more: the sections were joined
+                    # into the output column (see the gap-fill above), so the
+                    # version says that rather than claiming a compilation.
+                    reason.append("output built from the sections")
                 try:
                     written = state.prompt_sessions_api.save_version(
                         session_id=session_id,
@@ -1355,8 +1404,14 @@ Compiled Prompt:
                 semantic_content = f"Title: {request.title or 'Untitled'}\nSections: {section_summary}"
                 print(f"[AI Save] Embedding section summary (no AI compilation)")
 
-            # Pass AI metadata to Milvus for filtering and retrieval
-            milvus_save_version(session_id, semantic_content, ai_metadata=ai_compilation)
+            # Pass AI metadata to Milvus for filtering and retrieval. Off the
+            # event loop for the same reason as the summary call above: this is a
+            # synchronous network write behind a model load, and the save in front
+            # of it has already been written. (When the embedding model is not
+            # loaded at all, this is where the "Milvus save warning" comes from.)
+            await asyncio.to_thread(
+                milvus_save_version, session_id, semantic_content, ai_metadata=ai_compilation
+            )
             milvus_saved = True
         except Exception as e:
             print(f"[AI Save] Milvus save warning: {e}")
@@ -1364,25 +1419,23 @@ Compiled Prompt:
         elapsed_ms = int((time.time() - start_time) * 1000)
 
         # AI confirmation message. It reports what actually happened to the row:
-        # a compilation that failed is named as a failure, an emptied output
-        # column says so, and a vector index that was NOT written says that too.
-        # The message used to read as an unqualified success in all three cases.
-        compilation_failed = bool(section_contents) and ai_compilation is None
+        # a summary that did not arrive says so without calling the SAVE a failure,
+        # an emptied output column says so, and a vector index that was NOT written
+        # says that too. The message used to read as an unqualified success in all
+        # three cases — and then, for the first of them, as "AI compilation FAILED
+        # — no compiled prompt was generated" about a row that had been written.
+        summary_missing = bool(section_contents) and ai_compilation is None
         ai_message = f"Surface {action} successfully in {elapsed_ms}ms."
         if llm_used:
-            ai_message += f" AI compiled {len(sections)} sections"
-            if output_was_sent and not (compiled_output or "").strip():
-                # The model did run (and was paid for) and its text was then
-                # thrown away, because the caller explicitly cleared the column.
-                # Saying only "AI compiled N sections" would read as if that
-                # compilation had been kept.
-                ai_message += ", then discarded it: the output column was explicitly cleared"
-            ai_message += "."
-        elif compilation_failed:
-            ai_message += " AI compilation FAILED — no compiled prompt was generated."
+            ai_message += f" AI summary written for {len(sections)} sections."
+        elif summary_missing:
+            ai_message += " No AI summary (the compile call returned nothing usable)."
         else:
             ai_message += f" {len(sections)} sections saved."
-        if output_was_sent and not (compiled_output or "").strip() and not llm_used:
+        # One statement of an explicitly cleared column, whichever branch above
+        # was taken: the summary that was written does not live in the output
+        # column, so a cleared column is not a discarded summary.
+        if output_was_sent and not (compiled_output or "").strip():
             ai_message += " Output column cleared."
         if version_number is not None:
             ai_message += f" Version {version_number} saved."
@@ -1404,7 +1457,7 @@ Compiled Prompt:
             "milvus_saved": milvus_saved,
             "llm_used": llm_used,
             "ai_compiled": ai_compilation is not None,
-            "compilation_failed": compilation_failed,
+            "summary_missing": summary_missing,
             "compiled_output_length": len(compiled_output),
             "version_number": version_number,
             "version_error": version_error,

@@ -11,6 +11,14 @@
  *  - Functions / Tools is pre-labeled; choosing a tool injects its variable token.
  *  - Role-tile label click toggles the accordion body (collapse/expand).
  *  - Drag is anchored to the gripper only.
+ *  - A prompt that carries a FORM flags itself: an empty `required` field, or a form
+ *    with no values at all, turns the notice above the field red and rings the
+ *    field. The flag is read from this section's own content (see
+ *    @/shared/repairMaterial) — the same text Run sends — so it cannot describe a
+ *    state the prompt is not in.
+ *  - The activity rail is the notification column: while this section is waiting on
+ *    a person it carries an `!` in a circle beside the lightning. Same source as the
+ *    red flag above, so a red field and a marked rail are the same fact.
  *
  * Properties: name, type, content, sticky, minHeight, menuOpen ('types'|'functions'|''),
  *             placeholder.
@@ -27,6 +35,7 @@ import {
   SECTION_MENU_TYPES as SHARED_MENU_TYPES,
   SECTION_TYPE_LABELS,
 } from '@/shared/promptSections';
+import { repairPromptFlag } from '@/shared/repairMaterial';
 
 export interface MenuType { type: string; label: string }
 
@@ -226,6 +235,41 @@ export class PromptInputSection extends LitElement {
       margin-top: 17px;
     }
     :host([collapsed]) .prompt-imput { display: none; }
+    /* The flag, above the field it is about.
+       Neutral = the app filled what it could and Run only has to confirm it.
+       Red = the prompt cannot be run into a result yet: a required field is
+       empty, or the form holds no values. The red is an alpha of the menu's own
+       danger colour (#c50000, .menu-item.danger), so no new palette enters the
+       system for a state the design never drew. */
+    .prompt-flag {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin: 10px 0 -9px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      border-left: 4px solid #8b8b8b;
+      background: #f7f7f7;
+      color: #404040;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 16px;
+    }
+    .prompt-flag--blocked {
+      border-left-color: #c50000;
+      background: rgba(197, 0, 0, 0.07);
+      color: #c50000;
+    }
+    .prompt-flag-mark { font-weight: 700; }
+    .prompt-flag-text { min-width: 0; }
+    :host([collapsed]) .prompt-flag { display: none; }
+    /* The ring, not a border: an outline takes no space, so the field's geometry
+       is exactly the design's whether the ring is drawn or not. */
+    prompt-textarea[needs-input] {
+      outline: 2px solid #c50000;
+      outline-offset: 3px;
+    }
   `;
 
   render() {
@@ -258,7 +302,23 @@ export class PromptInputSection extends LitElement {
     // 2 dark lightnings"); the owner asked for those to be trimmed down to one
     // lightning. This is an intentional deviation from the Figma source, not a
     // design-system value — re-add kinds here if the full rail is wanted back.
-    const railIcons: string[] = ['lightning'];
+    // The rail is the notification column, so the one addition it takes is the
+    // `alert` cell (an exclamation in a circle) while this section is waiting on a
+    // person. It is driven by the same `blocked` as the flag and the field ring
+    // below, so the three cannot disagree about whether something is wrong — and it
+    // is absent the moment the text says nothing is missing, without any state to
+    // clear.
+
+    // The flag is derived from `content` — the text a person is looking at and Run
+    // sends — so it cannot drift from the fields below it.
+    const flag = repairPromptFlag(String(this.content || ''));
+    const blocked = flag.kind === 'needs-you' || flag.kind === 'no-values';
+    const railIcons: string[] = blocked ? ['lightning', 'alert'] : ['lightning'];
+    const promptFlag = flag.kind === 'none' ? '' : html`
+      <div class="prompt-flag${blocked ? ' prompt-flag--blocked' : ''}" role="status" data-flag="${flag.kind}">
+        <span class="prompt-flag-mark" aria-hidden="true">${blocked ? '!' : '✓'}</span>
+        <span class="prompt-flag-text">${flag.text}</span>
+      </div>`;
 
     return html`
       <div class="responsive-prompt-container" data-tag="prompt-section" data-node-id="40000746:94" data-section-name="${this.name}">
@@ -281,9 +341,11 @@ export class PromptInputSection extends LitElement {
             </div>
           </div>
         </div>
+        ${promptFlag}
         <div class="prompt-imput" data-node-id="40000878:240">
           <status-bar-prompt-input .icons=${railIcons}></status-bar-prompt-input>
           <prompt-textarea
+            ?needs-input=${blocked}
             .value=${this.content}
             .placeholder=${this.placeholder}
             .minHeight=${this.minHeight}

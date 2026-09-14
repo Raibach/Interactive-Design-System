@@ -144,11 +144,20 @@ const checkRan = (id) => { ran.add(id); };
  * the same key, event-unheard:…"), and a reader could not tell four findings from
  * one finding printed four times. Pass the thing that makes them different.
  */
-function add({ check, stage, owner, level = null, tier = null, component = null, nodeId = null, file = null, what, fix, key = null }) {
+function add({ check, stage, owner, level = null, tier = null, component = null, nodeId = null, file = null, what, fix, key = null, dispatchedEvents = null }) {
   // Severity is resolved, not passed: BLOCKING is the single home for the rule.
   // A caller may still force a level — that is what the `pass` entries use.
   const resolved = level || (BLOCKING.has(check) ? 'blocking' : 'advisory');
-  findings.push({ id: `${check}:${component || file || nodeId || 'catalog'}${key ? `:${key}` : ''}`, check, stage, owner, level: resolved, tier, component, nodeId, file, what, fix });
+  const finding = { id: `${check}:${component || file || nodeId || 'catalog'}${key ? `:${key}` : ''}`, check, stage, owner, level: resolved, tier, component, nodeId, file, what, fix };
+  // A CHECK'S MEASUREMENTS ARE DATA, NOT A SENTENCE. Five event names inside the
+  // English of `what` can only be read by a person; the same five names as a list
+  // are what the repair prompt needs to WRITE the value it asks for, instead of
+  // describing one that someone else has to type. `new CustomEvent('…')` in the
+  // component's own source is the measurement (see dispatchNames below). Carried
+  // only by the checks that make it, so the 45 findings that have no such list do
+  // not grow a null-valued key that reads like a field nobody uses.
+  if (dispatchedEvents && dispatchedEvents.length) finding.dispatchedEvents = dispatchedEvents;
+  findings.push(finding);
 }
 
 const read = (p) => readFileSync(p, 'utf8');
@@ -165,6 +174,17 @@ function litFiles(dir = PATHS.litDir, acc = []) {
 }
 const SOURCES = litFiles().map((p) => ({ path: p, file: basename(p, '.ts'), src: read(p) }));
 const srcOf = (name) => SOURCES.find((s) => s.file === name) || null;
+/**
+ * The event names a component's own source dispatches — one measurement, read by
+ * two checks: provenance (those names are unmarked inventions until the entry says
+ * otherwise) and annotation (they are the material for `On click:`). It reaches the
+ * repair prompt as a list rather than as a clause inside `what`, so the prompt can
+ * write the value it asks for instead of describing one to type out by hand.
+ */
+const dispatchNames = (name) => {
+  const s = srcOf(name);
+  return s ? [...s.src.matchAll(/new\s+CustomEvent\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]) : [];
+};
 
 // ── The catalog (allowlist source + schema + figma map) ────────────────────
 const figmaMap = JSON.parse(read(PATHS.figmaMap));
@@ -270,13 +290,13 @@ for (const c of figmaMap.components) {
 }
 for (const c of provenanceSubjects.values()) {
   if (!c.provenance) {
-    const s = srcOf(c.litComponent);
-    const invented = s ? [...s.src.matchAll(/new\s+CustomEvent\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]) : [];
+    const invented = dispatchNames(c.litComponent);
     add({
       check: 'provenance-missing', stage: 'deliver', owner: 'pipeline',
       component: c.litComponent, nodeId: c.figmaNodeId, file: c.file,
       what: `No provenance block. ${invented.length ? `${invented.length} event name(s) are unmarked inventions: ${invented.join(', ')}.` : 'Nothing marks which fields came from the design and which were invented.'}`,
       fix: `Add a "provenance" object marking each field verbatim or inferred.`,
+      dispatchedEvents: invented,
     });
   }
 }
@@ -949,9 +969,9 @@ if (OFFLINE) {
       const anns = node.annotations || [];
       const text = anns.map((a) => a.labelMarkdown || a.label || '').filter(Boolean).join('\n');
       if (!anns.length || !text.trim()) {
-        add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation.`, fix: `Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md` });
+        add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation.`, fix: `Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md`, dispatchedEvents: dispatchNames(c.litComponent) });
       } else if (!isStructured(text)) {
-        add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} has a note, but it is prose, not a spec — so behaviour must be invented. "${text.slice(0, 90)}${text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).' });
+        add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} has a note, but it is prose, not a spec — so behaviour must be invented. "${text.slice(0, 90)}${text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).', dispatchedEvents: dispatchNames(c.litComponent) });
       }
 
       // ── Geometry convergence ────────────────────────────────────────────

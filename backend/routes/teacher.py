@@ -253,7 +253,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
             editorial=request.editorial,
             mode=mode,
             # model intentionally omitted — use the enabled provider's default
-            # (deepseek-v4-flash). Passing "glm-4.7" (a Z.ai model) here made
+            # (deepseek-v4-pro). Passing "glm-4.7" (a Z.ai model) here made
             # DeepSeek reject every prompt_output run with HTTP 400.
         )
 
