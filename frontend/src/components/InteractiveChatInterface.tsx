@@ -298,15 +298,32 @@ ${compiledOutput.slice(0, 3000)}`;
   // preference: nothing about it is worth remembering between sessions, and a
   // preference that outlives its reason is one more thing that lies.
   const [findingsCollapsed, setFindingsCollapsed] = useState(true);
+  // ── Catalog check — the console reports the catalog's condition on arrival ──
+  // Alert, don't block: nothing here stops the app. It tells the truth on load
+  // so a design user can see what is wrong and go correct it in Figma.
+  const [catalogHealth, setCatalogHealth] = useState<CatalogHealth>({ state: 'loading' });
+
+  // The findings the drop-down shows. Grace's surface is the first source; when she
+  // has not assembled one (provider down, or no Figma), the shell falls back to the
+  // report it can fetch itself — the findings are machine data, not her opinion, and
+  // must not disappear because the model or Figma is unavailable.
+  const effectiveFindings = useMemo(() => {
+    if (catalogFindings && catalogFindings.length > 0) return catalogFindings;
+    if (catalogHealth.state === 'ok') {
+      return catalogHealth.report.findings.filter((f) => f.level !== 'pass');
+    }
+    return [];
+  }, [catalogFindings, catalogHealth]);
+
   const findingCounts = useMemo(() => {
-    const count = (pred: (f: NonNullable<typeof catalogFindings>[number]) => boolean) =>
-      (catalogFindings || []).filter(pred).length;
+    const count = (pred: (f: { level?: string; owner?: string }) => boolean) =>
+      effectiveFindings.filter(pred).length;
     return {
       blocking: count((f) => f.level === 'blocking'),
       pipeline: count((f) => f.owner === 'pipeline'),
       designer: count((f) => f.owner === 'designer'),
     };
-  }, [catalogFindings]);
+  }, [effectiveFindings]);
 
   // ── The order the report is read in: most urgent first ────────────────────
   // The check reports in the order its checks ran, which is a fact about the
@@ -317,7 +334,7 @@ ${compiledOutput.slice(0, 3000)}`;
   // comparator her brief sorts with, shared/catalogHealth.ts), and the standing
   // header names the blocking finding, so "which one is blocking" is answerable
   // with the list closed.
-  const orderedFindings = useMemo(() => sortByUrgency(catalogFindings || []), [catalogFindings]);
+  const orderedFindings = useMemo(() => sortByUrgency(effectiveFindings), [effectiveFindings]);
   const mostUrgent = useMemo(
     () => orderedFindings.find((f) => f.level === 'blocking') || null,
     [orderedFindings],
@@ -473,10 +490,6 @@ ${compiledOutput.slice(0, 3000)}`;
     return () => window.removeEventListener('section-write-failed', handler);
   }, []);
 
-  // ── Catalog check — the console reports the catalog's condition on arrival ──
-  // Alert, don't block: nothing here stops the app. It tells the truth on load
-  // so a design user can see what is wrong and go correct it in Figma.
-  const [catalogHealth, setCatalogHealth] = useState<CatalogHealth>({ state: 'loading' });
   /**
    * Her token usage, as she reports it — measured by the backend from the
    * provider's own usage report, never estimated.
@@ -1762,7 +1775,7 @@ You are in the chat panel. Follow the rules above. Use XML tags silently — the
                     Variables and Metadata each report their own thing, and an open
                     catalog finding is not part of what any of them is showing —
                     the tab is a filter, and this is what it filters out. */}
-                {selectedNav === 'chat' && catalogFindings && catalogFindings.length > 0 && (
+                {selectedNav === 'chat' && effectiveFindings.length > 0 && (
                   <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                     {/* The header is the whole standing report when closed: the
                         count, and what kind of work the open ones are. */}
@@ -1776,7 +1789,7 @@ You are in the chat panel. Follow the rules above. Use XML tags silently — the
                       <span className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
                         <span className="flex items-center gap-2 min-w-0 w-full">
                           <span className="font-['Inter'] text-[12px] font-semibold text-[#1c2f4e] truncate">
-                            Catalog check — {catalogFindings.length} open
+                            Catalog check — {effectiveFindings.length} open
                           </span>
                           {findingCounts.blocking > 0 && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#fdeaea] text-[#b02a2a] text-[10px] font-semibold">

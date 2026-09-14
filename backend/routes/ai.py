@@ -474,7 +474,11 @@ Output ONLY this exact JSON (no markdown, no extra text):
         # _read_catalog_audit raises 503 when the checker has not run, so an unrun
         # check can never be assembled into a surface that looks like a clean one.
         audit = _read_catalog_audit(catalog)
-        if audit.get("status") != "complete":
+        # Figma is an import tool, not a runtime gate: a "partial" report (the live
+        # Figma checks skipped because there is no token) still carries the findings
+        # the shell paints, so it assembles like a "complete" one. _read_catalog_audit
+        # already 503s when the checker has not run at all.
+        if audit.get("status") not in ("complete", "partial"):
             raise HTTPException(
                 status_code=503,
                 detail=(

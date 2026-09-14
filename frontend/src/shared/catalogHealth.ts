@@ -65,9 +65,9 @@ export async function fetchCatalogHealth(): Promise<CatalogHealth> {
     }
     if (!res.ok) return { state: 'unavailable', reason: `HTTP ${res.status}` };
     const report = (await res.json()) as CatalogAudit;
-    if (report.status !== 'complete') {
-      return { state: 'incomplete', reason: 'A live check did not run, so this report is partial.' };
-    }
+    // Figma is an import tool, not a runtime gate: "partial" (live Figma checks
+    // skipped) still carries the findings, so it is a readable report, not a failure.
+    // 503 above is the only "did not run" — a partial report is "ran, minus Figma".
     return { state: 'ok', report };
   } catch (e) {
     return { state: 'unavailable', reason: e instanceof Error ? e.message : 'unreachable' };
