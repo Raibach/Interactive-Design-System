@@ -31,6 +31,7 @@ import { LitElement, html, css } from 'lit';
 import './prompt-input/prompt-container';
 import './prompt-input/prompt-input-section';
 import { TYPE_LABELS, SECTION_MENU_TYPES } from './prompt-input/prompt-input-section';
+import { normalizeSectionType } from '@/shared/promptSections';
 
 export interface PromptSection {
   name: string;
@@ -129,7 +130,10 @@ class PromptSectionEditor extends LitElement {
 
   private _normalizeSection(s: any): PromptSection {
     if (!s || typeof s !== 'object') return { name: 'Section', content: '' };
-    const type = s.type || s.role || 'custom';
+    // Any spelling the server or an older save carries comes back canonical.
+    // A value with no seat yet is preserved rather than guessed — see UNDECIDED
+    // in @/shared/promptSections.
+    const type = normalizeSectionType(s.type || s.role || 'custom');
     return {
       name: s.name || s.section || s.role || type,
       content: s.content || '',
@@ -140,7 +144,9 @@ class PromptSectionEditor extends LitElement {
   }
 
   private _isSystem(s: PromptSection | undefined): boolean {
-    return !!s && String(s.type || '').toLowerCase().includes('system');
+    // Identity, not a substring. This was `.includes('system')`, which is true of
+    // `system-role` by luck and of "Systematic Review" by accident.
+    return !!s && normalizeSectionType(s.type) === 'system-role';
   }
 
   private _bindOnce() {
@@ -151,10 +157,15 @@ class PromptSectionEditor extends LitElement {
     // Order matches the Figma container (node 40000746-6): System Role,
     // User Role, Agent Role — no invented sections.
     if (this._sections.length === 0) {
+      // Types are the CANONICAL ids from @/shared/promptSections, not the short
+      // forms this used to write ('system' / 'user' / 'agent'). Those short forms
+      // matched nothing in the schema enum, and `agent` had no seat there at all.
+      // The labels — and so the wire format, which the Run path keys on — are
+      // unchanged.
       this._sections = [
-        { name: 'System Role', content: 'You are an expert in semantic design systems and A2UI protocol.', type: 'system' },
-        { name: 'User Role', content: '', type: 'user' },
-        { name: 'Agent Role', content: '', type: 'agent' },
+        { name: 'System Role', content: 'You are an expert in semantic design systems and A2UI protocol.', type: 'system-role' },
+        { name: 'User Role', content: '', type: 'user-role' },
+        { name: 'Agent Role', content: '', type: 'agent-role' },
       ];
     }
 
@@ -243,6 +254,10 @@ class PromptSectionEditor extends LitElement {
   }
 
   private _addSection() {
+    // `type: 'custom'` has no seat in the schema enum and no twin in the menu
+    // (the tile is "Custom Data" / `custom-data`) — it is listed in UNDECIDED in
+    // @/shared/promptSections. Left as-is deliberately: the value is preserved
+    // rather than quietly mapped onto a seat nobody has agreed it is.
     const newSection: PromptSection = {
       name: `Custom Role ${this._sections.length + 1}`,
       content: '', type: 'custom', position: this._sections.length,

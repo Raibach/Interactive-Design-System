@@ -44,7 +44,7 @@ export type RegistryMeta = z.infer<typeof RegistryMetaSchema>;
 export const PromptSectionSchema = z.object({
   tag: z.literal('prompt-section'),
   props: z.object({
-    type: z.enum(['system-role', 'user-role', 'tool-call', 'few-shot', 'constraints']),
+    type: z.enum(['system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints']),
     content: z.string(),
     order: z.number(),
     state: z.enum(['idle', 'editing', 'saving', 'error']).default('idle'),
@@ -681,9 +681,9 @@ export const TAG_REGISTRY = {
     tag: 'prompt-section',
     surface: 'composer',
     column: 'left',
-    description: 'A prompt builder section — System Role, User Role, Tool Call, Few Shot, or Constraints.',
+    description: 'A prompt builder section — System Role, User Role, Agent Role, Tool Call, Few Shot, or Constraints.',
     props: {
-      type: { type: 'enum', values: ['system-role', 'user-role', 'tool-call', 'few-shot', 'constraints'] },
+      type: { type: 'enum', values: ['system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints'] },
       content: { type: 'string' },
       order: { type: 'number' },
       state: { type: 'enum', values: ['idle', 'editing', 'saving', 'error'], default: 'idle' },

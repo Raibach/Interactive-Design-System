@@ -44,6 +44,8 @@ interface LeftColumnHeaderProps {
   // === ROW 2 PROPS ===
   promptTitle?: string;
   version?: string;
+  /** Live current_version of the session, so the version list can refresh. */
+  currentVersion?: number;
   tags?: string;
   promptId?: string;
   author?: string;
@@ -64,6 +66,7 @@ export default function LeftColumnHeader({
   navTabs,
   promptTitle,
   version,
+  currentVersion,
   tags,
   promptId,
   author,
@@ -344,7 +347,7 @@ export default function LeftColumnHeader({
             
             
           >
-            <VersionManager />
+            <VersionManager sessionId={promptId} currentVersion={currentVersion} />
           </div>
 
           {/* TAGS */}

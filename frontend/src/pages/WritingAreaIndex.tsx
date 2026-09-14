@@ -33,6 +33,7 @@ import { useAiOrchestrator, extractCommands } from "@/shared/ai-orchestrator";
 import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
+import { CORE_ROLE_LABELS } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
 import { aiOrchestrator } from "@/utils/aiOrchestrator";
 // The frontend half of the fail-loud boundary. Every failure the shell can observe gets
@@ -1032,6 +1033,20 @@ export default function Index({
     };
   }, []); // Empty dependency array - always listen
 
+  // VersionManager dispatches 'restore-output' when a version is restored. The
+  // event had no listener anywhere in the app, so restoring rolled the row back
+  // in Postgres while the middle column kept showing the newer output until a
+  // manual reload — the screen disagreed with the database.
+  useEffect(() => {
+    const handleRestoreOutput = (e: Event) => {
+      const content = (e as CustomEvent).detail?.content ?? '';
+      setCurrentPromptSession(prev => (prev ? { ...prev, compiledOutput: content } : prev));
+      console.log(`🔄 [RESTORE] Middle column set from restored version (${content.length} chars)`);
+    };
+    window.addEventListener('restore-output', handleRestoreOutput);
+    return () => window.removeEventListener('restore-output', handleRestoreOutput);
+  }, []);
+
   // Log last AI command for debugging (toast on blocked commands)
   useEffect(() => {
     if (!lastCommand) return;
@@ -1053,7 +1068,14 @@ export default function Index({
         const result = await promptService.savePromptTemplate(
           newTitle,
           sections.map((s: any) => ({ id: s.id || s.name, type: s.name || s.role, content: s.content || '' })),
-          { title: newTitle, description: `Prompt with ${sections.length} sections` }
+          {
+            title: newTitle,
+            // No description. This call used to stamp
+            // `Prompt with ${sections.length} sections` into the row, which reads
+            // like a summary of the package but describes only how many sections
+            // it happens to have. The backend keeps the model's description or
+            // nothing; it does not invent one.
+          }
         );
         if (result.session) {
           setCurrentPromptSession(result.session);
@@ -1202,10 +1224,11 @@ export default function Index({
   // `what` and `fix` are the check's OWN text, copied — never paraphrased. The
   // model reads the checker's words, not a summary of them.
   //
-  // Section types are the ones TYPE_LABELS in <prompt-input-section> knows
-  // (system / user / tool-call / agent), and the names are the ones
-  // handleRunRequested's CORE_ROLES recognises — so Run maps all four into
-  // core_roles instead of dropping them into custom_roles.
+  // Section types are the canonical ids from @/shared/promptSections
+  // (system-role / user-role / agent-role / tool-call), and the names are the
+  // labels CORE_ROLE_LABELS recognises — so Run maps shipped sections into
+  // core_roles instead of dropping them into custom_roles. Both lists are
+  // derived from one declaration; neither is retyped here.
   //
   // These live at component scope, NOT inside the listener useEffect where
   // handleRunRequested/handleSaveRequested are declared: the JSX below calls
@@ -2653,7 +2676,11 @@ export default function Index({
       // { core_roles: { "System Role": ... }, custom_roles: [...] }.
       // (Previously sent markdown, which json.loads() rejected, so the backend fell
       // back to a bare "Execute the prompt configuration." with no real prompt.)
-      const CORE_ROLES = ['System Role', 'User Role', 'Agent Role', 'System', 'User', 'Agent', 'Context', 'Constraints', 'Few Shot', 'Tool Call'];
+      // Which sections the model receives as core roles, and which fall through to
+      // custom_roles. Declared in @/shared/promptSections so a seat added to the
+      // left column cannot be silently dropped from the model's view by a list
+      // nobody remembered to update — the failure was one missing string away.
+      const CORE_ROLES = CORE_ROLE_LABELS;
       const coreRoles: Record<string, string> = {};
       const customRoles: { name: string; content: string }[] = [];
       for (const s of sections || []) {
@@ -3019,6 +3046,7 @@ export default function Index({
           onToggleFlip={toggleFlip}
           promptTitle={currentPromptSession?.title}
           version={currentPromptSession ? `Saved v${currentPromptSession.currentVersion || 1}` : undefined}
+          currentVersion={currentPromptSession?.currentVersion}
           tags={currentPromptSession?.metadata?.tags?.join(', ') || undefined}
           promptId={currentPromptSession?.id}
           author={currentPromptSession?.metadata?.author || undefined}

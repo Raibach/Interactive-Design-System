@@ -23,6 +23,10 @@ import './gripper-prompt-input';
 import './role-tile';
 import './status-bar-prompt-input';
 import './prompt-textarea';
+import {
+  SECTION_MENU_TYPES as SHARED_MENU_TYPES,
+  SECTION_TYPE_LABELS,
+} from '@/shared/promptSections';
 
 export interface MenuType { type: string; label: string }
 
@@ -32,25 +36,16 @@ export interface MenuType { type: string; label: string }
 // User Role · Agent Role · Tool Call · Custom Data — plus Remove and Add Section.
 // "Custom Data" is the addition the older three-item menu was missing
 // (the earlier node 40000934:22868 called this tile "Custom").
-export const SECTION_MENU_TYPES: MenuType[] = [
-  { type: 'user', label: 'User Role' },
-  { type: 'agent', label: 'Agent Role' },
-  { type: 'tool-call', label: 'Tool Call' },
-  { type: 'custom-data', label: 'Custom Data' },
-];
+export const SECTION_MENU_TYPES: MenuType[] = SHARED_MENU_TYPES;
 
-export const TYPE_LABELS: Record<string, string> = {
-  system: 'System Role',
-  user: 'User Role',
-  agent: 'Agent Role',
-  assistant: 'Agent Role',
-  'tool-call': 'Tool Call',
-  'custom-data': 'Custom Data',
-  'few-shot': 'Few Shot',
-  context: 'Context',
-  constraints: 'Constraints',
-  custom: 'Custom',
-};
+/**
+ * id (and every legacy spelling) → the label shown on the row.
+ *
+ * Declared in @/shared/promptSections alongside the ids, so a label can no
+ * longer drift from the seat it names. The old copy here had ten keys for eight
+ * ideas and no link to the schema enum.
+ */
+export const TYPE_LABELS: Record<string, string> = SECTION_TYPE_LABELS;
 
 // Pre-labeled Functions / Tools — from the wireframe's own Tool Call example
 // (node 40000747-217). Extend in Figma + here; never free-typed by the AI.

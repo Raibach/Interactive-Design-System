@@ -501,7 +501,9 @@ export class AgentCardElement extends LitElement {
         <div class="card-content">
           <div class="card-title">${this.title}</div>
           <div class="card-description">
-            <div class="desc-text"><span class="desc-label">##PROMPT##&nbsp;&nbsp;</span>${this.description}</div>
+            ${this.description
+              ? html`<div class="desc-text"><span class="desc-label">##PROMPT##&nbsp;&nbsp;</span>${this.description}</div>`
+              : ''}
             <div class="desc-line-wrap"><div class="desc-line"></div></div>
           </div>
         </div>

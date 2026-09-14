@@ -247,7 +247,26 @@ class A2UIConsoleCardGrid extends LitElement {
   static styles = css`
     :host {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(276px, 1fr));
+      /* FIVE columns, and never a sixth. The card is a fixed 276 × 372
+         (<agent-card-element>, Figma node 40000717:17091), so the track is fixed
+         too: auto-fill over a 276px track drops a column as the viewport
+         narrows. minmax(276px, 1fr) did the opposite on both axes — it opened
+         another column for every 276 + 16px and stretched the tracks it had. */
+      grid-template-columns: repeat(auto-fill, 276px);
+      /* Leftover width becomes margin, not another column. */
+      justify-content: center;
+      /* 5 × 276 + 4 × 16 = 1444 — the widest the designed five columns get.
+         Above it the grid stops growing and floats in the middle of its host. */
+      max-width: calc(5 * 276px + 4 * 16px);
+      /* width: 100% keeps the track count a function of the HOST's width, not of
+         the card count: under align-items: center an auto-width grid sizes to
+         max-content, which with auto-fill is one row of every card, overflowing.
+         align-self: center overrides the parent Column's stretch so the cap
+         actually centres — under stretch the item's free space is zero and
+         margin-inline: auto resolves to 0 on both sides. */
+      width: 100%;
+      align-self: center;
+      margin-inline: auto;
       gap: 16px;
       align-content: start;
     }
