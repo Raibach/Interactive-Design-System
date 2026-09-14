@@ -933,11 +933,12 @@ const token = (() => { try { return (read(PATHS.envFile).match(/^FIGMA_TOKEN=(.*
 let liveStatus = 'complete';
 const nodeIds = [...new Set(figmaMap.components.map((c) => c.figmaNodeId).filter(Boolean))];
 
-if (OFFLINE) {
+if (OFFLINE || !token) {
+  // Figma is an import tool, not a runtime dependency: the catalogue is assembled
+  // from the Lit sources, and the live Figma checks (node addresses, annotations)
+  // are optional. No token (production) or --offline skips them and reports
+  // INCOMPLETE — deliberately NOT a blocking finding.
   liveStatus = 'partial';
-} else if (!token) {
-  liveStatus = 'partial';
-  add({ check: 'check-could-not-run', stage: 'ingest', owner: 'pipeline', what: 'Cannot reach Figma — no token found. The live checks (node addresses, annotations) did not run.', fix: 'Set FIGMA_TOKEN in backend/.env. Until then this report is incomplete, not clean.' });
 } else {
   try {
     const res = await fetch(`https://api.figma.com/v1/files/${fileKey}/nodes?ids=${nodeIds.join(',')}`, { headers: { 'X-Figma-Token': token } });
@@ -1032,8 +1033,9 @@ if (OFFLINE) {
       }
     }
   } catch (e) {
+    // Figma is optional (see above): a failed fetch skips the live checks and
+    // reports INCOMPLETE, not blocking.
     liveStatus = 'partial';
-    add({ check: 'check-could-not-run', stage: 'ingest', owner: 'pipeline', what: `Cannot reach Figma (${e.message}). The live checks did not run.`, fix: 'Restore Figma access. Until then this report is incomplete, not clean.' });
   }
 }
 
@@ -1054,8 +1056,8 @@ if (!dirty.length) {
 // A census check is its own implementation, so it marks itself as run. A NON-live
 // check that did not run is a blocking finding: this script skipped a question it
 // claims to ask. Live checks that did not run are reported as INCOMPLETE —
-// --offline declares that on purpose, and a missing token already raises
-// check-could-not-run.
+// --offline and a missing (or unreachable) Figma token both declare that on
+// purpose: Figma is an import tool, not a runtime dependency.
 // The register's recorded counts, held against what this run actually derived. Last,
 // on purpose: every finding has to exist before the ledger can be compared to it.
 compareRegisterCounts();
