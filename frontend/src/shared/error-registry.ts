@@ -181,6 +181,18 @@ const LEDGER: Record<string, Omit<FailureReport, 'detail'>> = {
     arrow: '↳ the backend — full response body below.',
     retryable: true,
   },
+  'PROVIDER-OVERLOADED': {
+    code: 'PROVIDER-OVERLOADED',
+    headline: 'The AI service is temporarily at capacity.',
+    cause:
+      'DeepSeek answered "Service is too busy" — its capacity is saturated, not this app. '
+      + 'The request never reached the model.',
+    fix:
+      'Wait a moment and retry. This is on DeepSeek\'s side and clears on its own; nothing '
+      + 'here needs fixing.',
+    arrow: '⤴ DeepSeek — the upstream model provider.',
+    retryable: true,
+  },
   'ASSEMBLY-TIMEOUT': {
     code: 'ASSEMBLY-TIMEOUT',
     headline: 'The assembly request was abandoned before the backend answered.',
@@ -292,6 +304,11 @@ export function classifyFailure(error: unknown, ctx: FailureContext): FailureRep
     // §1 envelope always means the validation boundary refused something) rather than
     // silently downgrading a real VALIDATION_FAILED to "unclassified".
     code = KNOWN_CODES.includes(envelope.code) ? envelope.code : 'CATALOG-REJECT';
+  } else if (mentions(message, 'service is too busy', 'service_unavailable', 'service unavailable')) {
+    // The provider answered, and its answer is "we are at capacity". Not a fault in the
+    // shell or the model — an upstream outage, and the person deserves a "try again
+    // later" rather than a raw 503 payload.
+    code = 'PROVIDER-OVERLOADED';
   } else if (status === 404) {
     code = 'ROUTE-MISSING';
   } else if (status === 500) {
