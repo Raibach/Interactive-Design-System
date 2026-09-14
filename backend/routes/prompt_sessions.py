@@ -557,6 +557,11 @@ async def restore_prompt_version(
         raise
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        # The version layer raises ValueError both for "no such version" and for
+        # "not your session". With the 10-version cap, a listed version being gone
+        # is an ordinary condition, not a server fault — answer 404, not 500.
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         import traceback
 

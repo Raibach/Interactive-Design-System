@@ -285,49 +285,19 @@ def ai_assemble_surface(
         # inference. The A2UI contract remains intact: the surface still binds a
         # ConsoleCardGrid to /cards, but the card data comes straight from
         # PostgreSQL instead of waiting on an expensive reasoning model.
-        def _prompt_section_texts(session):
-            raw = session.get("left_column_content") or ""
-            try:
-                data = json.loads(raw)
-            except Exception:
-                return []
-            sections = data.get("sections", []) if isinstance(data, dict) else data
-            if not isinstance(sections, list):
-                return []
-            out = []
-            for s in sections:
-                if isinstance(s, dict):
-                    c = (s.get("content") or "").strip()
-                else:
-                    c = str(s or "").strip()
-                if c:
-                    out.append(c)
-            return out
-
-        _PLACEHOLDER_TITLES = {
-            "", "untitled", "untitled prompt", "untitled agent",
-            "new prompt (ai assembling...)", "blank canvas prompt", "new prompt agent",
-        }
-
+        # A card is a faithful read of its row. The title and description on the
+        # card are the title and description in PostgreSQL, byte for byte. This
+        # branch used to rewrite the title when the stored one looked like a
+        # placeholder, and to synthesise a description from the first 180 chars
+        # of section 1 when the row had none. Both were inventions attributed to
+        # the user's own package: a card could carry text that appeared nowhere in
+        # the database, and a row with no description could not be told apart from
+        # one whose description the assembler had made up. Removed — an empty
+        # description now renders as empty.
         cards = []
         for session in sessions:
             title = (session.get("title") or "").strip()
             description = (session.get("description") or "").strip()
-            texts = _prompt_section_texts(session)
-
-            # The card is an index of the whole prompt package. When the saved
-            # title is a placeholder, derive the card identity from the actual
-            # prompt content so each card reflects its own prompt.
-            if title.lower() in _PLACEHOLDER_TITLES:
-                first = next((t for t in texts), "")
-                if first:
-                    title = first[:48] + ("…" if len(first) > 48 else "")
-                elif description:
-                    title = description[:48] + ("…" if len(description) > 48 else "")
-                else:
-                    title = "Prompt"
-            if not description and texts:
-                description = texts[0][:180] + ("…" if len(texts[0]) > 180 else "")
 
             cards.append({
                 "id": str(session.get("id")),
@@ -1210,20 +1180,33 @@ Output ONLY valid JSON:
             except Exception as e:
                 print(f"[AI Save] LLM compilation warning: {e}")
 
-        # Use AI-compiled output ONLY to fill a gap. It must never replace output
-        # the user actually produced — a Run's output was being overwritten by
-        # the compiled prompt on every Save, so the middle column lost its
-        # content the moment the user saved.
+        # The client's middle_column is authoritative whenever it carries a
+        # compiled_output key at all: an explicit value — including an explicitly
+        # EMPTY one — is the user's decision and is stored exactly as sent.
+        #
+        # Clearing the output column and then saving used to be silently undone
+        # right here. An intentionally empty value was indistinguishable from
+        # "this caller said nothing about output", so the LLM's freshly compiled
+        # text was written over the Clear — and the response still reported the
+        # save as a success. The gap-fill below is kept for the case it was
+        # written for: a Save that carries no output at all must not blank out
+        # the result of a Run.
+        output_was_sent = "compiled_output" in (request.middle_column or {})
         if ai_compilation:
-            if not (compiled_output or "").strip() and ai_compilation.get("compiled_output"):
+            if (not output_was_sent and not (compiled_output or "").strip()
+                    and ai_compilation.get("compiled_output")):
                 compiled_output = ai_compilation["compiled_output"]
             # Update title if AI suggested a better one
             if ai_compilation.get("suggested_title") and request.title in [None, "", "Untitled", "New Prompt Agent"]:
                 request.title = ai_compilation["suggested_title"]
 
-        # Get AI-generated description or create default
+        # The row keeps the model's description, or none at all. There is
+        # deliberately no fallback string: the caller used to receive
+        # f"Prompt with {len(sections)} sections" whenever the model gave nothing,
+        # which reads as a description of the package but describes only how many
+        # sections it happens to contain. That literal is now written into no row.
         ai_description = ai_compilation.get("description", "") if ai_compilation else ""
-        session_description = ai_description or f"Prompt with {len(sections)} sections"
+        session_description = ai_description or ""
 
         # Build metadata including AI compilation info + column widths
         save_metadata = {
@@ -1234,6 +1217,18 @@ Output ONLY valid JSON:
         }
         if ai_description:
             save_metadata["ai_description"] = ai_description
+
+        # Read what the row holds BEFORE this save, so the version written below
+        # can be compared against it. Without this, a Save where nothing changed
+        # would manufacture a version recording no change.
+        previous_state = None
+        if request.session_id:
+            try:
+                previous_state = state.prompt_sessions_api.get_session(
+                    session_id=request.session_id, user_id=uid
+                )
+            except Exception as e:
+                print(f"[AI Save] Could not read previous state for versioning: {e}")
 
         if request.session_id:
             # UPDATE existing session
@@ -1269,6 +1264,60 @@ Output ONLY valid JSON:
             action = "created"
 
         session_id = session.get("id") if session else request.session_id
+
+        # ══════════════════════════════════════════════════════════════════════
+        # REAL VERSION HISTORY
+        # This endpoint used to update the row in place and write no version at
+        # all: nothing in it ever touched prompt_versions, so a Save left no
+        # predecessor to diff against and nothing to restore, and the console's
+        # version panel only ever had rows written by other code paths to show.
+        #
+        # One version is now written per Save whose stored content actually
+        # differs from what the row held, carrying BOTH columns. The output is
+        # included because no row in prompt_versions had ever held any.
+        # ══════════════════════════════════════════════════════════════════════
+        version_number = None
+        version_error = None
+        if session_id:
+            prev_output = (previous_state or {}).get("compiled_output")
+            # Compare the SECTIONS, not the serialized left_column_content. That
+            # JSON carries a `savedAt` timestamp which changes on every call, so
+            # comparing it verbatim reported "changed" for an identical save and
+            # wrote a version that recorded nothing.
+            try:
+                prev_sections = json.loads(
+                    (previous_state or {}).get("left_column_content") or "{}"
+                ).get("sections")
+            except (json.JSONDecodeError, AttributeError):
+                prev_sections = None
+            content_changed = (
+                previous_state is None
+                or prev_sections != sections
+                or (prev_output or "") != (compiled_output or "")
+            )
+            if content_changed:
+                reason = [f"{len(sections)} sections"]
+                if output_was_sent:
+                    reason.append(
+                        "output cleared" if not (compiled_output or "").strip()
+                        else "output saved"
+                    )
+                elif llm_used:
+                    reason.append("compiled prompt generated")
+                try:
+                    written = state.prompt_sessions_api.save_version(
+                        session_id=session_id,
+                        user_id=uid,
+                        left_column_content=left_column_content,
+                        compiled_output=compiled_output,
+                        change_description="Console save — " + ", ".join(reason),
+                        change_type="manual",
+                    )
+                    version_number = (written or {}).get("version_number")
+                    print(f"[AI Save] version {version_number} written for {session_id}")
+                except Exception as e:
+                    version_error = str(e)
+                    print(f"[AI Save] VERSION WRITE FAILED: {e}")
 
         # ══════════════════════════════════════════════════════════════════════
         # A2UI: EMBED THE AI-COMPILED SEMANTIC SUMMARY, NOT RAW JSON
@@ -1314,14 +1363,37 @@ Compiled Prompt:
 
         elapsed_ms = int((time.time() - start_time) * 1000)
 
-        # AI confirmation message - now includes compilation info
+        # AI confirmation message. It reports what actually happened to the row:
+        # a compilation that failed is named as a failure, an emptied output
+        # column says so, and a vector index that was NOT written says that too.
+        # The message used to read as an unqualified success in all three cases.
+        compilation_failed = bool(section_contents) and ai_compilation is None
         ai_message = f"Surface {action} successfully in {elapsed_ms}ms."
         if llm_used:
-            ai_message += f" AI compiled {len(sections)} sections."
+            ai_message += f" AI compiled {len(sections)} sections"
+            if output_was_sent and not (compiled_output or "").strip():
+                # The model did run (and was paid for) and its text was then
+                # thrown away, because the caller explicitly cleared the column.
+                # Saying only "AI compiled N sections" would read as if that
+                # compilation had been kept.
+                ai_message += ", then discarded it: the output column was explicitly cleared"
+            ai_message += "."
+        elif compilation_failed:
+            ai_message += " AI compilation FAILED — no compiled prompt was generated."
         else:
             ai_message += f" {len(sections)} sections saved."
+        if output_was_sent and not (compiled_output or "").strip() and not llm_used:
+            ai_message += " Output column cleared."
+        if version_number is not None:
+            ai_message += f" Version {version_number} saved."
+        elif version_error:
+            ai_message += f" VERSION NOT SAVED: {version_error}"
+        else:
+            ai_message += " No version written (content unchanged)."
         if milvus_saved:
             ai_message += " Vector embeddings updated."
+        else:
+            ai_message += " Vector index NOT updated (embedding model not loaded)."
 
         return {
             "status": "ok",
@@ -1332,7 +1404,10 @@ Compiled Prompt:
             "milvus_saved": milvus_saved,
             "llm_used": llm_used,
             "ai_compiled": ai_compilation is not None,
+            "compilation_failed": compilation_failed,
             "compiled_output_length": len(compiled_output),
+            "version_number": version_number,
+            "version_error": version_error,
             "ai_message": ai_message,
             # Include AI-generated data if available (for semantic search & display)
             "ai_description": ai_compilation.get("description") if ai_compilation else None,

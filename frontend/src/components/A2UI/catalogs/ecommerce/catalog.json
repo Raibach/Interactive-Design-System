@@ -499,6 +499,7 @@
               "enum": [
                 "system-role",
                 "user-role",
+                "agent-role",
                 "tool-call",
                 "few-shot",
                 "constraints"

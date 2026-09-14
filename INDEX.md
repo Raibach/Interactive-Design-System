@@ -58,6 +58,7 @@ If you are an AI session: read this before you touch anything. Three files here 
 | File | It is |
 |---|---|
 | `Lit-to-figma-trace-plan` | Where this is going: the catalog shape, then the monitoring |
+| `WHAT-THEY-BUILT-WHAT-WE-BUILT.md` | **The n8n comparison** — a living record of what their screen does versus ours, with the decisions we have made about which differences to keep (D1–D7), a feature-by-feature map, and the questions still open. Every claim about our build names a file and line, so it can be checked rather than believed. Started 2026-09-14; add to it as the comparison continues |
 
 ## The register
 
