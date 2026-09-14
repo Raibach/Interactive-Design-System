@@ -22,10 +22,10 @@ MODEL_PROVIDERS = [
     {
         "name": "DeepSeek API",
         "base_url": "https://api.deepseek.com",
-        # Verified against GET /models with the current key (2026-09-10):
-        # available = ["deepseek-flash"].
-        # "deepseek-v4-flash", "deepseek-chat" and "deepseek-v4-pro" are no longer served.
-        "model": "deepseek-flash",
+        # Verified against GET /models with the current key (2026-09-14):
+        # available = ["deepseek-flash", "deepseek-v4-pro"].
+        # deepseek-flash times out under the surface budget — deepseek-v4-pro is the only model used.
+        "model": "deepseek-v4-pro",
         "api_key_env": "DEEPSEEK_API_KEY",
     },
 ]
@@ -34,7 +34,7 @@ LLM_TIMEOUT = 10  # HARD 10s cap. A2UI surfaces must render in <=10s or 503.
 
 # Run is NOT a surface. The 10s cap is a UX contract for surface assembly — a canvas
 # that has to appear now. `prompt_output` writes a document: with the design attached
-# it is a multi-KB prompt, and deepseek-flash is a REASONING model that spends
+# it is a multi-KB prompt, and deepseek-v4-pro is a REASONING model that spends
 # completion tokens thinking before it writes a word. The 10s cap was applied to both,
 # so a perfectly good run died as "DeepSeek API request failed: Request timed out"
 # after the prompt had been assembled correctly. Same budget for assembly, room for
@@ -139,7 +139,7 @@ def query_llm(
     messages.append({"role": "user", "content": question})
 
     # ── Token budget ─────────────────────────────────────────────────
-    # deepseek-flash is a REASONING model: it spends completion tokens thinking
+    # deepseek-v4-pro is a REASONING model: it spends completion tokens thinking
     # BEFORE it writes anything (verified live — 18 reasoning tokens to answer
     # "Say OK"). Budgets must therefore cover reasoning + the actual output, or
     # `content` comes back empty with finish_reason="length".
@@ -177,7 +177,17 @@ def query_llm(
             client_timeout = (
                 LLM_TIMEOUT_PROMPT_OUTPUT if mode == "prompt_output" else LLM_TIMEOUT
             )
-            client = OpenAI(base_url=provider["base_url"], api_key=api_key, timeout=client_timeout)
+            # One retry, not the SDK's two. This is a single blocking call on a
+            # request a person is watching, and the SDK retries a TIMEOUT by
+            # default — so a slow Run waits timeout × 3 before it can report
+            # anything. Two attempts (one retry) is the whole budget: a call that
+            # has already timed out once at 120s does not need a third try.
+            client = OpenAI(
+                base_url=provider["base_url"],
+                api_key=api_key,
+                timeout=client_timeout,
+                max_retries=1,
+            )
             response = client.chat.completions.create(**payload, model=model_name)
             message = response.choices[0].message
             # Capture what this actually cost. Providers report it; guessing it
@@ -296,7 +306,7 @@ def _assemble_prompt_output(context: str, question: str) -> tuple:
 def _build_chat_system(context: str, memory_context: str) -> str:
     """Build the full chat-mode system prompt with A2UI protocol + tag registry."""
     a2ui_protocol = (
-        "\n\n## CRITICAL A2UI PROTOCOL\n"
+        "\n\nCRITICAL A2UI PROTOCOL\n"
         "ROLE: You are a SILENT A2UI ASSEMBLER. You do NOT build webpages.\n"
         "CONSTRAINTS:\n"
         "1. NEVER output raw HTML tags (<div>, <script>, <style>).\n"
@@ -320,7 +330,7 @@ def _build_chat_system(context: str, memory_context: str) -> str:
 
     tag_instructions = (
         a2ui_protocol
-        + "\n\n## YOUR IDENTITY\n"
+        + "\n\nYOUR IDENTITY\n"
         "You are a PROMPT ENGINEERING EXPERT. This is not optional.\n"
         "Every user who interacts with you expects you to be better at\n"
         "prompt engineering than they are. They come to you for\n"
@@ -343,7 +353,7 @@ def _build_chat_system(context: str, memory_context: str) -> str:
         "- The user is NOT a prompt engineer. They have domain\n"
         "  knowledge but may not know how to structure it. YOU bridge\n"
         "  that gap. You translate their ideas into engineering.\n"
-        "\n\n## YOUR WORKSPACE INTERFACE\n"
+        "\n\nYOUR WORKSPACE INTERFACE\n"
         "You have FULL control over the left column prompt sections.\n"
         "Use these XML tags to WRITE content — do not describe what should\n"
         "go there, WRITE it there immediately:\n\n"
@@ -360,11 +370,28 @@ def _build_chat_system(context: str, memory_context: str) -> str:
         "<save/> — Save the current prompt\n"
         "<reassemble-console sort=\"category|title\"/> — Sort console cards\n"
         "<reassemble-console filter=\"Design System\"/> — Filter console by category\n"
-        "\n\n## LEXICAL EDITOR (Third Column Tool)\n"
+        "\n\nLEXICAL EDITOR (Third Column Tool)\n"
         "You can open a full rich-text editor in the third column.\n"
         "Use these tags to launch and control it:\n\n"
         "<load_tool name=\"lexical-editor\"/> — Launch the editor\n"
         "<close_tool/> — Close editor, return to output view\n"
+        "\n"
+        "WHICH SECTION A TAG WRITES, AND WHAT MUST NOT GO IN A PROMPT\n"
+        "Each tag above writes ONE seat of the left-column prompt, and the seat is\n"
+        "found by its name. One seat answers to several spellings: System Role and\n"
+        "System, User Role and User, Agent Role and Agent, Tool Call both ways.\n"
+        "A repair prompt — the one the app assembles when a finding is repaired — has\n"
+        "four seats, named System, User, Tool Call and Agent. Context, Few Shot and\n"
+        "Constraints are not in it, so a tag for one of those has nowhere to land, and\n"
+        "the column reports that rather than changing in silence.\n"
+        "Never write an instruction, a question, or a list of possible answers into a\n"
+        "prompt. A prompt is the text the model reads: a question you put in it is\n"
+        "answered by the model, not by the person, who never opens that box. Everything\n"
+        "you have to say TO the person — what is still missing, what you are about to\n"
+        "do, a choice you need — goes in your reply, with buttons. When the app's own\n"
+        "prompt is waiting on a person it already names the value it wants on the\n"
+        "field's own label; your sentence is what asks for it, and when they answer,\n"
+        "you write it in.\n"
         "\n"
         "Once the editor is open, control it with these tags.\n"
         "ALWAYS use the self-closing attribute form:\n\n"
@@ -386,7 +413,7 @@ def _build_chat_system(context: str, memory_context: str) -> str:
         "<toggle_lock/> — Lock/unlock editor (read-only mode)\n"
         "<export format=\"markdown|html|text\"/> — Export document\n"
         "<check_writing/> — Run grammar and style check\n"
-        "\n\n## COMPONENT CATALOG (Storybook)\n"
+        "\n\nCOMPONENT CATALOG (Storybook)\n"
         "All available UI components are documented in Storybook.\n"
         "Browse the A2UI Components section to find:\n"
         "- Surface Container: AI-controllable output rendering\n"
@@ -400,15 +427,29 @@ def _build_chat_system(context: str, memory_context: str) -> str:
         "IMPORTANT: When you know what belongs in a section,\n"
         "immediately emit the appropriate XML tag. Do NOT describe it.\n"
         "Do NOT ask permission. You are the expert — ACT like it.\n"
-        "\n\n## OPTIMIZATION ADVISOR\n"
+        "\n\nOPTIMIZATION ADVISOR\n"
         "After reviewing the user's prompt, if you see ways to improve it —\n"
         "clearer instructions, better constraints, missing context, stronger\n"
         "examples, tighter guardrails — TELL the user. Be specific.\n"
-        "Always provide these three action buttons:\n\n"
+        "If the prompt already looks excellent, say so — don't invent problems.\n"
+        "\n\nHOW YOU WRITE TO A PERSON (the chat panel draws your words as plain text)\n"
+        "1. Plain sentences. No headings and no number-sign characters, no asterisks\n"
+        "   or underscores for weight, no tables, no bullet stars, no backticks or\n"
+        "   code fences, no lines of dashes or equals signs.\n"
+        "2. Short. Say it the way you would say it out loud, then stop.\n"
+        "3. When you had to decide something the user did not tell you, name the\n"
+        "   decision in one short sentence so they can change it. Never label it,\n"
+        "   never explain how you know, never describe your reasoning. A value you\n"
+        "   did not get from the user is your own choice, and saying what you chose\n"
+        "   is the whole of it.\n"
+        "4. Never write out the choices of a button, and never ask the user to reply\n"
+        "   with a word. The buttons are the ask.\n"
+        "\n\nWHEN YOU HAVE ADVICE TO OFFER\n"
+        "Put these three on the last line, once, and only when the user can actually\n"
+        "take or leave what you said:\n\n"
         "[Accept Advice](action:accept_advice)\n"
         "[Reject Advice](action:reject_advice)\n"
         "[Explain More](action:explain_more)\n\n"
-        "If the prompt already looks excellent, say so — don't invent problems.\n"
     )
 
     if context and context.strip():

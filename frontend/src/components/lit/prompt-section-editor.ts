@@ -14,7 +14,20 @@
  *     (canonical events consumed by WritingAreaIndex → /api/ai/save-surface
  *      → PostgreSQL → Zilliz — unchanged contract)
  *   - Window events consumed: set-left-column-text · force-set-section ·
- *     add-prompt-role · remove-prompt-role · a2ui:usage        (unchanged)
+ *     fill-field · add-prompt-role · remove-prompt-role · a2ui:usage
+ *
+ * A WRITE THAT LANDS NOWHERE IS REPORTED. Both text events name a seat, and both used
+ * to compare that name to each section's name EXACTLY: a write addressed to the "User
+ * Role" fell through against a repair prompt, whose seats are named "System" / "User" /
+ * "Tool Call" / "Agent", and nothing was said about it — the column simply did not
+ * change. The names are now resolved through @/shared/promptSections (label, id, and the
+ * short legacy names are one seat), and a request the column cannot honour dispatches
+ * `section-write-failed` with the seats it DOES have, so the chat can say so.
+ *
+ * `fill-field` is the same write, one level finer: a value that goes under ONE field's
+ * label inside a named section — what a button in the chat presses. The field's text is
+ * read and rewritten by @/shared/repairMaterial (`writeFieldValue`), the same module that
+ * wrote it, so a value filed by hand and a value filed by a button are the same text.
  *
  * The format rail's TITLE is the last call — whatever `mode` the most recent LLM
  * call reported through `a2ui:usage`. It is read from that event, never fixed
@@ -31,7 +44,8 @@ import { LitElement, html, css } from 'lit';
 import './prompt-input/prompt-container';
 import './prompt-input/prompt-input-section';
 import { TYPE_LABELS, SECTION_MENU_TYPES } from './prompt-input/prompt-input-section';
-import { normalizeSectionType } from '@/shared/promptSections';
+import { normalizeSectionType, resolveSectionName } from '@/shared/promptSections';
+import { writeFieldValue } from '@/shared/repairMaterial';
 
 export interface PromptSection {
   name: string;
@@ -215,6 +229,7 @@ class PromptSectionEditor extends LitElement {
     // Window event surface — unchanged contract (AI can drive the editor)
     window.addEventListener('set-left-column-text', this._onSetText as EventListener);
     window.addEventListener('force-set-section', this._onForceSet as EventListener);
+    window.addEventListener('fill-field', this._onFillField as EventListener);
     window.addEventListener('add-prompt-role', this._onAddRole as EventListener);
     window.addEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
     // The rail title is where we are now — the last call.
@@ -224,6 +239,7 @@ class PromptSectionEditor extends LitElement {
   disconnectedCallback() {
     window.removeEventListener('set-left-column-text', this._onSetText as EventListener);
     window.removeEventListener('force-set-section', this._onForceSet as EventListener);
+    window.removeEventListener('fill-field', this._onFillField as EventListener);
     window.removeEventListener('add-prompt-role', this._onAddRole as EventListener);
     window.removeEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
     window.removeEventListener('a2ui:usage', this._onUsage as EventListener);
@@ -293,26 +309,76 @@ class PromptSectionEditor extends LitElement {
 
   // ── AI / external event surface (unchanged) ────────────────────────────────
 
+  /**
+   * The section a name refers to, or -1. The three spellings of one seat are declared
+   * in @/shared/promptSections (`resolveSectionName`) rather than compared here, where
+   * the comparison used to be an exact string match and a repair prompt's shorter names
+   * silently missed.
+   */
+  private _indexOfNamed(section: string): number {
+    return resolveSectionName(section, this._sections.map((s) => s.name));
+  }
+
+  /**
+   * A write the column could not place. Said out loud, with the seats that DO exist:
+   * a request that lands nowhere is a request the person watched do nothing, and the
+   * silence is what made this surface feel out of reach. The chat listens and reports.
+   */
+  private _writeFailed(target: string, why: string) {
+    this.dispatchEvent(new CustomEvent('section-write-failed', {
+      bubbles: true,
+      composed: true,
+      detail: { target, why, names: this._sections.map((s) => s.name) },
+    }));
+  }
+
   private _onSetText = (e: Event) => {
     const { content, target } = (e as CustomEvent).detail || {};
     if (!target || content === undefined) return;
-    const idx = this._sections.findIndex(s => s.name.toLowerCase() === String(target).toLowerCase());
-    if (idx >= 0) {
-      this._sections[idx] = { ...this._sections[idx], content };
-      this._emitUpdate(idx);
-      this.requestUpdate();
+    const idx = this._indexOfNamed(String(target));
+    if (idx < 0) {
+      this._writeFailed(String(target), 'no section by that name');
+      return;
     }
+    this._sections[idx] = { ...this._sections[idx], content };
+    this._emitUpdate(idx);
+    this.requestUpdate();
   };
 
   private _onForceSet = (e: Event) => {
     const { sectionName, content } = (e as CustomEvent).detail || {};
     if (!sectionName || content === undefined) return;
-    const idx = this._sections.findIndex(s => s.name === sectionName);
-    if (idx >= 0) {
-      this._sections[idx] = { ...this._sections[idx], content };
-      this._emitUpdate(idx);
-      this.requestUpdate();
+    const idx = this._indexOfNamed(String(sectionName));
+    if (idx < 0) {
+      this._writeFailed(String(sectionName), 'no section by that name');
+      return;
     }
+    this._sections[idx] = { ...this._sections[idx], content };
+    this._emitUpdate(idx);
+    this.requestUpdate();
+  };
+
+  /**
+   * One value, under one field's label, in one named section — the write a chat button
+   * makes. `writeFieldValue` returns null when the text holds no such field, and that is
+   * reported rather than swallowed: a button that says "written" must not be able to lie.
+   */
+  private _onFillField = (e: Event) => {
+    const { section, field, value } = (e as CustomEvent).detail || {};
+    if (!section || !field || value === undefined) return;
+    const idx = this._indexOfNamed(String(section));
+    if (idx < 0) {
+      this._writeFailed(String(section), 'no section by that name');
+      return;
+    }
+    const next = writeFieldValue(this._sections[idx].content || '', String(field), String(value));
+    if (next === null) {
+      this._writeFailed(String(section), `no field named ${field}`);
+      return;
+    }
+    this._sections[idx] = { ...this._sections[idx], content: next };
+    this._emitUpdate(idx);
+    this.requestUpdate();
   };
 
   private _onAddRole = (e: Event) => {

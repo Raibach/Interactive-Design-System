@@ -1,5 +1,5 @@
 import { API_BASE } from "@/shared/apiHelper";
-import { fetchCatalogHealth, badgeState, badgeCount, type CatalogHealth } from "@/shared/catalogHealth";
+import { fetchCatalogHealth, badgeState, badgeCount, sortByUrgency, type CatalogHealth } from "@/shared/catalogHealth";
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import * as Sentry from "@sentry/react";
 import { motion, AnimatePresence } from 'motion/react';
@@ -17,6 +17,10 @@ import { TraceFeed } from './TraceFeed';
 import { neuralNetworkService } from '@/services/neuralNetworkService';
 import { conversationStorage, type Conversation } from '@/services/conversationStorage';
 import { eventBus } from '@/shared/event-bus';
+import { asPlainText } from '@/shared/plainText';
+import { catalogBrief } from '@/shared/catalogBrief';
+import { isAtBottom, isFollowingNewest, appendTarget, messageTop } from '@/shared/chatScroll';
+import { parseFillFieldAction } from '@/shared/actionLink';
 import { getAuthState } from '@/services/authService';
 
 // Sample approval queue items
@@ -106,6 +110,11 @@ interface InteractiveChatInterfaceProps {
     nodeId?: string | null;
     file?: string | null;
     what?: string;
+    /** Severity and owner, as the checker resolved them — carried so the closed
+     *  header can say the shape of the problem (N blocking, N pipeline). */
+    level?: string;
+    owner?: string;
+    stage?: string;
   }> | null;
   /**
    * Components ON SCREEN RIGHT NOW that carry an open annotation finding.
@@ -116,6 +125,16 @@ interface InteractiveChatInterfaceProps {
    * person who answers for the catalogue sees it on arrival, not in an audit later.
    */
   unannotatedInUse?: string[];
+  /**
+   * Where each finding's repair stands, by finding id — 'repair' from the click until
+   * a fresh check stops deriving it, 'done' after that. Absent means nothing has been
+   * done about it, and that is the only state that offers the Repair button: a finding
+   * already queued or already settled is not something to queue twice.
+   *
+   * The stages are the host's, not this component's. It cannot know whether a finding
+   * is fixed — only the check that raised it can (shared/catalogHealth.ts).
+   */
+  repairStages?: Record<string, 'repair' | 'done'>;
   /** Fired when a finding's call to action is clicked. The host opens a composer. */
   onRepairFinding?: (findingId: string) => void;
   /**
@@ -129,7 +148,7 @@ interface InteractiveChatInterfaceProps {
   consoleCards?: Array<Record<string, any>> | null;
 }
 
-export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent, columnCollapsed, onColumnExpand, onColumnCollapse, catalogFindings, unannotatedInUse, onRepairFinding, consoleCards }: InteractiveChatInterfaceProps = {}) {
+export function InteractiveChatInterface({ onConversationChange, sessionId, compiledOutput, isRunning, getLeftColumnSections, leftColumnContent, columnCollapsed, onColumnExpand, onColumnCollapse, catalogFindings, unannotatedInUse, repairStages, onRepairFinding, consoleCards }: InteractiveChatInterfaceProps = {}) {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [inputHeight, setInputHeight] = useState(180);
   const [isDragging, setIsDragging] = useState(false);
@@ -142,7 +161,16 @@ export function InteractiveChatInterface({ onConversationChange, sessionId, comp
   const [chatInput, setChatInput] = useState('');
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  /** The view is touching the bottom, so growth keeps it pinned there. */
   const isAtBottomRef = useRef(true);
+  /**
+   * The newest message is still in front of the person, so an arriving message
+   * may move the view. Distinct from the flag above, and that distinction is the
+   * bug fix: the app's own read-from-the-start scroll leaves the view above the
+   * bottom, and reading that as "the person scrolled away" is what stopped every
+   * later reply from ever being scrolled into view (shared/chatScroll.ts).
+   */
+  const followingNewestRef = useRef(true);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -161,12 +189,30 @@ export function InteractiveChatInterface({ onConversationChange, sessionId, comp
   const currentConversationIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
 
+  /** The newest message's offset from the top of the scrollable content. */
+  const newestMessageTop = (container: HTMLDivElement): number | null => {
+    const idx = chatMessages.length - 1;
+    if (idx < 0) return null;
+    const el = container.querySelector<HTMLElement>(`[data-msg-idx="${idx}"]`);
+    return el ? messageTop(container, el) : null;
+  };
+
   const handleScroll = () => {
     const container = chatContainerRef.current;
     if (!container) return;
-    const threshold = 30;
-    const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) <= threshold;
-    isAtBottomRef.current = isAtBottom;
+    // Two questions that only looked like one. "At the bottom" decides whether
+    // GROWTH keeps the view pinned (a panel resizing, a surface expanding).
+    // "Following the newest message" decides whether an ARRIVING message may move
+    // it — and a reply too tall for the viewport is never at the bottom while it
+    // is being read from its first line. Only the person leaving the newest
+    // message behind turns following off.
+    // At the bottom the second question answers itself — the newest message's
+    // start is always above the fold when the view is at the end of the thread —
+    // so the element is measured only when that is actually in doubt. A scroll
+    // event fires per frame; one forced layout read per frame is not free.
+    isAtBottomRef.current = isAtBottom(container);
+    followingNewestRef.current = isAtBottomRef.current
+      || isFollowingNewest(container, newestMessageTop(container));
   };
 
   // ── Auto-analyze output when Run completes ────────────────────────
@@ -217,6 +263,9 @@ ${compiledOutput.slice(0, 3000)}`;
     if (!chatContainerRef.current) return;
     chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'auto' });
     isAtBottomRef.current = true;
+    // Asking for the latest is also the person re-engaging with the conversation,
+    // so what arrives next is shown rather than held.
+    followingNewestRef.current = true;
   };
 
   // ResizeObserver: auto-scroll during streaming, freezes on manual scroll-up
@@ -239,6 +288,40 @@ ${compiledOutput.slice(0, 3000)}`;
   const [currentGroundingMetrics, setCurrentGroundingMetrics] = useState<GroundingMetrics>(groundingMetricsSample);
   const metricBars = useMemo<MetricBar[]>(() => buildMetricBars(currentGroundingMetrics), [currentGroundingMetrics]);
   const [traceHistoryCollapsed, setTraceHistoryCollapsed] = useState(true);
+
+  // ── Catalog findings: open the list, or keep it out of the way ────────────
+  // The catalog is red with 40-plus findings, and the list sits ABOVE the
+  // conversation in the same scroll, so leaving it open makes the report taller
+  // than the column and pushes her replies out of the viewport. Collapsed is the
+  // default; the header carries the counts, so the shape of the problem is still
+  // readable with the list closed. It is a state in here, not a stored
+  // preference: nothing about it is worth remembering between sessions, and a
+  // preference that outlives its reason is one more thing that lies.
+  const [findingsCollapsed, setFindingsCollapsed] = useState(true);
+  const findingCounts = useMemo(() => {
+    const count = (pred: (f: NonNullable<typeof catalogFindings>[number]) => boolean) =>
+      (catalogFindings || []).filter(pred).length;
+    return {
+      blocking: count((f) => f.level === 'blocking'),
+      pipeline: count((f) => f.owner === 'pipeline'),
+      designer: count((f) => f.owner === 'designer'),
+    };
+  }, [catalogFindings]);
+
+  // ── The order the report is read in: most urgent first ────────────────────
+  // The check reports in the order its checks ran, which is a fact about the
+  // checker. On 2026-09-14 that put the single blocking finding at item 43 of 43,
+  // below forty-two advisories, in a list that is closed by default — so the one
+  // item that blocks the pipeline was the last row of a report nobody opens, and
+  // nothing in the markup said which row it was. Order is urgency (the same
+  // comparator her brief sorts with, shared/catalogHealth.ts), and the standing
+  // header names the blocking finding, so "which one is blocking" is answerable
+  // with the list closed.
+  const orderedFindings = useMemo(() => sortByUrgency(catalogFindings || []), [catalogFindings]);
+  const mostUrgent = useMemo(
+    () => orderedFindings.find((f) => f.level === 'blocking') || null,
+    [orderedFindings],
+  );
 
   // ── ROLE-BASED ACCESS: fetch user's departmental role + capability set ──
   // Drives which tabs are visible in <chat-navigation-bar> and which
@@ -368,6 +451,26 @@ ${compiledOutput.slice(0, 3000)}`;
     };
     window.addEventListener('a2ui:system-message', handler);
     return () => window.removeEventListener('a2ui:system-message', handler);
+  }, []);
+
+  // ── A write into the prompt that landed nowhere ───────────────────────────
+  // `<prompt-section-editor>` names a seat on every write, and a name it cannot
+  // resolve used to be dropped in silence: the column did not change and nothing said
+  // why, which reads as a surface that ignores you. It dispatches `section-write-failed`
+  // instead, and this is where that becomes a sentence — with the seats the column DOES
+  // have, so the next attempt can name one that exists.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { target, why, names } = (e as CustomEvent).detail || {};
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content:
+          `Nothing written — no section "${target || 'that section'}" (${why}). ` +
+          `Sections here: ${(names || []).join(', ') || 'none'}.`,
+      }]);
+    };
+    window.addEventListener('section-write-failed', handler);
+    return () => window.removeEventListener('section-write-failed', handler);
   }, []);
 
   // ── Catalog check — the console reports the catalog's condition on arrival ──
@@ -830,6 +933,23 @@ ${compiledOutput.slice(0, 3000)}`;
       });
     }
 
+    // The catalog check's findings — the list drawn in her own seat, which her
+    // prompt did not carry.
+    //
+    // Measured live: asked to name the blocking finding, she named
+    // `provenance-missing:prompt-container`, which had been fixed earlier the same
+    // day and is no longer derived, in a sentence that read like a fact. She was
+    // not lying about the report; she had never been given it. The list is on
+    // screen next to her words, so a person reasonably expects her to know it.
+    // shared/catalogBrief.ts builds the block and carries the three things the list
+    // itself cannot say (fixed means REMOVED, app marks are not the check's
+    // verdict, and no report means no list).
+    const brief = catalogBrief(catalogHealth, catalogFindings);
+    if (brief.length) {
+      parts.push('');
+      parts.push(...brief);
+    }
+
     return parts.join('\n');
   };
 
@@ -862,40 +982,49 @@ ${compiledOutput.slice(0, 3000)}`;
     // Build full workspace context so the model knows all columns
     const workspaceContext = buildWorkspaceContext();
 
-    // Hardcoded baseline identity — MUST be at the very top of the payload
+    // Hardcoded baseline identity — MUST be at the very top of the payload.
+    //
+    // Written as plain lines on purpose, and that is not cosmetic: this string was
+    // written in markdown (# headings, a pipe table, **weight**), the model answered
+    // in markdown, and the chat panel draws text (whitespace-pre-wrap, no parser) —
+    // so people read the markers. The shape of the instructions is the shape of the
+    // answer. The same was true of the button block below: asking for a "fallback
+    // line" got one printed under a row of buttons that already said it.
     const systemInstructions = `You are Grace, the Agentic Flow Architect. You help users build multi-step agentic prompt pipelines. Each prompt entry field in the workspace represents a STEP in an agentic flow — they are not arbitrary text boxes. Your job is to map the user's ideas onto the correct steps in the flow.
 
-# AGENTIC FLOW STEPS (choose from this list — do NOT invent new ones)
+HOW YOU WRITE TO A PERSON — they read every character you type:
+1. Plain sentences. No headings and no number-sign characters, no asterisks or underscores for weight, no tables, no bullet stars, no backticks or code fences, no lines of dashes or equals signs.
+2. Short. Say it the way you would say it out loud, then stop.
+3. One sentence on which step you chose and where the content went.
+4. When you had to decide something the user did not tell you, name the decision in one short sentence so they can change it: "I set the lock to 24 hours — tell me if that is wrong." Never label it, never explain how you know, never describe your reasoning. A value you did not get from the user is your own choice, and saying what you chose is the whole of it.
+5. Never write out the choices of a button, and never ask the user to reply with a word. The buttons are the ask.
 
-| Step | Section Tag | Purpose |
-|------|-------------|---------|
-| 1. System Role | <update_agent> | Defines the AI's identity, expertise, and behavioral rules |
-| 2. User Role | <update_user> | The user's request, task, or query template |
-| 3. Tool Call | <update_tool> | Functions, APIs, or tools the agent can invoke |
-| 4. Few Shot | <update_few_shot> | Examples that demonstrate desired input→output patterns |
-| 5. Context | <update_context> | Background information, constraints, or domain knowledge |
-| 6. Constraints | <update_constraints> | Hard rules the agent must never violate |
+AGENTIC FLOW STEPS — choose from these six; do not invent new ones:
+1. System Role — <update_agent> — the AI's identity, expertise and behavioural rules.
+2. User Role — <update_user> — the user's request, task or query template.
+3. Tool Call — <update_tool> — functions, APIs or tools the agent can invoke.
+4. Few Shot — <update_few_shot> — examples of the input and the output wanted.
+5. Context — <update_context> — background, domain knowledge, reference material.
+6. Constraints — <update_constraints> — hard rules the agent must never violate.
 
-# WORKSPACE USER FLOW — STRICT RULES
-
-1. ANALYZE the user's intent. MAP it to ONE of the 6 steps above.
+HOW YOU WORK:
+1. ANALYZE the user's intent. MAP it to ONE of the six steps above.
 2. STATE your choice in ONE sentence. Example: "This belongs in Constraints — it's a hard rule the agent must follow."
 3. EMIT the tag IMMEDIATELY — same message, right after your sentence. Write the content INSIDE the tag.
    Correct: "I'll put this in Constraints. <update_constraints>Never suggest removing error boundaries.</update_constraints>"
    Wrong: "I'll put this in Constraints. The content would say: never suggest removing error boundaries."
-4. SUGGEST which step to fill next. Stay within the 6 steps above.
+4. SUGGEST which step to fill next. Stay within the six steps above.
 5. USER has veto — if they say move it to a different step, do it.
 
-# INTERACTION RULES — CONFIRMATION BUTTONS
+CONFIRMATION BUTTONS
 
-When you need user confirmation on an action, render clickable buttons in the chat using this exact format:
+When you need a decision from the user, put the buttons on their own line, in this exact form:
 
 [Confirm](action:confirm) [Refuse](action:refuse) [Cancel](action:cancel)
 
 Supported actions: confirm, refuse, cancel, proceed, yes, no, log, flag.
 
-Always include a fallback line immediately after the buttons:
-"Reply with one of: confirm, refuse, cancel."
+That line is the whole ask. Do not print the options underneath it, and do not ask the user to reply with a word — "Reply with one of: confirm, refuse, cancel." is the line that must never be written. Use the buttons when the choice is real; do not attach them to a message that is not asking for anything.
 
 Never proceed with a destructive or irreversible action (save, clear, delete) without explicit user confirmation. If the user has not confirmed, ask again.
 
@@ -909,6 +1038,10 @@ WRITE TO STEPS:
 <update_context>text</update_context>
 <update_constraints>text</update_constraints>
 
+THE COLUMN THOSE TAGS WRITE INTO
+Each of those six tags writes ONE seat of the prompt in the left column. A seat is found by its name, and one seat answers to several spellings: System Role and System are the same seat, User Role and User, Agent Role and Agent, Tool Call both ways. A repair prompt — the one the app builds when a finding is repaired — has four seats named System, User, Tool Call and Agent. Context, Few Shot and Constraints are not in it, so a tag for one of those has nowhere to land; the column reports that instead of changing silently.
+Never write an instruction, a question, or a list of possible answers into a prompt. A prompt is the text the model reads: a question you put in it is answered by the model, not by the person, who never opens that box. Everything you want to say TO the person — what is still missing, what you are about to do, a choice you need — goes in your reply, with buttons. When the app's prompt is waiting on a person it already names the value it wants on the field's own label; your sentence is what asks for it, and when they answer, you write it.
+
 MEMORY COMMANDS:
 <save/>
 <get_versions/>
@@ -917,12 +1050,12 @@ MEMORY COMMANDS:
 DESTRUCTIVE:
 <clear_all/> — ONLY if user says "clear", "reset", "wipe", or "nuke". MUST ask for confirmation with buttons first.
 
-## CURRENT WORKSPACE
+CURRENT WORKSPACE
 ${workspaceContext}
 </system_instructions>
 
 <execution_context>
-You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags silently — they are stripped from the visible chat. Never ask the user to copy-paste or manually click UI. Stay within the 6 agentic flow steps — do not invent new section types unless the user explicitly asks for a custom step.
+You are in the chat panel. Follow the rules above. Use XML tags silently — they are stripped from the visible chat. Never ask the user to copy-paste or manually click UI. Stay within the six agentic flow steps — do not invent new section types unless the user explicitly asks for a custom step.
 </execution_context>`;
 
     try {
@@ -1143,9 +1276,15 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
   };
 
   // ── Render message content with action buttons ────────────────────
-  const renderMessageContent = (content: string) => {
+  const renderMessageContent = (content: string, role: ChatMessage['role']) => {
+    // Grace's words are made plain here, at the edge where a person reads them
+    // (shared/plainText.ts says why here and nowhere else). The user's own words are
+    // left exactly as typed — those are theirs. The XML control tags are already
+    // extracted by the time this runs, so what is stripped is only the prose, and
+    // the prompt content she wrote into a section is never touched.
+    const shown = role === 'assistant' ? asPlainText(content) : content;
     // Split on action: patterns like [Confirm](action:confirm)
-    const parts = content.split(/(\[.*?\]\(action:[^)]+\))/g);
+    const parts = shown.split(/(\[.*?\]\(action:[^)]+\))/g);
     return parts.map((part, i) => {
       const match = part.match(/^\[(.*?)\]\(action:([^)]+)\)$/);
       if (match) {
@@ -1202,6 +1341,22 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                   detail: { roleName }
                 }));
                 setChatMessages(prev => [...prev, { role: 'assistant', content: `Removed "${roleName}". You can run now.` }]);
+                return;
+              }
+              // An answer to a repair field — the button under a repair ask. The value is
+              // carried in the action itself (`fill-field`), so this is one dispatch and
+              // one confirmation: nothing is asked of the model, and nothing is guessed.
+              // The editor reports back if the write could not be placed; the
+              // `section-write-failed` listener below is what says so.
+              const fill = parseFillFieldAction(action);
+              if (fill) {
+                window.dispatchEvent(new CustomEvent('fill-field', {
+                  detail: { section: fill.section, field: fill.field, value: fill.value },
+                }));
+                setChatMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: `Written — ${fill.field} in the ${fill.section} section now reads: ${fill.value}`,
+                }]);
                 return;
               }
               // Advice buttons
@@ -1394,22 +1549,28 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
   };
 
   // Scroll whenever chatMessages change (new message added).
-  // AI replies scroll so the reply begins at the TOP of the viewport (read
-  // from the start); the user's own messages keep classic scroll-to-bottom.
+  // What the view does is decided by shared/chatScroll.appendTarget:
+  //   · the person's own turn — always the bottom. They typed, so it and the reply
+  //     it asks for are what is on screen now, whatever the view was doing before.
+  //     This is the reset: without it a reply read from its own start left the view
+  //     above the bottom and every later message was appended out of sight.
+  //   · a reply — its first line aligned to the top, so it is read from the start,
+  //     and only while the newest message is still in front of the person.
+  //   · otherwise — hold. They have scrolled back into older turns; nothing moves.
   useEffect(() => {
     if (chatMessages.length === 0) return;
     const id = requestAnimationFrame(() => {
       const container = chatContainerRef.current;
-      if (!container || !isAtBottomRef.current) return;
+      if (!container) return;
       const lastIdx = chatMessages.length - 1;
       const last = chatMessages[lastIdx];
-      if (last.role !== 'user') {
-        const el = container.querySelector<HTMLElement>(`[data-msg-idx="${lastIdx}"]`);
-        if (el) {
-          const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 12;
-          container.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-          return;
-        }
+      const el = container.querySelector<HTMLElement>(`[data-msg-idx="${lastIdx}"]`);
+      const top = el ? messageTop(container, el) : null;
+      const target = appendTarget(last.role, { following: followingNewestRef.current, newestTop: top });
+      if (target === 'hold') return;
+      if (target === 'newest-top' && top !== null) {
+        container.scrollTo({ top: Math.max(0, top - 12), behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+        return;
       }
       container.scrollTop = container.scrollHeight;
     });
@@ -1592,35 +1753,108 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                 </motion.div>
 
                 {/* Catalog findings — Grace's report, under the hero, IN the chat's
-                    own flow. No frame, no embed, no separate scroll: the list
-                    scrolls with the conversation because it belongs to it. */}
+                    own flow. It scrolls with the conversation because it belongs to
+                    it; what changed is that it can be put away. The list is 40-plus
+                    rows when the catalog is red — taller than the column — and it
+                    sits ABOVE the thread in the same scroll, so leaving it open is
+                    what pushed her replies below the fold. */}
                 {/* Repair items belong to the CHAT view only. Trace, Tools,
                     Variables and Metadata each report their own thing, and an open
                     catalog finding is not part of what any of them is showing —
                     the tab is a filter, and this is what it filters out. */}
                 {selectedNav === 'chat' && catalogFindings && catalogFindings.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="font-['Inter'] text-[12px] font-semibold text-[#1c2f4e]">
-                      Catalog check — {catalogFindings.length} open
-                    </div>
-                    <ul className="space-y-1.5">
-                      {catalogFindings.map((f) => (
-                        <li key={f.id} className="flex items-start gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onRepairFinding?.(f.id)}
-                            className="shrink-0 px-2 py-0.5 rounded bg-[#4066e3] text-white text-[10px] font-semibold hover:bg-[#3051c0] transition-colors cursor-pointer"
-                          >
-                            Repair
-                          </button>
-                          <span className="font-['Inter'] text-[13px] text-gray-800 leading-snug">
-                            <span className="font-semibold">{f.component || f.file || '(catalog)'}</span>
-                            {f.nodeId ? ` ${f.nodeId}` : ''}
-                            {f.what ? ` — ${f.what.slice(0, 110)}` : ''}
+                  <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    {/* The header is the whole standing report when closed: the
+                        count, and what kind of work the open ones are. */}
+                    <button
+                      type="button"
+                      onClick={() => setFindingsCollapsed((collapsed) => !collapsed)}
+                      aria-expanded={!findingsCollapsed}
+                      aria-controls="catalog-findings-body"
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <span className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
+                        <span className="flex items-center gap-2 min-w-0 w-full">
+                          <span className="font-['Inter'] text-[12px] font-semibold text-[#1c2f4e] truncate">
+                            Catalog check — {catalogFindings.length} open
                           </span>
-                        </li>
-                      ))}
-                    </ul>
+                          {findingCounts.blocking > 0 && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#fdeaea] text-[#b02a2a] text-[10px] font-semibold">
+                              {findingCounts.blocking} blocking
+                            </span>
+                          )}
+                          <span className="shrink-0 font-['Inter'] text-[10px] text-[#6c757d]">
+                            {findingCounts.pipeline} pipeline · {findingCounts.designer} designer
+                          </span>
+                        </span>
+                        {/* The chip says HOW MANY are blocking; this says WHICH.
+                            It belongs to the standing header and not only to the
+                            list, because the list is closed by default: the one
+                            item that stops the pipeline has to be nameable without
+                            opening forty-three rows to find it. */}
+                        {mostUrgent && (
+                          <span
+                            className="max-w-full truncate font-['Inter'] text-[10px] font-semibold text-[#b02a2a]"
+                            title={mostUrgent.id}
+                          >
+                            blocking: {mostUrgent.id}
+                            {findingCounts.blocking > 1 ? ` (+${findingCounts.blocking - 1} more)` : ''}
+                          </span>
+                        )}
+                      </span>
+                      <span className={`shrink-0 text-[14px] text-gray-400 transition-transform ${findingsCollapsed ? '' : 'rotate-90'}`}>
+                        ▶
+                      </span>
+                    </button>
+                    {!findingsCollapsed && (
+                      <div id="catalog-findings-body" className="p-2">
+                      <ul className="space-y-1.5">
+                        {orderedFindings.map((f) => (
+                          <li key={f.id} className="flex items-start gap-2">
+                            {repairStages?.[f.id] === 'done' ? (
+                              // Settled: a report fetched after the repair stopped
+                              // deriving it. Nothing left to queue — the fix is in.
+                              <span className="shrink-0 px-2 py-0.5 rounded bg-[#e7f4ea] text-[#1e7a34] text-[10px] font-semibold">
+                                done
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onRepairFinding?.(f.id)}
+                                className="shrink-0 px-2 py-0.5 rounded bg-[#4066e3] text-white text-[10px] font-semibold hover:bg-[#3051c0] transition-colors cursor-pointer"
+                              >
+                                Repair
+                              </button>
+                            )}
+                            {/* The level, on the row. Without it the list is
+                                forty-three identical-looking lines and the one
+                                blocking finding cannot be seen even while it is on
+                                screen — which is exactly what was reported. Only
+                                the urgent level is marked: a chip on every row is
+                                a chip that means nothing. */}
+                            {f.level === 'blocking' && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#fdeaea] text-[#b02a2a] text-[10px] font-semibold">
+                                blocking
+                              </span>
+                            )}
+                            <span className="font-['Inter'] text-[13px] text-gray-800 leading-snug">
+                              <span className="font-semibold">{f.component || f.file || '(catalog)'}</span>
+                              {f.nodeId ? ` ${f.nodeId}` : ''}
+                              {f.what ? ` — ${f.what.slice(0, 110)}` : ''}
+                            </span>
+                            {repairStages?.[f.id] === 'repair' && (
+                              // Queued: the prompt is in the left column and the Run that
+                              // answers it has not settled yet. The button stays, because a
+                              // failed run is a repair that still has to happen.
+                              <span className="shrink-0 font-['Inter'] text-[10px] font-semibold text-[#6c757d]">
+                                in repair
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1629,7 +1863,7 @@ You are in the chat panel. Follow the WORKSPACE USER FLOW above. Use XML tags si
                     {chatMessages.map((msg, i) => (
                       <div key={i} data-msg-idx={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[80%] rounded-lg p-3 text-[13px] font-['Inter'] whitespace-pre-wrap ${msg.role === 'user' ? 'bg-[#4066e3] text-white' : 'bg-gray-100 text-gray-800 border border-gray-200'}`}>
-                          {renderMessageContent(msg.content)}
+                          {renderMessageContent(msg.content, msg.role)}
                         </div>
                       </div>
                     ))}

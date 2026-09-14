@@ -63,6 +63,28 @@ export const lightningAltFillLight1Svg: TemplateResult = html`<svg width="14" he
   </defs>
 </svg>`;
 
+/**
+ * The field flag's own red (--blocked in prompt-input-section). Kept as one
+ * constant so the rail glyph and the red flag cannot end up two different reds.
+ */
+export const DANGER_FILL = '#c50000';
+
+/**
+ * An exclamation in a circle — the rail's NOTIFICATION glyph.
+ *
+ * This is the one icon in this file that is NOT Figma geometry, and the only one
+ * without a node id behind it. The owner's rule for the rail is that it is the
+ * notification column (not just an activity counter), so a prompt that is
+ * waiting on a person marks itself there: `! ` in a circle, in the same red the
+ * field flag and the field's ring use. Drawn at 26×26 inside the rail's 40px
+ * cell, stroke weight 2, matching the other glyphs' weight.
+ */
+export const alertCircleSvg: TemplateResult = html`<svg width="32" height="32" viewBox="0 0 26 26" aria-hidden="true">
+  <circle cx="13" cy="13" r="11.5" fill="none" stroke="${DANGER_FILL}" stroke-width="2"/>
+  <path d="M13 6.5V14" stroke="${DANGER_FILL}" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="13" cy="18.8" r="1.4" fill="${DANGER_FILL}"/>
+</svg>`;
+
 export const MEATBALLS_DOT_STROKE = '#767676';
 
 /**

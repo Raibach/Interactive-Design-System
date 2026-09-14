@@ -39,6 +39,7 @@ import {
   normalizeSectionType,
   isUndecidedType,
   strictSectionType,
+  resolveSectionName,
 } from '@/shared/promptSections';
 import { PromptSectionSchema, TAG_REGISTRY } from '@/shared/tag-registry';
 
@@ -378,6 +379,69 @@ describe('the copy cannot drift from the live schema again', () => {
   it('refuses the old short spellings, so a re-introduced one fails loudly', () => {
     for (const short of ['system', 'user', 'agent']) {
       expect(liveEnum.safeParse(short).success, short).toBe(false);
+    }
+  });
+});
+
+/**
+ * The names a WRITE can use.
+ *
+ * Two writers put text into the left column — the window events
+ * (`set-left-column-text`, `force-set-section`, `fill-field`) and the assistant's
+ * `<update_*>` tags — and each names the seat it writes to. The comparison used to be
+ * exact, and the two shapes of prompt in this app name the same seat differently: a
+ * composer says "User Role" / "System Role" / "Agent Role", and a repair prompt says
+ * "User" / "System" / "Agent". So a write that named one shape while the other was in the
+ * column matched nothing, changed nothing, and said nothing — the failure that reads to a
+ * person as a surface that ignores them.
+ *
+ * What is pinned here is that the three spellings of one seat resolve, in both directions
+ * and in both shapes of column, and that a seat the column does NOT have stays unresolved
+ * rather than being redirected into a seat nobody named.
+ */
+describe('a write finds its seat by any of the names that seat answers to', () => {
+  const COMPOSER = ['System Role', 'User Role', 'Tool Call', 'Few Shot', 'Context', 'Constraints'];
+  const REPAIR = ['System', 'User', 'Tool Call', 'Agent'];
+
+  it('resolves the canonical label, the id, and the short name to one index', () => {
+    expect(resolveSectionName('User Role', COMPOSER)).toBe(1);
+    expect(resolveSectionName('user-role', COMPOSER)).toBe(1);
+    expect(resolveSectionName('User', REPAIR)).toBe(1);
+    expect(resolveSectionName('User Role', REPAIR)).toBe(1);
+    expect(resolveSectionName('Agent Role', REPAIR)).toBe(3);
+    expect(resolveSectionName('System Role', REPAIR)).toBe(0);
+    expect(resolveSectionName('tool-call', REPAIR)).toBe(2);
+  });
+
+  it('reads the name case- and space-insensitively, as both writers send it', () => {
+    expect(resolveSectionName('  user role  ', COMPOSER)).toBe(1);
+    expect(resolveSectionName('USER', REPAIR)).toBe(1);
+  });
+
+  it('lets the requested spelling win over a variant, so no seat is shadowed', () => {
+    // Both names exist in this column and they are different seats: an exact match must
+    // never be displaced by the legacy short name of another seat.
+    const both = ['System Role', 'User', 'User Role'];
+    expect(resolveSectionName('User', both)).toBe(1);
+    expect(resolveSectionName('User Role', both)).toBe(2);
+  });
+
+  it('leaves a seat this column does not have unresolved', () => {
+    // Constraints is a real seat — in a composer. A repair prompt has no such section,
+    // and "there is nowhere to put this" is the true answer; redirecting it into Agent
+    // would write a rule into a seat nobody named.
+    expect(resolveSectionName('Constraints', REPAIR)).toBe(-1);
+    expect(resolveSectionName('Few Shot', REPAIR)).toBe(-1);
+    expect(resolveSectionName('Nothing Like This', COMPOSER)).toBe(-1);
+    expect(resolveSectionName('', COMPOSER)).toBe(-1);
+    expect(resolveSectionName('User', [])).toBe(-1);
+  });
+
+  it('lists the spellings from the one declaration, so a new seat is reachable', () => {
+    for (const def of SECTION_TYPES) {
+      for (const name of [def.label, def.id, ...(def.legacyNames ?? [])]) {
+        expect(resolveSectionName(name, [def.label]), `${def.id} via ${name}`).toBe(0);
+      }
     }
   });
 });

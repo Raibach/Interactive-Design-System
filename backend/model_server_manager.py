@@ -17,7 +17,7 @@ PROVIDERS = {
     "deepseek": {
         "name": "DeepSeek API",
         "base_url": "https://api.deepseek.com",
-        "model": "deepseek-v4-flash",
+        "model": "deepseek-v4-pro",
         "api_key_env": "DEEPSEEK_API_KEY",
     },
     "zai": {

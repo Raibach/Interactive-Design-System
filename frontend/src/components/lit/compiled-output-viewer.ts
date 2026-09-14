@@ -17,6 +17,20 @@
 
 import { LitElement, html, css } from 'lit';
 
+/**
+ * A fenced block longer than this is folded to one line until it is opened.
+ *
+ * An answer about a one-word change hands back the WHOLE file — the app's own
+ * repair contract is a whole-file re-emit, because applyRepair overwrites a file
+ * and applyReadiness rejects a patch or a cut-off file. So the pane that shows the
+ * answer was showing sixty lines of code for a one-word edit, and the one line
+ * that mattered was above it. Above this many lines the block is announced
+ * instead: what it is, how long it is, and one click to read it. Short snippets
+ * (a two-line type, a shell command) stay as they were — they were never the
+ * wall.
+ */
+const FOLD_AFTER_LINES = 12;
+
 export class CompiledOutputViewer extends LitElement {
   static properties = {
     content: { type: String },
@@ -26,6 +40,8 @@ export class CompiledOutputViewer extends LitElement {
     isRunning: { type: Boolean, attribute: 'is-running' },
     sessionId: { type: String, attribute: 'session-id' },
     viewMode: { type: String, state: true },
+    /** Seconds the current — or the just-finished — Run has taken. Local state. */
+    elapsed: { state: true },
   };
 
   declare content: string;
@@ -35,6 +51,7 @@ export class CompiledOutputViewer extends LitElement {
   declare isRunning: boolean;
   declare sessionId: string | null;
   declare viewMode: 'rendered' | 'raw';
+  declare elapsed: number;
 
   constructor() {
     super();
@@ -45,11 +62,88 @@ export class CompiledOutputViewer extends LitElement {
     this.isRunning = false;
     this.sessionId = null;
     this.viewMode = 'rendered';
+    this.elapsed = 0;
   }
 
   private _prevContent = '';
 
+  /**
+   * A clock for the Run in flight.
+   *
+   * A Run is one call to a reasoning model with a large token budget — measured at 1010
+   * completion tokens just to answer "OK" — so it is legitimately slow, and the pane
+   * said "Running…" with no number while it happened. A spinner that has not changed in
+   * forty seconds reads as a hang, so the seconds are counted out loud.
+   */
+  private _timer: number | null = null;
+  private _startedAt = 0;
+  /** True once this element has watched a Run finish, so no line appears on mount. */
+  private _ranOnce = false;
+
+  /**
+   * The folded blocks the reader has opened, by index in the parsed reply.
+   *
+   * Keyed by position, not by text: the block a reader opens is the one they are
+   * looking at — block 3 of this reply — not "every block anywhere that happens
+   * to hold these characters". Cleared when a new Run starts or another session's
+   * output arrives, because that is a different document.
+   */
+  private _openBlocks = new Set<number>();
+
+  private _toggleBlock = (index: number): void => {
+    const next = new Set(this._openBlocks);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    this._openBlocks = next;
+    this.requestUpdate();
+  };
+
+  private _startClock = (): void => {
+    this._startedAt = Date.now();
+    this._ranOnce = true;
+    this.elapsed = 0;
+    this._openBlocks = new Set();
+    if (this._timer !== null) return;
+    this._timer = window.setInterval(() => {
+      this.elapsed = Math.round((Date.now() - this._startedAt) / 1000);
+    }, 1000);
+  };
+
+  private _stopClock = (): void => {
+    if (this._timer !== null) {
+      window.clearInterval(this._timer);
+      this._timer = null;
+    }
+    this.elapsed = Math.round((Date.now() - this._startedAt) / 1000);
+  };
+
+  disconnectedCallback(): void {
+    this._stopClock();
+    super.disconnectedCallback();
+  }
+
+  /**
+   * What just happened, in words — in the position the running bar occupied.
+   *
+   * A finished Run left the output and no statement of what it was, and a pane with no
+   * mark of an ending cannot be told from one that is still working.
+   */
+  private get _finishedLine(): string {
+    if (!this._ranOnce || this.elapsed <= 0) return '';
+    if (this._failed) return `Stopped after ${this.elapsed}s`;
+    return this.content ? `Done in ${this.elapsed}s` : '';
+  }
+
   updated(changed: Map<string, unknown>): void {
+    if (changed.has('isRunning')) {
+      if (this.isRunning) this._startClock();
+      else if (this._ranOnce) this._stopClock();
+    }
+    if (changed.has('sessionId') && this.sessionId) {
+      // Another prompt's output is a different document: folds opened in the one
+      // that was on screen do not carry over to it (or to the same index in it).
+      this._openBlocks = new Set();
+    }
     if (changed.has('content') && this.isRunning) {
       // auto-scroll during streaming
       const el = this.shadowRoot?.querySelector('.output') as HTMLElement | null;
@@ -367,6 +461,29 @@ export class CompiledOutputViewer extends LitElement {
       line-height: 1.5;
     }
     .md pre code { background: none; color: inherit; padding: 0; }
+    /* A folded code block: one line saying what it is, opening in place. */
+    .md .fold { margin: 0 0 12px; }
+    .md .fold-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #f9fafb;
+      color: #234354;
+      font: inherit;
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .md .fold-head:hover { background: #f3f4f6; }
+    .md .fold-head:focus-visible { outline: 2px solid #1B898D; outline-offset: 1px; }
+    .md .fold-caret { color: #6b7280; font-size: 10px; }
+    .md .fold-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .md .fold-action { margin-left: auto; color: #1B898D; text-decoration: underline; }
+    .md .fold pre { margin: 6px 0 0; }
     .md blockquote {
       margin: 0 0 10px;
       padding: 6px 12px;
@@ -381,8 +498,39 @@ export class CompiledOutputViewer extends LitElement {
     .md a { color: #1B898D; }
   `;
 
+  /**
+   * A fenced block, folded when it is long enough to be the whole reply.
+   *
+   * The reader is told what the block is (its language) and how big it is (its
+   * line count) instead of being handed all of it, and one click opens it. The
+   * text is still the whole block, still escaped by Lit — folding hides nothing
+   * from Copy, which copies the reply, not the fold.
+   */
+  private _codeBlock(b: any, index: number): unknown {
+    const text: string = b.text || '';
+    const lines = text ? text.split('\n').length : 0;
+    if (lines <= FOLD_AFTER_LINES) return html`<pre><code>${text}</code></pre>`;
+
+    const open = this._openBlocks.has(index);
+    return html`
+      <div class="fold">
+        <button
+          class="fold-head"
+          type="button"
+          aria-expanded=${open ? 'true' : 'false'}
+          @click=${() => this._toggleBlock(index)}
+        >
+          <span class="fold-caret" aria-hidden="true">${open ? '▾' : '▸'}</span>
+          <span class="fold-title">${b.lang ? `${b.lang} · ` : ''}${lines} lines</span>
+          <span class="fold-action">${open ? 'hide' : 'show'}</span>
+        </button>
+        ${open ? html`<pre><code>${text}</code></pre>` : html``}
+      </div>
+    `;
+  }
+
   /** One parsed block → Lit template. */
-  private _block(b: any): unknown {
+  private _block(b: any, index = -1): unknown {
     switch (b.t) {
       case 'h': {
         const inner = this._inline(b.text);
@@ -396,7 +544,7 @@ export class CompiledOutputViewer extends LitElement {
         }
       }
       case 'p': return html`<p>${this._inline(b.text)}</p>`;
-      case 'code': return html`<pre><code>${b.text}</code></pre>`;
+      case 'code': return this._codeBlock(b, index);
       case 'ul': return html`<ul>${(b.items || []).map((it: string) => html`<li>${this._inline(it)}</li>`)}</ul>`;
       case 'ol': return html`<ol>${(b.items || []).map((it: string) => html`<li>${this._inline(it)}</li>`)}</ol>`;
       case 'quote': return html`<blockquote>${this._inline(b.text)}</blockquote>`;
@@ -433,8 +581,11 @@ export class CompiledOutputViewer extends LitElement {
           <span>${this.tokens || 0} tokens</span>
           ${this.isRunning
             ? html`<span class="progress" role="progressbar" aria-label="Running"
-                    ><span class="progress-stripe"></span></span>`
-            : html`<span class="status">${this.status}</span>`}
+                    ><span class="progress-stripe"></span></span>
+                  <span class="status running">Running… ${this.elapsed}s</span>`
+            : this._finishedLine
+              ? html`<span class="status">${this._finishedLine}</span>`
+              : html`<span class="status">${this.status}</span>`}
         </div>
         <div class="actions">
           <button @click=${this._toggleView}>${this.viewMode === 'raw' ? 'Rendered' : 'Raw'}</button>
@@ -458,8 +609,8 @@ export class CompiledOutputViewer extends LitElement {
               </div>
             `
           : (this.content
-              ? html`<div class="md">${this._parse(this.content).map((b) => this._block(b))}</div>`
-              : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? 'Running…' : '(no output yet)'}</p></div>`));
+              ? html`<div class="md">${this._parse(this.content).map((b, i) => this._block(b, i))}</div>`
+              : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? `Running… ${this.elapsed}s` : '(no output yet)'}</p></div>`));
 
     return html`${header}${display}`;
   }

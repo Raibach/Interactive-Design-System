@@ -1,5 +1,6 @@
 # ── OS noise ──────────────────────────────────────────────
 .DS_Store
+*.backup.*
 
 # ── Secrets & local credentials ───────────────────────────
 # Never commit key material. Keys/ holds local credential docs.

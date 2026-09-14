@@ -37,7 +37,11 @@
       "figmaNodeId": "40000746:6",
       "litComponent": "prompt-container",
       "file": "frontend/src/components/lit/prompt-input/prompt-container.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "litComponent": "inferred",
+        "behavior": "inferred"
+      }
     },
     {
       "figmaName": "gripper-prompt-input",
