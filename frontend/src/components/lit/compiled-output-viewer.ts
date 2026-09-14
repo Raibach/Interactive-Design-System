@@ -16,6 +16,8 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import './prompt-input/model-selector-button';
+import './prompt-input/gripper-prompt-input';
 
 /**
  * A fenced block longer than this is folded to one line until it is opened.
@@ -37,6 +39,8 @@ export class CompiledOutputViewer extends LitElement {
     status: { type: String },
     model: { type: String },
     tokens: { type: Number },
+    /** Dollar cost of the most recent Run, as reported by the provider. */
+    cost: { type: String },
     isRunning: { type: Boolean, attribute: 'is-running' },
     sessionId: { type: String, attribute: 'session-id' },
     viewMode: { type: String, state: true },
@@ -48,6 +52,7 @@ export class CompiledOutputViewer extends LitElement {
   declare status: string;
   declare model: string;
   declare tokens: number;
+  declare cost: string;
   declare isRunning: boolean;
   declare sessionId: string | null;
   declare viewMode: 'rendered' | 'raw';
@@ -59,6 +64,7 @@ export class CompiledOutputViewer extends LitElement {
     this.status = 'empty';
     this.model = '';
     this.tokens = 0;
+    this.cost = '';
     this.isRunning = false;
     this.sessionId = null;
     this.viewMode = 'rendered';
@@ -274,10 +280,131 @@ export class CompiledOutputViewer extends LitElement {
   static styles = css`
     :host {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       height: 100%;
       min-height: 0;
       background: #fff;
+    }
+    /* ── Layout: main column + right vertical tab strip (Figma center-panel-3rd-col) ── */
+    .main {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 10px;
+      height: 40px;
+      flex-shrink: 0;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f9fafb;
+    }
+    .selector-tile {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      height: 40px;
+      padding: 0 10px;
+      background: #fff;
+      border: none;
+      border-radius: 6px;
+      box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.15), -4px -4px 10px rgba(0, 0, 0, 0.15);
+      cursor: pointer;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .selector-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #171717;
+      white-space: nowrap;
+    }
+    .chevron { color: #6b7280; font-size: 12px; }
+    .model-name {
+      font-size: 11px;
+      color: #6b7280;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+    }
+    .running {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: #dbeafe;
+      color: #1e40af;
+      white-space: nowrap;
+    }
+    .finished {
+      font-size: 10px;
+      color: #6b7280;
+      white-space: nowrap;
+    }
+    .actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+    }
+    .output-area {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .tab-strip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 40px;
+      flex-shrink: 0;
+      border-left: 1px solid #e5e7eb;
+      background: #f9fafb;
+    }
+    .gripper { flex-shrink: 0; }
+    .token-readout {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 10px;
+      color: #6b7280;
+      white-space: nowrap;
+    }
+    .format-label {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      padding: 4px 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 10px;
+      color: #9ca3af;
+      white-space: nowrap;
+    }
+    .format-btn {
+      width: 30px;
+      height: 30px;
+      margin: 3px 0;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: #374151;
+    }
+    .format-btn.active {
+      background: #1B898D;
+      color: #fff;
+      border-color: #1B898D;
     }
     .header {
       display: flex;
@@ -574,30 +701,8 @@ export class CompiledOutputViewer extends LitElement {
   }
 
   render() {
-    const header = html`
-      <div class="header">
-        <div class="meta">
-          <span>${this.model || '—'}</span>
-          <span>${this.tokens || 0} tokens</span>
-          ${this.isRunning
-            ? html`<span class="progress" role="progressbar" aria-label="Running"
-                    ><span class="progress-stripe"></span></span>
-                  <span class="status running">Running… ${this.elapsed}s</span>`
-            : this._finishedLine
-              ? html`<span class="status">${this._finishedLine}</span>`
-              : html`<span class="status">${this.status}</span>`}
-        </div>
-        <div class="actions">
-          <button @click=${this._toggleView}>${this.viewMode === 'raw' ? 'Rendered' : 'Raw'}</button>
-          <button @click=${this._copy}>Copy</button>
-          <button @click=${this._regenerate} ?disabled=${this.isRunning}>Regenerate</button>
-          <button @click=${this._clear}>Clear</button>
-        </div>
-      </div>
-    `;
-
-    // The progress indicator lives inline in the header meta row (above), in
-    // the position the "running" pill used to occupy.
+    // The output selector tile (Figma "output-selector-tile") is the view-mode
+    // control: rendered vs raw. The chevron is the affordance; one click toggles.
     const display = this.viewMode === 'raw'
       ? html`<pre class="output raw">${this.content || '(no output yet)'}</pre>`
       : ((this._failed && !this.isRunning)
@@ -612,7 +717,56 @@ export class CompiledOutputViewer extends LitElement {
               ? html`<div class="md">${this._parse(this.content).map((b, i) => this._block(b, i))}</div>`
               : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? `Running… ${this.elapsed}s` : '(no output yet)'}</p></div>`));
 
-    return html`${header}${display}`;
+    return html`
+      <div class="main">
+        <div class="controls">
+          <button
+            class="selector-tile"
+            type="button"
+            aria-haspopup="listbox"
+            aria-label="Output format"
+            title="Toggle output format"
+            @click=${this._toggleView}
+          >
+            <span class="selector-label">${this.viewMode === 'raw' ? 'Raw output' : 'Rendered output'}</span>
+            <span class="chevron" aria-hidden="true">&#9662;</span>
+          </button>
+          <model-selector-button></model-selector-button>
+          <span class="model-name">${this.model || '—'}</span>
+          ${this.isRunning
+            ? html`<span class="running" role="status">Running… ${this.elapsed}s</span>`
+            : this._finishedLine
+              ? html`<span class="finished">${this._finishedLine}</span>`
+              : html``}
+          <div class="actions">
+            <button @click=${this._copy}>Copy</button>
+            <button @click=${this._regenerate} ?disabled=${this.isRunning}>Regenerate</button>
+            <button @click=${this._clear}>Clear</button>
+          </div>
+        </div>
+        <div class="output-area">${display}</div>
+      </div>
+      <div class="tab-strip">
+        <gripper-prompt-input class="gripper" aria-label="Drag to resize output"></gripper-prompt-input>
+        <div class="token-readout" aria-hidden="true">Tokens: ${this.tokens || 0} · Cost: ${this.cost || '—'}</div>
+        <div class="format-label" aria-hidden="true">Response Format</div>
+        <button
+          class="format-btn ${this.viewMode === 'rendered' ? 'active' : ''}"
+          type="button"
+          aria-pressed=${this.viewMode === 'rendered' ? 'true' : 'false'}
+          title="Response Format A — rendered"
+          @click=${() => { this.viewMode = 'rendered'; }}
+        >A</button>
+        <button
+          class="format-btn ${this.viewMode === 'raw' ? 'active' : ''}"
+          type="button"
+          aria-pressed=${this.viewMode === 'raw' ? 'true' : 'false'}
+          title="Response Format B — raw"
+          @click=${() => { this.viewMode = 'raw'; }}
+        >B</button>
+        <gripper-prompt-input class="gripper" aria-label="Drag to resize output"></gripper-prompt-input>
+      </div>
+    `;
   }
 }
 
