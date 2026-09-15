@@ -109,8 +109,15 @@ export const neuralNetworkService = {
             context,
             mode: options?.mode || 'chat',
             reasoning: true,
-            reasoningStyle: options?.reasoningStyle || 'chain_of_thought',
-            includeMemory: options?.includeMemory ?? true,  // Enable memory by default
+            // One convention on the wire: snake_case, like every other field in this
+            // body. These three used to be sent camelCase, and the backend's request
+            // model is snake_case — so Pydantic dropped all three in silence, and
+            // memory was never retrieved despite the client asking for it. The
+            // TypeScript options above stay camelCase; only the wire names change.
+            reasoning_style: options?.reasoningStyle || 'chain_of_thought',
+            include_memory: options?.includeMemory ?? true,  // Enable memory by default
+            // eslint-disable-next-line camelcase
+            self_reflection: options?.selfReflection ?? false,
             project_id: options?.projectId,  // Send project ID for memory retrieval
             conversation_id: options?.conversationId,  // Send conversation ID so model can update title
             session_id: options?.sessionId,  // Package scope — backend requires this to create a conversation

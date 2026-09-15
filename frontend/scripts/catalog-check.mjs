@@ -65,6 +65,12 @@ const PATHS = {
   // to live in a locally excluded directory, where nothing showed it as changed and a
   // clone did not have it, so every defect number quoted from it was unverifiable.
   openItems: join(REPO, 'OPEN-ITEMS.md'),
+  // The ledger of FIXES — one row per finding corrected, with the commit that carries
+  // the fix. The register answers "what is still open"; this answers "what did we
+  // already do, and does it still hold". Separate files because they are separate
+  // questions, and because a correction that regresses must be visible as a
+  // regression rather than as a count quietly going back up.
+  corrections: join(REPO, 'CORRECTIONS.md'),
   // The two other tracked documents that cite register numbers.
   index: join(REPO, 'INDEX.md'),
   notes: join(REPO, 'catalog-audit', 'AI-notes.md'),
@@ -114,6 +120,7 @@ const CHECK_INVENTORY = [
   { id: 'clean-no-jsx', stage: 'clean', live: false, asserts: 'no React/JSX/Tailwind in the component sources' },
   { id: 'doc-claim-drift', stage: 'deliver', live: false, asserts: 'the component count and names the documents state are the catalog\'s' },
   { id: 'open-items-register', stage: 'deliver', live: false, asserts: 'the register is tracked and agrees with the findings this run derived' },
+  { id: 'corrections-ledger', stage: 'deliver', live: false, asserts: 'every correction the ledger records is still earned' },
 ];
 
 // Severity, one home. A finding about the pipeline's own ability to SEE or to stay
@@ -130,6 +137,7 @@ const BLOCKING = new Set([
   'schema-unreachable',    // a published catalog a client would reject
   'doc-claim-drift',       // a document states something about this catalog that is false
   'open-items-register',   // the register and the run disagree — one of them is lying
+  'corrections-ledger',    // a recorded fix that no longer holds: a regression wearing a fixed label
 ]);
 
 const ran = new Set();
@@ -1058,6 +1066,138 @@ if (!dirty.length) {
 // claims to ask. Live checks that did not run are reported as INCOMPLETE —
 // --offline and a missing (or unreachable) Figma token both declare that on
 // purpose: Figma is an import tool, not a runtime dependency.
+// ═══ DELIVER — the corrections ledger ═══════════════════════════════════════
+// A correction is a CLAIM: "this finding was fixed." A claim is only worth
+// recording if it can fail, so every row is held against the run it is part of:
+//
+//   check:<class>            earned when the class derives ZERO open findings
+//   check:<class>:<subject>  earned when NO finding in this run carries that exact id
+//
+// A row that is NOT earned is the one thing the register cannot express: a finding
+// that was corrected and is here anyway. In the register that reads as a count that
+// went back up — indistinguishable from work never done. Here it is a regression,
+// named, with the commit that used to hold the fix. Blocking, like every other
+// ledger-integrity failure: the record is either true or it is noise.
+//
+// Last, for the same reason as compareRegisterCounts(): every finding has to exist
+// before a row can be held against it.
+checkRan('corrections-ledger');
+{
+  const ledgerFile = rel(PATHS.corrections);
+  let ledgerText = null;
+  try { ledgerText = read(PATHS.corrections); } catch { ledgerText = null; }
+
+  if (ledgerText === null) {
+    add({
+      check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: 'gone',
+      what: 'The corrections ledger is not where it is read from. Every "this was fixed" then resolves to nothing, and a fix that regressed is discovered by a person noticing.',
+      fix: `Restore ${ledgerFile} at the repository root.`,
+    });
+  } else {
+    // Only ledger rows: a table row whose first cell is check:<class> or
+    // check:<class>:<subject>. Prose is deliberately not parsed — which is why the
+    // doctrine table in that file uses a placeholder that cannot match this.
+    const rows = ledgerText.split('\n')
+      .filter((l) => l.trim().startsWith('|'))
+      .map((l) => l.split('|').slice(1, -1).map((x) => x.trim().replace(/`/g, '')))
+      .filter((c) => /^check:[a-z0-9-]+(:.+)?$/.test(c[0]))
+      .map((c) => ({ finding: c[0], corrected: c[1] || '', receipt: c[2] || '' }));
+
+    if (!rows.length) {
+      add({
+        check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: 'table-unreadable',
+        what: 'The ledger exists but no row parsed. The table is its machine-readable half; without it this file is prose that nothing can be held against.',
+        fix: 'Restore the ledger table: | Finding | Corrected | Receipt | Witness |.',
+      });
+    }
+
+    const uncompared = [];
+    const seen = new Set();
+    for (const r of rows) {
+      const tail = r.finding.slice('check:'.length);
+      const cls = tail.split(':')[0];
+      const hasSubject = tail.includes(':');
+
+      if (!CHECK_INVENTORY.some((c) => c.id === cls)) {
+        add({
+          check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: `unknown-class:${r.finding}`,
+          what: `The ledger records a correction for "${r.finding}", and "${cls}" is not a check this script knows. A citation to a check that does not exist cannot fail, so it cannot prove anything.`,
+          fix: 'Correct the class, or add it to CHECK_INVENTORY.',
+        });
+        continue;
+      }
+
+      if (seen.has(r.finding)) {
+        add({
+          check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: `duplicate:${r.finding}`,
+          what: `The ledger records "${r.finding}" more than once. Two rows for one finding means one is stale, and nothing says which.`,
+          fix: 'Keep one row per finding, with the latest receipt.',
+        });
+      }
+      seen.add(r.finding);
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(r.corrected)) {
+        add({
+          check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: `bad-date:${r.finding}`,
+          what: `"${r.finding}" dates its correction "${r.corrected}", which is not YYYY-MM-DD. A date nobody can read is a date nobody can hold against a commit.`,
+          fix: 'Date it YYYY-MM-DD.',
+        });
+      }
+
+      // The receipt is what separates "it was fixed" from "it is fixed". Only the
+      // second can be checked, and only a commit can be looked at.
+      const sha = (r.receipt.match(/\b[0-9a-f]{7,40}\b/) || [])[0];
+      if (!sha) {
+        add({
+          check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: `no-receipt:${r.finding}`,
+          what: `"${r.finding}" names no commit. Without one there is nothing to look at, and a correction nobody can look at is a note.`,
+          fix: 'Cite the commit that carries the fix.',
+        });
+      } else if (existsSync(join(REPO, '.git'))) {
+        try {
+          execFileSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: REPO, stdio: 'pipe' });
+        } catch {
+          add({
+            check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: `receipt-unresolved:${r.finding}`,
+            what: `"${r.finding}" cites ${sha}, and no commit in this repository answers to it. The receipt is the whole reason this ledger is trusted.`,
+            fix: 'Cite a commit that resolves, or drop the row.',
+          });
+        }
+      }
+
+      // A class whose check needs Figma cannot be judged on a run that skipped Figma.
+      // Its 0 is an ABSENCE, not a fix, and calling the row earned would be a claim
+      // this run cannot support — the same "half-built report reading clean" trap
+      // compareRegisterCounts already refuses. Reported as uncompared, not passed over
+      // in silence.
+      const inv = CHECK_INVENTORY.find((c) => c.id === cls);
+      if (inv && inv.live && liveStatus !== 'complete') {
+        uncompared.push(r.finding);
+        continue;
+      }
+
+      // ── The one that matters ─────────────────────────────────────────────
+      const earned = hasSubject
+        ? !findings.some((f) => f.id === r.finding)
+        : liveOf(cls) === 0;
+      if (!earned) {
+        add({
+          check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: `not-earned:${r.finding}`,
+          what: `"${r.finding}" is recorded corrected on ${r.corrected} (${sha || 'no receipt'}) and this run derives it again${hasSubject ? '' : ` — ${liveOf(cls)} open finding(s) in ${cls}`}. A correction that does not hold is a regression wearing a fixed label, and a count cannot show it: the number simply goes back up.`,
+          fix: 'Fix it again and update the receipt, or drop the row if the finding was never closed.',
+        });
+      }
+    }
+
+    if (uncompared.length) {
+      add({
+        check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, level: 'pass',
+        what: `${uncompared.length} correction(s) were not judged this run because their checks need Figma and Figma was not reached (${uncompared.join(', ')}). Neither earned nor refuted here — the next complete run decides.`,
+      });
+    }
+  }
+}
+
 // The register's recorded counts, held against what this run actually derived. Last,
 // on purpose: every finding has to exist before the ledger can be compared to it.
 compareRegisterCounts();

@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 import services as state
 from deps import (
@@ -46,10 +46,17 @@ class TeacherQueryRequest(BaseModel):
     session_id: Optional[str] = None
     project_id: Optional[str] = None
     reasoning: bool = False
-    reasoning_style: str = "chain_of_thought"
-    include_memory: bool = False
+    # These three arrive camelCase from the browser and snake_case from everyone else,
+    # and Pydantic IGNORES a name it does not know — silently, with no error and no log.
+    # So `includeMemory: true` was dropped on every chat turn: the client turned memory
+    # ON, the server kept `include_memory = False`, and Grace was retrieved no memory at
+    # all. Nothing anywhere said so. Both spellings are accepted now, so neither sender
+    # can be ignored again; the field name is the first choice, so snake_case callers
+    # are unaffected.
+    reasoning_style: str = Field("chain_of_thought", validation_alias=AliasChoices("reasoning_style", "reasoningStyle"))
+    include_memory: bool = Field(False, validation_alias=AliasChoices("include_memory", "includeMemory"))
     temperature: float = 0.45
-    self_reflection: bool = False
+    self_reflection: bool = Field(False, validation_alias=AliasChoices("self_reflection", "selfReflection"))
     editorial: Optional[Dict[str, Any]] = None
     mode: str = "chat"
     metadata: Optional[Dict[str, Any]] = None

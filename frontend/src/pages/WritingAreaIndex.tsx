@@ -2386,6 +2386,11 @@ export default function Index({
       // which silently emptied the grid) and it flips is-ai-assembling. This is
       // not a surface; it is a report for her seat.
       const graceReport = (async () => {
+      // Whether Grace's own surface carried the findings. If it did not (provider
+      // down, malformed answer), the same findings are read from the report the
+      // shell fetches itself — they are machine data, and BOTH the drop-down and
+      // the repair lookup need one populated source.
+      let findingsFromSurface = false;
       try {
         const res = await fetch(`${API_BASE}/ai/assemble-surface`, {
           method: 'POST',
@@ -2425,6 +2430,7 @@ export default function Index({
           } else {
             const value = ops.find((o: any) => o.updateDataModel)?.updateDataModel?.value || {};
             if (Array.isArray(value.findings)) {
+              findingsFromSurface = true;
               setCatalogFindings(value.findings);
               // The report on screen is the one being read, so a finding it still
               // carries is open: a 'done' mark is dropped the moment a report derives
@@ -2453,6 +2459,28 @@ export default function Index({
           `  CAUSE: the catalog-health request never completed — network, timeout, or the backend is down.\n` +
           `  NOTE: the console surface is NOT blocked by this.`
         );
+      }
+
+      // ── The findings must exist even when Grace's surface does not ──────────
+      // The drop-down and handleRepairFinding read ONE source (`catalogFindings`).
+      // If her assembly failed, that source stayed null while the drop-down fell
+      // back to the report — so the Repair buttons rendered but could not resolve
+      // their finding, and clicking one did nothing. Read the report here instead:
+      // same findings, same ids, so the buttons resolve.
+      if (!findingsFromSurface) {
+        try {
+          const health = await fetchCatalogHealth();
+          if (health.state === 'ok') {
+            const open = health.report.findings.filter((f) => f.level !== 'pass');
+            setCatalogFindings(open);
+            setRepairStages((s) => reconcileRepairs(s, open.map((f) => f.id)));
+            console.log(
+              `[catalog] Grace's surface carried no findings — read ${open.length} from the report instead.`,
+            );
+          }
+        } catch (e) {
+          console.error('[catalog] the report fallback failed:', e);
+        }
       }
       })();
 

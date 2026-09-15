@@ -16,6 +16,17 @@
  */
 
 import { LitElement, html, css } from 'lit';
+// Chevron artwork for ouput-selector-tile / chevron-blue-closed — node
+// 40000922:4875, child "Arrow_drop_down" (40000922:4872, 14x13). The same file
+// role-tile.ts imports; the design references one asset from two places, so it
+// is imported, not re-drawn.
+import arrowDropDown from '../../assets/figma-9598a83b0a4eb9b9fc9c226f302689fd4f7075df.svg';
+// Side-effect imports for the elements the drawing instantiates. Both are
+// registry entries with their own node ids — do not re-implement either:
+//   model-selector-button  40000909:4322 + model-btn-label 40000973:24205
+//   gripper-prompt-input   40000941:23074
+import './prompt-input/model-selector-button';
+import './prompt-input/gripper-prompt-input';
 
 /**
  * A fenced block longer than this is folded to one line until it is opened.
@@ -39,6 +50,20 @@ export class CompiledOutputViewer extends LitElement {
     tokens: { type: Number },
     isRunning: { type: Boolean, attribute: 'is-running' },
     sessionId: { type: String, attribute: 'session-id' },
+    /**
+     * What the panel is showing, shown in ouput-selector-tile.
+     *
+     * Node 40001034:1190's text is literally "Agent Flow" (§3.5 of
+     * FIGMA/AGENT_MIDDLE_COLUMN_SPEC.md). It is a property rather than a
+     * hardcoded string because §D1 of WHAT-THEY-BUILT-WHAT-WE-BUILT.md makes
+     * this slot the thing the reader chooses at the top of the panel — the
+     * drawn value is the example, not the only value.
+     */
+    outputType: { type: String, attribute: 'output-type' },
+    /** The description line in a vertical tab — node 40001034:1041, "Figma designs". */
+    outputDescription: { type: String, attribute: 'output-description' },
+    /** Cost for the vertical-tab readout — node 40001034:1039. */
+    cost: { type: String },
     viewMode: { type: String, state: true },
     /** Seconds the current — or the just-finished — Run has taken. Local state. */
     elapsed: { state: true },
@@ -50,6 +75,9 @@ export class CompiledOutputViewer extends LitElement {
   declare tokens: number;
   declare isRunning: boolean;
   declare sessionId: string | null;
+  declare outputType: string;
+  declare outputDescription: string;
+  declare cost: string;
   declare viewMode: 'rendered' | 'raw';
   declare elapsed: number;
 
@@ -61,6 +89,10 @@ export class CompiledOutputViewer extends LitElement {
     this.tokens = 0;
     this.isRunning = false;
     this.sessionId = null;
+    // Defaults are the literals read from the drawing, not invented values.
+    this.outputType = 'Agent Flow';          // node 40001034:1190
+    this.outputDescription = 'Figma designs'; // node 40001034:1041
+    this.cost = '';
     this.viewMode = 'rendered';
     this.elapsed = 0;
   }
@@ -146,7 +178,7 @@ export class CompiledOutputViewer extends LitElement {
     }
     if (changed.has('content') && this.isRunning) {
       // auto-scroll during streaming
-      const el = this.shadowRoot?.querySelector('.output') as HTMLElement | null;
+      const el = this.shadowRoot?.querySelector('.output-body') as HTMLElement | null;
       if (el) el.scrollTop = el.scrollHeight;
     }
   }
@@ -272,27 +304,187 @@ export class CompiledOutputViewer extends LitElement {
   }
 
   static styles = css`
+    /* ── The middle column, as drawn ────────────────────────────────────────
+       Figma node 40000914:4677 "center-panel-3rd-col", file key
+       20UPR2KQMsbAxlo5NJb1se. Every value below carries the node id it was read
+       from; the node-by-node table is FIGMA/AGENT_MIDDLE_COLUMN_SPEC.md §3.
+       Nothing here comes from a screenshot or from memory.
+
+       The layout arithmetic, every term of it a class string in that table:
+         531 = 451 (panel) + 40 (vertical-tab B) + 40 (vertical-tab A)
+         649 = 732 - pt10 - 40 (controls) - gap10 - pb23
+         431 = 451 - px10 - px10
+       ──────────────────────────────────────────────────────────────────────── */
     :host {
-      display: flex;
-      flex-direction: column;
+      display: flex;                /* output-container 40001037:2229 */
+      align-items: center;          /* 40001037:2229 items-center */
       height: 100%;
       min-height: 0;
+      min-width: 0;
       background: #fff;
     }
-    .header {
+
+    /* right-panel-horiz-tab — 40000909:4085 */
+    .panel {
+      display: flex;
+      flex-direction: column;       /* 40000909:4085 flex-col */
+      gap: 10px;                    /* 40000909:4085 gap-[10px] */
+      align-items: flex-start;      /* 40000909:4085 items-start */
+      justify-content: center;      /* 40000909:4085 justify-center */
+      /* 40000909:4085's own class string is size-full — it FILLS its container.
+         The 451 in output-container is what the drawing's 531-wide container
+         leaves it after the two 40px tabs: 531 - 40 - 40. It is a consequence
+         of the container, not a width the node fixes.
+
+         So this must flex. A hard width:451px reproduced the drawing at exactly
+         531 and broke at every other width — and in the app the middle column's
+         width is driven by workspace-layout, not by 531. Spec section 9.8.
+
+         HAZARD: never write a backtick in this stylesheet. static styles is a
+         tagged template literal, so ONE raw backtick ends the template and the
+         whole file stops parsing (TS1005, reported at the line below, not at the
+         backtick). Recursive backticks belong in ordinary // comments only. */
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
+      padding: 10px 10px 23px;      /* 40000909:4085 pt-10 px-10 pb-23 */
+      background: #fff;             /* 40000909:4085 bg-white */
+      box-sizing: border-box;
+    }
+
+    /* output-vontrols — 40001034:1186.
+       TWO children, exactly: the selector tile and the model button. The
+       placeholder canvas controls are deliberately NOT here — spec §4; they
+       render inside the output area's body instead. */
+    .controls {
+      display: flex;
+      gap: 10px;                    /* 40001034:1186 gap-[10px] */
+      align-items: center;          /* 40001034:1186 items-center */
+      height: 40px;                 /* 40001034:1186 h-[40px] */
+      width: 100%;                  /* 40001034:1186 w-full */
+      flex-shrink: 0;
+    }
+
+    /* ouput-selector-tile — 40001034:1187 (misspelled in Figma; the node id is
+       the join key, so the name is left exactly as the designer wrote it) */
+    .selector-tile {
+      display: flex;
+      flex: 1 0 0;                  /* 40001034:1187 flex-[1_0_0] */
+      align-items: center;          /* 40001034:1187 items-center */
+      height: 40px;                 /* 40001034:1187 h-[40px] */
+      max-width: 500px;             /* 40001034:1187 max-w-[500px] */
+      min-width: 1px;               /* 40001034:1187 min-w-px */
+      padding: 0 10px;              /* 40001034:1187 px-[10px] */
+      background: #fff;             /* 40001034:1187 bg-white */
+      border: none;
+      border-radius: 6px;           /* 40001034:1187 rounded-[6px] */
+      /* 40001034:1187 drop-shadow — the applied blur is 5px. The "button drop"
+         variable returned for this same node says radius 10. Both are recorded
+         in spec §3.4 (O2); neither is silently dropped. */
+      box-shadow: -4px -4px 5px rgba(0, 0, 0, 0.15),
+                   4px 4px 5px rgba(0, 0, 0, 0.15);
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      box-sizing: border-box;
+    }
+    /* The output-type menu this selector opens is not drawn in 40000914:4677 —
+       no menu contents are in the pull. The control renders with the correct tag
+       and role; the host owns the menu. Same disposition as
+       <model-selector-button>. Deliberately NOT marked as a behavior stub: see
+       the note on _verticalTab for why marking this file is harmful. */
+
+    /* output-type — 40001034:1189; its text run is 40001034:1190 */
+    .output-type {
+      flex: 1 0 0;                  /* 40001034:1189 flex-[1_0_0] */
+      min-width: 1px;               /* 40001034:1189 min-w-px */
+      font-family: 'Inter', system-ui, sans-serif;  /* 40001034:1190 Inter:Bold */
+      font-size: 18px;              /* 40001034:1190 text-[18px] */
+      font-weight: 700;             /* 40001034:1190 font-bold */
+      line-height: normal;          /* 40001034:1190 leading-[normal] */
+      color: #171717;               /* 40001034:1190 text-[#171717] */
+      white-space: nowrap;          /* 40001034:1190 whitespace-nowrap */
+    }
+
+    /* chevron-blue-closed — 40000922:4875: 40x40, p-[7px], 14x13 Arrow_drop_down */
+    .chevron {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      padding: 7px;                 /* 40000922:4875 p-[7px] */
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+    .chevron img { display: block; width: 14px; height: 13px; }  /* 40000922:4872 */
+
+    /* The model control is <model-selector-button>: the same published component
+       (model-btn-label 40000973:24205) the prompt surface instantiates, and it
+       already owns 171x40 + radius 6 + "Models". Nothing is restyled here. */
+
+    /* output-area — 40000909:4165 */
+    .output-area {
+      display: flex;
+      flex-direction: column;       /* 40000909:4165 flex-col */
+      align-items: flex-start;      /* 40000909:4165 items-start */
+      flex: 1 0 0;                  /* 40000909:4165 flex-[1_0_0] */
+      width: 100%;                  /* 40000909:4165 w-full */
+      min-height: 0;
+      padding: 20px;                /* 40000909:4165 p-[20px] */
+      background: #fff;             /* 40000909:4165 bg-white */
+      border-radius: 6px;           /* 40000909:4165 rounded-[6px] */
+      box-sizing: border-box;
+    }
+
+    /* the output text — 40000909:4168: Inter Medium 14px #171717, normal leading */
+    .output-body {
+      flex: 1 0 0;
+      min-height: 0;
+      width: 100%;
+      overflow: auto;
+      font-family: 'Inter', system-ui, sans-serif;  /* 40000909:4168 Inter:Medium */
+      font-size: 14px;              /* 40000909:4168 text-[14px] */
+      font-weight: 500;             /* 40000909:4168 font-medium */
+      line-height: normal;          /* 40000909:4168 leading-[normal] */
+      color: #171717;               /* 40000909:4168 text-[#171717] */
+    }
+
+    /* ── The §D5 placeholder strip ──────────────────────────────────────────
+       NOT in the drawing. Four controls kept "left alone for now" by
+       WHAT-THEY-BUILT-WHAT-WE-BUILT.md §D5, rendered in the body of the output
+       area beneath the content — the region the drawing leaves empty — rather
+       than inside output-vontrols, which has exactly two designed children.
+       They keep the plain treatment they already had: restyling a placeholder
+       would invent a design for it. */
+    .canvas-controls {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 6px 10px;
-      font-size: 11px;
-      border-bottom: 1px solid #e5e7eb;
-      background: #f9fafb;
-    }
-    .meta {
-      display: flex;
       gap: 8px;
+      width: 100%;
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+    .canvas-controls .meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+      font-size: 11px;
       color: #6b7280;
     }
+    /* One row, as these four controls were before they moved — they are a
+       placeholder, so their styling is carried over rather than re-invented. */
+    .canvas-controls .actions {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
     .actions button {
       font-size: 10px;
       padding: 2px 8px;
@@ -303,20 +495,110 @@ export class CompiledOutputViewer extends LitElement {
       cursor: pointer;
     }
     .actions button:hover { background: #f3f4f6; }
-    .output {
-      flex: 1;
-      min-height: 0;
-      overflow: auto;
+    /* raw view is not drawn in 40000914:4677; it keeps the pre-formatted
+       treatment it already had, now sitting inside the drawn output area. */
+    .raw {
+      margin: 0;
       padding: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 6px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 13px;
       line-height: 1.5;
       white-space: pre-wrap;
-      background: #fff;
     }
-    .raw {
-      background: #0f172a;
-      color: #e2e8f0;
+
+    /* ── vertical-tab-A ─────────────────────────────────────────────────────
+       40001034:1035 (carries a left border — the one tabled in spec §3.11) and
+       40001034:1775 (carries none). Both frames share data-name "vertical-tab-A"
+       and differ in that one property, so the border is applied by class rather
+       than by name. Both are 40px wide with a 5px 0 2px shadow. */
+    .vertical-tab {
+      display: flex;
+      flex-direction: column;       /* flex-col */
+      gap: 10px;                    /* gap-[10px] */
+      align-items: center;          /* items-center */
+      justify-content: center;      /* justify-center */
+      width: 40px;
+      height: 100%;
+      background: #fff;             /* bg-white */
+      box-shadow: 5px 0 2px rgba(0, 0, 0, 0.15);  /* drop-shadow-[5px_0px_2px_…] */
+      box-sizing: border-box;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    /* 40001034:1035 only — spec §3.11 / O5 */
+    .vertical-tab.bordered { border-left: 1px solid #8b8b8b; }
+
+    /* gripper — 40001034:1036 + 1044 (frame B), 1776 + 1784 (frame A), each a
+       rotate-180 wrapper around the registry element <gripper-prompt-input>.
+       The gripper's documented contract is the LEFT column's section reordering
+       (component description 40000941:23074 — spec §5, O6); what it does in this
+       column is not stated, so no handler is attached. Deliberately not marked as a
+       behavior stub — see the note on _verticalTab for why marking is harmful. */
+    .vt-gripper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transform: rotate(180deg);
+    }
+
+    /* Every text run inside a vertical tab is -rotate-90: it reads bottom-to-top.
+       vertical-rl plus rotate(180deg) is that rotation done with real text, so
+       the glyphs stay upright and the run stays selectable. */
+    .vt-run {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* vertical-tab-token-readout — 40001034:1038 + 1039 (B), 1778 + 1779 (A) */
+    .vt-readout { flex-shrink: 0; display: flex; justify-content: center; width: 100%; }
+    .vt-readout .vt-run {
+      height: 197px;                /* 40001034:1039 h-[197px] */
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 12px;              /* text-[12px] */
+      font-weight: 600;             /* font-semibold (Inter:Semi_Bold) */
+      line-height: 20px;            /* leading-[20px] */
+      color: #767676;               /* text-[#767676] */
+      text-align: right;            /* text-right */
+    }
+
+    /* vertical-tab-tab-description — 40001034:1040 + 1041 (B), 1780 + 1781 (A).
+       This is the row that grows: flex-[1_0_0]. */
+    .vt-description {
+      flex: 1 0 0;
+      min-height: 0;
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+    .vt-description .vt-run {
+      height: 169px;                /* 40001034:1041 h-[169px] */
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 16px;              /* text-[16px] */
+      font-weight: 500;             /* font-medium (Inter:Medium) */
+      line-height: normal;          /* leading-[normal] */
+      color: #171717;               /* text-[#171717] */
+    }
+
+    /* horizontal-tab-label — 40001034:1042 + 1043 (B), 1782 + 1783 (A).
+       whitespace-pre-wrap is load-bearing: the drawn literal carries TWO spaces
+       between words ("Response  Format  A") and the node sets pre-wrap so they
+       survive. Collapsing them would not be this design. */
+    .vt-format { flex-shrink: 0; display: flex; justify-content: center; }
+    .vt-format .vt-run {
+      height: 169px;                /* 40001034:1043 h-[169px] */
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: normal;
+      color: #171717;
+      white-space: pre-wrap;        /* 40001034:1043 whitespace-pre-wrap */
     }
     .status {
       font-size: 10px;
@@ -441,11 +723,11 @@ export class CompiledOutputViewer extends LitElement {
     /* ── Scrollbar — matched EXACTLY to the left column's (.sections-scroll in
          prompt-section-editor): 14px, transparent track, #dadee4 rounded thumb.
          Kept in lockstep so all three columns scroll identically. ─────────── */
-    .output::-webkit-scrollbar,
+    .output-body::-webkit-scrollbar,
     .md::-webkit-scrollbar { width: 14px; }
-    .output::-webkit-scrollbar-track,
+    .output-body::-webkit-scrollbar-track,
     .md::-webkit-scrollbar-track { background: transparent; }
-    .output::-webkit-scrollbar-thumb,
+    .output-body::-webkit-scrollbar-thumb,
     .md::-webkit-scrollbar-thumb { background: #dadee4; border-radius: 10px; }
 
     .md pre {
@@ -573,9 +855,93 @@ export class CompiledOutputViewer extends LitElement {
       || t === '(No output returned.)';
   }
 
+  /**
+   * One vertical tab — the whole of a `vertical-tab-A` frame.
+   *
+   * The two frames are `40001034:1035` and `40001034:1775`. They share a
+   * `data-name` and differ in exactly one drawn property: `1035` carries
+   * `border-l: 1px solid #8b8b8b`, `1775` carries no border (spec §3.11/§3.12).
+   * The border therefore arrives as an argument, not from the name — keying off
+   * "vertical-tab-A" is what merges them.
+   *
+   * `1035` draws `Response  Format  B` and sits against the panel; `1775` draws
+   * `Response  Format  A` and sits outside it (spec §1.2, O8).
+   *
+   * Neither frame's click behavior is drawn in 40000914:4677. They are labels in
+   * the pull, so they render as labels and no handler is invented for them.
+   *
+   * DELIBERATE, do not "fix". catalog-check skips a component's unheard-event
+   * findings when one marker string appears ANYWHERE in its source
+   * (catalog-check.mjs, the event-unheard loop — a plain substring test). That
+   * marker is TWO fragments: `TODO` and `(behavior)`. It is not written here, and
+   * the two fragments must not be written adjacent — not even to talk about them.
+   * Doing so also silences `copy-output` and `regenerate-requested`, which are
+   * real open findings (OPEN-ITEMS.md `check:event-unheard`; AGENT_OPEN_GAPS.md
+   * §event-unheard). The marker is per-event in intent, per-file in implementation.
+   */
+  private _verticalTab(format: 'A' | 'B', bordered: boolean) {
+    // Child order is the drawn order: gripper, readout, description, label, gripper.
+    return html`
+      <div class="vertical-tab ${bordered ? 'bordered' : ''}">
+        <span class="vt-gripper"><gripper-prompt-input></gripper-prompt-input></span>
+        <!-- 40001034:1039 — the drawn literal is "Tokens: 2022 Cost: $0.00802 "
+             (one space between the fields, one trailing space that HTML
+             collapses; the spacing between the fields is the design). -->
+        <div class="vt-readout">
+          <span class="vt-run">Tokens: ${this.tokens || 0} Cost: $${this.cost}</span>
+        </div>
+        <!-- 40001034:1041 — literal "Figma designs" -->
+        <div class="vt-description">
+          <span class="vt-run">${this.outputDescription}</span>
+        </div>
+        <!-- 40001034:1043 / 40001034:1783 — literal "Response  Format  B"/"A",
+             TWO spaces per gap, kept by white-space: pre-wrap. -->
+        <div class="vt-format">
+          <span class="vt-run">Response  Format  ${format}</span>
+        </div>
+        <span class="vt-gripper"><gripper-prompt-input></gripper-prompt-input></span>
+      </div>
+    `;
+  }
+
   render() {
-    const header = html`
-      <div class="header">
+    /* output-vontrols — 40001034:1186. TWO children, exactly, as drawn: the
+       selector tile and the model button. */
+    const controls = html`
+      <div class="controls">
+        <button class="selector-tile" type="button" aria-haspopup="menu">
+          <span class="output-type">${this.outputType}</span>
+          <span class="chevron"><img src=${arrowDropDown} alt="" /></span>
+        </button>
+        <model-selector-button></model-selector-button>
+      </div>
+    `;
+
+    // The progress indicator lives inline in the header meta row (above), in
+    // the position the "running" pill used to occupy.
+    const display = this.viewMode === 'raw'
+      ? html`<pre class="raw">${this.content || '(no output yet)'}</pre>`
+      : ((this._failed && !this.isRunning)
+          ? html`
+              <div class="failed" role="alert">
+                <div class="failed-mark" aria-hidden="true">&#9888;</div>
+                <div class="failed-text">This could not be generated.</div>
+                <pre class="failed-detail">${this.content}</pre>
+              </div>
+            `
+          : (this.content
+              ? html`<div class="md">${this._parse(this.content).map((b, i) => this._block(b, i))}</div>`
+              : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? `Running… ${this.elapsed}s` : '(no output yet)'}</p></div>`));
+
+    /* The §D5 placeholder strip. It lives in the BODY of the output area,
+       beneath the content — spec §4 — which is the region the drawing leaves
+       empty. It is NOT inside output-vontrols, a frame with exactly two drawn
+       children. These four controls are the same four that were here before:
+       Rendered/Raw, Copy, Regenerate, Clear, kept "left alone for now" by §D5.
+       AGENT_OPEN_GAPS.md §event-unheard still records that copy-output and
+       regenerate-requested have no listener. */
+    const canvasControls = html`
+      <div class="canvas-controls">
         <div class="meta">
           <span>${this.model || '—'}</span>
           <span>${this.tokens || 0} tokens</span>
@@ -596,23 +962,21 @@ export class CompiledOutputViewer extends LitElement {
       </div>
     `;
 
-    // The progress indicator lives inline in the header meta row (above), in
-    // the position the "running" pill used to occupy.
-    const display = this.viewMode === 'raw'
-      ? html`<pre class="output raw">${this.content || '(no output yet)'}</pre>`
-      : ((this._failed && !this.isRunning)
-          ? html`
-              <div class="failed" role="alert">
-                <div class="failed-mark" aria-hidden="true">&#9888;</div>
-                <div class="failed-text">This could not be generated.</div>
-                <pre class="failed-detail">${this.content}</pre>
-              </div>
-            `
-          : (this.content
-              ? html`<div class="md">${this._parse(this.content).map((b, i) => this._block(b, i))}</div>`
-              : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? `Running… ${this.elapsed}s` : '(no output yet)'}</p></div>`));
-
-    return html`${header}${display}`;
+    /* The column: the panel, then the two vertical tabs. 451 + 40 + 40 = 531,
+       which is the drawn width of 40000914:4677 (spec §1.2). The bordered tab
+       (Format B, 40001034:1035) comes first because the table shows it against
+       the panel — which is why it, and not the other, carries a LEFT border. */
+    return html`
+      <div class="panel">
+        ${controls}
+        <div class="output-area">
+          <div class="output-body">${display}</div>
+          ${canvasControls}
+        </div>
+      </div>
+      ${this._verticalTab('B', true)}
+      ${this._verticalTab('A', false)}
+    `;
   }
 }
 

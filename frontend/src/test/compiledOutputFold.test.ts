@@ -99,7 +99,12 @@ describe('compiled-output-viewer folds a long fenced block', () => {
     el.viewMode = 'raw';
     await el.updateComplete;
 
-    const raw = el.shadowRoot!.querySelector('pre.output.raw');
+    // The viewer's raw <pre> is class "raw". It used to be "output raw": the
+    // class "output" carried the scroll container when the whole column was one
+    // pane, and it now belongs to .output-body — the scrolling region inside the
+    // drawn output area (40000909:4165). The assertion is unchanged: Raw shows
+    // the whole block, unfolded.
+    const raw = el.shadowRoot!.querySelector('pre.raw');
     expect(raw).not.toBeNull();
     expect(raw!.textContent).toContain('const fileLine59 = 59;');
     expect(heads(el)).toHaveLength(0);

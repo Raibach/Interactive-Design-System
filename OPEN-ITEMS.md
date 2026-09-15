@@ -78,6 +78,7 @@ cannot be added without a status.
 | `check:check-could-not-run` | watching | pipeline | the report does not know what it is talking about | — | `no check is possible` — re-measured 2026-09-14: Figma reachability no longer raises this class, because Figma is an import tool, not a runtime dependency — a missing token now skips the live checks as INCOMPLETE rather than blocking. The class fires only for the census (a NON-live check that never ran), which stays blocking. Recorded `—` as still environment-scoped — see the note under this table |
 | `check:clean-no-jsx` | watching | pipeline | no React / JSX / Tailwind in the component sources | 0 | `check:clean-no-jsx` → 0 — a **pass**, kept deliberately |
 | `check:open-items-register` | watching | pipeline | this file: present, tracked, un-excluded, agreeing with the run | 0 | `check:open-items-register` → 0 |
+| `check:corrections-ledger` | watching | pipeline | a recorded fix that no longer holds — a regression, or a claim with no receipt | 0 | `check:corrections-ledger` → 0 — the ledger is `CORRECTIONS.md`; a row is earned only while the run stops deriving what it names |
 
 `open` = derives findings now · `decided` = a ruling has been made, the work has
 not landed · `in-progress` = the work is in the tree, unmerged · `watching` = a
