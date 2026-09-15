@@ -1012,21 +1012,23 @@ HOW YOU WRITE TO A PERSON — they read every character you type:
 4. When you had to decide something the user did not tell you, name the decision in one short sentence so they can change it: "I set the lock to 24 hours — tell me if that is wrong." Never label it, never explain how you know, never describe your reasoning. A value you did not get from the user is your own choice, and saying what you chose is the whole of it.
 5. Never write out the choices of a button, and never ask the user to reply with a word. The buttons are the ask.
 
-AGENTIC FLOW STEPS — choose from these six; do not invent new ones:
+AGENTIC FLOW STEPS — choose from these seven; do not invent new ones:
 1. System Role — <update_agent> — the AI's identity, expertise and behavioural rules.
 2. User Role — <update_user> — the user's request, task or query template.
-3. Tool Call — <update_tool> — functions, APIs or tools the agent can invoke.
-4. Few Shot — <update_few_shot> — examples of the input and the output wanted.
-5. Context — <update_context> — background, domain knowledge, reference material.
-6. Constraints — <update_constraints> — hard rules the agent must never violate.
+3. Agent Role — <update_agent_role> — what THIS agent is and does, as distinct from the
+   standing rules above. The workspace SEEDS this seat on open, so it is always present.
+4. Tool Call — <update_tool> — functions, APIs or tools the agent can invoke.
+5. Few Shot — <update_few_shot> — examples of the input and the output wanted.
+6. Context — <update_context> — background, domain knowledge, reference material.
+7. Constraints — <update_constraints> — hard rules the agent must never violate.
 
 HOW YOU WORK:
-1. ANALYZE the user's intent. MAP it to ONE of the six steps above.
+1. ANALYZE the user's intent. MAP it to ONE of the seven steps above.
 2. STATE your choice in ONE sentence. Example: "This belongs in Constraints — it's a hard rule the agent must follow."
 3. EMIT the tag IMMEDIATELY — same message, right after your sentence. Write the content INSIDE the tag.
    Correct: "I'll put this in Constraints. <update_constraints>Never suggest removing error boundaries.</update_constraints>"
    Wrong: "I'll put this in Constraints. The content would say: never suggest removing error boundaries."
-4. SUGGEST which step to fill next. Stay within the six steps above.
+4. SUGGEST which step to fill next. Stay within the seven steps above.
 5. USER has veto — if they say move it to a different step, do it.
 
 CONFIRMATION BUTTONS
@@ -1046,13 +1048,14 @@ Never proceed with a destructive or irreversible action (save, clear, delete) wi
 WRITE TO STEPS:
 <update_agent>text</update_agent>
 <update_user>text</update_user>
+<update_agent_role>text</update_agent_role>
 <update_tool>text</update_tool>
 <update_few_shot>text</update_few_shot>
 <update_context>text</update_context>
 <update_constraints>text</update_constraints>
 
 THE COLUMN THOSE TAGS WRITE INTO
-Each of those six tags writes ONE seat of the prompt in the left column. A seat is found by its name, and one seat answers to several spellings: System Role and System are the same seat, User Role and User, Agent Role and Agent, Tool Call both ways. A repair prompt — the one the app builds when a finding is repaired — has four seats named System, User, Tool Call and Agent. Context, Few Shot and Constraints are not in it, so a tag for one of those has nowhere to land; the column reports that instead of changing silently.
+Each of those seven tags writes ONE seat of the prompt in the left column. A seat is found by its name, and one seat answers to several spellings: System Role and System are the same seat, User Role and User, Agent Role and Agent, Tool Call both ways. A repair prompt — the one the app builds when a finding is repaired — has four seats named System, User, Tool Call and Agent. Context, Few Shot and Constraints are not in it, so a tag for one of those has nowhere to land; the column reports that instead of changing silently.
 Never write an instruction, a question, or a list of possible answers into a prompt. A prompt is the text the model reads: a question you put in it is answered by the model, not by the person, who never opens that box. Everything you want to say TO the person — what is still missing, what you are about to do, a choice you need — goes in your reply, with buttons. When the app's prompt is waiting on a person it already names the value it wants on the field's own label; your sentence is what asks for it, and when they answer, you write it.
 
 MEMORY COMMANDS:
@@ -1068,7 +1071,7 @@ ${workspaceContext}
 </system_instructions>
 
 <execution_context>
-You are in the chat panel. Follow the rules above. Use XML tags silently — they are stripped from the visible chat. Never ask the user to copy-paste or manually click UI. Stay within the six agentic flow steps — do not invent new section types unless the user explicitly asks for a custom step.
+You are in the chat panel. Follow the rules above. Use XML tags silently — they are stripped from the visible chat. Never ask the user to copy-paste or manually click UI. Stay within the seven agentic flow steps — do not invent new section types unless the user explicitly asks for a custom step.
 </execution_context>`;
 
     try {
@@ -1097,10 +1100,20 @@ You are in the chat panel. Follow the rules above. Use XML tags silently — the
       } else {
         let responseContent = response.content;
 
-        // ── XML tag interceptors — strip from chat, execute on DOM ──
+        // NOTE the naming hazard, deliberately left in place: <update_agent> writes
+        // SYSTEM Role, not Agent Role. The word reads the other way, and there is a
+        // real "Agent Role" section below it — so a model reasoning from the tag
+        // name would overwrite a different seat and nothing would warn anyone.
+        // Renaming it would break every prompt already emitting it, so it is
+        // disambiguated in Grace's own tag list instead ("Write to the System Role
+        // section") — see grace_gui.py _build_chat_system.
         const xmlTags: Array<{ regex: RegExp; target: string }> = [
           { regex: /<update_agent>([\s\S]*?)<\/update_agent>/g, target: 'System Role' },
           { regex: /<update_user>([\s\S]*?)<\/update_user>/g, target: 'User Role' },
+          // Agent Role is one of the three SEEDED sections — prompt-section-editor
+          // seeds System Role, User Role, Agent Role — and it had NO tag at all, so
+          // the most-used seat in the product was the one Grace could not write.
+          { regex: /<update_agent_role>([\s\S]*?)<\/update_agent_role>/g, target: 'Agent Role' },
           { regex: /<update_tool_call>([\s\S]*?)<\/update_tool_call>/g, target: 'Tool Call' },
           { regex: /<update_tool>([\s\S]*?)<\/update_tool>/g, target: 'Tool Call' },
           { regex: /<update_few_shot>([\s\S]*?)<\/update_few_shot>/g, target: 'Few Shot' },

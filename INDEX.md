@@ -65,14 +65,22 @@ If you are an AI session: read this before you touch anything. Three files here 
 | File | It is |
 |---|---|
 | `OPEN-ITEMS.md` | **THE REGISTER** — every open discrepancy, with the thing to cite it by. At the repository root and **tracked by git since 2026-09-12**; before that it lived in an excluded directory, where nothing showed it as changed and no clone had it. Three citation spaces: the **checker** owns `check:<class>` and `check:<class>:<subject>` (regenerate with `cd frontend && npm run catalog:check`), and **`#NNN`** covers what no checker can see. An item closes only when the thing that derived it stops deriving it — and `check:open-items-register` fails the build when a recorded count, a cited `#NNN`, a check's accounting, or the file's own tracked status drifts |
+| `CORRECTIONS.md` | **THE CORRECTIONS LEDGER** — every finding this repository has corrected, with **the commit that carries the fix**. Its companion above asks *what is still open*; this asks *what we already did, and does it still hold*. A row is `check:<class>` (a whole class cleared) or `check:<class>:<subject>` (one finding), and it is **earned** only while the run stops deriving what it names — so a finding that comes back fails the build as a **regression**, which is the one signal a count cannot carry. Rows are added with `cd frontend && npm run corrections:add`, and held by `check:corrections-ledger` (blocking) |
+
 
 ## The notes — where a session with no memory re-orients
 
 Written for an AI reader, not for the repository — so most of them are ignored on
 purpose. Read them in this order.
 
+**The first one is intent; the rest are state.** It says what the application is *for*
+and what his rulings have been; the others say what happened to it. If a file below ever
+comes to contradict it, the journal is describing the build and this is describing the
+point of it.
+
 | File | It is | Git sees it |
 |---|---|---|
+| `AGENT_NORTH_STAR.md` | **The intent this build is checked against** — his own words on what the application is for (adoption, not component-fixing), the SCE doctrine behind it, six constraints each carrying the test that makes it *fail*, his rulings so they are not re-litigated, and the Grace/Keeper archaeology so a session does not re-derive it from scratch. **Read §2 before starting anything.** Tracked on purpose: the three Figma notes below are gitignored, so a fresh clone gets none of them | **tracked** — the only file in this table git carries |
 | `catalog-audit/AI-notes.md` | The working journal: what was broken, what was verified live, what is explicitly *not* claimed, and — at the end — the reporting register: the session's own wrong numbers, each re-run and corrected, plus the classes that are not numbers (§8: a fix marked "applied" whose only evidence is that it compiles, in a repo with no Python tests; §9: process shortcuts) and the open questions, three of five since closed. Converted from `AI-SLOOP.pages` (401431 B, 2026-09-11), which has since left the tree and was **never committed** — this file is now the only surviving copy; the decode method and the body md5 are in its header comment | untracked until 2026-09-12 (then committed — it was the only copy, so it was the last thing to be saved) |
 | `FIGMA/AGENT_BRIEF.md` | Figma in this repository: the two channels, both endpoints, the write-side rules, and the gotchas each earned by a wrong conclusion | ignored (`.gitignore:52`) |
 | `FIGMA/AGENT_NODE_MAP.md` | Figma node ↔ Lit element, containers, the two id sets, the dead ids | ignored (`.gitignore:53`) |

@@ -32,14 +32,24 @@ MODEL_PROVIDERS = [
 
 LLM_TIMEOUT = 10  # HARD 10s cap. A2UI surfaces must render in <=10s or 503.
 
-# Run is NOT a surface. The 10s cap is a UX contract for surface assembly — a canvas
-# that has to appear now. `prompt_output` writes a document: with the design attached
-# it is a multi-KB prompt, and deepseek-v4-pro is a REASONING model that spends
-# completion tokens thinking before it writes a word. The 10s cap was applied to both,
-# so a perfectly good run died as "DeepSeek API request failed: Request timed out"
-# after the prompt had been assembled correctly. Same budget for assembly, room for
-# writing, overridable for a slow provider.
-LLM_TIMEOUT_PROMPT_OUTPUT = int(os.getenv("LLM_TIMEOUT_PROMPT_OUTPUT", "120"))
+# Which modes are SURFACES. A surface is a canvas that has to appear now, and the
+# 10s cap is its contract. Everything NOT in this set asks the model to WRITE, and
+# writing gets room.
+#
+# Written as a set rather than as `mode == "prompt_output"` because that test WAS
+# the bug. `chat` was not in it, so a person's question inherited the assembly cap
+# and died as "DeepSeek API request failed: Request timed out" — while
+# deepseek-v4-pro, a REASONING model, spends completion tokens thinking before it
+# writes a word (18 reasoning tokens to answer "Say OK", measured). The first fix
+# covered `prompt_output` and left `chat` on 10s. Naming the surface set means a new
+# writing mode is safe by default, and one that IS a surface has to say so here.
+SURFACE_MODES = {"console_assembly", "surface_assembly", "catalog_health_assembly"}
+
+# The writing budget. The ENV VAR keeps its old name on purpose: an operator may
+# already have set LLM_TIMEOUT_PROMPT_OUTPUT, and renaming the variable would
+# silently fall back to the default on their machine.
+WRITING_TIMEOUT_ENV = "LLM_TIMEOUT_PROMPT_OUTPUT"
+LLM_TIMEOUT_WRITING = int(os.getenv(WRITING_TIMEOUT_ENV, "120"))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # A2UI MISSION HEADER — top-of-context anchor for maximum model attention
@@ -173,9 +183,11 @@ def query_llm(
         model_name = model or provider["model"]
         print(f"[{provider['name']}] Attempting {model_name}...")
         try:
-            # Surfaces keep the tight cap; writing gets room. See the constants above.
+            # Surfaces keep the tight cap; anything that writes gets room. See
+            # SURFACE_MODES. `chat` is a writing mode — a person is waiting on an
+            # answer, not on a canvas.
             client_timeout = (
-                LLM_TIMEOUT_PROMPT_OUTPUT if mode == "prompt_output" else LLM_TIMEOUT
+                LLM_TIMEOUT if mode in SURFACE_MODES else LLM_TIMEOUT_WRITING
             )
             # One retry, not the SDK's two. This is a single blocking call on a
             # request a person is watching, and the SDK retries a TIMEOUT by
@@ -224,7 +236,27 @@ def query_llm(
 
         except Exception as exc:
             print(f"[{provider['name']}] Failed: {exc}")
-            last_error = f"Error: {provider['name']} request failed: {exc}"
+            if "timed out" in str(exc).lower():
+                # Say WHICH budget expired, and whether it is the one meant to be
+                # tight. "Request timed out." alone sends a reader to the provider,
+                # the network and the model — when the number at fault was a
+                # constant in this file.
+                if mode in SURFACE_MODES:
+                    why = (
+                        f"this is a SURFACE and {LLM_TIMEOUT}s is its contract: "
+                        "the canvas has to appear now"
+                    )
+                else:
+                    why = (
+                        f"{mode} is a WRITING mode and {client_timeout}s was the budget — "
+                        f"raise {WRITING_TIMEOUT_ENV} if a reasoning model needs longer"
+                    )
+                last_error = (
+                    f"Error: {provider['name']} request failed: {exc} "
+                    f"(waited {client_timeout}s; {why})"
+                )
+            else:
+                last_error = f"Error: {provider['name']} request failed: {exc}"
 
     return last_error
 
@@ -359,12 +391,13 @@ def _build_chat_system(context: str, memory_context: str) -> str:
         "go there, WRITE it there immediately:\n\n"
         "<update_agent>TEXT</update_agent> — Write to the System Role section\n"
         "<update_user>TEXT</update_user> — Write to the User Role section\n"
+        "<update_agent_role>TEXT</update_agent_role> — Write to the Agent Role section\n"
         "<update_tool>TEXT</update_tool> — Write to the Tool Call section\n"
         "<update_few_shot>TEXT</update_few_shot> — Write to the Few Shot section\n"
         "<update_context>TEXT</update_context> — Write to the Context section\n"
         "<update_constraints>TEXT</update_constraints> — Write to the Constraints section\n"
         "<add_role name=\"NAME\">CONTENT</add_role> — Create a new custom section\n"
-        "<remove_role name=\"NAME\"/> — Delete a custom section\n"
+        "<remove_role name=\"NAME\"/> — Delete ANY section by name, including the built-in System Role, User Role and Agent Role\n"
         "<run_prompt/> — Trigger prompt execution\n"
         "<switch_tab>trace|variables|chat</switch_tab> — Navigate right-column tabs\n"
         "<save/> — Save the current prompt\n"
