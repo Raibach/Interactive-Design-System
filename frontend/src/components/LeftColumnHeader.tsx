@@ -190,7 +190,7 @@ export default function LeftColumnHeader({
           {logo ?? (
             <div className="flex flex-col leading-tight">
               <span style={{ color: "#1a1a1a", display: "flex", alignItems: "baseline", gap: "8px" }}>
-                <span style={{ fontFamily: "Arial Black, sans-serif", fontWeight: 900, letterSpacing: "-0.08em", fontSize: "24px" }}>RAIBACH IDS</span>
+                <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 900, letterSpacing: "-0.08em", fontSize: "24px" }}>RAIBACH IDS</span>
               </span>
               <span style={{ color: "rgba(0,0,0,0.55)", letterSpacing: "0.06em", fontSize: "14px", fontWeight: 600 }}>
                 Interactive Design System

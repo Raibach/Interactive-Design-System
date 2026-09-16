@@ -632,3 +632,43 @@ export function repairAsk(
     answers: closed.flatMap((f) => (f.choices ?? []).map((c) => ({ ...c, field: f.label }))),
   };
 }
+
+/**
+ * What each annotation line is FOR — the designer's own guide,
+ * catalog-audit/FIGMA/ANNOTATION_FIGMA_GUIDE.md §"Field-by-field".
+ */
+const ANNOTATION_LINE_MEANING: Record<string, string> = {
+  'Data': 'what this component binds to (e.g. workspace.activeItem.role)',
+  'On click': 'the event fired and its payload (e.g. dispatch role-select { role: <tile label> })',
+  'State': "the variant's state (e.g. open / closed)",
+  'A11y': 'accessibility role, and where the label comes from (e.g. role="menu")',
+};
+
+/**
+ * The repair, described to the model that GUIDES the person — not to the repair
+ * model. Carried as surface context `repair_brief`; never written into the repair
+ * prompt itself.
+ */
+export function repairBrief(
+  finding: RepairFinding,
+  seatName = 'User',
+  content?: string,
+): string[] {
+  const material = repairMaterialFor(finding);
+  const bare = material.fields.filter((f) => (f.suggestion ?? []).length === 0).map((f) => f.label);
+  const lines: string[] = [
+    '=== REPAIR OPEN — WHAT THE PERSON IN FRONT OF IT IS MISSING ===',
+    (finding.component ? finding.component + ' — ' : '') + finding.check,
+  ];
+  if (bare.length) {
+    lines.push('LINES THEY HAVE TO WRITE — the app has no true value to offer for these:');
+    for (const label of bare) {
+      const meaning = ANNOTATION_LINE_MEANING[label] || '';
+      lines.push(meaning ? label + ' — ' + meaning : label);
+    }
+    lines.push('The form shows these labels BARE, so what they mean reaches the person only if you say it. Say what each line you ask for is FOR, in these words. Invent no meaning of your own, and do not fill one in for them.');
+  } else {
+    lines.push('Nothing is left to write — every line the form asks for is already answered.');
+  }
+  return lines;
+}

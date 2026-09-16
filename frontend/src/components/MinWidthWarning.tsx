@@ -24,10 +24,10 @@ export const MinWidthWarning: React.FC = () => {
       style={{ backgroundColor: "rgba(26, 22, 37, 0.92)" }}
     >
       <div className="text-center px-8 max-w-xs">
-        <p className="text-white/70 text-sm font-semibold font-manrope mb-1">
+        <p className="text-white/70 text-sm font-semibold mb-1">
           Viewport too narrow
         </p>
-        <p className="text-white/40 text-xs font-manrope leading-relaxed">
+        <p className="text-white/40 text-xs leading-relaxed">
           Expand your browser window wider to display the content.
           <br />
           Minimum width: 400px.

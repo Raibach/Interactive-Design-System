@@ -64,6 +64,25 @@ ERROR HANDLING: Use <error-banner message="..."/> only. Never create debug pages
 </critical_protocol>
 """
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ASSISTANT PROFILE — Grace in conversation.
+#
+# Kept SEPARATE from the assembler profile above on purpose: the assembler's
+# no-invention rules bind generated payloads, never her. Grace is a
+# collaborator — she proposes, asks, and never refuses because a value is
+# missing. (2026-09-16: the repair rules leaked into her prompt and she
+# refused to help; the split is the fix.)
+# ═══════════════════════════════════════════════════════════════════════════════
+ASSISTANT_PROFILE = """
+YOUR PROFILE — you are the COLLABORATOR, not the assembler and not the repair applier.
+The rule against inventing annotations, event names, data paths, states, and
+accessibility labels binds the code that applies changes — never your conversation.
+Never refuse to help because a value is missing. When a design value is absent,
+PROPOSE one and say it is proposed: "I'll propose role-select — confirm it, or
+paste the Figma value." Never write a proposed value into the surface as if it
+came from the design.
+"""
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Public API — one call that routes everything
@@ -142,6 +161,17 @@ def query_llm(
                 "You are a production execution engine. Execute the user's request "
                 "and return only the output they asked for. No preamble, no commentary."
             )})
+    elif mode == "chat":
+        # Chat is CONVERSATION, not assembly. Prepending MISSION_HEADER here
+        # mandated "ONLY <a2ui_surface> XML", so a chat reply with nothing to
+        # update returned the empty shell "<a2ui_surface></a2ui_surface>"
+        # (29 chars, verified live 2026-09-16) and the person read a dead chat.
+        # The frontend's context already carries Grace's persona; the tags in
+        # it are TOOLS she may use, not her only allowed output.
+        messages.append({"role": "system", "content": system_prompt or (
+            "You are Grace, a helpful prompt-engineering assistant. "
+            "Reply in plain prose."
+        )})
     elif system_prompt and system_prompt.strip():
         messages.append({"role": "system", "content": MISSION_HEADER + system_prompt})
     else:
@@ -338,25 +368,23 @@ def _assemble_prompt_output(context: str, question: str) -> tuple:
 def _build_chat_system(context: str, memory_context: str) -> str:
     """Build the full chat-mode system prompt with A2UI protocol + tag registry."""
     a2ui_protocol = (
-        "\n\nCRITICAL A2UI PROTOCOL\n"
-        "ROLE: You are a SILENT A2UI ASSEMBLER. You do NOT build webpages.\n"
+        "\n\nA2UI PROTOCOL — YOUR SURFACE TOOLS\n"
+        "You are a conversational assistant FIRST: reply in plain prose.\n"
+        "The XML tags below are TOOLS you MAY use to drive the workspace — they are\n"
+        "not your only output, and you never wrap prose in them.\n"
         "CONSTRAINTS:\n"
         "1. NEVER output raw HTML tags (<div>, <script>, <style>).\n"
         "2. NEVER create new files, routes, or 'hidden pages' to fix errors.\n"
         "3. NEVER manipulate the DOM directly.\n"
-        "4. If an error occurs, report it ONLY via the <error-banner> tag.\n"
-        "5. Your ONLY valid output is A2UI XML tags defined in the Tag Registry below.\n"
-        "\n"
-        "OUTPUT FORMAT:\n"
-        "- Wrap ALL component updates in <a2ui_surface>...</a2ui_surface>.\n"
-        "- Use self-closing attribute form: <update_components component=\"name\" props='{...}' />\n"
-        "- NO raw HTML, NO JavaScript, NO CSS.\n"
+        "4. If an error occurs, report it via the <error-banner> tag.\n"
+        "5. When you change a component, wrap ONLY the component updates in\n"
+        "   <a2ui_surface>...</a2ui_surface>. If you change nothing, say so in\n"
+        "   plain prose — never emit an empty <a2ui_surface></a2ui_surface>.\n"
         "\n"
         "EXAMPLE INPUT: 'User clicks Console'\n"
         "EXAMPLE OUTPUT:\n"
         "<a2ui_surface>\n"
         "  <update_components component=\"chat-panel\" props='{\"status\": \"active\"}' />\n"
-        "  <update_components component=\"agent-card\" props='{\"id\": \"main\"}' />\n"
         "</a2ui_surface>\n"
     )
 
@@ -485,10 +513,13 @@ def _build_chat_system(context: str, memory_context: str) -> str:
         "[Explain More](action:explain_more)\n\n"
     )
 
+    # The ASSISTANT PROFILE rides at the TOP of every chat, even when a repair
+    # brief is in the room: conversation keeps its collaborator rules while the
+    # assembler/repair strictness binds only the payloads she generates.
     if context and context.strip():
-        system = context + tag_instructions
+        system = ASSISTANT_PROFILE + context + tag_instructions
     else:
-        system = (
+        system = ASSISTANT_PROFILE + (
             "You are Grace, the execution engine for this prompt engineering workspace.\n"
             "Your only interface is this chat panel.\n"
             "You are the AI, NOT the user. Execute the user's request directly.\n"

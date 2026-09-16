@@ -315,7 +315,7 @@ export class ChatNavigationBar extends LitElement {
       color: #fff;
       font-size: 12px;
       font-weight: 700;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
     }
     ::slotted(img) {
       position: absolute;
@@ -329,6 +329,8 @@ export class ChatNavigationBar extends LitElement {
 
     /* ── Tab button ───────────────────────────────────────────────────── */
     .nb {
+      /* Inherit — a shadow-root <button> otherwise falls back to the UA font (Arial). */
+      font-family: inherit;
       position: relative;
       flex-shrink: 0;
       width: 100%;
@@ -419,7 +421,7 @@ export class ChatNavigationBar extends LitElement {
       position: relative;
       flex-shrink: 0;
       width: 100%;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
       font-weight: 700;
       font-style: normal;
       font-size: 13px;
@@ -535,7 +537,7 @@ export class ChatNavigationBar extends LitElement {
       box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.25);
       white-space: nowrap;
       font-size: 10pt;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
       font-weight: 400;
       z-index: 50;
     }
@@ -553,6 +555,8 @@ export class ChatNavigationBar extends LitElement {
 
     /* ── Gripper (drag-to-resize handle) ──────────────────────────────── */
     .gb {
+      /* Inherit — a shadow-root <button> otherwise falls back to the UA font (Arial). */
+      font-family: inherit;
       position: relative;
       flex-shrink: 0;
       width: 100%;

@@ -49,6 +49,14 @@ export default defineConfig({
     port: 5001,           // the site — vite serves source LIVE here, never a build
     strictPort: true,     // if 5001 is taken, fail. Never silently use another port.
     hmr: false,
+    // The in-app browser reuses module responses from its HTTP cache even
+    // across reloads and cache-busted URLs, so edits silently never reach
+    // the screen. no-store (not no-cache) forbids storing them at all:
+    // every load re-fetches every module. Dev only — this config never
+    // reaches production builds.
+    headers: {
+      'Cache-Control': 'no-store',
+    },
     allowedHosts: [
       'localhost',
       '.loca.lt',

@@ -22,6 +22,7 @@ from deps import (
 from grace_gui import (
     evaluate_source, query_llm, retrieve_memory_context, search_news,
     summarize_pdfs, milvus_save_version, milvus_get_versions,
+    LAST_USAGE,
 )
 from agent_rpc_handler import AgentRpcHandler
 from figma_service import (
@@ -293,10 +294,21 @@ async def api_teacher_query(request: TeacherQueryRequest):
             except Exception as e:
                 print(f"⚠️  Failed to save assistant response: {e}")
 
+        # The measured cost of this call, attributed to the conversation it
+        # served. A surface seat may only show its own conversation's numbers —
+        # never session totals — so the usage that rides the envelope must say
+        # which conversation it belongs to.
+        if conv_id:
+            LAST_USAGE["conversation_id"] = str(conv_id)
+
         return {
             "content": result,
             "error": None,
             "conversation_id": conv_id,
+            # The measured cost of this call, so the surface seat's footer can
+            # show its own conversation's numbers. LAST_USAGE was updated by
+            # query_llm above and attributed to conv_id just before this.
+            "usage": dict(LAST_USAGE),
             # What a declared tool call could not do. Empty on a clean run; the UI
             # shows it rather than letting a run look complete when the design was
             # never read.

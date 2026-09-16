@@ -14,6 +14,11 @@ interface LeftVerticalMenuProps {
   onNewChat?: () => void;
   onNewProject?: () => void;
   onUploadDocument?: () => void;
+  // Received and destructured since the real login landed (routes/auth.py + PinGate),
+  // but not declared here, so the tree did not typecheck and `npm run build` failed
+  // with TS2339 on the destructuring below. Declared, not wired: LogoutIcon exists at
+  // :205 and nothing renders it yet, so there is still no control to press.
+  onSignOut?: () => void;
   userName?: string;
   userAvatar?: string;
 }
@@ -105,6 +110,7 @@ export default function LeftVerticalMenu({
   onNewChat,
   onNewProject,
   onUploadDocument,
+  onSignOut,
   userName = "User",
   userAvatar,
 }: LeftVerticalMenuProps) {
@@ -199,6 +205,14 @@ export default function LeftVerticalMenu({
     setExpandedItem(null);
     setIsExpanded(false);
   };
+
+// Sign out icon
+const LogoutIcon = () => (
+  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
+    <path d="M12 3h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M8 10h8M13 7l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
   const menuItems: MenuItem[] = [
     {

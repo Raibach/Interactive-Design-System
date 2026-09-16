@@ -73,6 +73,8 @@ export class RoleTile extends LitElement {
       text-overflow: ellipsis;
     }
     .arrow-drop-down {
+      /* Inherit — a shadow-root <button> otherwise falls back to the UA font (Arial). */
+      font-family: inherit;
       width: 40px;
       height: 40px;
       background: none;

@@ -61,3 +61,14 @@ catalog-audit/*.json
 FIGMA/AGENT_BRIEF.md
 FIGMA/AGENT_NODE_MAP.md
 FIGMA/AGENT_OPEN_GAPS.md
+
+# ── Ignored before commit (local working docs & agent instructions) ──
+AGENT_NORTH_STAR.md
+A2UI-Rules.md
+CORRECTIONS.md
+OPEN-ITEMS.md
+WHAT-THEY-BUILT-WHAT-WE-BUILT.md
+INDEX.md
+ignore-for-commit/
+AGENTS-instructions/
+models/

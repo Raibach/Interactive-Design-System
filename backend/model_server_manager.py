@@ -14,6 +14,15 @@ load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
 # ── Provider registry ──────────────────────────────────────────────────
 PROVIDERS = {
+    # Mirror of MODEL_PROVIDERS[0] in grace_gui.py — kept in step by hand
+    # because this module's job is to REPORT on the same provider the runtime
+    # uses, and the id in both places has to be the one actually being served.
+    "local": {
+        "name": "Grace Local (llama.cpp)",
+        "base_url": os.getenv("LOCAL_MODEL_URL", "http://127.0.0.1:8081/v1"),
+        "model": os.getenv("LOCAL_MODEL_ID", "grace-local"),
+        "api_key_env": "LOCAL_MODEL_API_KEY",
+    },
     "deepseek": {
         "name": "DeepSeek API",
         "base_url": "https://api.deepseek.com",
