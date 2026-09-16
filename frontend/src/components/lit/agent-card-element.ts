@@ -116,7 +116,7 @@ export class AgentCardElement extends LitElement {
       flex-direction: column;
       gap: 10px;
       overflow: hidden;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
       line-height: 0;
     }
 
@@ -362,6 +362,8 @@ export class AgentCardElement extends LitElement {
     /* Progressive: hidden until the card is hovered/focused, then trash
        icon top-right. First click arms it; second click confirms. */
     .card-delete {
+      /* Inherit — a shadow-root <button> otherwise falls back to the UA font (Arial). */
+      font-family: inherit;
       position: absolute;
       top: 8px;
       right: 8px;
@@ -392,7 +394,7 @@ export class AgentCardElement extends LitElement {
       border-color: #FFFFFF;
     }
     .card-delete-label {
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.04em;

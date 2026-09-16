@@ -45,7 +45,7 @@ export class ErrorBanner extends LitElement {
   static styles = css`
     :host {
       display: block;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
     }
     /* A banner with no message is a red bar that reports nothing — and a red bar
        that reports nothing teaches people to ignore the shape. So: nothing to

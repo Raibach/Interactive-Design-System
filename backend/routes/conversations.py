@@ -340,6 +340,12 @@ async def get_messages(
         uid = get_user_id_from_header(x_user_id)
         messages = state.conversation_api.get_messages(conversation_id, uid, limit, offset)
         return {"messages": messages}
+    except PermissionError as e:
+        # The caller has no claim on the PACKAGE this conversation belongs to.
+        # 403, not an empty list: a person who cannot read a conversation must
+        # be told that, or they will read the empty result as "nothing was
+        # ever said here".
+        raise HTTPException(status_code=403, detail=str(e))
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

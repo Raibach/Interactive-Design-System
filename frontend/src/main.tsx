@@ -12,6 +12,10 @@ import "./index.css";
 import "@/components/lit/prompt-section-editor";
 import "@/components/lit/compiled-output-viewer";
 import "@/components/lit/workspace-layout";
+// The right column's seat. Registration is a side effect of this import, and no
+// other element imports it transitively — without it <chat-panel> is an
+// unregistered tag and the right column renders as an empty box.
+import "@/components/lit/chat-panel";
 
 // ── Lit web component registry — side-effect imports auto-register custom elements ──
 import "@/components/lit/agent-card-element";

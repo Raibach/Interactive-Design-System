@@ -151,3 +151,33 @@ automatically. No re-typing, no second source of truth.
 You write one structured annotation per variant → the AI pulls it by node ID →
 it lands in the component (behavior), the design (visual, automatic), and the
 catalog (name, automatic). Done. You never explain it again.
+
+## What stays stable when you edit — and what doesn't
+
+**Stable. Edit freely:**
+
+- **Paint** — colors, sizes, spacing, radii, shadows, fonts. These re-apply to
+  the same elements; structure never moves.
+- **Tag names and the envelope contract.** `chat-panel`, `chat-messages`, etc.
+  are registered once (`customElements.define`), and the catalog validates by
+  component name. Editing styles inside a Lit element's shadow DOM changes
+  nothing upstream. The server emits `chat-panel`, the renderer resolves
+  `chat-panel` — done.
+- **Your labels are load-bearing identifiers.** That is exactly why they stay
+  put even while everything inside them gets rewritten.
+
+**Where the guarantee ends — the contract surface:**
+
+- **Properties and event payloads.** Rename `conversation-id` to `package-id`,
+  or change what `message-sent` carries in its detail object — the label holds
+  but every consumer breaks silently. Structure intact, data path severed, no
+  error raised. Labels are stable; contracts are not automatic.
+
+**Three rules, pinned:**
+
+1. Adding attributes/properties → safe, additive.
+2. Renaming properties or changing event payloads → breaks consumers without
+   failing loud.
+3. Deleting an element → breaks any parent whose `explicitList` references its
+   ID. Under the adjacency list a dangling ID reference doesn't crash — it
+   renders nothing at that position. A silent hole.

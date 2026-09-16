@@ -15,7 +15,11 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
+  /* Inter Medium is the site-wide base. Every explicit weight below this
+     (font-semibold, font-bold, the 600/700 in Lit static styles) still wins,
+     so this raises plain text without touching any bolding treatment. */
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

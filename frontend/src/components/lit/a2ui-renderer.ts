@@ -107,7 +107,7 @@ const pascalToKebab = (s: string) =>
  * nothing and looks like a missing component rather than a missing mapping.
  */
 const COMPOSITE_MAP: Record<string, string> = {
-  ChatPanel: 'chat-panel',            // reserved in the catalog; element still unimplemented
+  ChatPanel: 'chat-panel',            // defined in components/lit/chat-panel.ts (2026-09-15)
   SectionEditor: 'prompt-section-editor',
   CompiledOutput: 'compiled-output-viewer',
 };

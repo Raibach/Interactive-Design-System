@@ -1,237 +1,52 @@
 # Changelog — Design System Lifecycle Management
 
 Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
+Goddamn, damn look at you
 
-**[2026-09-14] — A north star that can fail, because the last one could not.**
 
-- **New `AGENT_NORTH_STAR.md`** (repository root, **tracked**) — the intent this build is checked against, addressed to an AI reader and saying so in its first line: the author of this repository *does not read it*, so no session cites it at him or reads his silence about it as agreement. It carries his own words on what the application is for — *"this application is about adoption… getting a human being to understand it and use it on a daily basis is a different story"* — and **six constraints each written with the test that makes it fail**, because on 2026-09-14 a full session went into a Figma column, a corrections ledger and a timeout fix without a single decision being tested against the point of the application, even though the doctrine answering it (`READ-ME/THE_METHOD.md:61`, the SCE progressive-adoption work) had been in this repository the whole time. It surfaced only when the word was said out loud. The lesson is recorded as the file's own reason to exist: *a north star that has been READ becomes background; a north star expressed as something that can FAIL becomes foreground.* It also holds the Grace/Keeper archaeology — `grace_memory_api.py` alive with 0 callers, `retrieve_memory_context` stubbed since the initial commit, the dead-code purge that did **not** happen in this repository's history — so no session re-derives it; his rulings, so they are not re-litigated; and what is deliberately on the back burner, so it is not built early.
-- **`INDEX.md` §The notes now opens with it**, and marks it **tracked** — the only file in that table git carries. The three `FIGMA/AGENT_*.md` notes are gitignored, so a fresh clone gets none of them; a document whose whole purpose is to orient a session with no memory cannot itself be absent from a clone. The section now also states the reading order's shape: *the first one is intent, the rest are state.*
+**[2026-09-16] — Dead-code audit (report only — no deletions, no moves, no cleanup)**
 
+Audit only — no deletions, no moves, no cleanup. Running the checks, then a three-section report with evidence.
 
+## 1. DEAD — zero references (including catalogs, registry, tests)
 
-- **The model is `deepseek-v4-pro`, and only that.** `deepseek-flash` timed out under the surface budget, so it is removed everywhere the runtime chooses a model: `grace_gui.py` (`MODEL_PROVIDERS`) and `model_server_manager.py` (`PROVIDERS["deepseek"]`), which is also what un-stuck `/api/health` (it had been pointing at a `deepseek-v4-flash` id DeepSeek no longer serves).
-- **Figma is an import tool, not a build gate.** Production carries no `FIGMA_TOKEN`, and the catalog check treated "no token" as a blocking `check-could-not-run` finding — so every push to `main` died at `npm run build` (exit 1) and production kept serving the previous image. The live Figma checks (node addresses, annotations) are optional: a missing or unreachable token now skips them as INCOMPLETE, exactly like `--offline`. The census (a NON-live check that never ran) still blocks — that one is a broken check, not an absent credential.
+| Item | Evidence |
+|---|---|
+| `src/shared/runStream.ts` | Only reference in all of `src` is its own test (`runStream.test.ts`). Its endpoint `POST /api/teacher/query/stream` **does not exist in the backend** (grep across `backend/routes` — no route). Module and consumer both dead. |
+| `src/components/A2UISurfaceContainer.tsx` | No import, no JSX mount anywhere. Grep finds only: its own file, its `.stories.tsx`, and a **comment** in `WritingAreaIndex.tsx:278`. It's the old XML-tag-driven "fake A2UI" container — superseded by the renderer. |
+| `src/components/registry.json.backup.20260914_124525` | Backup file, zero references. |
+| `src/components/lit/prompt-input/gripper-prompt-input.ts.backup.20260914_131541` + `…131701` | Backup files, zero references (superseded by the live `gripper-prompt-input.ts`). |
 
-**[2026-09-14] — The list she was standing in front of, and a view that had stopped following her.**
+## 2. SUSPECT — referenced only by console paths, or by paths slated for removal
 
-## Two defects with one symptom: the answer was there, and it could not be read
+| Item | Dependency |
+|---|---|
+| `src/shared/plainText.ts` | Imported only by `InteractiveChatInterface.tsx` (console seat) + its test. Dies when the console migrates to Lit. |
+| `src/shared/actionLink.ts` | Same — React seat's action-button rendering. Console-only. |
+| `src/shared/chatSeat.ts` | Console-only now (`InteractiveChatInterface` + its test). The Lit seat does **not** use it — it owns its conversation directly. |
+| `src/shared/ai-orchestrator.ts` | Console-only (the React seat's XML-tag extraction). The Lit seat has its own port of that logic in `chat-panel.ts`. |
+| The six chat pieces (`chat-header`, `chat-messages`, `chat-input`, `chat-action-bar`, `chat-footer`, `chat-repair-actions`) | Referenced **only** by `chat-panel.ts` (verified: 1–3 uses each, nowhere else). Live today, but they are the nested composition your adjacency-list rule objects to — if you choose the fully-flat direction (model-emitted pieces), all six retire. |
+| `A2UISurfaceContainer.stories.tsx` | Storybook-only; dies with its component. |
+| `src/test/runStream.test.ts` | Tests a dead module; dies with it. |
 
-The report was *"I ask her a question and all of her responses appear below the scroll bar."* The replies were arriving. They were out of view. Two separate causes, each enough on its own. **The scroll flag was being written by the app itself:** the flag that meant *the person has scrolled away from the newest message* was also set by the deliberate move that aligns a reply's first line with the top of the viewport. The effect that scrolls on a new message returned early whenever that flag was false, so one reply too tall to fit left the view scrolled to its own start — above the bottom — and from then on **nothing scrolled**: every later message, including the ones appended by the `a2ui:system-message` listener rather than by send, was drawn below the fold and stayed there until the person scrolled down by hand. Measured in the running app: a 2425px reply on a 776px viewport is anchored to its start with the view **1684px from the bottom** of a 3225px thread — exactly the geometry the old flag read as *the person is reading history*. **And the list above the thread was taller than the column:** the catalog check holds 43 open findings, the block rendering them sat directly above the conversation in the same scroll, so the report alone was taller than the viewport her replies had to appear in. The second defect also hid a third, which is why the list could not be managed by conversation at all: her prompt never carried the report, so asked *name the blocking finding* she named `provenance-missing:prompt-container` — one that had been fixed earlier the same day — in a sentence that read exactly like a fact.
+## 3. KEEP-BUT-STALE — live, but superseded or transitional
 
-- **The view now answers two different questions instead of conflating them.** New `shared/chatScroll.ts` (pure, so the policy is readable and testable in one sitting): `isAtBottom` decides whether **growth** keeps the view pinned; `isFollowingNewest` decides whether an **arriving** message may move it — and a reply too tall for the viewport is never at the bottom while it is being read from its first line, so *at the bottom* was the wrong question to ask. `appendTarget(role, …)` then resolves to `bottom` (the person's own turn: they typed, so the reply it asks for is the thing on screen now — this is the reset that was missing), `newest-top` (a reply, read from its start, while the newest message is still in front of them), or `hold` (they have scrolled back into older turns, and nothing moves). `handleScroll` writes both flags; `scrollToLatest` — called on send — re-engages following, because asking for the latest is the person re-joining the conversation. 11 cases in `chatScroll.test.ts`, including the regression by name (`keeps following after a reply too tall to fit: the app's own scroll is not the person leaving`).
+| Item | Why kept |
+|---|---|
+| `src/components/InteractiveChatInterface.tsx` | **Live** — mounted by the console operator shell in `WritingAreaIndex` (≈:3685+). Superseded by the Lit seat *for the composer only*. An aggressive audit will flag this file; do not trust that. |
+| `src/services/neuralNetworkService.ts` | Live — imported by both the console seat and `WritingAreaIndex`. |
+| `src/shared/event-bus.ts` | Live — the Lit seat's command channel (`save-button`, surface tags) still routes through it. |
+| `src/shared/tag-registry.ts`, `a2ui-envelope.ts`, `a2ui-primitives.ts`, `a2ui-image-catalog.ts` | Live — gatekeeper, envelope reader, renderer. |
+| `src/shared/conversationStorage.ts` | Live — the package-conversation DB feed (host → seat). |
+| `catalogHealth.ts`, `catalogBrief.ts`, `repairApply.ts`, `repairMaterial.ts`, `repairSections.ts` | Live — repair/findings flow. |
+| `retired-files/` (existing archive) | Your archive pattern already exists — the DEAD items above are candidates to move there, not delete. |
 
-- **The catalog list is an accordion in her output now, closed by default.** A real disclosure — `aria-expanded` and `aria-controls` on the header button, the ▶ rotating in place, the same pattern as the collapsible conversation history beside it — because 43 rows above the thread is a report taller than the column. The header carries the counts so the shape of the problem is still readable while the list is closed: `Catalog check — 43 open`, `1 blocking`, `35 pipeline · 8 designer`, which are the checker's own `counts` and each finding's resolved `level`/`owner`. It is component state, not a stored preference: nothing about it is worth remembering between sessions. Verified live in the browser: 43 rows present when open, `aria-expanded="false"` and no body when closed.
+## Honest tooling note
 
-- **The report travels into her prompt, because the list is drawn in her seat.** New `shared/catalogBrief.ts` — `catalogBrief(health, onScreen)`, which prefers the list the person is actually looking at (the surface's data model) over a report this shell fetched, since a brief describing a different list than the panel is worse than no brief. It carries the three things the list cannot say about itself, and each is the answer to a question a person asks: **a fixed finding is REMOVED, never marked green** (there is no pass mark to read — the count dropping is the only statement that it is gone); **`done` and `in repair` are the app's marks for work in this session, and the check has not confirmed either**; and **no current report means no list** — it says so and forbids describing findings from memory, which is what the `unavailable` / `incomplete` / `loading` paths pin. `what` and `fix` are clipped to 260 characters for recognition rather than reading. 12 cases in `catalogBrief.test.ts`. Measured after: asked the same question, she answered from the register drift itself — *"OPEN-ITEMS.md records 12 event-unheard items, while this run derives 11"*, owner `pipeline`, stage `deliver` — and stated the removal rule, which is the brief's own sentence.
+The define-vs-used cross-check for *all* 23 registered tags didn't complete cleanly (zsh glob mangling on the second grep), so I won't present a broken `comm` output as evidence. I verified the six chat pieces directly instead, and the remaining tags (`prompt-section-editor`, `prompt-textarea`, `role-dropdown`, etc.) are live via the left-column `prompt-input-section` composition and `main.tsx` registrations — checked by reading, not by the failed command. If you want, I can re-run that cross-check with a shell-safe script and give you the exact define-but-never-rendered list.
 
-- **Verified.** 208 frontend tests across 16 files (`chatScroll.test.ts` 11, `catalogBrief.test.ts` 12, and the 185 that were green before), `npm run typecheck` clean. The catalog check is unchanged by this work — 43 open, **1 blocking**, the pre-existing `open-items-register:OPEN-ITEMS.md:count:event-unheard` drift that was blocking before it and is what she now reports correctly — and both defects were measured in the running app rather than reasoned about: the second reply onto a 5229px thread with the view already 3452px down, and the accordion open/closed with its real counts.
+Nothing was touched. When you've read this and decided, the safe disposition per your rule is: **move** the DEAD items into `retired-files/` (nothing ever deleted), and settle the SUSPECT list only after the composer-through-renderer decision.
 
-
-
-## Nothing in a run could write a file, so "Correction applied" was a sentence about a write that could not have happened
-
-The report was that pressing Run on a repair answered *Correction applied* and the file did not change. The answer was not lying about a write she had performed; it was describing a write no code path could perform. The only tool a run may execute is a **read** (`figma.get_design_context`, `figma_mcp.SUPPORTED_TOOLS`), and `/api/files/write` accepts only `.md`/`.mdx` under three documentation directories — so the correction existed as prose in a chat, in a run whose whole output surface is prose. The prompt made that worse rather than better: it asked for *the exact lines to insert*, which is an instruction no app that replaces whole files can honour, and which reads as finished the moment the lines are printed.
-
-- **One module is allowed to overwrite source, and it is small enough to read in one sitting.** New `backend/repair_apply.py` (standard library only, so it can be exercised directly). `target_path` requires the target to be under `frontend/src/`, to already exist, to be `.ts`/`.tsx`/`.json`, and to resolve inside the repo: absolute paths, `~`, traversal (both out of the project and a traversal that lands back inside, which the source-tree rule catches), `.git`/`node_modules`/`dist`/`.venv`, and symlinks pointing out are each refused *by name*, in a sentence a person can read. `looks_complete` refuses **before** a byte is written — empty answer, the file unchanged, a patch/diff instead of a file, a drop below half the file's length, brackets left open (what a cut-off answer looks like first), and invalid JSON for a `.json` target. `apply_repair` keeps a timestamped backup beside the file, writes a sibling and `os.replace`s it, so the live file is never the half-written one.
-
-- **The prompt asks for the whole file now, because the whole file is the only thing this app can apply.** `REPAIR_DONE_LINE` in `shared/repairSections.ts` requires a whole `FILE: <path>` line followed by one fenced block, and `buildRepairSections(f, fileText?)` carries the file's current text into the Agent seat — or says it could not be read, which is a different sentence and a different run.
-
-- **The frontend writes the answer back, and claims only what the server returned.** New `shared/repairApply.ts` (`correctionFromAnswer`, `applyReadiness`, `applyRepair`, `readRepairTarget`). `WritingAreaIndex.tsx` reads the target before it builds the prompt, and after the run posts `POST /api/repair/apply`. `settleRepair` is called only when a file was written **and** the check re-ran (`written && checked`), so a refusal is said out loud instead of being rounded to a success.
-
-- **The report was a file, not a computation, so a repair could be judged by a report older than itself.** `/api/catalog/audit` reads whatever `catalog-check.mjs` last wrote, and nothing ran it — wrong in both directions: a change that worked looked undone, and a change that did nothing looked done. `rerun_catalog_check` runs the checker (~2s) and never raises; `{"ran": false, "why": …}` is reported as *the check did not run*, never as a pass, because those are two different facts.
-
-- **`GET /api/repair/read` and `POST /api/repair/apply`** (`backend/routes/files.py`), the second re-running the check. The real fix — the `provenance` block on the `prompt-container` entry in `frontend/src/components/registry.json` — went through that endpoint: `provenance-missing:prompt-container` is gone (15 findings → 14) and `registry.json.backup.20260914_124525` is beside the file. `OPEN-ITEMS.md`'s register row was re-measured 15 → 14 through the doc write path, because a register that records a number the repair changed is drift the checker blocks on. That file's doc read/write base was one level too deep (a leftover from when the code lived in `main.py`), so those routes could only ever see files under `backend/`; corrected, and dotfiles and key files are now refused on the same routes, because `path=.env` returned the API keys to a route that carries no authentication. Verified: 185 frontend tests (`repairApply.test.ts` 14, `repairSections.test.ts` 18) and `npm run typecheck` clean; 23 guards in `backend/repair_apply.py` exercised against real files; backend restarted, report RED on the pre-existing `event-unheard` register drift alone, with no blocking finding added by this change.
-
-**[2026-09-14] — The prompt states what value goes where; the assistant asks for it, with the answers as buttons.**
-
-## A question written into a prompt is read by the model, and a write into the prompt that missed was read by nobody
-
-The window is one conversation drawn in pieces — the left column is the artifact, the right column is where the person and the assistant talk — and the two halves could not reach each other. Two defects, each hiding the other. Guidance meant for a person was written *into* the prompt (`Provenance (required): [ type here: per field, designer (verbatim) | AI (inferred) ]`, `shared/repairMaterial.ts`), where the model reads it as material and the person only sees it if they open a box they did not open. And the assistant's writes to the column compared seat names **exactly** (`prompt-section-editor.ts`, `_onSetText` / `_onForceSet`), so a write addressed to the "User Role" fell through against a repair prompt, whose seats are named `System` / `User` / `Tool Call` / `Agent` — the column did not change, and nothing anywhere said why. That silence is what made the surface feel out of reach, and the prose in the prompt was the workaround for it.
-
-- **A field is a label and its value, and nothing else.** `RepairField.placeholder` (the bracket a person was told to type over) is gone, with `ParsedRepairField.placeholder` and the render branch that wrote it. `Provenance (required):` is now the whole field; the annotation repair's four lines are `Data:` / `On click:` / `State:` / `A11y:`. The answers a field can take moved to `choices` — **data, never prose**: `designer — verbatim` / `AI — inferred` for a provenance the app cannot derive, the two the check itself names for `event-unheard`, and the two for a `geometry-drift` decision. A package saved by the older render still reads correctly: `[ type here: … ]` is parsed as *empty* rather than as an answer nobody typed (pinned in `repairMaterial.test.ts`, "still reads a slot written before the ask moved into the chat").
-
-- **The question goes to the chat, with one button per answer.** New `repairAsk(finding)` returns one plain sentence naming what is still open ("The repair for prompt-container needs one answer from you, in the User section: Provenance.") plus one answer object per button. `handleRepairFinding` (`WritingAreaIndex.tsx:1450`) posts it after the prompt is in the column and saved. A field whose answer is not enumerable — a node id, the four annotation lines — is **named** in the sentence instead, and she writes what the person says with her own section write. Nothing is asked about a field that already has an answer, so the ask stops the moment the text stops being open.
-
-- **A write finds its seat by any of the names that seat answers to.** `resolveSectionName(requested, names)` in `shared/promptSections.ts` resolves the canonical label, the id, and the legacy short names (`SECTION_TYPES`' own `legacyNames`), so "User Role" and "User" are one seat in both directions and in both shapes of column. An exact match still wins first, so no seat is shadowed by another's variant; a seat this column does **not** have stays unresolved rather than being redirected into a seat nobody named.
-
-- **A write that lands nowhere is now reported, which is the half that was missing.** The editor dispatches `section-write-failed` with `{ target, why, names }`, and the chat turns it into one sentence with the seats the column *does* have. `fill-field` is new on the same surface: a value filed under one field's label inside a named section — the write a chat button makes. It is read and rewritten by `writeFieldValue` in the module that wrote the form, so a value filed by a button and a value typed by hand are the same text (and a person's answer clears the `suggested` flag, so the section stops claiming the app derived it).
-
-- **The page's own copy of the repair follows every write.** `WritingAreaIndex.tsx:1260` folds `section-update` back into `repairSectionsRef`, which the re-assert effect compares the column against. Until now the ref held only what the repair launched with, so the first edit inside that prompt — a keystroke, or an answer filed from the chat — was quietly undone by the next commit. The same listener arms `hasUnsavedChangesRef`, because a programmatic write is a change to the prompt just as a keystroke is.
-
-- **The buttons were one character away from not being buttons.** `renderMessageContent` finds them with `/\[.*?\]\(action:[^)]+\)/g`, and `encodeURIComponent` does not escape `( ) ! ' * ~` — so a payload carrying a JSON fragment or a sentence ended the link early and turned the control into visible punctuation. New `shared/actionLink.ts` owns the format: parens escaped per argument, arguments joined by `|` (legal inside an encoded argument, absent raw), label brackets stripped, and `fill-field` built and parsed in one place. `plainText.ts` already sets `action:` links aside before it strips markers, so the label survives to the button.
-
-- **Both prompts now state this truth rather than leaving it to be inferred.** The frontend `systemInstructions` (`InteractiveChatInterface.tsx`) and `backend/grace_gui.py::_build_chat_system` say which spellings reach which seat, that a repair prompt has four seats and no `Context` / `Few Shot` / `Constraints`, that a tag with nowhere to land is reported rather than silently dropped, and — the rule the whole change is about — *never write an instruction, a question, or a list of possible answers into a prompt; anything addressed to the person goes in your reply, with buttons.*
-
-- **Verified by running it.** `npx vitest run` **166/166** (was 142): new `actionLink.test.ts` (5) and `promptSectionWrite.test.ts` (6, mounting the editor in jsdom and firing the real window events), 5 added to `promptSections.test.ts` for the resolver, a loop test that runs the ask → button → write in one go, and `repairMaterial` / `repairSections` rewritten to assert the *absence* of prompts-for-people as hard as the presence of values. `npm run typecheck` clean, `vite build` clean, `py_compile grace_gui.py` parses. The frontend half is live on reload; the backend half needs a restart (uvicorn runs without `--reload`).
-
-
-**[2026-09-14] — Grace's replies stopped arriving as markdown, and stopped restating her own buttons.**
-
-## The words a person reads, fixed where they are written and again where they are drawn
-
-A person read `##`, `**`, pipe tables and a `Reply with one of: confirm, refuse, cancel.` line in the chat panel. Nothing was rendering markdown: `InteractiveChatInterface.tsx` draws `whitespace-pre-wrap` in a `div` (`:1665`), there is no markdown library anywhere in `frontend/src`, and no `dangerouslySetInnerHTML`. The markers *were* the message — so the fix is upstream of the renderer, and then again at the edge where the words are handed over.
-
-- **The style was taught by the instructions, not imagined by the model.** The baseline `systemInstructions` — the string the prompt says *"MUST be at the very top of the payload"* — was itself written in markdown: `# AGENTIC FLOW STEPS`, a seven-line pipe table, `# WORKSPACE USER FLOW — STRICT RULES`, `## CURRENT WORKSPACE`. `backend/grace_gui.py::_build_chat_system` was the same shape: `## CRITICAL A2UI PROTOCOL`, `## YOUR IDENTITY`, `## YOUR WORKSPACE INTERFACE`, `## LEXICAL EDITOR`, `## COMPONENT CATALOG`, `## OPTIMIZATION ADVISOR`. Both are now plain lines. No instruction was dropped in the rewrite — the table's six rows are six numbered lines carrying the same step, tag and purpose, because a table is a layout for information that a sentence list already holds.
-
-- **The footer was asked for by name.** The old confirmation block said *"Always include a fallback line immediately after the buttons: \"Reply with one of: confirm, refuse, cancel.\""* and the backend advisor said *"Always provide these three action buttons"* on every turn. Both instructions told her to print what the buttons already said. The buttons remain, byte for byte — `[Confirm](action:confirm) [Refuse](action:refuse) [Cancel](action:cancel)` is a wire format and `renderMessageContent` (`:1164`) turns it into the control a person clicks — and the new rule names the forbidden line so it cannot return: *"That line is the whole ask… 'Reply with one of: confirm, refuse, cancel.' is the line that must never be written."*
-
-- **The classification she was being asked to perform out loud is gone from the chat.** A value the model was not given is its own choice; saying what it chose is the whole of it. The rule now reads: *"When you had to decide something the user did not tell you, name the decision in one short sentence so they can change it… Never label it, never explain how you know, never describe your reasoning."* The two words survive in one place only, the repair form's provenance slot (`shared/repairMaterial.ts:207`), because that is a registry field a repair has to fill — not a sentence in front of a person.
-
-- **A prompt is a request, so the words are also made plain where they are drawn.** New `frontend/src/shared/plainText.ts` (8 tests in `src/test/plainText.test.ts`) runs inside `renderMessageContent`, on **assistant text only**, after the XML control tags are extracted and before the action links are split out. A person's own words are untouched — those are theirs. Run live on the reported shape, the reply above comes out as `Constraints`, then *"This belongs in **Constraints** — it is a hard rule"* with the weight gone, then `Step   Tag` / `Constraints   <update_constraints>` as columns a person reads, then the buttons with no footer under them.
-
-- **Why the display edge and not the response boundary.** `stripSystemScaffolding` (`neuralNetworkService.ts:27`) already cleans model output and was the tempting home — and it is the wrong one: it runs while `<update_constraints>…</update_constraints>` is still in the string, and the interior of a control tag is the **artifact being written into the user's prompt**. A marker strip there would silently rewrite the content the user asked for, a worse defect than the one it repairs. Not on write either: the record is kept as it was said, and stripping on save would leave every reply already in the database — the very ones a person is looking at now — still unreadable.
-
-- **It caught the application's own words too, which is why it is worth having at the edge.** Not just the model's: `WritingAreaIndex.tsx:2611` posts `'⚠️ **Run did nothing.** …'`, `:2831` backticks `` `POST /api/teacher/query` ``, and the tool-warning list joins as markdown bullets. Those are ours, and they were drawn as markers for the same reason. One pass flattens them; the source strings were left alone, since the drawing is what was wrong.
-
-- **What it does not touch, asserted rather than hoped:** `[Confirm](action:confirm)` and every other `action:` link byte for byte, `2 * 3`, `snake_case_name`, `__init__`, `#24`, `>50%`, a pipe inside a sentence, and the inside of a fenced code block (the fence line goes, the code stays — `_` and `*` are syntax there). The one stated limit, held in a test: a **single** underscored word keeps its markers, because `_init_` and `_the_` are the same shape and in this workspace the name is the more expensive thing to damage — the emphasis form that carries single words, `**init**`, is unwrapped.
-
-- **Verified by running it.** `npx vitest run` — **142/142, 11 files** (8 new). `npm run typecheck` — clean, including the `typecheck-guard` solution check. `./backend/.venv/bin/python -m py_compile backend/grace_gui.py` — parses, and no line matching `Reply with one of` remains in it. A scratch run printed the before/after on the reported reply and was removed. The frontend half is live on reload; the backend half needs a restart (uvicorn runs without `--reload`, so a prompt edit is not picked up until one).
-
-
-**[2026-09-12] — The session prompt stopped teaching a greeting, and two findings stopped sharing one id.**
-
-## A greeting was still in a template, and the chat's finding list was keyed off a collision
-
-Two defects of the same shape — words the system typed and then attributed to someone else — closed at their sources.
-
-- **The session prompt still printed a greeting, and the model copied it.** `backend/routes/ai.py:888` (was `:885`) carried `"ai_message": "Welcome back..."` as its output example, at `temperature=0.0` with no schema but the example. Measured against the running endpoint: `POST {"intent":"render-session:d94c58a8-…"}` returned `ai_message: "Welcome back — restored '…'"`. It is **not displayed** — `WritingAreaIndex.tsx:1864-1883` reads it, deliberately does not post it, and logs it only — which is exactly why it survived the console fix one layer over. Requirement 4 now asks for a message that says what is on screen, the prompt forbids the salutation by name, and the example is a statement of the surface. The fallback (`:924`) was the last typed greeting — `"Welcome back to your session."` — and is now data-derived like the console's (`"<title> is open."`). Neither edit suppresses her words: the prompt stopped asking for them.
-
-- **The chat's finding list was rendered under duplicate React keys, every poll.** Live console, measured: `Encountered two children with the same key, provenance-missing:prompt-input-section` and `…annotation-missing:prompt-input-section`, twice per 30s cycle — 183 occurrences in one log, 0 in any log from before this window. The root is neither in the shell nor in the list: `frontend/src/components/registry.json` holds **two rows that resolve to one file** (`functions` → `40000909:4005`, `prompt-input-section` → `40000746:94`, both `prompt-input-section.ts` — open item `#024`), and the checker built a finding's id from the component alone (`catalog-check.mjs:151`).
-
-- **They were two different defects, and one `key` would have got one of them wrong.** `provenance-missing`'s subject is the **file** — which fields are design and which were invented — so a file without a provenance block is one problem however many rows point at it: counted once per file, derived **16 → 15**, and the row that speaks for a file is the row whose `figmaName` **is** that component (`40000746:94`, the section root) rather than whichever row the loop reached first — the finding's node id is what a repair is told to open (`WritingAreaIndex.tsx:1270` writes it into the brief), so a file-level finding has to name the node the file answers to. `annotation-missing`'s subject is the **node**, and each node makes its own statement (`Node 40000909:4005 ("functions", FRAME)…` is not the statement about `40000746:94`): the id now carries the node through `add()`'s `key`, **7 findings, unchanged — both nodes are still reported**. This matters beyond the console: `handleRepairFinding` finds a finding *by id*, so two findings sharing one id repaired whichever came first. A `key` was the wrong tool for provenance and the right one for the nodes; the report now says **44 open findings, 44 distinct ids** (ecommerce: 45/45).
-
-- **Verified by running it.** `npm run catalog:check` — the register's own check caught the count before any document drifted ("the register records 16, this run derives 15", blocking, RED), the row was corrected, and both catalogs now report **VERDICT: GREEN — 21 checks ran**. `POST {"intent":"catalog-health:prompt-composer"}` returns the payload the chat paints from with **0 duplicate ids**. `npx vitest run` 43/43. Backend restarted (uvicorn runs without `--reload`, so prompt edits need one).
-
-- **Re-measured, not assumed:** `prompt-input-section.ts` draws `40000909:4005` on its **inner** `.functions-wrap` div (`:282`) and `40000746:94` on the section root (`.responsive-prompt-container`, `:269`). Which of the two registry rows is the honest claim is `#024`'s open question and stays open — this change removes the id collision, it does not decide the claim.
-
-- **Not touched, and named here so it is not mistaken for an oversight:** the `catalog-health` prompt *asks* for a greeting (`ai.py:520-523`, "greet the user by time of day… and offer to take care of them"). That one is the surface's design — an invitation to act, not a line over the content — and it is displayed, unlike the two above. `#009` remains open for the system-typed `ai_message` values (`:252`, fallbacks `:414`, `:562`, `:924`).
-
-**[2026-09-12] — The console carries no greeting, and the instruction that made one is gone.**
-## The sentence above the cards was the model's, not the shell's
-
-The console opened with a line over its cards — *"Welcome back! Your console is ready."* Nothing in the React shell says that, and nothing in it ever did. The line was a `Text` node in the component tree Grace returned, and she returned it because her assembly prompt asked for it.
-
-- The instruction is in the persona prompt, `backend/routes/ai.py:356` — *"You are Grace, the A2UI surface assembler for the console."* Requirement 2 read **"Text header with a welcome message and variant \"greeting\""**, and the output template printed the node verbatim: `{"id":"header","component":"Text","text":"Welcome back!","variant":"greeting"}`. With `temperature=0.0` and no schema but the example, the model did the obvious thing — it copied it.
-
-- Two other layers were read and cleared, and it matters that they were: `grace_gui.py:100–106` gives both assembly modes a bare strict-JSON system prompt with no greeting in it, and `role_caps.py` holds role filtering only — no persona text, no prompts (there is no `frontend/src/shared/manifest.json` either, so `/api/ai/manifest` has nothing to inject).
-
-- Fixed at that source: the requirement is gone, the template tree is `root Column → ["card-grid"]`, and the prompt now says the console *is* the cards — no greeting, no header, no `Text` above them. The `greeting` **variant** stays in the catalog untouched; it is a deliberate `Text` enum entry that belongs to other surfaces.
-
-- Verified against the running endpoint, not the file: `POST /api/ai/assemble-surface {"intent":"render-console"}` returns `root` + `card-grid` and nothing else, with `ai_message: "Your 10 prompt packages are ready — pick one to open."` Note this needed a backend restart — uvicorn was running without `--reload`, so the old prompt sat in memory and kept greeting long after the file was corrected.
-
-**[2026-09-10] — A2UI AI-native compliance verified.**
-## The reactive shell is real, and it is the A2UI contract
-
-`A2UIRenderer extends LitElement` — `frontend/src/components/lit/a2ui-renderer.ts:177`. Its header calls itself "the missing half of the A2UI contract," and having read it: that's accurate, not grandiose.
-
-- Mounted at `WritingAreaIndex.tsx:3039`, defined with a guard (`if (!customElements.get(...))`, :429), imported for side-effect in `main.tsx:29`, and given React JSX intrinsics (:442–459) so a React host can mount it at all. Held down by 178 lines of vitest (`frontend/src/test/a2ui-renderer.test.ts`).
-
-- Serial number of the v0.9.1 contract, all verified present:
-
-  - flat list, `component` discriminator, children __by id__ (`STRUCTURAL = {id, component, children, props}`, :36)
-  - props assigned as __properties__, coerced from the element's own `static properties` (:67–89) — the `conversationId` / `conversation-id` trap
-  - name→tag via an ordered authority: `COMPOSITE_MAP` (explicit — *"Not a casing guess"*, :133) → `A2UI_PRIMITIVES` (the six spec primitives) → `A2UI_STRUCTURAL` (7 composites) → `TAG_REGISTRY`; returns `null` and reports rather than inventing a tag
-  - __the two channels joined__: `resolveBinding({path:'/cards/0/title'}, dataModel)` (:160–176) — object form only, bare strings never mistaken for paths
-  - fail-loud validation __before__ render (missing id, cycle, depth > 64, duplicate id, malformed entry) into a red `role="alert"` block (:391–403)
-  - events out: `_forward` re-emits `a2ui-event`, bubbling + composed + sourceId, listened at `WritingAreaIndex.tsx:249` and routed to `a2ui:user-message` / `a2ui:console-command`
-
-__The claim is correct.__ A reactive shell, holding an A2UI-compliant surface. My earlier "nobody has checked the spec" was right about the *spec documents* and wrong about the *surface* — the surface is not unbuilt, it's built and tested.
-
-## Three things that qualify it, all measured
-
-__1. The shell is blind to `version` and `surfaceId`.__ `grep 'version\|surfaceId'` in `a2ui-renderer.ts` → no match. The backend envelope carries both (`ai.py:198–200`: `{"version":"v0.9.1","createSurface":{"surfaceId":"main","catalogId":...}}`). So the shell holds *one* surface, defaults `rootId='root'`, and cannot refuse a message shaped for a version it doesn't implement. Two surfaces on a page would collide; a v1.0 message would render silently with v0.9.1 semantics. This is the only genuinely thin spot in the compliance claim.
-
-__2. The compliant path renders hidden — the visible console is a parallel channel.__ `WritingAreaIndex.tsx:3038–3040`:
-
-Done and verified. Here's the report.
-
-## Item #1 — the renderer was mounted off-screen
-
-__What was actually broken__ (more than two attributes):
-
-- `<a2ui-renderer>` was mounted in exactly __one__ place in the whole app — `WritingAreaIndex.tsx:3039` — inside `<div aria-hidden="true" style={{display:'none'}}>`. So the app's only A2UI render never appeared.
-- Deleting just those two attributes would have been wrong: the mount was hidden to avoid its consequence — the console slot __also__ hand-rendered the same grid in React (`<ConsolePage aiAssembledCards={dataModel.cards}>` → `Frame29`). Unhiding alone draws the console twice.
-- The renderer also couldn't have taken over. Its card grid passed 5 props, set __no__ `id`, and handled __no__ click. `<agent-card-element>` dispatches `card-delete` with `this.id` — id-less cards delete the empty string. And `card-open` is declared in the tag contract (`tag-registry.ts:187` → `AgentCardSchema.events`) but was emitted by nobody and heard by nobody.
-- The mount was kept "so the data-a2ui-id parity evidence keeps accumulating." That evidence could not exist: the two trees drew different things by construction. Rendered-but-never-seen is `THE_METHOD`'s "exile rather than delete" — fog.
-
-Changed (3 files + 1 new test):
-
-File	Change
-components/lit/a2ui-primitives.ts:238	Console grid now forwards the full card prop set Frame29 forwarded, sets id = session id, and dispatches the declared card-open {sessionId, id} (bubbles·composed). No visuals invented — the card is the designed agent-card-element.
-pages/WritingAreaIndex.tsx:3018	The closet is gone; the renderer is the console (console background + 54px/16px framing preserved). A failed assembly now clears surfaceComponents/surfaceDataModel in both failure branches, so a stale tree can't sit beside the error.
-pages/ConsolePage.tsx	Stops drawing the second grid. Keeps what a component tree cannot own — loading / failed / waiting / zero-package states + the delete confirmation — and routes card-open → open intent, card-delete → confirm. Its window listeners now read handlers through a ref (registered once; they would have called the first render's closure, i.e. a stale session).
-src/test/a2ui-console-surface.test.ts (new)	4 assertions against Grace's real console tree.
-Evidence
-
-tsc -b --noEmit exit 0 · vitest run 31/31 · eslint 0 errors (1 pre-existing warning at WritingAreaIndex.tsx:2257, outside every hunk of mine) · npm run build exit 0 twice (includes catalog:check) · catalog:check exit 0.
-Real browser (the app needs auth to reach /console, so I mounted the tree directly in a scratch page, then deleted it and killed vite): computed display:block, no aria-hidden ancestor, 407px tall, 3/3 cards drawn and visible from the tree backend/routes/ai.py asks for, ids bound, click → card-open with the session id. Screenshot: /tmp/.playwright-mcp/a2ui-console-surface-renderer.png — greeting + three real cards, on screen.
-
-"The visible console is a different, second copy" was already only half-closed by item #1. Item #1 killed the duplicate render. The duplicate data was alive, and it is exactly the part of your sentence that mattered: "reading the same data its own way. They can disagree."
-
-What was broken (evidence, not description)
-#	Broken	Proof
-1	Two authorities for one console. The grid on screen came from surfaceDataModel.cards; ConsolePage's states and both chat panels read a separate React state, assembledConsoleCards.	setAssembledConsoleCards had 4 writers (:432, :1068, :1861, :1979/:2013) vs setSurfaceDataModel — neither could see the other
-2	They disagreed on screen. Renaming a package patched only the copy: the card you look at kept the old title while the copy (and the library the chat describes to Grace) said the new one.	handlePromptTitleChange → setAssembledConsoleCards(prev => prev.map(...)); renderer only re-binds on dataModel change
-3	A dead second channel wrote the copy. The a2ui:surface-update listener set cards from cmd.props.cards and never touched the surface — and stopped the spinner, so the console could report "arrived" with nothing drawn.	grep -rn surface-update src/ → add + remove only, no sender
-4	The contract asserted the duplication. The catalog handed to the assembling model said the grid was "Backed by LitCardGrid + PromptDashboardCanvas in the React shell."	both catalog.json:734 / :767
-
-What I changed
-pages/WritingAreaIndex.tsx — assembledConsoleCards is now derived, not state: Array.isArray(surfaceDataModel.cards) ? surfaceDataModel.cards : null. Deleted the dead listener (+ its add/remove), deleted the assembly and both failure writers, redirected the rename into /cards so the write lands on the card you look at, corrected the diagnostic line (assembledConsoleCards=null → surfaceDataModel={} (cards cleared with it)) and two comments that would have gone stale.
-components/lit/a2ui-primitives.ts — the grid's comment no longer cites the removed React console as its backing.
-A2UI/catalogs/{ecommerce,prompt-composer}/catalog.json — description now states the truth: this grid is the only renderer, so /cards is the single list of packages.
-test/a2ui-console-surface.test.ts — one new behavioral test: after the first paint, writing a new title into /cards is what the card on screen says (id survives the redraw). This is the mechanism the rename fix depends on, so it's pinned rather than assumed.
-Gates: tsc 0 · vitest 32/32 (31 + 1) · catalog:check exit 0 · npm run build exit 0 · eslint on touched files 0 errors (1 pre-existing unused eslint-disable at WritingAreaIndex.tsx:2280, shifted from 2257 by my +23 lines). Note: npm run lint = eslint . and reports 10 errors / 22 warnings, all in files I never touched (e.g. no-namespace in workspace-layout.ts, prefer-const in conversationStorage.ts) — my earlier "eslint 0 errors" baseline was measured on a narrower invocation and was wrong about the repo-wide state.
-
-Final state: one producer (/cards), three readers (ConsolePage states, both chats), zero writers of a second list. "Two consoles exist at once" is now false.
-
-a failure was being swallowed (and two of them were lying)
-RESTART-LOCAL.sh had 8 || true sites; three of them converted a failure into a success claim:
-
-site	the lie
-brew services start … || true (×2)	start silently did nothing (guarded downstream by pg_isready, but the why was invisible)
-kill … || true then echo "✅ Freed port $P"	the success line was unconditional — printed even if the kill failed
-CF_URL=$(grep … || true) then "Cloudflare tunnel started but URL not captured"	asserted the tunnel started without ever asking the process; cloudflared can die at launch
-Now: brew failures are reported; ✅ Freed port is only printed after a probe that still finds the port empty, and a port that survives kill -9 exits 1; the tunnel branch asks the process (kill -0) and prints the log tail when it died; and the catalog check no longer discards its output, so "loud" now names which blocking finding (proved end-to-end: ⚠️ … blocking 1 / VERDICT: RED — 1 blocking finding(s)). The 7 remaining || true are all "may legitimately match nothing / process already gone", documented at each site.
-
-#20b — the document: it was wrong and the mechanism was fiction
-README.md §Component Catalog and IMPLEMENTATION_CONFORMANCE.md R4/§4.3 stated 28 trusted components and claimed the count "is asserted live at the startup log … so drift between catalog and docs is self-announcing."
-
-The catalog defines 37 (12 Basic + 25 Lit, not 16). Nine components of drift, unnoticed.
-deps.py prints the number and compares it to nothing (grep EXPECTED\|assert → empty). Nothing asserted anything.
-The README list also carried a phantom (featured-card, which the catalog has never defined) and omitted 10 real components.
-Fixed by correcting the numbers/lists and implementing the claimed mechanism: new blocking check doc-claim-drift (inventory 19 → 20) reads the count and the enumerated name list out of README + the conformance doc and holds them against the catalog. Proved both directions: README back to 28 → blocking 1, VERDICT: RED, exit 1; phantom name → blocking 1, RED, exit 1; README restored byte-identical (md5 bebe7f1b… vs pristine).
-
-Also found: INDEX.md named the health report frontend/dist/catalog-audit.json — a path that has never existed (the checker writes frontend/catalog-audit/<pipeline>.json; backend/routes/misc.py reads it there). A second, unfixed instance for the retro: frontend/src/storybook/documentation/A2UI_SPEC_COMPLIANCE.md claims a verified compliance matrix but cites main.py lines 2670–2799 — backend/main.py is now 134 lines (endpoint is in routes/ai.py); it's dated "Last verified: 2026-07-20", i.e. pre-dates the A2UI restoration.
-
-#19 — saved
-Three commits, journal in history for the first time:
-(Corrected 2026-09-12, in the session that fixed #20b: this line said "working tree
-clean". It was not. This very file was modified and uncommitted, and the register sat
-in an excluded directory, so `git status` could not show either one of them. A sentence
-stating a tree state nobody re-read is the same defect as a README stating a count
-nobody re-measured.)
-
-493d932 fix(catalog): the checker's own integrity + the facts it checks (#10/#11/#13/#16/#17/#18/#20b)
-28425c7 wip(carried): the rest of the tree — gate-verified only, labelled as such
-cb06bbb docs(tracking): journal + spec text + what is deliberately untracked
-The stash is preserved as a real ref rescued/stash-2026-09-12 (86eb79c) — it holds work not in the tree (InteractiveChatInterface.tsx +161, compiled-output-viewer.ts +105, tag-registry.ts +5, larger teacher.py/grace_gui.py). Not pushed — origin is 3 behind and README says a push to main auto-deploys to production; that's your call.
-
-#19b — the register gains a mechanism, and open items stop being session-local numbers
-OPEN-ITEMS.md moves to the repository root and is TRACKED. It had lived in ignore-this-work-catalog-audit/, excluded by .git/info/exclude: `git status` never showed it as changed, no clone had it at all, and its counts had aged — event-unheard 17→12, tag-inert 9→8, element-unclaimed 3→0 — while the file still stated the old ones. Every defect number this project quotes at another person resolved to a file git could not see.
-
-Every count was re-measured against a live run, which closed two entries that editing could not (the closure rule working): #007 (check:annotation-prose stopped deriving chat-navigation-bar; selectedState/closedState are verbatim and collapsedState is gone from the tree) and #021 (no 0.6 anywhere in backend/ — the four calls are back at 0.0). Two were rewritten because their premise no longer matches the tree (#014/#015: the hidden shadow mount — <a2ui-renderer> is mounted visibly at WritingAreaIndex.tsx:3085 inside slot="console"). One is new and mine: #024 — 493d932 pointed the `functions` entry at prompt-input-section.ts, which cleared check:component-missing and left two registry entries for one source file, so the run reports 45 open findings with only 43 distinct ids.
-
-DECIDED, recorded with its closure test: check:tag-inert → implement the 8 (run-button, layout-row, layout-col, status-indicator, dynamic-button, undo, redo, export), not remove them from the allowlist. The five actions cannot be implemented honestly without an On click: — an element with no annotation ships invented behaviour, which is the finding class in section A of the register.
-
-The retired session-local numbers (#7, #8, #12, #16…) are mapped once, with the three that shadowed existing #NNN entries called out: a number that lives in neither the run nor the register gets quoted out of position within a week.
-
-New blocking check open-items-register (inventory 20 → 21): exactly one ledger row per check in CHECK_INVENTORY; every recorded count equal to the count this run derived; every #NNN cited in README, INDEX, the conformance doc, the journal or this change log resolving to a row; and the register present, tracked, and not matched by an ignore rule. Proved seven ways — stale count, missing ledger row, dangling citation, ignore rule re-added, a number written into the environment-scoped row, a `—` used to hide a compared class, and a status outside the vocabulary — each blocking, VERDICT: RED, exit 1, each restored byte-identical (md5 checked).
-
-**Two of those proofs found faults in the check itself, and both were mine.** It first recorded `check:check-could-not-run` as `0`, because that is what it derives on the machine that wrote it. In a fresh `git clone` with no token it derives `1`, so the check made a clean clone RED over a missing credential — the "a number nobody re-measures" defect the ledger exists to catch, with the number mine and the machine the variable. That class counts whether the environment answered, so it now records `—`, and `—` is allowed for exactly that class: anywhere else it would be a way to hide a stale number by deleting it, which the check blocks. The rule that forbids it was itself broken one branch deep — nested inside the "recorded is not a number" test, so a *number* in that row skipped it. I found that because the proof I wrote for it read GREEN, and the green was also a lie: the `sed` that was supposed to inject the number never matched (U+2014 is not the dash I typed), so "the rule held" was really "the edit never happened". Both are in the journal as M17/M18. Verified after: a real clone run exits 1 on exactly one blocking finding, the missing credential, and prints the list of classes it did not compare rather than passing over them in silence.
-
-Gates: npm run build exit 0 (both catalogs COMPLETE, 21/21, VERDICT GREEN) · npm run typecheck 0, run through its guard (`tsc -p tsconfig.json` inspects ZERO files — which is #018's point) · vitest 43/43 · eslint unchanged at 10 errors / 22 warnings · bash -n RESTART-LOCAL.sh OK · a fresh clone with no token: exit 1, one blocking finding (`check-could-not-run`), the four Figma classes and the one machine class named as uncompared · ecommerce run GREEN, with the count scoping stated as a pass rather than assumed.
-
-Not claimed: #022–#027 are open, the 45 advisory findings are untouched, and nothing is pushed (origin is behind, and README says a push to main auto-deploys).
 
 **[2026-09-10] — Figma → Lit import pipeline: annotations as the single source of behavior**
 

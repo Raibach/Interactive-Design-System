@@ -193,7 +193,7 @@ export class AISurfaceSandbox extends LitElement {
       color: #ff6b6b;
       padding: 24px;
       overflow: auto;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
     }
 
     .error-panel .error-label {

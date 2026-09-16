@@ -46,7 +46,7 @@ import { classifyFailure, parseValidationEnvelope, type FailureReport } from "@/
 // rather than parsed as v0.9.1-and-one-surface.
 import { readA2UIEnvelope, envelopeRefusalError } from "@/shared/a2ui-envelope";
 import { buildRepairSections } from "@/shared/repairSections";
-import { repairAsk } from "@/shared/repairMaterial";
+import { repairAsk, repairBrief } from "@/shared/repairMaterial";
 import {
   applyReadiness,
   applyRepair,
@@ -343,6 +343,40 @@ export default function Index({
   const [currentPromptSession, setCurrentPromptSession] = useState<PromptSession | null>(null);
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+
+  // The SURFACE SEAT's accumulative usage — what the footer shows. Seat
+  // identity rule: the package chat may only show calls attributed to ITS
+  // conversation (conversation_id in the event, matched against the seat's
+  // bound conversation). No conversation resolved → nothing accumulates and
+  // the footer reads "unattributed". Session totals are the HOST seat's
+  // numbers and are never shown here. Deduped by call_id; reset on package
+  // change.
+  const [usageTotal, setUsageTotal] = useState({
+    totalTokens: 0, inTokens: 0, outTokens: 0, calls: 0, lastCall: '',
+  });
+  useEffect(() => {
+    const seen = new Set<string>();
+    const onUsage = (e: Event) => {
+      const d = (e as CustomEvent).detail || {};
+      const seatConversation = currentPromptSessionObjRef.current?.conversationId ?? null;
+      if (!seatConversation) return;
+      if (typeof d.conversation_id !== 'string' || d.conversation_id !== seatConversation) return;
+      if (d.call_id && seen.has(d.call_id)) return;
+      if (d.call_id) seen.add(d.call_id);
+      setUsageTotal((prev) => ({
+        totalTokens: prev.totalTokens + (typeof d.total_tokens === 'number' ? d.total_tokens : 0),
+        inTokens: prev.inTokens + (typeof d.prompt_tokens === 'number' ? d.prompt_tokens : 0),
+        outTokens: prev.outTokens + (typeof d.completion_tokens === 'number' ? d.completion_tokens : 0),
+        calls: prev.calls + 1,
+        lastCall: typeof d.mode === 'string' ? d.mode : prev.lastCall,
+      }));
+    };
+    window.addEventListener('a2ui:usage', onUsage);
+    return () => window.removeEventListener('a2ui:usage', onUsage);
+  }, []);
+  useEffect(() => {
+    setUsageTotal({ totalTokens: 0, inTokens: 0, outTokens: 0, calls: 0, lastCall: '' });
+  }, [currentPromptSession?.id]);
   const isSavingRef = useRef(false); // Serialization guard: prevents concurrent save operations
   // Key that changes on each prompt load — forces full unmount/remount of all three columns
   const [promptLoadKey, setPromptLoadKey] = useState(0);
@@ -389,6 +423,46 @@ export default function Index({
    * See shared/catalogHealth.ts for why the check, and only the check, decides.
    */
   const [repairStages, setRepairStages] = useState<RepairStages>({});
+
+  // The Lit seat's structure-valued channels ride PROPERTIES, not attributes —
+  // strings like conversation-id already travel as attributes on the element.
+  // Assigned through a ref, the same rule that feeds <a2ui-renderer>.
+  const chatPanelRef = useRef<any>(null);
+  useEffect(() => {
+    const el = chatPanelRef.current;
+    if (!el) return;
+    el.findings = catalogFindings || [];
+    el.repairStages = repairStages || {};
+    el.unannotatedInUse = unannotatedInUse || [];
+    el.consoleCards = assembledConsoleCards || [];
+    el.usage = usageTotal;
+  }, [catalogFindings, repairStages, unannotatedInUse, assembledConsoleCards, usageTotal]);
+
+  // The package's conversations — the selector's list, and the binding the
+  // selector acts on. Loaded from the DB (conversations.session_id is NOT NULL:
+  // a conversation belongs to a package), refreshed whenever the package or the
+  // adopted conversation changes.
+  useEffect(() => {
+    const sessionId = currentPromptSession?.id;
+    const el = chatPanelRef.current;
+    if (!el) return;
+    if (!sessionId) {
+      el.conversations = [];
+      return;
+    }
+    let cancelled = false;
+    conversationStorage.getSessionConversations(sessionId)
+      .then((all) => {
+        if (cancelled) return;
+        el.conversations = (all || [])
+          .filter(Boolean)
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      })
+      .catch(() => {
+        if (!cancelled) el.conversations = [];
+      });
+    return () => { cancelled = true; };
+  }, [currentPromptSession?.id, currentPromptSession?.conversationId]);
   /**
    * The finding the repair prompt in the column came from. Held from the click to the
    * Run that answers it, because that Run is the thing that gets settled — and it
@@ -396,6 +470,20 @@ export default function Index({
    * do: the click that starts a repair can be interrupted and resumed.
    */
   const repairFindingRef = useRef<string | null>(null);
+  /**
+   * The ask a repair launch produced, held from the click until the assembly that
+   * carries it answers.
+   *
+   * The BUTTONS are the deterministic half of a repair — one per answer, wired to
+   * `fill-field` — and they stay app-rendered on purpose: a model must never generate
+   * the answer set, because a wrong set is a wrong repair. The SENTENCE asking for them
+   * is no longer app-written; it is Grace's `ai_message` for the assembly, built from
+   * `repairBrief`. So the ask waits here and is posted WITH her reply, and it is posted
+   * on its own only as the fallback, when the assembly fails and there is no reply to
+   * attach it to. Before this, the sentence was a template posted as her, which she had
+   * no record of having said.
+   */
+  const repairAskRef = useRef<{ text: string; buttons: string } | null>(null);
   // Ref for pending action to execute after exit confirmation
   const pendingActionRef = useRef<(() => Promise<void>) | null>(null);
   // Keep refs in sync with state
@@ -950,7 +1038,7 @@ export default function Index({
       // ✅ Toast: save succeeded
       toast({
         title: "Template saved",
-        description: result.ai_message || `Saved with ${allSections.length} sections`,
+        description: `Saved with ${allSections.length} sections`,
         duration: 3000,
       });
     } catch (error) {
@@ -1542,11 +1630,38 @@ export default function Index({
       : (currentPromptSession?.id || null);
     const repairOpensFreshPackage = !repairTargetSessionId;
 
+    // ── ONE FACT SET, TWO READERS ─────────────────────────────────────────────
+    // Both are computed from the same finding, in the same module, so they cannot come
+    // to describe different forms. `repairBrief` is read by the model that GUIDES the
+    // person, and it rides the composer assembly this click already makes — her greeting
+    // costs no second model call and no second timeout budget. `repairAsk` is read by
+    // the PERSON; its buttons are the deterministic half and stay app-rendered, because
+    // a model must never generate the answer set.
+    const userSeat = sections.find((s: any) => s.type === 'user');
+    const repairSeatName = userSeat?.name || 'User';
+    const ask = repairAsk(finding, repairSeatName, userSeat?.content);
+    const brief = repairBrief(finding, repairSeatName, userSeat?.content);
+    // The buttons are built HERE, while the seat name is in hand, and the ask is held
+    // with them so the reply path needs no second lookup. They stay app-rendered: a
+    // model must never generate the answer set.
+    const repairAskButtons = ask
+      ? ask.answers
+          .map((a) => actionLink(a.label, fillFieldAction(repairSeatName, a.field, a.value.join('\n'))))
+          .join('  ')
+      : '';
+    repairAskRef.current = ask ? { text: ask.text, buttons: repairAskButtons } : null;
+    console.log(
+      `[repair] ${repairSeatName}: ` +
+      `${brief ? `${brief.length} line(s) of brief riding the assembly` : 'nothing open — no brief'} · ` +
+      `${ask ? `${ask.answers.length} answer button(s)` : 'no buttons'}`,
+    );
+
     await assembleSurfaceWithAI('render-composer', {
       current_surface: surfaceContext?.current_surface ?? (headerTab || 'composer'),
       has_unsaved_changes: hasUnsavedChangesRef.current,
       session_id: repairTargetSessionId,
       session_title: surfaceContext?.session_title || repairTitle,
+      repair_brief: brief,
     });
 
     // The NAME was settled by the composer branch when the surface landed — it has
@@ -1582,33 +1697,20 @@ export default function Index({
       writeItDown();
     }
 
-    // ── THE ASK GOES TO THE CHAT, NOT INTO THE PROMPT ─────────────────────────
-    // The prompt states what value goes where and nothing else. The question the person
-    // has to answer is asked HERE, in the conversation, with the answers as buttons: a
-    // field whose answers are a closed set arrives as one button per answer, and pressing
-    // one writes that value under the field's label (`fill-field` → the editor's
-    // writeFieldValue). A field only the person can phrase — a node id, the four
-    // annotation lines — is named in the sentence instead, and Grace writes what they say
-    // with her own section write.
+    // ── THE ASK DOES NOT SPEAK FOR HER ANY MORE ───────────────────────────────
+    // It used to be posted here, as a template with `role: 'assistant'` — a sentence
+    // wearing her name that she had no record of saying, because it never went through
+    // the model and never entered her context. The sentence is hers now: the brief above
+    // rides the assembly and comes back as her `ai_message`.
     //
-    // Posted here rather than inside the save: the prompt is in the column by now
-    // (pushRepairSections above), and the write-down is in flight — waiting on it would
-    // tie the question to a network call that may be queued behind another save.
-    const userSeat = sections.find((s: any) => s.type === 'user');
-    const ask = repairAsk(finding, userSeat?.name || 'User', userSeat?.content);
-    if (ask) {
-      const seat = userSeat?.name || 'User';
-      const buttons = ask.answers
-        .map((a) => actionLink(a.label, fillFieldAction(seat, a.field, a.value.join('\n'))))
-        .join('  ');
-      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-        detail: { role: 'assistant', content: [ask.text, buttons].filter(Boolean).join('\n\n') },
-      }));
-      console.log(
-        `[repair] asked in the chat about ${ask.fields.join(', ')} — ` +
-        `${ask.answers.length} answer button(s)`,
-      );
-    }
+    // What waits here is the half she must NOT author — one button per answer, wired to
+    // `fill-field`, which writes the value under that field's label when pressed. A model
+    // generating the answer set would be a model choosing what a repair may say.
+    //
+    // Held rather than posted, so her greeting and these buttons arrive as ONE turn. The
+    // reply consumes it; the assembly-failure path falls back to it, so a repair whose
+    // assembly gives up still tells the person what is missing. (Already set above, with
+    // the buttons — nothing to do here.)
 
     // CLICKED = QUEUED. The finding is in repair from here, and the Run that answers
     // this prompt is what settles it (see settleRepair). Held in a ref rather than in
@@ -1850,6 +1952,10 @@ export default function Index({
     session_id?: string | null;
     session_title?: string;
     category?: string;
+    /** The repair brief — see `repairBrief`. Carried only when a repair launched this
+     *  assembly, and declared here because a field the model does not declare is dropped
+     *  in silence (see AISurfaceContext in backend/routes/ai.py). */
+    repair_brief?: string[] | null;
   }) => {
     // ✅ DEDUP: If already in flight, skip (user spamming refresh)
     if (isConsoleAssemblyInFlightRef.current) {
@@ -1877,12 +1983,16 @@ export default function Index({
     const controller = new AbortController();
     consoleAssemblyControllerRef.current = controller;
 
-    // Client-side timeout: 10s hard cap.
+    // Client-side timeout: ASSEMBLY_TIMEOUT_MS (120s, declared at the top of this file).
     //
-    // This was previously raised to 30s after a COLD DeepSeek call was measured
-    // at ~13.5s, and the old 10s cap aborted requests the backend went on to
-    // finish. Re-measured 2026-09-11: warm assemblies run 1.5–2.7s, so 10s is
-    // comfortable, and a stalled request now fails in ten seconds, not thirty.
+    // This cap is the OUTER bound and it is deliberately loose: it exists to stop a
+    // request that is truly dead, not to police latency. THE REAL BUDGET IS THE
+    // SERVER'S — grace_gui.LLM_TIMEOUT is 20s per attempt with max_retries=1, so a
+    // surface gives up at 40s worst case and returns its own 503 naming the budget that
+    // expired. A client cap BELOW the server's is the failure mode this number exists
+    // to avoid: it aborts a call the backend goes on to finish, and the abort reads as
+    // a network failure rather than a timeout with a reason. That is what happened when
+    // this was 10s against a cold call measured at ~13.5s.
     //
     // The catalog check does NOT come through here — it has its own fetch with
     // no client cap, because it can legitimately run long (measured 5.4–17.4s on
@@ -2032,12 +2142,25 @@ export default function Index({
 
       const assemblyTime = dataModel.assembly_time_ms || 0;
       const aiMessage = dataModel.ai_message || '';
-      // NOT posted. An assembly is not a turn in the conversation — nobody asked,
-      // and the operator is reading the surface the message describes. It used to
-      // arrive as an interruption wearing her name, opening with a greeting.
+
+      // ── SHE SPEAKS. THIS IS THE SEAT'S ONLY REAL VOICE. ─────────────────────
+      // It was suppressed right here — "NOT posted. An assembly is not a turn in the
+      // conversation — nobody asked, and the operator is reading the surface the message
+      // describes." That came from a real irritation (she opened with a greeting on every
+      // console reload), and the fix removed her from the conversation entirely: the
+      // assistant a person is looking at never said anything, at all, including when
+      // their own click is what changed the surface. A silent seat is not the smaller
+      // problem — it is the one that makes her read as a static menu.
       //
-      // Her words are untouched: this is the display deciding what belongs in the
-      // conversation, not the model being told to say less. Still logged below.
+      // Posted whenever the model produced a message. It is HER sentence, written for
+      // this surface, and it is the only thing in this column that is not a template in
+      // the bundle. An empty message is not posted: that is the model declining to speak,
+      // and a blank bubble reads as her having said nothing on purpose.
+      if (aiMessage.trim()) {
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: { role: 'assistant', content: aiMessage.trim() },
+        }));
+      }
       // The measured cost of this action, straight from the provider's usage
       // report — the readout in Grace's seat shows this and nothing else.
       if (dataModel.usage && typeof dataModel.usage.total_tokens === 'number') {
@@ -2122,6 +2245,29 @@ export default function Index({
         // leave it closed until the user Runs.
         setMiddleOpen(!!(session.middle_column?.compiled_output || '').trim());
 
+        // ── HER GREETING, WHEN IT IS ANSWERING SOMETHING ───────────────────────
+        // Every other assembly's ai_message is deliberately NOT posted (see the note
+        // where `aiMessage` is read): an assembly is not a turn, and nobody asked. A
+        // REPAIR is the exception — the person clicked REPAIR and is looking at a form
+        // they cannot finish alone, so the message that describes it answers what they
+        // just did.
+        //
+        // The flag is the SERVER's, set only when the brief actually rode this assembly.
+        // So the greeting is posted only when she was really given it, and a repair whose
+        // brief went missing does not fake one.
+        // Her reply was posted above, by the surface branch — this adds only the half she
+        // must NOT author: one button per answer, wired to `fill-field`. Sent as its own
+        // message on purpose. Hers is prose and these are app-rendered controls, and a
+        // reader can tell those apart; fused into one bubble they would not be able to.
+        if (dataModel.repair_brief && repairAskRef.current?.buttons) {
+          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+            detail: { role: 'assistant', content: repairAskRef.current.buttons },
+          }));
+          console.log('[repair] answer buttons attached under her reply');
+        }
+        // Either way the ask is consumed: a stale ask must not fire on a later assembly.
+        if (dataModel.repair_brief) repairAskRef.current = null;
+
         console.log(`✅ [A2UI] Composer assembled with ${sections.length} sections`);
 
       } else if (surface === 'decision') {
@@ -2153,6 +2299,29 @@ export default function Index({
     } catch (error) {
       clearTimeout(timeoutId);
       setIsAIAssembling(false);
+
+      // ── THE FALLBACK: the brief had nowhere to land ──────────────────────────
+      // The assembly failed, so there is no greeting to carry the ask. Post the app's
+      // own sentence after all — as the FALLBACK, not as the design. It exists because
+      // a repair whose assembly gives up must still tell the person what is open; the
+      // alternative is a form with no explanation and no way in, which is the state
+      // this whole path replaced.
+      //
+      // Skipped when this request was SUPERSEDED rather than failed — a newer assembly is
+      // already on its way and the brief will ride that one — so it is guarded on the
+      // controller for the same reason the timeout branch below is.
+      if (repairAskRef.current && consoleAssemblyControllerRef.current === controller) {
+        const unspoken = repairAskRef.current;
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: {
+            role: 'assistant',
+            content: [unspoken.text, unspoken.buttons].filter(Boolean).join('\n\n'),
+          },
+        }));
+        repairAskRef.current = null;
+        console.log('[repair] the assembly did not land — the app-authored ask stands in as the fallback');
+      }
+
       const errMsg = error instanceof Error ? error.message : String(error);
       const isAbort = error instanceof Error && (
         error.name === 'AbortError' ||
@@ -2600,8 +2769,38 @@ export default function Index({
       // Update local state only. Conversations are package-owned: the conversation
       // row already carries session_id — prompt_sessions.conversation_id was dropped.
       setCurrentPromptSession(prev => prev ? { ...prev, conversationId } : null);
+      // The ref must move in the SAME tick: the seat dispatches the first
+      // call's a2ui:usage right after conversation-change, and the usage
+      // accumulator reads this ref synchronously. An effect-run update would
+      // still hold the old conversation and drop the first call's numbers.
+      if (currentPromptSessionObjRef.current) {
+        currentPromptSessionObjRef.current = { ...currentPromptSessionObjRef.current, conversationId };
+      }
     }
   }, [currentPromptSession]);
+
+  // The Lit seat speaks through composed events, so they arrive at window — no
+  // ref, no per-element listener. repair-finding starts the repair flow;
+  // conversation-change adopts the conversation the first send created for a
+  // new package.
+  useEffect(() => {
+    const onRepairFinding = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { findingId?: string };
+      if (detail.findingId) {
+        void handleRepairFinding(detail.findingId, { current_surface: headerTab || 'composer' });
+      }
+    };
+    const onConversationChange = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { conversationId?: string };
+      if (detail.conversationId) handleConversationChange(detail.conversationId);
+    };
+    window.addEventListener('repair-finding', onRepairFinding);
+    window.addEventListener('conversation-change', onConversationChange);
+    return () => {
+      window.removeEventListener('repair-finding', onRepairFinding);
+      window.removeEventListener('conversation-change', onConversationChange);
+    };
+  }, [handleRepairFinding, handleConversationChange, headerTab]);
 
   const _handleDeleteProject = (projectId: string) => {
     // Prevent deletion of the only project
@@ -3230,7 +3429,7 @@ export default function Index({
   return (
     <div
       {...UI_ID.LAYOUT.MAIN_CONTAINER}
-      className="h-screen flex flex-row overflow-hidden font-manrope"
+      className="h-screen flex flex-row overflow-hidden"
       style={{ backgroundColor: "#E5E1DD" }}
     >
       {/* Real loading state indicator - shows actual database activity */}
@@ -3524,37 +3723,43 @@ export default function Index({
                       session-id={currentPromptSession?.id || undefined}
                       is-running={isComposerRunning ? '' : undefined}
                     />
-                    <div slot="right"
+                    <chat-panel slot="right"
+                      ref={chatPanelRef}
                       data-a2ui-id="right-column"
                       data-column="right"
-                      data-tag="chat-panel"
                       data-session-id={currentPromptSession?.id || undefined}
-                      style={{ height: '100%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                      {/* chat-panel target for the AI layout; bridge existing chat for composer surfaces.
-                          Pass sessionId so conversations are strictly scoped to this prompt package (prompt_session).
-                          Pass compiledOutput + isRunning so the assistant can auto-analyze on Run.
-                          overflow: hidden constrains the chat within the workspace-layout right pane —
-                          prevents the chat column from pushing past the browser right edge. */}
-                      <InteractiveChatInterface 
-                      consoleCards={assembledConsoleCards || []}
-                      sessionId={currentPromptSession?.id || null}
-                      compiledOutput={currentPromptSession?.compiledOutput || ''}
-                      isRunning={false}
-                      getLeftColumnSections={() => {
-                        const editor = promptSectionEditorRef.current as any;
-                        return (editor && (editor._sections || editor.sections)) || [];
-                      }}
-                      leftColumnContent={currentPromptSession?.leftColumnContent || ''}
-                      catalogFindings={catalogFindings}
-                      unannotatedInUse={unannotatedInUse}
-                      repairStages={repairStages}
-                      onRepairFinding={(findingId) => {
-                        // The finding becomes a PROMPT in the left column, and the
-                        // user Runs it. Nothing is applied — see handleRepairFinding.
-                        void handleRepairFinding(findingId, { current_surface: headerTab || 'composer' });
-                      }}
-                    />
-                  </div>
+                      conversation-id={currentPromptSession?.conversationId || undefined}
+                      session-id={currentPromptSession?.id || undefined}
+                      left-column-content={currentPromptSession?.leftColumnContent || ''}
+                      compiled-output={currentPromptSession?.compiledOutput || ''}>
+                      {/* THE SEAT DRAWS ITS OWN THREAD — THE PACKAGE'S, NOT A GLOBAL ONE.
+
+                          A React seat used to be slotted in here. Two things were wrong
+                          with that, and they compounded:
+
+                            1. <chat-panel>'s own rule is that a SLOTTED SEAT IS WHAT GETS
+                               DRAWN. So the element never drew its thread, and the column
+                               was a React component wearing a surface component's tag.
+                            2. That seat kept its conversation in a module-level store
+                               (shared/chatSeat.ts) that belongs to no package, and it was
+                               handed `sessionId` but never the package's conversation. So
+                               even the conversation it held was not this package's.
+
+                          The result was a chat that was global by construction: it did not
+                          change when a different prompt package was opened, which is
+                          precisely what it must do.
+
+                          Nothing is slotted now. The element draws its own thread and
+                          composer from THE PACKAGE'S conversation — bound above, and
+                          re-read whenever it changes (chat-panel's `updated` reloads the
+                          history on every conversationId change). Open a different package
+                          and this column is a different chat.
+
+                          Measured 2026-09-15: <chat-panel> was 836x874 with an empty shadow
+                          root, and the slotted child measured 0x0 while fully mounted — a
+                          shadow root shows light-DOM children only where a <slot> sits, and
+                          there was none. Both causes are fixed in chat-panel.ts. */}
+                    </chat-panel>
                   </workspace-layout>
                   )}
                 </div>
@@ -3614,10 +3819,6 @@ export default function Index({
                   unannotatedInUse={unannotatedInUse}
                   repairStages={repairStages}
                   onRepairFinding={(findingId) => {
-                    // Same path as the composer chat's list: the finding becomes a
-                    // PROMPT in the left column and the user Runs it. The console
-                    // opens a FRESH package to hold it (a repair is a new prompt,
-                    // not an edit of whatever was open).
                     void handleRepairFinding(findingId, {
                       current_surface: headerTab || 'console',
                       session_id: null,

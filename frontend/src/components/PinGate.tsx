@@ -1,103 +1,62 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import raibachLogo from '@/assets/raibach-logo.jpg';
-import { storeUserId, DEFAULT_USER_ID } from '@/services/authService';
+import { login, storeUserId } from '@/services/authService';
 
-const PIN_CODES: Record<string, { role: string; label: string; userId: string }> = {
-  '7377': { role: 'admin', label: 'Administrator', userId: DEFAULT_USER_ID },
-};
-
-interface PinGateProps {
-  onLoginSuccess: () => void;
-}
-
-export default function PinGate({ onLoginSuccess }: PinGateProps) {
-  const [digits, setDigits] = useState<string[]>(['', '', '', '']);
+/**
+ * Sign in. Was a hardcoded 4-digit PIN held in this file pointing at one user —
+ * which is why the system only ever had one. It now asks the database.
+ */
+export default function PinGate({ onLoginSuccess }: { onLoginSuccess: () => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [shaking, setShaking] = useState(false);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    inputRefs.current[0]?.focus();
-  }, []);
-
-  const submitPin = (pin: string[]) => {
-    const code = pin.join('');
-    const match = PIN_CODES[code];
-    if (match) {
-      localStorage.setItem("grace_is_authenticated", "true");
-      localStorage.setItem("grace_user_role", match.role);
-      storeUserId(match.userId);
-      console.log(`🔐 Authenticated as ${match.label} (${match.userId})`);
-      setShaking(false);
-      setTimeout(() => onLoginSuccess(), 600);
-    } else {
-      setShaking(true);
-      setError('Invalid access code');
-      setTimeout(() => {
-        setShaking(false);
-        setDigits(['', '', '', '']);
-        inputRefs.current[0]?.focus();
-      }, 600);
-    }
-  };
-
-  const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newDigits = [...digits];
-    newDigits[index] = value.slice(-1);
-    setDigits(newDigits);
-    setError('');
-    if (value && index < 3) inputRefs.current[index + 1]?.focus();
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-    if (e.key === 'ArrowLeft' && index > 0) inputRefs.current[index - 1]?.focus();
-    if (e.key === 'ArrowRight' && index < 3) inputRefs.current[index + 1]?.focus();
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
-    if (!pasted) return;
-    const newDigits = [...digits];
-    for (let i = 0; i < pasted.length; i++) newDigits[i] = pasted[i];
-    setDigits(newDigits);
-    const next = pasted.length < 4 ? pasted.length : 3;
-    inputRefs.current[next]?.focus();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    const res = await login(email.trim(), password);
+    setBusy(false);
+    if (!res.success) {
+      setError(res.error || 'Invalid email or password');
+      return;
+    }
+    if (res.userId) storeUserId(res.userId);
+    if (res.role) localStorage.setItem('grace_user_role', res.role);
+    localStorage.setItem('grace_is_authenticated', 'true');
+    onLoginSuccess();
   };
 
-  const inputStyle = (hasValue: boolean): React.CSSProperties => ({
-    width: '48px',
-    height: '56px',
-    textAlign: 'center',
-    fontSize: '24px',
-    fontFamily: "'Inter', sans-serif",
-    fontWeight: 600,
+  const field: React.CSSProperties = {
+    width: '100%',
+    boxSizing: 'border-box',
+    height: '48px',
+    padding: '0 14px',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    fontSize: '14px',
     color: '#f5f0e8',
-    background: hasValue ? 'rgba(254,209,65,0.12)' : 'rgba(255,255,255,0.04)',
-    border: hasValue ? '1px solid rgba(254,209,65,0.5)' : '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '10px',
     outline: 'none',
-    transition: 'border-color 0.2s, background 0.2s',
-  });
+    marginBottom: '12px',
+  };
 
   return (
     <div
       style={{
         minHeight: '100vh',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#1a1625',
         margin: 0,
-        padding: 0,
       }}
     >
-      <div
+      <form
+        onSubmit={submit}
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -120,17 +79,13 @@ export default function PinGate({ onLoginSuccess }: PinGateProps) {
             boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
           }}
         >
-          <img
-            src={raibachLogo}
-            alt="Raibach"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
+          <img src={raibachLogo} alt="Raibach" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
 
         <div style={{ textAlign: 'center', marginBottom: '8px' }}>
           <div
             style={{
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'Inter', system-ui, sans-serif",
               fontWeight: 900,
               fontSize: '32px',
               letterSpacing: '-0.02em',
@@ -142,24 +97,21 @@ export default function PinGate({ onLoginSuccess }: PinGateProps) {
           </div>
           <div
             style={{
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'Inter', system-ui, sans-serif",
               fontWeight: 500,
               fontSize: '14px',
               color: 'rgba(245,240,232,0.35)',
               marginTop: '4px',
-              letterSpacing: '0.02em',
             }}
           >
             Interactive Design
           </div>
           <div
             style={{
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 400,
+              fontFamily: "'Inter', system-ui, sans-serif",
               fontSize: '13px',
               color: 'rgba(245,240,232,0.55)',
               marginTop: '6px',
-              letterSpacing: '0.01em',
             }}
           >
             AI-Driven Design System Management
@@ -176,50 +128,29 @@ export default function PinGate({ onLoginSuccess }: PinGateProps) {
           }}
         />
 
-        <p
-          style={{
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            color: 'rgba(255,255,255,0.45)',
-            marginBottom: '28px',
-            textAlign: 'center',
-            letterSpacing: '0.01em',
-          }}
-        >
-          Enter your access code
-        </p>
-
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            marginBottom: '24px',
-            animation: shaking ? 'shake 0.5s ease' : 'none',
-          }}
-        >
-          {digits.map((digit, i) => (
-            <input
-              key={i}
-              ref={(el) => { inputRefs.current[i] = el; }}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handleChange(i, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(i, e)}
-              onPaste={handlePaste}
-              style={inputStyle(!!digit)}
-            />
-          ))}
-        </div>
+        <input
+          type="email"
+          autoFocus
+          placeholder="Email"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setError(''); }}
+          style={field}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(''); }}
+          style={field}
+        />
 
         {error && (
           <p
             style={{
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'Inter', system-ui, sans-serif",
               fontSize: '12px',
               color: '#ff6b6b',
-              margin: '0 0 16px',
+              margin: '4px 0 12px',
               textAlign: 'center',
             }}
           >
@@ -228,35 +159,26 @@ export default function PinGate({ onLoginSuccess }: PinGateProps) {
         )}
 
         <button
-          onClick={() => submitPin(digits)}
-          disabled={digits.some((d) => d === '')}
+          type="submit"
+          disabled={busy}
           style={{
             width: '100%',
-            padding: '12px 0',
-            background: digits.some((d) => d === '')
-              ? 'rgba(255,255,255,0.06)'
-              : 'linear-gradient(-90deg, rgb(240,179,35), rgb(254,209,65))',
-            color: digits.some((d) => d === '') ? 'rgba(255,255,255,0.25)' : '#1a0800',
+            height: '46px',
+            marginTop: '8px',
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontWeight: 700,
+            fontSize: '14px',
+            color: '#1a1625',
+            background: 'linear-gradient(-90deg, rgb(240,179,35), rgb(254,209,65))',
             border: 'none',
             borderRadius: '10px',
-            fontFamily: "'Inter', sans-serif",
-            fontWeight: 600,
-            fontSize: '15px',
-            cursor: digits.some((d) => d === '') ? 'default' : 'pointer',
-            transition: 'background 0.2s, color 0.2s',
+            cursor: busy ? 'default' : 'pointer',
+            opacity: busy ? 0.6 : 1,
           }}
         >
-          Enter
+          {busy ? 'Signing in…' : 'Sign in'}
         </button>
-      </div>
-
-      <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 50%, 90% { transform: translateX(-6px); }
-          30%, 70% { transform: translateX(6px); }
-        }
-      `}</style>
+      </form>
     </div>
   );
 }

@@ -10,3 +10,7 @@ pymilvus>=2.6.0
 tenacity==8.2.3
 sentry-sdk[fastapi]==2.3.1
 openai>=1.0.0
+# Password verification for /api/auth/login. The `users` table has held real
+# bcrypt hashes ($2b$12$) since it was written; nothing could CHECK one until
+# now, because no auth endpoint existed and this library was never installed.
+bcrypt>=4.1.0,<6.0.0

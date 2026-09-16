@@ -19,6 +19,7 @@ import { conversationStorage, type Conversation } from '@/services/conversationS
 import { eventBus } from '@/shared/event-bus';
 import { asPlainText } from '@/shared/plainText';
 import { catalogBrief } from '@/shared/catalogBrief';
+import { useChatSeat, setChatSeatConversation, setChatSeatPersister } from '@/shared/chatSeat';
 import { isAtBottom, isFollowingNewest, appendTarget, messageTop } from '@/shared/chatScroll';
 import { parseFillFieldAction } from '@/shared/actionLink';
 import { getAuthState } from '@/services/authService';
@@ -173,10 +174,39 @@ export function InteractiveChatInterface({ onConversationChange, sessionId, comp
   const followingNewestRef = useRef(true);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  // ONE conversation, held ABOVE this component — see shared/chatSeat.ts.
+  //
+  // It was `useState` here, and this component is mounted twice: the console's resizable
+  // pane and the composer's `workspace-layout` right slot. So a message posted into one
+  // instance died when a tab switch unmounted it — measured, on a repair ask that the log
+  // said had been posted and the DOM did not contain. The seat is persistent now, and a
+  // layout swap cannot take her voice with it.
+  const [chatMessages, setChatMessages] = useChatSeat<ChatMessage>();
+
+  // ── THE SEAT IS TOLD WHICH CONVERSATION BELONGS TO THIS PACKAGE ────────────────
+  // `conversations.session_id` is NOT NULL: the conversation belongs to the prompt
+  // package, and its messages cascade from it. So the package on screen names the
+  // conversation her history is written to, and a reload of that package brings it back.
+  useEffect(() => {
+    setChatSeatConversation(currentConversationId || null);
+  }, [currentConversationId]);
+
+  // …and how to write one down. Messages that arrive through the seat — every surface
+  // greeting she writes, and the repair guidance — were previously held in React state and
+  // never persisted, so the database kept only the typed exchange and lost everything she
+  // had said about the work. The two paths that already persist themselves (the person's
+  // turn, her LLM reply) are NOT routed through here, so nothing is written twice.
+  useEffect(() => {
+    setChatSeatPersister((conversationId, content) => {
+      void conversationStorage
+        .addMessage(conversationId, 'response', content)
+        .catch((err) => console.error('[Chat] the seat could not write her message down:', err));
+    });
+    return () => setChatSeatPersister(null);
+  }, []);
   const [isSending, setIsSending] = useState(false);
   const [showConvDropdown, setShowConvDropdown] = useState(false);
-  const handleSendRef = useRef<(overrideText?: string) => void>(() => {});
+  const handleSendRef = useRef<(overrideText?: string, opts?: { silent?: boolean }) => void>(() => {});
   // ── Request deduplication: prevent conversation fetch storms ──
   const isConversationsLoadingRef = useRef(false);
   const conversationsLoadedRef = useRef(false); // Track if we've loaded at least once
@@ -254,10 +284,43 @@ ${compiledOutput.slice(0, 3000)}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentConversationId]);
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // NO STARTUP GREETING (owner directive: no welcome messages).
-  // The AI speaks only when the user initiates. No automatic LLM calls on mount.
-  // ══════════════════════════════════════════════════════════════════════════
+/**
+ * THE PROMPT THAT WAKES HER when the chat is opened.
+ *
+ * It is a real turn sent to the model, not a canned line. The panel shows her
+ * thinking and then shows her answer — whatever she actually says.
+ *
+ * This REVERSES a rule that used to live here: "NO STARTUP GREETING (owner
+ * directive: no welcome messages). The AI speaks only when the user initiates.
+ * No automatic LLM calls on mount." The result was a person clicking the chat
+ * and finding an empty panel with nothing happening, which reads as broken, not
+ * as restrained.
+ */
+// REWRITTEN 2026-09-15, from her reply to the old sentence. It read:
+//   "[WAKE] The person just opened this package's conversation. Greet them in your own
+//    voice — brief, warm, aware of the hour. Do not explain yourself, and do not ask a
+//    list of questions."
+// Three things in it produced the greeting she gave, which was not a greeting:
+//   · "The person", third person, inside a turn the model reads as its own interlocutor,
+//     so it wrote ABOUT the situation instead of greeting someone in it;
+//   · two PROHIBITIONS. `grace_gui.py:647` records the measurement on this model:
+//     it answers what is in front of it, and forbidding a word is still saying the word.
+//     "Do not explain yourself" produced "It's Grace, your personal prompt engineer.
+//     I'm here to help you build prompts for AI models.";
+//   · "[WAKE]" is a machine token, and a silent turn is still a persisted message — so
+//     the package's own history opened with a stage direction the person never wrote.
+// The hour is interpolated below: "aware of the hour" asked her to know something the
+// app already knew, and she filled that hole the way she filled the missing name —
+// with a placeholder, "[User's Name]".
+const wakePrompt = (): string => {
+  const hour = new Date().getHours();
+  const partOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  return (
+    `The package has just been opened and there is someone at the desk, waiting on you. It is ${partOfDay}. ` +
+    'Say hello the way you would to a colleague who just walked in — one or two sentences, ' +
+    'in your own voice: the hour, and the work the two of you have in front of you here.'
+  );
+};
 
   const scrollToLatest = () => {
     if (!chatContainerRef.current) return;
@@ -284,6 +347,27 @@ ${compiledOutput.slice(0, 3000)}`;
   // ── NO AUTO-LOAD (owner directive): conversations load COLLAPSED.
   // The user picks one from the dropdown — nothing opens automatically.
   const [selectedNav, setSelectedNav] = useState('chat');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // WAKE — opening the chat is the turn.
+  //
+  // Clicking the chat hands her ONE real prompt, the panel shows her thinking,
+  // and what appears is her answer. Before this, the chat opened on dead air:
+  // a person clicked and nothing happened.
+  //
+  // Fires ONCE per conversation, so reopening shows what she already said
+  // rather than greeting again every time the tab is touched.
+  // ══════════════════════════════════════════════════════════════════════════
+  const wokeForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedNav !== 'chat') return;
+    if (!currentConversationId) return;
+    if (chatMessages.length > 0 || isSending) return;
+    if (wokeForRef.current === currentConversationId) return;
+    wokeForRef.current = currentConversationId;
+    handleSendRef.current(wakePrompt(), { silent: true });
+  }, [selectedNav, currentConversationId, chatMessages.length, isSending]);
+
   const [showApprovalQueue, setShowApprovalQueue] = useState(false);
   const [currentGroundingMetrics, setCurrentGroundingMetrics] = useState<GroundingMetrics>(groundingMetricsSample);
   const metricBars = useMemo<MetricBar[]>(() => buildMetricBars(currentGroundingMetrics), [currentGroundingMetrics]);
@@ -461,14 +545,11 @@ ${compiledOutput.slice(0, 3000)}`;
   }, []);
 
   // ── System messages (save errors, etc.) routed to chat instead of toasts ──
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { role, content } = (e as CustomEvent).detail;
-      setChatMessages(prev => [...prev, { role: role || 'assistant', content }]);
-    };
-    window.addEventListener('a2ui:system-message', handler);
-    return () => window.removeEventListener('a2ui:system-message', handler);
-  }, []);
+  // NOT listened for HERE any more. The seat owns this listener (shared/chatSeat.ts) so
+  // that it is installed exactly once — two instances would each append the same message —
+  // and so that it keeps HEARING while no seat is mounted. That second part is the repair
+  // case: the ask is posted while one view is on screen, and it has to still be there when
+  // the other replaces it.
 
   // ── A write into the prompt that landed nowhere ───────────────────────────
   // `<prompt-section-editor>` names a seat on every write, and a name it cannot
@@ -891,7 +972,17 @@ ${compiledOutput.slice(0, 3000)}`;
       .map((s) => {
         const name = s.name || s.section || s.role || s.type || 'Section';
         const content = String(s.content || '').trim();
-        return content ? `${name}: ${content}` : `${name}: (empty)`;
+        // THE SEAT NAME GETS ITS OWN LINE, and its body is indented under it.
+        //
+        // It used to be `${name}: ${content}`, one line, which FUSES the seat name with
+        // the first line of the body. A repair's User seat begins with the bare field
+        // label `Data:`, so the block rendered as "User Role: Data:" — and the model read
+        // `Data:` as the VALUE of the User Role seat. Measured 2026-09-15, her own words:
+        // "User Role: Data: This is where you provide the input data for the prompt."
+        // The form's own label was invisible as a label. This shape cannot be misread.
+        return content
+          ? `### ${name}\n${content.split('\n').map((l) => `  ${l}`).join('\n')}`
+          : `### ${name}\n  (empty)`;
       });
 
     if (leftParts.length > 0) {
@@ -978,11 +1069,16 @@ ${compiledOutput.slice(0, 3000)}`;
     window.dispatchEvent(new CustomEvent('clear-left-column'));
   };
 
-  const handleSend = async (overrideText?: string) => {
+  const handleSend = async (overrideText?: string, opts?: { silent?: boolean }) => {
     const text = (overrideText ?? chatInput).trim();
     if (!text || isSending) return;
     if (!overrideText) setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', content: text }]);
+    // `silent` is the WAKE turn: she is handed a prompt by the app rather than by
+    // the person, so it must not appear as if they typed it. The turn is still
+    // real and still sent; only the bubble is withheld.
+    if (!opts?.silent) {
+      setChatMessages(prev => [...prev, { role: 'user', content: text }]);
+    }
     // Persist user message to backend
     if (currentConversationId) {
       conversationStorage.addMessage(currentConversationId, 'question', text).catch(err => {
@@ -1504,12 +1600,10 @@ You are in the chat panel. Follow the rules above. Use XML tags silently — the
     };
   }, [isDragging, inputHeight]);
 
-  const handleNavClick = useCallback((tab: string) => {
-    // The Lit component handles expand/collapse internally.
-    // React just syncs selectedNav for trace/tools content rendering.
-    setSelectedNav(tab);
-    setShowApprovalQueue(false);
-  }, []);
+  // `handleNavClick` used to live here: it set `selectedNav` and closed the approval queue, for a
+  // React nav bar. The bar is <chat-navigation-bar> now and reports through `tab-change`, so the
+  // callback was called by nothing and only its `setShowApprovalQueue(false)` was load-bearing —
+  // that line moved into the `tab-change` listener above, where the event actually arrives.
 
   // ── Wire Lit <chat-navigation-bar> events → React state ───────────────
   useEffect(() => {
@@ -1520,6 +1614,16 @@ You are in the chat panel. Follow the rules above. Use XML tags silently — the
       const detail = (e as CustomEvent<TabChangeEventDetail>).detail;
       if (detail?.tab !== undefined) {
         setSelectedNav(detail.tab);
+        // THE CHAT TAB IS ALSO THE WAY OUT OF THE APPROVAL QUEUE.
+        //
+        // `setShowApprovalQueue(false)` was in `handleNavClick`, a callback that is now referenced
+        // NOWHERE — it was written for a React nav bar and the bar is a Lit element now, which
+        // reports through `tab-change` instead. So the queue opened from "(10) Approve" and had no
+        // exit at all: the chat icon set `selectedNav` and the queue body stayed where it was.
+        // Measured 2026-09-15 in the running app; it is not this session's change (HEAD defines
+        // `handleNavClick` and never calls it either), and it is the whole of "there is no way
+        // back to the chat".
+        setShowApprovalQueue(false);
         // Clicking the Chat tab is the operator asking for the column back.
         // The bar only emits this on the expand path, so when the column is
         // already open this is a no-op.
@@ -1888,7 +1992,7 @@ You are in the chat panel. Follow the rules above. Use XML tags silently — the
                   <div className="space-y-3">
                     {chatMessages.map((msg, i) => (
                       <div key={i} data-msg-idx={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] rounded-lg p-3 text-[13px] font-['Inter'] whitespace-pre-wrap ${msg.role === 'user' ? 'bg-[#4066e3] text-white' : 'bg-gray-100 text-gray-800 border border-gray-200'}`}>
+                        <div className={`max-w-[80%] rounded-lg p-3 text-[13px] font-['Inter'] font-medium whitespace-pre-wrap ${msg.role === 'user' ? 'bg-[#4066e3] text-white' : 'bg-gray-100 text-gray-800 border border-gray-200'}`}>
                           {renderMessageContent(msg.content, msg.role)}
                         </div>
                       </div>

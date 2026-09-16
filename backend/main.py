@@ -87,11 +87,11 @@ async def startup_event():
 # ── Route modules (extracted during modularization) ─────────────────
 from routes import (
     misc, conversations, projects, teacher, memory,
-    prompt_sessions, ai, figma, milvus, agent_rpc, files,
+    prompt_sessions, ai, figma, milvus, agent_rpc, files, auth,
 )
 
 for _m in (misc, conversations, projects, teacher, memory,
-           prompt_sessions, ai, figma, milvus, agent_rpc, files):
+           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth):
     app.include_router(_m.router)
 
 

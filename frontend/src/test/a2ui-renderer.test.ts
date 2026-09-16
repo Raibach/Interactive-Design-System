@@ -14,6 +14,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { resolveBinding, componentProps, resolveTag } from '@/components/lit/a2ui-renderer';
+// Imported for the resolution cases below: <chat-panel> exists now (components/lit/chat-panel.ts),
+// and a test that asserts a name has no element has to import the modules that could define it.
+import '@/components/lit/chat-panel';
 
 const mount = async (props: Record<string, unknown>) => {
   const el = document.createElement('a2ui-renderer') as HTMLElement & Record<string, any>;
@@ -101,6 +104,9 @@ describe('resolveTag', () => {
     // which resolves to nothing and reads as a missing component.
     expect(resolveTag('SectionEditor')).toBe('prompt-section-editor');
     expect(resolveTag('CompiledOutput')).toBe('compiled-output-viewer');
+    // This one used to resolve to nothing at all: the catalog advertised the name and
+    // COMPOSITE_MAP mapped it, but no element existed behind it.
+    expect(resolveTag('ChatPanel')).toBe('chat-panel');
   });
 
   it('returns null for a name nothing claims, so the caller can report it', () => {
@@ -179,20 +185,57 @@ describe('root resolution', () => {
 
 describe('a name that resolves to an element nobody defines', () => {
   it('reports it rather than leaving an empty box where the component should be drawn', async () => {
-    // ChatPanel is in the catalog, and COMPOSITE_MAP maps it to <chat-panel> —
-    // and no module in this repo defines <chat-panel>. So the tag renders as an
-    // unknown element: an empty box, silently. That is the real "can never
-    // appear", and it is NOT the server's doing: the catalog accepts the name,
-    // so no gate refuses it, and only the element itself is missing.
+    // `filter-pill` is in the tag registry (tag: 'filter-pill'), the catalog advertises it, and
+    // no module in this repo defines that element. So the tag renders as an unknown element: an
+    // empty box, silently. That is the real "can never appear", and it is NOT the server's doing:
+    // the catalog accepts the name, so no gate refuses it, and only the element is missing.
+    //
+    // This case used to use `ChatPanel`. It stopped being a true example on 2026-09-15, when
+    // chat-panel.ts defined the element: the seat was still drawn by nobody for a different
+    // reason (class fields had replaced Lit's accessors, so the element threw and drew nothing),
+    // and a test that says "no element defines this" over an element that DOES exist would have
+    // hidden that.
     const { text } = await mount({
-      components: [{ id: 'root', component: 'ChatPanel' }],
+      components: [{ id: 'root', component: 'filter-pill' }],
     });
 
-    expect(text).toContain('ChatPanel');
+    expect(text).toContain('filter-pill');
     expect(text).toContain('no element defines');
-    expect(text).toContain('chat-panel');
     // Silent is the failure this exists to prevent: an empty box is
     // indistinguishable from a component that drew nothing on purpose.
     expect(text).not.toBe('');
+  });
+
+  it('draws ChatPanel now that <chat-panel> is defined, from the model it is bound to', async () => {
+    // The claim being held down: a name in the catalog now reaches an element, and the element
+    // draws the values its `{path}` bindings point at — no host code in between.
+    const { el, text } = await mount({
+      dataModel: {
+        session: {
+          right_column: {
+            conversation_id: null,
+            messages: [
+              { role: 'assistant', content: 'Composer ready.' },
+              { role: 'user', content: 'put a lock on it' },
+            ],
+          },
+        },
+      },
+      components: [
+        { id: 'root', component: 'ChatPanel', messages: { path: '/session/right_column/messages' } },
+      ],
+    });
+
+    const seat = el.shadowRoot?.querySelector('chat-panel') as HTMLElement | null;
+    expect(seat).toBeTruthy();
+    expect(text).not.toContain('no element defines');
+
+    await (seat as HTMLElement & { updateComplete: Promise<unknown> }).updateComplete;
+    // The thread now lives in the nested <chat-messages> shadow root, not chat-panel's.
+    const messagesEl = seat!.shadowRoot?.querySelector('chat-messages') as HTMLElement | null;
+    await (messagesEl as (HTMLElement & { updateComplete: Promise<unknown> }) | null)?.updateComplete;
+    const drawn = messagesEl?.shadowRoot?.textContent || '';
+    expect(drawn).toContain('Composer ready.');
+    expect(drawn).toContain('put a lock on it');
   });
 });

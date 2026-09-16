@@ -98,9 +98,10 @@ class ConversationAPI:
                        created_at, updated_at, metadata, project_id,
                        surface_state_json, surface_updated_at
                 FROM conversations
-                WHERE user_id = %s
+                WHERE (user_id = %s OR session_id IN (
+                    SELECT session_id FROM session_permissions WHERE user_id = %s))
             """
-            params = [user_id]
+            params = [user_id, user_id]
 
             if not include_archived:
                 query += " AND is_archived = FALSE"
@@ -457,14 +458,44 @@ class ConversationAPI:
         self.set_user_context(cursor, user_id)
 
         try:
-            # Verify conversation belongs to user
+            # ── MAY THIS CALLER READ THIS CONVERSATION? ────────────────
+            # ACCESS IS DERIVED FROM THE PACKAGE, NEVER STORED PER
+            # CONVERSATION. A conversation hangs off a package
+            # (`conversations.session_id`), and a package is owned by one user
+            # and shared through `session_permissions`. So the only question
+            # worth asking is whether this caller has a claim on the PACKAGE.
+            # Asking it per-conversation would mean every new conversation
+            # needs its own grant, and a package with four conversations would
+            # need four separate permissions to be as shared as the package is.
             cursor.execute("""
-                SELECT id FROM conversations
-                WHERE id = %s AND user_id = %s
-            """, (conversation_id, user_id))
+                SELECT c.id
+                FROM conversations c
+                WHERE c.id = %s
+                  AND (
+                        c.user_id = %s
+                     OR c.session_id IN (
+                            SELECT session_id FROM session_permissions
+                            WHERE user_id = %s
+                        )
+                  )
+            """, (conversation_id, user_id, user_id))
 
             if not cursor.fetchone():
-                return []
+                # THIS WAS `return []`, AND THAT WAS A LIE.
+                #
+                # It reported "you are not allowed to read this" as "this
+                # conversation is empty", with HTTP 200 and no way to tell the
+                # difference. Verified live 2026-09-15: a collaborator holding
+                # an `editor` row on the package that contains this
+                # conversation asked for its messages and got
+                # `200 {"messages": []}` — the same answer a genuinely empty
+                # conversation gives. The person reading it concludes there is
+                # nothing there, which is the opposite of what happened.
+                #
+                # So an access failure is now its own answer. The route turns
+                # this into 403; an empty conversation still returns an empty
+                # list, because that one is true.
+                raise PermissionError("No access to this conversation")
 
             query = """
                 SELECT id, conversation_id, user_id, role, content, metadata, created_at
@@ -527,15 +558,32 @@ class ConversationAPI:
         self.set_user_context(cursor, user_id)
 
         try:
-            # Verify conversation belongs to user and get conversation details
+            # ── MAY THIS CALLER WRITE HERE? ────────────────────────────
+            # Same question as the read path, and the same answer: the PACKAGE
+            # decides. `conversations.user_id` was doing the checking and it is
+            # NULL on 5 rows (all of which have messages in them), so the
+            # OWNER could not write to his own conversation — verified live
+            # 2026-09-15, `POST .../messages` answered "not found or not owned
+            # by user" for a conversation the caller owned through its package.
+            # It is also redundant: measured over all 238 rows it never once
+            # disagrees with the package's owner. One fact, one place.
             cursor.execute("""
-                SELECT id, title, metadata FROM conversations
-                WHERE id = %s AND user_id = %s
-            """, (conversation_id, user_id))
+                SELECT c.id, c.title, c.metadata FROM conversations c
+                WHERE c.id = %s
+                  AND (
+                        c.user_id = %s
+                     OR c.session_id IN (
+                            SELECT session_id FROM session_permissions
+                            WHERE user_id = %s
+                        )
+                  )
+            """, (conversation_id, user_id, user_id))
 
             conv = cursor.fetchone()
             if not conv:
-                raise ValueError(f"Conversation {conversation_id} not found or not owned by user")
+                # ValueError reaches the route as 404, which is the right shape
+                # for "there is no conversation here that you may write to".
+                raise ValueError(f"Conversation {conversation_id} not found or not writable by user")
 
             conv_title = conv['title'] if conv else "Untitled Conversation"
             
