@@ -74,3 +74,77 @@ describe('<chat-navigation-bar> — the seat lists the server writes', () => {
     expect(labels(el).length).toBeGreaterThan(5);
   });
 });
+
+/**
+ * A CLICK ON A COLLAPSED RAIL OPENS THE COLUMN — AND AN OPEN ONE IS LEFT ALONE.
+ *
+ * The owner, 2026-09-18: "the user should be able to click on the chat icon whenever the chat
+ * component is collapsed and expand it… yes, by disabling chat click-and-expand you took care of
+ * the other problems, but I don't think you meant to sacrifice the click-and-expand." And the
+ * other half, from the same day: "we would click on trace and it would expand it an additional
+ * 650 pixels."
+ *
+ * The rail does not own the column's width — a container does — so an expansion has to be
+ * ANNOUNCED. It used to be announced only when the previous tab was empty, which is true only
+ * after collapsing by clicking the active tab; a seat that LOADED collapsed (the console always
+ * does) clicked into the void. These tests pin both directions.
+ */
+describe('<chat-navigation-bar> — collapsing and expanding', () => {
+  const clickTab = (rail: RailEl, label: string) => {
+    const node = Array.from(rail.shadowRoot!.querySelectorAll('button .lt')).find(
+      (n) => (n.textContent ?? '').trim() === label,
+    );
+    (node!.closest('button') as HTMLButtonElement).click();
+  };
+
+  const toggles = (rail: RailEl) => {
+    const seen: Array<boolean> = [];
+    rail.addEventListener('collapse-toggle', (e) =>
+      seen.push(Boolean((e as CustomEvent).detail?.collapsed)),
+    );
+    return seen;
+  };
+
+  it('a rail that LOADED collapsed announces the opening when Chat is clicked', async () => {
+    const rail = await mount('chat,versions,tools,approvals,repair');
+    rail.collapsed = true;
+    rail.activeTab = 'versions'; // a real active tab — the state the console loads in
+    await rail.updateComplete;
+
+    const seen = toggles(rail);
+    clickTab(rail, 'Chat');
+    await rail.updateComplete;
+
+    expect(seen).toContain(false); // the container is told: open
+    expect(rail.collapsed).toBe(false);
+    expect(rail.activeTab).toBe('chat');
+  });
+
+  it('an OPEN rail does not ask the container to resize when another tab is clicked', async () => {
+    const rail = await mount('chat,versions,tools,approvals,repair');
+    rail.collapsed = false;
+    rail.activeTab = 'chat';
+    await rail.updateComplete;
+
+    const seen = toggles(rail);
+    clickTab(rail, 'Tools');
+    await rail.updateComplete;
+
+    expect(seen).toEqual([]); // no 650px jump
+    expect(rail.activeTab).toBe('tools');
+  });
+
+  it('clicking the tab it is already on closes the column — one control, both ways', async () => {
+    const rail = await mount('chat,versions,tools,approvals,repair');
+    rail.collapsed = false;
+    rail.activeTab = 'chat';
+    await rail.updateComplete;
+
+    const seen = toggles(rail);
+    clickTab(rail, 'Chat');
+    await rail.updateComplete;
+
+    expect(seen).toContain(true);
+    expect(rail.collapsed).toBe(true);
+  });
+});
