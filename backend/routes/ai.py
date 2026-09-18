@@ -73,6 +73,55 @@ def _catalog_component_vocabulary() -> str:
     return f"COMPONENT CATALOG — all {len(components)} (only these; anything else is a 503):\n" + "\n".join(lines)
 
 
+def _repair_rows(catalog: str = "prompt-composer") -> List[Dict[str, Any]]:
+    """
+    The checker's open findings, as rows that arrive READY TO DRAW.
+
+    `text` and `level` are composed HERE — not by the model, and not by the element that
+    draws them. A row is a statement about the catalog, and a view that re-words it is a
+    second author of it; the two would disagree the moment either changed. The source is
+    the report the checker already wrote (frontend/catalog-audit/<catalog>.json), read
+    through GET /api/catalog/audit's own reader. Nothing is inferred, merged or summarised.
+
+    AN UNRUN CHECK IS NOT AN EMPTY LIST. When there is no readable report this returns
+    one row that says so, because an empty list is the claim that the checker found
+    nothing open — and a checker that never ran must never read as a clean catalog. That
+    rule is the checker's own (`check-could-not-run` is blocking there), and it holds here.
+    """
+    from routes.misc import _read_catalog_audit
+
+    try:
+        audit = _read_catalog_audit(catalog)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        remedy = detail.get("remedy") or f"cd frontend && node scripts/catalog-check.mjs --catalog {catalog}"
+        print(
+            f"[A2UI Console] no catalog report for '{catalog}' — the repair list states that "
+            f"rather than showing nothing. Remedy: {remedy}"
+        )
+        return [{
+            "id": f"catalog-audit-unavailable:{catalog}",
+            "text": f"The catalog check did not run, so there is nothing to repair from. Remedy: {remedy}",
+            "level": "blocking",
+        }]
+
+    rows: List[Dict[str, Any]] = []
+    for f in audit.get("findings", []):
+        if f.get("level") == "pass":
+            continue
+        subject = f.get("component") or f.get("file") or f.get("nodeId") or "catalog"
+        where = f" ({f['nodeId']})" if f.get("nodeId") else ""
+        rows.append({
+            "id": f.get("id") or f"{f.get('check')}:{subject}",
+            "text": f"{subject}{where} — {f.get('what', '')}",
+            "level": f.get("level") or "advisory",
+        })
+    # Blocking first, then by id — the order the checker prints, so the list on screen
+    # and the list in the report are read the same way.
+    rows.sort(key=lambda r: (r["level"] != "blocking", str(r["id"])))
+    return rows
+
+
 
 def _extract_json_payload(response_text: str) -> Any:
     """Extract a JSON object/array from LLM output without relying on fenced-block parsing."""
@@ -286,6 +335,47 @@ def ai_assemble_surface(
                 detail="A2UI FAILURE: Database not available",
             )
 
+        # ── THE CONSOLE'S OWN SESSION ──────────────────────────────────────────
+        # The console chat binds the console's conversation — the one dashboard
+        # conversation per user, created on first landing and enforced by
+        # idx_prompt_sessions_console_per_user. Same get-or-create the shell's
+        # /api/prompt-sessions/console serves, so there is ONE row, not two.
+        #
+        # NO FALLBACK. A2UI's seat rule (Core-Concept.md) requires a surface seat to
+        # carry a conversation id and session id that are present and non-null, so a
+        # console assembled without them is a surface whose chat cannot bind —
+        # complete-looking output with a required piece missing. That is a 503 here,
+        # like every other missing precondition in this branch.
+        console_session = state.prompt_sessions_api.get_or_create_console_session(user_id=uid)
+        if not console_session or not console_session.get("conversation_id"):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "A2UI FAILURE: the console session did not resolve"
+                    + (" (no conversation)" if console_session else " (not created)")
+                    + ". The console chat binds that conversation, so the surface "
+                    "cannot be assembled without it."
+                ),
+            )
+        console_session_id = str(console_session["id"])
+        console_conversation_id = str(console_session["conversation_id"])
+
+        # ── THE CONSOLE'S CONVERSATIONS — the Conversations dropdown's rows here ──
+        #
+        # Same ownership read the composer's seat uses (`conversations.session_id`),
+        # pointed at the console's own package. Without it the console seat's dropdown —
+        # the only conversation-reading control on the surface a person lands on —
+        # carried nothing, so the console's own conversation could not be opened from
+        # anywhere in the app.
+        console_conversations = []
+        if state.conversation_api:
+            try:
+                console_conversations = state.conversation_api.get_conversations_by_session(
+                    console_session_id, uid
+                )
+            except Exception as e:
+                print(f"[A2UI Surface] Console conversation list warning: {e}")
+
         # ── PERFORMANCE TRACE: Milestone A (Database) ──
         t_a_start = time.perf_counter()
 
@@ -355,18 +445,48 @@ Assemble the FULL console surface using A2UI v0.9.1.
 {_catalog_component_vocabulary()}
 
 REQUIREMENTS:
-1. id "root" Column at top
-2. ConsoleCardGrid bound to /cards
-3. Short friendly ai_message
+1. id "root", component "workspace-layout" — the composer's own container. Its
+   panes are NAMED slots, so "children" is an OBJECT keyed by slot name; the
+   array form fills nothing.
+2. "card-grid": ConsoleCardGrid in slot "left", items bound to {{"path": "/cards"}}
+3. "console-chat": "chat-panel" in slot "right", bound to the console's own
+   conversation: conversationId {{"path": "/console/conversation_id"}},
+   sessionId {{"path": "/console/session_id"}}. There is no middle slot.
+4. "isThirdOpen": false — the chat column loads CLOSED. This is the container's
+   own state and it owns the column's width, so it is the only flag needed: at
+   false the right pane sits at its designed 60px collapsed floor with the rail
+   showing, and the container tells the panel it is collapsed so the rail's Chat
+   button OPENS it on the first click. Do NOT send "collapsed" or "rightWidth" on
+   the panel or the container — a payload flag is re-asserted on every assembly
+   and would snap the column shut again after the operator opened it, and a pinned
+   width jumped the column from 75px to half the screen. Open or closed belongs to
+   the element that owns the width.
+5. "console-chat" carries TWO children in its "view" slot: "trace-view" and
+   "repair-view". The panel's "view" slot is the design's ONE content hole
+   ("chat-output-simple-slot-area" #40001085:2373, annotated "holds plain text
+   output and inserted functions" — plural), so BOTH are inserted into it and the
+   slot's value is a LIST of ids.
+   "trace-view" is a TraceFeed bound to /trace/entries and /trace/breadcrumbCount.
+   Both of those paths are written by the CLIENT — the logger and Sentry's scope
+   exist in the browser tab and nowhere else, and the transport has no return path —
+   so do not invent values for them and do not add an updateDataModel for them.
+   "repair-view" is "chat-repair-actions" bound to /findings. The repair rows are
+   composed by the BACKEND from the report the catalog checker already wrote, and
+   written into the data model there — the same reason: a list of what is wrong in
+   the catalog is not something to be paraphrased by a model. It is listed FIRST in
+   the slot: it is the actionable thing, and the feed below it fills the rest.
+6. Short friendly ai_message
 
-The console IS the cards and nothing else: do NOT emit a greeting, a header,
-or any other Text component above them.
+Emit nothing else — no greeting, no header, no Text above them.
 
 Output ONLY this exact JSON (no markdown, no extra text):
 {{
   "components": [
-    {{"id": "root", "component": "Column", "children": ["card-grid"]}},
-    {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}}
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "console-chat"}}}},
+    {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
+    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": ["repair-view", "trace-view"]}}}},
+    {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}},
+    {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
   ],
   "ai_message": "Your message"
 }}
@@ -429,6 +549,10 @@ Output ONLY this exact JSON (no markdown, no extra text):
         print(f"  Milestone C (Parse):    {ms_c:8.1f}ms")
         print(f"{'='*60}\n")
 
+        # The repair rows — the checker's own findings, composed for the panel's "view"
+        # slot. A read of the report, never a model call, and it cannot fail the surface:
+        # the report's absence is carried as a row rather than as an empty list.
+        repair_rows = _repair_rows()
         validate_a2ui_components(components)
         return [
             {
@@ -452,10 +576,36 @@ Output ONLY this exact JSON (no markdown, no extra text):
                     "path": "/",
                     "value": {
                         "cards": cards,
+                        # The console's OWN session and conversation — what the
+                        # emitted chat-panel binds to. One console-typed session per
+                        # user, one conversation under it.
+                        "console": {
+                            "session_id": console_session_id,
+                            "conversation_id": console_conversation_id,
+                            # The dropdown's rows — same shape as the composer's seat.
+                            "conversations": [
+                                {
+                                    "id": str(c.get("id")),
+                                    "title": c.get("title") or "(untitled)",
+                                }
+                                for c in console_conversations
+                            ],
+                        },
                         "assembly_time_ms": elapsed_ms,
                         "llm_used": True,
                         "usage": dict(LAST_USAGE),  # measured, straight from the provider
-                        "ai_message": ai_message
+                        "ai_message": ai_message,
+                        # What the panel's "repair-view" draws. Composed by the writer
+                        # above from the report the checker wrote — the model is told not
+                        # to invent values for it, and the element re-words nothing.
+                        "findings": repair_rows,
+                        # A row's state while a repair is being made: "repair" (amber,
+                        # in repair) and "done" (green, completed). WRITTEN BY THE CLIENT —
+                        # a repair is started and settled in the browser — so the path exists
+                        # here and holds nothing until a person starts one. A completed row
+                        # is then simply absent from the next report: the checker re-derives
+                        # the findings, and there is no history of repaired components.
+                        "repairs": {"stages": {}}
                     }
                 }
             }
@@ -623,24 +773,42 @@ The user clicked "Composer". Assemble the FULL blank composer surface.
 COMPONENT NAMES — use exactly these strings in each object's "component" field:
 {json.dumps(list(a2ui_catalog.get("components", {}).keys()))}
 
-LAYOUT CONTRACT — three fixed slots you fill:
-- left_column: prompt-section-editor, sections bound to {{"path": "/session/left_column/sections"}}
-- middle_column: compiled-output-viewer, empty content
-- right_column: chat-panel
+LAYOUT CONTRACT — the container's NAMED slots, which you fill:
+- left: prompt-section-editor, sections bound to {{"path": "/session/left_column/sections"}}
+- left-footer: control-bar
+  The design puts the "Left-column-ControlBar" at the BOTTOM of the left column
+  (#40000954:23865), as that container's LAST child — it is the CONTAINER's slot, not a
+  child of the editor, so the bar stays put while the prompt sections scroll above it.
+  Emit it with NO props: the master carries three controls (undo, Save Template, RUN)
+  and no version line, so there is no value to bind.
+- middle: compiled-output-viewer, content ""
+- right: chat-panel, conversationId bound to {{"path": "/session/right_column/conversation_id"}}
+  It carries one child in its "view" slot — "trace-view", a TraceFeed bound to
+  /trace/entries and /trace/breadcrumbCount — because that slot is the design's
+  content hole for every non-chat tab and a panel emitted without it shows the
+  Trace tab loading forever. Both paths are written by the client; do not invent
+  values for them.
+
+"root" IS "workspace-layout" — do not put a Column above it. Its panes are NAMED
+slots, so its "children" is an OBJECT keyed by slot name ({{"left": ...,
+"middle": ..., "right": ...}}), not an array: the array form carries no slot and
+fills nothing.
 
 REQUIREMENTS:
 1. Component objects use key "component" (NOT "type"). Every object needs "id".
-2. id "root" Column at the top.
+2. id "root", component "workspace-layout", children keyed by slot name.
 3. initial_sections: exactly 3 starter prompt sections — System, User, Agent — each an object {{"name", "type", "content"}} with short real content (User and Agent may be empty).
 4. One short friendly ai_message and one short suggested_title.
 
 Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array, no extra keys, no text after the JSON:
 {{
   "components": [
-    {{"id": "root", "component": "Column", "children": ["left-column", "middle-column", "right-column"]}},
+    {{"id": "root", "component": "workspace-layout", "children": {{"left": "left-column", "left-footer": "control-bar", "middle": "middle-column", "right": "right-column"}}}},
     {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
+    {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
-    {{"id": "right-column", "component": "chat-panel"}}
+    {{"id": "right-column", "component": "chat-panel", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "initial_sections": [
     {{"name": "System", "type": "system", "content": "You are a precise, professional assistant."}},
@@ -771,9 +939,18 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                             "id": None,  # in-memory only until explicit Save
                             "title": suggested_title,  # AI-generated
                             "is_unsaved": True,
-                            "left_column": {"sections": initial_sections},  # slot contract (fixed), sections are AI-generated
-                            "middle_column": {"compiled_output": ""},      # slot contract (fixed)
-                            "right_column": {"conversation_id": None},      # slot contract (fixed), chat is mostly static
+                            "left_column": {
+                                "saving": False,
+                                "sections": initial_sections,  # slot contract (fixed), sections are AI-generated
+                                # The seat beside this column reads the workspace from
+                                # raw_content (chat-panel.leftColumnContent). A fresh
+                                # package has no row yet, so the writer supplies the same
+                                # JSON shape the database stores — without it Grace is
+                                # handed nothing and answers "the workspace is empty".
+                                "raw_content": json.dumps({"sections": initial_sections}),
+                            },
+                            "middle_column": {"compiled_output": "", "running": False},  # slot contract (fixed)
+                            "right_column": {"conversation_id": None, "conversations": []},      # slot contract (fixed), chat is mostly static
                         },
                         "ai_message": ai_message,  # AI-generated
                         "grace_greeting": True,
@@ -826,8 +1003,42 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             pass
 
         # Fetch actual conversation messages (for ChatPanel history on mount)
+        #
+        # ── THE PACKAGE'S CONVERSATION IS FOUND BY ITS OWNER, NOT BY A COPY ────
+        # A conversation is owned by the package through `conversations.session_id` —
+        # the frontend states the rule outright ("Conversations are package-owned: the
+        # conversation row already carries session_id — prompt_sessions.conversation_id
+        # was dropped"). This read used the dropped copy instead, so the surface bound
+        # whatever that column held. Measured 2026-09-17: 8 conversations owned by 4
+        # packages, and only 2 of 265 packages carry conversation_id — so a package with
+        # a real conversation was told there was none, and the seat drew "No
+        # conversations yet." over it. That is the same severed wire as the output column
+        # and the repair list: the data existed, the read looked somewhere else.
+        # ── THE PACKAGE'S CONVERSATIONS, AS A LIST — the Conversations dropdown's rows ──
+        #
+        # The dropdown at the top of the chat column binds its list to the package's
+        # conversations (its `Data:` line), the element declares `conversations`, and this
+        # payload had no such path — so the closed dropdown drew its empty sentence over a
+        # package that owns a conversation with eight turns in it. The lookup below was
+        # already being made; its result was used for `conv_id` and then thrown away, and
+        # it was only made on the branch where the package had no `conversation_id`, so the
+        # list existed as a side effect of a fallback rather than as data.
+        #
+        # It is one read, the owner's own (`conversations.session_id`), and both facts come
+        # out of it: which conversation the seat is in, and the list to choose from.
+        conversations_list = []
+        if state.conversation_api:
+            try:
+                conversations_list = state.conversation_api.get_conversations_by_session(session_id, uid)
+            except Exception as e:
+                print(f"[A2UI Surface] Conversation list warning for {session_id}: {e}")
+
         messages = []
         conv_id = session.get("conversation_id")
+        if not conv_id and conversations_list:
+            conv_id = conversations_list[0].get("id")
+            print(f"[A2UI Surface] {session_id} owns {len(conversations_list)} conversation(s) — "
+                  f"bound {str(conv_id)[:8]}… (conversations.session_id, not the dropped column)")
         if conv_id and state.conversation_api:
             try:
                 messages = state.conversation_api.get_messages(str(conv_id), uid, limit=200)
@@ -855,17 +1066,19 @@ Data summary:
 Assemble the FULL surface with A2UI v0.9.1.
 
 CATALOG (use these):
-- Column (children)
 - prompt-section-editor (sections: {{"path": "/session/left_column/sections"}})
+- control-bar (no props) — in the container's "left-footer" slot, at the bottom of the left column
 - compiled-output-viewer (content: {{"path": "/session/middle_column/compiled_output"}})
 - chat-panel (conversationId: {{"path": "/session/right_column/conversation_id"}})
+- TraceFeed (entries: {{"path": "/trace/entries"}}, breadcrumbCount: {{"path": "/trace/breadcrumbCount"}}) — the chat panel's "view" slot child, for the rail's Trace tab
 - workspace-layout (resizable host for the three panes)
 
 REQUIREMENTS:
-1. id "root" Column
-2. 3-column workspace layout
-3. Bind editors to the paths above
-4. Short ai_message that says what is on screen
+1. id "root", component "workspace-layout" — the host IS the root, with no Column
+   above it. Its panes are NAMED slots, so "children" is an OBJECT keyed by slot
+   name; the array form fills nothing.
+2. Bind the panes to the paths above
+3. Short ai_message that says what is on screen
 
 The session IS the three panes: do NOT greet. Not "Welcome back", no time of day,
 no return salutation — the operator is already in the session they opened.
@@ -873,11 +1086,12 @@ no return salutation — the operator is already in the session they opened.
 Output ONLY this JSON (no markdown):
 {{
   "components": [
-    {{"id": "root", "component": "Column", "children": ["workspace"]}},
-    {{"id": "workspace", "component": "workspace-layout", "children": ["left-col", "middle-col", "right-col"]}},
+    {{"id": "root", "component": "workspace-layout", "children": {{"left": "left-col", "left-footer": "control-bar", "middle": "middle-col", "right": "right-col"}}}},
     {{"id": "left-col", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
+    {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
-    {{"id": "right-col", "component": "chat-panel", "conversationId": {{"path": "/session/right_column/conversation_id"}}}}
+    {{"id": "right-col", "component": "chat-panel", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "ai_message": "Session open — your three panes are loaded."
 }}
@@ -970,12 +1184,36 @@ Output ONLY this JSON (no markdown):
                             "left_column": {
                                 "sections": sections,
                                 "raw_content": session.get("left_column_content"),
+                                # The bottom bar's two busy flags. They start false and the
+                                # client owns them from there: pressing Save Template or RUN
+                                # sets one, the bar binds it by path, and the spinner the
+                                # drawing asks for (state=Compiling / state=Running) appears
+                                # on the button that was pressed.
+                                "saving": False,
                             },
                             "middle_column": {
                                 "compiled_output": session.get("compiled_output"),
+                                "running": False,
                             },
                             "right_column": {
-                                "conversation_id": str(session.get("conversation_id")) if session.get("conversation_id") else None,
+                                # THE RESOLVED ID, not the dropped column. Binding
+                                # `session.conversation_id` here was why the seat had
+                                # history it could not write to: with no id, every send
+                                # created ANOTHER conversation for the package — measured
+                                # 2026-09-17, this package owned four, two messages each,
+                                # and no way to say which one it was looking at.
+                                "conversation_id": str(conv_id) if conv_id else None,
+                                # The Conversations dropdown's rows. Same read as the id
+                                # above — the package's own conversations, newest first —
+                                # bound to the element's `conversations` prop by the
+                                # assembled surface.
+                                "conversations": [
+                                    {
+                                        "id": str(c.get("id")),
+                                        "title": c.get("title") or "(untitled)",
+                                    }
+                                    for c in conversations_list
+                                ],
                                 "messages": messages,
                             },
                         },

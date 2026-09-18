@@ -105,6 +105,107 @@ class PromptSessionsAPI:
                 conn.rollback()
                 raise e
 
+    def get_or_create_console_session(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        The user's CONSOLE session — the owner of the console chat's conversations.
+
+        WHY IT EXISTS: the console chat is GLOBAL. It operates on cards, never on a
+        package, so it reads and writes no package's conversation. But
+        conversations.session_id is NOT NULL with an FK to prompt_sessions, so its
+        conversations still have to belong to a session — and the console needs
+        exactly one. This is it: one per user, with metadata.session_type='console',
+        created the first time the user lands on the console.
+
+        GET-OR-CREATE, NOT CREATE-IF-MISSING: a check-then-insert cannot hold the
+        "exactly one" rule. Two tabs landing together both find nothing and both
+        insert, and the console chat splits across two sessions with half the
+        history in each. The unique index
+        idx_prompt_sessions_console_per_user (partial, on user_id where
+        metadata->>'session_type' = 'console') makes the second insert a no-op —
+        ON CONFLICT DO NOTHING is what makes the race safe, not the SELECT that
+        follows it.
+
+        The conversation is created too, because a chat with an id of nothing
+        persists nothing. Its `tab` is left to the caller's default; per-tab
+        conversations hang off this same session and are distinguished by the
+        conversations.tab column.
+        """
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+
+            try:
+                # Set user context for RLS
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+
+                # The race is settled HERE: the loser inserts nothing.
+                cursor.execute(
+                    """
+                    INSERT INTO prompt_sessions (user_id, title, description, metadata)
+                    VALUES (%s, %s, %s, %s::jsonb)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (
+                        user_id,
+                        "Console",
+                        "The console's own session — global chat over cards, not a prompt package.",
+                        json.dumps({"session_type": "console", "has_prompt_session": False}),
+                    ),
+                )
+
+                cursor.execute(
+                    """
+                    SELECT id, user_id, title, conversation_id, metadata, created_at
+                    FROM prompt_sessions
+                    WHERE user_id = %s AND metadata->>'session_type' = 'console'
+                    """,
+                    (user_id,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    conn.rollback()
+                    return None
+
+                session = dict(row)
+
+                # A chat with no conversation id persists nothing. Own the one the
+                # tab reads, and open it if this is the first landing.
+                if not session.get("conversation_id"):
+                    cursor.execute(
+                        """
+                        INSERT INTO conversations (session_id, user_id, created_by, title, message_count, metadata)
+                        VALUES (%s, %s, %s, %s, 0, %s::jsonb)
+                        RETURNING id
+                        """,
+                        (
+                            session["id"],
+                            user_id,
+                            user_id,
+                            "Console — Chat",
+                            json.dumps(
+                                {
+                                    "session_type": "console",
+                                    "has_prompt_session": False,
+                                    # str(): psycopg2 hands back a UUID object, and
+                                    # json.dumps refuses it.
+                                    "prompt_session_id": str(session["id"]),
+                                }
+                            ),
+                        ),
+                    )
+                    conversation_id = cursor.fetchone()["id"]
+                    cursor.execute(
+                        "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                        (conversation_id, session["id"]),
+                    )
+                    session["conversation_id"] = conversation_id
+
+                conn.commit()
+                return session
+
+            except Exception as e:
+                conn.rollback()
+                raise e
+
     def get_sessions(
         self,
         user_id: str,
@@ -161,6 +262,11 @@ class PromptSessionsAPI:
                         WHERE (ps.user_id = %s OR ps.id IN (
                             SELECT session_id FROM session_permissions WHERE user_id = %s
                         ))
+                          -- The CONSOLE session is a package for ownership purposes —
+                          -- conversations.session_id has to point at something — but it
+                          -- is not a prompt package and must never be listed as one.
+                          -- Without this it appears as a card beside the real packages.
+                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') <> 'console'
                     """
                 else:
                     query = """
@@ -189,6 +295,10 @@ class PromptSessionsAPI:
                         WHERE (ps.user_id = %s OR ps.id IN (
                             SELECT session_id FROM session_permissions WHERE user_id = %s
                         ))
+                          -- Same exclusion as the count query above: the console
+                          -- session owns the console chat's conversations, but it is
+                          -- not a prompt package and is not listed as one.
+                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') <> 'console'
                     """
 
                 params = [user_uuid, user_uuid]

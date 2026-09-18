@@ -65,11 +65,25 @@ FIGMA/AGENT_OPEN_GAPS.md
 # ── Ignored before commit (local working docs & agent instructions) ──
 AGENT_NORTH_STAR.md
 A2UI-Rules.md
-CORRECTIONS.md
-OPEN-ITEMS.md
 WHAT-THEY-BUILT-WHAT-WE-BUILT.md
 INDEX.md
 ignore-for-commit/
 AGENTS-instructions/
+#
+# LOCAL-ONLY, BY THE OWNER'S DECISION (2026-09-17). The working registers and the
+# catalog audit are the operator's own record of what is open and what the checker
+# said — they are not published. TO-DO.md, OPEN-ITEMS.md and CORRECTIONS.md live in
+# the working copy and in no clone, and so does the audit under catalog-audit/.
+#
+# This reverses an earlier rule that required OPEN-ITEMS.md to be tracked, on the
+# grounds that a register git cannot see is one whose numbers drift unnoticed. That
+# guard is intact where it matters: `check:open-items-register` still compares the
+# numbers the register records against the numbers each run derives, and fails the
+# build when they disagree. What is no longer asserted is visibility to git.
 models/
 retired-files/
+TO-DO.md
+OPEN-ITEMS.md
+CORRECTIONS.md
+catalog-audit/
+frontend/catalog-audit/

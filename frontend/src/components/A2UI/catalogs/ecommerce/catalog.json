@@ -1116,7 +1116,7 @@
     },
     "chat-panel": {
       "type": "object",
-      "description": "Lit chat panel (right column + console). Binds to conversationId.",
+      "description": "Lit chat panel (right column + console). Binds to conversationId and to the Conversations dropdown's list.",
       "properties": {
         "component": {
           "const": "chat-panel"
@@ -1124,12 +1124,43 @@
         "conversationId": {
           "type": "object"
         },
+        "conversations": {
+          "type": "object",
+          "description": "The Conversations dropdown's rows — the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
+        },
         "id": {
           "type": "string"
         }
       },
       "required": [
         "component"
+      ]
+    },
+    "chat-repair-actions": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The catalog checker's open findings, drawn in the chat panel's \"view\" slot. Implemented by <chat-repair-actions> in src/components/lit/chat-repair-actions.ts. A VIEW: it fetches nothing and composes no sentence about a finding — the writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them here, so the list cannot disagree with the check that produced it.",
+          "properties": {
+            "component": {
+              "const": "chat-repair-actions"
+            },
+            "findings": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "description": "Data-bound rows, blocking first: {\"path\": \"/findings\"}. Each row is {id, text, level}, with text and level composed by the writer. Unset is NOT empty: the element draws its waiting state until the path has been written, because an empty list is the claim that the checker found nothing open."
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
       ]
     },
     "prompt-container": {
@@ -1301,6 +1332,43 @@
       "required": [
         "component"
       ]
+    },
+    "control-bar": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The left column's bottom bar: undo, Save Template, RUN — and nothing else. Figma \"Left-column-ControlBar\" #40000761:261, placed as the last child of the left column container #40000954:23865. Implemented by <control-bar> in src/components/lit/control-bar.ts; the shell listens for its undo-click / save-click / run-click.",
+          "properties": {
+            "component": {
+              "const": "control-bar"
+            },
+            "isSaving": {
+              "type": "boolean",
+              "description": "True while a save is in flight; the bar shows its compiling state."
+            },
+            "isRunning": {
+              "type": "boolean",
+              "description": "True while a run is in flight."
+            },
+            "saveShortcut": {
+              "type": "string"
+            },
+            "runShortcut": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
     }
   },
   "$defs": {
@@ -1335,18 +1403,42 @@
     },
     "anyComponent": {
       "oneOf": [
-        { "$ref": "#/components/error-banner" },
-        { "$ref": "#/components/workspace-layout" },
-        { "$ref": "#/components/prompt-section-editor" },
-        { "$ref": "#/components/compiled-output-viewer" },
-        { "$ref": "#/components/chat-panel" },
-        { "$ref": "#/components/prompt-container" },
-        { "$ref": "#/components/prompt-input-section" },
-        { "$ref": "#/components/gripper-prompt-input" },
-        { "$ref": "#/components/role-dropdown" },
-        { "$ref": "#/components/role-tile" },
-        { "$ref": "#/components/status-bar-prompt-input" },
-        { "$ref": "#/components/prompt-textarea" },
+        {
+          "$ref": "#/components/error-banner"
+        },
+        {
+          "$ref": "#/components/workspace-layout"
+        },
+        {
+          "$ref": "#/components/prompt-section-editor"
+        },
+        {
+          "$ref": "#/components/compiled-output-viewer"
+        },
+        {
+          "$ref": "#/components/chat-panel"
+        },
+        {
+          "$ref": "#/components/prompt-container"
+        },
+        {
+          "$ref": "#/components/prompt-input-section"
+        },
+        {
+          "$ref": "#/components/gripper-prompt-input"
+        },
+        {
+          "$ref": "#/components/role-dropdown"
+        },
+        {
+          "$ref": "#/components/role-tile"
+        },
+        {
+          "$ref": "#/components/status-bar-prompt-input"
+        },
+        {
+          "$ref": "#/components/prompt-textarea"
+        },
         {
           "$ref": "#/components/Text"
         },
@@ -1418,6 +1510,12 @@
         },
         {
           "$ref": "#/components/token-cost-readout"
+        },
+        {
+          "$ref": "#/components/chat-repair-actions"
+        },
+        {
+          "$ref": "#/components/control-bar"
         }
       ],
       "discriminator": {

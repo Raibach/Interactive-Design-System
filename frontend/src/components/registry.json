@@ -1,18 +1,18 @@
 {
   "_meta": {
-    "whatThisFileIs": "THE FIGMA MAP. Which Figma node each component came from. Three files in this repository are called some version of 'registry' — this is the one that records the design relationship, NOT the one that decides what may be rendered. The allowlist is frontend/src/shared/tag-registry.ts; the schema the server validates against is frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json.",
-    "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it — do NOT regenerate. If absent, ask before building.",
+    "whatThisFileIs": "THE FIGMA MAP. Which Figma node each component came from. Three files in this repository are called some version of 'registry' \u2014 this is the one that records the design relationship, NOT the one that decides what may be rendered. The allowlist is frontend/src/shared/tag-registry.ts; the schema the server validates against is frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json.",
+    "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it \u2014 do NOT regenerate. If absent, ask before building.",
     "ruleFile": ".continue/rules/design-system.md",
-    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09); chat-button re-pulled from Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes (2026-09-11) after the design edited the node — the previously recorded icon node 40001010:25766 no longer exists.",
-    "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented — audit against the source annotation)."
+    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09); chat-button re-pulled from Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes (2026-09-11) after the design edited the node \u2014 the previously recorded icon node 40001010:25766 no longer exists.",
+    "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented \u2014 audit against the source annotation)."
   },
   "containers": {
     "chat-menu-item": {
-      "whatThisIs": "The rail nav button. Every designed button inside the navigation rail inherits this — it is a constraint of the CONTAINER, not a property of each button.",
+      "whatThisIs": "The rail nav button. Every designed button inside the navigation rail inherits this \u2014 it is a constraint of the CONTAINER, not a property of each button.",
       "renderedBy": [
         "chat-navigation-bar"
       ],
-      "definedIn": "frontend/src/components/lit/chat-navigation-bar.ts — the :host cascade block",
+      "definedIn": "frontend/src/components/lit/chat-navigation-bar.ts \u2014 the :host cascade block",
       "provenance": "inferred",
       "geometry": {
         "button": {
@@ -48,56 +48,88 @@
       "figmaNodeId": "40000941:23074",
       "litComponent": "gripper-prompt-input",
       "file": "frontend/src/components/lit/prompt-input/gripper-prompt-input.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "role-tile",
       "figmaNodeId": "40000909:4316",
       "litComponent": "role-tile",
       "file": "frontend/src/components/lit/prompt-input/role-tile.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "functions",
       "figmaNodeId": "40000909:4005",
       "litComponent": "prompt-input-section",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "model-selector-button",
       "figmaNodeId": "40000909:4322",
       "litComponent": "model-selector-button",
       "file": "frontend/src/components/lit/prompt-input/model-selector-button.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "status-bar-prompt-input",
       "figmaNodeId": "40000878:239",
       "litComponent": "status-bar-prompt-input",
       "file": "frontend/src/components/lit/prompt-input/status-bar-prompt-input.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "prompt-textarea",
       "figmaNodeId": "40000746:95",
       "litComponent": "prompt-textarea",
       "file": "frontend/src/components/lit/prompt-input/prompt-textarea.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "prompt-input-section",
       "figmaNodeId": "40000746:94",
       "litComponent": "prompt-input-section",
       "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "prompt-section-editor",
       "figmaNodeId": null,
       "litComponent": "prompt-section-editor",
       "file": "frontend/src/components/lit/prompt-section-editor.ts",
-      "status": "built"
+      "status": "built",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "workspace-layout",
@@ -105,7 +137,11 @@
       "litComponent": "workspace-layout",
       "file": "frontend/src/components/lit/workspace-layout.ts",
       "status": "built",
-      "managed": "manual"
+      "managed": "manual",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "control-bar",
@@ -113,7 +149,11 @@
       "litComponent": "control-bar",
       "file": "frontend/src/components/lit/control-bar.ts",
       "status": "built",
-      "managed": "manual"
+      "managed": "manual",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "compiled-output-viewer",
@@ -121,7 +161,11 @@
       "litComponent": "compiled-output-viewer",
       "file": "frontend/src/components/lit/compiled-output-viewer.ts",
       "status": "built",
-      "managed": "manual"
+      "managed": "manual",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "chat-navigation-bar",
@@ -129,7 +173,11 @@
       "litComponent": "chat-navigation-bar",
       "file": "frontend/src/components/lit/chat-navigation-bar.ts",
       "status": "built",
-      "managed": "manual"
+      "managed": "manual",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "agent-card-element",
@@ -137,7 +185,11 @@
       "litComponent": "agent-card-element",
       "file": "frontend/src/components/lit/agent-card-element.ts",
       "status": "built",
-      "managed": "manual"
+      "managed": "manual",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "a2ui-image-catalog",
@@ -145,7 +197,11 @@
       "litComponent": "a2ui-image-catalog",
       "file": "frontend/src/components/lit/a2ui-image-catalog.ts",
       "status": "built",
-      "managed": "manual"
+      "managed": "manual",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "ai-surface-sandbox",
@@ -153,7 +209,11 @@
       "litComponent": "ai-surface-sandbox",
       "file": "frontend/src/components/lit/ai-surface-sandbox.ts",
       "status": "built",
-      "managed": "manual"
+      "managed": "manual",
+      "provenance": {
+        "behavior": "inferred",
+        "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
+      }
     },
     {
       "figmaName": "Component 24/Frame 886946",
@@ -181,30 +241,62 @@
         "Chat button selected: it's yellow when it's selected and it's transparent when the chat is closed and it's not selected."
       ],
       "annotationChannel": {
-        "read": "Figma MCP get_design_context (http://127.0.0.1:3845/mcp — Figma Dev Mode MCP Server v1.0.0); cross-checked against Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes?ids=40001010:25768",
+        "read": "Figma MCP get_design_context (http://127.0.0.1:3845/mcp \u2014 Figma Dev Mode MCP Server v1.0.0); cross-checked against Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes?ids=40001010:25768",
         "attributeNameFound": [
           "data-annotations",
           "data-interaction-annotations"
         ],
-        "note": "TWO attributes, not one — and they carry DIFFERENT halves of the spec. `data-annotations` holds the STATE note (\"...yellow when it's selected and transparent when the chat is closed...\"); `data-interaction-annotations` holds the INTERACTION note (the `On click:` contract). Both match /^data-.*annotation/i, so a regex matcher catches them, but an implementation that expects a SINGLE attribute silently loses the `On click:` half — the one field that makes behaviour verbatim instead of invented. The REST node.annotations[] carries the same two notes. SUPERSEDES an earlier record of `attributeNameFound: null`: that was an artifact of a layout-only Figma tool that dropped annotation attributes, NOT a property of this design — the names are observable, and were observed.",
-        "namesMustStayUntrusted": "Match by regex and record what was seen. §2 of the pipeline rules forbids hardcoding the name; §9.3's recorded name is stale (see below)."
+        "note": "TWO attributes, not one \u2014 and they carry DIFFERENT halves of the spec. `data-annotations` holds the STATE note (\"...yellow when it's selected and transparent when the chat is closed...\"); `data-interaction-annotations` holds the INTERACTION note (the `On click:` contract). Both match /^data-.*annotation/i, so a regex matcher catches them, but an implementation that expects a SINGLE attribute silently loses the `On click:` half \u2014 the one field that makes behaviour verbatim instead of invented. The REST node.annotations[] carries the same two notes. SUPERSEDES an earlier record of `attributeNameFound: null`: that was an artifact of a layout-only Figma tool that dropped annotation attributes, NOT a property of this design \u2014 the names are observable, and were observed.",
+        "namesMustStayUntrusted": "Match by regex and record what was seen. \u00a72 of the pipeline rules forbids hardcoding the name; \u00a79.3's recorded name is stale (see below)."
       },
       "children": {
-        "frame": { "name": "chat-menu-item", "nodeId": "40001010:25749" },
+        "frame": {
+          "name": "chat-menu-item",
+          "nodeId": "40001010:25749"
+        },
         "icon": {
           "name": "Machine-learning-model",
           "nodeId": "40001012:26436",
           "componentId": "40000122:3412",
           "type": "INSTANCE",
-          "art": "vector — exported to frontend/src/assets/figma-chat-button-icon.svg"
+          "art": "vector \u2014 exported to frontend/src/assets/figma-chat-button-icon.svg"
         },
-        "label": { "name": "Chat", "nodeId": "40001010:25751" }
+        "label": {
+          "name": "Chat",
+          "nodeId": "40001010:25751"
+        }
       },
       "values": {
-        "button": { "w": 74, "h": 74, "layout": "row", "gap": 10, "align": "center/center" },
-        "frame": { "fill": "#FCCD3D", "effect": "inset 0 4 4 rgba(0,0,0,0.25)", "padding": "8px 13px", "layout": "column" },
-        "icon": { "w": 38, "h": 38, "x": 18, "y": 8, "fill": "#1FACC2" },
-        "label": { "text": "Chat", "fill": "#1FACC2", "fontFamily": "Inter", "fontStyle": "Bold", "fontWeight": 700, "fontSize": 13, "lineHeight": 20, "y": 46 }
+        "button": {
+          "w": 74,
+          "h": 74,
+          "layout": "row",
+          "gap": 10,
+          "align": "center/center"
+        },
+        "frame": {
+          "fill": "#FCCD3D",
+          "effect": "inset 0 4 4 rgba(0,0,0,0.25)",
+          "padding": "8px 13px",
+          "layout": "column"
+        },
+        "icon": {
+          "w": 38,
+          "h": 38,
+          "x": 18,
+          "y": 8,
+          "fill": "#1FACC2"
+        },
+        "label": {
+          "text": "Chat",
+          "fill": "#1FACC2",
+          "fontFamily": "Inter",
+          "fontStyle": "Bold",
+          "fontWeight": 700,
+          "fontSize": 13,
+          "lineHeight": 20,
+          "y": 46
+        }
       },
       "provenance": {
         "geometry": "verbatim",
@@ -219,9 +311,9 @@
         "geometrySharing": "inferred"
       },
       "gaps": [
-        "The annotation dispatches tab-change { tab: \"chat conversations\" }; the element emits { tab: 'chat' }. One of the two is wrong — the payload string is the designer's, the enum is the element's.",
+        "The annotation dispatches tab-change { tab: \"chat conversations\" }; the element emits { tab: 'chat' }. One of the two is wrong \u2014 the payload string is the designer's, the enum is the element's.",
         "The frame's inset shadow (0 4 4 rgba(0,0,0,0.25), node 40001010:25749) is not rendered by the element. Carried in `values`, not yet in CSS.",
-        "Icon instance 40001012:26436 resolves to component 40000122:3412 (\"Machine-learning-model\"), which carries no annotation — a property-only marker at most. Reported per §5; the icon's behaviour is the button's, so this is expected, not a missing spec."
+        "Icon instance 40001012:26436 resolves to component 40000122:3412 (\"Machine-learning-model\"), which carries no annotation \u2014 a property-only marker at most. Reported per \u00a75; the icon's behaviour is the button's, so this is expected, not a missing spec."
       ]
     },
     {
@@ -243,6 +335,29 @@
         "geometrySharing": "inferred"
       },
       "container": "chat-menu-item"
+    },
+    {
+      "figmaName": "chat-output-slot-area-conversations",
+      "figmaNodeId": "40001085:2510",
+      "litComponent": "small-dropdown",
+      "file": "frontend/src/components/lit/small-dropdown.ts",
+      "status": "built",
+      "annotations": [
+        "Conversation Dropdown",
+        "Data: the package's conversations",
+        "Source: packages.conversation_id \u2192 conversations",
+        "On click: dispatch conversation-select { conversationId }",
+        "Connects: the chosen conversation loads into the thread below"
+      ],
+      "provenance": {
+        "annotation": "verbatim",
+        "litComponent": "inferred",
+        "behavior": "inferred"
+      },
+      "gaps": [
+        "The node is a detached FRAME, not a component. Its address is therefore not stable: deleting and re-placing the slot area changes the id, and node-unresolved fires.",
+        "The annotation's On click: contract is `conversation-select { conversationId }`. The element currently dispatches `dropdown-toggle`; the conversation event belongs to the wrapper that supplies the list, not to the generic <small-dropdown>."
+      ]
     }
   ]
 }

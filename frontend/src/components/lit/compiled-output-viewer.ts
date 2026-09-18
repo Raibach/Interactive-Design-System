@@ -84,7 +84,11 @@ export class CompiledOutputViewer extends LitElement {
   constructor() {
     super();
     this.content = '';
-    this.status = 'empty';
+    // `status` is NOT defaulted here. The spec's `output-panel` defaults it to "empty",
+    // and defaulting it made this element unable to tell "the host said empty" from
+    // "nobody has said anything" — so the chip read the default forever. See
+    // `_statusWord`: an unassigned status is now derived from what is actually in the
+    // pane, which is the only way the word cannot disagree with the content beside it.
     this.model = '';
     this.tokens = 0;
     this.isRunning = false;
@@ -164,6 +168,26 @@ export class CompiledOutputViewer extends LitElement {
     if (!this._ranOnce || this.elapsed <= 0) return '';
     if (this._failed) return `Stopped after ${this.elapsed}s`;
     return this.content ? `Done in ${this.elapsed}s` : '';
+  }
+
+  /**
+   * The word in the meta row's chip.
+   *
+   * It said "empty" over 3,834 characters of output, measured 2026-09-17 on a package whose
+   * answer had been restored from the database: the chip drew `this.status`, whose only
+   * value was the constructor's default, because nothing in this app ever assigns it. A
+   * word that describes a pane has to come from that pane.
+   *
+   * A surface that DOES supply a status still wins — that is the spec's contract for
+   * `output-panel` (`empty | streaming | complete | error`) — and the derivation below uses
+   * the same two facts this element already judges the pane by: `_failed` (the app's own
+   * error markers at the start of the content) and whether there is content at all.
+   * `streaming` never needs deriving: a running pane draws the running bar instead.
+   */
+  private get _statusWord(): string {
+    if (this.status) return this.status;
+    if (this._failed) return 'error';
+    return (this.content || '').trim() ? 'complete' : 'empty';
   }
 
   updated(changed: Map<string, unknown>): void {
@@ -951,7 +975,7 @@ export class CompiledOutputViewer extends LitElement {
                   <span class="status running">Running… ${this.elapsed}s</span>`
             : this._finishedLine
               ? html`<span class="status">${this._finishedLine}</span>`
-              : html`<span class="status">${this.status}</span>`}
+              : html`<span class="status">${this._statusWord}</span>`}
         </div>
         <div class="actions">
           <button @click=${this._toggleView}>${this.viewMode === 'raw' ? 'Rendered' : 'Raw'}</button>

@@ -5,15 +5,15 @@
  * fill #F7FAFC (bg/muted), stroke #999999 "1px 0px" (top+bottom), "button drop"
  * shadow. Children, left to right, exactly as the frame:
  *
- *   1. gripper-prompt-input 40x40, white — Meatballs SVG 17x21 (a marker in the
- *      frame; resizing is not implemented, so it is not a handle)
- *   2. "Function - send input to model" 46x40 — Send-chat frame, Vector SVG
- *      24.32x20 #4E68D2 (asset: assets/chat-action-send.svg). THE SUBMIT BUTTON.
- *   3. "Function - stop model thinking" 46x40 — 20x18 rect #4E68D2 radius 2.
- *      THE STOP BUTTON.
- *   4. "Console" 126x40 — label Inter Bold 700/16 #4E68D2
- *   5. "Models"  126x40 — same
- *   6. "+" 40x40 — glyph #4066E3 Inter 500/35, line-height 20
+ *   1. gripper-prompt-input 40x40, white — the drag handle for the input area
+ *      (see <chat-navigation-bar> / <workspace-layout> for the resize contract)
+ *   2. "send-stop-chat-input" 46x40 — ONE control with two states, component set
+ *      40001085:2532. state=send: the arrow 24.32x20 #4E68D2 (asset
+ *      assets/chat-action-send.svg), disabled while the input is empty.
+ *      state=stop: the 20x18 block #4E68D2 radius 2, while a call is in flight.
+ *   3. "Console" 126x40 — label Inter Bold 700/16 #4E68D2
+ *   4. "Models"  126x40 — same
+ *   5. "+" 40x40 — glyph #4066E3 Inter 500/35, line-height 20
  *
  * Only the two named functions dispatch events — with the design's own names,
  * kebab-cased. Console / Models / + are rendered per the frame; their actions
@@ -30,13 +30,21 @@ export class ChatActionBar extends LitElement {
   static properties = {
     /** Label on the Models button. */
     modelLabel: { type: String, attribute: 'model-label' },
+    /** A call is in flight — the one control shows stop instead of send. */
+    busy: { type: Boolean },
+    /** The input holds no text — send is disabled (`Disabled:` on state=send). */
+    hasText: { type: Boolean, attribute: 'has-text' },
   };
 
   declare modelLabel: string;
+  declare busy: boolean;
+  declare hasText: boolean;
 
   constructor() {
     super();
     this.modelLabel = 'Models';
+    this.busy = false;
+    this.hasText = false;
   }
 
   static styles = css`
@@ -77,6 +85,11 @@ export class ChatActionBar extends LitElement {
       align-items: center;
       justify-content: center;
       padding: 0;
+    }
+    /* state=send, Disabled — empty input. */
+    .icon:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
     /* The stop glyph — the frame's 20x18 rect, #4E68D2, radius 2. */
     .glyph-stop {
@@ -148,11 +161,23 @@ export class ChatActionBar extends LitElement {
         <div class="gripper" title="Drag to resize the input area" @mousedown=${this._startDrag}>
           <img src=${gripperIcon} width="17" height="21" alt="" />
         </div>
-        <button class="icon" type="button" title="Send input to model" @click=${() => this._emit('send-input-to-model')}>
-          <img src=${sendIcon} width="24.32" height="20" alt="" />
-        </button>
-        <button class="icon" type="button" title="Stop model thinking" @click=${() => this._emit('stop-model-thinking')}>
-          <span class="glyph-stop" aria-hidden="true"></span>
+        <!-- Figma "send-stop-chat-input" #40001085:2532 — ONE control with two
+             states, not two buttons side by side.
+               state=send  idle   · glyph is the send arrow · On click: send-input-to-model
+               state=stop  busy   · glyph is the stop block · On click: stop-model-thinking
+             Disabled on state=send: while the input is empty. -->
+        <button
+          class="icon"
+          type="button"
+          data-state=${this.busy ? 'stop' : 'send'}
+          title=${this.busy ? 'Stop model thinking' : 'Send input to model'}
+          aria-label=${this.busy ? 'Stop model thinking' : 'Send input to model'}
+          ?disabled=${!this.busy && !this.hasText}
+          @click=${() => this._emit(this.busy ? 'stop-model-thinking' : 'send-input-to-model')}
+        >
+          ${this.busy
+            ? html`<span class="glyph-stop" aria-hidden="true"></span>`
+            : html`<img src=${sendIcon} width="24.32" height="20" alt="" />`}
         </button>
         <button class="wide" type="button" title="Loads cards from console in prompt area" @click=${() => this._emit('loads-cards-form-console-in-prompt-area')}>
           Console

@@ -41,10 +41,10 @@ import { LitElement, html, css, nothing } from 'lit';
 // be defined before render, the same rule that forced the main.tsx import above.
 import './chat-header';
 import './chat-messages';
+import './small-dropdown';
 import './chat-input';
 import './chat-action-bar';
 import './chat-footer';
-import './chat-repair-actions';
 import './error-banner';
 import './chat-navigation-bar';
 import './prompt-input/prompt-textarea';
@@ -57,6 +57,13 @@ interface SeatMessage {
   role?: string;
   content?: string;
 }
+
+/**
+ * The trace button's `AI:` line, verbatim from Figma "trace-button" state=Default.
+ * Clicking Trace is a PROMPT: the reply renders in this thread like any answer.
+ */
+const TRACE_PROMPT =
+  'Load the latest activity and report tokens, cost, latency and evaluation for this session.';
 
 export class ChatPanel extends LitElement {
   static properties = {
@@ -74,17 +81,13 @@ export class ChatPanel extends LitElement {
     /** Token/cost tallies for <chat-footer>, fed by the host's a2ui:usage listener. */
     usage: { type: Object },
     /** Persisted left-column JSON — fallback when no live section callback is set. */
-    leftColumnContent: { type: String, attribute: 'left-column-content' },
+    leftColumnContent: { type: Object, attribute: 'left-column-content' },
     /** The compiled Run output in the middle column, for Grace's workspace context. */
     compiledOutput: { type: String, attribute: 'compiled-output' },
     /** The console's prompt packages, for Grace's workspace context. */
     consoleCards: { type: Array },
     /** Open catalog findings, for Grace's workspace context. */
     catalogFindings: { type: Array },
-    /** Non-pass findings for the repair panel. */
-    findings: { type: Array },
-    /** Record<string, 'repair' | 'done'> keyed by finding id. */
-    repairStages: { type: Object },
     /** Component ids carrying an open annotation finding — draws the red banner. */
     unannotatedInUse: { type: Array },
     /** Label on the Models button in the action bar. */
@@ -94,6 +97,41 @@ export class ChatPanel extends LitElement {
     /** The input area's dragged height, px. 0 = auto. Reactive — the gripper's
         drag writes this and the template re-renders chat-input with it. */
     inputHeight: { type: Number },
+    /** The rail's active view. Driven by the rail's `tab-change`, not by the host. */
+    activeTab: { type: String, attribute: 'active-tab' },
+    /**
+     * True when the chat column is collapsed to its rail — the design's
+     * chat-button state=Selected, clicked again.
+     *
+     * And it is passed DOWN to the rail, which matters more than it looks: when a
+     * HOST owns the column's width (the console's shell does), the rail's own
+     * collapsed flag is never set by the host, so it drifts out of sync with the
+     * real column. Its click logic then reads "already collapsed → expand" against
+     * a flag that says false, and the first click on the Chat tab COLLAPSES
+     * instead of opening — one click too many to get the chat back. The old React
+     * seat documented exactly this and fixed it the same way.
+     */
+    collapsed: { type: Boolean, reflect: true },
+    /** Which rail buttons this surface may show, comma-separated. The rail is
+        surface-dependent: Chat/Trace/Versions on both, Tools in the composer,
+        Approvals on the console. Empty shows them all (dev default). */
+    allowedTabs: { type: String, attribute: 'allowed-tabs' },
+    /**
+     * Whether the rail's Trace tab SENDS its prompt when clicked.
+     *
+     * The prompt asks for tokens, cost, latency and evaluation — properties of a
+     * prompt PACKAGE's run. The composer's seat is a package, so the question is
+     * answerable there. The console's seat is not: it operates on cards, has no
+     * run, and the model refuses every time, so each Trace click wrote a canned
+     * question and a canned refusal into the console's conversation. Measured
+     * 2026-09-17: the console conversation held nothing else — 8 prompt copies
+     * and 8 refusals, and nothing more.
+     *
+     * The view still switches; only the automatic question is suppressed. The
+     * surface says which it is, because nothing in the payload distinguishes the
+     * two seats — both carry a conversationId and a sessionId.
+     */
+    tracePrompt: { type: Boolean, attribute: 'trace-prompt' },
   };
 
   // `declare` — NOT a class field. With `useDefineForClassFields` true, a plain field
@@ -116,17 +154,23 @@ export class ChatPanel extends LitElement {
   /** Token/cost tallies shown in <chat-footer>. */
   declare usage: Record<string, number | string | undefined>;
   /** Persisted left-column JSON. */
-  declare leftColumnContent: string;
+  /**
+   * The left column, as the seat beside it sees it: the LIVE sections array
+   * (`/session/left_column/sections` — the same path the editor binds and the host writes on
+   * every keystroke), or the persisted JSON string when a caller hands it that instead.
+   *
+   * It was the persisted copy alone (`raw_content`, what the package was SAVED with), which
+   * meant she read yesterday's column: type a line into a seat, ask her about it, and the
+   * question was answered against text that no longer existed. Two paths held one fact and
+   * the seat had the stale one.
+   */
+  declare leftColumnContent: string | any[];
   /** The compiled Run output in the middle column. */
   declare compiledOutput: string;
   /** The console's prompt packages. */
   declare consoleCards: Array<Record<string, unknown>>;
   /** Open catalog findings. */
   declare catalogFindings: Array<Record<string, unknown>>;
-  /** Non-pass findings for the repair panel. */
-  declare findings: Array<Record<string, unknown>>;
-  /** Per-finding repair state. */
-  declare repairStages: Record<string, 'repair' | 'done'>;
   /** Component ids with an open annotation finding. */
   declare unannotatedInUse: string[];
   /** Label on the Models button. */
@@ -135,6 +179,14 @@ export class ChatPanel extends LitElement {
   declare conversations: Array<{ id?: string; title?: string }>;
   /** The input area's dragged height, px. 0 = auto. */
   declare inputHeight: number;
+  /** The rail's active view. */
+  declare activeTab: string;
+  /** True when the chat column is collapsed to its rail. */
+  declare collapsed: boolean;
+  /** Comma-separated rail buttons this surface may show. */
+  declare allowedTabs: string;
+  /** Whether the rail's Trace tab sends its prompt. See the property above. */
+  declare tracePrompt: boolean;
 
   constructor() {
     super();
@@ -149,12 +201,14 @@ export class ChatPanel extends LitElement {
     this.compiledOutput = '';
     this.consoleCards = [];
     this.catalogFindings = [];
-    this.findings = [];
-    this.repairStages = {};
     this.unannotatedInUse = [];
     this.modelLabel = 'Models';
     this.conversations = [];
     this.inputHeight = 0;
+    this.activeTab = 'chat';
+    this.collapsed = false;
+    this.allowedTabs = '';
+    this.tracePrompt = true;
   }
 
   private _sending = false;
@@ -163,13 +217,73 @@ export class ChatPanel extends LitElement {
   /** The slotted input's draft, and the in-flight request's abort handle. */
   private _draft = '';
   private _abort: AbortController | null = null;
+  /** The spacer's gesture while it is in flight — see _onGripDown. */
+  private _gripMove: ((e: MouseEvent) => void) | null = null;
+  private _gripUp: (() => void) | null = null;
 
   private _onDraftInput(e: Event) {
     const d = (e as CustomEvent).detail || {};
-    if (typeof d.value === 'string') this._draft = d.value;
+    if (typeof d.value !== 'string') return;
+    this._draft = d.value;
+    this._syncBarText();
+  }
+
+  /**
+   * TELL THE BAR WHETHER SEND IS AVAILABLE. It has to be told, and that is the defect
+   * this exists for.
+   *
+   * `_draft` is a PLAIN field on purpose: making it reactive would re-render this element
+   * — and therefore the whole thread — on every keystroke. But the bar's disabled state
+   * depends on the draft (`chat-action-bar:175`, `?disabled=${!busy && !hasText}`), and
+   * nothing ever carried it across. So typing worked, the draft was right, and the send
+   * control stayed DISABLED forever: measured 2026-09-17 on a package — the draft held
+   * "xXX" from real typing while the bar reported hasText false, and the chat could not
+   * speak to the model at all.
+   *
+   * The bar is this element's OWN child (an internal piece, not a surface component), so
+   * writing its property is composition, not a value pushed into the surface's tree.
+   */
+  private _syncBarText() {
+    const bar = this.renderRoot?.querySelector('chat-action-bar') as
+      (HTMLElement & { hasText: boolean }) | null;
+    if (bar) bar.hasText = this._draft.trim().length > 0;
   }
 
   /** The bar's submit — send the slotted input's draft to the model. */
+  // ── WHAT THE HOST SAYS TO THIS SEAT ────────────────────────────────────────
+  //
+  // ONE channel, and it is a DISPLAY channel: a2ui:system-message puts a line in the thread.
+  // The shell has dispatched these since the React seat owned the thread (a Run failed, the
+  // tool call returned nothing, a save failed) and the seat that replaced it never listened,
+  // so they landed in a store nothing renders — a Run that died was silent in the one place
+  // a person looks. Same shape as before, role + content, so those call sites did not change.
+  //
+  // There was a second channel here for one afternoon: a2ui:chat-send, which ASKED the model
+  // (the post-Run analysis the retired React seat ran when a run finished). It put an
+  // instruction to Grace — "analyze this output, what's good, what could be improved" plus
+  // three thousand characters of the answer — into the thread as a turn. The owner read it on
+  // screen and said what it looks like: code, unreadable, nobody can read that. Asking
+  // on the user's behalf is not a turn in their conversation. Removed.
+  private _onHostSay = (e: Event) => {
+    const detail = ((e as CustomEvent).detail || {}) as { role?: string; content?: string };
+    if (!detail.content) return;  // an empty bubble reads as having said nothing on purpose
+    this._local = [
+      ...this._local,
+      { role: detail.role === 'user' ? 'user' : 'assistant', content: String(detail.content) },
+    ];
+    this.requestUpdate();
+  };
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('a2ui:system-message', this._onHostSay);
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener('a2ui:system-message', this._onHostSay);
+    super.disconnectedCallback();
+  }
+
   private _onSendCommand() {
     const text = this._draft.trim();
     if (!text || this._sending) return;
@@ -177,6 +291,7 @@ export class ChatPanel extends LitElement {
       (HTMLElement & { value: string }) | null;
     if (textarea) textarea.value = '';
     this._draft = '';
+    this._syncBarText();
     void this._send(text);
   }
 
@@ -229,14 +344,82 @@ export class ChatPanel extends LitElement {
       height: 100%;
       min-height: 0;
       min-width: 0;
-      overflow: hidden;
+      /*
+       * NO OVERFLOW HIDING. This host used to clip, and that clip was doing two
+       * jobs, both of them wrong. It hid content that overflows — the class of
+       * thing that makes a broken layout look contained — and it cut off the rail's
+       * edge drop shadow, which is drawn to fall OUTSIDE the rail and onto the
+       * surface beside it ("chat-main-menu-vert" #40001066:4301, -4px 4px 10px).
+       *
+       * Nothing here needs it. The column's scrollers are the inner regions — the
+       * thread and the view slot both carry overflow-y: auto — so this box is not a
+       * scroll container and has no overflow to contain.
+       */
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 14px;
       color: #10455f;
     }
+    /*
+     * THIS ELEMENT IS THE DESIGN'S right-column-panel-container (#40001066:3272),
+     * so the container's own two properties live here, applied to the box that
+     * actually holds its three children:
+     *   paddingTop 10 — why the design's rail is 954 tall inside a 964 container.
+     *   the fill — #9C9C9C by the owner's instruction (2026-09-17). The last Figma
+     *   pull still said #FFFFFF for the node, so this is the instruction and not a
+     *   reading; the spacer is transparent by design, so what shows through it is
+     *   THIS fill, and the rail's edge shadow lands on it.
+     * With the strip and the panel both inside this box, the padding insets both and
+     * the fill sits behind both — which is what could not happen while the strip was
+     * outside it.
+     */
+    :host {
+      padding-top: 10px;
+      box-sizing: border-box;
+      background: #9c9c9c;
+    }
+    /*
+     * The spacer: "chat-left-spacer" #40001085:2598. 20px in the design, 30px here
+     * for the reason recorded in the host layout tests; transparent because the
+     * node's fill is switched off (or removed) in Figma and the container's fill is
+     * what shows through; the glyph's two colours are the component set's two
+     * states, and the colour IS the hover — neither state paints a background.
+     */
+    .gripper-chat {
+      flex: 0 0 30px;
+      width: 30px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: col-resize;
+      color: #b4b4b4;
+      user-select: none;
+    }
+    .gripper-chat:hover,
+    .gripper-chat:active {
+      color: #7e72e3;
+    }
+    .gripper-chat svg {
+      display: block;
+      pointer-events: none;
+    }
     /* The rail is <chat-navigation-bar>, which carries its own Figma constraint
        (75px, blue gradient, radius). The panel stacks the remaining pieces; only
-       the thread is allowed to grow and scroll. */
+       the thread is allowed to grow and scroll.
+
+       NO z-index, NO un-clipping, and neither is missing: both were tried today to
+       get the rail's drop shadow out of this element, and both were the wrong kind
+       of change — a forced paint order, and a containment guarantee given up for a
+       visual effect. The shadow is invisible here because THIS ELEMENT IS NOT THE
+       CONTAINER THE DESIGN PUTS IT IN.
+
+       The design's right column is one container holding three SIBLINGS — spacer
+       (20, x -14857), rail (74, x -14837), panel (540, x -14763) — so the rail's
+       -4px 4px 10px lands on the transparent spacer beside it and on the container
+       behind it, across boundaries nothing clips. Here the rail is a CHILD of the
+       panel, flush against the edge of the box that clips it, and the panel paints
+       over it. Until the rail is the panel's sibling inside a right-column
+       container, any fix from inside this element is a workaround. */
     chat-navigation-bar { flex-shrink: 0; will-change: transform; }
     /* The panel FILLS its column and snaps to the edges of the browser window.
        contain: layout paint scopes its internals so a window drag-resize
@@ -272,7 +455,126 @@ export class ChatPanel extends LitElement {
       min-height: 0;
     }
     chat-header { flex-shrink: 0; }
+    small-dropdown { flex-shrink: 0; }
+    /* "chat-output-slot-area" #40001085:1521 — column, padding 10px 20px, gap 10px,
+       vertical HUG, white. The HUG is why the Conversations row is as tall as the dropdown
+       and no taller; only the two below it are drawn to fill. */
+    .output-slot {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px 20px;
+      background: #FFFFFF;
+    }
+    /* "chat-output-spacer-slot-area" #40001085:2404 — same column, same 10px 20px inset,
+       holding one child: a 1px #B5CCCE rule stretched to the slot's width. */
+    .output-spacer {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 10px 20px;
+      background: #FFFFFF;
+    }
+    .output-spacer > span {
+      display: block;
+      height: 1px;
+      background: #b5ccce;
+    }
+    /* Collapsed to the rail — chat-button state=Selected, clicked again. */
+    .panel.collapsed { display: none; }
+    /* The Conversations dropdown's rows, from "small-dropdown" state=open
+       #40001085:2414: a column of white tiles, gap 5, radius 4, height 30,
+       label #4E68D2 Semi Bold 600 / 14. */
+    .conversation-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .conversation-list button {
+      display: block;
+      width: 100%;
+      height: 30px;
+      padding: 0 10px;
+      box-sizing: border-box;
+      background: #ffffff;
+      border: none;
+      border-radius: 4px;
+      box-shadow: 2px 2px 6px 0 rgba(0, 0, 0, 0.15), -2px -2px 6px 0 rgba(0, 0, 0, 0.15);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: #4e68d2;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    .conversation-list button:hover { background: #f7fafc; }
+    .conversation-none {
+      margin: 0;
+      padding: 8px 0;
+      font-size: 13px;
+      font-style: italic;
+      opacity: 0.7;
+    }
     chat-messages { flex: 1 1 auto; min-height: 0; display: flex; }
+    /* "chat-output-simple-slot-area" #40001085:2373 — the hole the surface injects into.
+       Read from the file, not assumed: the master's own sizing is vertical HUG (it is as
+       tall as what is put in it) and the placement #40001085:2391 is vertical FILL (it takes
+       the height its parent gives it). NEITHER IS A FIXED HEIGHT, and this rule is the
+       placement's: flex 1 1 auto is vertical fill, and the children keep their own heights
+       — the feed fills, the repair list hugs.
+       The box's own numbers are drawn on both nodes and were not being honoured here: padding
+       10px 20px (this had 20px all round), gap 10px between injected children, white fill.
+       overflow-y is NOT drawn — the drawing shows one static line — and it is kept
+       deliberately: a slot that fills a column whose parent clips (.chat-output-wrapper,
+       overflow hidden) would otherwise cut a long repair list off at the panel's edge. */
+    .view-slot {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      padding: 10px 20px;
+      background: #FFFFFF;
+    }
+    /* TWO VIEWS SHARE THIS ONE HOLE (the design's answer: "holds plain text output and
+       inserted functions", plural). The feed FILLS it; the repair list HUGS its content,
+       because a list stretched to fill the pane leaves a border around empty space and
+       pushes its own rows off the bottom edge — measured: the header sat clipped at the
+       panel's lower boundary with the feed above it taking the whole height. The 12px under
+       the list is gone: the slot's own 10px gap is the drawn distance between children. */
+    .view-slot ::slotted(chat-repair-actions) {
+      flex: 0 0 auto;
+    }
+    /* What an EMPTY view slot draws. The slot is filled by the surface, so an empty
+       one means the surface has not put anything there yet — a state, not a blank.
+       Until the emission exists this is what the Trace tab shows. */
+    .view-waiting {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #6B7280;
+    }
+    .view-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #D1D5DB;
+      border-top-color: #1FACC2;
+      border-radius: 50%;
+      animation: view-spin 0.8s linear infinite;
+    }
+    @keyframes view-spin {
+      to { transform: rotate(360deg); }
+    }
     chat-action-bar { flex-shrink: 0; }
     chat-input { flex-shrink: 0; }
     chat-footer { flex-shrink: 0; }
@@ -285,25 +587,88 @@ export class ChatPanel extends LitElement {
   `;
 
   private get _thread(): SeatMessage[] {
-    // The surface's history first, then anything said since it was handed over. One
-    // conversation; the split is only about who supplied the bytes.
-    return [...(this.messages || []), ...this._local];
+    /*
+     * THE SURFACE'S HISTORY FIRST, THEN WHAT IT DOES NOT YET CARRY — and the second half
+     * is why a turn must not be drawn twice.
+     *
+     * A local turn is not a second kind of turn: the seat WRITES each one into the
+     * package's conversation as it is spoken (`_write`). So the moment the surface hands
+     * that conversation back — the next assembly, a reload, a re-assert — the same turn
+     * exists in `messages` AND in `_local`, and `[...messages, ..._local]` draws it twice.
+     * Measured 2026-09-17 in the console chat: "ping from the seat" twice, and her reply
+     * twice, in the order they were spoken.
+     *
+     * The conversation is the source of truth (Data-Binding.md: the value arrives by
+     * path), so any local turn the surface's list now ends with is RELEASED — it is the
+     * same turn, back from where it was written. Only local turns the conversation has
+     * not caught up with yet are appended.
+     */
+    const fromSurface = this.messages || [];
+    const local = this._local;
+    if (!fromSurface.length || !local.length) return [...fromSurface, ...local];
+
+    const same = (a: SeatMessage, b: SeatMessage) =>
+      (a?.role || '') === (b?.role || '') && (a?.content || '') === (b?.content || '');
+
+    let caughtUp = 0;
+    const max = Math.min(local.length, fromSurface.length);
+    for (let n = max; n > 0; n--) {
+      const tail = fromSurface.slice(-n);
+      const spoken = local.slice(-n);
+      if (tail.every((m, i) => same(m, spoken[i]))) { caughtUp = n; break; }
+    }
+    return [...fromSurface, ...local.slice(0, local.length - caughtUp)];
   }
 
   // ── The slot contract. See the header. ───────────────────────────────────────
+
+  /**
+   * A slot in this element's own shadow root, by name (undefined = the default
+   * slot). ONE place does the lookup and the cast, because `querySelector` returns
+   * `Element` and `assignedNodes` lives on `HTMLSlotElement` — spelled out here so
+   * neither reader has to know that.
+   */
+  private _slot(name?: string): HTMLSlotElement | null {
+    const selector = name ? 'slot[name="' + name + '"]' : 'slot';
+    const found = this.renderRoot?.querySelector(selector) as HTMLSlotElement | null;
+    return found ?? null;
+  }
+
   /** Is a seat supplied by the host? Read at render time — the light DOM is the truth. */
   private _seatSlotted(): boolean {
-    const slot = this.renderRoot?.querySelector('slot');
-    const assigned = slot?.assignedNodes?.({ flatten: true }) ?? [];
+    const assigned = this._slot()?.assignedNodes?.({ flatten: true }) ?? [];
     if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE)) return true;
     // The light DOM covers the case slotting does not report: jsdom's slotting is thin, and a host
     // may append a seat after this element's first render.
-    return this.children.length > 0;
+    //
+    // A child that NAMES another slot is not a seat. The surface puts the Trace view in this
+    // element's "view" slot, so a bare count of children read that as "the host handed me a seat",
+    // rendered the seat slot in place of the panel body, and took the entire rail off the screen
+    // — the collapsed right column measured 82px with nothing in it. Measured 2026-09-17.
+    return Array.from(this.children).some((el) => !el.getAttribute('slot'));
   }
 
   private _onSlotChange(): void {
-    // A seat arrived or left. Nothing is cached: the next render reads the light DOM again.
+    // A seat or a view arrived or left. Nothing is cached: the next render reads the
+    // light DOM again.
     this.requestUpdate();
+  }
+
+  /**
+   * Is a view supplied for the rail's non-chat tab — Trace, Versions, Tools,
+   * Approvals? Read at render time, the same rule the seat slot follows, because
+   * the light DOM is the truth and a cached flag would be one more thing that can
+   * disagree with what is assigned.
+   *
+   * The slot element only exists while a non-chat tab is active (see render), so
+   * this answers for the tab being drawn, not for every tab at once.
+   */
+  private _viewSlotted(): boolean {
+    const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
+    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE)) return true;
+    // The light DOM covers what slotting does not report: jsdom's slotting is thin,
+    // and the surface's child may be appended after this element's first render.
+    return Array.from(this.children).some((el) => el.getAttribute('slot') === 'view');
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
@@ -343,20 +708,23 @@ export class ChatPanel extends LitElement {
     }
   }
 
-  private async _write(role: 'user' | 'assistant', content: string): Promise<void> {
-    // Written into the PACKAGE's conversation as it is said. A message that exists only in
-    // this element is gone the moment the surface reassembles — the defect this replaces.
-    if (!this.conversationId) return;
-    try {
-      await fetch(`/api/conversations/${this.conversationId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
-        body: JSON.stringify({ role, content, metadata: {} }),
-      });
-    } catch (err) {
-      console.error('[chat-panel] could not write the turn down:', err);
-    }
-  }
+  // THERE IS NO WRITER HERE, AND THAT IS THE FIX.
+  //
+  // This element used to POST every turn to /api/conversations/{id}/messages as well as
+  // asking for it: `_write('assistant', reply)` after the response, and `_write('user', text)`
+  // at send. The backend writes both turns itself (`routes/teacher.py` lines 173 and 315),
+  // so the same fact had two homes and the second one doubled every answer.
+  //
+  // Measured 2026-09-17 in the package's conversation 85d9575b: 12 rows for 4 user turns —
+  // each answer twice, 7.5–18ms apart, identical text and identical metadata, which is what
+  // two writers look like. The backend log shows the pattern exactly: one
+  // `POST /api/teacher/query` followed by one `POST /api/conversations/…/messages`. The user
+  // turn never doubled only because this element's `conversationId` was empty at send time,
+  // where a chat turn is written before anyone could adopt it.
+  //
+  // Persisting a turn is the backend's, because the backend is the only party that knows
+  // whether a call was a conversation at all (a Run is not one, and writing its prompt here
+  // is what put the same text in the output column and in the thread beside it).
 
   /**
    * Grace's view of the workspace — the same shape the React seat built (buildWorkspaceContext),
@@ -369,8 +737,12 @@ export class ChatPanel extends LitElement {
 
     let sections: any[] = [];
     try {
-      if (this.leftColumnContent) {
-        const parsed = JSON.parse(this.leftColumnContent);
+      const src = this.leftColumnContent;
+      if (Array.isArray(src)) {
+        // The live path: the array itself, written by the host on every edit.
+        sections = src;
+      } else if (src) {
+        const parsed = JSON.parse(src);
         sections = Array.isArray(parsed?.sections)
           ? parsed.sections
           : Array.isArray(parsed) ? parsed : [];
@@ -617,7 +989,6 @@ ${workspaceContext}`;
     this._local = [...this._local, { role: 'user', content: text }];
     this._sending = true;
     this.requestUpdate();
-    void this._write('user', text);
 
     try {
       this._abort = new AbortController();
@@ -631,7 +1002,11 @@ ${workspaceContext}`;
           reasoning: true,
           reasoning_style: 'chain_of_thought',
           include_memory: true,
-          temperature: 0.45,
+          // No temperature here. It used to send 0.45 while the request model defaulted
+          // to 0.45 and the backend passed it straight through — three homes for one
+          // number, and three numbers waiting to disagree. `chat` has ONE: CHAT_TEMPERATURE
+          // in grace_gui.py, chosen by mode, because this element does not own how she is
+          // prompted.
           session_id: this.sessionId,
           conversation_id: this.conversationId,
         }),
@@ -676,7 +1051,6 @@ ${workspaceContext}`;
         const reply = this._processReply(raw);
         if (reply) {
           this._local = [...this._local, { role: 'assistant', content: reply }];
-          void this._write('assistant', reply);
         }
       }
     } catch (err) {
@@ -723,12 +1097,168 @@ ${workspaceContext}`;
     );
   }
 
+  /**
+   * The rail's `tab-change`. Chat and Trace are view switches, except that Trace
+   * is also a PROMPT — its note's `AI:` line says the reply is the trace.
+   * An EMPTY tab is the rail collapsing itself (the active tab clicked twice).
+   */
+  private _onTabChange(e: Event): void {
+    const tab = String((e as CustomEvent).detail?.tab ?? '');
+    if (!tab) {
+      this.collapsed = true;
+      return;
+    }
+    this.collapsed = false;
+    this.activeTab = tab;
+    // The VIEW switches either way; only a seat that has a run is asked the
+    // question. See `tracePrompt`.
+    if (tab === 'trace' && this.tracePrompt) void this._send(TRACE_PROMPT);
+  }
+
+  /**
+   * The spacer's mousedown. "chat-left-spacer" #40001085:2598, state=Default
+   * #40001085:2597 — the annotation on the MASTER (not on the instance, which is why
+   * it took a second visit to find):
+   *   On drag:   dispatch input-resize-start, input-resize-move, input-resize-end
+   *   Connects:  drags the chat column's left edge; the whole strip is the target,
+   *              not just the glyph
+   *
+   * So the strip owns the whole gesture: it raises start, tracks the pointer and
+   * raises move and end. The host does the sizing, because the column's width is its
+   * to lay out. The three names are the annotation's, verbatim.
+   */
+  private _onGripDown(e: MouseEvent): void {
+    this._gripMove = (ev: MouseEvent) => {
+      this.dispatchEvent(
+        new CustomEvent('input-resize-move', {
+          bubbles: true,
+          composed: true,
+          detail: { clientX: ev.clientX, clientY: ev.clientY },
+        }),
+      );
+    };
+    this._gripUp = () => {
+      this.dispatchEvent(new CustomEvent('input-resize-end', { bubbles: true, composed: true }));
+      if (this._gripMove) document.removeEventListener('mousemove', this._gripMove);
+      if (this._gripUp) {
+        document.removeEventListener('mouseup', this._gripUp);
+        document.removeEventListener('pointerup', this._gripUp);
+        document.removeEventListener('pointercancel', this._gripUp);
+      }
+      this._gripMove = null;
+      this._gripUp = null;
+    };
+    document.addEventListener('mousemove', this._gripMove);
+    document.addEventListener('mouseup', this._gripUp);
+    document.addEventListener('pointerup', this._gripUp);
+    document.addEventListener('pointercancel', this._gripUp);
+
+    this.dispatchEvent(
+      new CustomEvent('input-resize-start', {
+        bubbles: true,
+        composed: true,
+        detail: { clientX: e.clientX, clientY: e.clientY },
+      }),
+    );
+    e.preventDefault();
+  }
+
+  /** The rail's `collapse-toggle` — chat-button state=Selected, clicked again. */
+  private _onCollapseToggle(e: Event): void {
+    this.collapsed = Boolean((e as CustomEvent).detail?.collapsed);
+  }
+
+  /**
+   * The Conversations dropdown's rows. The design's `Data:` line binds this list
+   * to the package's conversations, in the white rows of the open variant.
+   */
+  private _conversationItems() {
+    const list = this.conversations ?? [];
+    if (!list.length) {
+      return html`<p class="conversation-none">No conversations yet for this package.</p>`;
+    }
+    return html`
+      <ul class="conversation-list">
+        ${list.map(
+          (c) => html`
+            <li>
+              <button
+                type="button"
+                data-conversation-id=${String(c.id ?? '')}
+                @click=${this._pickConversation}
+              >${c.title || c.id || '(untitled)'}</button>
+            </li>
+          `,
+        )}
+      </ul>
+    `;
+  }
+
+  /**
+   * A row was picked. Raised as the design's `On click:` contract says —
+   * `conversation-select { conversationId }` — and caught by the wrapper below,
+   * which is the same handler the thread used to raise.
+   */
+  private _pickConversation(e: Event): void {
+    const el = e.currentTarget as HTMLElement | null;
+    const id = el?.dataset.conversationId ?? '';
+    if (!id) return;
+    el?.dispatchEvent(
+      new CustomEvent('conversation-select', {
+        bubbles: true,
+        composed: true,
+        detail: { conversationId: id },
+      }),
+    );
+  }
+
   render() {
     const seated = this._seatSlotted();
     const usage = this.usage ?? {};
     const attributed = Boolean(this.conversationId);
     const unannotated = (this.unannotatedInUse ?? []).length > 0;
     return html`
+      <!-- THE COLUMN'S SPACER — "chat-left-spacer" #40001085:2598, and it is this
+           component's first child, not the host's.
+
+           THE DESIGN PUTS THREE SIBLINGS IN ONE CONTAINER: "right-column-panel-
+           container" #40001066:3272 holds spacer (x -14857, w 20), rail (x -14837,
+           w 74) and panel (x -14763, w 540), with paddingTop 10 and a fill behind
+           all three. THIS element is that container in the app, so the strip is
+           rendered here — beside the rail and the panel — and the container's own
+           padding and fill reach it, which they could not while it was a sibling of
+           the pane outside this component. That was the fault behind three visible
+           symptoms: the strip standing 10px proud of the rail, showing the shell
+           through its transparency instead of the container's fill, and covering the
+           container's top inset band.
+
+           The drag STARTS here too, on this element, and leaves as the rail's own
+           declared contract — right-column-drag-start, which the allowlist has
+           declared all along and nothing emitted. The host owns the widths, so the
+           host does the sizing; the component owns the grip, so the component
+           raises the gesture. -->
+      <div
+        class="gripper-chat"
+        data-node-id="40001085:1470"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the chat column"
+        @mousedown=${this._onGripDown}
+      >
+        <!-- Figma "Meatballs-for-spacer-between-columns" #40001085:1478. One glyph,
+             two colours, from the two states of set "chat-left-spacer"
+             #40001085:2598: state=Default strokes #B4B4B4, state=Hover strokes
+             #7E72E3. Drawn with currentColor so the hover is a colour change and not
+             a second asset. -->
+        <svg width="10" height="38" viewBox="0 0 10 38" fill="none" aria-hidden="true">
+          <ellipse cx="5.35914" cy="2.08103" rx="1.08108" ry="1.02564" transform="rotate(-90 5.35914 2.08103)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <ellipse cx="5.35914" cy="8.56736" rx="1.08108" ry="1.02564" transform="rotate(-90 5.35914 8.56736)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <ellipse cx="5.35914" cy="15.0537" rx="1.08108" ry="1.02564" transform="rotate(-90 5.35914 15.0537)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <ellipse cx="5.56422" cy="22.081" rx="1.08108" ry="1.02564" transform="rotate(-90 5.56422 22.081)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <ellipse cx="5.56422" cy="28.5674" rx="1.08108" ry="1.02564" transform="rotate(-90 5.56422 28.5674)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <ellipse cx="5.56422" cy="35.0537" rx="1.08108" ry="1.02564" transform="rotate(-90 5.56422 35.0537)" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
       <slot
         class=${seated ? 'seat' : 'seat empty'}
         @slotchange=${this._onSlotChange}
@@ -736,11 +1266,19 @@ ${workspaceContext}`;
       ${seated
         ? nothing
         : html`
-            <chat-navigation-bar active-tab="chat">
+            <chat-navigation-bar
+              active-tab=${this.collapsed ? '' : this.activeTab}
+              allowed-tabs=${this.allowedTabs}
+              ?collapsed=${this.collapsed}
+              @tab-change=${this._onTabChange}
+              @collapse-toggle=${this._onCollapseToggle}
+            >
               <img slot="logo" src=${logoAsset} width="66" height="62" alt="Copilot" />
             </chat-navigation-bar>
-            <div class="panel">
-              <div class="chat-output-wrapper">
+            <div class="panel ${this.collapsed ? 'collapsed' : ''}">
+              <!-- The listener sits on the WRAPPER so it hears conversation-select
+                   from the Conversations dropdown below and from the thread. -->
+              <div class="chat-output-wrapper" @conversation-select=${this._onConversationSelect}>
                 <chat-header
                   status-text=${this.statusText ?? ''}
                   status=${this.status ?? ''}
@@ -749,27 +1287,58 @@ ${workspaceContext}`;
                   duration=${this.duration ?? ''}
                   qa-score=${this.qaScore ?? ''}
                 ></chat-header>
+                <!-- "chat-output-slot-area" #40001085:1521 — padding 10px 20px.
+                     The design places <small-dropdown> here; the panel labels it
+                     "Conversations". Its body is a slot, left empty until the
+                     dropdown's own contents are designed (the open variant's rows
+                     are still "item" placeholders). -->
+                <div class="output-slot">
+                  <small-dropdown label="Conversations">
+                    ${this._conversationItems()}
+                  </small-dropdown>
+                </div>
+                <!-- "chat-output-spacer-slot-area" #40001085:2404 — padding 10px
+                     20px over a 1px #B5CCCE rule. -->
+                <div class="output-spacer"><span></span></div>
                 ${unannotated
                   ? html`<error-banner
                       code="UNANNOTATED-IN-USE"
                       message="A component in use was generated without its catalog annotation — its behaviour is being invented downstream."
                     ></error-banner>`
                   : nothing}
-                <chat-repair-actions
-                  .findings=${this.findings ?? []}
-                  .repairStages=${this.repairStages ?? {}}
-                ></chat-repair-actions>
-                <chat-messages
-                  .messages=${this._thread}
-                  .sending=${this._sending}
-                  .conversations=${this.conversations ?? []}
-                  conversation-id=${this.conversationId ?? ''}
-                  @conversation-select=${this._onConversationSelect}
-                ></chat-messages>
+                <!-- THE REPAIR LIST IS NOT DRAWN HERE ANY MORE. It was a permanent
+                     sibling in this template — a console list above the composer in
+                     every assembly, owned by the panel rather than by the surface that
+                     has the findings. It arrives the same way the trace view does, in
+                     the "view" slot below: chat-panel draws the slot, the surface fills
+                     it. See chat-repair-actions and the console assembler. -->
+                <!-- THE CONTENT SLOT — the design's "Current content goes here"
+                     (chat-output-simple-slot-area #40001085:2373, whose note reads
+                     "holds plain text output and inserted functions").
+                     The CHAT tab shows the thread; every other tab shows whatever
+                     the host slots into the "view" slot — Trace, Versions, Tools or
+                     Approvals. One slot, four views: the slot stays generic and the
+                     view decides, which is the same split as the dropdown. -->
+                ${this.activeTab === 'chat'
+                  ? html`<chat-messages
+                      .messages=${this._thread}
+                      .sending=${this._sending}
+                    ></chat-messages>`
+                  : html`<div class="view-slot">
+                      <slot name="view" @slotchange=${this._onSlotChange}></slot>
+                      ${this._viewSlotted()
+                        ? nothing
+                        : html`<div class="view-waiting" role="status">
+                            <span class="view-spinner" aria-hidden="true"></span>
+                            Loading the ${this.activeTab} view…
+                          </div>`}
+                    </div>`}
               </div>
               <div class="chat-input-wrapper">
                 <chat-action-bar
                   model-label=${this.modelLabel ?? 'Models'}
+                  ?busy=${this._sending}
+                  ?has-text=${this._draft.trim().length > 0}
                   @input-resize-start=${this._onResizeStart}
                   @input-resize-move=${this._onResizeMove}
                   @send-input-to-model=${this._onSendCommand}
@@ -814,6 +1383,10 @@ declare module 'react' {
           'session-id'?: string;
           'conversation-id'?: string;
           'status-text'?: string;
+          'allowed-tabs'?: string;
+          /** React 19 sets the matching PROPERTY, so a real boolean is correct —
+              never the string "false", which Lit's boolean converter reads as true. */
+          collapsed?: boolean;
           ref?: React.Ref<ChatPanel>;
         },
         ChatPanel

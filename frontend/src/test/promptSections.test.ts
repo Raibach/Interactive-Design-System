@@ -306,7 +306,10 @@ describe('the silent fallbacks that still exist, pinned by count', () => {
   const EXPECTED_FALLBACK_SITES: Record<string, number> = {
     'components/lit/prompt-input/prompt-input-section.ts': 1,
     'components/lit/prompt-section-editor.ts': 2,
-    'pages/WritingAreaIndex.tsx': 3,
+    // 3 → 2 on 2026-09-17: the composer's host JSX was removed from this file.
+    // It parsed the package's left column itself, substituting `|| 'custom'` per
+    // section type; the assembled surface binds `sections` instead.
+    'pages/WritingAreaIndex.tsx': 2,
   };
 
   it('are exactly the sites recorded here — none added, none silently removed', () => {

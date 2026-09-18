@@ -1297,8 +1297,56 @@ class ConversationAPI:
             cursor.close()
             conn.close()
 
-    def get_conversations_by_session(self, session_id: str, user_id: str) -> List[Dict]:
-        """Get all conversations linked to a prompt session."""
+    def close_conversations_for_session(self, session_id: str, user_id: str) -> int:
+        """
+        Close every OPEN conversation this package owns — the closing half of the
+        conversation lifecycle.
+
+        A package that is closed is finished work: its conversation stops being the live
+        thread and becomes history, and the next turn spoken in that package starts a NEW
+        conversation (the seat's lookup takes open conversations only, so an empty result is
+        what makes one). Without this, closing a prompt left its conversation open and the
+        next send continued an ended thread — the "rolled up" state had no representation.
+
+        Returns how many were closed, so the caller can say what happened rather than assume.
+        """
+        conn = self.get_db()
+        cursor = conn.cursor()
+        self.set_user_context(cursor, user_id)
+        try:
+            cursor.execute("""
+                UPDATE conversations
+                SET is_archived = TRUE, updated_at = NOW()
+                WHERE session_id = %s AND user_id = %s AND is_archived = FALSE
+            """, (session_id, user_id))
+            closed = cursor.rowcount or 0
+            conn.commit()
+            return closed
+        except Exception as e:
+            conn.rollback()
+            print(f"⚠️  Could not close conversations for session {session_id}: {e}")
+            return 0
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_conversations_by_session(self, session_id: str, user_id: str,
+                                     include_archived: bool = False) -> List[Dict]:
+        """
+        Get all conversations OWNED by a prompt session.
+
+        THE OWNERSHIP COLUMN IS `conversations.session_id`, and this read did not use it.
+        It joined `prompt_sessions.conversation_id` — a second, mostly-empty copy of the
+        same link — so a package with a full conversation was told it had none.
+
+        Measured 2026-09-17: 8 conversations in Postgres, all 8 carrying `session_id`;
+        2 of 265 packages carrying `conversation_id`. The package opened in the composer
+        (ef306805-defd-4f71-8e1c-ec2bba58d1e4) owns FOUR conversations of two messages
+        each, and every read of them returned nothing — the seat drew "No conversations
+        yet." over them, and the Conversations dropdown listed none.
+
+        One home per fact: a conversation says which package owns it.
+        """
         conn = self.get_db()
         cursor = conn.cursor()
         self.set_user_context(cursor, user_id)
@@ -1309,10 +1357,10 @@ class ConversationAPI:
                        c.created_at, c.updated_at, c.metadata, c.project_id,
                        c.surface_state_json, c.surface_updated_at
                 FROM conversations c
-                JOIN prompt_sessions ps ON ps.conversation_id = c.id
-                WHERE ps.id = %s AND c.user_id = %s
+                WHERE c.session_id = %s AND c.user_id = %s
+                  AND (%s OR c.is_archived = FALSE)
                 ORDER BY c.updated_at DESC
-            """, (session_id, user_id))
+            """, (session_id, user_id, include_archived))
 
             conversations = cursor.fetchall()
             result = []

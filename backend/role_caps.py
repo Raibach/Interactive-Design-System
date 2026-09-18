@@ -35,7 +35,10 @@ ROLE_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "label": "Governance",
         "persona": "Corporate director, compliance officer, department head",
         "driving_question": "How much did this prompt cost the company, and is the AI behaving safely?",
-        "tabs": ["trace", "metadata"],
+        # `metadata` (the "Governance & Cost" placeholder) came off the rail with the
+        # design. `approvals` is its replacement and the console operator's fourth
+        # button — Figma "approval-button" #40001088:2795.
+        "tabs": ["trace", "approvals"],
         "allowed_tags": [
             "version-trace",
             "status-indicator",
@@ -57,7 +60,9 @@ ROLE_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "label": "UX Design",
         "persona": "Design system manager, component librarian",
         "driving_question": "How are the components performing, and is the design system being followed?",
-        "tabs": ["chat", "trace", "tools", "variables"],
+        # `variables` became `versions`: that tab renders the session's version
+        # history, and the rail now names it for what it shows.
+        "tabs": ["chat", "trace", "tools", "versions"],
         "allowed_tags": [
             "prompt-section-editor", "compiled-output-viewer", "workspace-layout",
             "toggle_code_view", "output-panel", "version-trace",
@@ -77,7 +82,9 @@ ROLE_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "label": "Research",
         "persona": "Researcher, analyst, synthesizer",
         "driving_question": "Can I synthesize my discovery notes and cross-reference other prompts?",
-        "tabs": ["chat", "trace", "evaluation"],
+        # `evaluation` was a placeholder ("design pending") and came off the rail
+        # with the design.
+        "tabs": ["chat", "trace"],
         "allowed_tags": [
             "load_tool", "close_tool", "set_content", "insert_text", "append_text",
             "format_text", "format_block", "format_align", "format_font",

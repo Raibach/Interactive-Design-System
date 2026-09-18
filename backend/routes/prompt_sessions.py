@@ -211,6 +211,47 @@ async def get_prompt_sessions(
         )
 
 
+@router.get("/api/prompt-sessions/console")
+async def get_console_session(
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+):
+    """
+    The user's CONSOLE session — the owner of the console chat's conversations.
+
+    Declared BEFORE /api/prompt-sessions/{session_id} so "console" is not captured
+    as a session id. Get-or-create: the console is the entry point, so the first
+    landing makes the session and every later landing returns the same one. The
+    uniqueness is the database's (idx_prompt_sessions_console_per_user), not this
+    handler's, so two tabs landing together cannot make two.
+    """
+    if not state.prompt_sessions_api:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Please check your connection.",
+        )
+
+    try:
+        uid = get_user_id_from_header(x_user_id)
+        session = state.prompt_sessions_api.get_or_create_console_session(user_id=uid)
+        if not session:
+            raise HTTPException(
+                status_code=500, detail="Could not resolve the console session."
+            )
+        return {"session": session, "error": None}
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        error_detail = (
+            f"Error resolving the console session: {str(e)}\n{traceback.format_exc()}"
+        )
+        print(f"❌ Console session error: {error_detail}")
+        raise HTTPException(
+            status_code=500, detail=f"Error resolving the console session: {str(e)}"
+        )
+
+
 @router.get("/api/prompt-sessions/{session_id}")
 async def get_prompt_session(
     session_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
@@ -293,6 +334,14 @@ async def update_prompt_session(
 
     try:
         uid = get_user_id_from_header(x_user_id)
+
+        # The card draws this word ("Version 1 | active"), so closing has to change it: an
+        # archived package whose chip still read "active" would be a distinction nobody can
+        # see. Only filled in when the caller did not state a status of its own.
+        close_status = request.status
+        if request.is_archived is True and request.status is None:
+            close_status = "Completed"
+
         session = state.prompt_sessions_api.update_session(
             session_id=session_id,
             user_id=uid,
@@ -305,13 +354,29 @@ async def update_prompt_session(
             is_archived=request.is_archived,
             metadata=request.metadata,
             category=request.category,
-            status=request.status,
+            status=close_status,
             likes=request.likes,
             model_name=request.model_name,
             team_name=request.team_name,
             avatar_url=request.avatar_url,
         )
-        return {"session": session, "error": None}
+
+        # ── CLOSING A PACKAGE CLOSES ITS CONVERSATION ──────────────────────────
+        # A closed prompt is finished work, and its conversation stops being the live
+        # thread: it is archived here, so the seat's lookup (open conversations only)
+        # finds none and the next turn spoken in this package starts a NEW one. The
+        # count is returned rather than assumed — the caller can say what happened.
+        closed_conversations = 0
+        if request.is_archived is True and state.conversation_api:
+            try:
+                closed_conversations = state.conversation_api.close_conversations_for_session(
+                    session_id, uid
+                )
+                print(f"✅ Closed {closed_conversations} conversation(s) with package {session_id}")
+            except Exception as e:
+                print(f"⚠️  Could not close conversations for {session_id}: {e}")
+
+        return {"session": session, "error": None, "closed_conversations": closed_conversations}
     except HTTPException:
         raise
     except ConnectionError as e:

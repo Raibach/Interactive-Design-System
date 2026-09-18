@@ -62,21 +62,18 @@ export const clearApiKey = (): void => {
 export const DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
- * Get stored user ID, or return default if none found
- * For now, we use a single default user ID for all operations
+ * Get the identity used for every request.
+ *
+ * The gate is a doorman, not multi-tenant auth: there is ONE user — the owner
+ * (DEFAULT_USER_ID), the identity every package actually belongs to. A stored
+ * credential-row id must never leak in as the identity; it did once (the row
+ * the login credentials live on, 04d61ea2…), and the console assembled zero
+ * packages because every package belongs to the owner, not that row.
  */
 export const getStoredUserId = (): string => {
   try {
-    const stored = localStorage.getItem(USER_ID_STORAGE_KEY);
-    const uid = (
-      stored &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stored)
-    ) ? stored : DEFAULT_USER_ID;
-
-    // Set Sentry user context for AI conversation attribution
-    Sentry.setUser({ id: uid });
-
-    return uid;
+    Sentry.setUser({ id: DEFAULT_USER_ID });
+    return DEFAULT_USER_ID;
   } catch {
     console.error("[auth] localStorage unavailable — cannot persist user session.");
     return DEFAULT_USER_ID;

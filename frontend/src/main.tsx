@@ -16,6 +16,12 @@ import "@/components/lit/workspace-layout";
 // other element imports it transitively — without it <chat-panel> is an
 // unregistered tag and the right column renders as an empty box.
 import "@/components/lit/chat-panel";
+import "@/components/lit/trace-feed";
+// The repair list the console's chat panel draws in its "view" slot. It used to be
+// registered as a side effect of chat-panel's own import; the panel no longer draws it,
+// and an element that is never imported is never defined — the surface would emit the
+// name and the slot would stay empty, silently.
+import "@/components/lit/chat-repair-actions";
 
 // ── Lit web component registry — side-effect imports auto-register custom elements ──
 import "@/components/lit/agent-card-element";

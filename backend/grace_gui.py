@@ -51,6 +51,13 @@ SURFACE_MODES = {"console_assembly", "surface_assembly", "catalog_health_assembl
 WRITING_TIMEOUT_ENV = "LLM_TIMEOUT_PROMPT_OUTPUT"
 LLM_TIMEOUT_WRITING = int(os.getenv(WRITING_TIMEOUT_ENV, "120"))
 
+# Temperature for `chat` — the one mode where a person is talking to her. It lives here
+# rather than in the caller because it had three homes (the chat element sent 0.45, the
+# request model defaulted to 0.45, and this file passed whatever arrived), and a number
+# with three homes is three numbers waiting to disagree. A surface pins 0.0; this is the
+# only place a temperature belongs.
+CHAT_TEMPERATURE = 1.5
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # A2UI MISSION HEADER — top-of-context anchor for maximum model attention
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -110,7 +117,7 @@ def query_llm(
     temperature: float = 0.0,
     self_reflection: bool = False,
     editorial: Optional[Dict[str, Any]] = None,
-    mode: str = "chat",
+    mode: str = "writer",
     prompt_id: str = "unknown",
     model: Optional[str] = None,
 ) -> str:
@@ -120,7 +127,11 @@ def query_llm(
         console_assembly  — lightweight JSON contract for A2UI console/composer
         surface_assembly  — full A2UI surface (composer, session)
         prompt_output     — execute the user's prompt, return raw output
-        chat              — prompt engineering assistant
+        chat              — the ONE conversation: the chat panel answering a person
+        writer            — any other writing job that is not a conversation (tags,
+                            summaries, source evaluation, memory recall). The DEFAULT,
+                            so a caller that forgets to name its mode gets 0.0 and no
+                            reasoning rather than inheriting the chat's.
     """
     if not question.strip():
         return "Please provide a question to answer."
@@ -161,7 +172,7 @@ def query_llm(
                 "You are a production execution engine. Execute the user's request "
                 "and return only the output they asked for. No preamble, no commentary."
             )})
-    elif mode == "chat":
+    elif mode in ("chat", "writer"):
         # Chat is CONVERSATION, not assembly. Prepending MISSION_HEADER here
         # mandated "ONLY <a2ui_surface> XML", so a chat reply with nothing to
         # update returned the empty shell "<a2ui_surface></a2ui_surface>"
@@ -189,7 +200,23 @@ def query_llm(
         "prompt_output": 8000,
     }
     max_tokens = token_budgets.get(mode, 4000)
-    request_temp = 0.0 if mode == "console_assembly" else temperature
+    # ── TEMPERATURE AND REASONING LIVE IN ONE PLACE: THE CHAT. ───────
+    # Temperature and reasoning belong to the chat input and the reply to it in the chat
+    # panel, "just like it normally would" — and nowhere else. Everything else is 0.0 and
+    # does not reason: an assembly, an output column, a summary, a tag pass.
+    #
+    # A surface transcribes a payload its own prompt dictates, so it has nothing to think
+    # about — and anything above 0.0 is a surface that can differ between two identical
+    # requests for no reason. Measured on this provider: told not to reason it spends 251
+    # completion tokens on a console assembly instead of 460, and 1.53s instead of 6.05s
+    # on the same prompt.
+    #
+    # There was a third branch here that handed every other mode whatever number its
+    # caller passed. A number nobody owns is a number that drifts.
+    if mode == "chat":
+        request_temp = CHAT_TEMPERATURE
+    else:
+        request_temp = 0.0
 
     payload = {
         "messages": messages,
@@ -201,94 +228,104 @@ def query_llm(
     if mode in ("console_assembly", "surface_assembly"):
         payload["response_format"] = {"type": "json_object"}
 
-    # ── Provider fallback loop ───────────────────────────────────────
-    last_error = "No providers configured."
-    for provider in MODEL_PROVIDERS:
-        api_key = os.getenv(provider.get("api_key_env", ""))
-        if not api_key:
-            print(f"[{provider['name']}] Skipped — no API key ({provider.get('api_key_env', '?')})")
-            last_error = f"Error: {provider['name']} key is not configured."
-            continue
+    # ── NO REASONING ANYWHERE BUT THE CHAT ───────────────────────────
+    # Off is explicit, for every mode that is not a conversation — including the writing
+    # ones. Reasoning that nobody asked for is latency and tokens spent guessing at an
+    # answer that was already dictated.
+    if mode != "chat":
+        payload["reasoning_effort"] = "none"
 
-        model_name = model or provider["model"]
-        print(f"[{provider['name']}] Attempting {model_name}...")
-        try:
-            # Surfaces keep the tight cap; anything that writes gets room. See
-            # SURFACE_MODES. `chat` is a writing mode — a person is waiting on an
-            # answer, not on a canvas.
-            client_timeout = (
-                LLM_TIMEOUT if mode in SURFACE_MODES else LLM_TIMEOUT_WRITING
+    # ── ONE PROVIDER, ONE ATTEMPT. No fallback, no retry. ───────────
+    #
+    # This was a "provider fallback loop" with `max_retries=1` on the client, and
+    # that combination was a retry wearing a budget's clothes: a 10s timeout became
+    # a 20s success or a 20s failure, so the contract the surface is held to was
+    # never the contract that ran, and a slow answer looked like a fast one.
+    #
+    # Neither is allowed. A canvas appears inside LLM_TIMEOUT or it does not appear,
+    # and a second attempt is not a way of making the first one have worked.
+    #
+    # The first provider carrying a key IS the provider. If it fails, its failure is
+    # the answer — there is no next one.
+    provider = next(
+        (p for p in MODEL_PROVIDERS if os.getenv(p.get("api_key_env", ""))), None
+    )
+    if provider is None:
+        return "Error: no provider is configured with an API key."
+
+    api_key = os.getenv(provider["api_key_env"])
+    model_name = model or provider["model"]
+    # Surfaces keep the tight cap; anything that writes gets room. See SURFACE_MODES.
+    # `chat` is a writing mode — a person is waiting on an answer, not on a canvas.
+    client_timeout = LLM_TIMEOUT if mode in SURFACE_MODES else LLM_TIMEOUT_WRITING
+    print(f"[{provider['name']}] {model_name} — one attempt, {client_timeout}s")
+    try:
+        client = OpenAI(
+            base_url=provider["base_url"],
+            api_key=api_key,
+            timeout=client_timeout,
+            max_retries=0,
+        )
+        response = client.chat.completions.create(**payload, model=model_name)
+        message = response.choices[0].message
+        # Capture what this actually cost. Providers report it; guessing it
+        # would put an invented number above a real action.
+        _usage = getattr(response, "usage", None)
+        if _usage is not None:
+            LAST_USAGE.clear()
+            LAST_USAGE.update({
+                "call_id": next(_CALL_SEQ),
+                "provider": provider["name"],
+                "model": model_name,
+                "mode": mode,
+                # The settings this call ACTUALLY ran with, so they can be seen rather
+                # than taken on trust. The owner asked twice whether the chat's 1.5 had
+                # landed, and nothing anywhere could show him: the value is decided here
+                # by mode and the response carried only tokens. Now the usage block that
+                # rides the envelope carries them, so the seat's readout and the trace
+                # feed report the temperature and the reasoning budget that were applied.
+                "temperature": request_temp,
+                "reasoning_effort": payload.get("reasoning_effort", "default"),
+                "prompt_tokens": getattr(_usage, "prompt_tokens", None),
+                "completion_tokens": getattr(_usage, "completion_tokens", None),
+                "total_tokens": getattr(_usage, "total_tokens", None),
+            })
+        content = (message.content or "").strip()
+        if not content:
+            # NO SUBSTITUTION. An empty answer is an empty answer — the model's
+            # inner monologue is not its output, and printing it as the result is a
+            # decorative stand-in for a missing one. It fails instead, naming why.
+            raise RuntimeError(
+                f"Empty response (finish_reason={response.choices[0].finish_reason}) — "
+                f"no content for mode={mode}"
             )
-            # One retry, not the SDK's two. This is a single blocking call on a
-            # request a person is watching, and the SDK retries a TIMEOUT by
-            # default — so a slow Run waits timeout × 3 before it can report
-            # anything. Two attempts (one retry) is the whole budget: a call that
-            # has already timed out once at 120s does not need a third try.
-            client = OpenAI(
-                base_url=provider["base_url"],
-                api_key=api_key,
-                timeout=client_timeout,
-                max_retries=1,
-            )
-            response = client.chat.completions.create(**payload, model=model_name)
-            message = response.choices[0].message
-            # Capture what this actually cost. Providers report it; guessing it
-            # would put an invented number above a real action.
-            _usage = getattr(response, "usage", None)
-            if _usage is not None:
-                LAST_USAGE.clear()
-                LAST_USAGE.update({
-                    "call_id": next(_CALL_SEQ),
-                    "provider": provider["name"],
-                    "model": model_name,
-                    "mode": mode,
-                    "prompt_tokens": getattr(_usage, "prompt_tokens", None),
-                    "completion_tokens": getattr(_usage, "completion_tokens", None),
-                    "total_tokens": getattr(_usage, "total_tokens", None),
-                })
-            content = (message.content or "").strip()
-            if not content and getattr(message, "reasoning_content", None):
-                # The model ran out of budget mid-thought. Surfacing reasoning as
-                # the answer is a last resort — say so, because the output column
-                # would otherwise show the model's inner monologue as a result.
-                print(
-                    f"[{provider['name']}] ⚠️  empty content (finish_reason="
-                    f"{response.choices[0].finish_reason}) — falling back to "
-                    f"reasoning_content. Raise max_tokens for mode={mode}."
-                )
-                content = message.reasoning_content.strip()
-            if not content:
-                raise RuntimeError("Empty response")
 
-            content = _process_backend_tags(content, context, prompt_id)
-            print(f"[{provider['name']}] OK — {len(content)} chars")
-            return content
+        content = _process_backend_tags(content, context, prompt_id)
+        print(f"[{provider['name']}] OK — {len(content)} chars")
+        return content
 
-        except Exception as exc:
-            print(f"[{provider['name']}] Failed: {exc}")
-            if "timed out" in str(exc).lower():
-                # Say WHICH budget expired, and whether it is the one meant to be
-                # tight. "Request timed out." alone sends a reader to the provider,
-                # the network and the model — when the number at fault was a
-                # constant in this file.
-                if mode in SURFACE_MODES:
-                    why = (
-                        f"this is a SURFACE and {LLM_TIMEOUT}s is its contract: "
-                        "the canvas has to appear now"
-                    )
-                else:
-                    why = (
-                        f"{mode} is a WRITING mode and {client_timeout}s was the budget — "
-                        f"raise {WRITING_TIMEOUT_ENV} if a reasoning model needs longer"
-                    )
-                last_error = (
-                    f"Error: {provider['name']} request failed: {exc} "
-                    f"(waited {client_timeout}s; {why})"
+    except Exception as exc:
+        print(f"[{provider['name']}] Failed: {exc}")
+        if "timed out" in str(exc).lower():
+            # Say WHICH budget expired, and whether it is the one meant to be
+            # tight. "Request timed out." alone sends a reader to the provider,
+            # the network and the model — when the number at fault was a
+            # constant in this file.
+            if mode in SURFACE_MODES:
+                why = (
+                    f"this is a SURFACE and {LLM_TIMEOUT}s is its contract: "
+                    "the canvas has to appear now"
                 )
             else:
-                last_error = f"Error: {provider['name']} request failed: {exc}"
-
-    return last_error
+                why = (
+                    f"{mode} is a WRITING mode and {client_timeout}s was the budget — "
+                    f"raise {WRITING_TIMEOUT_ENV} if a reasoning model needs longer"
+                )
+            return (
+                f"Error: {provider['name']} request failed: {exc} "
+                f"(waited {client_timeout}s; {why})"
+            )
+        return f"Error: {provider['name']} request failed: {exc}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

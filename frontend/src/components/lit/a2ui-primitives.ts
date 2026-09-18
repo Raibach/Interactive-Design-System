@@ -247,26 +247,56 @@ class A2UIConsoleCardGrid extends LitElement {
   static styles = css`
     :host {
       display: grid;
-      /* FIVE columns, and never a sixth. The card is a fixed 276 × 372
-         (<agent-card-element>, Figma node 40000717:17091), so the track is fixed
-         too: auto-fill over a 276px track drops a column as the viewport
-         narrows. minmax(276px, 1fr) did the opposite on both axes — it opened
-         another column for every 276 + 16px and stretched the tracks it had. */
+      /*
+       * 75px of clearance on EVERY side — top, bottom, left, right — and nowhere
+       * else. The card area is a panel inset in its column, not a band that
+       * floats in the middle of it.
+       *
+       * It belongs HERE, on the grid, and not on the pane that holds it or on the
+       * shell wrapper around the surface. The left pane is shared with the
+       * composer's prompt-section-editor, so an inset there would push the editor
+       * down too, and a wrapper inset moves the chat column with the cards — the
+       * two columns would sit at different heights, which is what the shell's
+       * wrapper was doing before it was removed. This element draws console cards
+       * and nothing else, so an inset on it is an inset on the cards only.
+       *
+       * padding, not margin: the pane is the scroll container, and padding on the
+       * scrolled content is part of the scrollable area, so the inset stays put
+       * instead of collapsing out of the box.
+       *
+       * box-sizing: border-box is REQUIRED with it. Under content-box the 150px of
+       * side padding would be added to a width: 100% host, and the grid would be
+       * 150px wider than its column — a horizontal scrollbar on every console.
+       *
+       * No backticks in this comment: this is a Lit css template literal.
+       */
+      padding: 75px;
+      box-sizing: border-box;
+      /* The card is a fixed 276 × 372 (<agent-card-element>, Figma node
+         40000717:17091), so the track is fixed too: auto-fill over a 276px track
+         drops a column as the viewport narrows. minmax(276px, 1fr) did the
+         opposite — it opened another column for every 276 + 16px and stretched
+         the tracks it had — and a stretched track cannot widen a fixed card, so
+         the slack only reappeared inside the track. */
       grid-template-columns: repeat(auto-fill, 276px);
-      /* Leftover width becomes margin, not another column. */
+      /*
+       * The rows are CENTRED in the column, and the cards are packed TIGHT: the
+       * equal 16px gap is the only space between them.
+       *
+       * This was justify-content: space-between, which distributed the leftover
+       * width INTO the gaps — so the space between two cards grew with the window
+       * and the row read as an accordion opening. The leftover belongs outside the
+       * group, not inside it.
+       *
+       * It was then justify-content: start, which pinned the group to the left
+       * inset and dumped all of the leftover on the right. Centring splits it
+       * evenly, so the two outside margins match each other, and with the 75px
+       * padding they can never fall below the inset. A wider window gets MORE
+       * columns from auto-fill — which is what fills the width, not wider gaps and
+       * not a group that drifts left.
+       */
       justify-content: center;
-      /* 5 × 276 + 4 × 16 = 1444 — the widest the designed five columns get.
-         Above it the grid stops growing and floats in the middle of its host. */
-      max-width: calc(5 * 276px + 4 * 16px);
-      /* width: 100% keeps the track count a function of the HOST's width, not of
-         the card count: under align-items: center an auto-width grid sizes to
-         max-content, which with auto-fill is one row of every card, overflowing.
-         align-self: center overrides the parent Column's stretch so the cap
-         actually centres — under stretch the item's free space is zero and
-         margin-inline: auto resolves to 0 on both sides. */
       width: 100%;
-      align-self: center;
-      margin-inline: auto;
       gap: 16px;
       align-content: start;
     }

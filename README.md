@@ -25,17 +25,37 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 
 ## Systems Overview: MCP Pipelines and Independent Model Governance
 
-**The External Capture (The MCP Pipelines)**
-Massive cloud organizations are rushing to deploy external MCP servers designed to hook into corporate production lines. Their goal is to ingest, map, and capture internal corporate workflows, routing that data directly into their centralized cloud ecosystems.
+**The external capture (the MCP pipelines).**
+Cloud providers ship MCP servers that connect corporate production workflows to their own clouds.
 
-**The Sovereign Shield (Model-Agnostic RIDS)**
-By building an internal, model-agnostic system that utilizes open standards like A2UI and MCP, the architecture provides the enterprise with a localized control plane. Because the React shell functions as a deterministic gatekeeper, the enterprise can route data through internal pipelines and swap out models seamlessly without surrendering custody of its production logic or component trees to an external provider.
+**The internal alternative (model-agnostic RIDS).**
+This system is built on open standards (A2UI, MCP) with no dependency on one model provider. The shell is the gatekeeper, so data stays inside the enterprise's own pipelines and models can be replaced without giving up the component tree or the production logic.
 
-Even though it is currently an open reference implementation without a massive database of production content to assemble yet, the governance architecture and protocol purity are 100% present. The foundational machine is complete; populating the production payloads functions strictly as data ingestion. When enterprise engineering directors evaluate the repository, they will recognize the immediate utility of this exact zero-trust gateway to prevent external cloud services from capturing internal infrastructure. The defensive framework is built before the structural pivot occurs.
+This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
 
 A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
 
 **The product:** prompt *packages* — configuration + conversation + execution trace + governance metadata — bundled as one versioned, shareable, contributor-owned unit. The package is the aggregate root; the user is not the package.
+
+---
+
+## Constraint, Compute, Custody — Measured
+
+Cost here follows from the design. Assembly does not need a model that thinks; it needs a model that moves, and what allows that is a closed answer space: a fixed catalog, a fixed set of seats, and values bound by path.
+
+**The mechanism.** A model produces the next token from a set of candidates, and the constraint decides how many candidates are in that set. At each step it sits at the edge of a choice. With the catalog fixed and values bound by path, the set holds one or two items, so the model copies rather than chooses. Reasoning tokens are what it spends when the set is wide. This describes the measurements below; it is not a claim about what the model experiences, which is nothing anybody can observe from outside.
+
+**The measurement.** With reasoning turned off for surfaces, the same prompt returned the same valid JSON: 251 completion tokens instead of 460, 1.53 seconds instead of 6.05. If the model were deciding anything, removing the reasoning would have changed the answer.
+
+**Where invention enters.** The structure carries the answer and the model moves it forward. Where the structure has a gap, the model fills it by guessing, and that guess is where invention enters. An unannotated control is a gap of this kind, and so is a field no check covers.
+
+**Per console load.** One assembly call at 3,551 tokens. Before the change: three calls at about 3,760 tokens each, 23 of 86 requests returning an error, and two attempts spent on each failure. Saving: 7,700 tokens per load, about half a cent at commodity model prices, not counting the failures that no longer occur.
+
+**Volume.** Half a cent per load, multiplied by the number of loads. At five dollars per thousand loads, one hundred million loads a year is about half a million dollars — around 300,000 loads a day. Below that volume the token figure is smaller. The remaining savings are behavioral: failures that no longer occur, and the wait per assembly, 6 seconds to 1.5 on the same prompt.
+
+**On-premise.** On owned hardware the limiting resource is GPU seconds, not dollars per token, so a two-thirds reduction in tokens and a four-fold reduction in latency is fewer machines. Assembly runs on a small local model because the catalog fixes the answer space and every value is checked. The conversation runs on a larger model; it is the only mode with reasoning enabled.
+
+**Limits.** Power is the operating cost, not the total cost; hardware and staffing are additional. The conversation needs a capable model and assembly does not. The constraint is a live property: each entry added to the catalog, and each field no check covers, gives the model something to decide again.
 
 ---
 
@@ -78,20 +98,21 @@ A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interf
 
 ## Component Catalog
 
-37 trusted components — 12 A2UI Basic Catalog primitives + 25 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 37 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+41 trusted components — 13 A2UI Basic Catalog primitives + 28 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 41 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
                 SectionEditor · DecisionDialog · ConsoleCardGrid
-                CompiledOutput · ChatPanel
+                CompiledOutput · ChatPanel · TraceFeed
 Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer
-                chat-panel · version-trace · token-cost-readout · status-readout
-                output-panel · search-bar · filter-pill · footer-bar
-                chat-navigation-bar · agent-card · prompt-section
-                add-section-button · ai-surface-sandbox · error-banner
-                prompt-container · prompt-input-section · gripper-prompt-input
-                role-dropdown · role-tile · status-bar-prompt-input
-                prompt-textarea · model-selector-button
+                chat-panel · trace-feed · chat-repair-actions · version-trace
+                token-cost-readout · status-readout · output-panel · search-bar
+                filter-pill · footer-bar · chat-navigation-bar · agent-card
+                prompt-section · control-bar · add-section-button
+                ai-surface-sandbox · error-banner · prompt-container
+                prompt-input-section · gripper-prompt-input · role-dropdown
+                role-tile · status-bar-prompt-input · prompt-textarea
+                model-selector-button
 ```
 
 ---

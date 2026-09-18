@@ -45,10 +45,65 @@ export interface A2UIComponent {
   id: string;
   /** The discriminator. Named `component` in the spec and in the catalog schema. */
   component: string;
-  /** Ids of other entries in the same flat list — not nested objects. */
-  children?: string[];
+  /**
+   * Ids of other entries in the same flat list — not nested objects.
+   *
+   * Either a flat array, or an object keyed by SLOT NAME whose value is one id or a
+   * LIST of ids (the panel's one content hole holds both views). See childRefs().
+   */
+  children?: string[] | Record<string, string | string[]>;
   /** Literal props, siblings of `id` — NOT a nested `props` object. */
   [prop: string]: unknown;
+}
+
+/**
+ * One child reference: the id, and the slot it was named for (null = default).
+ *
+ * WHY BOTH FORMS. A2UI's flat list specifies `children` as an array of ids, and
+ * for a component that lays its children out wherever they fall, an array is
+ * exactly right. But a container whose panes are NAMED — workspace-layout
+ * projects <slot name="left">, <slot name="middle">, <slot name="right"> and
+ * nothing else — cannot be filled by a flat array: the array carries no slot
+ * name, this renderer writes no `slot` attribute for it, and every child is then
+ * projected into no slot at all. The container draws its panes empty and the
+ * children are in the DOM, unprojected and invisible. That is a blank surface
+ * that looks like a successful assembly, which is the failure this renderer
+ * exists to refuse.
+ *
+ * So a named-slot container declares its children as `{slotName: childId}` and
+ * each child is built carrying `slot="slotName"`.
+ *
+ * A SLOT MAY HOLD MORE THAN ONE CHILD, which is why a slot's value may also be a
+ * LIST: `{slotName: [idA, idB]}`. The design's answer for the chat column is ONE
+ * generic hole — "chat-output-simple-slot-area" #40001085:2373, annotated "holds
+ * plain text output and inserted functions", PLURAL — fed by the surface. The
+ * trace view and the repair list are both inserted into that one hole, so one id
+ * per slot was a limit of this extension and not of the design. A per-tab slot
+ * scheme was tried and reverted; this is the shape the design asks for.
+ *
+ * Anything else contributes no children rather than throwing: a malformed
+ * `children` is a bad payload, and it is reported by the per-entry validation,
+ * not by a crash that takes the surface down.
+ */
+export function childRefs(comp: A2UIComponent): Array<{ id: string; slot: string | null }> {
+  const raw = comp.children;
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((id): id is string => typeof id === 'string')
+      .map((id) => ({ id, slot: null }));
+  }
+  if (raw && typeof raw === 'object') {
+    const out: Array<{ id: string; slot: string | null }> = [];
+    for (const [slot, value] of Object.entries(raw)) {
+      if (typeof value === 'string') out.push({ id: value, slot });
+      // A list in a named slot: every id in it is named for that same slot, in order.
+      else if (Array.isArray(value)) {
+        for (const id of value) if (typeof id === 'string') out.push({ id, slot });
+      }
+    }
+    return out;
+  }
+  return [];
 }
 
 export interface RenderError {
@@ -71,8 +126,7 @@ export interface RenderError {
  * component disagree about the contract.
  */
 function assignProps(el: HTMLElement, props: Record<string, unknown>): string[] {
-  const declared = (el.constructor as unknown as { properties?: Record<string, { type?: unknown }> })
-    .properties ?? {};
+  const declared = declaredProperties(el);
   const unreported: string[] = [];
 
   for (const [key, raw] of Object.entries(props)) {
@@ -94,6 +148,66 @@ function assignProps(el: HTMLElement, props: Record<string, unknown>): string[] 
   return unreported;
 }
 
+/** A custom element's own property declarations — the contract it publishes. */
+function declaredProperties(el: HTMLElement): Record<string, { type?: unknown }> {
+  return (el.constructor as unknown as { properties?: Record<string, { type?: unknown }> }).properties ?? {};
+}
+
+/**
+ * The value each declared property had BEFORE this renderer ever wrote to it.
+ * Captured once per tag, from the first instance — whose constructor defaults are
+ * still intact at that moment, because this renderer is what creates it.
+ */
+const tagDefaults = new Map<string, Record<string, unknown>>();
+
+/** The prop keys this renderer last ASSIGNED to each element. */
+const assignedProps = new WeakMap<Element, string[]>();
+
+/**
+ * Give back the props this payload no longer carries.
+ *
+ * A surface has to be a pure function of the LAST emission. Lit reuses the
+ * element it built — same id, same tag — so a prop assigned by the previous
+ * assembly stays set when the next one simply omits it. The drawn surface then
+ * depends on the history of assemblies rather than on the payload, and it is the
+ * omitted flag that does the damage because omitting a flag reads as "default",
+ * not as "keep what you had". Measured on the console 2026-09-17: two assemblies
+ * earlier the payload said rightWidth: 75 and collapsed: true; the payload after
+ * that said neither, the panel still carried collapsed="" and the layout still
+ * carried rightWidth: 75, so the chat column stayed 75px wide with its body
+ * hidden and the gripper dragged against a pane pinned to a fixed width — the
+ * chat could not be opened or expanded at all.
+ *
+ * ONLY PROPS THIS RENDERER SET ARE GIVEN BACK. State the element owns — the rail
+ * folding the panel away, the panel's own loaded conversation list, anything a
+ * person toggled — was never assigned from a payload, so it is never in the list
+ * below and is never touched. This restores the payload's authority without
+ * taking the component's away.
+ */
+function releaseStaleProps(el: HTMLElement, props: Record<string, unknown>): string[] {
+  const declared = declaredProperties(el);
+  const tag = el.tagName.toLowerCase();
+  const target = el as unknown as Record<string, unknown>;
+
+  if (!tagDefaults.has(tag)) {
+    const defaults: Record<string, unknown> = {};
+    for (const key of Object.keys(declared)) defaults[key] = target[key];
+    tagDefaults.set(tag, defaults);
+  }
+  const defaults = tagDefaults.get(tag) ?? {};
+
+  const now = Object.keys(props).filter((key) => declared[key]);
+  const before = assignedProps.get(el) ?? [];
+  const released: string[] = [];
+  for (const key of before) {
+    if (now.includes(key)) continue;
+    target[key] = defaults[key];
+    released.push(key);
+  }
+  assignedProps.set(el, now);
+  return released;
+}
+
 const pascalToKebab = (s: string) =>
   s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/([A-Z])([A-Z][a-z])/g, '$1-$2').toLowerCase();
 
@@ -110,6 +224,7 @@ const COMPOSITE_MAP: Record<string, string> = {
   ChatPanel: 'chat-panel',            // defined in components/lit/chat-panel.ts (2026-09-15)
   SectionEditor: 'prompt-section-editor',
   CompiledOutput: 'compiled-output-viewer',
+  TraceFeed: 'trace-feed',          // the rail's Trace view, injected into the panel's view slot
 };
 
 /**
@@ -205,7 +320,40 @@ class A2UIRenderer extends LitElement {
   private _errors: RenderError[] = [];
 
   static styles = css`
-    :host { display: block; }
+    /*
+     * height: 100% IS LOAD-BEARING, not decoration.
+     *
+     * The tree this draws is usually a container that sizes itself with
+     * height: 100% — workspace-layout does exactly that. A percentage height
+     * resolves against the PARENT's height, and this host was display: block
+     * with no height of its own, so the percentage resolved against an
+     * auto-height box and collapsed to content height. Measured 2026-09-17 on the
+     * console: the surface drew 1224x20899 inside a 906px window, the app grew a
+     * scrollbar 20 screens long, and the chat column measured 0 wide inside it.
+     *
+     * No backticks in this comment, deliberately: this is a Lit css template
+     * literal, and a backtick here ends the literal and breaks the build.
+     */
+    :host {
+      display: block;
+      height: 100%;
+      min-width: 0;
+      /*
+       * flex: 1 1 auto IS LOAD-BEARING TOO. Both slots that mount this element are
+       * display:flex wrappers in WritingAreaIndex, and this is their only child —
+       * without a grow factor it is sized to its content's MAX width and never fills
+       * the wrapper. Measured 2026-09-17 in a 1948px window: the wrapper was 1892 wide,
+       * this element 1716.94, so the composer's surface stopped 175px short of the
+       * browser's right edge with dead space after it. The console looked fine only
+       * because its card grid's content is WIDER than the pane, which leaves shrink
+       * doing the filling — narrower content exposes it. A flex parent fills it now,
+       * and in a block parent flex is ignored while width: auto still fills.
+       *
+       * No backticks in this comment: this is a Lit css template literal. (Written after
+       * breaking the build with exactly that, twice, both times in a comment.)
+       */
+      flex: 1 1 auto;
+    }
     .a2ui-errors {
       border: 2px solid #ef4444;
       background: #fef2f2;
@@ -288,7 +436,7 @@ class A2UIRenderer extends LitElement {
         + ` the element itself does not exist yet.`,
       );
     }
-    for (const childId of comp.children ?? []) {
+    for (const { id: childId } of childRefs(comp)) {
       this._validate(childId, byId, [...path, id], depth + 1);
     }
   }
@@ -306,7 +454,12 @@ class A2UIRenderer extends LitElement {
    * (lit-html cannot do a dynamic tag name any other way: the tag is part of the
    * template, parsed once.)
    */
-  private _build(comp: A2UIComponent, byId: Map<string, A2UIComponent>, path: string[]): TemplateResult {
+  private _build(
+    comp: A2UIComponent,
+    byId: Map<string, A2UIComponent>,
+    path: string[],
+    slot: string | null = null,
+  ): TemplateResult {
     const tag = resolveTag(comp.component);
     // Resolved is not the same as defined: a name can map to a tag that no
     // element registers, and that tag draws an empty box with nothing to explain
@@ -322,48 +475,91 @@ class A2UIRenderer extends LitElement {
       </div>`;
     }
 
-    const children = (comp.children ?? []).map((childId) => {
+    const children = childRefs(comp).map(({ id: childId, slot: childSlot }) => {
       const child = byId.get(childId);
       if (!child || path.includes(childId)) return nothing; // already reported by _validate
-      return this._build(child, byId, [...path, comp.id]);
+      return this._build(child, byId, [...path, comp.id], childSlot);
     });
 
-    const props = componentProps(comp, this.dataModel);
     const assign = (el: Element | undefined) => {
-      if (!el) return;
-      try {
-        for (const unknown of assignProps(el as HTMLElement, props)) {
-          console.warn(
-            `[a2ui-renderer] ${comp.id} <${comp.component}>: prop "${unknown}" is not declared by the element. ` +
-            `It was not assigned. The payload and the component disagree about the contract.`,
-          );
-        }
-      } catch (err) {
-        // A property setter can throw — a component that validates its own input
-        // does it mid-assignment, inside Lit's update. Uncaught, that throw
-        // aborts the update and takes down the React subtree that mounted us, so
-        // one bad prop would cost the whole surface. Contained here: one bad
-        // prop costs one component, and the pass still renders.
-        //
-        // This reports to the console only. _errors was already consumed by the
-        // render that assigned this ref, and the list is rebuilt next pass — so
-        // the DOM block cannot show it without a second render. Stated rather
-        // than left to look like the report was forgotten.
-        console.error(
-          `[a2ui-renderer] ${comp.id} <${comp.component}>: assigning props threw — ${(err as Error)?.message ?? String(err)}. ` +
-          `The component was left unset; the rest of the surface rendered.`,
-        );
-      }
+      if (el) this._assign(el as HTMLElement, comp);
     };
 
     return staticHtml`<${unsafeStatic(tag)}
       id=${comp.id}
       data-a2ui-id=${comp.id}
+      slot=${slot ?? nothing}
       ${ref(assign)}
       @a2ui-action=${(e: Event) => this._forward(e, comp.id)}
       @message-sent=${(e: Event) => this._forward(e, comp.id)}
       @command-received=${(e: Event) => this._forward(e, comp.id)}
     >${children}</${unsafeStatic(tag)}>`;
+  }
+
+  /**
+   * HAND ONE COMPONENT ITS PROPS, FROM THE CURRENT DATA MODEL.
+   *
+   * Called in two places: from the `ref` when a node is built, and again on every
+   * data-model change by `updated()` below. It has to be both, and that is the defect
+   * this comment is here for.
+   *
+   * Structure and content arrive on TWO channels: `components` describes the tree,
+   * `dataModel` carries the values. An assembly replaces both, but a LATER write — the
+   * shell writing /trace, a package landing, anything that only moves data — changes the
+   * model and leaves the tree identical. The `ref` fires when an element is built, so on
+   * a data-model-only change the markup re-rendered and the ELEMENTS WERE NEVER RE-GIVEN
+   * THEIR VALUES: every component kept whatever it was constructed with.
+   *
+   * Measured 2026-09-17, and it cost the client his package contents. Opening a saved
+   * package: the surface's model carried /session/left_column/sections as 4 rows with
+   * 5,094 characters of real content, and <prompt-section-editor> still held the three
+   * skeleton rows of the BLANK composer it had been built with — System Role 63 chars,
+   * User Role empty, Agent Role empty. Re-assigning the model again by hand changed
+   * nothing. The database was intact the whole time; the last metre was severed.
+   */
+  private _assign(el: HTMLElement, comp: A2UIComponent): void {
+    const props = componentProps(comp, this.dataModel);
+    try {
+      for (const unknown of assignProps(el, props)) {
+        console.warn(
+          `[a2ui-renderer] ${comp.id} <${comp.component}>: prop "${unknown}" is not declared by the element. ` +
+          `It was not assigned. The payload and the component disagree about the contract.`,
+        );
+      }
+      // Then give back whatever THIS payload dropped, so the element reflects
+      // the model it was just handed and not the one before it.
+      releaseStaleProps(el, props);
+    } catch (err) {
+      // A property setter can throw — a component that validates its own input
+      // does it mid-assignment, inside Lit's update. Uncaught, that throw
+      // aborts the update and takes down the React subtree that mounted us, so
+      // one bad prop would cost the whole surface. Contained here: one bad
+      // prop costs one component, and the pass still renders.
+      console.error(
+        `[a2ui-renderer] ${comp.id} <${comp.component}>: assigning props threw — ${(err as Error)?.message ?? String(err)}. ` +
+        `The component was left unset; the rest of the surface rendered.`,
+      );
+    }
+  }
+
+  /**
+   * A DATA-MODEL CHANGE RE-APPLIES EVERY PROP. The tree is untouched by such a change
+   * — same components, same elements, new values — so the `ref` callbacks do not fire
+   * and nothing would otherwise carry the new values down. This walks the nodes it
+   * actually drew and re-hands each one its props.
+   *
+   * Skipped when `components` changed too: that rebuilds the tree and the refs assign
+   * on construction, so doing it here would assign every prop twice.
+   */
+  protected updated(changed: Map<PropertyKey, unknown>): void {
+    if (!changed.has('dataModel') || changed.has('components')) return;
+    const byId = new Map(
+      (Array.isArray(this.components) ? this.components : []).map((c) => [c.id, c]),
+    );
+    for (const el of this.renderRoot.querySelectorAll<HTMLElement>('[data-a2ui-id]')) {
+      const comp = byId.get(el.getAttribute('data-a2ui-id') || '');
+      if (comp) this._assign(el, comp);
+    }
   }
 
   render() {
@@ -437,7 +633,7 @@ class A2UIRenderer extends LitElement {
       // expected, and the remedy is a single word. The failure stays loud: it
       // just also says which word.
       const referenced = new Set<string>();
-      for (const c of byId.values()) for (const childId of c.children ?? []) referenced.add(childId);
+      for (const c of byId.values()) for (const { id: childId } of childRefs(c)) referenced.add(childId);
       const candidates = [...byId.keys()].filter((id) => !referenced.has(id));
       return html`<div class="a2ui-errors" role="alert">
         <div class="hdr">No root component</div>

@@ -107,6 +107,22 @@ async def api_teacher_query(request: TeacherQueryRequest):
         uid = get_user_id_from_header()
         conv_id = request.conversation_id
 
+        # ── A CLOSED CONVERSATION TAKES NO MORE TURNS ─────────────────────────
+        #
+        # A seat holds the id it adopted, and an update settles (closes) the conversation it
+        # was made in — so the id a seat is still carrying is, by design, often the id of a
+        # thread that is finished. Writing into it anyway would append to history that has
+        # been marked done and would leave the package's live thread empty forever. The
+        # closed id is therefore dropped here, and the resolution below starts a new one.
+        if conv_id and state.conversation_api:
+            try:
+                live = state.conversation_api.get_conversation(str(conv_id), uid)
+                if live and live.get("is_archived"):
+                    print(f"ℹ️  Conversation {str(conv_id)[:8]}… is closed — starting a new one.")
+                    conv_id = None
+            except Exception as e:
+                print(f"⚠️  Could not read conversation {conv_id}: {e}")
+
         # ── Sentry AI monitoring: tag span with conversation + user ──
         sentry_sdk.set_user({"id": uid})
         if conv_id:
@@ -126,7 +142,18 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # and only create one when there genuinely isn't one. Creating with a
         # null session_id was rejected by Postgres on every single call, so
         # nothing was ever saved.
-        if state.conversation_api and not conv_id and request.session_id:
+        # ── ONLY A CONVERSATION ATTACHES OR CREATES A CONVERSATION ────────────
+        # A RUN carried a session_id like a chat does, so every Run attached (or created)
+        # a conversation for the package and titled it "Execute the prompt
+        # configuration." — four of them on one package, measured 2026-09-17. The seat
+        # then binds the package's newest conversation, so what the chat drew was a RUN,
+        # which is the owner's "it's putting the output into the chat panel".
+        #
+        # The OUTPUT column is a Run's home. A Run is not a conversation, so it starts
+        # none and joins none.
+        if request.mode != "chat":
+            print(f"ℹ️  mode={request.mode} — not a conversation; no conversation attached or created.")
+        elif state.conversation_api and not conv_id and request.session_id:
             try:
                 existing = state.conversation_api.get_conversations_by_session(
                     request.session_id, uid
@@ -149,12 +176,21 @@ async def api_teacher_query(request: TeacherQueryRequest):
         elif state.conversation_api and not conv_id:
             print("ℹ️  No session_id supplied — this turn will not be persisted.")
 
-        # Save user message to PostgreSQL
-        if state.conversation_api and conv_id:
+        # ── ONLY A CONVERSATION WRITES TO A CONVERSATION ─────────────────────
+        # This persisted every call's question and answer into the package's chat,
+        # whatever the call was for. A RUN is not a conversation: its prompt and its
+        # answer belong in the OUTPUT column (`/session/middle_column/compiled_output`,
+        # which the run writes), and writing them here as well is the duplication the
+        # owner sees — the same text in the output column and in the thread beside it.
+        # `chat` is the one mode where a turn is a turn.
+        persist_turn = request.mode == "chat"
+        if state.conversation_api and conv_id and persist_turn:
             try:
                 state.conversation_api.add_message(conv_id, uid, "user", request.question)
             except Exception as e:
                 print(f"⚠️  Failed to save user message: {e}")
+        elif state.conversation_api and conv_id:
+            print(f"ℹ️  mode={request.mode} — not a conversation turn; not written to {str(conv_id)[:8]}…")
 
         # ── Conversation context retrieval ──────────────────────────
         conversation_context = ""
@@ -287,8 +323,10 @@ async def api_teacher_query(request: TeacherQueryRequest):
         except Exception as e:
             print(f"⚠️  Audit log write failed (non-blocking): {e}")
 
-        # ── Save assistant response to PostgreSQL ────────────────────
-        if state.conversation_api and conv_id:
+        # ── Save the assistant response — only for a real conversation ────────
+        # See the note at the user-message write: a Run's answer is the OUTPUT column's,
+        # not a chat turn. Writing both is what put one answer in two places.
+        if state.conversation_api and conv_id and request.mode == "chat":
             try:
                 state.conversation_api.add_message(conv_id, uid, "assistant", result)
             except Exception as e:

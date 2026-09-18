@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, useBlocker } from "react-router-dom";
 // pdfService import removed — PDF processing is retired
 // import { quarantineService } from "@/services/quarantineService"; // Excluded from production
@@ -24,7 +24,10 @@ import LeftColumnHeader from "@/components/LeftColumnHeader";
 import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
-import { InteractiveChatInterface } from "@/components/InteractiveChatInterface";
+// InteractiveChatInterface is RETIRED — archived, not deleted, at
+// retired-files/console-seat-20260917/InteractiveChatInterface.tsx. The console's
+// chat is the same Lit <chat-panel> the composer loads, assembled in the console's
+// surface and bound to the console's own conversation.
 import MobileLayout from "@/components/MobileLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MinWidthWarning } from "@/components/MinWidthWarning";
@@ -45,6 +48,11 @@ import { classifyFailure, parseValidationEnvelope, type FailureReport } from "@/
 // not implement, or a response describing more than one surface, is refused here
 // rather than parsed as v0.9.1-and-one-surface.
 import { readA2UIEnvelope, envelopeRefusalError } from "@/shared/a2ui-envelope";
+// The trace view's data path. The reads (the app logger, Sentry's global scope)
+// live behind this module, and this shell is what WRITES what they hold into the
+// surface's model — the same shape writeSectionsToSurface uses for /session.
+// See lib/trace-source.ts for why the element does not fetch its own.
+import { subscribeTrace, traceSnapshot, type TraceSnapshot } from "@/lib/trace-source";
 import { buildRepairSections } from "@/shared/repairSections";
 import { repairAsk, repairBrief } from "@/shared/repairMaterial";
 import {
@@ -109,37 +117,27 @@ export default function Index({
   const [consoleRefreshKey, setConsoleRefreshKey] = useState(0);
   const pendingExitTabRef = useRef<string | null>(null);
 
-  // ── Console Chat Panel State (matches ConsolePageWithNavigate) ──
-  const COLLAPSED_WIDTH = 75;
-  const DEFAULT_EXPANDED_WIDTH = 380;
-  const SIDEBAR_GRIP_OFFSET = 40;
-  // How far the Chat tab opens the column: a third of the shell. One constant so
-  // the click-expand and the resize observer cannot drift apart.
-  const CONSOLE_CHAT_OPEN_FRACTION = 1 / 3;
-  const [consoleChatWidth, setConsoleChatWidth] = useState(COLLAPSED_WIDTH);
-  const [isConsoleChatResizing, setIsConsoleChatResizing] = useState(false);
-  // The operator's motion preference is a runtime setting, not a build-time
-  // constant, so it has to be read from the client. Mirrors the identical hook
-  // in InteractiveChatInterface.
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const preCollapseWidthRef = useRef(DEFAULT_EXPANDED_WIDTH);
-  const consoleChatContainerRef = useRef<HTMLDivElement>(null);
-  const isSidebarDraggingRef = useRef(false);
-  // True while the column's width is derived from the shell (set by the Chat tab)
-  // and hasn't been dragged since. A ref, not state: the observer below reads it
-  // without needing a re-render.
-  const isConsoleChatProportionalRef = useRef(false);
-  const consoleChatObserverRef = useRef<ResizeObserver | null>(null);
-  const isConsoleChatCollapsed = consoleChatWidth <= COLLAPSED_WIDTH;
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
-    updatePreference();
-    mediaQuery.addEventListener('change', updatePreference);
-    return () => { mediaQuery.removeEventListener('change', updatePreference); };
-  }, []);
-  const promptSectionEditorRef = useRef<any>(null);
+  // ── THE CONSOLE'S SEAT IS NOT IN THIS SHELL ANY MORE ────────────────────────
+  // It lived here: a React grip writing a column width, a ResizeObserver that
+  // followed the shell, a seat hung off that width, and rail-tab state feeding
+  // its `view` slot. All of it is gone, because the console's chat is now IN the
+  // surface the model assembles: the same `chat-panel` the composer loads, in the
+  // container's right slot, bound to the console's own conversation.
+  //
+  // What went with it here: COLLAPSED_WIDTH / DEFAULT_EXPANDED_WIDTH /
+  // SIDEBAR_GRIP_OFFSET / CONSOLE_CHAT_OPEN_FRACTION, consoleChatWidth and its
+  // resize+collapse handlers, the console session fetch (the assembly resolves
+  // that same row server-side, through the same get-or-create), and the
+  // consoleChatTab / consolePanelEl pair that listened to the seat's rail.
+  //
+  // What STAYS: the `a2ui:console-command` channel below. The assembled seat
+  // still speaks through it, and re-assembly is what a reshuffle means.
+  //
+  // The column's content is no longer reached through a React ref to the editor.
+  // <prompt-section-editor> is drawn by <a2ui-renderer> inside its own shadow
+  // root, so the ref can only ever be null; every read of it is gone and the
+  // surface's data model is read instead (surfaceSections / surfaceCompiledOutput
+  // below).
 
   // Composer-specific running state (controls middle column visibility during Run)
   const [isComposerRunning, setIsComposerRunning] = useState(false);
@@ -214,14 +212,46 @@ export default function Index({
   const [isFailureAcknowledged, setIsFailureAcknowledged] = useState(false);
   // Retry re-runs the assembly that actually failed, not a guess at one.
   const lastAssemblyIntentRef = useRef<string>('render-console');
-  // The surface's two channels, held as React state and handed to
-  // <a2ui-renderer> as props. This is what replaced `window.__lastA2UIComponents`:
-  // a bare global drifted outside React's control — nothing could react to it,
-  // nothing could diff it, and it outlived the surface it described. State
-  // re-renders the renderer on change, which is the whole point of a reactive
-  // surface that is a pure function of Grace's last emission.
-  const [surfaceComponents, setSurfaceComponents] = useState<any[]>([]);
-  const [surfaceDataModel, setSurfaceDataModel] = useState<Record<string, any>>({});
+  // The surface's two channels, handed to <a2ui-renderer> as props. This is what
+  // replaced `window.__lastA2UIComponents`: a bare global drifted outside React's
+  // control — nothing could react to it, nothing could diff it, and it outlived
+  // the surface it described.
+  //
+  // ONE TREE PER SURFACE, not one tree. The sandbox projects exactly one slot and
+  // each slot mounts its own renderer, so a tree has a destination. Held as a
+  // single tree, the console painted the composer's columns and the cards
+  // disappeared from a surface nobody had asked to change (measured 2026-09-17).
+  const [consoleTree, setConsoleTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
+    { components: [], dataModel: {} },
+  );
+  const [workspaceTree, setWorkspaceTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
+    { components: [], dataModel: {} },
+  );
+
+  // Which slot <ai-surface-sandbox> projects. Its rule is
+  // `headerTab === 'console' ? 'console' : 'workspace'`, and an unset tab is the
+  // console — this has to read the same way, or the values below would describe a
+  // slot that is not on screen.
+  const isConsoleView = (headerTab || 'console') === 'console';
+  const surfaceComponents = isConsoleView ? consoleTree.components : workspaceTree.components;
+  const surfaceDataModel = isConsoleView ? consoleTree.dataModel : workspaceTree.dataModel;
+
+  /**
+   * THE SURFACE'S MODEL, READ THROUGH A REF BY LONG-LIVED LISTENERS.
+   *
+   * `surfaceDataModel` is chosen per render from `headerTab` — the console's tree or the
+   * composer's. A window listener registered once keeps the render it was registered on,
+   * so a handler reading the variable directly reads THE TREE THAT WAS ON SCREEN THEN.
+   *
+   * Measured 2026-09-17, and it is why Save did nothing: the save-click listener was
+   * registered while the console was showing, so `surfaceSections()` looked in the
+   * console's model, found no `/session/left_column/sections`, and took the "nothing to
+   * save" exit — start fired, end fired twice, and not one request left the browser,
+   * while the composer on screen held four sections. The same pattern the file already
+   * uses for the output (`surfaceCompiledOutput` reads a ref for exactly this reason).
+   */
+  const surfaceDataModelRef = useRef(surfaceDataModel);
+  surfaceDataModelRef.current = surfaceDataModel;
 
   // ONE authority for the console's prompt packages: /cards in that data model —
   // the same array Grace's ConsoleCardGrid binds to, which is what the renderer
@@ -240,9 +270,142 @@ export default function Index({
   // (ConsolePage states that as "waiting"); [] = assembled, and there are none
   // (stated as "zero packages"). The old variable carried the same distinction in
   // a comment; now the model itself makes it.
-  const assembledConsoleCards = Array.isArray(surfaceDataModel.cards)
-    ? (surfaceDataModel.cards as any[])
+  // The CONSOLE's tree specifically, not whichever slot is showing: the cards are
+  // the console's, and reading the projected surface here would report the
+  // composer's model as the console's while the composer tab was up.
+  const assembledConsoleCards = Array.isArray(consoleTree.dataModel.cards)
+    ? (consoleTree.dataModel.cards as any[])
     : null;
+
+  // ── THE SURFACE IS WHERE THE COLUMN'S CONTENT IS NOW READ FROM ──────────────
+  // These two used to be read out of the DOM — `promptSectionEditorRef.current
+  // .sections` and `document.querySelector('compiled-output-viewer').content`.
+  // Both components are drawn by <a2ui-renderer> inside its own shadow root now,
+  // so no React ref and no document query can reach them: the ref is null and the
+  // query finds nothing. That is why Save had nothing to write.
+  //
+  // The values themselves are unchanged — they are what the renderer BOUND into
+  // those elements, held in the data model the assembly returned. Reading them
+  // there reads exactly what the components were given.
+  const surfaceSections = useCallback((): any[] => {
+    // Through the REF, not the render's variable: see surfaceDataModelRef above — a
+    // listener that outlives a render must not read the tree from the render it was
+    // registered in. This is what made Save read the console's model while the composer
+    // was on screen, find no sections, and give up in silence.
+    const s = (surfaceDataModelRef.current as any)?.session?.left_column?.sections;
+    return Array.isArray(s) ? s : [];
+  }, []);
+
+  const surfaceCompiledOutput = useCallback((): string => {
+    const out = (surfaceDataModelRef.current as any)?.session?.middle_column?.compiled_output;
+    if (typeof out === 'string' && out.length > 0) return out;
+    // No assembled output on screen: the package's stored output is the last
+    // thing that was written, and it is what the column would be seeded with.
+    //
+    // Read through the REF, never the `currentPromptSession` state: this callback
+    // is declared above that state, and naming it in the dependency array below
+    // evaluates it during render — before its `const` runs — which throws
+    // "Cannot access 'currentPromptSession' before initialization" and takes the
+    // whole shell down. A ref is a stable box the closure reads at call time.
+    return currentPromptSessionObjRef.current?.compiledOutput || '';
+  }, [surfaceDataModel]);
+
+  /**
+   * Put sections into the composer's column, the way the surface reads them.
+   *
+   * This replaces three writes to `promptSectionEditorRef.current.sections` — the
+   * imperative push, the repair re-assert, and the repair prompt's retry dance.
+   * All three wrote to a Lit element this shell no longer mounts, so all three
+   * were no-ops against null. Writing the model the renderer binds from
+   * re-resolves the column's `sections` binding in the same commit, which is what
+   * the property write was reaching for.
+   *
+   * Bails out when the value is already there: the re-assert runs on every commit,
+   * and returning a fresh object each time would loop.
+   */
+  const writeSectionsToSurface = useCallback((sections: any[]) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      const left = session.left_column ?? {};
+      const have = Array.isArray(left.sections) ? left.sections : [];
+      const same = have.length === sections.length
+        && have.every((s: any, i: number) => (s?.content || '') === (sections[i]?.content || ''));
+      if (same) return prev;
+      return {
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          session: { ...session, left_column: { ...left, sections } },
+        },
+      };
+    });
+  }, []);
+
+  /**
+   * THE MIDDLE COLUMN'S WRITER — and there was none, which is why the output was never
+   * on screen.
+   *
+   * The viewer binds `content` to /session/middle_column/compiled_output, and this file
+   * only ever READ that path (four reads: the surface read, the session load, the
+   * post-load restore). Nothing wrote it. So a Run went: press → POST /api/teacher/query
+   * → 200 with an answer → into React state → nowhere. The column drew its empty state
+   * over an answer that had already arrived, and the only evidence was the network tab.
+   *
+   * Measured 2026-09-17: one RUN click produced three teacher/query calls (200, 10.5 /
+   * 11.1 / 11.5s) while the surface's model still held {"compiled_output": ""} and the
+   * viewer's own prop was 0 chars, status "empty". The model was connected the whole
+   * time; the last metre was missing, exactly as it was for the left column.
+   *
+   * Same shape as the writer above, same reason, and the same bail-out: the sync runs on
+   * every change, so returning a fresh object when nothing moved would loop.
+   */
+  const writeCompiledOutputToSurface = useCallback((output: string) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      const middle = session.middle_column ?? {};
+      if ((middle.compiled_output ?? '') === output) return prev;
+      return {
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          session: { ...session, middle_column: { ...middle, compiled_output: output } },
+        },
+      };
+    });
+  }, []);
+
+  /**
+   * THE TWO BUSY FLAGS THE BOTTOM BAR DRAWS — the spinner on the button that was pressed.
+   *
+   * `<control-bar>` has carried `isSaving` (state=Compiling) and `isRunning` from the
+   * drawing since it was built, and nothing ever assigned either: the surface emits the bar
+   * with no props, so both stayed false and a Save Template that took two seconds looked
+   * like a button that did nothing. The host already tracks both facts (`isSavingPrompt`,
+   * `isComposerRunning`); they are published to the model now and the bar binds them by
+   * path, which is the one way a value reaches a component in this system.
+   *
+   * Written as values, not as a call into the element: whoever renders the bar draws what
+   * the model says, and the renderer re-applies every bound path when the model changes.
+   */
+  const writeBusyToSurface = useCallback((saving: boolean, running: boolean) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      const left = session.left_column ?? {};
+      const middle = session.middle_column ?? {};
+      if (left.saving === saving && middle.running === running) return prev;
+      return {
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          session: {
+            ...session,
+            left_column: { ...left, saving },
+            middle_column: { ...middle, running },
+          },
+        },
+      };
+    });
+  }, []);
 
   // Lit receives objects as PROPERTIES, not JSX attributes — React's `.prop=`
   // syntax is Preact, and in React it is a syntax error (it compiled to
@@ -250,13 +413,76 @@ export default function Index({
   // element through a ref, which is how every other Lit element in this file is
   // fed. Attributes would also be lossy here: a component tree and a data model
   // are structures, and both would arrive as the string "[object Object]".
-  const a2uiRendererRef = useRef<any>(null);
+  //
+  // ONE REF PER RENDERER. There are two renderers — one per slot — and a single
+  // ref bound to both points at whichever React attached last, so the other
+  // surface was handed no tree at all and drew nothing. Measured 2026-09-17: the
+  // console slot existed at 1224px with an empty tree and no error to explain it.
+  const consoleRendererRef = useRef<any>(null);
+  const composerRendererRef = useRef<any>(null);
+
   useEffect(() => {
-    const el = a2uiRendererRef.current;
+    const el = consoleRendererRef.current;
     if (!el) return;
-    el.components = surfaceComponents;
-    el.dataModel = surfaceDataModel;
-  }, [surfaceComponents, surfaceDataModel]);
+    el.components = consoleTree.components;
+    el.dataModel = consoleTree.dataModel;
+  }, [consoleTree]);
+
+  useEffect(() => {
+    const el = composerRendererRef.current;
+    if (!el) return;
+    el.components = workspaceTree.components;
+    el.dataModel = workspaceTree.dataModel;
+  }, [workspaceTree]);
+
+  // ── THE TRACE FEED'S DATA PATH ──────────────────────────────────────────────
+  // <trace-feed> renders `{path: "/trace/entries"}` and nothing else; something has
+  // to write that path. This is the something, and the choice of WRITER is the one
+  // real decision in the trace view:
+  //
+  //   The protocol-pure writer is the agent — it owns the model, and it would send
+  //   an updateDataModel operation. It cannot be the writer here, and not for a
+  //   stylistic reason: the transport has no return path (transports.md — our REST
+  //   channel is a one-shot POST, and A2A/AG-UI are not wired), so breadcrumbs
+  //   never reach the server at all. Telemetry is also client-local by nature: the
+  //   logger and Sentry's scope exist in this tab and nowhere else.
+  //
+  //   So the CLIENT writes it, which the Read/Write contract permits, and which
+  //   this shell already does for /session/left_column/sections
+  //   (writeSectionsToSurface below). The component stays a view: it is still
+  //   handed its values by a path, and it draws what it is given.
+  //
+  // BOTH TREES. The trace is the app's, not a surface's — one scope, one logger —
+  // so both models carry it and the binding resolves in whichever seat emits the
+  // feed. Writing it into a model with no such binding is inert.
+  //
+  // TWO JOBS. (1) Live updates while a surface is on screen. (2) Re-assertion: an
+  // assembly REPLACES the whole model, so `/trace` leaves with the one it was
+  // written into, and a feed that is bound to a path which is no longer there
+  // shows its waiting state until the next breadcrumb happens to arrive. Keyed on
+  // the assembled component lists, this re-runs on every assembly and writes the
+  // values straight back.
+  //
+  // The identity check is what keeps a quiet poll from re-rendering the surface
+  // twice a second: the source hands back the SAME snapshot object until something
+  // actually changed, and returning `prev` unchanged makes React bail out.
+  useEffect(() => {
+    const merge = (
+      prev: { components: any[]; dataModel: Record<string, any> },
+      trace: TraceSnapshot,
+    ) =>
+      prev.dataModel.trace === trace
+        ? prev
+        : { ...prev, dataModel: { ...prev.dataModel, trace } };
+
+    setConsoleTree((prev) => merge(prev, traceSnapshot()));
+    setWorkspaceTree((prev) => merge(prev, traceSnapshot()));
+
+    return subscribeTrace((trace) => {
+      setConsoleTree((prev) => merge(prev, trace));
+      setWorkspaceTree((prev) => merge(prev, trace));
+    });
+  }, [consoleTree.components, workspaceTree.components]);
 
   // Route the surface renderer's events onto the bus.
   //
@@ -344,6 +570,28 @@ export default function Index({
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 
+  // The two busy flags the bottom bar draws. Declared HERE, after the state it reads:
+  // an effect's dependency array is evaluated during render, so reading a const that is
+  // declared further down the file is a ReferenceError, not a subtle bug.
+  useEffect(() => {
+    writeBusyToSurface(isSavingPrompt, isComposerRunning);
+  }, [isSavingPrompt, isComposerRunning, writeBusyToSurface]);
+
+  /**
+   * THE OUTPUT FOLLOWS THE STATE INTO THE SURFACE. One writer, whatever changed the
+   * output: a Run's answer (streamed or whole), a Run's error, the Clear control, or a
+   * version restore (the `restore-output` listener). The state is the authority; the
+   * model is what the element reads, so this is the only place that carries it over —
+   * the alternative was five call sites, each one a place to forget.
+   *
+   * Written here rather than at the run's own completion so a restore and a Clear land
+   * the same way a Run does. Without it the column has never displayed a run's output
+   * at all: see the writer above for the measurement.
+   */
+  useEffect(() => {
+    writeCompiledOutputToSurface(currentPromptSession?.compiledOutput ?? '');
+  }, [currentPromptSession?.compiledOutput, writeCompiledOutputToSurface]);
+
   // The SURFACE SEAT's accumulative usage — what the footer shows. Seat
   // identity rule: the package chat may only show calls attributed to ITS
   // conversation (conversation_id in the event, matched against the seat's
@@ -424,45 +672,47 @@ export default function Index({
    */
   const [repairStages, setRepairStages] = useState<RepairStages>({});
 
-  // The Lit seat's structure-valued channels ride PROPERTIES, not attributes —
-  // strings like conversation-id already travel as attributes on the element.
-  // Assigned through a ref, the same rule that feeds <a2ui-renderer>.
-  const chatPanelRef = useRef<any>(null);
-  useEffect(() => {
-    const el = chatPanelRef.current;
-    if (!el) return;
-    el.findings = catalogFindings || [];
-    el.repairStages = repairStages || {};
-    el.unannotatedInUse = unannotatedInUse || [];
-    el.consoleCards = assembledConsoleCards || [];
-    el.usage = usageTotal;
-  }, [catalogFindings, repairStages, unannotatedInUse, assembledConsoleCards, usageTotal]);
+  /**
+   * THE ROW'S STATE, PUBLISHED TO THE MODEL — the last wire between the repair path and the
+   * repair list.
+   *
+   * The stages were tracked here and never left this component: the element has drawn an
+   * amber "in repair" and a green mark since it was built, and nothing ever handed it a
+   * stage, so a row that was being repaired looked exactly like one nobody had touched. The
+   * model is how a value reaches a component in this system, and the repair-view entry binds
+   * `/repairs/stages`, so this writes the map there. Declared AFTER the state it reads: an
+   * effect's dependency array is evaluated during render.
+   */
+  const writeRepairStagesToSurface = useCallback((stages: RepairStages) => {
+    setConsoleTree((prev) => {
+      const repairs = prev.dataModel.repairs ?? {};
+      const have = repairs.stages ?? {};
+      const same = Object.keys(have).length === Object.keys(stages).length
+        && Object.entries(stages).every(([id, stage]) => have[id] === stage);
+      if (same) return prev;
+      return {
+        ...prev,
+        dataModel: { ...prev.dataModel, repairs: { ...repairs, stages } },
+      };
+    });
+  }, []);
 
-  // The package's conversations — the selector's list, and the binding the
-  // selector acts on. Loaded from the DB (conversations.session_id is NOT NULL:
-  // a conversation belongs to a package), refreshed whenever the package or the
-  // adopted conversation changes.
   useEffect(() => {
-    const sessionId = currentPromptSession?.id;
-    const el = chatPanelRef.current;
-    if (!el) return;
-    if (!sessionId) {
-      el.conversations = [];
-      return;
-    }
-    let cancelled = false;
-    conversationStorage.getSessionConversations(sessionId)
-      .then((all) => {
-        if (cancelled) return;
-        el.conversations = (all || [])
-          .filter(Boolean)
-          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      })
-      .catch(() => {
-        if (!cancelled) el.conversations = [];
-      });
-    return () => { cancelled = true; };
-  }, [currentPromptSession?.id, currentPromptSession?.conversationId]);
+    writeRepairStagesToSurface(repairStages);
+  }, [repairStages, writeRepairStagesToSurface]);
+
+  // ── THE CHAT PANEL'S CHANNELS ARE NO LONGER ASSIGNED FROM HERE ──────────────
+  // There was a `chatPanelRef` here, plus two effects: one pushing findings /
+  // repair stages / unannotated names / cards / usage onto the element, one
+  // loading the package's conversation list into it. Both are gone, and neither
+  // worked: the panel is drawn by <a2ui-renderer> in its own shadow root, so the
+  // ref never held an element and every assignment was a no-op on a null value.
+  //
+  // What those effects were for is real, and the surface is where it has to come
+  // from — the findings ride the assembly's data model next to the panel, the
+  // same way its conversation id already does. Reaching into the element from the
+  // shell was never going to work; that is why removing it costs nothing.
+
   /**
    * The finding the repair prompt in the column came from. Held from the click to the
    * Run that answers it, because that Run is the thing that gets settled — and it
@@ -497,19 +747,16 @@ export default function Index({
   // Save used to read the output from a ref, which can be stale by the time the
   // click arrives — so Save posted compiled_output:"" and the backend wrote that
   // empty string over the output the user was looking at, wiping the column on
-  // every save. Read the LIVE viewer instead: whatever is on screen is what gets
-  // saved. (Falls back to the ref / state if the viewer isn't mounted.)
+  // every save. It then read the LIVE element to compensate.
+  //
+  // The live element is unreachable now: <compiled-output-viewer> is drawn by
+  // <a2ui-renderer> inside its own shadow root, so `document.querySelector` finds
+  // nothing and the DOM read silently degraded to the stale fallback it was
+  // written to avoid. surfaceCompiledOutput reads the same value one step earlier
+  // — the model the renderer bound into that element — which is what "whatever is
+  // on screen" means now.
   // ══════════════════════════════════════════════════════════════════════════
-  const readLiveOutput = (): string => {
-    const viewer = document.querySelector('compiled-output-viewer') as any;
-    const live = viewer?.content;
-    if (typeof live === 'string' && live.trim().length > 0) return live;
-    return (
-      currentPromptSessionObjRef.current?.compiledOutput ||
-      currentPromptSession?.compiledOutput ||
-      ''
-    );
-  };
+  const readLiveOutput = (): string => surfaceCompiledOutput();
 
   // My Story Editor state — NOTE: MyStory editor and SaveProjectModal are retired.
   // State kept for legacy compatibility with remaining save function references.
@@ -858,7 +1105,7 @@ export default function Index({
     // Uses the unified assembleSurfaceWithAI function with render-composer intent
     // ══════════════════════════════════════════════════════════════════════════
     console.log('🤖 [A2UI] Creating new prompt → intent: render-composer');
-    await assembleSurfaceWithAI('render-composer');
+    await assembleSurfaceThenRepairs('render-composer');
   };
 
   const handleSavePrompt = async (
@@ -1072,11 +1319,10 @@ export default function Index({
   useEffect(() => {
     if (!currentPromptSession) return;
 
-    // <save-button/> → save (reads sections from Lit editor ref)
+    // <save-button/> → save (sections read from the surface's data model)
     const unsubSave = eventBus.on('save-button', () => {
-      const editor = promptSectionEditorRef.current as any;
-      const sections = (editor && (editor._sections || editor.sections)) || [];
-      const compiledOutput = currentPromptSession?.compiledOutput || '';
+      const sections = surfaceSections();
+      const compiledOutput = surfaceCompiledOutput();
       handleSavePromptRef.current?.(compiledOutput, sections);
     });
 
@@ -1214,9 +1460,8 @@ export default function Index({
     }
     if (!currentPromptSession?.id) {
       // No session with a valid ID — create one via the AI save pipeline
-      // (reads sections from Lit editor ref, same as save-template)
-      const editor = promptSectionEditorRef.current as any;
-      const sections = (editor && (editor._sections || editor.sections)) || [];
+      // (sections come from the surface's data model, same as save-template)
+      const sections = surfaceSections();
       try {
         const result = await promptService.savePromptTemplate(
           newTitle,
@@ -1260,14 +1505,17 @@ export default function Index({
       // the copy (and the picture of the library in Grace's seat) said otherwise.
       // Writing /cards re-resolves the grid's binding, and the drawn card states
       // the new title immediately.
-      setSurfaceDataModel(prev => {
-        const cards = Array.isArray(prev.cards) ? prev.cards : null;
+      setConsoleTree((prev) => {
+        const cards = Array.isArray(prev.dataModel.cards) ? prev.dataModel.cards : null;
         if (!cards) return prev; // no console surface to update
         return {
           ...prev,
-          cards: cards.map((card: any) =>
-            card?.id === currentPromptSession.id ? { ...card, title: newTitle } : card
-          ),
+          dataModel: {
+            ...prev.dataModel,
+            cards: cards.map((card: any) =>
+              card?.id === currentPromptSession.id ? { ...card, title: newTitle } : card
+            ),
+          },
         };
       });
       console.log('✅ [CRUD] Renamed session:', currentPromptSession.id);
@@ -1307,11 +1555,13 @@ export default function Index({
     pendingSectionsRef.current = [];
   }, [promptLoadKey, headerTab]);
 
-  // ── A2UI: Push sections to Lit <prompt-section-editor> imperatively
-  // Declarative prop passing to custom elements can be unreliable for complex arrays.
-  // This ensures the editor always receives the normalized sections when data changes.
+  // ── A2UI: Push sections into the composer column through the surface ───────
+  // This wrote `sections` as a PROPERTY on the <prompt-section-editor> element,
+  // because declarative prop passing to custom elements can be unreliable for
+  // complex arrays. The element is inside the renderer's shadow root now, so the
+  // write goes to the model the renderer binds it from — same value, one step
+  // earlier, and it survives the renderer rebuilding the element.
   useEffect(() => {
-    if (!promptSectionEditorRef.current) return;
     if (headerTab !== 'composer') return;
 
     // A repair prompt OWNS the column until the user Runs, Saves, or opens
@@ -1319,7 +1569,7 @@ export default function Index({
     // handler: render-composer builds the composer from the backend, so its
     // starter sections arrive after the repair and would overwrite it.
     if (repairSectionsRef.current) {
-      (promptSectionEditorRef.current as any).sections = repairSectionsRef.current;
+      writeSectionsToSurface(repairSectionsRef.current);
       return;
     }
 
@@ -1336,15 +1586,15 @@ export default function Index({
           visible: s.visible !== false,
         } : null)
         .filter(Boolean);
-      // Only override if we have real data; let the component keep its seeded defaults otherwise
+      // Only override if we have real data; let the surface keep its seeded defaults otherwise
       if (normalized.length > 0) {
-        console.log('[A2UI] Imperatively setting sections on <prompt-section-editor>:', normalized.length);
-        (promptSectionEditorRef.current as any).sections = normalized;
+        console.log('[A2UI] Writing sections into the composer column:', normalized.length);
+        writeSectionsToSurface(normalized);
       }
     } catch (e) {
-      console.warn('[A2UI] Failed to set sections on editor', e);
+      console.warn('[A2UI] Failed to write sections into the composer column', e);
     }
-  }, [currentPromptSession?.leftColumnContent, promptLoadKey, headerTab]);
+  }, [currentPromptSession?.leftColumnContent, promptLoadKey, headerTab, writeSectionsToSurface]);
 
   // ── Every write into the column lands back in the repair prompt we hold ────
   //
@@ -1358,6 +1608,27 @@ export default function Index({
   useEffect(() => {
     const handler = (e: Event) => {
       const { index, section } = (e as CustomEvent).detail || {};
+
+      // ── THE WRITE HALF OF THE READ/WRITE CONTRACT ──────────────────────────
+      // Handling-User-Actions.md: "As soon as a user interacts … the renderer
+      // IMMEDIATELY writes the new value into the local Data Model … the local model is
+      // always the source of truth for the UI's current state."
+      //
+      // This listener did not write anything. It updated the repair copy and armed the
+      // unsaved flag, so a keystroke lived in the element and NOWHERE ELSE — and every
+      // reader of the model got the text from before the edit, including the save path's
+      // `surfaceSections()`. That is how a package gets written with 42 characters while
+      // a person watches their prompt on screen. Measured 2026-09-17: typing "ZQ" into
+      // System Role left the element holding 2 characters and the model still holding 0.
+      if (typeof index === 'number' && index >= 0 && section) {
+        const held = surfaceSections();
+        if (index < held.length) {
+          const next = held.slice();
+          next[index] = { ...next[index], ...section };
+          writeSectionsToSurface(next);
+        }
+      }
+
       const held = repairSectionsRef.current;
       if (!held || !section || typeof index !== 'number' || index < 0 || index >= held.length) return;
       const next = held.slice();
@@ -1371,7 +1642,10 @@ export default function Index({
     };
     window.addEventListener('section-update', handler);
     return () => window.removeEventListener('section-update', handler);
-  }, []);
+    // The writers are re-created when the model changes, so the listener is re-registered
+    // with them: a handler holding the first render's copy would write from the model as
+    // it was when the page loaded.
+  }, [surfaceSections, writeSectionsToSurface]);
 
   // ── Keep a repair prompt in the column ────────────────────────────────────
   // No dependency array, on purpose: this re-asserts AFTER EVERY COMMIT.
@@ -1384,12 +1658,9 @@ export default function Index({
   useEffect(() => {
     const want = repairSectionsRef.current;
     if (!want) return;
-    const el = promptSectionEditorRef.current as any;
-    if (!el) return;
-    const have = el.sections || [];
-    const same = have.length === want.length
-      && have.every((s: any, i: number) => (s.content || '') === (want[i].content || ''));
-    if (!same) el.sections = want;
+    // The equality check that used to guard this write now lives inside the
+    // writer, where it can compare against what the model actually holds.
+    writeSectionsToSurface(want);
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1542,24 +1813,16 @@ export default function Index({
   };
 
   /**
-   * Write the repair prompt into the editor's inputs.
+   * Write the repair prompt into the composer column.
    *
-   * Retried the way this file retries every other push into the editor: the
-   * element mounts only after the composer assembles, so one attempt can land
-   * while the ref is still null, and `sections` is a property (not an attribute),
-   * so there is no markup to wait on.
+   * This used to retry the write across three rAF/timeout passes, because the
+   * element mounted only after the composer assembled and a single attempt could
+   * land while the ref was still null. There is no element to wait for now: the
+   * write lands in the surface's data model, and the renderer binds it whenever
+   * the column is next drawn — a state update does not need a retry to survive.
    */
   const pushRepairSections = (sections: any[]) => {
-    const push = () => {
-      const editor = promptSectionEditorRef.current as any;
-      if (editor) editor.sections = sections;
-    };
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        push();
-        setTimeout(push, 300);
-      });
-    });
+    writeSectionsToSurface(sections);
   };
 
   /**
@@ -1656,7 +1919,7 @@ export default function Index({
       `${ask ? `${ask.answers.length} answer button(s)` : 'no buttons'}`,
     );
 
-    await assembleSurfaceWithAI('render-composer', {
+    await assembleSurfaceThenRepairs('render-composer', {
       current_surface: surfaceContext?.current_surface ?? (headerTab || 'composer'),
       has_unsaved_changes: hasUnsavedChangesRef.current,
       session_id: repairTargetSessionId,
@@ -1730,7 +1993,7 @@ export default function Index({
     // is released with it, and a Run of this package settles nothing.
     repairSectionsRef.current = null;
     repairFindingRef.current = null;
-    await assembleSurfaceWithAI(`render-session:${sessionId}`);
+    await assembleSurfaceThenRepairs(`render-session:${sessionId}`);
 
     // Force full re-render to dispatch sections to textareas
     setPromptLoadKey(k => k + 1);
@@ -1778,146 +2041,15 @@ export default function Index({
     session_id: string | null;
   } | null>(null);
 
-  // Attach the resize observer from the ref callback rather than an effect: the
-  // console panel mounts conditionally (headerTab === "console"), so a mount-time
-  // effect would run while the element is still null and silently never observe it.
-  const attachConsoleChatContainer = useCallback((el: HTMLDivElement | null) => {
-    consoleChatContainerRef.current = el;
-    consoleChatObserverRef.current?.disconnect();
-    consoleChatObserverRef.current = null;
-    if (!el) return;
-    const observer = new ResizeObserver(() => {
-      // Follow the shell ONLY while the width is proportional. A width the
-      // operator dragged is theirs — it must not move under them.
-      if (!isConsoleChatProportionalRef.current) return;
-      const openWidth = Math.max(COLLAPSED_WIDTH, Math.floor(el.getBoundingClientRect().width * CONSOLE_CHAT_OPEN_FRACTION));
-      preCollapseWidthRef.current = openWidth;
-      setConsoleChatWidth(openWidth);
-    });
-    observer.observe(el);
-    consoleChatObserverRef.current = observer;
-  }, []);
-
-  const handleConsoleChatResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    // Dragging is the operator taking manual control — stop following the shell.
-    isConsoleChatProportionalRef.current = false;
-    setIsConsoleChatResizing(true);
-  }, []);
-
-  const handleConsoleChatResizeDoubleClick = useCallback(() => {
-    if (isConsoleChatCollapsed) {
-      setConsoleChatWidth(preCollapseWidthRef.current);
-    } else {
-      preCollapseWidthRef.current = consoleChatWidth;
-      setConsoleChatWidth(COLLAPSED_WIDTH);
-    }
-  }, [isConsoleChatCollapsed, consoleChatWidth]);
-
-  // Clicking the Chat tab in the collapsed rail is the operator asking for the
-  // column back. It opens to CONSOLE_CHAT_OPEN_FRACTION of the shell, computed
-  // from the live row width so it scales with the window instead of landing on a
-  // fixed pixel count.
-  const handleConsoleChatExpand = useCallback(() => {
-    const container = consoleChatContainerRef.current;
-    if (!container) {
-      // Not mounted yet — fall back to the remembered width rather than guessing.
-      setConsoleChatWidth(preCollapseWidthRef.current);
-      return;
-    }
-    const openWidth = Math.max(COLLAPSED_WIDTH, Math.floor(container.getBoundingClientRect().width * CONSOLE_CHAT_OPEN_FRACTION));
-    // Proportional mode: the observer keeps this fraction as the shell resizes,
-    // until the operator drags it somewhere they chose.
-    isConsoleChatProportionalRef.current = true;
-    preCollapseWidthRef.current = openWidth;
-    setConsoleChatWidth(openWidth);
-  }, []);
-
-  // Clicking the already-active tab again puts the column away. Remember the
-  // width first, so the next expand restores what the operator actually had.
-  const handleConsoleChatCollapse = useCallback(() => {
-    // MUST clear proportional mode BEFORE narrowing: otherwise the observer would
-    // see the collapsed width, recompute the fraction, and re-open the column by
-    // itself.
-    isConsoleChatProportionalRef.current = false;
-    setConsoleChatWidth((w) => {
-      if (w > COLLAPSED_WIDTH) preCollapseWidthRef.current = w;
-      return COLLAPSED_WIDTH;
-    });
-  }, []);
-
-  // Console chat resize mouse move/up handlers
-  useEffect(() => {
-    if (!isConsoleChatResizing) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isSidebarDraggingRef.current) return;
-      if (!consoleChatContainerRef.current) return;
-      const rect = consoleChatContainerRef.current.getBoundingClientRect();
-      setConsoleChatWidth(rect.right - e.clientX);
-    };
-    const handleMouseUp = () => {
-      if (isSidebarDraggingRef.current) return;
-      setIsConsoleChatResizing(false);
-      setConsoleChatWidth((w) => {
-        if (w > COLLAPSED_WIDTH) preCollapseWidthRef.current = w;
-        return w;
-      });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isConsoleChatResizing]);
-
-  // Console chat sidebar gripper drag handlers
-  useEffect(() => {
-    const handleSidebarDragStart = () => {
-      isSidebarDraggingRef.current = true;
-      // Same as the strip drag: manual control ends proportional mode.
-      isConsoleChatProportionalRef.current = false;
-      setIsConsoleChatResizing(true);
-    };
-    const handleSidebarDrag = (event: Event) => {
-      const customEvent = event as CustomEvent<{ clientX?: number }>;
-      if (typeof customEvent.detail?.clientX !== 'number') return;
-      if (!consoleChatContainerRef.current) return;
-      const rect = consoleChatContainerRef.current.getBoundingClientRect();
-      setConsoleChatWidth(rect.right - customEvent.detail.clientX + SIDEBAR_GRIP_OFFSET);
-    };
-    const handleSidebarDragEnd = () => {
-      isSidebarDraggingRef.current = false;
-      setIsConsoleChatResizing(false);
-      setConsoleChatWidth((w) => {
-        if (w > COLLAPSED_WIDTH) preCollapseWidthRef.current = w;
-        return w;
-      });
-    };
-    window.addEventListener('right-column-drag-start', handleSidebarDragStart);
-    window.addEventListener('right-column-drag-move', handleSidebarDrag as EventListener);
-    window.addEventListener('right-column-drag-end', handleSidebarDragEnd);
-    return () => {
-      window.removeEventListener('right-column-drag-start', handleSidebarDragStart);
-      window.removeEventListener('right-column-drag-move', handleSidebarDrag as EventListener);
-      window.removeEventListener('right-column-drag-end', handleSidebarDragEnd);
-    };
-  }, []);
-
-  // Console chat double-click to snap to center
-  useEffect(() => {
-    const handleGripperDoubleClickToCenter = () => {
-      if (!consoleChatContainerRef.current) return;
-      const rect = consoleChatContainerRef.current.getBoundingClientRect();
-      const centerWidth = Math.floor(rect.width / 2);
-      setConsoleChatWidth(Math.max(COLLAPSED_WIDTH, centerWidth));
-      preCollapseWidthRef.current = Math.max(COLLAPSED_WIDTH, centerWidth);
-    };
-    window.addEventListener('right-column-gripper-doubleclick', handleGripperDoubleClickToCenter);
-    return () => {
-      window.removeEventListener('right-column-gripper-doubleclick', handleGripperDoubleClickToCenter);
-    };
-  }, []);
+  // The console seat's resize/collapse handlers lived here (the ref-attached
+  // ResizeObserver, the proportional-width follow, the grip drag, and the
+  // rail's tab-change / collapse-toggle wiring). They are deleted, not archived:
+  // no separate file held them — they were this component's own code, and the
+  // seat they drove is already in the archive.
+  //
+  // The React seat itself is NOT here and does not need moving: it was retired on
+  // 2026-09-17 to retired-files/console-seat-20260917/InteractiveChatInterface.tsx,
+  // with the README beside it. This file stopped mounting it in the same move.
 
   // ═══════════════════════════════════════════════════════════════════════════
   // A2UI v0.9 UNIFIED SURFACE ASSEMBLY
@@ -1927,18 +2059,20 @@ export default function Index({
   // TRUE:  AI decides *data* for each intent (cards, sections, messages).
   // TRUE:  On AI failure, the surface returns 503 — no fake fallback rendering.
   //
-  // NOT TRUE YET: "AI is the ARCHITECT" — AI cannot reorganize the surface.
-  //   The slot="workspace" JSX below HARDCODES:
-  //     - <workspace-layout> three-column frame (left/middle/right)
+  // "AI is the ARCHITECT" — the frame belongs to the SURFACE now, not to this shell. The
+  // assemblers in backend/routes/ai.py emit it, and this file renders only the HOST that
+  // the tree is handed to:
+  //     - <workspace-layout>, the three-column frame, whose panes are NAMED slots
   //     - <prompt-section-editor> in slot="left"
+  //     - <control-bar> in slot="left-footer" — the bottom of the left column, where the
+  //       design puts it ("left-column-panel-container" #40000954:23865 carries the
+  //       "Left-column-ControlBar" as its LAST child)
   //     - <compiled-output-viewer> in slot="middle"
-  //     - <InteractiveChatInterface> in slot="right"
-  //     - <control-bar> always at bottom of left column
-  //   AI can only *populate data into* this frame. It cannot:
-  //     - Add a 4th column, remove a column, or swap positions
-  //     - Choose different components than the hardcoded ones
-  //     - Decide "this task needs no output viewer" and skip it
-  //
+  //     - <chat-panel> in slot="right"
+  //   This list is the model's to change, which is why it can grow — the control bar
+  //   arrived here without this component being edited. (It WAS edited once, to remove a
+  //   hardcoded tree; naming an element in a comment is not a mount, and the checker
+  //   reads comments as claims — see READ-ME/TRACE-VIEW.md.)
   // DISCOVERY GOAL: For A2UI to be real, AI must control the *component tree*
   //   (which components, in what arrangement), not just the *data* inside a
   //   fixed frame. The hardcoded JSX is a scaffold during development —
@@ -2116,13 +2250,17 @@ export default function Index({
 
       // Hand both channels to the surface renderer as props.
       //
+      // WHICH RENDERER IS DECIDED BELOW, by the same inference the view uses — a
+      // tree goes to the slot it was assembled for and nowhere else. The
+      // assignment cannot happen here: `surface` is not known until the model has
+      // been read, and assigning first is what put the composer's columns on the
+      // console (measured 2026-09-17) and dropped the cards from the screen.
+      //
       // The component list is passed even when empty: an empty list is Grace
       // saying "no surface", and the renderer draws nothing for it. Keeping the
       // previous tree on screen instead would make a deliberately cleared surface
       // look stuck — indistinguishable from a renderer that had stopped
       // listening, which is the exact failure this wiring exists to make visible.
-      setSurfaceComponents(assembledComponents);
-      setSurfaceDataModel(dataModel);
 
       // A2UI v0.9.1: the surface LABEL is the spec's `surfaceId`, and it is read by
       // the envelope boundary above (readA2UIEnvelope) — it names which surface these
@@ -2140,23 +2278,30 @@ export default function Index({
             : 'console';
       console.log(`🤖 [A2UI] Surface inferred from data model: ${surface}`);
 
+      // The tree now goes to the slot it belongs to. A decision payload is drawn
+      // on the composer's side — it is the composer's own question, asked in the
+      // composer's column — so anything that is not the console goes to the
+      // workspace tree.
+      if (surface === 'console') {
+        setConsoleTree({ components: assembledComponents, dataModel });
+      } else {
+        setWorkspaceTree({ components: assembledComponents, dataModel });
+      }
+
       const assemblyTime = dataModel.assembly_time_ms || 0;
       const aiMessage = dataModel.ai_message || '';
 
-      // ── SHE SPEAKS. THIS IS THE SEAT'S ONLY REAL VOICE. ─────────────────────
-      // It was suppressed right here — "NOT posted. An assembly is not a turn in the
-      // conversation — nobody asked, and the operator is reading the surface the message
-      // describes." That came from a real irritation (she opened with a greeting on every
-      // console reload), and the fix removed her from the conversation entirely: the
-      // assistant a person is looking at never said anything, at all, including when
-      // their own click is what changed the surface. A silent seat is not the smaller
-      // problem — it is the one that makes her read as a static menu.
+      // ── SHE SPEAKS WHEN SHE WAS ASKED, AND IS SILENT WHEN SHE WAS NOT ────────
+      // The history here is worth keeping: this was suppressed entirely ("an assembly
+      // is not a turn in the conversation — nobody asked"), then re-enabled for every
+      // assembly, and the owner's verdict on that is the second one: opening a package,
+      // switching a tab or loading the console is not a question, and a column that
+      // greets you on every one of them reads as a machine talking to itself.
       //
-      // Posted whenever the model produced a message. It is HER sentence, written for
-      // this surface, and it is the only thing in this column that is not a template in
-      // the bundle. An empty message is not posted: that is the model declining to speak,
-      // and a blank bubble reads as her having said nothing on purpose.
-      if (aiMessage.trim()) {
+      // The one assembly that IS an ask is a repair: the brief rides the assembly and
+      // comes back as her sentence, which is how a repair tells the person what is open.
+      // So that is the condition — a repair brief, not "the model produced a message".
+      if (aiMessage.trim() && (context?.repair_brief?.length ?? 0) > 0) {
         window.dispatchEvent(new CustomEvent('a2ui:system-message', {
           detail: { role: 'assistant', content: aiMessage.trim() },
         }));
@@ -2356,8 +2501,10 @@ export default function Index({
           // looks like a renderer that stopped listening. No envelope, no surface.
           // The console's cards are READ from this model, so clearing it is also what
           // clears them: there is no second list left holding the failed assembly.
-          setSurfaceComponents([]);
-          setSurfaceDataModel({});
+          // Cleared for the surface that FAILED, not for both: the other slot's
+          // tree is not stale — it is simply not what this request was for.
+          if (intent === 'render-console') setConsoleTree({ components: [], dataModel: {} });
+          else setWorkspaceTree({ components: [], dataModel: {} });
         } else {
           // Previous request was aborted because a newer user action (tab click, etc.) superseded it
           console.log('[A2UI] Previous assembly superseded by newer request (normal)');
@@ -2372,7 +2519,7 @@ export default function Index({
           `  error.message: ${errorMessage}\n` +
           `  error.stack: ${error instanceof Error && error.stack ? error.stack.split('\n').slice(0, 5).join('\n    ') : 'N/A'}\n` +
           `  timestamp: ${new Date().toISOString()}\n` +
-          `  state: aiAssemblyFailed=true, currentPromptSession=null, surfaceDataModel={} (cards cleared with it)`
+          `  state: aiAssemblyFailed=true, currentPromptSession=null, the failed surface's tree cleared (cards go with it)`
         );
         // The branch that used to live here tested `errorMessage.startsWith('A2UI FAILURE:')`
         // against a message the throw site prefixed differently ("A2UI Assembly Failed: "), so
@@ -2389,8 +2536,8 @@ export default function Index({
         // tree until it is handed another, and a stale surface beside a failure
         // reads as a live one. Cleared, so the error is the only thing on screen —
         // and with the model cleared there are no cards left to disagree with it.
-        setSurfaceComponents([]);
-        setSurfaceDataModel({});
+        if (intent === 'render-console') setConsoleTree({ components: [], dataModel: {} });
+        else setWorkspaceTree({ components: [], dataModel: {} });
       }
     } finally {
       isConsoleAssemblyInFlightRef.current = false;
@@ -2398,6 +2545,63 @@ export default function Index({
       setIsAIAssembling(false);
     }
   }, [setHeaderTab]);
+
+  /**
+   * THE CHECKER'S FINDINGS, READ FROM THE REPORT THE CHECKER WROTE.
+   *
+   * This is the ONE source the repair lookup resolves against (handleRepairFinding,
+   * writeAnswerBack), so it has to be populated even when nothing else is: a Repair
+   * control whose finding cannot be found does nothing at all, silently.
+   *
+   * It is a READ, not a model call. The findings are the audit report the checker
+   * already wrote to disk (GET /api/catalog/audit) — the same report this page has
+   * always been able to fall back to. Nothing here is assembled, so nothing here can
+   * be refused for being slow.
+   */
+  const loadCatalogFindings = useCallback(async () => {
+    try {
+      const health = await fetchCatalogHealth();
+      if (health.state !== 'ok') {
+        // Said out loud. With no findings the repair list has nothing to resolve
+        // against, and an empty list looks exactly like a clean catalog.
+        console.error(
+          `[catalog] the check did not answer (${health.state}) — the repairs have nothing ` +
+            `to resolve against. Run it: cd frontend && npm run catalog:check`,
+        );
+        return;
+      }
+      const open = health.report.findings.filter((f) => f.level !== 'pass');
+      setCatalogFindings(open);
+      // A finding the report still derives is still open, so a 'done' mark is dropped
+      // the moment it comes back (shared/catalogHealth.reconcileRepairs).
+      setRepairStages((s) => reconcileRepairs(s, open.map((f) => f.id)));
+      console.log(`[catalog] ${open.length} open finding(s) read from the checker's report`);
+    } catch (e) {
+      console.error('[catalog] the report could not be read:', e);
+    }
+  }, []);
+
+  /**
+   * ONE MODEL CALL, THEN THE REPAIRS — in that order, never together.
+   *
+   * A load used to fire two surfaces in the same millisecond (`Promise.allSettled([
+   * graceReport, assembleSurfaceWithAI(intent) ])`), with the report request sent
+   * TWICE besides, and all three raced one provider on the surface's 10s contract.
+   * The slowest was refused, which is how a first-time visitor got an error over an
+   * empty console while a report about the catalog was still being written.
+   *
+   * The order here is the order the surface is read in: the surface assembles first,
+   * on its own, and only when it has landed are the findings read. The chat panel is
+   * CLOSED by default on the console, so nothing waits behind it — there was never a
+   * reason to hold the cards for a report.
+   */
+  const assembleSurfaceThenRepairs = useCallback(
+    async (intent: string, context?: Parameters<typeof assembleSurfaceWithAI>[1]) => {
+      await assembleSurfaceWithAI(intent, context);
+      await loadCatalogFindings();
+    },
+    [assembleSurfaceWithAI, loadCatalogFindings],
+  );
 
   // ── Legacy function wrappers for backward compatibility ──
   const assembleConsoleWithAI = useCallback(() => assembleSurfaceWithAI('render-console'), [assembleSurfaceWithAI]);
@@ -2426,7 +2630,7 @@ export default function Index({
   useEffect(() => {
     const handleRetry = () => {
       console.log(`🤖 [A2UI] Retry requested → re-running intent: ${lastAssemblyIntentRef.current}`);
-      void assembleSurfaceWithAI(lastAssemblyIntentRef.current);
+      void assembleSurfaceThenRepairs(lastAssemblyIntentRef.current);
     };
     const handleDismiss = () => {
       setIsFailureAcknowledged(true);
@@ -2447,7 +2651,7 @@ export default function Index({
       const { sort, filter } = e.detail || {};
       console.log('[WritingAreaIndex] Console command from chat:', { sort, filter });
       // Re-assemble console — AI will sort/filter fresh from DB
-      assembleSurfaceWithAI('render-console');
+      assembleSurfaceThenRepairs('render-console');
     };
     window.addEventListener('a2ui:console-command', handleConsoleCommand as EventListener);
     return () => window.removeEventListener('a2ui:console-command', handleConsoleCommand as EventListener);
@@ -2483,7 +2687,7 @@ export default function Index({
       handleHeaderTabChange('console');
       // Console is read-only — unsaved changes in the composer do not block navigation.
       console.log('🤖 [A2UI] Console clicked → intent: render-console (direct, no gate)');
-      await assembleSurfaceWithAI('render-console', {
+      await assembleSurfaceThenRepairs('render-console', {
         current_surface: 'composer',
         has_unsaved_changes: false,  // ← Console is safe navigation, no decision dialog
         session_id: currentPromptSession?.id || null,
@@ -2499,7 +2703,7 @@ export default function Index({
       // Composer click always starts a FRESH prompt package (same as "Create New")
       // — never reload the card the user had open.
       console.log('🤖 [A2UI] Composer clicked → intent: render-composer (fresh package)');
-      await assembleSurfaceWithAI('render-composer', {
+      await assembleSurfaceThenRepairs('render-composer', {
         ...context,
         session_id: null,
         session_title: '',
@@ -2509,7 +2713,7 @@ export default function Index({
 
     // Other tabs - just switch for now (TODO: wire to AI assembly)
     handleHeaderTabChange(tabId);
-  }, [handleHeaderTabChange, assembleSurfaceWithAI, currentPromptSession?.id, currentPromptSession?.title, headerTab]);
+  }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab]);
 
   // ══════════════════════════════════════════════════════════════════════════
   // A2UI v0.9: INITIAL MOUNT - AI ALWAYS ASSEMBLES THE INITIAL SURFACE
@@ -2527,9 +2731,9 @@ export default function Index({
     // Only a session id in the URL changes the initial intent. The assembled
     // surface still sets the tab that matches it (see the `setHeaderTab` calls
     // in the surface handlers).
-    // The console page shows the CARDS. The catalog check is a SECOND call —
-    // it puts Grace's findings and her greeting in her own seat, and
-    // deliberately does not touch the console surface.
+    // The console page shows the CARDS. The checker's findings are read AFTER the
+    // surface has landed — a read of the report, not a second model call — and they
+    // populate ONE source (`catalogFindings`) that the repair lookup resolves against.
     const initialIntent = routeSessionId
       ? `render-session:${routeSessionId}`
       : 'render-console';
@@ -2542,126 +2746,19 @@ export default function Index({
 
     console.log(`🤖 [A2UI] Initial mount → intent: ${initialIntent}`);
 
-    // GRACE FIRST, then the surface contents.
+    // THE ORDER: the surface first, alone; the checker's findings after it lands.
     //
-    // This order used to be the reverse (cards first, her report afterwards), so
-    // the thing that SPEAKS had to wait on the thing it narrates. She goes first
-    // now: her seat is already mounted — see the operator shell below, which no
-    // longer waits on the assembly either — and her report lands before the
-    // surface fills in around her. The orchestra is present before the content.
+    // This used to be two surfaces in the same millisecond — the comment said so
+    // outright: "The surface, in PARALLEL — not behind her report" — with the report
+    // request sent TWICE besides (a StrictMode remount re-ran this effect down a path
+    // that bypassed the single in-flight slot). Three model calls raced one provider
+    // on the surface's 10s contract, and the slowest was refused. That is how a
+    // first-time visitor's first impression became an error over an empty console.
+    //
+    // The chat panel is CLOSED by default on the console, so nothing sits behind it
+    // waiting: there was never a reason to hold the cards while a report was written.
     void (async () => {
-      // 1) Grace. Her OWN request, deliberately NOT assembleSurfaceWithAI: that
-      // function keeps a single in-flight slot (a second call aborts the first —
-      // which silently emptied the grid) and it flips is-ai-assembling. This is
-      // not a surface; it is a report for her seat.
-      const graceReport = (async () => {
-      // Whether Grace's own surface carried the findings. If it did not (provider
-      // down, malformed answer), the same findings are read from the report the
-      // shell fetches itself — they are machine data, and BOTH the drop-down and
-      // the repair lookup need one populated source.
-      let findingsFromSurface = false;
-      try {
-        const res = await fetch(`${API_BASE}/ai/assemble-surface`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
-          body: JSON.stringify({ intent: 'catalog-health:prompt-composer' }),
-        });
-        // The check must never gate the surface — those `return`s used to skip
-        // the assembly entirely once this block moved ahead of it — and it must
-        // never go quiet either. A silent skip is exactly how a checker that
-        // never ran ends up looking like a clean catalog, so every failure path
-        // below states what happened and then carries on to the surface.
-        if (!res.ok) {
-          let detail = '';
-          try { detail = (await res.json())?.detail?.message || ''; } catch { /* body was not JSON */ }
-          console.error(
-            `[CATALOG HEALTH] CHECK DID NOT RUN\n` +
-            `  status: ${res.status} ${res.statusText}\n` +
-            `  detail: ${detail || '(no detail)'}\n` +
-            `  timestamp: ${new Date().toISOString()}\n` +
-            `  CAUSE: ${res.status === 503
-              ? 'GET /api/catalog/audit reports the checker has not run for this deployment, so there is no report to speak from.'
-              : 'The catalog-health surface could not be assembled.'}\n` +
-            `  FIX: run the checker (node frontend/scripts/catalog-check.mjs) and redeploy, or read the backend log for "A2UI FAILURE" at this timestamp.\n` +
-            `  NOTE: the console surface is NOT blocked by this — it assembles regardless. The chat bar indicator reports this state.`
-          );
-        } else {
-          const ops = await res.json();
-          if (!Array.isArray(ops)) {
-            console.error(
-              `[CATALOG HEALTH] MALFORMED RESPONSE\n` +
-              `  expected: an A2UI operations array\n` +
-              `  received: ${typeof ops}\n` +
-              `  timestamp: ${new Date().toISOString()}\n` +
-              `  CAUSE: the endpoint answered 200 with something that is not an A2UI payload.\n` +
-              `  NOTE: the console surface is NOT blocked by this.`
-            );
-          } else {
-            const value = ops.find((o: any) => o.updateDataModel)?.updateDataModel?.value || {};
-            if (Array.isArray(value.findings)) {
-              findingsFromSurface = true;
-              setCatalogFindings(value.findings);
-              // The report on screen is the one being read, so a finding it still
-              // carries is open: a 'done' mark is dropped the moment a report derives
-              // the finding again (shared/catalogHealth.reconcileRepairs).
-              setRepairStages((s) => reconcileRepairs(s, value.findings.map((f: any) => f.id)));
-            }
-            if (value.usage && typeof value.usage.total_tokens === 'number') {
-              // Carries its session id for the same reason: the report is for
-              // ONE seat, not for whatever else happens to be mounted.
-              window.dispatchEvent(new CustomEvent('a2ui:usage', {
-                detail: { ...value.usage, sessionId: value.session_id || currentPromptSessionRef.current || null },
-              }));
-            }
-            // The catalog check does not announce itself either — same rule as the
-            // surface assembly above. The findings render as a list in the chat;
-            // the message describing them does not.
-          }
-        }
-      } catch (error) {
-        // Loud, and still not fatal to the surface.
-        console.error(
-          `[CATALOG HEALTH] REQUEST FAILED\n` +
-          `  error.type: ${error instanceof Error ? error.constructor.name : typeof error}\n` +
-          `  error.message: ${error instanceof Error ? error.message : String(error)}\n` +
-          `  timestamp: ${new Date().toISOString()}\n` +
-          `  CAUSE: the catalog-health request never completed — network, timeout, or the backend is down.\n` +
-          `  NOTE: the console surface is NOT blocked by this.`
-        );
-      }
-
-      // ── The findings must exist even when Grace's surface does not ──────────
-      // The drop-down and handleRepairFinding read ONE source (`catalogFindings`).
-      // If her assembly failed, that source stayed null while the drop-down fell
-      // back to the report — so the Repair buttons rendered but could not resolve
-      // their finding, and clicking one did nothing. Read the report here instead:
-      // same findings, same ids, so the buttons resolve.
-      if (!findingsFromSurface) {
-        try {
-          const health = await fetchCatalogHealth();
-          if (health.state === 'ok') {
-            const open = health.report.findings.filter((f) => f.level !== 'pass');
-            setCatalogFindings(open);
-            setRepairStages((s) => reconcileRepairs(s, open.map((f) => f.id)));
-            console.log(
-              `[catalog] Grace's surface carried no findings — read ${open.length} from the report instead.`,
-            );
-          }
-        } catch (e) {
-          console.error('[catalog] the report fallback failed:', e);
-        }
-      }
-      })();
-
-      // 2) The surface, in PARALLEL — not behind her report.
-      //
-      // Her request is issued first: `graceReport` starts above and runs to its
-      // first await before this line is reached, so the order is still
-      // Grace-then-surface. But the surface must not WAIT on her. Her report is
-      // an LLM round trip — 28.5s measured against production — and awaiting it
-      // here left the console blank for half a minute. Order is not dependency,
-      // and a report about the catalog is not a precondition for rendering it.
-      await Promise.allSettled([graceReport, assembleSurfaceWithAI(initialIntent)]);
+      await assembleSurfaceThenRepairs(initialIntent);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps = run only on mount
@@ -2726,7 +2823,7 @@ export default function Index({
         await handleSavePromptRef.current();
         hasUnsavedChangesRef.current = false;
         // Now execute the original intent without unsaved changes context
-        await assembleSurfaceWithAI(pendingIntent);
+        await assembleSurfaceThenRepairs(pendingIntent);
       } catch (error) {
         console.error('🤖 [A2UI] Save failed:', error);
         // Stay on current surface - save failed
@@ -2734,7 +2831,7 @@ export default function Index({
     } else if (actionId === 'discard') {
       // Discard changes and proceed with the pending intent
       hasUnsavedChangesRef.current = false;
-      await assembleSurfaceWithAI(pendingIntent);
+      await assembleSurfaceThenRepairs(pendingIntent);
     } else if (actionId === 'cancel') {
       // Stay on the current surface — and DROP whatever was waiting behind this
       // gate. A repair queues its sections and its name BEFORE the gate opens; if
@@ -2746,9 +2843,9 @@ export default function Index({
     } else if (aiDecision.decision_type === 'select_category') {
       // Category selection gate — pass chosen category back to render-composer
       console.log(`🤖 [A2UI] Category selected: ${actionId}`);
-      await assembleSurfaceWithAI(pendingIntent, { category: actionId });
+      await assembleSurfaceThenRepairs(pendingIntent, { category: actionId });
     }
-  }, [aiDecision, assembleSurfaceWithAI]);
+  }, [aiDecision, assembleSurfaceThenRepairs]);
 
   const _handleDeletePromptSession = async (sessionId: string) => {
     if (!confirm('Are you sure you want to delete this prompt? This will remove all versions and the linked chat.')) return;
@@ -2764,7 +2861,27 @@ export default function Index({
     }
   };
 
-  const handleConversationChange = useCallback((conversationId: string | null) => {
+  const handleConversationChange = useCallback((conversationId: string | null, surface: 'console' | 'composer' = 'composer') => {
+    // ── WHICH SURFACE SPOKE DECIDES WHICH PATH IS WRITTEN ──────────────────
+    //
+    // Both seats dispatch the same `conversation-change`, and they read different paths:
+    // the composer's seat reads /session/right_column/conversation_id and the console's
+    // reads /console/conversation_id. Writing the composer's path for a console pick would
+    // put the console's conversation into the composer's model — one surface's id in the
+    // other's seat. The event carries the surface now (`detail.surface`), which the element
+    // knows from the tree it was rendered in.
+    if (surface === 'console') {
+      setConsoleTree((prev) => {
+        const consoleModel = prev.dataModel.console ?? {};
+        if ((consoleModel.conversation_id ?? null) === conversationId) return prev;
+        return {
+          ...prev,
+          dataModel: { ...prev.dataModel, console: { ...consoleModel, conversation_id: conversationId } },
+        };
+      });
+      return;
+    }
+
     if (currentPromptSession && conversationId && currentPromptSession.conversationId !== conversationId) {
       // Update local state only. Conversations are package-owned: the conversation
       // row already carries session_id — prompt_sessions.conversation_id was dropped.
@@ -2776,6 +2893,31 @@ export default function Index({
       if (currentPromptSessionObjRef.current) {
         currentPromptSessionObjRef.current = { ...currentPromptSessionObjRef.current, conversationId };
       }
+
+      // ── AND THE MODEL HAS TO LEARN IT, OR THE SEAT FORGETS EVERY TURN ──────
+      //
+      // The seat reads its conversation from /session/right_column/conversation_id, and a
+      // re-render re-applies that path over whatever the element adopted. React state does
+      // not reach that path, so the id was adopted from the response and lost on the next
+      // render: the backend log shows `Reusing conversation … for session … ` on EVERY
+      // turn, which is the lookup running because the request arrived with no
+      // conversation_id at all. The package's conversation was found each time by its
+      // session_id — the one home — and handed to the element, which dropped it.
+      //
+      // Writing the path is what makes the link outlive one turn. It is the same value,
+      // not a second home: the model is where this element is told.
+      setWorkspaceTree((prev) => {
+        const session = prev.dataModel.session ?? {};
+        const right = session.right_column ?? {};
+        if ((right.conversation_id ?? null) === conversationId) return prev;
+        return {
+          ...prev,
+          dataModel: {
+            ...prev.dataModel,
+            session: { ...session, right_column: { ...right, conversation_id: conversationId } },
+          },
+        };
+      });
     }
   }, [currentPromptSession]);
 
@@ -2792,7 +2934,17 @@ export default function Index({
     };
     const onConversationChange = (event: Event) => {
       const detail = ((event as CustomEvent).detail || {}) as { conversationId?: string };
-      if (detail.conversationId) handleConversationChange(detail.conversationId);
+      if (!detail.conversationId) return;
+      // Which tree raised it decides which path is written. Both seats dispatch this same
+      // event, and each reads its conversation from its own path — the composer's seat from
+      // /session/right_column/conversation_id, the console's from /console/conversation_id —
+      // so the event's path through the DOM is what says which one spoke. The renderer in
+      // the path is the surface.
+      const path = typeof (event as Event & { composedPath?: () => EventTarget[] }).composedPath === 'function'
+        ? (event as Event & { composedPath: () => EventTarget[] }).composedPath()
+        : [];
+      const consoleSpeaking = !!consoleRendererRef.current && path.includes(consoleRendererRef.current);
+      handleConversationChange(detail.conversationId, consoleSpeaking ? 'console' : 'composer');
     };
     window.addEventListener('repair-finding', onRepairFinding);
     window.addEventListener('conversation-change', onConversationChange);
@@ -3145,7 +3297,10 @@ export default function Index({
           question: 'Execute the prompt configuration.',
           context: promptContext,
           mode: 'prompt_output',
-          temperature: 0.45,
+          // NO temperature here. It sent 0.45 while the mode decides: grace_gui.py pins
+          // 0.0 for every mode that is not `chat` (and turns reasoning off with it), so
+          // this number was read by nobody and claimed otherwise. The chat is the only
+          // place with a temperature — CHAT_TEMPERATURE, 1.5 — and the run is not a chat.
           // Executed server-side before the model runs. Empty when the prompt
           // declares no tool, which is not an error and changes nothing.
           tool_calls: toolCalls,
@@ -3203,6 +3358,20 @@ export default function Index({
             }
           : prev
       );
+
+      // ── THE RUN'S ANSWER IS WRITTEN DOWN, OR IT IS GONE AT THE NEXT RELOAD ──
+      // The output column drew it and the package kept NOTHING: measured 2026-09-17,
+      // the column held 279 characters while `prompt_sessions.compiled_output` was still
+      // 0 — so the answer survived only as the conversation rows a run should never have
+      // written, and a reload took it off the screen entirely (the column fell back to
+      // "no output yet" in front of the owner). A Run's product belongs in the package.
+      //
+      // The SAME write Save makes, through the same path — no new endpoint — with
+      // `keepSurface` so the column does not re-assemble out from under the person who
+      // is reading the answer it just produced.
+      if (output) {
+        await handleSavePromptRef.current?.(output, sections, { keepSurface: true });
+      }
 
       // ── THE ANSWER BECOMES A FILE, AND ONLY THEN IS IT CHECKED ─────────────
       //
@@ -3319,13 +3488,12 @@ export default function Index({
     window.addEventListener("toggle-third-column", handleToggleThirdColumn);
 
     // Listen for save-template event from ResponsivePromptBuilder's Save Template button.
-    // Reads sections from the Lit <prompt-section-editor> ref (source of truth).
-    // This is the SAME path as save-requested — no broken DOM fallback.
+    // Sections come from the surface's data model — the composer column's binding.
+    // This is the SAME path as save-requested — no DOM read, no fallback.
     const handleSaveTemplateEvent = () => {
-      const editor = promptSectionEditorRef.current as any;
-      const sections = (editor && (editor._sections || editor.sections)) || [];
+      const sections = surfaceSections();
       const compiledOutput = readLiveOutput();
-      console.log('[save-template] Reading', sections.length, 'sections +', compiledOutput.length, 'chars of output from live DOM');
+      console.log('[save-template] Reading', sections.length, 'sections +', compiledOutput.length, 'chars of output from the surface');
       handleSavePromptRef.current?.(compiledOutput, sections);
     };
     window.addEventListener("save-template", handleSaveTemplateEvent);
@@ -3336,17 +3504,15 @@ export default function Index({
 
     // Wire the bottom control bar (control-bar from Figma node 40000761:261) to the *existing* CRUD paths only.
     // No new save/run/version logic — re-uses handleSavePromptRef + run-requested dispatch exactly as the Lit editor does.
-    // Control-bar save: reads sections from Lit editor ref (same as save-template).
+    // Control-bar save: sections from the surface's data model (same as save-template).
     const handleControlBarSave = () => {
-      const editor = promptSectionEditorRef.current as any;
-      const sections = (editor && (editor._sections || editor.sections)) || [];
+      const sections = surfaceSections();
       const compiledOutput = readLiveOutput();
-      console.log('[control-bar] save-click →', sections.length, 'sections +', compiledOutput.length, 'chars of output from live DOM');
+      console.log('[control-bar] save-click →', sections.length, 'sections +', compiledOutput.length, 'chars of output from the surface');
       handleSavePromptRef.current?.(compiledOutput, sections);
     };
     const handleControlBarRun = () => {
-      const editor = promptSectionEditorRef.current as any;
-      const sections = (editor && (editor._sections || editor.sections)) || [];
+      const sections = surfaceSections();
       console.log('[control-bar] run-click → dispatching run-requested (existing path)');
       window.dispatchEvent(new CustomEvent('run-requested', { detail: { sections } }));
     };
@@ -3521,8 +3687,10 @@ export default function Index({
           onTabChange={handleTabChangeWithGate}
         />
 
-        {/* ── OPERATOR SHELL + AI SURFACE — 2UI architecture ── */}
-        <div ref={attachConsoleChatContainer} className="flex flex-row overflow-hidden flex-1 min-h-0" style={{ minWidth: 0 }}>
+        {/* ── THE SURFACE HOST — the AI's surface, and now the only thing here ──
+            The row used to hold two children: the surface, and the console's chat
+            seat beside it. The seat is gone, so this row is the surface alone. */}
+        <div className="flex flex-row overflow-hidden flex-1 min-h-0" style={{ minWidth: 0 }}>
             {/* ── AI SURFACE — Lit Shadow DOM sandbox for A2UI content rendering ── */}
             <SentryErrorBoundary scope="ai-surface" onError={(error) => console.error("AI Surface error:", error.message)}>
               {/* P1+MIGRATION: React AISurfaceSandbox → Lit <ai-surface-sandbox>.
@@ -3557,26 +3725,41 @@ export default function Index({
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
                 <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#E5E1DD' }}>
-                  {/* THE SURFACE — the renderer draws Grace's updateComponents tree.
-                      Both channels of her last envelope arrive here as props: the
-                      tree, and the data model its bindings point into.
-
-                      This IS the console. There is no second, hand-rendered grid
-                      beside it: rebuilding the same grid in React from
-                      `dataModel.cards` was the duplication that had this mount kept
-                      off-screen, and that grid is gone. What surrounds it is the
-                      host's and stays the host's — the loading / failed / waiting /
-                      zero-package states and the delete confirmation, which live in
-                      <ConsolePage> because a component tree cannot state them.
-
-                      The two card behaviours that had to come with the swap, since
-                      they used to live in the React grid: a click on a card is
-                      dispatched as `card-open` by a2ui-console-card-grid and routed
-                      by ConsolePage to the render-session intent, and `card-delete`
-                      was already emitted by <agent-card-element> and already
-                      confirmed by the host dialog. */}
-                  <div style={{ flex: '1 1 0%', minWidth: 0, padding: '54px 16px 24px' }}>
-                    <a2ui-renderer ref={a2uiRendererRef} />
+                  {/* A FAILED ASSEMBLY MUST SAY SO, IN THE SLOT THAT IS SHOWN.
+                      The full failure pane lives in slot="workspace", and the sandbox
+                      projects ONE slot — so a console failure wrote its message into
+                      markup that was never displayed and the console went blank with
+                      no explanation. Measured 2026-09-17: header-tab unset (→ console),
+                      console slot 0 wide, no error rendered anywhere. This banner is
+                      the one thing that must reach the visible slot. */}
+                  {aiAssemblyFailed && !isFailureAcknowledged && (
+                    <error-banner
+                      code={aiAssemblyReport?.code || 'ASSEMBLY-FAILED'}
+                      message={aiAssemblyMessage}
+                      {...(aiAssemblyReport?.retryable ? { retry: true } : {})}
+                    ></error-banner>
+                  )}
+                  {/* NO HOST PADDING. This wrapper carried `padding: 54px 16px 24px`,
+                      which pushed the whole surface down — the cards AND the chat
+                      column together — while the design insets neither: the chat
+                      column touches the header and runs to the bottom of the
+                      window, with only the container's own 10px on its right pane
+                      (Figma "right-column-panel-container" #40001066:3272), and the
+                      cards float inside their pane by the grid's own rules
+                      (max-width + centred). Insets belong to the components that
+                      were designed with them, not to a shell wrapper. */}
+                  <div style={{ flex: '1 1 0%', minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden' }}>
+                    {/* ONLY THE SURFACE THAT IS ON SCREEN IS BUILT. Both slots used to
+                        render at once and <ai-surface-sandbox> hid the one it was not
+                        projecting, so the whole other screen — its cards, its chat panel,
+                        every element — sat in the page at zero size. Measured 2026-09-17:
+                        two a2ui-renderers, two chat panels, and 61 shadow roots on one
+                        console page, with the hidden panel at 0x0. The cost was not only
+                        weight: two live seats hear the same window events, which is how a
+                        pick in the console's dropdown wrote into the composer's model.
+                        The tree is handed back on mount (consoleTree / workspaceTree are
+                        React state), so unmounting one costs nothing. */}
+                    {isConsoleView && <a2ui-renderer ref={consoleRendererRef} />}
                   </div>
                   <ConsolePage
                     refreshKey={consoleRefreshKey}
@@ -3586,7 +3769,7 @@ export default function Index({
                     errorMessage={aiAssemblyFailed ? aiAssemblyMessage : null}
                     errorReport={aiAssemblyFailed ? aiAssemblyReport : null}
                     onCreateNew={async (_title) => {
-                      await assembleSurfaceWithAI('render-composer', {
+                      await assembleSurfaceThenRepairs('render-composer', {
                         current_surface: headerTab || 'console',
                         has_unsaved_changes: hasUnsavedChangesRef.current,
                         session_id: currentPromptSession?.id || null,
@@ -3594,7 +3777,7 @@ export default function Index({
                       });
                     }}
                     onOpenPrompt={async (sessionId) => {
-                      await assembleSurfaceWithAI(`render-session:${sessionId}`, {
+                      await assembleSurfaceThenRepairs(`render-session:${sessionId}`, {
                         current_surface: headerTab || 'console',
                         has_unsaved_changes: hasUnsavedChangesRef.current,
                         session_id: currentPromptSession?.id || null,
@@ -3610,7 +3793,7 @@ export default function Index({
                       if (currentPromptSession?.id === sessionId) {
                         setCurrentPromptSession(null);
                       }
-                      await assembleSurfaceWithAI('render-console');
+                      await assembleSurfaceThenRepairs('render-console');
                     }}
                   />
                 </div>
@@ -3670,165 +3853,29 @@ export default function Index({
                       )}
                     </div>
                   ) : (
-                  <workspace-layout 
-                    data-a2ui-id="workspace"
-                    data-column="workspace"
-                    data-tag="workspace-layout"
-                    data-session-id={currentPromptSession?.id || undefined}
-                    show-middle={middleOpen ? '' : undefined}
-                    style={{ height: '100%', width: '100%' }}
-                  >
-                    <div 
-                      slot="left"
-                      data-a2ui-id="left-column"
-                      data-column="left"
-                      data-tag="prompt-section-editor"
-                      data-session-id={currentPromptSession?.id || undefined}
-                      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}
-                    >
-                      <prompt-section-editor
-                        ref={promptSectionEditorRef}
-                        style={{ flex: '1 1 0%', minHeight: 0, overflow: 'auto' }}
-                        sections={( () => {
-                        try { 
-                          const raw = currentPromptSession?.leftColumnContent 
-                            ? JSON.parse(currentPromptSession.leftColumnContent).sections || [] 
-                            : []; 
-                          return raw
-                            .map((s: any) => s && typeof s === 'object' ? {
-                              name: s.name || s.section || s.role || s.type || 'Section',
-                              content: s.content || '',
-                              type: s.type || s.role || s.name || 'custom',
-                              position: s.position,
-                              visible: s.visible !== false,
-                            } : null)
-                            .filter(Boolean);
-                        } catch { return []; } 
-                      })()}
-                      session-id={currentPromptSession?.id || undefined}
-                    />
-                    <control-bar
-                      version-text={currentPromptSession ? `Editing Version ${currentPromptSession.currentVersion || 1}` : 'Editing Version 1'}
-                      is-saving={isSavingPrompt ? '' : undefined}
-                      is-running={isComposerRunning ? '' : undefined}
-                    />
-                  </div>
-                    <compiled-output-viewer
-                      slot="middle"
-                      data-a2ui-id="middle-column"
-                      data-column="middle"
-                      data-tag="compiled-output-viewer"
-                      data-session-id={currentPromptSession?.id || undefined}
-                      content={currentPromptSession?.compiledOutput || ''}
-                      session-id={currentPromptSession?.id || undefined}
-                      is-running={isComposerRunning ? '' : undefined}
-                    />
-                    <chat-panel slot="right"
-                      ref={chatPanelRef}
-                      data-a2ui-id="right-column"
-                      data-column="right"
-                      data-session-id={currentPromptSession?.id || undefined}
-                      conversation-id={currentPromptSession?.conversationId || undefined}
-                      session-id={currentPromptSession?.id || undefined}
-                      left-column-content={currentPromptSession?.leftColumnContent || ''}
-                      compiled-output={currentPromptSession?.compiledOutput || ''}>
-                      {/* THE SEAT DRAWS ITS OWN THREAD — THE PACKAGE'S, NOT A GLOBAL ONE.
-
-                          A React seat used to be slotted in here. Two things were wrong
-                          with that, and they compounded:
-
-                            1. <chat-panel>'s own rule is that a SLOTTED SEAT IS WHAT GETS
-                               DRAWN. So the element never drew its thread, and the column
-                               was a React component wearing a surface component's tag.
-                            2. That seat kept its conversation in a module-level store
-                               (shared/chatSeat.ts) that belongs to no package, and it was
-                               handed `sessionId` but never the package's conversation. So
-                               even the conversation it held was not this package's.
-
-                          The result was a chat that was global by construction: it did not
-                          change when a different prompt package was opened, which is
-                          precisely what it must do.
-
-                          Nothing is slotted now. The element draws its own thread and
-                          composer from THE PACKAGE'S conversation — bound above, and
-                          re-read whenever it changes (chat-panel's `updated` reloads the
-                          history on every conversationId change). Open a different package
-                          and this column is a different chat.
-
-                          Measured 2026-09-15: <chat-panel> was 836x874 with an empty shadow
-                          root, and the slotted child measured 0x0 while fully mounted — a
-                          shadow root shows light-DOM children only where a <slot> sits, and
-                          there was none. Both causes are fixed in chat-panel.ts. */}
-                    </chat-panel>
-                  </workspace-layout>
-                  )}
-                </div>
+                    !isConsoleView && <a2ui-renderer ref={composerRendererRef} />
+                  )}                </div>
             </ai-surface-sandbox>
           </SentryErrorBoundary>
 
-          {/* ── OPERATOR SHELL: Resize handle + Chat panel — outside AI Surface ──
-              Present FIRST and unconditionally. Grace's seat and the orchestrator
-              must not wait on a surface assembly: gating this on !isAIAssembling
-              removed her exactly while the thing she narrates was loading, so the
-              console arrived and the seat that speaks for it did not. The surface
-              contents fill in around her — not the other way round. */}
-          {headerTab === "console" && (
-            <>
-              <div
-                onMouseDown={handleConsoleChatResizeStart}
-                onDoubleClick={handleConsoleChatResizeDoubleClick}
-                className={`shrink-0 cursor-col-resize transition-colors flex items-center justify-center ${
-                  isConsoleChatResizing ? "bg-[#507274]" : "bg-transparent hover:bg-[#507274]/20"
-                }`}
-                style={{ width: 6, userSelect: "none" }}
-                title="Drag to resize · Double-click to collapse"
-              >
-                {isConsoleChatCollapsed && (
-                  <div className="w-[3px] h-8 rounded-full bg-[#507274]/30" />
-                )}
-              </div>
-              <div
-                className="h-full overflow-hidden"
-                style={{
-                  width: consoleChatWidth,
-                  // The pane keeps its width, but must be ABLE to give width
-                  // back. shrink-0 made it refuse, so when the row was a few
-                  // pixels over, the pane's right edge landed past the browser
-                  // edge and its content was clipped outside the viewport.
-                  minWidth: 0,
-                  flexShrink: 1,
-                  // Same curve and duration as the panes: the chat arrives with
-                  // everything else instead of snapping open. Landed, not slapped.
-                  //
-                  // MUST be off while dragging. The drag handlers write a new
-                  // width on EVERY mousemove, so easing each one leaves the column
-                  // permanently chasing the cursor — it reads as the gripper
-                  // fighting back against you. workspace-layout guards its panes
-                  // the same way, with :host([dragging]) .pane { transition: none }.
-                  transition: prefersReducedMotion || isConsoleChatResizing
-                    ? 'none'
-                    : 'width 520ms cubic-bezier(0.22, 1, 0.36, 1)',
-                }}
-              >
-                <InteractiveChatInterface
-                  consoleCards={assembledConsoleCards || []}
-                  columnCollapsed={isConsoleChatCollapsed}
-                  onColumnExpand={handleConsoleChatExpand}
-                  onColumnCollapse={handleConsoleChatCollapse}
-                  catalogFindings={catalogFindings}
-                  unannotatedInUse={unannotatedInUse}
-                  repairStages={repairStages}
-                  onRepairFinding={(findingId) => {
-                    void handleRepairFinding(findingId, {
-                      current_surface: headerTab || 'console',
-                      session_id: null,
-                      session_title: '',
-                    });
-                  }}
-                />
-              </div>
-            </>
-          )}
+          {/* ── THE CONSOLE'S CHAT IS NO LONGER DRAWN BY THIS SHELL ──────────
+              It was here: a grip, a width state, and a <chat-panel> hung off
+              that width, mounted outside the surface and present before the
+              cards assembled. All three are gone.
+
+              The console's chat is now IN the surface the model assembles: the
+              same `chat-panel` the composer loads, beside `ConsoleCardGrid`
+              and bound to the console's own conversation through the surface's
+              data model (/console/conversation_id, /console/session_id). It
+              arrives when the surface arrives, which is the point — nothing
+              outside the assembly draws it, so it cannot appear ahead of the
+              cards, and the same Lit element the composer loads is what the
+              console loads.
+
+              The React seat that used to answer to this comment is archived, not
+              deleted: retired-files/console-seat-20260917/InteractiveChatInterface.tsx,
+              with its README. */}
+
         </div>
       </div>
     </div>

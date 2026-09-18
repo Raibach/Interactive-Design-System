@@ -44,7 +44,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
 import services as state
-from deps import get_user_id_from_header, user_is_admin
+from deps import get_user_id_from_header, user_is_admin, DEFAULT_USER_ID
 
 router = APIRouter()
 
@@ -198,15 +198,38 @@ async def login(request: LoginRequest, http_request: Request):
         )
         conn.commit()
 
-        user_id = str(row["id"])
+        # The gate links to the ONE real user — the identity the packages are
+        # actually owned by (DEFAULT_USER_ID), not the row the credentials live
+        # on. The credentials row is the gate; the identity is the owner. This
+        # is not multi-tenant auth — it is a doorman that drops you into the
+        # existing owner.
+        user_id = DEFAULT_USER_ID
+        owner_email = DEFAULT_USER_ID
+        owner_name = DEFAULT_USER_ID
+        owner_role = None
+        owner_prompt_role = None
+        cursor.execute(
+            """
+            SELECT email, full_name, role, prompt_role
+            FROM users WHERE id = %s AND deleted_at IS NULL
+            """,
+            (user_id,),
+        )
+        owner = cursor.fetchone()
+        if owner:
+            owner_email = owner["email"]
+            owner_name = owner.get("full_name") or owner["email"]
+            owner_role = owner.get("role")
+            owner_prompt_role = owner.get("prompt_role")
+
         admin = user_is_admin(user_id)
-        teacher = (row.get("role") == "teacher")
+        teacher = (owner_role == "teacher")
         return {
             "success": True,
             "user_id": user_id,
-            "email": row["email"],
-            "name": row.get("full_name") or row["email"],
-            "role": row.get("prompt_role") or row.get("role") or "basic",
+            "email": owner_email,
+            "name": owner_name,
+            "role": owner_prompt_role or owner_role or "basic",
             # The client reads both spellings (`data.is_admin || data.isAdmin`),
             # so both are sent rather than betting on which one it meant.
             "is_admin": admin,
