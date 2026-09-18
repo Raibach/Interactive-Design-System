@@ -922,12 +922,8 @@ export default function Index({
       const middleId =
         (childMap.middle as string | undefined) ??
         next.find((c: any) => c?.component === 'compiled-output-viewer' || c?.component === 'AgentCanvas')?.id;
-      // Her seat: whatever the layout points at, or the chat panel it emitted.
-      const seatId =
-        (childMap.right as string | undefined) ??
-        next.find((c: any) => c?.component === 'chat-panel')?.id;
       const i = middleId ? next.findIndex((c: any) => c?.id === middleId) : -1;
-      if (i < 0 || !seatId) return prev;
+      if (i < 0) return prev;
       const have = next[i];
       if (which === 'flow' && have?.component === 'AgentCanvas') return prev;
       if (which === 'output' && have?.component === 'compiled-output-viewer' && have?.content?.path) return prev;
@@ -951,6 +947,14 @@ export default function Index({
         // the session, the prompt text, the compiled output, and her own view child. The
         // adjacency list lets one component change parents, so nothing about her contract
         // is restated here and there is exactly one chat-panel to keep true.
+        // A RUN DOES NOT TOUCH HER. The canvas is the DRAWING — header, flow, foot — and her
+        // seat is not a child of it. This used to move her in (the plug-in had a "seat" slot),
+        // which is what replaced her container and lost the thread on every Run. The owner,
+        // 2026-09-18: "there's no difference between the canvas Grace and the new-package Grace
+        // — they're the same Grace, so there's no reason to replace anything. That was my
+        // mistake." And: "when we click run, all we have to do is expose the third column,
+        // which is actually the canvas." So the middle column swaps what it shows; she stays
+        // where she is, with her conversation, and nothing re-creates her.
         next[i] = {
           id: middleId,
           component: 'AgentCanvas',
@@ -973,7 +977,6 @@ export default function Index({
             // switch lives. A Run replaces what is under the header, and the place's own
             // foot has to survive that.
             footer: 'canvas-footer-view',
-            seat: seatId,
           },
         };
         if (!next.some((c: any) => c?.id === 'flow-view')) {
@@ -1006,9 +1009,11 @@ export default function Index({
         // so the assembly emits the component without pointing the layout at it. The Run
         // is what makes it a column, which is also why the flow view lives in it.
         childMap.middle = middleId;
-        // AND HER OWN COLUMN STANDS DOWN. She is drawn inside the container now, so the
-        // layout must not draw her a second time; the component itself is untouched.
-        delete childMap.right;
+        // AND HER OWN COLUMN STAYS STANDING. It used to stand down, because she was drawn
+        // inside the canvas — one Grace on screen meant one of the two columns had to go.
+        // She is not inside it any more (see the note above), so this is her column and it
+        // is left exactly as it was: the layout keeps pointing at her, and nothing about her
+        // moves on a Run.
         if (root) next[r] = { ...root, children: childMap, isThirdOpen: false };
       } else {
         next[i] = {
@@ -1016,10 +1021,9 @@ export default function Index({
           component: 'compiled-output-viewer',
           content: { path: '/session/middle_column/compiled_output' },
         };
-        // She goes back to her own column, the middle column goes away again — it is a
-        // Run's column — and the drawing and the header leave with the view that used
-        // them.
-        childMap.right = seatId;
+        // The middle column goes away again — it is a Run's column — and the drawing and the
+        // header leave with the view that used them. Her column is not "restored": it was
+        // never taken, which is the point of the change above.
         delete childMap.middle;
         for (const gone of ['flow-view', 'output-controls-view', 'canvas-footer-view']) {
           const idx = next.findIndex((c: any) => c?.id === gone);
