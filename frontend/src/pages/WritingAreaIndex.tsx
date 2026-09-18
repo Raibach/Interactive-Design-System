@@ -3751,73 +3751,37 @@ export default function Index({
       fromEditor.length ? '' : `— editor empty, running the ${sections.length} the column holds`,
     );
 
-    if (!currentPromptSessionRef.current) {
-      // A fresh composer has NO session: render-composer deliberately creates none
-      // (routes/ai.py — "session creation happens on explicit Save"). Run used to
-      // return here in SILENCE, so the button looked dead: the prompt sat in the
-      // column, Run did nothing, and the middle column never opened.
-      //
-      // Create the session through the EXISTING save path, then carry on with a
-      // real id. No new endpoint, no new write path — the same one Save uses.
-      // (Repair prompts are saved when they are launched, so reaching this with a
-      // repair in the column means that save did not finish — see below.)
-      if (!sections.length) {
-        // Nothing to run, and nowhere to put a run. Say THAT. The message this
-        // replaced blamed a save for failing at a moment when nothing had been
-        // sent anywhere and there was nothing to send.
-        console.warn('[WritingAreaIndex] Run has no session and no sections — nothing was sent anywhere');
-        setCurrentPromptSession((prev: any) =>
-          prev
-            ? { ...prev, compiledOutput: '⚠️ Run did nothing: there was nothing in the left column to run.' }
-            : prev
-        );
-        setMiddleOpen(true);
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: {
-            role: 'assistant',
-            content:
-              '⚠️ **Run did nothing.** The left column came back empty, so there was no prompt to send ' +
-              'and nothing was changed. Put something in a section — or press Repair on a finding — and press Run again.',
-          },
-        }));
-        return;
-      }
-      /*
-       * A RUN DOES NOT SAVE. This used to save-then-run: with no package, Run first called the
-       * AI save endpoint — a MODEL CALL — and waited on it, behind a 20-second serialising
-       * guard. That is what made a Run hang, inconsistently, on exactly the packages that had
-       * no session yet (owner, 2026-09-18: "it doesn't seem to be running consistently… it looks
-       * like you might even be hanging up… I believe things are being blocked by some saved
-       * template process. I don't think we need to run an auto save just because somebody
-       * clicks run… people need to save manually using the button, or get them an alert if they
-       * try to exit with unsaved changes.")
-       *
-       * So the run RUNS. With no package there is nowhere for the answer to be kept, and the
-       * message below says so where the person is looking instead of holding the run hostage
-       * to a save.
-       */
-      if (!currentPromptSessionRef.current) {
-        // Still nothing. Say it where the person is looking, not only in the console.
-        setCurrentPromptSession((prev: any) =>
-          prev
-            ? { ...prev, compiledOutput: '⚠️ Run did nothing: this prompt has no saved package, and the save that creates one did not finish.' }
-            : prev
-        );
-        setMiddleOpen(true);
-        // Say it in the CHAT too. The middle pane is a place a person may not be
-        // looking, and a Run that does nothing and says nothing is the exact
-        // failure this whole feature exists to avoid.
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: {
-            role: 'assistant',
-            content:
-              '⚠️ **Run did not execute.** This prompt has no saved package yet, and the save that creates one did not finish.\n\n' +
-              'Nothing was run and nothing was changed. The console line `[CRUD] Save failed` names the reason — ' +
-              'usually a failed request to `/api/ai/save-surface`.',
-          },
-        }));
-        return;
-      }
+    // ── NOTHING TO RUN IS THE ONLY THING THAT STOPS A RUN ────────────────────
+    //
+    // A RUN DOES NOT NEED A PACKAGE. This used to be nested inside "if there is no
+    // session": with no package it tried a save, and when that save did not finish the
+    // run refused — "Run did not execute… the save that creates one did not finish."
+    // The owner, 2026-09-18: "So it does not have to save the package to run — that is
+    // not required." He is right: Run sends the prompt and draws the canvas, and the
+    // package is a place to KEEP the answer, not a permission to ask for one.
+    //
+    // The one real precondition is CONTENT. With nothing in the left column there is no
+    // prompt to send, and that is what this says — where the person is looking, not only
+    // in the console. Nothing else gates a run: the run's own call carries
+    // `session_id: currentPromptSessionRef.current || undefined`, which is what an
+    // unsaved prompt has always meant here.
+    if (!sections.length) {
+      console.warn('[WritingAreaIndex] Run has no sections — nothing was sent anywhere');
+      setCurrentPromptSession((prev: any) =>
+        prev
+          ? { ...prev, compiledOutput: '⚠️ Run did nothing: there was nothing in the left column to run.' }
+          : prev
+      );
+      setMiddleOpen(true);
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+        detail: {
+          role: 'assistant',
+          content:
+            '⚠️ **Run did nothing.** The left column came back empty, so there was no prompt to send ' +
+            'and nothing was changed. Put something in a section — or press Repair on a finding — and press Run again.',
+        },
+      }));
+      return;
     }
 
     // The repair prompt has done its job: Run folds these sections into the
