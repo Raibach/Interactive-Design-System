@@ -191,6 +191,13 @@ export class WorkspaceLayout extends LitElement {
    */
   private _rightPx = WorkspaceLayout.OPEN_CHAT_PX;
 
+  /**
+   * THE GROUND HER COLUMN STANDS ON, while a drawing is on screen — the canvas's OWN colour,
+   * read from the canvas element rather than a value kept in step with it, and empty when no
+   * canvas is in the shell (her pane then paints nothing, which is what a package view wants).
+   */
+  private _columnGround = '';
+
   private _dragging: 'left' | 'right' | null = null;
 
   constructor() {
@@ -206,6 +213,9 @@ export class WorkspaceLayout extends LitElement {
    */
   private _onMiddleSlotChange = (): void => {
     const slot = this.shadowRoot?.querySelector('slot[name="middle"]') as HTMLSlotElement | null;
+    // Straight away, before the early return: a canvas REPLACED by another canvas is the same
+    // middle pane and a different ground.
+    this._readColumnGround();
     const has = (slot?.assignedNodes({ flatten: true }) ?? [])
       .some((n) => n.nodeType === Node.ELEMENT_NODE);
     if (has === this._hasMiddle) return;
@@ -258,6 +268,8 @@ export class WorkspaceLayout extends LitElement {
      */
     document.addEventListener('mouseout', this._onPointerBoundary as EventListener);
     document.addEventListener('mouseover', this._onPointerBoundary as EventListener);
+    // The tone switch flips the canvas's `--flow-ground`, and her column stands on it.
+    window.addEventListener('theme-change', this._readColumnGround as EventListener);
     // The rail's requests arrive here because both events are composed and
     // bubble: the rail is inside the panel's shadow root, inside this element.
     this.addEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
@@ -313,6 +325,7 @@ export class WorkspaceLayout extends LitElement {
     window.removeEventListener('blur', this._onMouseUp as EventListener);
     document.removeEventListener('mouseout', this._onPointerBoundary as EventListener);
     document.removeEventListener('mouseover', this._onPointerBoundary as EventListener);
+    window.removeEventListener('theme-change', this._readColumnGround as EventListener);
     this.removeEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);
@@ -383,6 +396,35 @@ export class WorkspaceLayout extends LitElement {
    * question for itself (`_hasMiddle`); this is the right column asking it too.
    */
   private _hasRight = false;
+
+  /**
+   * WHAT SHOWS THROUGH HER TRANSPARENT EDGE. The strip and the panel's container paint nothing
+   * by design — "right-column-panel-container" #40001066:3272 and "chat-left-spacer"
+   * #40001085:2598 are both transparent in the drawing, and they are transparent in the code
+   * (measured 2026-09-18, both rgba(0,0,0,0)). What was WRONG was what stood behind them: the
+   * shell's own grey, because in this shell the drawing is a column beside her rather than the
+   * ground under her. The owner, 2026-09-18: "when Grace is over top of the canvas, she should
+   * see the canvas behind that."
+   *
+   * So her pane stands on the canvas's OWN colour, read from the canvas element — its host
+   * declares `--flow-ground`, mid-tone or dark, and this reads it rather than restating it. One
+   * value, one home: a copy here is the second value that drifts, which is the reason those two
+   * components carry no fill in the first place.
+   *
+   * Empty when no canvas is in the shell, and then nothing is painted and the package view looks
+   * exactly as it did.
+   */
+  private _readColumnGround(): void {
+    const slot = this.shadowRoot?.querySelector('slot[name="middle"]') as HTMLSlotElement | null;
+    const canvas = (slot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
+    const ground = canvas
+      ? getComputedStyle(canvas).getPropertyValue('--flow-ground').trim()
+      : '';
+    if (ground === this._columnGround) return;
+    this._columnGround = ground;
+    if (ground) this.style.setProperty('--column-ground', ground);
+    else this.style.removeProperty('--column-ground');
+  }
 
   private _onRightSlotChange = (e: Event): void => {
     const slot = e.target as HTMLSlotElement;
@@ -806,6 +848,10 @@ export class WorkspaceLayout extends LitElement {
        so this box has nothing to contain. */
     .pane.right {
       overflow: visible;
+      /* WHAT SHOWS THROUGH HER TRANSPARENT EDGE — the canvas's own colour while a canvas is on
+         screen, empty (nothing painted) otherwise. Set from the canvas element, never restated
+         here: see _readColumnGround. */
+      background: var(--column-ground, transparent);
     }
     /* The MIDDLE pane hides its content when collapsed — that column is simply not
        shown in the 2-column layout, so hiding it is the point.
