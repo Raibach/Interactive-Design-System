@@ -138,22 +138,25 @@ describe('the console surface <a2ui-renderer> draws', () => {
 });
 
 /**
- * NO ROOM, NO CARDS — the console never grows a scrollbar.
+ * THE FIT RULE — no scroller ever, and cards whenever they can be drawn.
  *
- * The owner, 2026-09-18, in a smaller window: "the scroll bar came back — we don't give them
- * the scroll bar… I'm not adding a scroller because they want to resize their browser."
+ * The owner, 2026-09-18, in a smaller window: "the scroll bar came back — we don't give them the
+ * scroll bar… I'm not adding a scroller because they want to resize their browser." The grid
+ * used to draw 878px of rows into a pane that could not hold them, and the PANE scrolled.
  *
- * Two rows are fixed (row-collapse was turned off), so the scrollbar was the only thing left to
- * give: the grid drew 878px of rows into a pane that could not hold them and the PANE scrolled.
- * The fit is now tested before anything is drawn, against the pane — so these tests stub the two
- * boxes jsdom has no notion of: the grid's own width and the pane's height.
+ * Then the first fix was all-or-nothing — two rows or a message — and at 1280x720 a person got
+ * "I love the console and I get a message instead of" the cards. So the rows are now as many as
+ * FIT, up to two, and the message is kept for the case that is genuinely impossible: not even one
+ * row. What never bends is the scrollbar.
  *
- * jsdom has no layout, so every unstubbed measurement is zero — and zero means NO BOX, NO LIMIT,
- * which is why every test above this block still draws its cards without stubbing anything.
+ * These tests stub the two boxes jsdom has no notion of: the grid's own width and the pane's
+ * height. jsdom has no layout, so every unstubbed measurement is zero — and zero means NO BOX, NO
+ * LIMIT, which is why every test above this block still draws its cards without stubbing anything.
  */
-describe('the console grid when the pane cannot hold it', () => {
-  const PANE_FITS = 900; // 55 inset + two 372px rows + two 16px gaps + 47px pager = 878
-  const PANE_TOO_SHORT = 600;
+describe('the console grid, and the room the pane has for it', () => {
+  const PANE_FITS = 900;   // 55 inset + two 372px rows + two 16px gaps + 47px pager = 878
+  const PANE_ONE_ROW = 600; // 55 + 372 + 16 + 47 = 490 — a second row would need 878
+  const PANE_NO_ROW = 380;  // less than the 490 the shortest arrangement needs
 
   /** Give the grid a real width and its pane a real height, then re-measure. */
   const measure = async (grid: CardEl, paneH: number, gridW = 1200) => {
@@ -177,9 +180,23 @@ describe('the console grid when the pane cannot hold it', () => {
     title: `P${i}`,
   }));
 
-  it('takes the cards away rather than scrolling — and says what it needs', async () => {
+  it('a short pane shows ONE row of cards rather than a message', async () => {
+    // 600px of pane: room for the inset, one 372px row and the pager — and not for a second row.
+    // The cards stay (the owner, at 1280x720: "I love the console and I get a message instead
+    // of" the cards) and the pane does NOT scroll.
     const { el, grid } = await mount({ cards: manyCards });
-    await measure(grid, PANE_TOO_SHORT);
+    await measure(grid, PANE_ONE_ROW);
+
+    expect(grid.shadowRoot!.querySelectorAll('agent-card-element')).toHaveLength(3);
+    expect(grid.shadowRoot!.querySelector('.too-small')).toBeNull();
+    expect(grid.shadowRoot!.querySelector('.pager')).not.toBeNull();
+
+    el.remove();
+  });
+
+  it('takes the cards away only when not even one row fits — and says what it needs', async () => {
+    const { el, grid } = await mount({ cards: manyCards });
+    await measure(grid, PANE_NO_ROW);
 
     expect(grid.shadowRoot!.querySelectorAll('agent-card-element')).toHaveLength(0);
     // No pager either: paging a list nobody can see is a control that can only fail.
@@ -191,13 +208,12 @@ describe('the console grid when the pane cannot hold it', () => {
     el.remove();
   });
 
-  it('draws both rows and the pager the moment the pane can hold them', async () => {
+  it('draws the second row and the pager the moment the pane can hold them', async () => {
     const { el, grid } = await mount({ cards: manyCards });
-    await measure(grid, PANE_TOO_SHORT);
-    expect(grid.shadowRoot!.querySelectorAll('agent-card-element')).toHaveLength(0);
+    await measure(grid, PANE_ONE_ROW);
+    expect(grid.shadowRoot!.querySelectorAll('agent-card-element')).toHaveLength(3);
 
-    // The same grid, a pane that fits: 3 columns x 2 rows at 1200px wide, and a pager,
-    // because 20 cards do not fit on one page.
+    // The same grid, a pane that fits two: 3 columns x 2 rows at 1200px wide.
     await measure(grid, PANE_FITS);
     expect(grid.shadowRoot!.querySelectorAll('agent-card-element')).toHaveLength(6);
     expect(grid.shadowRoot!.querySelector('.pager')).not.toBeNull();
