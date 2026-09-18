@@ -25,22 +25,10 @@ The console load fired three model calls where it needed one, and every one of t
 
 **[2026-09-17] — The Trace view: click, expand, spinner, content — and the feed stops being its own source**
 
-The rail's Trace button is finished, and the feed behind it is now a view instead of a fetcher — carrying every signal the page can observe about itself. Seen on a freshly loaded page: 74px collapsed → **726px** open, the loading state drawn while the slot is unfilled, then `LIVE TRACE` holding real entries. Written up in [`READ-ME/TRACE-VIEW.md`](READ-ME/TRACE-VIEW.md), with the measurements and the parts that were *not* seen.
-
-- **Everything the page can see about itself is now in it, in one list.** Seven kinds: `network` (a `window.fetch` wrapper — method, path, **status and duration**), `log` (the logger, including the structured `data` the old feed dropped), `event` (`a2ui-event` plus the system/user/usage messages the surface raises), `error` (window error + unhandled rejection — the two failures that otherwise leave no trace), `audit` (a summary read from the `/api/catalog/audit` response the app already fetches, so no second request), `perf` (long tasks — main-thread stalls), and `breadcrumb` (Sentry's scope, structurally empty in dev). Each row is `time · kind · message · status/duration` with a detail line when the entry has one: `POST /api/ai/assemble-surface  200 · 9.4s`, and `ui usage` detailing `model=deepseek-v4-pro  prompt_tokens=9907`. Measured: 18 entries on a fresh console load — 7 network, 7 log, 4 event — and the durations agree with the backend's own `[PERF TRACE]` numbers, measured independently.
+- **Everything the page can see about itself.** Seven kinds: `network` (a `window.fetch` wrapper — method, path, **status and duration**), `log` (the logger, including the structured `data` the old feed dropped), `event` (`a2ui-event` plus the system/user/usage messages the surface raises), `error` (window error + unhandled rejection — the two failures that otherwise leave no trace), `audit` (a summary read from the `/api/catalog/audit` response the app already fetches, so no second request), `perf` (long tasks — main-thread stalls), and `breadcrumb` (Sentry's scope, structurally empty in dev). Each row is `time · kind · message · status/duration` with a detail line when the entry has one: `POST /api/ai/assemble-surface  200 · 9.4s`, and `ui usage` detailing `model=deepseek-v4-pro  prompt_tokens=9907`. Measured: 18 entries on a fresh console load — 7 network, 7 log, 4 event — and the durations agree with the backend's own `[PERF TRACE]` numbers, measured independently.
 - **It starts at module load, not at first subscribe**, so the first assembly is not the one request the feed cannot explain. One observer per page, bursts coalesced at 250ms, and the snapshot's identity is what keeps a quiet poll from re-rendering the surface.
 - **What is NOT loadable, so nobody hunts for it:** Sentry spans, transactions, replays and Web Vitals need a build (`lib/sentry.ts` returns early in development) and an auth token, which this machine does not have — a DSN is write-only. `breadcrumb` is empty in dev by construction.
 
-- **The feed is bound now.** `<trace-feed>` renders `{path: "/trace/entries"}` and fetches nothing. The reads moved to `lib/trace-source.ts` — one observer per page instead of one poller per element. Unset is kept distinct from empty: "waiting for the surface to bind" and "the app has logged nothing" are different claims and draw differently.
-- **The client is the writer, and that is a decision.** The protocol-pure writer is the agent, and it cannot be: the transport has no return path, and telemetry lives in the browser tab and nowhere else. The client writes `/trace`, as this shell already writes `/session/left_column/sections`. The cost is stated in the document: the model has two authors now, so the writer re-asserts the path on every assembly and the snapshot's identity is what stops a quiet poll re-rendering the surface twice a second.
-- **A second defect, and this one the session's own writer caused.** Pick Trace, the column opens to 726px, and then it snapped back to 74px with the view inside it. Proved by assigning the renderer a data model object with identical contents: `isThirdOpen` went true → false. A data-model change re-runs the renderer, which re-applies *every* payload prop — including the `isThirdOpen: false` the console sends so the column loads closed. The model only used to change when a new assembly landed, so the handoff's trap #5 ("a payload flag the operator can also toggle fights them") was latent; writing `/trace` on every log line made it constant. Fixed where the requirement already said it belonged — `workspace-layout` now owns the flag: the payload's assignment is honoured until the operator touches the pane and ignored after, with `_setThirdOpen()` as the internal path that marks that ownership. Verified live: two data-model changes after a Trace click, column still 726px.
-- **A defect that only looking found.** The surface's new child in the panel's `view` slot made `_seatSlotted()`'s fallback (`this.children.length > 0`) read as "the host handed me a seat" — so the panel drew the seat slot in place of its whole body and **the rail vanished**, leaving an 82px empty column. A child that names another slot is not a seat. No test caught it; none asserted the rail was still on screen.
-- **The element was never fully registered.** `<trace-feed>` existed, drew, was in the renderer's map — and was claimed nowhere: not in the allowlist, and only under its model name (`TraceFeed`) in the catalog, while the allowlist and the audit name the tag. Both are fixed, which took the unclaimed-element count 8 → 7 and made the register's own number true again: `open-items-register` now passes, so the pre-existing blocking count went **2 → 1** (the remaining one is `corrections-ledger`, untouched here). The documented count moved 38 → 39 in `README.md` and `IMPLEMENTATION_CONFORMANCE.md`, because `doc-claim-drift` fails the build otherwise — correctly.
-- **All three assemblers emit it**, console and composer and session, so no seat shows a loading state that can never resolve. Console and composer both **seen on screen** — the composer's Trace tab draws the same live feed. The session intent is verified as far as the envelope only (it returns the right tree and paths).
-- **Styled, and it forced a real question: which styling sheet?** There was none for components. `index.css` is the shell's Tailwind sheet (51 lines, no `:root`, no tokens); Tailwind cannot cross a shadow boundary; and `clean-no-jsx` forbids it in component sources anyway. `primitive-missing` / `primitive-drift` guard catalog *schemas*, not CSS. So each element restated the palette — the thread writes `#171717` / `#507274`, and the trace had drifted to Tailwind greys, which is exactly why it read as bolted-on. **`src/shared/design-tokens.ts` is now the one home** for the app's palette, type and radii as `--ds-*` properties on `:host`; an element adopts it with `static styles = [designTokens, css\`…\`]`, and Lit de-duplicates the sheet so it costs one stylesheet however many elements use it. On screen: a four-column grid so times, badges and messages align; kind badges as tinted pills whose colours are classes resolved from tokens rather than inline styles chosen in JS; status pills and durations in tabular figures; hover on a row; and the brand gold spent on exactly one meaning — the live dot.
-- **One family: Inter, everywhere.** The first pass set the timestamps, statuses and detail lines in a monospace stack, on the usual assumption that data wants a "data font". It does not: two families split the application's voice, and the timestamps came out at `#9aa5ae` — about **2.6:1** on white, well under the 4.5:1 floor for text, which is why they were barely visible. Inter aligns figures perfectly through `tabular-nums`, which is what the monospaced look was actually buying. So the tokens carry no monospace family and the sheet now states a contrast floor: `--ds-muted` (#6c757d, 4.8:1) is the lightest a value may go and still be text — to make something recede, take down its size or weight, never its contrast.
-- **A nasty little trap found by the resulting red build:** `element-unclaimed` decides a component is mounted when the literal tag text appears anywhere under `src`, and a COMMENT satisfies it. Writing the chat thread's tag in a comment in the new tokens file silently converted that element's real finding into a pass, moved the derived count 7 → 6, and made `open-items-register` fail as blocking. Nothing was broken — a sentence was read as markup.
-- **Performance is in it, measured client-side.** Per-request durations and HTTP statuses, plus main-thread stalls over 50ms — which is what "the console feels slow" usually means in practice, and it needed no token and no Sentry (both are off in a dev build). It also settles the question the backend numbers raised: the assembly durations in the feed (`6.8s`, `9.1s`, `9.4s`) match the `[PERF TRACE]` blocks, so the latency the operator sees is the same latency the server measures. **Still missing, and needing a token:** Sentry spans, transactions, replays and Web Vitals. The supported way in, if a token ever exists, is a `beforeSendSpan` / `beforeSendTransaction` hook feeding this same channel — never another private-field read.
 
 **[2026-09-17] — Console chat: scope and ownership (decision, not yet built)**
 
@@ -64,49 +52,6 @@ The composer's chat panel was brought into line with the Figma design, and one o
 - **The chat column's grip** is the design's 20px strip with the dot glyph — grey at rest, purple on hover — dragging on the whole strip. The rail's own grip was removed; the design puts it on the leading edge.
 - **Versions and Tools were extracted into components** (`VersionHistoryPanel`, `ToolsPanel`) so they can load into a chat output slot the way `TraceFeed` already does. Neither is mounted yet.
 - **The annotation workflow is written down** in `catalog-audit/FIGMA/ANNOTATION_REVIEW_WORKFLOW.md`, including the output contract: where the note goes, what it says, and whether it is correct. Nothing else.
-
-**[2026-09-16] — Dead-code audit (report only — no deletions, no moves, no cleanup)**
-
-Audit only — no deletions, no moves, no cleanup. Running the checks, then a three-section report with evidence.
-
-## 1. DEAD — zero references (including catalogs, registry, tests)
-
-| Item | Evidence |
-|---|---|
-| `src/shared/runStream.ts` | Only reference in all of `src` is its own test (`runStream.test.ts`). Its endpoint `POST /api/teacher/query/stream` **does not exist in the backend** (grep across `backend/routes` — no route). Module and consumer both dead. |
-| `src/components/A2UISurfaceContainer.tsx` | No import, no JSX mount anywhere. Grep finds only: its own file, its `.stories.tsx`, and a **comment** in `WritingAreaIndex.tsx:278`. It's the old XML-tag-driven "fake A2UI" container — superseded by the renderer. |
-| `src/components/registry.json.backup.20260914_124525` | Backup file, zero references. |
-| `src/components/lit/prompt-input/gripper-prompt-input.ts.backup.20260914_131541` + `…131701` | Backup files, zero references (superseded by the live `gripper-prompt-input.ts`). |
-
-## 2. SUSPECT — referenced only by console paths, or by paths slated for removal
-
-| Item | Dependency |
-|---|---|
-| `src/shared/plainText.ts` | Imported only by `InteractiveChatInterface.tsx` (console seat) + its test. Dies when the console migrates to Lit. |
-| `src/shared/actionLink.ts` | Same — React seat's action-button rendering. Console-only. |
-| `src/shared/chatSeat.ts` | Console-only now (`InteractiveChatInterface` + its test). The Lit seat does **not** use it — it owns its conversation directly. |
-| `src/shared/ai-orchestrator.ts` | Console-only (the React seat's XML-tag extraction). The Lit seat has its own port of that logic in `chat-panel.ts`. |
-| The six chat pieces (`chat-header`, `chat-messages`, `chat-input`, `chat-action-bar`, `chat-footer`, `chat-repair-actions`) | Referenced **only** by `chat-panel.ts` (verified: 1–3 uses each, nowhere else). Live today, but they are the nested composition your adjacency-list rule objects to — if you choose the fully-flat direction (model-emitted pieces), all six retire. |
-| `A2UISurfaceContainer.stories.tsx` | Storybook-only; dies with its component. |
-| `src/test/runStream.test.ts` | Tests a dead module; dies with it. |
-
-## 3. KEEP-BUT-STALE — live, but superseded or transitional
-
-| Item | Why kept |
-|---|---|
-| `src/components/InteractiveChatInterface.tsx` | **Live** — mounted by the console operator shell in `WritingAreaIndex` (≈:3685+). Superseded by the Lit seat *for the composer only*. An aggressive audit will flag this file; do not trust that. |
-| `src/services/neuralNetworkService.ts` | Live — imported by both the console seat and `WritingAreaIndex`. |
-| `src/shared/event-bus.ts` | Live — the Lit seat's command channel (`save-button`, surface tags) still routes through it. |
-| `src/shared/tag-registry.ts`, `a2ui-envelope.ts`, `a2ui-primitives.ts`, `a2ui-image-catalog.ts` | Live — gatekeeper, envelope reader, renderer. |
-| `src/shared/conversationStorage.ts` | Live — the package-conversation DB feed (host → seat). |
-| `catalogHealth.ts`, `catalogBrief.ts`, `repairApply.ts`, `repairMaterial.ts`, `repairSections.ts` | Live — repair/findings flow. |
-| `retired-files/` (existing archive) | Your archive pattern already exists — the DEAD items above are candidates to move there, not delete. |
-
-## Honest tooling note
-
-The define-vs-used cross-check for *all* 23 registered tags didn't complete cleanly (zsh glob mangling on the second grep), so I won't present a broken `comm` output as evidence. I verified the six chat pieces directly instead, and the remaining tags (`prompt-section-editor`, `prompt-textarea`, `role-dropdown`, etc.) are live via the left-column `prompt-input-section` composition and `main.tsx` registrations — checked by reading, not by the failed command. If you want, I can re-run that cross-check with a shell-safe script and give you the exact define-but-never-rendered list.
-
-Nothing was touched. When you've read this and decided, the safe disposition per your rule is: **move** the DEAD items into `retired-files/` (nothing ever deleted), and settle the SUSPECT list only after the composer-through-renderer decision.
 
 
 **[2026-09-10] — Figma → Lit import pipeline: annotations as the single source of behavior**
