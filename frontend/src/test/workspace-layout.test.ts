@@ -20,6 +20,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import '@/components/lit/workspace-layout';
+import '@/components/lit/agent-canvas';
 import type { WorkspaceLayout } from '@/components/lit/workspace-layout';
 
 type LayoutEl = WorkspaceLayout & { updateComplete: Promise<unknown> };
@@ -362,5 +363,53 @@ describe('<workspace-layout> Reset puts the arrangement back', () => {
     expect(el.leftCollapsed).toBe(false);
     expect(el.isThirdOpen).toBe(true);
     expect(widthOf(el)).toBe(650);
+  });
+});
+
+/**
+ * SHE IS A LAYER OVER THE DRAWING — the playground's geometry, and the owner's rule.
+ *
+ * canvas.html: "THE CANVAS IS THE GROUND; HER COLUMN IS A LAYER OVER IT… the drawing never moves,
+ * never re-scales and never re-fits because she opened or closed." The owner, 2026-09-18, seeing
+ * the app do the opposite: "the canvas is not underneath Grace anymore. Now it's responsive. It
+ * has to be under her." And the question that names the stakes: "what if I have a note that's 15
+ * nodes long? Where is it gonna go?"
+ *
+ * So the invariant these pin: her column's moves are HERS — the drawing's box is the same before
+ * and after, and a 15-node flow is never squeezed by her opening.
+ */
+describe('<workspace-layout> her column is a layer, not a pane', () => {
+  const withDrawing = async () => {
+    const el = await mountWithPanel();
+    const middle = document.createElement('agent-canvas');
+    middle.setAttribute('slot', 'middle');
+    el.appendChild(middle);
+    el.shadowRoot!.querySelector('slot[name="middle"]')!.dispatchEvent(new Event('slotchange'));
+    await el.updateComplete;
+    return el;
+  };
+  const styleOf = (el: LayoutEl, which: '.pane.middle' | '.pane.right') =>
+    (el.shadowRoot!.querySelector(which) as HTMLElement).getAttribute('style') ?? '';
+
+  it('opening and closing her leaves the drawing its whole box', async () => {
+    const el = await withDrawing();
+    const drawing = styleOf(el, '.pane.middle');
+    const herOpen = styleOf(el, '.pane.right');
+    expect(herOpen).toContain('650px');
+
+    el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: true } }));
+    await el.updateComplete;
+    // THE DRAWING DID NOT MOVE: the same flex line, so the same box, with her away or here.
+    expect(styleOf(el, '.pane.middle')).toBe(drawing);
+    // ...and she did, which is the whole of the interaction.
+    expect(styleOf(el, '.pane.right')).not.toBe(herOpen);
+    expect(styleOf(el, '.pane.right')).toContain('104px');
+  });
+
+  it('she takes no width out of the flex line — a layer, not a share', async () => {
+    const el = await withDrawing();
+    // Her box is sized by WIDTH; the drawing and the prompt divide the line between them only.
+    expect(styleOf(el, '.pane.right')).not.toContain('flex');
+    expect(styleOf(el, '.pane.middle')).toContain('flex');
   });
 });
