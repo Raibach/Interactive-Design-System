@@ -334,12 +334,15 @@ export class AgentCanvas extends LitElement {
         <slot name="footer"></slot>
       </div>
 
-      <aside
-        class="seat ${this.collapsed ? 'collapsed' : ''} ${this._gripping ? 'gripping' : ''}"
-        aria-label="The flow and Grace"
-      >
-        <slot name="seat"></slot>
-      </aside>
+      <!-- NO SEAT IS DRAWN HERE, AND THAT IS THE POINT.
+           This element used to render an <aside class="seat"> with a "seat" slot, and the Run
+           moved her panel into it — which is what replaced her container and lost the thread.
+           The owner, 2026-09-18: "there's no difference between the canvas Grace and the
+           new-package Grace… no reason to replace anything." The canvas is the drawing; her
+           column is hers and is never a child of this element. The seat styles and the width
+           state below are left in place but are inert now — removing them is a cleanup, not a
+           behaviour, and an empty absolutely-positioned aside left here would have covered the
+           right third of the drawing and eaten its clicks. -->
     `;
   }
 

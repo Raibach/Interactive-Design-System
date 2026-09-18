@@ -75,13 +75,18 @@ const grip = (el: El, type: string, detail: Record<string, unknown>): void => {
 };
 
 describe('<agent-canvas> — the container', () => {
-  it('draws NO component: two slots, filled by the envelope', async () => {
+  it('draws NO component: the drawing slots — and never her seat', async () => {
     const { el } = await mount();
     // Nothing of the kind lives in its own template.
     expect(el.shadowRoot!.querySelector('agent-flow')).toBeNull();
     expect(el.shadowRoot!.querySelector('chat-panel')).toBeNull();
     expect(el.shadowRoot!.querySelector('slot[name="flow"]')).toBeTruthy();
-    expect(el.shadowRoot!.querySelector('slot[name="seat"]')).toBeTruthy();
+    // AND NO SEAT SLOT. The plug-in used to hold her panel, and a Run moved it in — which is what
+    // replaced her container and lost the thread. The owner's correction (2026-09-18): "there's no
+    // difference between the canvas Grace and the new-package Grace… no reason to replace anything.
+    // That was my mistake." Her column is hers; the canvas is the drawing.
+    expect(el.shadowRoot!.querySelector('slot[name="seat"]')).toBeNull();
+    expect(el.shadowRoot!.querySelector('.seat')).toBeNull();
     // The header slot exists and is EMPTY here: it takes no height when nothing fills
     // it, so a surface that fills only the drawing slots lays out as it always did.
     expect(el.shadowRoot!.querySelector('slot[name="header"]')).toBeTruthy();
@@ -132,23 +137,21 @@ describe('<agent-canvas> — the container', () => {
     expect(seat).toBeTruthy();
   });
 
-  it('moves the column for the SPACER grip, and ignores the composer grip', async () => {
+  it('holds no column at all now: NEITHER grip moves anything here', async () => {
     // Both grips raise input-resize-start. Only one carries a horizontal position; the
     // other is the composer's own resize (startY) and belongs to her input area.
     const { el } = await mount();
     grip(el, 'input-resize-start', { startY: 400 });
     await el.updateComplete;
-    expect(el.collapsed).toBe(true);
-    expect(seatEl(el).classList.contains('gripping')).toBe(false);
+    expect(el.shadowRoot!.querySelector('.seat')).toBeNull();
 
     grip(el, 'input-resize-start', { clientX: 900, clientY: 400 });
     await el.updateComplete;
-    expect(el.collapsed).toBe(false);
-    expect(seatEl(el).classList.contains('gripping')).toBe(true);
+    expect(el.shadowRoot!.querySelector('.seat')).toBeNull();
 
     grip(el, 'input-resize-end', {});
     await el.updateComplete;
-    expect(seatEl(el).classList.contains('gripping')).toBe(false);
+    expect(el.shadowRoot!.querySelector('.seat')).toBeNull();
   });
 
   it('a move with no grip in progress does not drag the column', async () => {
