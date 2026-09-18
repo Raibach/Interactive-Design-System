@@ -56,15 +56,26 @@ export class ChatHeader extends LitElement {
 
   static styles = css`
     :host { display: block; }
-    /* The outer card the frame calls "output-area": white, padding 20, gap 10, radius 6. */
+    /* THE TOP OF HER COLUMN, AND FLUSH TO IT. This area used to sit inside a white card
+       with 20px of padding (the older frame, 40001066:4308 "output-area"), which pushed
+       the status line down and in from the edge. The owner's node for this slot is
+       40001085:1553 "output-header-area" — column, padding 10px 20px, gap 5 — and its top
+       is the column's top (owner, 2026-09-18: "the top of that design is the top of our
+       chat, technically it should be flush to the top").
+
+       ONE DELIBERATE DEVIATION from that node, recorded rather than silent: the node's
+       fills are #FFFFFF with a #999999 bottom rule, and this draws TRANSPARENT so the
+       ground behind the column shows through — which is the rule this column now follows
+       everywhere (its container and spacer paint nothing either; see chat-panel). The
+       padding, the gap, the status bar's own 57px/rgba(117,142,135,.35)/radius 8/inset
+       shadow, and the type are the node's, exactly. */
     .output-area {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 10px;
-      padding: 20px;
-      background: #ffffff;
-      border-radius: 6px;
+      gap: 5px;
+      padding: 10px 20px;
+      background: transparent;
     }
     .status {
       display: flex;

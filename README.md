@@ -98,15 +98,17 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-41 trusted components — 13 A2UI Basic Catalog primitives + 28 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 41 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+49 trusted components — 17 A2UI Basic Catalog primitives + 32 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 49 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
                 SectionEditor · DecisionDialog · ConsoleCardGrid
-                CompiledOutput · ChatPanel · TraceFeed
+                CompiledOutput · ChatPanel · TraceFeed · AgentFlow
+                AgentCanvas · OutputControls · CanvasFooter
 Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer
-                chat-panel · trace-feed · chat-repair-actions · version-trace
-                token-cost-readout · status-readout · output-panel · search-bar
+                chat-panel · trace-feed · agent-flow · agent-canvas · output-controls · canvas-footer · chat-repair-actions
+                version-trace · token-cost-readout · status-readout
+                output-panel · search-bar
                 filter-pill · footer-bar · chat-navigation-bar · agent-card
                 prompt-section · control-bar · add-section-button
                 ai-surface-sandbox · error-banner · prompt-container

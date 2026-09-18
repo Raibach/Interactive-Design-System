@@ -75,7 +75,7 @@ export class ErrorBanner extends LitElement {
     }
     .code {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -96,7 +96,7 @@ export class ErrorBanner extends LitElement {
     }
     button {
       font-family: inherit;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 600;
       padding: 3px 8px;
       border-radius: 4px;

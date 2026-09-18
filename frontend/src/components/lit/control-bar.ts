@@ -186,11 +186,13 @@ export class ControlBar extends LitElement {
       margin-left: 15.92px;
       /* Figma: bg-gradient-to-l from-[#f0b424] to-[#fed141], h-[43px], w-[142px] */
       background: linear-gradient(to left, #f0b424 0%, #fed141 100%);
-      /* Figma: text-black text-[18px] font-extrabold */
+      /* Figma: text-black text-[18px] font-extrabold — drawn at 700. The master says extrabold
+         (800) and the app has three weights: 500, 600, 700 (owner, 2026-09-18). The top of the
+         range is 700, so a heavier request is capped rather than loaded. */
       color: #000;
       border: none;
       font-size: 18px;
-      font-weight: 800;
+      font-weight: 700;
       height: 43px;
       width: 142px;
       /* Figma: button drop shadow */
@@ -221,7 +223,7 @@ export class ControlBar extends LitElement {
     /* Save shortcut (node 40000761:270): text-[#8b8b8b] */
     .shortcut {
       font-size: 16px;
-      font-weight: 400;
+      font-weight: 500;
       color: #8b8b8b;
     }
 

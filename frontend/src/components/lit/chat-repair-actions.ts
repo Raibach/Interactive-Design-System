@@ -23,6 +23,10 @@
  * open, which is a different and better claim.
  */
 import { LitElement, html, css, nothing } from 'lit';
+// THE DESIGN'S OWN CHEVRON, the same imported artwork the Conversations dropdown uses —
+// one asset, two places, so the two disclosures cannot look like different controls.
+// This header had none at all: it opened and closed with nothing to say it could.
+import arrowDropDown from '../../assets/figma-9598a83b0a4eb9b9fc9c226f302689fd4f7075df.svg';
 import { designTokens } from '@/shared/design-tokens';
 
 /** One row, as the writer composes it. Nothing here is derived on the client. */
@@ -56,13 +60,24 @@ export class ChatRepairActions extends LitElement {
     super();
     this.findings = undefined;
     this.stages = undefined;
-    // EXPANDED by default now that it lives in the panel's view hole. It used to default
-    // collapsed because it was a SIBLING ABOVE THE THREAD: expanded with 52 findings it
-    // measured 3,309px and pushed the composer below the fold, which read as "the chat
-    // input is missing". In the slot it cannot do that — the hole is a bounded, scrolling
-    // region and the list is capped at 240px — so the findings are on screen when the tab
-    // is opened, and the header still collapses them.
-    this.collapsed = false;
+    /*
+     * COLLAPSED BY DEFAULT — the owner's instruction, 2026-09-18: "the catalogue checker
+     * list collapsed by default."
+     *
+     * The history is worth keeping, because it has been both ways. It first defaulted
+     * collapsed as a SIBLING ABOVE THE THREAD: expanded with 52 findings it measured
+     * 3,309px and pushed the composer below the fold, which read as "the chat input is
+     * missing". It then defaulted EXPANDED, because in the panel's view hole it cannot do
+     * that — the hole is a bounded, scrolling region and the list is capped at 240px.
+     *
+     * Both of those were about containment. This one is about ATTENTION: 29 open findings
+     * is a wall of text above a conversation that has not started yet, and the first thing
+     * a person should meet in this seat is Grace, not the checker. The list is one click
+     * away, its header carries the count either way, and an EMPTY check still says so in
+     * full (see the render: a header with nothing under it is the one case that is never
+     * hidden).
+     */
+    this.collapsed = true;
   }
 
   static styles = [
@@ -77,6 +92,30 @@ export class ChatRepairActions extends LitElement {
         font-size: var(--ds-fs-sm);
         color: var(--ds-text);
       }
+      /* The chevron's box, to the master's own geometry: 40x30 padded to 7, holding the
+         14x13 artwork, dim at 50% and full when the list is open — the same values the
+         small-dropdown's chevron uses, because it is the same drawing. */
+      .header .chevron {
+        flex-shrink: 0;
+        margin-left: auto;
+        width: 40px;
+        height: 30px;
+        padding: 7px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.15s ease;
+      }
+      .header .chevron img {
+        display: block;
+        width: 14px;
+        height: 13px;
+        opacity: 0.5;
+        transition: opacity 0.15s ease;
+      }
+      .header[aria-expanded='false'] .chevron { transform: rotate(180deg); }
+      .header[aria-expanded='false'] .chevron img { opacity: 1; }
       .header {
         display: flex;
         align-items: center;
@@ -111,10 +150,15 @@ export class ChatRepairActions extends LitElement {
         list-style: none;
         margin: 0;
         padding: 0 12px 8px;
-        /* The cap: expanded, the list scrolls instead of growing the column and burying
-           the composer beneath it. */
-        max-height: 240px;
-        overflow-y: auto;
+        /* NO CAP, AND NO SCROLLER OF ITS OWN. This list used to stop at 240px and scroll
+           inside itself, which was right while it was a sibling above the thread and the
+           column around it did not scroll. The owner's rule now (2026-09-18) is ONE
+           scrollbar for the whole column, and his reason for letting the list run long is
+           worth keeping in mind before anyone caps it again: "those are incentives to
+           make the user clean up their repairs." Five hundred repairs is five hundred
+           rows down — and a cap would hide exactly the thing that motivates the person to
+           shorten it. The column's scroller (chat-panel's .content-scroll) does the
+           moving. */
       }
       li {
         display: flex;
@@ -187,10 +231,18 @@ export class ChatRepairActions extends LitElement {
     const counts = this._counts();
     return html`
       <div class="panel">
-        <button class="header" type="button" @click=${this._toggle}>
+        <button
+          class="header"
+          type="button"
+          aria-expanded=${this.collapsed ? 'false' : 'true'}
+          @click=${this._toggle}
+        >
           Catalog check — ${rows.length} open
           ${counts.blocking ? html`<span class="chip blocking">${counts.blocking} blocking</span>` : ''}
           <span class="chip count">${counts.advisory} advisory</span>
+          <!-- The chevron goes at the far end, as the Conversations dropdown draws it:
+               down and dim while the list is open, turned and full blue while it is shut. -->
+          <span class="chevron" aria-hidden="true"><img src=${arrowDropDown} width="14" height="13" alt="" /></span>
         </button>
         ${this.collapsed
           ? nothing
@@ -200,13 +252,20 @@ export class ChatRepairActions extends LitElement {
                 const stage = this.stages?.[f.id];
                 return html`
                   <li>
-                    <span class="level ${f.level === 'blocking' ? 'blocking' : 'advisory'}">${f.level ?? 'advisory'}</span>
-                    <span class="text">${f.text}</span>
+                    <!-- THE ACTION LEADS THE ROW. The owner's instruction, 2026-09-18:
+                         the Repair button belongs on the LEFT — "it should be on the
+                         left side always for the most part" — not shoved against the
+                         rail by a growing text column. The stage mark takes the same
+                         place when a row has left the button behind, so the row's first
+                         column means one thing whatever state it is in; the sentence
+                         then runs right and gets the width it needs. -->
                     ${stage === 'done'
                       ? html`<span class="stage done">completed</span>`
                       : stage === 'repair'
                         ? html`<span class="stage repair">in repair</span>`
                         : html`<button class="repair" type="button" @click=${() => this._repair(f.id)}>Repair</button>`}
+                    <span class="level ${f.level === 'blocking' ? 'blocking' : 'advisory'}">${f.level ?? 'advisory'}</span>
+                    <span class="text">${f.text}</span>
                   </li>
                 `;
               })}

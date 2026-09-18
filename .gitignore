@@ -69,6 +69,9 @@ WHAT-THEY-BUILT-WHAT-WE-BUILT.md
 INDEX.md
 ignore-for-commit/
 AGENTS-instructions/
+# The standing rules the agent loads at the start of every session — local, like the rest
+# of the agent instructions above. See the file's own header for what it is.
+AGENTS.md
 #
 # LOCAL-ONLY, BY THE OWNER'S DECISION (2026-09-17). The working registers and the
 # catalog audit are the operator's own record of what is open and what the checker
@@ -87,3 +90,9 @@ OPEN-ITEMS.md
 CORRECTIONS.md
 catalog-audit/
 frontend/catalog-audit/
+#
+# THE AGENTIC EDITOR'S OWN FOLDER, local-only by the owner's instruction (2026-09-18):
+# "that folder is yours, I don't care what you do to it. It'll never be on GitHub."
+# Its README, its CHANGELOG and its numbered chapters are the working record of the
+# canvas work — a record for the session that writes it, not a document of the product.
+AGENTIC_EDITOR/

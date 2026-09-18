@@ -48,8 +48,17 @@ export class ChatFooter extends LitElement {
       flex-direction: column;
       align-items: stretch;
       gap: 10px;
+      /* THE MASTER'S OWN NUMBERS: chat-footer-area #40001085:2697, instance
+         #40001085:2698 — 540x70, padding 20, gap 10, fill #CFD7D5, radius 6, the button
+         drop (4 4 10 / -4 -4 10 at 15%), one text line: Inter Medium 14, #171717.
+
+         The padding is 20 and the bar lands on 70 because there is ONE line: 20 + a
+         14px line's box (30) + 20 = 70. It was 8px while four readouts wrapped into two
+         rows — the padding was bending to content that was not the design's, and the
+         owner's note that the footer was "a little off" was that arithmetic showing.
+         min-height, not height: a long readout grows the bar rather than being clipped. */
       padding: 20px;
-      min-height: 102px;
+      min-height: 70px;
       background: #cfd7d5;
       border-radius: 6px;
       box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.15), -4px -4px 10px rgba(0, 0, 0, 0.15);
@@ -60,17 +69,14 @@ export class ChatFooter extends LitElement {
       color: #171717;
       box-sizing: border-box;
     }
-    .row {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .stat {
-      display: flex;
-      flex-direction: row;
-      gap: 6px;
+    /* THE LINE. One, filling the box's width, ellipsised rather than wrapped — the
+       master draws a single text layer with horizontal fill, and a footer that grows to
+       two lines stops being 70px tall. */
+    .line {
+      width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   `;
 
@@ -82,17 +88,25 @@ export class ChatFooter extends LitElement {
     return this.unattributed ? 'unattributed' : v;
   }
 
+  /**
+   * ONE LINE, AS THE MASTER DRAWS IT. The readouts that are known, in the order they
+   * matter while work is happening: the token count first (the field the master's own
+   * placeholder text names), then the split, then the call count and its timing when
+   * there are any. A number nobody can stand behind still says so, through the seat's own
+   * unattributed rule — an invented figure in a token readout is worse than a dash.
+   */
+  private get _line(): string {
+    const parts: string[] = [`Tokens: ${this._value(this._fmt(this.tokens))}`];
+    if (this.inTokens || this.outTokens) {
+      parts.push(`In / Out: ${this._value(`${this._fmt(this.inTokens)} / ${this._fmt(this.outTokens)}`)}`);
+    }
+    if (this.calls) parts.push(`Calls: ${this._value(this._fmt(this.calls))}`);
+    if (this.lastCall) parts.push(`Last Call: ${this._value(this.lastCall)}`);
+    return parts.join('  ·  ');
+  }
+
   render() {
-    return html`
-      <div class="footer">
-        <div class="row">
-          <div class="stat"><span>Total Tokens</span><span>${this._value(this._fmt(this.tokens))}</span></div>
-          <div class="stat"><span>In / Out</span><span>${this._value(`${this._fmt(this.inTokens)} / ${this._fmt(this.outTokens)}`)}</span></div>
-          <div class="stat"><span>Calls</span><span>${this._value(this._fmt(this.calls))}</span></div>
-          <div class="stat"><span>Last Call</span><span>${this._value(this.lastCall || '—')}</span></div>
-        </div>
-      </div>
-    `;
+    return html`<div class="footer"><div class="line">${this._line}</div></div>`;
   }
 }
 

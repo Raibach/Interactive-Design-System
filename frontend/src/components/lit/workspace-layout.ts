@@ -27,13 +27,44 @@ import { LitElement, html, css, nothing } from 'lit';
 
 export class WorkspaceLayout extends LitElement {
   static properties = {
-    // noAccessor: the accessor below is hand-written, because a write from the
-    // payload and a write from the operator have to be told apart. See it for why.
+    // noAccessor on BOTH column flags, for the same reason spelled out under
+    // isThirdOpen's accessor: a write from the payload and a write from the
+    // operator have to be told apart, and a hand-written accessor is where that
+    // distinction lives.
     isThirdOpen: { type: Boolean, attribute: 'is-third-open', noAccessor: true },
-    leftCollapsed: { type: Boolean, attribute: 'left-collapsed', reflect: true },
+    leftCollapsed: { type: Boolean, attribute: 'left-collapsed', reflect: true, noAccessor: true },
   };
 
-  declare leftCollapsed: boolean;
+  /**
+   * THE LEFT COLUMN, SAME LAW AS THE RIGHT: the payload may set it, the operator
+   * owns it after that, and the element itself can always change it.
+   *
+   * This was a plain reflected property, so anyone could write it — including the
+   * renderer re-assigning every prop on every data-model update. The left column is
+   * the prompt a person is READING; a telemetry tick snapping it shut under their
+   * hands is the same failure the right column already had measured and fixed.
+   */
+  private _leftCollapsed = false;
+
+  /** Has the operator (or a Run) taken the left pane's state out of the payload's hands? */
+  private _leftOwnedByOperator = false;
+
+  get leftCollapsed(): boolean {
+    return this._leftCollapsed;
+  }
+
+  set leftCollapsed(next: boolean) {
+    if (this._leftOwnedByOperator) return; // decided already — a payload re-assert loses
+    this._setLeftCollapsed(next);
+  }
+
+  /** Change the state from INSIDE: the dock, the grip, or a Run. */
+  private _setLeftCollapsed(next: boolean): void {
+    if (this._leftCollapsed === next) return;
+    const previous = this._leftCollapsed;
+    this._leftCollapsed = next;
+    this.requestUpdate('leftCollapsed', previous);
+  }
 
   /**
    * IS THERE ANYTHING IN THE MIDDLE PANE? Read from the slot, never sent.
@@ -102,6 +133,13 @@ export class WorkspaceLayout extends LitElement {
     this.requestUpdate('isThirdOpen', previous);
   }
 
+  /**
+   * HOW LONG THE DOCK WAITS FOR A HOST THAT IS SWAPPING ITS MIDDLE COLUMN. Long enough for a
+   * React render plus the renderer's rebuild (a double frame is ~32ms; this is generous), and
+   * short enough that a surface which never signals still docks while the Run is spinning.
+   */
+  private static readonly DOCK_FALLBACK_MS = 420;
+
   private static readonly MIN_LEFT_PX = 60;
   /**
    * The collapsed chat column's floor — and it is the RAIL'S width, not the 60px
@@ -158,6 +196,18 @@ export class WorkspaceLayout extends LitElement {
     // The pane changes the drag arithmetic (2-column vs 3-column) and the grip, so the
     // split is re-baselined from the column that is now on screen.
     this.requestUpdate();
+    /*
+     * AND A DOCKED COLUMN IS STILL DOCKED. The dock runs on `run-click`, which arrives a
+     * beat BEFORE the middle column exists — a Run is what brings it — so the arithmetic
+     * ran in the two-column case and handed the freed space to the right (the
+     * `!_hasMiddle` branch). When the middle then arrived, the ratios no longer put the
+     * boundary on its floor, and the prompt hung open: measured 107px against a 60px
+     * floor, the owner's "it's not quite snapping shut" (2026-09-18).
+     *
+     * The floor is a fact about the collapsed column, not about when the middle happened
+     * to appear, so the dock is recomputed now that it is here.
+     */
+    if (this._leftCollapsed) this._dockLeft();
   };
 
   connectedCallback(): void {
@@ -200,6 +250,24 @@ export class WorkspaceLayout extends LitElement {
     this.addEventListener('input-resize-move', this._onGripStart as EventListener);
     this.addEventListener('input-resize-end', this._onGripEnd as EventListener);
     this.addEventListener('tab-change', this._onTabChange as EventListener);
+    /*
+     * A RUN DOCKS THE PROMPT, AND THE PROMPT IS WHAT HEARS IT.
+     *
+     * The Run button lives in the left column's own footer (<control-bar> is slotted
+     * into this element's left pane), so the click arrives here from inside the thing
+     * it acts on. Docking is the point: a person has just READ the process as text,
+     * and what they now watch is the same process as a picture — the canvas takes the
+     * width, and the prompt keeps its rail and one grip, so opening it back up is one
+     * gesture. This is a RE-presentation of one process, not a mode switch: nothing
+     * about the prompt changed by being docked.
+     *
+     * It is the element that owns the width doing it, which is the whole reason the
+     * flag below is internal: a payload re-assert cannot reopen the column mid-run,
+     * and the grip still can.
+     */
+    this.addEventListener('run-click', this._onRunClick as EventListener);
+    // The host that swaps its middle column on a Run says when the new one is up.
+    this.addEventListener('flow-view-ready', this._dockNow as EventListener);
   }
 
   disconnectedCallback(): void {
@@ -210,6 +278,9 @@ export class WorkspaceLayout extends LitElement {
     window.removeEventListener('blur', this._onMouseUp as EventListener);
     this.removeEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
+    this.removeEventListener('run-click', this._onRunClick as EventListener);
+    this.removeEventListener('flow-view-ready', this._dockNow as EventListener);
+    if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
     /*
      * A DRAG CANNOT OUTLIVE THE ELEMENT. Re-rendering the surface replaces this
      * element mid-gesture, and the flag that says "follow the mouse" went with it
@@ -250,9 +321,26 @@ export class WorkspaceLayout extends LitElement {
     el.collapsed = !this.isThirdOpen;
   }
 
+  /**
+   * IS THERE ANYTHING IN THE RIGHT PANE? Read from the slot, like the middle's own flag.
+   *
+   * A pane with nothing in it must not be DRAWN, and it must not take width either. That
+   * matters because her panel can MOVE: the flow view composes <agent-canvas> in the
+   * middle column and puts the same chat panel inside it, so the right slot is left empty
+   * — and an empty pane still reserved its floor, which measured 104px of dead column on
+   * the right of the drawing (2026-09-18). The middle column has always answered this
+   * question for itself (`_hasMiddle`); this is the right column asking it too.
+   */
+  private _hasRight = false;
+
   private _onRightSlotChange = (e: Event): void => {
     const slot = e.target as HTMLSlotElement;
     this._rightPanel = (slot.assignedElements()[0] as HTMLElement | undefined) ?? null;
+    const has = slot.assignedNodes({ flatten: true }).some((n) => n.nodeType === Node.ELEMENT_NODE);
+    if (has !== this._hasRight) {
+      this._hasRight = has;
+      this.requestUpdate();
+    }
     this._syncRightPanel();
   };
 
@@ -271,7 +359,20 @@ export class WorkspaceLayout extends LitElement {
    * a 74px pane and the click appeared to do nothing at all: measured 2026-09-17,
    * Trace selected, column still 74px, view slot present and empty on screen.
    */
+  /**
+   * A RAIL SPEAKS FOR ITS OWN COLUMN, and this element only draws a column when it has one.
+   *
+   * `tab-change` arrives from whatever rail is on screen. In the flow view her panel lives
+   * INSIDE the middle column — the container's seat — so a click on Trace was answered here by
+   * opening THIS element's right pane, which is empty: the chat slid left and a band of nothing
+   * appeared beside it. The owner's diagnosis was exact (2026-09-18): "it's sliding the chat to
+   * the left when you click on the trace button — it thinks it's still docked."
+   *
+   * An empty right slot means the rail that spoke is not this pane's, and a pane with no child
+   * has nothing to open.
+   */
   private _onTabChange = (e: Event): void => {
+    if (!this._hasRight) return;
     const tab = String((e as CustomEvent).detail?.tab ?? '');
     this._setThirdOpen(tab !== '');
     this._syncRightPanel();
@@ -301,6 +402,79 @@ export class WorkspaceLayout extends LitElement {
   private _onGripEnd = (): void => {
     this._onMouseUp();
   };
+
+  /**
+   * THE RUN BUTTON ASKS FOR THE ROOM. See the listener in connectedCallback.
+   *
+   * Docking is done HERE, on the element that lays the panes out, and through the
+   * internal path — so it is the column's own act, the person's next grip can undo
+   * it, and no later payload re-assert can. The ratios are recomputed rather than
+   * the flag alone: a pane whose grow factor is unchanged keeps its width, and a
+   * collapsed flag that does not move the split would be a mark with no consequence.
+   */
+  /**
+   * THE DOCK IS QUEUED, NOT IMMEDIATE — a Run is followed by a whole new middle column, and
+   * the dock used to land a beat BEFORE it.
+   *
+   * What that looked like (owner, 2026-09-18): "it's closing the left side correctly but in
+   * doing so it pulls the chat all the way over… and then when I load the canvas, I push the
+   * chat back to its proper position." Two changes, two frames: her column first took the
+   * width the prompt gave up, and only then did the flow view arrive and move her inside the
+   * middle column.
+   *
+   * His answer, and it is the right one: "the way I would do it is queue it up — when you hit
+   * run it used to spin, and I had a little delay on it that allowed everything to queue up."
+   * The Run button DOES spin (`control-bar.isRunning`, which the shell sets at the top of the
+   * run). So the dock now waits for the host that is about to swap: it says
+   * `flow-view-ready` when its new middle column is on screen, and the dock lands with it.
+   *
+   * THE FALLBACK KEEPS EVERY OTHER HOST HONEST: a surface with no flow view never signals, so
+   * the dock cannot wait forever — it lands on the timer instead, exactly as it always did.
+   */
+  private _dockTimer: number | null = null;
+
+  private _onRunClick = (): void => {
+    this._leftOwnedByOperator = true;
+    if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
+    this._dockTimer = window.setTimeout(() => this._dockNow(), WorkspaceLayout.DOCK_FALLBACK_MS);
+  };
+
+  /** The dock, once — from the host's signal or from the fallback, whichever arrives first. */
+  private _dockNow = (): void => {
+    if (this._dockTimer !== null) {
+      window.clearTimeout(this._dockTimer);
+      this._dockTimer = null;
+    }
+    this._dockLeft();
+  };
+
+  /** Collapse the left pane to its floor, by the same arithmetic the drag uses. */
+  private _dockLeft(): void {
+    this._setLeftCollapsed(true);
+    // No layout (a test environment, or before first paint): the FLAG is the fact
+    // the contract is about, and the ratios below would be arithmetic on a zero
+    // width. The drag has the same guard through its Math.max calls.
+    const w = this.clientWidth;
+    if (!w) return;
+    const grip = this._hasMiddle
+      ? WorkspaceLayout.GRIP_LEFT_PX + WorkspaceLayout.GRIP_CHAT_PX
+      : WorkspaceLayout.GRIP_CHAT_PX;
+    const content = Math.max(1, w - grip);
+    // Exactly the left pane's branch of _onMouseMove, with the pointer's travel
+    // replaced by "put the boundary on its floor" — one arithmetic, two callers.
+    if (!this._hasMiddle) {
+      const total = this._left + this._right;
+      const newLeft = (WorkspaceLayout.MIN_LEFT_PX / content) * total;
+      this._left = newLeft;
+      this._right = total - newLeft;
+    } else {
+      const total = this._left + this._middle;
+      const newLeft = (WorkspaceLayout.MIN_LEFT_PX / content) * total;
+      this._left = newLeft;
+      this._middle = total - newLeft;
+    }
+    this.requestUpdate();
+  }
 
   private _onGripDown = (side: 'left' | 'right', e: MouseEvent): void => {
     this.setAttribute('dragging', '');
@@ -344,6 +518,18 @@ export class WorkspaceLayout extends LitElement {
       this._setThirdOpen(true);
       this._syncRightPanel();
     }
+    /*
+     * TAKING HOLD OF THE LEFT DIVIDER IS THE OPERATOR ASKING FOR THE PROMPT BACK.
+     * Same rule as the right column, and the same reason: a collapse docked the pane
+     * to its floor, so the grip sits ON the boundary it is about to move — no
+     * restored ratio to throw the boundary away from the hand. The grab reopens it
+     * and marks the pane the operator's, and the drag's own clamp closes it again if
+     * the hand returns to the floor, so the gripper stays one control both ways.
+     */
+    if (side === 'left') {
+      this._leftOwnedByOperator = true;
+      this._setLeftCollapsed(false);
+    }
     this._startX = e.clientX;
     this._start = { left: this._left, middle: this._middle, right: this._right };
     this.dispatchEvent(new CustomEvent('resize-start', { detail: { side } }));
@@ -376,7 +562,7 @@ export class WorkspaceLayout extends LitElement {
       const newLeft = (leftPx / content) * total;
       this._left = newLeft;
       this._right = total - newLeft;
-      this.leftCollapsed = leftPx <= WorkspaceLayout.MIN_LEFT_PX + 1;
+      this._setLeftCollapsed(leftPx <= WorkspaceLayout.MIN_LEFT_PX + 1);
     } else if (this._dragging === 'left') {
       // 3-column: left vs middle.
       const total = this._start.left + this._start.middle;
@@ -390,7 +576,7 @@ export class WorkspaceLayout extends LitElement {
       const newLeft = (leftPx / content) * total;
       this._left = newLeft;
       this._middle = total - newLeft;
-      this.leftCollapsed = leftPx <= WorkspaceLayout.MIN_LEFT_PX + 1;
+      this._setLeftCollapsed(leftPx <= WorkspaceLayout.MIN_LEFT_PX + 1);
     } else {
       // 3-column: middle vs right.
       const total = this._start.middle + this._start.right;
@@ -545,6 +731,15 @@ export class WorkspaceLayout extends LitElement {
        with the 10×38 glyph centred. No painted hover: the frame draws none, and
        the col-resize cursor is the affordance. The design draws this boundary
        only, so the left boundary keeps the plain bar. */
+    /* AN EMPTY PANE TAKES NO SPACE. The slot above is the observer, so the pane is always
+       drawn — but a pane whose slot has nothing assigned reserves its floor and shows a
+       dead column: measured 104px beside the drawing when the flow view moves her panel
+       inside the middle column (2026-09-18). The middle column has always sized itself to
+       its content this way; so does the right one now.
+       This must stay AFTER the .collapsed rule below: same specificity, source order
+       decides, and collapse-to-the-rail is the wrong answer for a pane that is empty. */
+    .pane.right.empty { flex: 0 0 0; min-width: 0; overflow: hidden; }
+
     /* The spacer's rules MOVED to <chat-panel>, which is the element that renders it
        and the design's container for it. One definition, in the component that owns
        the element — this file no longer draws that strip at all. */
@@ -590,7 +785,16 @@ export class WorkspaceLayout extends LitElement {
     const growTotal = this._left + middleGrow + rightGrow;
     const share = (g: number) => (growTotal > 0 ? g / growTotal : 0);
     const leftFlex = `${share(this._left)} 1 0%`;
-    const rightFlex = `${share(rightGrow)} 1 0%`;
+    /*
+     * A PANE WITH NOTHING IN IT GETS NO SHARE OF THE WIDTH — and it has to be withheld HERE,
+     * because these two lines are written into the pane's own `style` attribute. An inline
+     * style beats every selector, so the `.pane.right.empty` rule that was supposed to zero an
+     * empty pane could never win: measured 2026-09-18, an empty right pane at 526px with the
+     * class applied and the width untouched — the owner's "weird large space on the right hand
+     * side when you click one of the navigation menu", which was her panel living inside the
+     * flow view's container instead of in her own column.
+     */
+    const rightFlex = this._hasRight ? `${share(rightGrow)} 1 0%` : '0 0 0';
 
     return html`
       <div class="pane left" style="flex: ${leftFlex}; min-width: ${minLeft}px;">
@@ -631,7 +835,7 @@ export class WorkspaceLayout extends LitElement {
 
            The floor is the COLUMN's: rail 74 + spacer 30, because the pane's content
            now includes both. -->
-      <div class="pane right ${this.isThirdOpen ? '' : 'collapsed'}" style="flex: ${rightFlex}; min-width: ${WorkspaceLayout.MIN_RIGHT_PX}px;">
+      <div class="pane right ${this.isThirdOpen ? '' : 'collapsed'} ${this._hasRight ? '' : 'empty'}" style="flex: ${rightFlex}; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;">
         <slot name="right" @slotchange=${this._onRightSlotChange}></slot>
       </div>
     `;

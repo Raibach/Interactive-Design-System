@@ -26,6 +26,9 @@ import '@/components/lit/chat-panel';
 // The real child the surface puts in the panel's view slot. Imported, not stubbed: the
 // failure this file guards against was about a real slotted element's `slot` attribute.
 import '@/components/lit/trace-feed';
+// The console's repair list — the real element, imported for the same reason: the failure it
+// guards against is about what a slotted element does or does not get drawn in.
+import '@/components/lit/chat-repair-actions';
 import type { ChatPanel } from '@/components/lit/chat-panel';
 
 type SeatEl = ChatPanel & { updateComplete: Promise<unknown> };
@@ -220,7 +223,11 @@ describe('<chat-panel> draws its seat', () => {
 
     expect(el.conversationId).toBe('conv-B');
     expect(calls.some((c) => c.url === '/api/conversations/conv-B/messages?limit=200')).toBe(true);
-    expect(shadowText(el)).toContain('It reads the node.');
+    // AND THE COLUMN MOVES TO TRACE. Picking a conversation is a request to SEE it, and what
+    // there is to see about a run is its trace (owner, 2026-09-18). So the thread is off
+    // screen by design — the messages are still there, and the tab says where we are.
+    expect(el.activeTab).toBe('trace');
+    expect((el.messages || []).some((m) => String(m.content || '').includes('It reads the node.'))).toBe(true);
   });
 
   it('resizes the input area when the gripper is dragged', async () => {
@@ -434,10 +441,77 @@ describe('<chat-panel> is not fooled by a child that names another slot', () => 
     expect(el.shadowRoot!.querySelector('.view-waiting')).toBeNull();
   });
 
-  it('draws the waiting state when a non-chat tab has nothing in the slot', async () => {
+  it('answers an empty view with what the view IS — never with a spinner that cannot end', async () => {
+    // The line used to read "Loading the trace view…", which was untrue twice: nothing is
+    // loading (the surface fills the slot synchronously) and the empty composer is the
+    // demo. An empty view now says what it is and what would fill it (2026-09-18).
     const el = await mount({ activeTab: 'trace' });
 
     expect(el.shadowRoot!.querySelector('.view-waiting')).not.toBeNull();
-    expect(shadowText(el)).toContain('Loading the trace view');
+    const text = shadowText(el);
+    expect(text).toContain('Nothing traced yet');
+    expect(text).not.toContain('Loading the trace view');
+    // And every rail view has its own line, so the answer is about THIS place.
+    for (const [tab, expected] of [
+      ['versions', 'No versions yet'],
+      ['tools', 'No tools yet'],
+      ['executions', 'No runs yet'],
+      ['eval', 'Nothing has been judged yet'],
+    ] as const) {
+      const other = await mount({ activeTab: tab });
+      expect(shadowText(other)).toContain(expected);
+    }
+  });
+});
+
+/**
+ * THE CONSOLE'S CHAT OPENS WITH THE FINDINGS ON IT — and no other chat is touched.
+ *
+ * The owner, 2026-09-18: "I'm building a demo and I don't want blank chat to open up, so add
+ * it to the chat as well… just make sure it's collapsed by default." And then, on scope:
+ * "this is only for the console, not anywhere else chat appears."
+ *
+ * Which seat is the console's is not a second flag: it is the rail's own list, written by the
+ * server, and the seat that OFFERS Repairs is the seat that draws the findings above its
+ * thread. A package's panel slots a TraceFeed and has no Repairs button, so nothing changes
+ * there — the element is the same, the place is not.
+ *
+ * jsdom computes no `::slotted` rules, so what is asserted is the structure the CSS then
+ * filters: the region is drawn on the chat tab, and its sibling thread is still drawn.
+ */
+describe("<chat-panel> — the console's chat carries the findings", () => {
+  const CONSOLE_SEAT = 'chat,versions,tools,approvals,repair';
+  const PACKAGE_SEAT = 'chat,trace,versions,tools,executions,eval';
+
+  it('draws the findings region above the thread, with the thread still there', async () => {
+    const repair = document.createElement('chat-repair-actions');
+    repair.setAttribute('slot', 'view');
+    const el = await mount({ activeTab: 'chat', allowedTabs: CONSOLE_SEAT }, repair);
+
+    expect(el.shadowRoot!.querySelector('.chat-top')).not.toBeNull();
+    expect(el.shadowRoot!.querySelector('.chat-top slot[name="view"]')).not.toBeNull();
+    expect(el.shadowRoot!.querySelector('chat-messages')).not.toBeNull();
+    // Above the thread, not below it: the thread stays the thing at the bottom of the column.
+    const region = el.shadowRoot!.querySelector('.chat-top')!;
+    const thread = el.shadowRoot!.querySelector('chat-messages')!;
+    expect(region.compareDocumentPosition(thread) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("leaves every other chat alone — a package's seat draws no such region", async () => {
+    const trace = document.createElement('trace-feed');
+    trace.setAttribute('slot', 'view');
+    const el = await mount({ activeTab: 'chat', allowedTabs: PACKAGE_SEAT }, trace);
+
+    expect(el.shadowRoot!.querySelector('.chat-top')).toBeNull();
+    expect(el.shadowRoot!.querySelector('chat-messages')).not.toBeNull();
+  });
+
+  it('draws it on a view tab too, in the view hole the rail switches to', async () => {
+    const repair = document.createElement('chat-repair-actions');
+    repair.setAttribute('slot', 'view');
+    const el = await mount({ activeTab: 'repair', allowedTabs: CONSOLE_SEAT }, repair);
+
+    expect(el.shadowRoot!.querySelector('.chat-top')).toBeNull();
+    expect(el.shadowRoot!.querySelector('.view-slot slot[name="view"]')).not.toBeNull();
   });
 });

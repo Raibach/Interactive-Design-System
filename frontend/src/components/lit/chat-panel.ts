@@ -56,6 +56,11 @@ import { eventBus } from '@/shared/event-bus';
 interface SeatMessage {
   role?: string;
   content?: string;
+  /** Which canvas node the turn is about, when it is about one — passed through, never
+   *  invented here. See <chat-messages>. */
+  nodeId?: string;
+  /** The turn's small note (what part of the flow it is). */
+  label?: string;
 }
 
 /**
@@ -265,11 +270,20 @@ export class ChatPanel extends LitElement {
   // screen and said what it looks like: code, unreadable, nobody can read that. Asking
   // on the user's behalf is not a turn in their conversation. Removed.
   private _onHostSay = (e: Event) => {
-    const detail = ((e as CustomEvent).detail || {}) as { role?: string; content?: string };
+    const detail = ((e as CustomEvent).detail || {}) as {
+      role?: string; content?: string; nodeId?: string; label?: string;
+    };
     if (!detail.content) return;  // an empty bubble reads as having said nothing on purpose
     this._local = [
       ...this._local,
-      { role: detail.role === 'user' ? 'user' : 'assistant', content: String(detail.content) },
+      {
+        role: detail.role === 'user' ? 'user' : 'assistant',
+        content: String(detail.content),
+        // Carried through, not decided here: whether a turn is about a node is the
+        // host's business, and the element that draws turns only needs to know it.
+        nodeId: detail.nodeId,
+        label: detail.label,
+      },
     ];
     this.requestUpdate();
   };
@@ -375,7 +389,15 @@ export class ChatPanel extends LitElement {
     :host {
       padding-top: 10px;
       box-sizing: border-box;
-      background: #9c9c9c;
+      /* TRANSPARENT, SO THERE IS NOTHING TO KEEP IN STEP. This container (the design's
+         right-column-panel-container) and the spacer beside it paint no fill at all: what
+         shows through is whatever the column stands on, so when it stands on a canvas the
+         canvas IS its background and the two read as one surface with no token to match
+         (owner, 2026-09-18). A ground colour here was a second value that had to agree
+         with the drawing, and a second value is a thing that drifts. Her own fills — the
+         rail, the panel, the turns — are hers, and she looks the same everywhere.
+         No backticks in a css literal: this comment is inside one. */
+      background: transparent;
     }
     /*
      * The spacer: "chat-left-spacer" #40001085:2598. 20px in the design, 30px here
@@ -524,6 +546,25 @@ export class ChatPanel extends LitElement {
       opacity: 0.7;
     }
     chat-messages { flex: 1 1 auto; min-height: 0; display: flex; }
+    /* The host's slot above the content. It takes what its content asks for and
+       NOTHING when it is empty — no height, no border, no gap. This is what keeps the
+       new slot cost-free for every assembly that does not fill it. */
+    /* The column's single scroller, and the design's scrollbar: 14px, a transparent
+       track, a rounded #dadee4 thumb — the same one the left column and the output pane
+       draw, so all three scroll alike. */
+    .content-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .content-scroll::-webkit-scrollbar { width: 14px; }
+    .content-scroll::-webkit-scrollbar-track { background: transparent; }
+    .content-scroll::-webkit-scrollbar-thumb { background: #dadee4; border-radius: 10px; }
+    .content-header { flex: 0 0 auto; min-height: 0; display: flex; }
+    .content-header ::slotted(*) { flex: 1 1 auto; min-height: 0; }
     /* "chat-output-simple-slot-area" #40001085:2373 — the hole the surface injects into.
        Read from the file, not assumed: the master's own sizing is vertical HUG (it is as
        tall as what is put in it) and the placement #40001085:2391 is vertical FILL (it takes
@@ -554,9 +595,33 @@ export class ChatPanel extends LitElement {
     .view-slot ::slotted(chat-repair-actions) {
       flex: 0 0 auto;
     }
+    /* THE CHAT TAB CARRIES THE FINDINGS TOO — AND ONLY THE FINDINGS.
+       The console must not open on a blank chat (owner, 2026-09-18: "I'm building a demo and
+       I don't want blank chat to open up, so add it to the chat as well… just make sure it's
+       collapsed by default"). It is the SAME slot the rail's tabs draw from — one element,
+       two places, so the two can never disagree — and the filter is what keeps the chat
+       honest: a TraceFeed slotted for a package's rail is not drawn above a package's thread.
+       It sits inside the column's one scroller, so a long list scrolls the column instead of
+       growing a second scrollbar, and the list itself arrives collapsed: the person opens it,
+       and the thread stays the first thing they meet. */
+    .chat-top {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 0 0 auto;
+      padding: 10px 20px 0;
+      background: #FFFFFF;
+    }
+    .chat-top ::slotted(*) { display: none; }
+    .chat-top ::slotted(chat-repair-actions) { display: block; }
     /* What an EMPTY view slot draws. The slot is filled by the surface, so an empty
        one means the surface has not put anything there yet — a state, not a blank.
-       Until the emission exists this is what the Trace tab shows. */
+       THE LINE IS THE FIRST LESSON, NOT A SPINNER. It used to read "Loading the X view…",
+       which was untrue twice over: nothing is loading (the slot is filled by the surface,
+       synchronously), and the person is looking at a demo whose whole point is to be
+       explored empty (owner, 2026-09-18: "offer empty slots and offer advice in those
+       slots… letting them know how Grace handles an empty prompt"). So an empty view says
+       what the view IS and what would fill it. */
     .view-waiting {
       display: flex;
       align-items: center;
@@ -564,6 +629,7 @@ export class ChatPanel extends LitElement {
       font-size: 13px;
       color: #6B7280;
     }
+    .view-empty { line-height: 1.5; }
     .view-spinner {
       width: 14px;
       height: 14px;
@@ -663,12 +729,58 @@ export class ChatPanel extends LitElement {
    * The slot element only exists while a non-chat tab is active (see render), so
    * this answers for the tab being drawn, not for every tab at once.
    */
+  /**
+   * WHAT AN EMPTY VIEW SAYS. Advice, per tab, in the place the view would be — because a
+   * rail button is a request to look at something THIS place has, and "this place has none
+   * yet" is the answer a demo owes the person who pressed it.
+   *
+   * A tab with no line of its own gets the plain truth rather than an invention: the view
+   * is empty, and it fills when the surface puts something in it.
+   */
+  private _emptyViewLine(): unknown {
+    const lines: Record<string, string> = {
+      versions: 'No versions yet. A version is written when this package is saved.',
+      tools: 'No tools yet. A Tool Call seat in the prompt is what names one.',
+      executions: 'No runs yet. Press ▶ Play the run and this flow\'s run lands here.',
+      eval: 'Nothing has been judged yet. The catalog check runs after a repair is applied.',
+      trace: 'Nothing traced yet. The canvas\'s own events appear here as they happen.',
+      states: 'Sample drawings only. Run the flow to draw the real one.',
+      repair: 'Nothing to repair. The catalog checker found no open findings.',
+    };
+    const line = lines[this.activeTab]
+      ?? `Nothing in this view yet — the surface fills it when this place has something to show.`;
+    return html`<span class="view-empty">${line}</span>`;
+  }
+
+  /**
+   * IS THIS THE CONSOLE'S SEAT — the one whose chat carries the findings?
+   *
+   * The answer is the rail's own list, written by the server: the seat that OFFERS Repairs is
+   * the seat that draws the findings above its thread, and no other chat is touched (owner,
+   * 2026-09-18: "this is only for the console, not anywhere else chat appears"). Reading the
+   * server's list rather than taking a second flag means the rail and the panel cannot
+   * disagree about which seat this is — the same reason the list is not the model's to write.
+   */
+  private _findingsSeat(): boolean {
+    return this.allowedTabs
+      .split(',')
+      .map((tab) => tab.trim())
+      .includes('repair');
+  }
+
   private _viewSlotted(): boolean {
     const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
     if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE)) return true;
     // The light DOM covers what slotting does not report: jsdom's slotting is thin,
     // and the surface's child may be appended after this element's first render.
-    return Array.from(this.children).some((el) => el.getAttribute('slot') === 'view');
+    // A SLOT ELEMENT IS NOT A VIEW. When a host sits between this panel and the
+    // surface — <agent-canvas> re-projects the surface's children into these slots —
+    // the children seen here are `slot` elements, which PROJECT content rather than
+    // being it. Counting them claimed a view was slotted when the host had none, and
+    // the waiting line was suppressed for a view that was never coming.
+    return Array.from(this.children).some(
+      (el) => el.getAttribute('slot') === 'view' && el.tagName !== 'SLOT',
+    );
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
@@ -1088,6 +1200,17 @@ ${workspaceContext}`;
     this.messages = [];
     this._local = [];
     this.conversationId = id;
+    /*
+     * AND THE COLUMN MOVES TO TRACE. Choosing a conversation in the dropdown is not only a
+     * change of thread — it is a request to SEE that conversation, and what there is to see
+     * about a run is its trace. The owner's rule, 2026-09-18: "when somebody clicks one of
+     * those, it should switch everything to trace and the tab should move to trace."
+     *
+     * The rail hears it the same way a click on it would: `active-tab` is what this panel
+     * passes down, so setting it here moves the highlight AND the view together — one
+     * writer, which is why the two can never disagree about which tab is showing.
+     */
+    this.activeTab = 'trace';
     this.dispatchEvent(
       new CustomEvent('conversation-change', {
         bubbles: true,
@@ -1319,20 +1442,42 @@ ${workspaceContext}`;
                      the host slots into the "view" slot — Trace, Versions, Tools or
                      Approvals. One slot, four views: the slot stays generic and the
                      view decides, which is the same split as the dropdown. -->
-                ${this.activeTab === 'chat'
-                  ? html`<chat-messages
-                      .messages=${this._thread}
-                      .sending=${this._sending}
-                    ></chat-messages>`
-                  : html`<div class="view-slot">
-                      <slot name="view" @slotchange=${this._onSlotChange}></slot>
-                      ${this._viewSlotted()
-                        ? nothing
-                        : html`<div class="view-waiting" role="status">
-                            <span class="view-spinner" aria-hidden="true"></span>
-                            Loading the ${this.activeTab} view…
-                          </div>`}
-                    </div>`}
+                <!-- A HOST-FILLABLE SLOT ABOVE THE WORK — the hole a host fills with
+                     whatever belongs at the top of the content: the canvas's own
+                     events, a run's notes, a summary of what is being worked on. The
+                     same idea as the "view" slot one level down, and EMPTY BY DEFAULT
+                     ON PURPOSE: the wrapper takes no height and paints nothing when
+                     nothing is slotted, so every existing assembly is unchanged.
+                     Anything slotted here brings its own height, border and disclosure. -->
+                <!-- THE ONE SCROLLER. Everything below the conversations dropdown and
+                     above the composer moves under a single scrollbar on this column's
+                     right edge: the repairs, the thread, whatever view the rail selected.
+                     There are no inner scrollers here any more — a repair list that
+                     scrolls inside a column that also scrolls is two scrollbars for one
+                     movement, and the owner's rule is one (2026-09-18). It also means a
+                     list GROWS as long as it is: 500 repairs is 500 rows down, which is
+                     the incentive to clean them up, and a cap would hide exactly that. -->
+                <div class="content-scroll">
+                  <div class="content-header"><slot name="content-header"></slot></div>
+                  ${this.activeTab === 'chat'
+                    ? html`${this._findingsSeat()
+                        ? html`<div class="chat-top">
+                            <slot name="view" @slotchange=${this._onSlotChange}></slot>
+                          </div>`
+                        : nothing}
+                      <chat-messages
+                        .messages=${this._thread}
+                        .sending=${this._sending}
+                      ></chat-messages>`
+                    : html`<div class="view-slot">
+                        <slot name="view" @slotchange=${this._onSlotChange}></slot>
+                        ${this._viewSlotted()
+                          ? nothing
+                          : html`<div class="view-waiting" role="status">
+                              ${this._emptyViewLine()}
+                            </div>`}
+                      </div>`}
+                </div>
               </div>
               <div class="chat-input-wrapper">
                 <chat-action-bar

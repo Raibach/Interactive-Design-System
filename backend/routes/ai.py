@@ -30,6 +30,35 @@ from role_caps import get_filtered_manifest, get_user_role, get_role_capabilitie
 router = APIRouter()
 
 
+# ── THE MENU IS THE PLACE, AND THE SERVER WRITES IT ─────────────────────────────
+#
+# A rail's buttons say what THIS place has. A package offers its own versions, tools, runs
+# and evals; the console is the one global seat, and only it offers APPROVALS — the issues
+# that span every package. The prompts ask the model for this list and the model drops it:
+# measured 2026-09-18 in the running app, a fresh composer's rail drew all EIGHT buttons,
+# including the console's Approvals.
+#
+# So the list is written HERE, onto the components the model returned — for the same reason
+# the console's repair rows are composed here: a list like this is not something to be
+# paraphrased by a model. The surfaces still decide; the model no longer does.
+#
+# 2026-09-18, the owner: "remove runs, evals, states and trace from the console chat vertical
+# menu… add the repair dropdown and show all repairs." So the console's rail is this seat's
+# own four — Chat, Versions, Tools, Approvals — plus REPAIRS, the one item only this seat can
+# show: a finding belongs to the catalog, not to a package (the same reason Approvals is here
+# and nowhere else). Trace, Runs and Evals leave this menu and stay where they mean something:
+# a record of a RUN, which is a package's business.
+PACKAGE_TABS = "chat,trace,versions,tools,executions,eval"
+CONSOLE_TABS = "chat,versions,tools,approvals,repair"
+
+
+def _seat_tabs(components: list, tabs: str) -> None:
+    """Set every chat seat's allowed-tabs. Idempotent, and it never adds a component."""
+    for c in components:
+        if isinstance(c, dict) and c.get("component") == "chat-panel":
+            c["allowedTabs"] = tabs
+
+
 def _catalog_component_vocabulary() -> str:
     """The component list for a prompt, GENERATED from the catalog.
 
@@ -252,7 +281,10 @@ class AISurfaceRequest(BaseModel):
 @router.post("/api/ai/assemble-surface")
 def ai_assemble_surface(
     request: AISurfaceRequest,
-    limit: int = Query(10, ge=1, le=200),
+    # THE CEILING IS THE CONSOLE'S, NOT THE MODEL'S. It used to be 200 with a default of 10,
+    # and the default was what a person actually got. The data model can carry a list this
+    # size; the prompt no longer grows with it (see the console's sample).
+    limit: int = Query(500, ge=1, le=1000),
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ):
     """
@@ -432,10 +464,25 @@ def ai_assemble_surface(
         # ── TRUE A2UI: Model is the architect for the console surface ──
         # DB only supplies raw data. The model MUST return the components.
         # Hard-fail (503) if the model cannot assemble it. No DB skip, no fallbacks.
-        cards_for_prompt = json.dumps(cards)
+        # ── THE MODEL SEES A SAMPLE; THE GRID GETS EVERYTHING ──────────────────────
+        #
+        # The cards were dumped into the prompt whole, which meant the number of packages a
+        # person could SEE was decided by what the model could be asked to read: the request's
+        # limit, and the limit defaulted to TEN. The owner, looking at a console with 265
+        # packages in it: "I don't see the pagination… you have a max count of 10 still in
+        # place and I know there's more cards than 10."
+        #
+        # The model does not need every row — it needs to know the list exists, how big it is,
+        # and what a card looks like, because it binds ConsoleCardGrid to /cards and the DATA
+        # MODEL carries the list. So the prompt takes a sample and the count; the data model
+        # takes everything the request asked for.
+        SAMPLE = 12
+        cards_for_prompt = json.dumps(cards[:SAMPLE])
         llm_prompt = f"""You are Grace, the A2UI surface assembler for the console.
 
-The user opened the Console. There are {len(cards)} prompt packages.
+The user opened the Console. There are {len(cards)} prompt packages. The first
+{min(SAMPLE, len(cards))} are shown below as examples of the card shape; bind the grid to the
+whole list at the path below, NOT to these samples.
 
 Card data (bind ConsoleCardGrid to this):
 {cards_for_prompt}
@@ -461,21 +508,28 @@ REQUIREMENTS:
    and would snap the column shut again after the operator opened it, and a pinned
    width jumped the column from 75px to half the screen. Open or closed belongs to
    the element that owns the width.
-5. "console-chat" carries TWO children in its "view" slot: "trace-view" and
-   "repair-view". The panel's "view" slot is the design's ONE content hole
-   ("chat-output-simple-slot-area" #40001085:2373, annotated "holds plain text
-   output and inserted functions" — plural), so BOTH are inserted into it and the
-   slot's value is a LIST of ids.
-   "trace-view" is a TraceFeed bound to /trace/entries and /trace/breadcrumbCount.
-   Both of those paths are written by the CLIENT — the logger and Sentry's scope
-   exist in the browser tab and nowhere else, and the transport has no return path —
-   so do not invent values for them and do not add an updateDataModel for them.
+5. "console-chat" carries ONE child in its "view" slot: "repair-view". The panel's
+   "view" slot is the design's ONE content hole ("chat-output-simple-slot-area"
+   #40001085:2373, annotated "holds plain text output and inserted functions") and
+   this seat fills it with the one view the console has.
    "repair-view" is "chat-repair-actions" bound to /findings. The repair rows are
    composed by the BACKEND from the report the catalog checker already wrote, and
    written into the data model there — the same reason: a list of what is wrong in
-   the catalog is not something to be paraphrased by a model. It is listed FIRST in
-   the slot: it is the actionable thing, and the feed below it fills the rest.
-6. Short friendly ai_message
+   the catalog is not something to be paraphrased by a model.
+   It arrives COLLAPSED — the element's own default, and the owner's rule for the demo he is
+   building: "I don't want blank chat to open up, so add it to the chat as well… just make
+   sure it's collapsed by default." The panel draws this one view above her THREAD on the
+   Chat tab as well as in the hole the rail's tabs use, so the console never opens on a blank
+   chat; collapsed it is a header with a count on it, and opening it is one click.
+   There is no "trace-view" in this assembly any more: Trace left this menu on the same
+   instruction, and a view with no rail button would be a hole nothing can reach.
+6. "console-chat" carries "allowedTabs": "chat,versions,tools,approvals,repair".
+   THE MENU IS THE PLACE: the console is the ONE global seat, so it is the only one that
+   offers APPROVALS — the issues that span every package — and the only one that offers
+   REPAIRS, the findings of the catalog check. A package's seat omits both: a package can
+   only approve, and only repair, what belongs to it. Emit the list exactly as written;
+   an omitted allowedTabs shows every button the rail has.
+7. Short friendly ai_message
 
 Emit nothing else — no greeting, no header, no Text above them.
 
@@ -484,8 +538,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
   "components": [
     {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "console-chat"}}}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
-    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": ["repair-view", "trace-view"]}}}},
-    {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}},
+    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,versions,tools,approvals,repair", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
     {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
   ],
   "ai_message": "Your message"
@@ -522,6 +575,9 @@ Output ONLY this exact JSON (no markdown, no extra text):
         try:
             parsed = _extract_json_payload(response_text)
             components = parsed["components"]
+            # The console is the ONE global seat: the only one that offers approvals.
+            _seat_tabs(components, CONSOLE_TABS)
+            # The console is the ONE global seat, so it is the one that offers approvals.
             ai_message = parsed.get("ai_message", f"{len(cards)} packages ready.")
             if not isinstance(components, list) or len(components) == 0:
                 raise ValueError("components must be non-empty array")
@@ -704,6 +760,8 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
         try:
             parsed = _extract_json_payload(response_text)
             components = parsed["components"]
+            # This place is a package: its own versions, tools, runs and evals — no approvals.
+            _seat_tabs(components, PACKAGE_TABS)
             ai_message = parsed.get("ai_message", f"{len(findings)} open in {index_name}.")
             if not isinstance(components, list) or len(components) == 0:
                 raise ValueError("components must be non-empty array")
@@ -799,15 +857,36 @@ REQUIREMENTS:
 2. id "root", component "workspace-layout", children keyed by slot name.
 3. initial_sections: exactly 3 starter prompt sections — System, User, Agent — each an object {{"name", "type", "content"}} with short real content (User and Agent may be empty).
 4. One short friendly ai_message and one short suggested_title.
+   "isThirdOpen": true IS STATED, NOT LEFT OUT — and that is load-bearing. A prop an assembly
+   OMITS is not reset: the renderer re-assigns what the tree carries, and the element keeps
+   everything else. The console (and a Run's flow view) sets `isThirdOpen: false`, so a
+   Composer that said nothing inherited a CLOSED column — measured 2026-09-18, the owner: "I'm
+   not sure why the chat's loading collapsed." Two columns means the second one is OPEN, every
+   time, so it is written down.
+5. THE ROOT HAS NO "middle" CHILD. A prompt that has not been run shows TWO columns:
+   the prompt and GRACE. The middle column is the one a Run produces — it holds the flow
+   and the run's output, and until there is a run it is not drawn at all (owner,
+   2026-09-18: "you should only see two columns. The third column is not visible until the
+   user clicks run"; and, on seeing the middle drawn without her: "the middle column is
+   open and Grace is gone"). "middle-column" is still EMITTED below — the shell moves the
+   flow view into it at Run time — it is simply not in the layout's children yet, so the
+   layout does not draw it.
+5. "right-column" carries "allowedTabs": "chat,trace,versions,tools,executions,eval".
+   THE MENU IS THE PLACE, not a filter over data: a rail button is a request to look at
+   something THIS place has, so a package offers its own versions, its own tools, its own
+   runs and its own evals — and NOT approvals, because approvals are the console's job:
+   the console approves across every package, and a package can only ever see its own.
+   Emit the list EXACTLY as written; a missing allowedTabs shows every button the rail
+   has, which is how a package ends up offering the console's global view.
 
 Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array, no extra keys, no text after the JSON:
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "children": {{"left": "left-column", "left-footer": "control-bar", "middle": "middle-column", "right": "right-column"}}}},
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left": "left-column", "left-footer": "control-bar", "right": "right-column"}}}},
     {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
-    {{"id": "right-column", "component": "chat-panel", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,versions,tools,executions,eval", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "initial_sections": [
@@ -855,6 +934,8 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
         try:
             parsed = _extract_json_payload(response_text)
             components = parsed["components"]
+            # This place is a package: its own versions, tools, runs and evals — no approvals.
+            _seat_tabs(components, PACKAGE_TABS)
             initial_sections = parsed["initial_sections"]
             ai_message = parsed["ai_message"]
             suggested_title = parsed["suggested_title"]
@@ -1079,6 +1160,10 @@ REQUIREMENTS:
    name; the array form fills nothing.
 2. Bind the panes to the paths above
 3. Short ai_message that says what is on screen
+4. "right-col" carries "allowedTabs": "chat,trace,versions,tools,executions,eval".
+   THE MENU IS THE PLACE: this is a package's own seat, so it offers the versions,
+   tools, runs and evals THIS package has — and not approvals, which belong to the
+   console, the one seat that sees every package at once. Emit it exactly as written.
 
 The session IS the three panes: do NOT greet. Not "Welcome back", no time of day,
 no return salutation — the operator is already in the session they opened.
@@ -1086,11 +1171,11 @@ no return salutation — the operator is already in the session they opened.
 Output ONLY this JSON (no markdown):
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "children": {{"left": "left-col", "left-footer": "control-bar", "middle": "middle-col", "right": "right-col"}}}},
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left": "left-col", "left-footer": "control-bar", "right": "right-col"}}}},
     {{"id": "left-col", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
-    {{"id": "right-col", "component": "chat-panel", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,versions,tools,executions,eval", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "ai_message": "Session open — your three panes are loaded."
@@ -1129,6 +1214,8 @@ Output ONLY this JSON (no markdown):
         try:
             parsed = _extract_json_payload(response_text)
             components = parsed["components"]
+            # This place is a package: its own versions, tools, runs and evals — no approvals.
+            _seat_tabs(components, PACKAGE_TABS)
             ai_message = parsed.get("ai_message", f"{session.get('title') or 'Untitled'} is open.")
             if not isinstance(components, list) or len(components) == 0:
                 raise ValueError("components must be non-empty array")
@@ -1226,6 +1313,10 @@ Output ONLY this JSON (no markdown):
                             "created_at": str(session.get("created_at")) if session.get("created_at") else None,
                             "updated_at": str(session.get("updated_at")) if session.get("updated_at") else None,
                             "column_widths": session.get("metadata", {}).get("column_widths") if session.get("metadata") else None,
+                            # The place as it was saved — the view applies it on opening a
+                            # package (WritingAreaIndex), the same way column_widths is
+                            # applied to the columns.
+                            "workspace": session.get("metadata", {}).get("workspace") if session.get("metadata") else None,
                         },
                         "ai_message": ai_message,
                         "assembly_time_ms": elapsed_ms,
@@ -1337,6 +1428,10 @@ class AISaveSurfaceRequest(BaseModel):
     middle_column: Optional[dict] = None  # compiled_output, model_used
     right_column: Optional[dict] = None  # conversation_id, messages
     column_widths: Optional[dict] = None  # { left: number|null, chat: number }
+    # THE PLACE AS IT WAS LEFT — the state the ELEMENTS hold and a save reads off them:
+    # { leftCollapsed, seat: {open, width}, flow: {zoom, panX, panY} }. Optional on purpose:
+    # a save that does not know the arrangement must not erase one that does.
+    workspace: Optional[dict] = None
 
 
 @router.post("/api/ai/save-surface")
@@ -1505,6 +1600,12 @@ Output ONLY valid JSON:
         }
         if ai_description:
             save_metadata["ai_description"] = ai_description
+
+        # WHERE THE PERSON LEFT OFF, kept with the package. Written ONLY when the caller sent
+        # one — a client that cannot see the arrangement (an API caller, an older page) would
+        # otherwise blank a stored one on the next save. Same reason the field is optional.
+        if request.workspace:
+            save_metadata["workspace"] = request.workspace
 
         # Read what the row holds BEFORE this save, so the version written below
         # can be compared against it. Without this, a Save where nothing changed

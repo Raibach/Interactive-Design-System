@@ -69,6 +69,22 @@ export interface ColumnWidths {
   chat: number;         // always a pixel value (75 when collapsed)
 }
 
+/**
+ * THE PLACE, AS THE OPERATOR LEFT IT — saved with the package, restored when it is opened.
+ *
+ * Every field is optional and every one is written only if the element that owns it was on
+ * screen at save time: a package opened without her column, or without the drawing, keeps
+ * whatever it had rather than being rearranged by a half-record.
+ */
+export interface WorkspaceState {
+  /** The left column, folded away or not (workspace-layout). */
+  leftCollapsed?: boolean;
+  /** Her column: whether it stood open, and how wide it was in px (agent-canvas). */
+  seat?: { open?: boolean; width?: number };
+  /** Where the drawing was left: pan and zoom (agent-flow). */
+  flow?: { zoom?: number; panX?: number; panY?: number } | null;
+}
+
 export interface PromptSession {
   id: string;
   userId: string;
@@ -86,6 +102,13 @@ export interface PromptSession {
   metadata?: Record<string, any>;
   conversationTitle?: string;
   columnWidths?: ColumnWidths;  // persisted slider positions
+  /**
+   * The place as the operator left it, saved WITH the package: the left column's collapse,
+   * her column's width and whether it stood open, and the drawing's pan and zoom. The
+   * elements hold these while a package is open (see agent-canvas.workspaceState) and the
+   * server keeps them in the row's metadata; this is the shape they travel in.
+   */
+  workspace?: WorkspaceState;
   // ── Console card fields (agent-card-element, Figma 40000717:17091) ──
   category?: string;
   categoryColor?: string;
@@ -178,6 +201,9 @@ function mapSessionFromBackend(raw: any): PromptSession {
     username: raw.username || "",
     author: raw.author || raw.metadata?.author || "",
     columnWidths: raw.metadata?.column_widths || raw.column_widths || undefined,
+    // The place as it was left: { leftCollapsed, seat, flow }. Saved with the package (see
+    // the page's save payload) and applied when it is opened.
+    workspace: raw.metadata?.workspace || raw.workspace || undefined,
   };
 }
 

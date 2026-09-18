@@ -43,7 +43,7 @@ export function VersionHistoryPanel({
           <div className="flex items-center justify-between px-4 py-2.5 bg-[#4066e3]">
             <span className="text-white font-semibold text-[13px]">
               {selected.change_description || `Version ${selected.version_number}`}
-              <span className="ml-2 opacity-70 font-normal">v{selected.version_number}</span>
+              <span className="ml-2 opacity-70 font-medium">v{selected.version_number}</span>
             </span>
             <div className="flex items-center gap-3">
               {selected.overall_score != null && (

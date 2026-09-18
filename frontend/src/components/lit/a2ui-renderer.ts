@@ -225,6 +225,10 @@ const COMPOSITE_MAP: Record<string, string> = {
   SectionEditor: 'prompt-section-editor',
   CompiledOutput: 'compiled-output-viewer',
   TraceFeed: 'trace-feed',          // the rail's Trace view, injected into the panel's view slot
+  AgentFlow: 'agent-flow',          // the output column's flow canvas, swapped in on Run
+  AgentCanvas: 'agent-canvas',      // the plug-in: that canvas and her seat, as one unit
+  OutputControls: 'output-controls',  // the middle column's header row, drawn in every view of it
+  CanvasFooter: 'canvas-footer',      // the canvas column's foot: the host's controls and the tone switch
 };
 
 /**
@@ -362,17 +366,17 @@ class A2UIRenderer extends LitElement {
       border-radius: 6px;
       margin: 0 0 10px;
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 13px;
     }
     .a2ui-errors .hdr { font-weight: 700; margin-bottom: 4px; }
-    .a2ui-errors code { font-size: 11px; }
+    .a2ui-errors code { font-size: 13px; }
     .a2ui-error {
       border: 1px dashed #ef4444;
       background: #fef2f2;
       color: #991b1b;
       padding: 6px 8px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 13px;
     }
   `;
 

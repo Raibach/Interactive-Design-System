@@ -26,6 +26,14 @@
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
 import { LitElement, html, css } from 'lit';
+// THE DESIGN'S OWN CHEVRON — "Arrow_drop_down", the exported 14x13 artwork, the same
+// file the output selector's tile imports. The design references ONE asset from two
+// places, so it is imported, not re-drawn: this element used to paint its own stroked
+// path in code, which is a second drawing of a glyph the file already ships — and it
+// looked like one (owner, 2026-09-18: "for some reason there's a fake chevron on the
+// conversations … I know that component came with its own chevron"). Its own artwork,
+// its own 50%-to-full blue, exactly as the node draws it.
+import arrowDropDown from '../../assets/figma-9598a83b0a4eb9b9fc9c226f302689fd4f7075df.svg';
 
 export class SmallDropdown extends LitElement {
   static properties = {
@@ -75,22 +83,30 @@ export class SmallDropdown extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    /* chevron #40001085:1892 — 40×30, 50% blue closed → full blue open. */
+    /* chevron #40001085:1892 — a 40x30 box, padding 7, holding the 14x13 artwork.
+       The DIM is the design's: 50% blue closed, full blue open. It rides on the image as
+       opacity, because the colour is in the file — which is the difference between
+       importing a drawing and tinting one made from a string. */
     .chevron {
       flex-shrink: 0;
       width: 40px;
       height: 30px;
+      padding: 7px;
+      box-sizing: border-box;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: rgba(78, 104, 210, 0.5);
-      transition: transform 0.15s ease, color 0.15s ease;
+      transition: transform 0.15s ease;
     }
-    .chevron svg { display: block; }
-    .trigger[aria-expanded='true'] .chevron {
-      transform: rotate(180deg);
-      color: #4e68d2;
+    .chevron img {
+      display: block;
+      width: 14px;
+      height: 13px;
+      opacity: 0.5;
+      transition: opacity 0.15s ease;
     }
+    .trigger[aria-expanded='true'] .chevron { transform: rotate(180deg); }
+    .trigger[aria-expanded='true'] .chevron img { opacity: 1; }
     /* Hover — inferred (the frame carries no hover variant). */
     .trigger:hover { background: #f7fafc; }
     .body { margin-top: 10px; }
@@ -120,9 +136,7 @@ export class SmallDropdown extends LitElement {
       >
         <span class="label" data-node-id="40001085:1828">${this.label}</span>
         <span class="chevron" data-node-id="40001085:1892" aria-hidden="true">
-          <svg width="14" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M7 10l5 5 5-5" />
-          </svg>
+          <img src=${arrowDropDown} width="14" height="13" alt="" />
         </span>
       </button>
       <div class="body ${this.open ? '' : 'closed'}">
