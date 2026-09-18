@@ -56,13 +56,18 @@ export class PromptContainer extends LitElement {
       min-height: 0;
     }
     .format-rail {
-      width: 39px;
+      /* THE DESIGN'S OWN NUMBERS, read from 40000954:23867 "right-panel-horiz-tab": a 40px
+         column that FILLS the height (it is a flex column, height-wise) with a 1px left rule
+         #999999 — the rail's left edge is an edge, not a gap. It was 39px and no border. */
+      width: 40px;
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 10px;
       background: #ffffff;
+      border-left: 1px solid #999999;
+      box-sizing: border-box;
     }
     .rail-meatballs {
       display: flex;
@@ -93,7 +98,9 @@ export class PromptContainer extends LitElement {
     .vertical-tokens {
       writing-mode: vertical-rl;
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 13px;
+      /* 12px SEMI BOLD, per the same node — it was 13px, which is this app's floor and not the
+         design's number. The readout is the one text on this rail that is NOT body text. */
+      font-size: 12px;
       font-weight: 600;
       line-height: 20px;
       color: #767676;
