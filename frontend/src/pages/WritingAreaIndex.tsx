@@ -102,6 +102,23 @@ interface WritingAreaIndexProps {
  */
 const FIGMA_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
 
+/**
+ * HOW LONG A RUN'S CONTROLS STAY BUSY, at the very least.
+ *
+ * The owner, 2026-09-18: "you need to add a spinner and a delay to the run — three seconds, five
+ * seconds, ten seconds, I don't know, however long it takes to assemble all of this stuff in the
+ * background. I don't wanna see the chat with a big gap on the side and all of a sudden it
+ * corrects itself and slides… this thing should already be in place and then you're just
+ * presenting them, right — you're creating an effective opening like a cassette tape."
+ *
+ * So the spinner is not a progress bar and not a lie about the work: it is the beat that lets the
+ * canvas be PRESENTED instead of watched. Below this floor a run's own controls blink, which is
+ * the glitch he is describing; above it, the motion belongs to the row of controls he is looking
+ * at, which is the point. The canvas's ready signal still ends it — a wait is a floor, not a
+ * delay added to the work.
+ */
+const MIN_RUN_BUSY_MS = 3200;
+
 export default function Index({
   onLogout: _onLogout,
   isAuthenticated: _isAuthenticated,
@@ -399,6 +416,31 @@ export default function Index({
    * Written as values, not as a call into the element: whoever renders the bar draws what
    * the model says, and the renderer re-applies every bound path when the model changes.
    */
+  // ── The run's own controls, busy from the CLICK ────────────────────────────
+  //
+  // The owner, 2026-09-18: "when I click run, the run button is not spinning. It's not delaying
+  // like the save tab does… I don't wanna see the chat with a big gap on the side and all of a
+  // sudden it corrects itself and slides if I put a spinner in, so they have some time to queue
+  // up the canvas." He is describing the same shape Save already has (a spinner and a
+  // "Compiling…" label), and the reason Run did not have it: `isRunning` reaches the control bar
+  // through the tree binding (/session/middle_column/running), and on a Run the tree is SWAPPED
+  // for the canvas — so the flag is written into a tree whose control bar has already been
+  // replaced. The spinner arrives, if at all, after the thing it was meant to cover.
+  //
+  // So the controls are written DIRECTLY for the duration of the assembly, and released on the
+  // canvas's own ready signal — which is the one moment that means "the canvas is up".
+  const setRunControlsBusy = useCallback((busy: boolean) => {
+    for (const tag of ['control-bar', 'canvas-footer']) {
+      document.querySelectorAll(tag).forEach((el) => {
+        const node = el as HTMLElement & { isRunning?: boolean; running?: boolean };
+        node.isRunning = busy;
+        node.running = busy;
+      });
+    }
+  }, []);
+  /** When the current run was asked for — the floor the spinner is held for. */
+  const runBusyFromRef = useRef(0);
+
   const writeBusyToSurface = useCallback((saving: boolean, running: boolean) => {
     setWorkspaceTree((prev) => {
       const session = prev.dataModel.session ?? {};
@@ -3830,6 +3872,9 @@ export default function Index({
       prev ? { ...prev, leftColumnContent, compiledOutput: '' } : prev
     );
     setIsComposerRunning(true);
+    // THE SPINNER GOES ON NOW, not when the tree catches up. See setRunControlsBusy.
+    runBusyFromRef.current = Date.now();
+    setRunControlsBusy(true);
     setMiddleOpen(true);
 
     // ── THE PROMPT DOCKS, AND THE CANVAS TAKES THE WIDTH ────────────────────
@@ -3876,6 +3921,11 @@ export default function Index({
     // dock landing before it is what made her column take the width, then give it back.
     requestAnimationFrame(() => requestAnimationFrame(() =>
       window.dispatchEvent(new CustomEvent('flow-view-ready'))));
+    // …AND THE SPINNER IS HELD FOR A FLOOR OF ITS OWN, so the canvas is PRESENTED rather than
+    // watched arriving: the assembly is as fast as it is, and a control that stops spinning
+    // half a second in reads as a glitch, not as work. Released on the canvas's ready signal,
+    // never earlier than MIN_RUN_BUSY_MS after the click.
+    window.setTimeout(() => setRunControlsBusy(false), Math.max(0, MIN_RUN_BUSY_MS - (Date.now() - runBusyFromRef.current)));
 
     // ── The Run URL is RELATIVE, like every other call in this app ────────────
     //
