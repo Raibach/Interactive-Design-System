@@ -23,3 +23,29 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* The console's column grip — Figma "chat-left-spacer" #40001085:1406 with
+   "gripper-verticle" #40001085:1470. A 20px unfilled strip; the dot glyph is
+   grey at rest and purple on hover, matching <workspace-layout>'s gripper-chat
+   on the composer's boundary, which is the same design.
+
+   It replaced a 6px bar that was transparent until hover, so at rest the slot
+   showed nothing and the guard rail's scrollbar — which ends exactly where the
+   strip begins — was what read as the grip. */
+.console-grip {
+  /* 30px, not the design's 20px. The design draws the strip alone; here it sits
+     directly against the guard rail's scrollbar, and at 20px the centred glyph
+     was only 5px clear of it — close enough to read as one mark. Widening the
+     strip keeps the glyph centred (which is what the design specifies) and puts
+     15px between it and the scrollbar, so the meatball is legible as itself. */
+  width: 30px;
+  background: transparent;
+  color: #b4b4b4;
+}
+.console-grip:hover {
+  color: #7e72e3;
+}
+.console-grip svg {
+  display: block;
+  pointer-events: none;
+}

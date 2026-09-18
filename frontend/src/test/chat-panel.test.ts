@@ -23,6 +23,9 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import '@/components/lit/chat-panel';
+// The real child the surface puts in the panel's view slot. Imported, not stubbed: the
+// failure this file guards against was about a real slotted element's `slot` attribute.
+import '@/components/lit/trace-feed';
 import type { ChatPanel } from '@/components/lit/chat-panel';
 
 type SeatEl = ChatPanel & { updateComplete: Promise<unknown> };
@@ -94,7 +97,7 @@ describe('<chat-panel> draws its seat', () => {
   it('draws its own composer when the surface handed it nothing', async () => {
     const el = await mount();
 
-    expect(shadowText(el)).toContain('No conversation yet for this package.');
+    expect(shadowText(el)).toContain('No conversations yet.');
     expect(el.shadowRoot?.querySelector('chat-input')).toBeTruthy();
     expect(el.shadowRoot?.querySelector('chat-messages')).toBeTruthy();
   });
@@ -115,7 +118,12 @@ describe('<chat-panel> draws its seat', () => {
     expect(shadowText(el)).not.toContain('No conversation yet');
   });
 
-  it('writes every turn back into the package conversation', async () => {
+  it('leaves persistence to the backend — it asks for the turn and writes nothing itself', async () => {
+    // The backend writes both turns (`routes/teacher.py`, the user write and the assistant
+    // write). When this element wrote them as well, every answer landed twice: measured
+    // 2026-09-17, six duplicated rows in one package's conversation. One home per fact, so
+    // the assertion is now the opposite of what it used to be — and it fails loudly if a
+    // second writer comes back.
     const calls = stubFetch();
     const el = await mount({ conversationId: 'conv-1730', sessionId: 'sess-1' });
     await settle(el);
@@ -129,15 +137,11 @@ describe('<chat-panel> draws its seat', () => {
     await settle(el);
 
     const written = calls.filter(
-      (c) => c.init?.method === 'POST' && c.url === '/api/conversations/conv-1730/messages',
+      (c) => c.init?.method === 'POST' && String(c.url).includes('/messages'),
     );
-    const bodies = written.map((c) => JSON.parse(String(c.init?.body)));
 
-    expect(written.length).toBe(2);
-    expect(bodies.map((b) => `${b.role}:${b.content}`)).toEqual([
-      'user:what is this for',
-      'assistant:Answer',
-    ]);
+    expect(written).toEqual([]);
+    expect(calls.some((c) => String(c.url).includes('/api/teacher/query'))).toBe(true);
     expect(shadowText(el)).toContain('Answer');
   });
 
@@ -252,13 +256,9 @@ describe('<chat-panel> draws its seat', () => {
     await settle(el);
 
     const written = calls.filter(
-      (c) => c.init?.method === 'POST' && c.url === '/api/conversations/conv-1730/messages',
+      (c) => c.init?.method === 'POST' && String(c.url).includes('/messages'),
     );
-    const bodies = written.map((c) => JSON.parse(String(c.init?.body)));
-    expect(bodies.map((b) => `${b.role}:${b.content}`)).toEqual([
-      'user:wire it up',
-      'assistant:Answer',
-    ]);
+    expect(written).toEqual([]);
     expect(textarea.value).toBe('');
   });
 
@@ -331,12 +331,19 @@ describe('<chat-panel> draws its seat', () => {
     expect(shadowText(el)).not.toContain('Thinking');
   });
 
-  it('keeps the composer above the footer, with the findings panel collapsed by default', async () => {
-    // The layout assertion for the class of bug this test exists to stop: a
-    // self-added panel once rendered 3,309px of findings and buried the composer
-    // below the fold, which read as "the chat input is missing". The frame's
-    // order is status → messages → action bar → input → footer, and the panel
-    // must default collapsed so it can never grow into that order.
+  it('draws the frame the design draws and NOT the repair list, which the surface injects', async () => {
+    // Two things this pins, both learned the hard way.
+    //
+    // 1. THE ORDER. A self-added panel once rendered 3,309px of findings and buried the
+    //    composer below the fold, which read as "the chat input is missing". The frame's
+    //    order is header → dropdown → rule → content, with the composer chain (action
+    //    bar → input → footer) after it.
+    // 2. THE OWNER. The repair list is NOT this element's child. It arrives in the
+    //    "view" slot — the design's one content hole ("holds plain text output and
+    //    inserted functions") — the same way the trace view does, filled by the surface
+    //    that has the findings. A panel that draws it is a panel owning a list it cannot
+    //    see the source of, and it put a console list above the composer in every
+    //    assembly.
     const el = await mount({
       findings: Array.from({ length: 52 }, (_, i) => ({
         id: `f-${i}`, level: 'advisory', what: `finding ${i}`,
@@ -344,8 +351,6 @@ describe('<chat-panel> draws its seat', () => {
     });
 
     const panel = el.shadowRoot!.querySelector('.panel')!;
-    // The frame's corrected split: output pieces in the fixed 519px wrapper,
-    // the composer chain in the filling input wrapper, input above the footer.
     const outputWrapper = panel.querySelector('.chat-output-wrapper')!;
     expect(outputWrapper.querySelector('chat-header')).toBeTruthy();
     expect(outputWrapper.querySelector('chat-messages')).toBeTruthy();
@@ -356,10 +361,14 @@ describe('<chat-panel> draws its seat', () => {
     expect(pieces.indexOf('chat-input')).toBeGreaterThan(-1);
     expect(pieces.indexOf('chat-input')).toBeLessThan(pieces.indexOf('chat-footer'));
 
-    const repair = el.shadowRoot!.querySelector('chat-repair-actions') as
-      HTMLElement & { collapsed: boolean };
-    expect(repair.collapsed).toBe(true);
-    expect(repair.shadowRoot?.querySelector('ul')).toBeNull();
+    // The findings were handed in as a prop and the panel still does not draw them: the
+    // slot is the only way in, and that is the point. (The slot itself is drawn on the
+    // non-chat tabs, which is where a view is what the design shows.)
+    expect(el.shadowRoot!.querySelector('chat-repair-actions')).toBeNull();
+
+    const onAViewTab = await mount({ activeTab: 'trace', findings: [{ id: 'f-1' }] });
+    expect(onAViewTab.shadowRoot!.querySelector('chat-repair-actions')).toBeNull();
+    expect(onAViewTab.shadowRoot!.querySelector('slot[name="view"]')).toBeTruthy();
   });
 });
 
@@ -383,5 +392,52 @@ describe('<chat-panel> hosts the seat it is given', () => {
   it('collapses the slot when nothing is slotted, so an empty box takes no room', async () => {
     const el = await mount();
     expect(el.shadowRoot!.querySelector('slot')!.className).toBe('seat empty');
+  });
+});
+
+/**
+ * The rail must survive the surface filling the panel's OTHER slot.
+ *
+ * This is the 2026-09-17 failure, and it is here because nothing asserted it: the
+ * surface puts the Trace view in this element's "view" slot, which made it a light-DOM
+ * child, which made `_seatSlotted()`'s fallback (`this.children.length > 0`) report
+ * that a host had handed over a seat — so the panel drew the seat slot in place of its
+ * entire body. The rail left the screen entirely and the collapsed right column
+ * measured 82px with nothing in it. The Trace button could not be found.
+ *
+ * A regression test rather than a fix note: the three assertions below are exactly the
+ * three things that were wrong, and none of them needs a pixel to check.
+ */
+describe('<chat-panel> is not fooled by a child that names another slot', () => {
+  const viewChild = () => {
+    const view = document.createElement('trace-feed');
+    view.setAttribute('slot', 'view');
+    return view;
+  };
+
+  it('keeps its own rail when the surface fills the view slot', async () => {
+    const view = viewChild();
+    const el = await mount({}, view);
+
+    // A child named for another slot is NOT a seat...
+    expect(el.shadowRoot!.querySelector('slot')!.className).toBe('seat empty');
+    // ...so the element draws its own body, rail included.
+    expect(el.shadowRoot!.querySelector('chat-navigation-bar')).not.toBeNull();
+    expect(el.children[0]).toBe(view);
+  });
+
+  it('draws the view slot on a non-chat tab, with no waiting state over a filled slot', async () => {
+    const view = viewChild();
+    const el = await mount({ activeTab: 'trace' }, view);
+
+    expect(el.shadowRoot!.querySelector('slot[name="view"]')).not.toBeNull();
+    expect(el.shadowRoot!.querySelector('.view-waiting')).toBeNull();
+  });
+
+  it('draws the waiting state when a non-chat tab has nothing in the slot', async () => {
+    const el = await mount({ activeTab: 'trace' });
+
+    expect(el.shadowRoot!.querySelector('.view-waiting')).not.toBeNull();
+    expect(shadowText(el)).toContain('Loading the trace view');
   });
 });

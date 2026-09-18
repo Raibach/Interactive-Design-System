@@ -58,6 +58,24 @@ export interface PromptSection {
 class PromptSectionEditor extends LitElement {
   static properties = {
     sessionId: { type: String, attribute: 'session-id' },
+    /**
+     * DECLARED, or the surface can never fill it. `sections` is a hand-written
+     * accessor (see below), so Lit must not generate one — hence noAccessor — but the
+     * declaration itself is what lets the payload reach this element at all.
+     *
+     * Both gates read `static properties`: the renderer's assignProps SKIPS any prop
+     * the element does not declare (it warns to the console and carries on), and Lit's
+     * own reactive check does the same. Without this line the surface's
+     * `{"sections": {"path": "/session/left_column/sections"}}` was dropped on every
+     * assignment — the model on screen held a package's four sections, one with 5,094
+     * characters, and this element drew the three empty seats it seeds for itself.
+     * Every saved package looked blank, and the only trace was a console warning.
+     *
+     * Measured 2026-09-17: /api/ai/assemble-surface render-session for
+     * ef306805-defd-4f71-8e1c-ec2bba58d1e4 returned 4 sections (5,948 chars in
+     * Postgres, version 1) and the editor drew 3 empty rows.
+     */
+    sections: { type: Array, noAccessor: true },
     isRunning: { type: Boolean, attribute: 'is-running' },
   };
 
@@ -115,7 +133,23 @@ class PromptSectionEditor extends LitElement {
   // External data ingestion (React host / AI) — canonical normalization
   set sections(value: unknown) {
     if (Array.isArray(value)) {
-      this._sections = value.map((s: any) => this._normalizeSection(s));
+      const next = value.map((s: any) => this._normalizeSection(s));
+      /*
+       * IDENTICAL CONTENT IN, NOTHING OUT. This is the return leg of the Read/Write
+       * contract (Handling-User-Actions.md): the host writes the model as the person
+       * types, the model comes back here as a `sections` assignment, and without this
+       * guard that round trip CLEARS the collapse state, resets the open menu and
+       * re-renders the whole editor — on every keystroke. The textarea owns the caret;
+       * a re-render mid-typing is how a person loses their place.
+       *
+       * Compared by name and content, which is all the two copies can differ by when the
+       * host is echoing back what this element just reported.
+       */
+      const same = next.length === this._sections.length
+        && next.every((s, i) => s.name === this._sections[i].name
+          && s.content === this._sections[i].content);
+      if (same) return;
+      this._sections = next;
     } else {
       this._sections = [];
     }
@@ -167,17 +201,24 @@ class PromptSectionEditor extends LitElement {
     if (this._listenersBound) return;
     this._listenersBound = true;
 
-    // Seed default sections so the left column is never empty.
-    // Order matches the Figma container (node 40000746-6): System Role,
-    // User Role, Agent Role — no invented sections.
+    // Seed the SEATS the design draws — System Role, User Role, Agent Role — and
+    // NOTHING ELSE. The order matches the Figma container (node 40000746-6).
+    //
+    // The System seat used to be seeded with a sentence: "You are an expert in semantic
+    // design systems and A2UI protocol." Nothing else in this repository contains that
+    // string — not the database, not the assembler, not a prompt. It was invented here,
+    // and it was drawn in the same place and the same style as a package's own content.
+    // Measured 2026-09-17: opening a saved package whose System row is empty showed that
+    // sentence, so a package's contents could not be told apart from this element's
+    // filler. An empty seat is a state; a sentence nobody wrote is a fabrication.
+    //
+    // Types are the CANONICAL ids from @/shared/promptSections, not the short forms this
+    // used to write ('system' / 'user' / 'agent'). Those matched nothing in the schema
+    // enum, and `agent` had no seat there at all. The labels — and so the wire format,
+    // which the Run path keys on — are unchanged.
     if (this._sections.length === 0) {
-      // Types are the CANONICAL ids from @/shared/promptSections, not the short
-      // forms this used to write ('system' / 'user' / 'agent'). Those short forms
-      // matched nothing in the schema enum, and `agent` had no seat there at all.
-      // The labels — and so the wire format, which the Run path keys on — are
-      // unchanged.
       this._sections = [
-        { name: 'System Role', content: 'You are an expert in semantic design systems and A2UI protocol.', type: 'system-role' },
+        { name: 'System Role', content: '', type: 'system-role' },
         { name: 'User Role', content: '', type: 'user-role' },
         { name: 'Agent Role', content: '', type: 'agent-role' },
       ];

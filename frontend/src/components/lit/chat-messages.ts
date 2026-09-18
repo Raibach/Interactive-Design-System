@@ -29,25 +29,15 @@ export class ChatMessages extends LitElement {
     messages: { type: Array },
     /** True while a send is in flight; draws a "Thinking…" turn. */
     sending: { type: Boolean },
-    /** The package's conversations — the selector BELOW the output is part of the binding. */
-    conversations: { type: Array },
-    /** The conversation currently bound. */
-    conversationId: { type: String, attribute: 'conversation-id' },
   };
 
   declare messages: ChatMessage[];
   declare sending: boolean;
-  declare conversations: ChatConversation[];
-  declare conversationId?: string;
-
-  private _menuOpen = false;
 
   constructor() {
     super();
     this.messages = [];
     this.sending = false;
-    this.conversations = [];
-    this.conversationId = undefined;
   }
 
   static styles = css`
@@ -106,55 +96,9 @@ export class ChatMessages extends LitElement {
     @keyframes chat-spin {
       to { transform: rotate(360deg); }
     }
-    /* The conversation selector — BELOW the output, part of the binding. */
-    .selector {
-      position: relative;
-      padding: 0 20px 12px;
-    }
-    .selector > button {
-      width: 100%;
-      min-height: 36px;
-      padding: 6px 10px;
-      border: 1px solid #8e98a8;
-      border-radius: 6px;
-      background: #fff;
-      color: #10455f;
-      font: inherit;
-      font-size: 13px;
-      text-align: left;
-      cursor: pointer;
-    }
-    .placeholder { opacity: 0.6; font-style: italic; }
-    .menu {
-      position: absolute;
-      top: calc(100% - 8px);
-      left: 20px;
-      right: 20px;
-      z-index: 20;
-      margin: 0;
-      padding: 4px;
-      list-style: none;
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.15);
-      max-height: 220px;
-      overflow-y: auto;
-    }
-    .menu button {
-      display: block;
-      width: 100%;
-      padding: 7px 10px;
-      border: none;
-      background: none;
-      font: inherit;
-      font-size: 13px;
-      text-align: left;
-      color: #10455f;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .menu button:hover { background: #f7fafc; }
+    /* No conversation selector here. The design puts it in the output area as
+       <small-dropdown label="Conversations"> (chat-output-slot-area #40001085:1521),
+       so this element is the thread and nothing else. */
   `;
 
   private _roleOf(m: ChatMessage): string {
@@ -167,60 +111,18 @@ export class ChatMessages extends LitElement {
     if (thread) thread.scrollTop = thread.scrollHeight;
   }
 
-  private get _currentLabel(): string {
-    const found = (this.conversations ?? []).find((c) => c?.id === this.conversationId);
-    if (found?.title) return found.title;
-    return this.conversationId ?? '';
-  }
-
-  private _toggleMenu() {
-    this._menuOpen = !this._menuOpen;
-  }
-
-  private _pick(conversationId: string) {
-    this._menuOpen = false;
-    this.dispatchEvent(
-      new CustomEvent('conversation-select', {
-        bubbles: true,
-        composed: true,
-        detail: { conversationId },
-      }),
-    );
-  }
-
   render() {
     const turns = this.messages ?? [];
-    const label = this._currentLabel;
     return html`
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
           ? turns.map(
               (m) => html`<div class="turn ${this._roleOf(m)}">${m.content ?? ''}</div>`,
             )
-          : html`<div class="empty">No conversation yet for this package.</div>`}
+          : html`<div class="empty">No conversations yet.</div>`}
         ${this.sending
           ? html`<div class="thinking"><span class="spinner" aria-hidden="true"></span> Thinking…</div>`
           : ''}
-      </div>
-      <div class="selector">
-        <button type="button" title="Conversation" @click=${this._toggleMenu}>
-          ${label ? html`<span>${label}</span>` : html`<span class="placeholder">Select a conversation…</span>`}
-        </button>
-        ${this._menuOpen
-          ? html`
-              <ul class="menu">
-                ${(this.conversations ?? []).map(
-                  (c) => html`
-                    <li>
-                      <button type="button" @click=${() => this._pick(String(c.id))}>
-                        ${c.title || c.id || '(untitled)'}
-                      </button>
-                    </li>
-                  `,
-                )}
-              </ul>
-            `
-          : nothing}
       </div>
     `;
   }

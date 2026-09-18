@@ -110,11 +110,14 @@ const CHECK_INVENTORY = [
   { id: 'schema-absent', stage: 'deliver', live: false, asserts: 'every implemented allowlist tag is in the schema' },
   { id: 'allowlist-absent', stage: 'deliver', live: false, asserts: 'every schema component is drawable' },
   { id: 'schema-unreachable', stage: 'deliver', live: false, asserts: 'every schema component is reachable through anyComponent' },
-  { id: 'element-unclaimed', stage: 'deliver', live: false, asserts: 'every shipped element is claimed by a gate or mounted by the app' },
+  { id: 'element-unclaimed', stage: 'deliver', live: false, asserts: 'every shipped element is claimed by a gate, a map entry, or a source that draws it' },
+  { id: 'element-refused', stage: 'deliver', live: false, asserts: 'a behavioural element is claimed by an allowlist entry, a catalog entry, a map entry, or a source that draws it' },
+  { id: 'prop-undeclared', stage: 'deliver', live: false, asserts: 'every property the catalog lets a component carry is declared by the element that draws it' },
   { id: 'attr-hardcoded', stage: 'ingest', live: false, asserts: 'the untrusted annotation attribute name is not hardcoded' },
   { id: 'node-unresolved', stage: 'ingest', live: true, asserts: 'every registry node address resolves in the file' },
   { id: 'annotation-missing', stage: 'gap', live: true, asserts: 'every resolved node carries an annotation' },
   { id: 'annotation-prose', stage: 'gap', live: true, asserts: 'every annotation is a spec, not prose' },
+  { id: 'annotation-on-placement', stage: 'ingest', live: true, asserts: 'a control\'s spec is on its master, not on a placement of it' },
   { id: 'geometry-drift', stage: 'deliver', live: true, asserts: 'the node and the rendering agree' },
   { id: 'check-could-not-run', stage: 'ingest', live: false, asserts: 'no check was skipped' },
   { id: 'clean-no-jsx', stage: 'clean', live: false, asserts: 'no React/JSX/Tailwind in the component sources' },
@@ -131,10 +134,13 @@ const BLOCKING = new Set([
   'check-could-not-run',   // the report does not know what it is talking about
   'attr-hardcoded',        // the reader depends on a name the protocol calls untrusted
   'node-unresolved',       // the address is dead: everything said about it is fiction
+  'annotation-on-placement', // the spec is on a place the component was used, not on the component: nothing downstream can find it
   'component-missing',     // the map names a component source that is not there
   'primitive-drift',       // one component, two definitions
   'primitive-missing',     // a theme that silently drops the shared floor
   'schema-unreachable',    // a published catalog a client would reject
+  'element-refused',       // an element with behaviour and no home: it can ship, and no check ever asks about it
+  'prop-undeclared',       // a value the catalog promises the element never receives: the wire is cut in silence
   'doc-claim-drift',       // a document states something about this catalog that is false
   'open-items-register',   // the register and the run disagree — one of them is lying
   'corrections-ledger',    // a recorded fix that no longer holds: a regression wearing a fixed label
@@ -355,7 +361,10 @@ for (const [event, by] of dispatched) {
   if (heard.has(event)) continue;
   for (const comp of by) {
     const s = srcOf(comp);
-    if (s && s.src.includes('TODO(behavior)')) continue; // correctly marked
+    // NO ESCAPE. A `TODO(behavior)` written in a comment used to excuse the file from
+    // this check — so the escape was a claim made inside the very code that dispatches
+    // the event, about itself. A dispatched event with nothing listening is a dead
+    // control whether or not someone typed "undefined in Figma" beside it.
     add({ check: 'event-unheard', stage: 'deliver', owner: 'pipeline', component: comp, nodeId: null, file: s ? rel(s.path) : null, key: event, what: `Dispatches "${event}" and nothing listens — and it is not marked as a stub.`, fix: `Wire a listener, or mark it: // TODO(behavior): action undefined in Figma` });
   }
 }
@@ -555,7 +564,22 @@ const mountedBy = (tag) => APP_SOURCES.find((p) => {
   const src = read(p);
   return src.includes(`<${tag}`) || src.includes(`createElement('${tag}'`) || src.includes(`createElement("${tag}"`);
 });
+/**
+ * THE THIRD HOME: a PARENT ELEMENT composes it.
+ *
+ * This is the channel that was missing, and its absence is why seven sub-pieces of the
+ * chat panel were reported as unclaimed on every run. <chat-header>, <chat-messages>,
+ * <chat-input>, <chat-action-bar>, <chat-footer>, <small-dropdown> and
+ * <chat-repair-actions> are drawn by <chat-panel>'s own template — "Sub-pieces are
+ * internal to a parent element" (Core-Concept.md). A parent that renders the tag is a
+ * claim, and reading it from the element's own file is still forbidden: the scan
+ * excludes `self`, because a file naming itself names nobody.
+ */
+const composedBy = (tag, selfPath) => SOURCES.find((s) => s.path !== selfPath && s.src.includes(`<${tag}`));
+/** THE FOURTH HOME: the Figma map names it (the design relationship is a claim too). */
+const mappedBy = (tag) => figmaMap.components.find((c) => c.litComponent === tag);
 checkRan('element-unclaimed');
+checkRan('element-refused');
 const definesElement = (src) => {
   const m = src.match(/customElements\.define\(\s*['"]([^'"]+)['"]/);
   return m ? m[1] : null;
@@ -565,15 +589,40 @@ for (const s of SOURCES) {
   if (!tag) continue; // a helper module, not an element — nothing to claim
   if (allowlistTags.has(tag) || schemaComponents.includes(tag)) continue;
   const mount = mountedBy(tag);
-  if (mount) {
-    // Claimed by the app itself. Recorded as a PASS with its mounting site, so the
-    // exemption is on the record and reasoned about, not silently dropped — and so
-    // the check still shows as having run.
+  const parent = composedBy(tag, s.path);
+  const mapped = mappedBy(tag);
+  // The claiming HOME, as a path — normalised, because the channels return different
+  // shapes: the app channel and the map are strings/entries, a parent element is a
+  // SOURCE object, and `rel()` takes a path.
+  const claimedPath = mount || (parent && parent.path) || (mapped && mapped.file) || null;
+  if (claimedPath) {
+    // Claimed somewhere other than the two gates. Recorded as a PASS with its claiming
+    // home, so the exemption is on the record and reasoned about, not silently dropped
+    // — and so the check still shows as having run.
     findings.push({
       id: `clean:app-mounted:${tag}`, check: 'element-unclaimed', stage: 'clean', owner: 'pipeline',
-      level: 'pass', tier: 'primitives', component: s.file, nodeId: null, file: rel(mount),
-      what: `Defines <${tag}> and the app mounts it directly (${rel(mount)}) — it is not an A2UI surface component, so no surface has to claim it.`,
+      level: 'pass', tier: 'primitives', component: s.file, nodeId: null,
+      file: rel(claimedPath),
+      what: parent && !mount
+        ? `Defines <${tag}> and a parent element draws it (${rel(parent.path)}) — a sub-piece of its parent, not an A2UI surface component.`
+        : mount
+          ? `Defines <${tag}> and the app mounts it directly (${rel(mount)}) — it is not an A2UI surface component, so no surface has to claim it.`
+          : `Defines <${tag}> and the Figma map records where it came from (${mapped.file}) — tracked by the annotation checks even though no surface emits it.`,
       fix: null,
+    });
+    continue;
+  }
+  const dispatchedBy = dispatchNames(s.file);
+  if (dispatchedBy.length) {
+    // A BEHAVIOURAL element nobody has claimed. This is the refusal, not a report: an
+    // element that dispatches events and belongs to no home is one the next surface can
+    // emit by accident, or that a model can add and then call "new, so exempt".
+    add({
+      check: 'element-refused', stage: 'deliver', owner: 'pipeline', tier: 'primitives',
+      component: s.file, nodeId: null, file: rel(s.path),
+      what: `Defines <${tag}> and DISPATCHES ${dispatchedBy.length} event(s) — ${dispatchedBy.join(', ')} — but nothing claims it: no allowlist entry, no catalog entry, no map entry, and no source mounts or composes it. It can be added, it can ship, and no check would ever ask about it.`,
+      fix: `Give it a home before it ships — an allowlist entry plus a catalog entry if a surface may emit it, a map entry if it came from the design, or a parent element that draws it. "It is new" is not one of the homes.`,
+      dispatchedEvents: dispatchedBy,
     });
     continue;
   }
@@ -583,6 +632,77 @@ for (const s of SOURCES) {
     what: `Defines <${tag}> but neither the allowlist nor the schema claims it, and the app never mounts it — nothing can render it.`,
     fix: `Add "${tag}" to the allowlist, mount it in the app, or delete the element.`,
   });
+}
+
+// ═══ DELIVER — can the element RECEIVE what the catalog promises? ══════════
+// A payload prop the element does not declare is DROPPED, and the drop is nearly silent:
+// the renderer's assignProps skips it and reports it to the CONSOLE only
+// (a2ui-renderer.ts:128 — "an undeclared prop is reported rather than assigned
+// silently"). Nothing else notices, so the value never arrives and the component draws
+// its own defaults while every other check stays green.
+//
+// Measured 2026-09-17, and it cost the owner his afternoon: `sections` was missing from
+// <prompt-section-editor>'s static properties, so the surface's
+// {"sections": {"path": "/session/left_column/sections"}} was dropped on EVERY
+// assignment. Every saved package drew its own empty seats; 43 rows with real content sat
+// in Postgres and the screen said the database was disconnected. One declaration, and no
+// check asked for it because every check read the catalog against the ALLOWLIST — which
+// only names the tag — and never against the element's own property list.
+//
+// The catalog is where the promise is made, so the catalog is where it is checked.
+checkRan('prop-undeclared');
+{
+  // name -> tag, as the renderer resolves it: an explicit composite alias first, then
+  // the kebab of the model name, then the name itself when it is already a tag.
+  const compositePairs = (() => {
+    const src = read(join(ROOT, 'src/components/lit/a2ui-renderer.ts'));
+    const block = src.match(/(?:const|export const)\s+COMPOSITE_MAP\b[^=]*=\s*\{([\s\S]*?)\n\};/);
+    if (!block) return {};
+    const out = {};
+    for (const m of block[1].matchAll(/'([^']+)'\s*:\s*'([^']+)'/g)) out[m[1]] = m[2];
+    return out;
+  })();
+  const kebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2').toLowerCase();
+  const sourceByTag = new Map(
+    SOURCES.map((s) => [definesElement(s.src), s]).filter(([t]) => t),
+  );
+  // Set by the renderer's own template, not by the property channel: `id` is the
+  // component's address, `children` is the tree, `component` is the discriminator.
+  const RENDERER_HANDLED = new Set(['component', 'children', 'id']);
+
+  for (const [name, spec] of Object.entries(schema.components || {})) {
+    // Who draws it? A component with no element of its own (a spec primitive, or one of
+    // the renderer's own composites) has no property list to be held to.
+    const tag = compositePairs[name]
+      || (allowlistTags.has(kebab(name)) ? kebab(name) : null)
+      || (allowlistTags.has(name) ? name : null);
+    if (!tag) continue;
+    const src = sourceByTag.get(tag);
+    if (!src) continue; // no element defines it — tag-inert / element-refused say so
+
+    const declared = new Set(
+      ((src.src.match(/static properties\s*=\s*\{([\s\S]*?)\n  \};/) || [])[1] || '')
+        .split('\n')
+        .map((l) => (l.match(/^\s*'?([A-Za-z_$][\w$]*)'?\s*:/) || [])[1])
+        .filter(Boolean),
+    );
+
+    const bound = new Set();
+    for (const part of (spec.allOf || []).concat([spec])) {
+      for (const prop of Object.keys(part.properties || {})) bound.add(prop);
+    }
+
+    for (const prop of bound) {
+      if (RENDERER_HANDLED.has(prop) || declared.has(prop)) continue;
+      add({
+        check: 'prop-undeclared', stage: 'deliver', owner: 'pipeline', tier: tierOfTag(tag),
+        component: tag, nodeId: null, file: rel(src.path), key: `${name}.${prop}`,
+        what: `Catalog "${name}" may carry "${prop}", and <${tag}> does not declare it — the renderer DROPS it (assignProps skips undeclared props and warns to the console only), so any payload binding that property renders a component that never received the value.`,
+        fix: `Declare "${prop}" in static properties of ${rel(src.path)} (add noAccessor: true when the element has a hand-written accessor), or remove "${prop}" from the "${name}" entry in catalogs/${CATALOG_NAME}/catalog.json.`,
+      });
+    }
+  }
 }
 
 // ═══ INGEST — the pipeline's own health ════════════════════════════════════
@@ -900,30 +1020,18 @@ if (registerText === null) {
       fix: 'Give it a ledger row, or correct the citation — a number that resolves to nothing is worse than no number.' });
   }
 
-  // The failure that started all this: the register existed, and git could not see it.
-  if (existsSync(join(REPO, '.git'))) {
-    try {
-      execFileSync('git', ['ls-files', '--error-unmatch', registerFile], { cwd: REPO, stdio: 'pipe' });
-    } catch {
-      add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'untracked',
-        what: 'The register is not tracked by git. It exists on this machine and in no clone — which is exactly how its numbers drifted unnoticed for months.',
-        fix: `git add ${registerFile}` });
-    }
-    const rules = [join(REPO, '.gitignore'), join(REPO, '.git', 'info', 'exclude')].filter(existsSync).flatMap((p) => {
-      let text = ''; try { text = read(p); } catch { return []; }
-      // Comments are skipped on purpose: this check's own explanation of WHY the
-      // register is no longer excluded names the file, and a scan that counted that
-      // would fire on its own documentation.
-      return text.split('\n').map((l) => l.trim())
-        .filter((l) => l && !l.startsWith('#') && l.includes('OPEN-ITEMS.md'))
-        .map((l) => `${rel(p)}: ${l}`);
-    });
-    if (rules.length) {
-      add({ check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'excluded',
-        what: `An ignore rule matches the register (${rules.join('; ')}), so the next edit to it would not show up in git status.`,
-        fix: 'Remove the rule. A register nothing can see is the defect this check exists for.' });
-    }
-  }
+  // ── THE REGISTER IS LOCAL-ONLY NOW, AND THE GUARD IS THE NUMBERS ───────────
+  //
+  // This used to assert that OPEN-ITEMS.md was tracked by git and matched by no
+  // ignore rule, on the grounds that a register git cannot see is one whose counts
+  // drift unnoticed — which is exactly how it happened before. The owner has decided
+  // the registers and the catalog audit are not published (2026-09-17: TO-DO.md,
+  // OPEN-ITEMS.md, CORRECTIONS.md and catalog-audit/ are local), so visibility to git
+  // is no longer something this script can require.
+  //
+  // The guard that actually catches drift is untouched and is the one above: every
+  // count the register records is compared against the count this run derives, and a
+  // disagreement fails the build. That mechanism never depended on git.
 }
 
 // ═══ INGEST + GAP — the live file ══════════════════════════════════════════
@@ -958,7 +1066,63 @@ if (OFFLINE || !token) {
     checkRan('node-unresolved');
     checkRan('annotation-missing');
     checkRan('annotation-prose');
+    checkRan('annotation-on-placement');
     checkRan('geometry-drift');
+
+    // ── AN INSTANCE CARRIES NO ANNOTATION: RESOLVE TO THE COMPONENT IT PLACES ──
+    //
+    // The registry addresses a node, and the annotation belongs to the thing that node is
+    // an instance OF. Reading `node.annotations` on a placement reads an empty list, so a
+    // properly annotated component reports as unannotated — and a spec written on a
+    // placement is accepted, where nothing downstream can find it. Figma's node endpoint
+    // returns only the ids asked for, so the components the placements point at are a
+    // second request, once per run.
+    const placedComponentIds = [...new Set(
+      Object.values(data.nodes || {})
+        .map((n) => n.document)
+        .filter((d) => d && d.type === 'INSTANCE' && d.componentId)
+        .map((d) => d.componentId),
+    )];
+    let masterNodes = {};
+    if (placedComponentIds.length) {
+      try {
+        const mres = await fetch(`https://api.figma.com/v1/files/${fileKey}/nodes?ids=${placedComponentIds.join(',')}`, { headers: { 'X-Figma-Token': token } });
+        if (mres.ok) masterNodes = (await mres.json()).nodes || {};
+      } catch (e) {
+        // The annotation then reads as absent, and the finding says which master could
+        // not be read rather than claiming the master is bare.
+        console.error(`[catalog-check] component fetch failed (${placedComponentIds.length} ids): ${e.message}`);
+      }
+    }
+    const annText = (n) => (n?.annotations || []).map((a) => a.labelMarkdown || a.label || '').filter(Boolean).join('\n');
+    const masterOf = (n) => (n && n.componentId ? masterNodes[n.componentId]?.document : undefined);
+
+    /**
+     * Where the spec actually is. In order: the node itself, the component an instance
+     * places, the first variant of a set that carries one. `via` is reported so a finding
+     * can say where it looked, and `specOnPlacement` is the case that blocks: the node is
+     * an instance, the instance is annotated, and the master is not.
+     */
+    const readAnnotation = (node, id) => {
+      const own = annText(node);
+      const master = masterOf(node);
+      if (own.trim()) {
+        return {
+          text: own, from: id, via: 'node',
+          specOnPlacement: node.type === 'INSTANCE' && !annText(master).trim(),
+          masterId: node.componentId || null,
+        };
+      }
+      if (node.type === 'INSTANCE' && node.componentId) {
+        const mt = annText(master);
+        if (mt.trim()) return { text: mt, from: node.componentId, via: 'master' };
+        return { text: '', from: node.componentId, via: 'master-missing' };
+      }
+      // A component SET carries no note either; its variants do.
+      const variant = (node.children || []).find((ch) => annText(ch).trim());
+      if (variant) return { text: annText(variant), from: variant.id, via: 'variant' };
+      return { text: '', from: null, via: 'none' };
+    };
     // ── The node is the subject ────────────────────────────────────────────
     // Every finding in this loop is about ONE NODE, and two registry rows can
     // resolve to one component file (#024: `functions` and `prompt-input-section`
@@ -975,12 +1139,30 @@ if (OFFLINE || !token) {
         add({ check: 'node-unresolved', stage: 'ingest', owner: 'pipeline', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Address ${id} is not in the file. The pull returns nothing, so this component reports as "no annotation" when really the address is dead.`, fix: 'Point the registry at the component\u2019s real node id.' });
         continue;
       }
-      const anns = node.annotations || [];
-      const text = anns.map((a) => a.labelMarkdown || a.label || '').filter(Boolean).join('\n');
-      if (!anns.length || !text.trim()) {
-        add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation.`, fix: `Annotate the variant in Figma. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md`, dispatchedEvents: dispatchNames(c.litComponent) });
-      } else if (!isStructured(text)) {
-        add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} has a note, but it is prose, not a spec — so behaviour must be invented. "${text.slice(0, 90)}${text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).', dispatchedEvents: dispatchNames(c.litComponent) });
+      const ann = readAnnotation(node, id);
+      const where = ann.via === 'master' ? ` (read from the component it places, ${ann.from})`
+        : ann.via === 'variant' ? ` (read from its variant ${ann.from})`
+        : '';
+      if (!ann.text.trim()) {
+        const masterNote = ann.via === 'master-missing'
+          ? `, and neither does the component it places (${ann.from})`
+          : '';
+        add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation${masterNote}.`, fix: `Annotate the MASTER in Figma — a placement carries no annotation. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md`, dispatchedEvents: dispatchNames(c.litComponent) });
+      } else if (ann.specOnPlacement) {
+        // THE SPEC IS ON A PLACEMENT. The node is an instance, the instance is annotated,
+        // and the component it places is not — so the behaviour was written somewhere the
+        // component cannot carry it: the next placement of that component, and every reader
+        // of its master, sees nothing. Blocking, because accepting it lets a control into
+        // the catalogue on a note that is not attached to the control.
+        add({
+          check: 'annotation-on-placement', stage: 'ingest', owner: 'pipeline',
+          component: c.litComponent, nodeId: id, key: id, file: c.file,
+          what: `Node ${id} ("${node.name}", ${node.type}) is a PLACEMENT and it carries the annotation, while the component it places (${ann.masterId}) carries none. A spec on a placement belongs to one use of the component, not to the component.`,
+          fix: `Move the annotation to the master (${ann.masterId}) in Figma and leave the placement bare.`,
+          dispatchedEvents: dispatchNames(c.litComponent),
+        });
+      } else if (!isStructured(ann.text)) {
+        add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id}${where} has a note, but it is prose, not a spec — so behaviour must be invented. "${ann.text.slice(0, 90)}${ann.text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).', dispatchedEvents: dispatchNames(c.litComponent) });
       }
 
       // ── Geometry convergence ────────────────────────────────────────────

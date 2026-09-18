@@ -8,10 +8,10 @@
  * It is restricted to the left column — it does NOT span the full page.
  *
  * Layout (Figma node 40000761:248, 656×70px):
- *   [Version text]  ···  [↩️ Undo] [Save Template ⌘ S] [RUN ⌘ ⏎]
+ *   [↩️ Undo] [Save Template ⌘ S] [RUN ⌘ ⏎]      — right-aligned, and nothing else.
+ *   The master carries no version text; see render().
  *
  * Properties (HTML attributes):
- *   - version-text   (String)  — "Saved: My Prompt" or "Editing Version 1"
  *   - is-saving       (Boolean) — shows spinner on Save button when true
  *   - is-running      (Boolean) — shows spinner on Run button when true
  *   - save-shortcut   (String)  — keyboard shortcut label (default "⌘ S")
@@ -38,14 +38,12 @@ import { LitElement, html, css } from 'lit';
 
 export class ControlBar extends LitElement {
   static properties = {
-    versionText: { type: String, attribute: 'version-text' },
     isSaving: { type: Boolean, attribute: 'is-saving' },
     isRunning: { type: Boolean, attribute: 'is-running' },
     saveShortcut: { type: String, attribute: 'save-shortcut' },
     runShortcut: { type: String, attribute: 'run-shortcut' },
   };
 
-  declare versionText: string;
   declare isSaving: boolean;
   declare isRunning: boolean;
   declare saveShortcut: string;
@@ -53,7 +51,6 @@ export class ControlBar extends LitElement {
 
   constructor() {
     super();
-    this.versionText = 'Editing Version 1';
     this.isSaving = false;
     this.isRunning = false;
     this.saveShortcut = '⌘ S';
@@ -66,15 +63,15 @@ export class ControlBar extends LitElement {
       display: var(--left-control-display, flex);
       flex-shrink: 0;
       align-items: center;
-      justify-content: space-between;
+      /* Figma "controlBar" #40000761:248: layout row, justify flex-end, align center.
+         The bar holds ONE child — the CTA group — and the group is pushed right. */
+      justify-content: flex-end;
       /* Figma node 40000761:248: bg-[#b5ccce] px-[38px] py-[13px] */
       padding: 13px 38px;
       background: #B5CCCE;
       /* Figma: rounded-br-[10px] */
       border-radius: 0px 0px 10px 0px;
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 16px;
-      color: #4E68D2;
       /* Figma: 656×70 outer, minus padding = 656 × (70 - 13 - 13) = 656 × 44 inner */
       height: 70px;
       box-sizing: border-box;
@@ -93,22 +90,25 @@ export class ControlBar extends LitElement {
                   inset 0px 4px 4px 0px rgba(0, 0, 0, 0.1);
     }
 
-    /* ── Version text (node 40000761:249) ─────────────────────────────────── */
-    .version {
-      /* Figma: font-['Inter:Bold'] font-bold text-[#4e68d2] text-[16px] h-[34px] w-[153px] */
-      font-weight: 700;
-      font-size: 16px;
-      color: #4E68D2;
-      white-space: nowrap;
-      line-height: 34px;
-      width: 153px;
-    }
-
-    /* ── Actions container (node 40000761:264) ────────────────────────────── */
+    /* ── Actions container (node 40000761:264 "CTA-prompt-inputs") ────────── */
+    /* 417.24 × 44, and the three controls sit at FIXED offsets inside it. The master
+       draws them as a group (layout mode "none", absolute x), so the spacing is a
+       number, not a gap: undo x=0 (36.07 wide) · Save x=54.88 (204.44 wide, so 18.81
+       after the circle) · RUN x=275.24 (142 wide, 15.92 after Save). 36.07 + 18.81 +
+       204.44 + 15.92 + 142 = 417.24 exactly. */
     .actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: flex-end;
+      /* HUG the three controls (417.24) instead of filling the content box: the design's
+         bar is justify-content flex-end, so the group sits against the right padding and
+         the bar is otherwise empty. Measured before this: the group spanned the full
+         content width and its controls came out LEFT-aligned — undo at 38px from the bar's
+         left edge, where the design puts it at 201px. (No backticks in this comment: this
+         is a Lit css literal, and a backtick ends it. tsc does not catch that; esbuild does.) */
+      width: fit-content;
+      flex: 0 0 auto;
+      margin-left: auto;
       height: 44px;
     }
 
@@ -149,6 +149,9 @@ export class ControlBar extends LitElement {
 
     /* ── Save button (node 40000761:269 "Save prompt") ───────────────────── */
     .btn-save {
+      /* Figma: x=54.88, 18.81 after the 36.07-wide circle — the group's own offsets,
+         not a flex gap. */
+      margin-left: 18.81px;
       /* Figma: bg-white, h-[43px], w-[204.437px], rounded-[6px] */
       background: #fff;
       color: #5a5a5a;
@@ -179,6 +182,8 @@ export class ControlBar extends LitElement {
 
     /* ── Run button (node 40000761:267 "enter-run") ──────────────────────── */
     .btn-run {
+      /* Figma: x=275.24, 15.92 after Save's 204.44 — the group's own offsets. */
+      margin-left: 15.92px;
       /* Figma: bg-gradient-to-l from-[#f0b424] to-[#fed141], h-[43px], w-[142px] */
       background: linear-gradient(to left, #f0b424 0%, #fed141 100%);
       /* Figma: text-black text-[18px] font-extrabold */
@@ -274,12 +279,13 @@ export class ControlBar extends LitElement {
   }
 
   render() {
+    // THE DESIGN'S BAR HAS THREE THINGS AND NOTHING ELSE. Its master
+    // "Left-column-ControlBar" #40000761:261 has ONE child — "controlBar" #40000761:248 —
+    // whose CTA group #40000761:264 holds the undo circle (#40000761:271), "Save Template
+    // ⌘ S" (#40000761:269) and "RUN ⌘ ⏎" (#40000761:267). There is no version line in it.
+    // One was drawn here from node #40000761:249, which is not part of this component —
+    // and drawing it put a sentence in the bar that the design does not have.
     return html`
-      <div
-        class="version"
-        data-tag="control-bar-version"
-        data-node-id="40000761:249"
-      >${this.versionText}</div>
       <div class="actions" data-node-id="40000761:264">
         <!-- Undo button (node 40000761:271 "undo-last-state-milivis") -->
         <button
@@ -332,7 +338,6 @@ declare module 'react' {
     interface IntrinsicElements {
       'control-bar': React.DetailedHTMLProps<
         React.HTMLAttributes<ControlBar> & {
-          'version-text'?: string;
           'is-saving'?: '' | undefined;
           'save-shortcut'?: string;
           'run-shortcut'?: string;

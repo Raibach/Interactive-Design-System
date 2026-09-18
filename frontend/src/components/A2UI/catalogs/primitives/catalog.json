@@ -279,13 +279,17 @@
     },
     "chat-panel": {
       "type": "object",
-      "description": "Lit chat panel (right column + console). Binds to conversationId.",
+      "description": "Lit chat panel (right column + console). Binds to conversationId and to the Conversations dropdown's list.",
       "properties": {
         "component": {
           "const": "chat-panel"
         },
         "conversationId": {
           "type": "object"
+        },
+        "conversations": {
+          "type": "object",
+          "description": "The Conversations dropdown's rows — the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
         },
         "id": {
           "type": "string"

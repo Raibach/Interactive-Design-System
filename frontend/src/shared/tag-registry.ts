@@ -73,19 +73,6 @@ export const SaveButtonSchema = z.object({
   constraints: z.array(z.string()),
 });
 
-export const RunButtonSchema = z.object({
-  tag: z.literal('run-button'),
-  props: z.object({
-    state: z.enum(['idle', 'running', 'complete', 'error']).default('idle'),
-    label: z.string().default('Run'),
-  }),
-  events: z.tuple([z.literal('run-click')]),
-  surface: z.literal('composer'),
-  column: z.literal('left'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
 // ── COMPOSER — Middle Column (Output & Trace) ────────────────────────────────
 
 export const OutputPanelSchema = z.object({
@@ -115,32 +102,6 @@ export const VersionTraceSchema = z.object({
     })).optional(),
   }),
   events: z.tuple([z.literal('version-select'), z.literal('version-compare')]),
-  surface: z.literal('composer'),
-  column: z.literal('middle'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
-export const LayoutRowSchema = z.object({
-  tag: z.literal('layout-row'),
-  props: z.object({
-    gap: z.number().default(16),
-    align: z.enum(['start', 'center', 'end', 'stretch']).default('start'),
-  }),
-  events: z.tuple([]),
-  surface: z.literal('composer'),
-  column: z.literal('middle'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
-export const LayoutColSchema = z.object({
-  tag: z.literal('layout-col'),
-  props: z.object({
-    gap: z.number().default(16),
-    align: z.enum(['start', 'center', 'end', 'stretch']).default('start'),
-  }),
-  events: z.tuple([]),
   surface: z.literal('composer'),
   column: z.literal('middle'),
   description: z.string(),
@@ -221,18 +182,6 @@ export const SearchBarSchema = z.object({
 
 // ── UNIVERSAL — Any Column/Surface ───────────────────────────────────────────
 
-export const StatusIndicatorSchema = z.object({
-  tag: z.literal('status-indicator'),
-  props: z.object({
-    state: z.enum(['idle', 'loading', 'success', 'error', 'warning']),
-    message: z.string().optional(),
-  }),
-  events: z.tuple([]),
-  surface: z.literal('both'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
 export const ErrorBannerSchema = z.object({
   tag: z.literal('error-banner'),
   props: z.object({
@@ -255,21 +204,6 @@ export const AiSurfaceSandboxSchema = z.object({
     'header-tab': z.enum(['console', 'composer', 'evaluation', 'variables', 'metadata']).default('console'),
   }),
   events: z.tuple([]),
-  surface: z.literal('both'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
-export const DynamicButtonSchema = z.object({
-  tag: z.literal('dynamic-button'),
-  props: z.object({
-    label: z.string(),
-    action: z.string(),
-    variant: z.enum(['primary', 'secondary', 'danger', 'ghost']).default('primary'),
-    state: z.enum(['idle', 'loading', 'success', 'error']).default('idle'),
-    disabled: z.boolean().default(false),
-  }),
-  events: z.tuple([z.literal('button-click')]),
   surface: z.literal('both'),
   description: z.string(),
   constraints: z.array(z.string()),
@@ -461,26 +395,6 @@ export const InsertImageSchema = z.object({
 
 // ── Editor Navigation Tags ──────────────────────────────────────────────────
 
-export const UndoSchema = z.object({
-  tag: z.literal('undo'),
-  props: z.object({}),
-  events: z.tuple([]),
-  surface: z.literal('composer'),
-  column: z.literal('middle'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
-export const RedoSchema = z.object({
-  tag: z.literal('redo'),
-  props: z.object({}),
-  events: z.tuple([]),
-  surface: z.literal('composer'),
-  column: z.literal('middle'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
 // ── Editor View Control Tags ────────────────────────────────────────────────
 
 export const ToggleCodeViewSchema = z.object({
@@ -496,18 +410,6 @@ export const ToggleCodeViewSchema = z.object({
 export const ToggleLockSchema = z.object({
   tag: z.literal('toggle_lock'),
   props: z.object({}),
-  events: z.tuple([]),
-  surface: z.literal('composer'),
-  column: z.literal('middle'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
-
-export const ExportDocSchema = z.object({
-  tag: z.literal('export'),
-  props: z.object({
-    format: z.enum(['markdown', 'html', 'text']).default('markdown'),
-  }),
   events: z.tuple([]),
   surface: z.literal('composer'),
   column: z.literal('middle'),
@@ -774,6 +676,24 @@ export const TAG_REGISTRY = {
     events: ['model-selector-toggle'],
     constraints: [],
   },
+  'control-bar': {
+    tag: 'control-bar',
+    surface: 'composer',
+    column: 'left',
+    description:
+      'The left column\'s bottom bar — Figma "Left-column-ControlBar" (#40000761:261), drawn as the LAST child of the left column\'s container (#40000954:23865), below the prompt input area. A 36px undo circle, "Save Template ⌘ S" on white, "RUN ⌘ ⏎" on the gold gradient: row, justify flex-end, padding 13px 38px, fill #B5CCCE, radius 0 0 10px 0. Its three controls dispatch `undo-click`, `save-click`, `run-click`, which the shell already listens for — the element existed and drew correctly while nothing mounted it, so those handlers were waiting on a bar that was never on screen.',
+    props: {
+      isSaving: { type: 'boolean', optional: true },
+      isRunning: { type: 'boolean', optional: true },
+      saveShortcut: { type: 'string', optional: true },
+      runShortcut: { type: 'string', optional: true },
+    },
+    events: ['undo-click', 'save-click', 'run-click'],
+    constraints: [
+      'belongs in workspace-layout\'s "left-footer" slot — the bottom of the left column, never inside the scrolling body',
+      'isSaving / isRunning arrive as data-model bindings, not as props the shell assigns',
+    ],
+  },
   'save-button': {
     tag: 'save-button',
     surface: 'composer',
@@ -785,18 +705,6 @@ export const TAG_REGISTRY = {
     },
     events: ['save-click'],
     constraints: ['cannot save while Run is in progress'],
-  },
-  'run-button': {
-    tag: 'run-button',
-    surface: 'composer',
-    column: 'left',
-    description: 'Execute the prompt pipeline and stream output.',
-    props: {
-      state: { type: 'enum', values: ['idle', 'running', 'complete', 'error'], default: 'idle' },
-      label: { type: 'string', default: 'Run' },
-    },
-    events: ['run-click'],
-    constraints: ['system-role section must exist before Run'],
   },
 
   // Composer — Middle Column
@@ -826,30 +734,6 @@ export const TAG_REGISTRY = {
     events: ['version-select', 'version-compare'],
     constraints: ['sessionId must match current session'],
   },
-  'layout-row': {
-    tag: 'layout-row',
-    surface: 'composer',
-    column: 'middle',
-    description: 'Horizontal flex container for AI-assembled layouts.',
-    props: {
-      gap: { type: 'number', default: 16 },
-      align: { type: 'enum', values: ['start', 'center', 'end', 'stretch'], default: 'start' },
-    },
-    events: [],
-    constraints: ['only allowed inside AiManagedContainer'],
-  },
-  'layout-col': {
-    tag: 'layout-col',
-    surface: 'composer',
-    column: 'middle',
-    description: 'Vertical flex container for AI-assembled layouts.',
-    props: {
-      gap: { type: 'number', default: 16 },
-      align: { type: 'enum', values: ['start', 'center', 'end', 'stretch'], default: 'start' },
-    },
-    events: [],
-    constraints: ['only allowed inside AiManagedContainer'],
-  },
 
   // Composer — Right Column / Both
   'chat-panel': {
@@ -864,6 +748,39 @@ export const TAG_REGISTRY = {
     },
     events: ['message-sent', 'command-received'],
     constraints: [],
+  },
+  'trace-feed': {
+    tag: 'trace-feed',
+    surface: 'both',
+    column: 'right',
+    description:
+      'Live telemetry feed, drawn in the chat panel\'s "view" slot when the rail\'s Trace button is selected. It READS NOTHING: the app logger and Sentry\'s global-scope breadcrumbs are read by lib/trace-source.ts and written into the surface model by the shell, and this element binds entries from /trace/entries (newest first) and breadcrumbCount from /trace/breadcrumbCount. Unset entries is its waiting state — an empty list means the app has logged nothing, which is a different claim.',
+    props: {
+      entries: { type: 'array', optional: true },
+      breadcrumbCount: { type: 'number', optional: true },
+    },
+    events: [],
+    constraints: [
+      'a view, not a source: both values arrive as data-model bindings',
+      'belongs in chat-panel\'s "view" slot, and a surface that emits chat-panel fills it',
+    ],
+  },
+  'chat-repair-actions': {
+    tag: 'chat-repair-actions',
+    surface: 'both',
+    column: 'right',
+    description:
+      'The catalog checker\'s open findings, drawn in the chat panel\'s "view" slot — the same one generic hole the trace view is injected into (the design\'s "chat-output-simple-slot-area" #40001085:2373, annotated "holds plain text output and inserted functions", PLURAL). A VIEW: it fetches nothing, composes no sentence about a finding and decides no severity. The writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them to /findings. Unset is its waiting state — an empty list is the claim that the checker found nothing open, which is a different thing.',
+    props: {
+      findings: { type: 'array', optional: true },
+      stages: { type: 'object', optional: true },
+      collapsed: { type: 'boolean', default: true },
+    },
+    events: ['repair-finding'],
+    constraints: [
+      'a view, not a source: every row arrives already composed, as a data-model binding',
+      'belongs in chat-panel\'s "view" slot beside the trace view — the panel draws the slot, the surface fills it',
+    ],
   },
 
   // Console — Homepage Grid
@@ -966,17 +883,6 @@ export const TAG_REGISTRY = {
   },
 
   // Universal
-  'status-indicator': {
-    tag: 'status-indicator',
-    surface: 'both',
-    description: 'Inline status dot/badge — loading, success, error, warning.',
-    props: {
-      state: { type: 'enum', values: ['idle', 'loading', 'success', 'error', 'warning'] },
-      message: { type: 'string', optional: true },
-    },
-    events: [],
-    constraints: [],
-  },
   'error-banner': {
     tag: 'error-banner',
     surface: 'both',
@@ -988,20 +894,6 @@ export const TAG_REGISTRY = {
     },
     events: ['error-dismiss', 'error-retry'],
     constraints: [],
-  },
-  'dynamic-button': {
-    tag: 'dynamic-button',
-    surface: 'both',
-    description: 'AI-generated action button. Label, action, and variant set by AI.',
-    props: {
-      label: { type: 'string' },
-      action: { type: 'string' },
-      variant: { type: 'enum', values: ['primary', 'secondary', 'danger', 'ghost'], default: 'primary' },
-      state: { type: 'enum', values: ['idle', 'loading', 'success', 'error'], default: 'idle' },
-      disabled: { type: 'boolean', default: false },
-    },
-    events: ['button-click'],
-    constraints: ['action must be a registered command'],
   },
 
   // ── Lexical Editor — Lifecycle ───────────────────────────────────────────
@@ -1174,24 +1066,6 @@ export const TAG_REGISTRY = {
   },
 
   // ── Lexical Editor — Navigation ──────────────────────────────────────────
-  'undo': {
-    tag: 'undo',
-    surface: 'composer',
-    column: 'middle',
-    description: 'Undo the last edit.',
-    props: {},
-    events: [],
-    constraints: ['requires lexical-editor to be loaded'],
-  },
-  'redo': {
-    tag: 'redo',
-    surface: 'composer',
-    column: 'middle',
-    description: 'Redo the last undone edit.',
-    props: {},
-    events: [],
-    constraints: ['requires lexical-editor to be loaded'],
-  },
 
   // ── Lexical Editor — View Control ────────────────────────────────────────
   'toggle_code_view': {
@@ -1209,17 +1083,6 @@ export const TAG_REGISTRY = {
     column: 'middle',
     description: 'Toggle editor read-only lock.',
     props: {},
-    events: [],
-    constraints: ['requires lexical-editor to be loaded'],
-  },
-  'export': {
-    tag: 'export',
-    surface: 'composer',
-    column: 'middle',
-    description: 'Export document in the specified format.',
-    props: {
-      format: { type: 'enum', values: ['markdown', 'html', 'text'], default: 'markdown' },
-    },
     events: [],
     constraints: ['requires lexical-editor to be loaded'],
   },
@@ -1371,12 +1234,9 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   // Composer — Left Column
   'prompt-section',
   'save-button',
-  'run-button',
   // Composer — Middle Column
   'output-panel',
   'version-trace',
-  'layout-row',
-  'layout-col',
   // Lexical Editor — Lifecycle
   'load_tool',
   'close_tool',
@@ -1397,12 +1257,9 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   'insert_code_block',
   'insert_image',
   // Lexical Editor — Navigation
-  'undo',
-  'redo',
   // Lexical Editor — View Control
   'toggle_code_view',
   'toggle_lock',
-  'export',
   // Lexical Editor — AI-Assisted
   'check_writing',
   'apply_suggestion',
@@ -1412,9 +1269,7 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   'stop_dictation',
   // Shared
   'chat-panel',
-  'status-indicator',
   'error-banner',
-  'dynamic-button',
   // A2UI v0.9.1 Lit-ported workspace (model is the architect)
   'prompt-section-editor',
   'compiled-output-viewer',
@@ -1432,9 +1287,7 @@ export const SHELL_TAGS: TagName[] = [
 /** Tags shared between both surfaces */
 export const SHARED_TAGS: TagName[] = [
   'chat-panel',
-  'status-indicator',
   'error-banner',
-  'dynamic-button',
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

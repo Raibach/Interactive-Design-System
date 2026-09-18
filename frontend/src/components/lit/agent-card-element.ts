@@ -326,6 +326,10 @@ export class AgentCardElement extends LitElement {
       white-space: nowrap;
       overflow: hidden;
     }
+    /* A finished package says so in green — asked for by name. It is the one word this chip
+       draws that is a verdict rather than a state: the work is done, and the card leaves the
+       console on the next assembly. */
+    .status-text.completed { color: #1F7A3D; }
     .likes {
       flex: 0 0 84px;
       width: 84px;
@@ -413,9 +417,9 @@ export class AgentCardElement extends LitElement {
   }
 
   /**
-   * Owner-instructed delete control. Confirmation step 1 lives here (arm →
-   * confirm). Confirmation step 2 is the host dialog that ConsolePage shows on
-   * the `card-delete` event, so nothing is removed on a single click.
+   * Owner-instructed delete control. The arm → confirm here is the ONLY
+   * confirmation — on the second click it dispatches `card-delete` and the host
+   * deletes directly, with no modal in between.
    * This control is NOT in the Figma pull for node 40000717:17091.
    */
   private _onDeleteClick(e: Event) {
@@ -525,7 +529,7 @@ export class AgentCardElement extends LitElement {
         <div class="footer-details">
           <div class="version-pill">
             <div class="version-text">Version ${Math.min(v, 99)} |</div>
-            <div class="status-text">${safeStatus}</div>
+            <div class="status-text ${String(safeStatus).toLowerCase() === 'completed' ? 'completed' : ''}">${safeStatus}</div>
           </div>
           <div class="likes">
             <div class="like-count">${likeCount}</div>

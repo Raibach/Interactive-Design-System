@@ -1,5 +1,5 @@
 /**
- * ConsolePage - the CONSOLE's host states, and the confirmation a card cannot own.
+ * ConsolePage - the CONSOLE's host states.
  *
  * The surface itself — Grace's greeting and her ConsoleCardGrid — is drawn by
  * <a2ui-renderer> from the updateComponents tree she sent. This component does NOT
@@ -8,9 +8,8 @@
  *
  * What is left here is what is genuinely the host's:
  *   · the states a surface cannot state — loading, failed, waiting, zero packages
- *   · the delete confirmation (the card arms; the host asks; nothing is removed on
- *     one click)
- *   · the two card events, routed to the host's intents.
+ *   · the two card events, routed to the host's intents (the card's own arm→confirm
+ *     is the only delete confirmation — the host deletes on `card-delete`, no modal).
  *
  * NO FALLBACKS. NO HIDDEN FETCHES. NO ERROR SUPPRESSION. If AI fails, show the error.
  */
@@ -58,10 +57,9 @@ export default function ConsolePage({
 
   // ── Card events · the two the tag contract declares ───────────────────────
   // <agent-card-element> dispatches `card-delete` only after its own arm→confirm
-  // (step 1). Nothing is removed until this dialog is confirmed (step 2).
+  // (the ONLY confirmation — no modal). The host deletes directly on the event.
   // `card-open` is dispatched by the grid when a card is clicked; opening a package
   // is an assembly, so it goes back out to the host rather than happening here.
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   // The listeners below are registered ONCE (empty deps), while the host passes a new
   // inline handler on every render — and the ones that matter read the OPEN session.
@@ -76,7 +74,8 @@ export default function ConsolePage({
     const onCardDelete = (e: Event) => {
       const sessionId = (e as CustomEvent).detail?.sessionId;
       if (typeof sessionId === 'string' && UUID_RE.test(sessionId)) {
-        setPendingDelete(sessionId);
+        console.log('[ConsolePage] card-delete:', sessionId);
+        liveHandlers.current.onDeletePrompt?.(sessionId);
       }
     };
     // Both events are `composed`, so they cross the renderer's shadow boundary and
@@ -113,15 +112,6 @@ export default function ConsolePage({
   const arrowParts = (errorReport?.arrow ?? '').split(' ');
   const arrowGlyph = arrowParts.shift() ?? '';
   const arrowRest = arrowParts.join(' ');
-
-  const confirmDelete = async () => {
-    const id = pendingDelete;
-    setPendingDelete(null);
-    if (id) {
-      console.log('[ConsolePage] card-delete confirmed:', id);
-      await onDeletePrompt?.(id);
-    }
-  };
 
   // ✅ STRICT A2UI RULE #1: If parent is loading, show spinner INSIDE this surface only
   if (isParentLoading) {
@@ -241,48 +231,8 @@ export default function ConsolePage({
   }
 
   // ✅ AI assembled cards successfully — the SURFACE is drawn by <a2ui-renderer>
-  // from Grace's own tree, so this returns no layout at all: a full-width sibling
-  // here would steal the row from the surface beside it. What is returned is the
-  // confirmation, which is viewport-anchored and needs no box of its own.
-  return (
-    <>
-      {/* Delete · step 2 of 2 — host confirmation. Step 1 was the card's
-          arm→confirm; nothing is removed until this dialog is confirmed. */}
-      {pendingDelete && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirm delete prompt package"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
-          onClick={() => setPendingDelete(null)}
-        >
-          <div
-            className="bg-white rounded-2xl border-2 border-[#234354] p-6 max-w-md w-full text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-[#234354] text-lg font-bold mb-2">Delete this prompt package?</h2>
-            <p className="text-gray-600 text-sm mb-1">
-              This removes the prompt, its versions, and its linked chat.
-            </p>
-            <p className="text-gray-500 text-xs mb-5 font-mono break-all">{pendingDelete}</p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => setPendingDelete(null)}
-                className="px-5 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="px-5 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+  // The card's arm→confirm is the only confirmation; the grid is drawn by the
+  // surface renderer, so this component returns nothing extra for the
+  // "cards present" case.
+  return null;
 }

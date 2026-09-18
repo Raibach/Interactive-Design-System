@@ -142,8 +142,15 @@ export class PromptTextarea extends LitElement {
 
   private _onInput(e: Event) {
     const ta = e.target as HTMLTextAreaElement;
+    // THE ELEMENT ABSORBS WHAT IT REPORTS. It dispatched `value-input` and left its own
+    // `value` at whatever the payload last assigned — '' for an empty box — so the
+    // property and the DOM disagreed about the text. A caller that then CLEARED the input
+    // by assigning '' changed nothing (same value, no update, no re-render) and the box
+    // kept the message that had just been sent: measured 2026-09-17, the chat input held
+    // sent text forever while the element's own value was still empty.
+    if (this.value !== ta.value) this.value = ta.value;
     // Typing measures at once: scrollHeight is synchronous, so the box stays in
-    // step with the caret rather than a frame behind it.
+    // step with the caret rather than a frame behind.
     this._resize();
     this.dispatchEvent(new CustomEvent('value-input', {
       bubbles: true,

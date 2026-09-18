@@ -110,3 +110,42 @@ describe('compiled-output-viewer folds a long fenced block', () => {
     expect(heads(el)).toHaveLength(0);
   });
 });
+
+/**
+ * The chip in the meta row. It read "empty" over 3,834 characters of restored answer,
+ * measured 2026-09-17, because its only value was the constructor's default and nothing
+ * in this app assigns `status`. What it says now comes from the pane it sits in — unless a
+ * surface supplies the spec's own word, which still wins.
+ */
+describe('<compiled-output-viewer> — the status chip describes the pane', () => {
+  const chip = (el: ViewerEl) => {
+    const s = el.shadowRoot!.querySelector('.status');
+    return s ? s.textContent!.trim() : null;
+  };
+
+  it('says empty only when the pane is empty', async () => {
+    const el = await mount('');
+    expect(chip(el)).toBe('empty');
+  });
+
+  it('says complete when there is an answer on screen', async () => {
+    const el = await mount('Line 1 — RESULT: DONE. The annotation is written.');
+    expect(chip(el)).toBe('complete');
+  });
+
+  it.each([
+    ['Error: 500 Internal Server Error'],
+    ['⚠️ Run failed.'],
+    ['(No output returned.)'],
+  ])('says error for the app\'s own failure marker: %s', async (text) => {
+    const el = await mount(text);
+    expect(chip(el)).toBe('error');
+  });
+
+  it('lets a surface\'s own status win, which is the spec\'s contract', async () => {
+    const el = (await mount('Answer')) as ViewerEl & { status: string };
+    el.status = 'streaming';
+    await el.updateComplete;
+    expect(chip(el)).toBe('streaming');
+  });
+});

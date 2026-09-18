@@ -41,13 +41,24 @@ import chatButtonIcon from '@/assets/figma-chat-button-icon.svg';
 // so the asset's fill was updated to match (it previously carried a #2689D6 →
 // #AC8CEC gradient — stale artwork from an earlier state of the file).
 import traceButtonIcon from '@/assets/figma-trace-button-icon.svg';
+import versionsButtonIcon from '@/assets/figma-versions-button-icon.svg';
+import toolsButtonIcon from '@/assets/figma-tools-button-icon.svg';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types — exported for React consumers (InteractiveChatInterface.tsx)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** Valid tab identifiers. */
-export type TabId = 'chat' | 'trace' | 'tools' | 'evaluation' | 'variables' | 'metadata';
+// The design draws FOUR rail buttons — chat, trace, versions, tools
+// (#40001085:2666, :2762, :2731, :2634). `evaluation` and `metadata` were
+// placeholders whose own panels said "design pending"; they came off the rail
+// with the design, and `variables` became `versions` because that is what its
+// panel actually renders.
+// `approvals` is the CONSOLE's fourth button — Figma "approval-button"
+// #40001088:2795. The rail is surface-dependent: Chat / Trace / Versions on both,
+// Tools in the composer, Approvals on the console. The host chooses with
+// `allowed-tabs`; this list is what is drawable.
+export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals';
 
 /** Detail payload for the 'tab-change' CustomEvent. */
 export interface TabChangeEventDetail {
@@ -134,53 +145,67 @@ const TABS: TabDef[] = [
     // artwork. Unused while iconSrc is set; kept as the drawing of record.
     svgPath: 'M20.3125 13.2813C21.6566 13.2813 22.75 12.2299 22.75 10.9375C22.75 9.6451 21.6566 8.5937 20.3125 8.5937C19.2546 8.5937 18.3612 9.2488 18.0247 10.1563H13.3364L19.2683 4.4525C19.586 4.59898 19.9374 4.6875 20.3125 4.6875C21.6566 4.6875 22.75 3.63617 22.75 2.34375C22.75 1.05133 21.6566 0 20.3125 0C18.9684 0 17.875 1.05133 17.875 2.34375C17.875 2.70461 17.9672 3.04219 18.1192 3.34781L11.375 9.8328V4.68758C11.375 3.82625 12.1038 3.12508 13 3.12508H14.625V1.56258H13C12.0248 1.56258 11.1588 1.98641 10.5625 2.6425C9.9662 1.98641 9.1002 1.56258 8.125 1.56258H7.3125C3.28055 1.56258 0 4.71656 0 8.5938V13.2813C0 17.1586 3.28055 20.3126 7.3125 20.3126H8.125C9.1002 20.3126 9.9662 19.8887 10.5625 19.2327C11.1588 19.8887 12.0248 20.3126 13 20.3126H14.625V18.7501H13C12.1038 18.7501 11.375 18.0489 11.375 17.1876V12.0423L18.1192 18.5273C17.9672 18.8329 17.875 19.1705 17.875 19.5314C17.875 20.8238 18.9684 21.8752 20.3125 21.8752C21.6566 21.8752 22.75 20.8238 22.75 19.5314C22.75 18.239 21.6566 17.1877 20.3125 17.1877C19.9374 17.1877 19.5861 17.2762 19.2683 17.4227L13.3364 11.7189H18.0247C18.3612 12.6264 19.2546 13.2813 20.3125 13.2813Z',
   },
+  // The TRACE tab was removed 2026-09-17: the trace view is not being built. The
+  // information it showed lived in the retired React seat
+  // (retired-files/console-seat-20260917/InteractiveChatInterface.tsx) and the
+  // decision is not to load it. A rail button whose view will never exist is a
+  // control that can only fail, so it is gone rather than left dangling.
   {
     id: 'trace',
     label: 'Trace',
     tooltip: 'Execution trace and evaluation',
-    // Figma "trace-button" 40001011:26266. Annotated: "Loads trace for current
-    // activity in the chat widow. On click: dispatch tab-change { tab: 'trace' }"
-    // — which is what the code already emits, so nothing here was invented.
+    // Figma "trace-button" 40001011:26266 — the rail's second button, restored
+    // 2026-09-17. It was deleted an hour earlier on a misreading of "the trace
+    // information is not being loaded": that is about the VIEW, not the button. A
+    // rail tab is a view switch, and the panel's view is a SLOT — the design calls
+    // it chat-output-simple-slot-area, and anything can be injected into it.
     //
-    // Geometry comes from the container constraint, NOT from this node. The node
-    // says 42×39 at (16, 6.5) with its label at 51.5 — hand-placed drift. Copying
-    // it would reproduce a difference nobody designed; geometry-drift reports it
-    // instead. The icon art keeps its own aspect and fits the shared box.
+    // The hand-traced `svgPath` that used to sit here as the drawing of record is
+    // NOT restored: the original string is not recoverable from git, whose version
+    // of this file predates the working tree. `iconSrc` is the design's own
+    // artwork and is what renders; the traced fallback was unused while it was set.
     nodeId: '40001011:26266',
     iconNodeId: '40001011:26260',
     labelNodeId: '40001011:26259',
     iconSrc: traceButtonIcon,
-    svgPath: 'M23.07 15.6777V4.11016C24.0271 3.81716 24.7178 3.04006 24.7178 2.12013C24.7178 0.951022 23.6091 0 22.2461 0C20.883 0 19.7742 0.951022 19.7742 2.12013C19.7742 2.39688 19.8406 2.6595 19.9533 2.90176L12.3589 8.60167L4.76457 2.90204C4.87736 2.65943 4.94356 2.39688 4.94356 2.12013C4.94356 0.951022 3.83479 0 2.47179 0C1.10877 0 0 0.951022 0 2.12013C0 3.04013 0.690785 3.81723 1.64785 4.10981V15.678C0.690785 15.9707 0 16.7478 0 17.6677C0 18.8368 1.10877 19.7878 2.47179 19.7878C3.83479 19.7878 4.94356 18.8368 4.94356 17.6677C4.94356 17.1967 4.75757 16.7653 4.45317 16.413L8.84758 13.1148L10.7957 16.0389C10.2456 16.4282 9.88716 17.0096 9.88716 17.6677C9.88716 18.8368 10.9959 19.7878 12.3589 19.7878C13.722 19.7878 14.8306 18.8368 14.8306 17.6677C14.8306 17.0096 14.4721 16.4282 13.9221 16.0389L15.8702 13.1148L20.2646 16.413C19.9603 16.7653 19.7742 17.1967 19.7742 17.6677C19.7742 18.8368 20.883 19.7878 22.2461 19.7878C23.6091 19.7878 24.7178 18.8368 24.7178 17.6677C24.7178 16.7478 24.0271 15.9707 23.07 15.6777Z',
+  },
+  {
+    id: 'versions',
+    label: 'Versions',
+    tooltip: 'Version history for this session',
+    iconSrc: versionsButtonIcon,
+    // Figma "versions-button" #40001085:2731 — the fourth rail button. Label is
+    // Versions, not Variables: the tab renders the session's version history.
+    svgPath: 'M9.4 22C7.6 22 6.4 21.2 5.6 19.5C5.3 18.8 5 18.2 4.5 17.7C4 17.2 3.5 16.9 2.8 16.7L2 16.4V14.4L3.2 14.7C4.3 15 5.2 15.6 5.9 16.4C6.6 17.2 7.1 18.1 7.5 19.1C7.9 19.9 8.3 20.2 9.4 20.2H10V22H9.4ZM14.6 22C12.8 22 11.6 21.2 10.8 19.5C10.5 18.8 10.2 18.2 9.7 17.7C9.2 17.2 8.7 16.9 8 16.7L7.2 16.4V14.4L8.4 14.7C9.5 15 10.4 15.6 11.1 16.4C11.8 17.2 12.3 18.1 12.7 19.1C13.1 19.9 13.5 20.2 14.6 20.2H15.2V22H14.6ZM5.5 11H18.5V9H5.5V11ZM5.5 7H18.5V5H5.5V7Z',
   },
   {
     id: 'tools',
     label: 'Tools',
     tooltip: 'Tool registry and usage',
+    iconSrc: toolsButtonIcon,
+    // Figma "tools-button" #40001085:2634 — the fifth rail button, which was the
+    // old trace-button set until the design renamed it.
     // Wrench / tools icon — Material Design "build". Drawn on a 24x24 grid, so
     // it declares its own viewBox; the shared default would clip its handle.
     viewBox: '0 0 24 24',
     svgPath: 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z',
   },
   {
-    id: 'evaluation',
-    label: 'Evaluate',
-    tooltip: 'A/B testing and model comparison',
-    // Bar chart / evaluation icon
-    svgPath: 'M4 22H2V10H4V22ZM20.5 22H18.5V2H20.5V22ZM12.25 22H10.25V6H12.25V22Z',
-  },
-  {
-    id: 'variables',
-    label: 'Variables',
-    tooltip: 'Design system variables and tokens',
-    // Braces / variables icon
-    svgPath: 'M9.4 22C7.6 22 6.4 21.2 5.6 19.5C5.3 18.8 5 18.2 4.5 17.7C4 17.2 3.5 16.9 2.8 16.7L2 16.4V14.4L3.2 14.7C4.3 15 5.2 15.6 5.9 16.4C6.6 17.2 7.1 18.1 7.5 19.1C7.9 19.9 8.3 20.2 9.4 20.2H10V22H9.4ZM14.6 22C12.8 22 11.6 21.2 10.8 19.5C10.5 18.8 10.2 18.2 9.7 17.7C9.2 17.2 8.7 16.9 8 16.7L7.2 16.4V14.4L8.4 14.7C9.5 15 10.4 15.6 11.1 16.4C11.8 17.2 12.3 18.1 12.7 19.1C13.1 19.9 13.5 20.2 14.6 20.2H15.2V22H14.6ZM5.5 11H18.5V9H5.5V11ZM5.5 7H18.5V5H5.5V7Z',
-  },
-  {
-    id: 'metadata',
-    label: 'Metadata',
-    tooltip: 'Cost, compliance, and governance data',
-    // Document / metadata icon
-    svgPath: 'M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM16 18H8V16H16V18ZM16 14H8V12H16V14ZM13 9V3.5L18.5 9H13Z',
+    id: 'approvals',
+    label: 'Approvals',
+    tooltip: 'Pending approvals',
+    // Figma "approval-button" #40001088:2795 — the CONSOLE rail's fourth button.
+    //
+    // The artwork is the TRACE glyph: the design's variant carries
+    // "Model-trace" (40000122:3408), instance node I40001088:2797;40001011:26260,
+    // which is the same icon the Trace button uses. Read verbatim rather than
+    // substituted — but if Approvals is meant to have its own mark, the design
+    // needs to draw one, because right now the two buttons read identically.
+    nodeId: '40001088:2795',
+    iconNodeId: '40001088:2797;40001011:26260',
+    labelNodeId: '40001088:2797;40001011:26259',
+    iconSrc: traceButtonIcon,
+    svgPath: 'M23.07 15.6777V4.11016C24.0271 3.81716 24.7178 3.04006 24.7178 2.12013C24.7178 0.951022 23.6091 0 22.2461 0C20.883 0 19.7742 0.951022 19.7742 2.12013C19.7742 2.39688 19.8406 2.6595 19.9533 2.90176L12.3589 8.60167L4.76457 2.90204C4.87736 2.65943 4.94356 2.39688 4.94356 2.12013C4.94356 0.951022 3.83479 0 2.47179 0C1.10877 0 0 0.951022 0 2.12013C0 3.04013 0.690785 3.81723 1.64785 4.10981V15.678C0.690785 15.9707 0 16.7478 0 17.6677C0 18.8368 1.10877 19.7878 2.47179 19.7878C3.83479 19.7878 4.94356 18.8368 4.94356 17.6677C4.94356 17.1967 4.75757 16.7653 4.45317 16.413L8.84758 13.1148L10.7957 16.0389C10.2456 16.4282 9.88716 17.0096 9.88716 17.6677C9.88716 18.8368 10.9959 19.7878 12.3589 19.7878C13.722 19.7878 14.8306 18.8368 14.8306 17.6677C14.8306 17.0096 14.4721 16.4282 13.9221 16.0389L15.8702 13.1148L20.2646 16.413C19.9603 16.7653 19.7742 17.1967 19.7742 17.6677C19.7742 18.8368 20.883 19.7878 22.2461 19.7878C23.6091 19.7878 24.7178 18.8368 24.7178 17.6677C24.7178 16.7478 24.0271 15.9707 23.07 15.6777Z',
   },
 ];
 
@@ -234,8 +259,6 @@ export class ChatNavigationBar extends LitElement {
   }
 
   // ── Drag state (not reactive — no re-render needed) ──────────────────────
-  private _isDragging: boolean = false;
-  private _dragStartX: number = 0;
   private _previousTab: TabId | '' = '';
 
   // ── Shadow DOM styles — pixel-identical to original compiled component ──
@@ -263,7 +286,8 @@ export class ChatNavigationBar extends LitElement {
       --nb-label-y: 46px;
       display: block;
       height: 100%;
-      width: 75px;
+      /* Figma "chat-main-menu-vert" #40001066:4301 — width 74. */
+      width: 74px;
       flex-shrink: 0;
     }
 
@@ -271,21 +295,21 @@ export class ChatNavigationBar extends LitElement {
       display: flex;
       flex-direction: column;
       align-items: center;
+      /* Figma "chat-main-menu-vert" #40001066:4301 — gap 10 between the logo and
+         each button. The code stacked them flush, so every button sat 10px high. */
+      gap: 10px;
       height: 100%;
-      width: 75px;
-      border-radius: 10px 0px 0px 10px;
-      box-shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25);
+      width: 74px;
+      /* Figma "chat-main-menu-vert" #40001066:4301, verbatim: radius 10px 0 0 0,
+         shadow -4px 4px 10px rgba(0,0,0,.25), "blue gradient" at 181deg. */
+      border-radius: 10px 0px 0px 0px;
+      box-shadow: -4px 4px 10px 0px rgba(0, 0, 0, 0.25);
       background-image: linear-gradient(
-          90deg,
-          rgba(0, 0, 0, 0.2) 0%,
-          rgba(0, 0, 0, 0.2) 100%
-        ),
-        linear-gradient(
-          193.083deg,
-          rgb(28, 47, 78) 27.022%,
-          rgb(18, 66, 126) 38.117%,
-          rgb(13, 48, 91) 98.965%
-        );
+        181deg,
+        rgba(28, 47, 78, 1) 0%,
+        rgba(27, 80, 145, 1) 38%,
+        rgba(13, 48, 91, 1) 100%
+      );
       overflow: hidden;
     }
 
@@ -295,6 +319,11 @@ export class ChatNavigationBar extends LitElement {
       flex-direction: column;
       height: 66px;
       width: 100%;
+      /* Figma "logo-of-chat-model-slected" #40001085:2680 — 74×66 with px 3px,
+         so the mark itself is 68 wide. The slot was stretching the artwork to
+         the full 74×66 with object-fit: cover. */
+      padding: 0 3px;
+      box-sizing: border-box;
       overflow: clip;
       flex-shrink: 0;
       align-items: flex-start;
@@ -317,14 +346,17 @@ export class ChatNavigationBar extends LitElement {
       font-weight: 700;
       font-family: 'Inter', system-ui, sans-serif;
     }
+    /* The mark as the design draws it: 68×58, centred in the 74×66 slot. */
     ::slotted(img) {
       position: absolute;
-      inset: 0;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       max-width: none;
-      object-fit: cover;
+      object-fit: contain;
       pointer-events: none;
-      width: 100%;
-      height: 100%;
+      width: 68px;
+      height: 58px;
     }
 
     /* ── Tab button ───────────────────────────────────────────────────── */
@@ -494,33 +526,27 @@ export class ChatNavigationBar extends LitElement {
     .nb.nbc .lt {
       color: #1FACC2;
     }
+    /* Figma "chat-button" state=Selected #40001085:2663 — the inset the registry
+       has carried as "not yet in CSS": inset 0 4px 4px rgba(0,0,0,0.25).
+       ONLY Selected carries it. state=Hover is the same yellow with no inset. */
+    .nb.nbc.na {
+      box-shadow: inset 0 4px 4px 0 rgba(0, 0, 0, 0.25);
+    }
 
     /* ── Selected vs closed — from the annotation, verbatim ──────────────────
        "Chat button selected: it's yellow when it's selected and it's transparent
        when the chat is closed and it's not selected."
 
-       Yellow-on-selected is already this bar's active treatment (.na), so that
-       half costs nothing. Closed = transparent, and the WHOLE BUTTON pulses —
-       motion is what makes it findable in a 75px rail; a tint alone reads as
-       decoration.
-
-       The pulse is NOT in the annotation. It is the motion the health marker
-       already uses, applied to the button instead of the glyph, so the two read
-       as one signal. Marked inferred in registry.json for that reason. */
+       So closed-and-unselected is just transparent — the design's state=Default.
+       NOTHING MOVES. This used to pulse the whole button; that pulse was never in
+       the design (it was marked "inferred" in registry.json), and drawing the
+       states settled it: a resting state that moves reads as an alert, and the
+       design already spends motion on state=Alert. */
     .nb.nbc.nb-closed {
       background: none;
-      animation: hb-pulse 1.1s ease-in-out infinite;
     }
     .nb.nbc.nb-closed:hover {
       background: rgb(252, 205, 61);
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .nb.nbc.nb-closed {
-        animation: none;
-        /* Without the motion the background IS the affordance — dropping both
-           would leave the button with no way to announce itself at all. */
-        background: rgb(252, 205, 61);
-      }
     }
 
     /* ── Tooltip ──────────────────────────────────────────────────────── */
@@ -553,122 +579,23 @@ export class ChatNavigationBar extends LitElement {
       border-right: 4px solid rgb(188, 203, 206);
     }
 
-    /* ── Gripper (drag-to-resize handle) ──────────────────────────────── */
-    .gb {
-      /* Inherit — a shadow-root <button> otherwise falls back to the UA font (Arial). */
-      font-family: inherit;
-      position: relative;
-      flex-shrink: 0;
-      width: 100%;
-      margin-top: auto;
-      cursor: col-resize;
-      border: none;
-      background: none;
-      padding: 0;
-      border-radius: 4px;
-      /* No transition on background-color - prevents jerky motion during drag */
-    }
-    .gb:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-    .ga {
-      background: rgba(255, 255, 255, 0.1);
-    }
-    .gfr {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-    }
-    .gpc {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 8px 3px;
-      width: 100%;
-      position: relative;
-    }
-    .gsh {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      flex-shrink: 0;
-    }
-    .gro {
-      flex: 0 0 auto;
-      transform: rotate(180deg);
-    }
-    .gco {
-      height: 54px;
-      position: relative;
-      width: 24px;
-    }
-    .grt,
-    .grb {
-      position: absolute;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      left: 1px;
-      width: 24px;
-      height: 24px;
-    }
-    .grt {
-      top: 25px;
-    }
-    .grb {
-      top: 13px;
-    }
-    .gri {
-      transform: rotate(-90deg);
-      flex: 0 0 auto;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      width: 24px;
-      height: 24px;
-    }
-    .grc {
-      height: 24px;
-      overflow: clip;
-      width: 100%;
-      position: relative;
-      flex-shrink: 0;
-    }
-    .gdl {
-      inset: 45.83% 20.83% 45.83% 45.83%;
-      position: absolute;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .gdr {
-      inset: 45.83% 20.83% 45.83% 70.83%;
-      position: absolute;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .gds {
-      position: absolute;
-      inset: 45.83%;
-    }
-    .gdi {
-      position: absolute;
-      inset: -50%;
-    }
-    .gdsv {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
     /* Catalog health marker — visible on arrival, silent when the count is 0.
        There is no separate dot laid over the icon any more: the ICON itself
        pulses, so the signal rides the thing the person is already looking at. */
-    .nb.hb-on .nsv,
+    /* The DESIGNED alert — Figma "chat-button" state=Alert #40001085:2662, whose
+       Builder block is the spec: fade to blank and back, 400ms, infinite, until
+       the findings clear. The BUTTON fades, not just its glyph, so "blank" means
+       the whole control goes — which is what makes it findable in a 74px rail. */
+    .nb.hb-on {
+      animation: chat-alert-pulse 400ms ease-in-out infinite;
+    }
+    @keyframes chat-alert-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    /* "The check could not run" is a DIFFERENT claim from "one problem", and the
+       design has no state for it. It keeps the older, slower, partial fade and
+       rides the GLYPH alone, so the two can never be read as each other. */
     .nb.hb-x .nsv {
       animation: hb-pulse 1.1s ease-in-out infinite;
     }
@@ -687,7 +614,10 @@ export class ChatNavigationBar extends LitElement {
       50% { opacity: 0.35; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .nb.hb-on .nsv,
+      /* The Alert note, verbatim: with the motion off, hold a visible alert look
+         rather than a blank — the glyph tint below IS the signal when the fade
+         cannot be. */
+      .nb.hb-on,
       .nb.hb-x .nsv { animation: none; }
     }
     /* The marker is a signal, not decoration — so it is still announced even
@@ -710,18 +640,6 @@ export class ChatNavigationBar extends LitElement {
   // ═══════════════════════════════════════════════════════════════════════════
   // Lifecycle
   // ═══════════════════════════════════════════════════════════════════════════
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.addEventListener('mousedown', this._onGripperMouseDown as EventListener);
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener('mousedown', this._onGripperMouseDown as EventListener);
-    document.removeEventListener('mousemove', this._onGripperMouseMove);
-    document.removeEventListener('mouseup', this._onGripperMouseUp);
-  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Tab click handler
@@ -778,63 +696,6 @@ export class ChatNavigationBar extends LitElement {
       );
     }
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Gripper drag handlers
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  private _onGripperMouseDown = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (!target.closest('.gb')) return;
-
-    this._isDragging = true;
-    this._dragStartX = e.clientX;
-
-    const gripper = this.shadowRoot?.querySelector('.gb');
-    gripper?.classList.add('ga');
-
-    this.dispatchEvent(
-      new CustomEvent('right-column-drag-start', {
-        detail: { clientX: e.clientX },
-        bubbles: true,
-        composed: true,
-      })
-    );
-
-    document.addEventListener('mousemove', this._onGripperMouseMove);
-    document.addEventListener('mouseup', this._onGripperMouseUp);
-    e.preventDefault();
-  };
-
-  private _onGripperMouseMove = (e: MouseEvent) => {
-    if (!this._isDragging) return;
-    const deltaX = this._dragStartX - e.clientX;
-
-    this.dispatchEvent(
-      new CustomEvent('right-column-drag-move', {
-        detail: { clientX: e.clientX, deltaX },
-        bubbles: true,
-        composed: true,
-      })
-    );
-  };
-
-  private _onGripperMouseUp = () => {
-    this._isDragging = false;
-
-    const gripper = this.shadowRoot?.querySelector('.gb');
-    gripper?.classList.remove('ga');
-
-    this.dispatchEvent(
-      new CustomEvent('right-column-drag-end', {
-        bubbles: true,
-        composed: true,
-      })
-    );
-
-    document.removeEventListener('mousemove', this._onGripperMouseMove);
-    document.removeEventListener('mouseup', this._onGripperMouseUp);
-  };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Health marker
@@ -948,94 +809,11 @@ export class ChatNavigationBar extends LitElement {
           `
         )}
 
-        <!-- Gripper (drag-to-resize handle) -->
-        <button
-          type="button"
-          class="gb"
-          aria-label="Drag to resize right column"
-          title="Drag to resize · Double-click to snap to center"
-        >
-          <div class="gfr">
-            <div class="gpc">
-              <div class="gsh">
-                <div class="gro">
-                  <div class="gco">
-                    <!-- Top grip dots -->
-                    <div class="grt">
-                      <div class="gri">
-                        <div class="grc">
-                          <div class="gdl">
-                            <div class="gds">
-                              <div class="gdi">
-                                <svg class="gdsv" fill="none" viewBox="0 0 4 4">
-                                  <path
-                                    stroke="white"
-                                    stroke-linecap="round"
-                                    stroke-width="2"
-                                    d="M2 3C2.55228 3 3 2.55228 3 2C3 1.44772 2.55228 1 2 1C1.44772 1 1 1.44772 1 2C1 2.55228 1.44772 3 2 3Z"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                          <div class="gdr">
-                            <div class="gds">
-                              <div class="gdi">
-                                <svg class="gdsv" fill="none" viewBox="0 0 4 4">
-                                  <path
-                                    stroke="white"
-                                    stroke-linecap="round"
-                                    stroke-width="2"
-                                    d="M2 3C2.55228 3 3 2.55228 3 2C3 1.44772 2.55228 1 2 1C1.44772 1 1 1.44772 1 2C1 2.55228 1.44772 3 2 3Z"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <!-- Bottom grip dots -->
-                    <div class="grb">
-                      <div class="gri">
-                        <div class="grc">
-                          <div class="gdl">
-                            <div class="gds">
-                              <div class="gdi">
-                                <svg class="gdsv" fill="none" viewBox="0 0 4 4">
-                                  <path
-                                    stroke="white"
-                                    stroke-linecap="round"
-                                    stroke-width="2"
-                                    d="M2 3C2.55228 3 3 2.55228 3 2C3 1.44772 2.55228 1 2 1C1.44772 1 1 1.44772 1 2C1 2.55228 1.44772 3 2 3Z"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                          <div class="gdr">
-                            <div class="gds">
-                              <div class="gdi">
-                                <svg class="gdsv" fill="none" viewBox="0 0 4 4">
-                                  <path
-                                    stroke="white"
-                                    stroke-linecap="round"
-                                    stroke-width="2"
-                                    d="M2 3C2.55228 3 3 2.55228 3 2C3 1.44772 2.55228 1 2 1C1.44772 1 1 1.44772 1 2C1 2.55228 1.44772 3 2 3Z"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </button>
+        <!-- No resize grip here. The design draws it as "chat-left-spacer"
+             #40001085:1406 — a 20px strip on the chat column's left edge — and
+             <workspace-layout> renders it. The rail's own dot-grid grip went with
+             it, along with the right-column-drag-* events it was the only emitter
+             of; nothing ever listened for those. -->
       </div>
     `;
   }

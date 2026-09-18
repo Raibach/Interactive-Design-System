@@ -778,6 +778,17 @@ INDEX_DEFINITIONS = [
     "CREATE INDEX IF NOT EXISTS idx_tags_user ON tags(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_prompt_context_session ON prompt_context(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_prompt_context_type ON prompt_context(context_type)",
+    # ONE console session per user, enforced by the database rather than by code.
+    #
+    # The console chat is global - it works on cards, never on a package - so its
+    # conversations have no package to belong to. But conversations.session_id is
+    # NOT NULL with an FK to prompt_sessions, so they still need a session, and the
+    # console needs exactly one. A check-then-insert cannot hold that: two tabs
+    # landing together would both find nothing and both insert, and the console chat
+    # would split across two sessions. A PARTIAL unique index is what makes the
+    # second insert lose instead.
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_console_per_user "
+    "ON prompt_sessions(user_id) WHERE (metadata->>'session_type') = 'console'",
 ]
 
 # Default user that the frontend expects
