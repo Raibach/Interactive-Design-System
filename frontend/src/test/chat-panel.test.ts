@@ -515,3 +515,31 @@ describe("<chat-panel> — the console's chat carries the findings", () => {
     expect(el.shadowRoot!.querySelector('.view-slot slot[name="view"]')).not.toBeNull();
   });
 });
+
+/**
+ * A FRESH COMPOSER KEEPS NOTHING FROM THE LAST ONE.
+ *
+ * The owner, 2026-09-18: "it's almost as if the composer is not clearing… every time I create a
+ * new one by clicking composer, it should clear whatever Grace had and be ready to accept the
+ * new run." The panel is reused across assemblies (the surface keeps the same component id), so
+ * the turns it spoke in the previous place stayed on screen. `clearThread()` is what the host
+ * calls when it means "a new place" — the Composer click.
+ */
+describe('<chat-panel> — starting over', () => {
+  it('empties the thread on request, whoever put the turns there', async () => {
+    const el = await mount({
+      conversationId: '',
+      messages: [
+        { role: 'assistant', content: 'a turn from the last composer' },
+        { role: 'user', content: 'and one of mine' },
+      ],
+    });
+    expect(shadowText(el)).toContain('a turn from the last composer');
+
+    el.clearThread();
+    await settle(el);
+
+    expect(shadowText(el)).not.toContain('a turn from the last composer');
+    expect(shadowText(el)).not.toContain('and one of mine');
+  });
+});

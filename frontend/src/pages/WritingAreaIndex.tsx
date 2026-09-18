@@ -3015,6 +3015,17 @@ export default function Index({
     }
 
     if (tabId === 'composer') {
+      // A FRESH COMPOSER STARTS CLEAN — whatever Grace had here is not kept.
+      //
+      // The owner, 2026-09-18: "it's almost as if the composer is not clearing… every time I
+      // create a new one by clicking composer, it should clear whatever Grace had and be ready
+      // to accept the new run." The seat is reused across assemblies, so its thread has to be
+      // emptied on purpose here; nothing that was SAVED is affected (a package's conversation
+      // is loaded from its own id when it is opened).
+      const seat = document.querySelector('chat-panel') as
+        | (HTMLElement & { clearThread?: () => void })
+        | null;
+      seat?.clearThread?.();
       // Move the header tab indicator INSTANTLY — don't wait for AI assembly
       handleHeaderTabChange('composer');
       // Composer click always starts a FRESH prompt package (same as "Create New")
