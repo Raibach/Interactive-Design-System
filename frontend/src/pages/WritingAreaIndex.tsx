@@ -3591,7 +3591,19 @@ export default function Index({
      * writing checks for: every event here has a listener in the same change.
      */
     const onCanvasPlay = () => window.dispatchEvent(new CustomEvent('run-requested'));
-    const onCanvasReset = () => setOutputColumn('output');
+    const onCanvasReset = () => {
+      setOutputColumn('output');
+      /*
+       * AND THE REST OF THE PLACE GOES BACK WITH IT. The swap above takes the canvas out of the
+       * middle column; the ARRANGEMENT — the prompt out of its rail, her column open at her
+       * width — belongs to the layout that lays it out, so the layout is ASKED to put it back
+       * (owner, 2026-09-18: "it should just reset it… it doesn't look like it does"). Before
+       * this, Reset left the prompt docked where the Run had put it and her column wherever the
+       * last drag had left it: the canvas left, and nothing else did.
+       */
+      deepFind<HTMLElement & { resetArrangement?: () => void }>('workspace-layout')
+        ?.resetArrangement?.();
+    };
     const onCanvasSave = () => {
       // THE FOOT'S SAVE TAKES THE SAME TWO READINGS its siblings do — the control bar's Save and
       // the surface's own save-template both hand the save the sections and the live output.

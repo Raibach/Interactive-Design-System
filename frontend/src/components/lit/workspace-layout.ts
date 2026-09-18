@@ -708,6 +708,31 @@ export class WorkspaceLayout extends LitElement {
     this.dispatchEvent(new CustomEvent('third-column-toggle', { detail: { open: this.isThirdOpen } }));
   };
 
+  /**
+   * PUT THE PLACE BACK TO HOW IT OPENS — the prompt out of its rail, her column standing open
+   * at her width, and the panes back to the proportions a fresh layout starts with.
+   *
+   * WHAT ASKS FOR THIS: the canvas footer's Reset. The owner, 2026-09-18: "what does the reset
+   * button do? Does it set it back to the default state when you first click on composer?
+   * Because it doesn't look like it does — it should just reset it." He is right, and this is
+   * why: the only thing Reset did was put the middle column back to its compiled output, so the
+   * prompt stayed where the Run had docked it and her column kept whatever the last few minutes
+   * had made of it. The arrangement is this element's, so this element is what puts it back —
+   * the host asks, it does not write.
+   *
+   * IT IS THE OPERATOR'S ACT, so both panes are marked theirs: no payload re-assert may undo a
+   * reset, exactly as none may undo a drag.
+   */
+  resetArrangement(): void {
+    this._leftOwnedByOperator = true;
+    this._setLeftCollapsed(false);
+    this._left = 1;
+    this._middle = 1;
+    // Her column opens at her width, and `_openThird` claims it as the operator's on the way.
+    this._openThird();
+    this.requestUpdate();
+  }
+
   static styles = css`
     :host {
       display: flex;

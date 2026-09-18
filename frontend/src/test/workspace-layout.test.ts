@@ -324,3 +324,42 @@ describe('<workspace-layout> her column: 650, and the cursor', () => {
     expect(el.isThirdOpen).toBe(false);
   });
 });
+
+/**
+ * RESET — what the canvas footer's Reset asks for.
+ *
+ * The owner, 2026-09-18: "what does the reset button do? Does it set it back to the default
+ * state when you first click on composer? Because it doesn't look like it does — it should just
+ * reset it." It did not: the host's half (the canvas out of the middle column) was all there
+ * was, so the prompt stayed docked where the Run had put it.
+ */
+describe('<workspace-layout> Reset puts the arrangement back', () => {
+  const widthOf = (el: LayoutEl) => (el as unknown as { _rightPx: number })._rightPx;
+
+  it('the prompt comes out of its rail and her column stands open at 650', async () => {
+    const el = await mountWithPanel();
+    Object.defineProperty(el, 'clientWidth', { value: 1375, configurable: true });
+    el.getBoundingClientRect = () => ({
+      left: 0, right: 1375, width: 1375,
+      top: 0, bottom: 900, height: 900, x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+
+    // A Run docks the prompt …
+    el.dispatchEvent(new CustomEvent('run-click', { detail: {} }));
+    el.dispatchEvent(new CustomEvent('flow-view-ready', {}));
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(true);
+
+    // … and the operator narrows her column by hand.
+    el.dispatchEvent(new CustomEvent('input-resize-start', { detail: { clientX: 1000, clientY: 10 } }));
+    el.dispatchEvent(new CustomEvent('input-resize-end', {}));
+    await el.updateComplete;
+    expect(widthOf(el)).toBe(375);
+
+    el.resetArrangement();
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(false);
+    expect(el.isThirdOpen).toBe(true);
+    expect(widthOf(el)).toBe(650);
+  });
+});
