@@ -406,7 +406,7 @@ export class AgentCanvas extends LitElement {
          the right, it's pulling the right side in towards the middle, then sliding itself to
          the right."
          The element is not the right thing to animate on its first paint: its opening state is
-         where it BEGINS, not a movement. `data-arrived` is set once, after the first paint, so
+         where it BEGINS, not a movement. The arrived attribute is set once, after the first paint, so
          the motion belongs to the person's own gestures — the rail and the gripper — and only
          to those. */
       :host(:not([arrived])) .seat { transition: none; }
