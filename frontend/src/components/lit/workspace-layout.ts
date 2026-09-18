@@ -198,6 +198,10 @@ export class WorkspaceLayout extends LitElement {
    */
   private _columnGround = '';
 
+  /** Follows the assigned canvas's `theme` while it is the one in the middle pane. */
+  private _groundObserver: MutationObserver | null = null;
+  private _groundElement: HTMLElement | null = null;
+
   private _dragging: 'left' | 'right' | null = null;
 
   constructor() {
@@ -326,6 +330,7 @@ export class WorkspaceLayout extends LitElement {
     document.removeEventListener('mouseout', this._onPointerBoundary as EventListener);
     document.removeEventListener('mouseover', this._onPointerBoundary as EventListener);
     window.removeEventListener('theme-change', this._readColumnGround as EventListener);
+    this._groundObserver?.disconnect();
     this.removeEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);
@@ -406,17 +411,22 @@ export class WorkspaceLayout extends LitElement {
    * ground under her. The owner, 2026-09-18: "when Grace is over top of the canvas, she should
    * see the canvas behind that."
    *
-   * So her pane stands on the canvas's OWN colour, read from the canvas element — its host
-   * declares `--flow-ground`, mid-tone or dark, and this reads it rather than restating it. One
-   * value, one home: a copy here is the second value that drifts, which is the reason those two
-   * components carry no fill in the first place.
+   * So the drawing's ground becomes the ROOM's ground (see the :host rule): every column stands
+   * on it, her transparent edges show the drawing by showing the room, and nothing is painted on
+   * her column at all.
    *
-   * Empty when no canvas is in the shell, and then nothing is painted and the package view looks
-   * exactly as it did.
+   * The value is the canvas element's own `--flow-ground` — mid-tone or dark, one home, read
+   * here and never restated — and it is re-read when the tone changes as well as when the
+   * canvas arrives, because the tone is written onto the canvas by the TREE (and by the foot's
+   * switch) with no event this element could hear. That mattered: the first version of this read
+   * it once, caught the mid-tone before `theme="dark"` had been written, and painted a light
+   * ground beside a dark drawing — the owner: "the background is dark and you added the light
+   * mode version of the background."
    */
   private _readColumnGround(): void {
     const slot = this.shadowRoot?.querySelector('slot[name="middle"]') as HTMLSlotElement | null;
     const canvas = (slot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
+    this._watchGround(canvas ?? null);
     const ground = canvas
       ? getComputedStyle(canvas).getPropertyValue('--flow-ground').trim()
       : '';
@@ -424,6 +434,16 @@ export class WorkspaceLayout extends LitElement {
     this._columnGround = ground;
     if (ground) this.style.setProperty('--column-ground', ground);
     else this.style.removeProperty('--column-ground');
+  }
+
+  /** Follow the assigned element's `theme`, the one way its ground changes without an event. */
+  private _watchGround(el: HTMLElement | null): void {
+    if (el === this._groundElement) return;
+    this._groundObserver?.disconnect();
+    this._groundElement = el;
+    if (!el || typeof MutationObserver === 'undefined') return;
+    this._groundObserver = new MutationObserver(() => this._readColumnGround());
+    this._groundObserver.observe(el, { attributes: true, attributeFilter: ['theme'] });
   }
 
   private _onRightSlotChange = (e: Event): void => {
@@ -798,6 +818,22 @@ export class WorkspaceLayout extends LitElement {
          yielding. The three panes must be able to give width back. */
       min-width: 0;
 
+      /*
+       * THE ROOM'S GROUND, WHILE A DRAWING IS IN IT.
+       *
+       * Two things are TRUE of this screen and only look contradictory. Her column and the
+       * drawing are SIBLINGS here — the drawing in the middle pane, she in the right — so
+       * nothing of the drawing is under her, and "make her transparent" showed the shell's grey
+       * instead of the drawing. And the design says the strip and the panel's container are
+       * transparent so that what shows through them IS the drawing. Both hold at once only if
+       * the drawing's ground is the ROOM's ground, with every column standing on it: then the
+       * transparent edges show the drawing by showing the room.
+       *
+       * The value is the drawing's own — read from the canvas element (see _readColumnGround),
+       * never restated here. Empty when no drawing is on screen, and then nothing is painted.
+       */
+      background: var(--column-ground, transparent);
+
       /* ── Motion language ────────────────────────────────────────────────
          One curve, one duration, for every pane move in the shell.
          Ease accelerates and stops — it lands like a slap. This curve
@@ -846,12 +882,39 @@ export class WorkspaceLayout extends LitElement {
        because the rail's edge shadow is drawn inside it and is cast beyond it.
        The column's own scrollers live further in — the thread and the view slot —
        so this box has nothing to contain. */
+    /*
+     * HER COLUMN IS A LAYER OVER A DRAWING — AND ONLY OVER A DRAWING.
+     *
+     * This is the playground's own geometry, for the view that has a drawing to stand on —
+     * canvas.html: "THE CANVAS IS THE GROUND; HER COLUMN IS A LAYER OVER IT", and the owner's
+     * rule for it: "the canvas does not respond to anything on the right-hand side. It always
+     * covers it." As a flex PANE beside a canvas she took width out of the drawing's pane, so
+     * opening her narrowed the drawing and closing her widened it — it re-fitted on every move
+     * of hers, which is what the owner saw and named: "the canvas is not underneath Grace
+     * anymore. Now it's responsive. It has to be under her."
+     *
+     * THE over CLASS IS WHAT SCOPES IT — and it is set only when the middle holds something
+     * that publishes a ground — a canvas. Everything else keeps her as a PANE: a console, or a
+     * prompt that has not run, is two columns and always has been. The first version of this
+     * rule had no scope, so it applied to the console too, and her layer landed across the
+     * console's own column: the owner, 2026-09-18 — "Restore the console. The console is
+     * responsive. You've just broke it just now."
+     *
+     * Absolute over a drawing, so the middle pane spans everything right of the prompt and this
+     * one lies on the part of it she takes: the drawing keeps every pixel behind her, and what
+     * she covered is simply uncovered again when she closes. The host is a positioning context
+     * already (relative, in the :host rule), and the motion is the same curve and duration as
+     * every other pane move — on WIDTH, because that is what this box is sized by here.
+     */
     .pane.right {
       overflow: visible;
-      /* WHAT SHOWS THROUGH HER TRANSPARENT EDGE — the canvas's own colour while a canvas is on
-         screen, empty (nothing painted) otherwise. Set from the canvas element, never restated
-         here: see _readColumnGround. */
-      background: var(--column-ground, transparent);
+    }
+    .pane.right.over {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      transition: width var(--dur-pane) var(--ease-settle);
     }
     /* The MIDDLE pane hides its content when collapsed — that column is simply not
        shown in the 2-column layout, so hiding it is the point.
@@ -929,17 +992,44 @@ export class WorkspaceLayout extends LitElement {
   render() {
     const middleGrow = this._hasMiddle ? this._middle : 0;
     /*
-     * HER PANE IS A WIDTH, NOT A SHARE — see _rightPx. Flex takes that width out of the panes
-     * beside her by its own arithmetic, so nothing here divides anything for her, and her
-     * gripper cannot hand width to the prompt: there is no second number to keep in step.
-     *
-     * SHE GROWS ONLY WHEN NOTHING ELSE CAN ABSORB THE REMAINDER: with the prompt docked and no
-     * canvas beside her — the beat before a Run's middle column arrives — the leftover has to
-     * land somewhere, and hers is the only pane left that can take it. Every other state has
-     * the prompt or the canvas absorbing it, and she keeps exactly her width.
+     * HER COLUMN'S WIDTH IS A NUMBER, and it is a WIDTH — not a share of the flex line. See
+     * _rightPx, and see the .pane.right rule: she is a LAYER over the drawing, so this width
+     * is how much of the drawing she covers and nothing else.
      */
-    const rightBasis = this.isThirdOpen ? this._rightPx : WorkspaceLayout.MIN_RIGHT_PX;
-    const rightAbsorbs = this.isThirdOpen && this._leftCollapsed && !this._hasMiddle;
+    const rightWidth = this.isThirdOpen ? this._rightPx : WorkspaceLayout.MIN_RIGHT_PX;
+    /*
+     * SHE IS A LAYER ONLY OVER A DRAWING — and "there is a drawing" is read off the ELEMENT in
+     * the middle: the plug-in that draws it (<agent-canvas>), which is what the flow view puts
+     * there. A console, or a prompt that has not run, has no such element: there she is a PANE,
+     * exactly as she has always been, and the two columns divide the shell between them.
+     *
+     * The first version of this rule asked "is there a middle pane", which is true in the
+     * console too — so her layer landed across the console's own column: the owner, 2026-09-18,
+     * "Restore the console. The console is responsive. You've just broke it just now."
+     */
+    const middleSlot = this.shadowRoot?.querySelector('slot[name="middle"]') as HTMLSlotElement | null;
+    const middleEl = (middleSlot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
+    const rightOver = this._hasRight && !!middleEl && middleEl.tagName.toLowerCase() === 'agent-canvas';
+    /*
+     * AS A PANE SHE GROWS ONLY WHEN NOTHING ELSE CAN ABSORB THE REMAINDER: with the prompt
+     * docked and no canvas beside her — the beat before a Run's middle column arrives — the
+     * leftover has to land somewhere, and hers is the only pane left that can take it.
+     */
+    const rightAbsorbs = !rightOver && this.isThirdOpen && this._leftCollapsed;
+    /*
+     * HER BOX, SIZED TWO WAYS, and it has to be written HERE because an inline style beats every
+     * selector — the measured case was an empty right pane at 526px with the class applied and
+     * the width untouched (the owner's "weird large space on the right hand side").
+     *
+     *   over a drawing   width, because she is a LAYER on it (.pane.right.over): the number is
+     *                    how much of the drawing she covers, and none of it comes out of any
+     *                    other column's box.
+     *   over nothing     flex, because she is a PANE beside the prompt, as she has always been
+     *                    in a console or a prompt that has not run.
+     */
+    const rightStyle = rightOver
+      ? `width: ${this._hasRight ? rightWidth : 0}px;`
+      : `flex: ${rightAbsorbs ? 1 : 0} 1 ${rightWidth}px; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`;
     const minLeft = WorkspaceLayout.MIN_LEFT_PX;
     /*
      * THE 60px FLOOR IS THE COLLAPSED WIDTH, so it holds in BOTH states.
@@ -970,18 +1060,18 @@ export class WorkspaceLayout extends LitElement {
     const share = (g: number) => (growTotal > 0 ? g / growTotal : 0);
     const leftFlex = `${share(this._left)} 1 0%`;
     /*
-     * A PANE WITH NOTHING IN IT GETS NO WIDTH AT ALL — and it has to be withheld HERE, because
-     * these two lines are written into the pane's own `style` attribute. An inline style beats
-     * every selector, so the `.pane.right.empty` rule that was supposed to zero an empty pane
-     * could never win: measured 2026-09-18, an empty right pane at 526px with the class applied
-     * and the width untouched — the owner's "weird large space on the right hand side when you
-     * click one of the navigation menu", which was her panel living inside the flow view's
-     * container instead of in her own column.
+     * HER BOX IS SIZED HERE, IN THE INLINE STYLE, and it is sized differently depending on what
+     * she is standing on — which is not a detail to be tidied away:
      *
-     * Shrink stays 1 so a narrow window gives her width back rather than overflowing, and the
-     * pane's min-width is her floor, so what she gives back is bounded.
+     *   over a DRAWING   width, because she is a LAYER on it (see .pane.right.over): the number
+     *                    is how much of the drawing she covers, and nothing of it comes out of
+     *                    any other column's box.
+     *   over nothing     flex, because she is a PANE beside the prompt, as she has always been
+     *                    in a console or a prompt that has not run — and it has to be written
+     *                    HERE because an inline style beats every selector: the measured case
+     *                    was an empty right pane at 526px with the class applied and the width
+     *                    untouched (the owner's "weird large space on the right hand side").
      */
-    const rightFlex = this._hasRight ? `${rightAbsorbs ? 1 : 0} 1 ${rightBasis}px` : '0 0 0';
 
     return html`
       <div class="pane left" style="flex: ${leftFlex}; min-width: ${minLeft}px;">
@@ -1022,7 +1112,7 @@ export class WorkspaceLayout extends LitElement {
 
            The floor is the COLUMN's: rail 74 + spacer 30, because the pane's content
            now includes both. -->
-      <div class="pane right ${this.isThirdOpen ? '' : 'collapsed'} ${this._hasRight ? '' : 'empty'}" style="flex: ${rightFlex}; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;">
+      <div class="pane right ${this.isThirdOpen ? '' : 'collapsed'} ${this._hasRight ? '' : 'empty'} ${rightOver ? 'over' : ''}" style=${rightStyle}>
         <slot name="right" @slotchange=${this._onRightSlotChange}></slot>
       </div>
     `;
