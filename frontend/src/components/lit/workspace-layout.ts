@@ -247,6 +247,17 @@ export class WorkspaceLayout extends LitElement {
     document.addEventListener('pointerup', this._onMouseUp as EventListener);
     document.addEventListener('pointercancel', this._onMouseUp as EventListener);
     window.addEventListener('blur', this._onMouseUp as EventListener);
+    /*
+     * AND THE ONE RELEASE NONE OF THOSE CATCH: letting go OUTSIDE the window. It fires no
+     * mouseup anywhere — the document never hears it and the window does not lose focus — so
+     * the pane kept following a hand that was no longer holding anything. The boundary says it
+     * instead: crossing it with NO BUTTON DOWN means the hand is empty, whether it just arrived
+     * or just left after letting go. (Capturing the pointer is the other way to know, and it
+     * cost the whole page: a capture that outlives its pointer sends every later event to one
+     * strip, so nothing else could be grabbed — see chat-panel.)
+     */
+    document.addEventListener('mouseout', this._onPointerBoundary as EventListener);
+    document.addEventListener('mouseover', this._onPointerBoundary as EventListener);
     // The rail's requests arrive here because both events are composed and
     // bubble: the rail is inside the panel's shadow root, inside this element.
     this.addEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
@@ -300,6 +311,8 @@ export class WorkspaceLayout extends LitElement {
     document.removeEventListener('pointerup', this._onMouseUp as EventListener);
     document.removeEventListener('pointercancel', this._onMouseUp as EventListener);
     window.removeEventListener('blur', this._onMouseUp as EventListener);
+    document.removeEventListener('mouseout', this._onPointerBoundary as EventListener);
+    document.removeEventListener('mouseover', this._onPointerBoundary as EventListener);
     this.removeEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);
@@ -323,6 +336,19 @@ export class WorkspaceLayout extends LitElement {
     this._dragging = null;
     this.removeAttribute('dragging');
   }
+
+  /**
+   * THE HAND IS OFF THE PAGE. A release outside the window fires no mouseup anywhere, so a drag
+   * would stay live and the pane would keep following a cursor nobody is holding. Crossing the
+   * boundary with no button down is the fact that says otherwise — see the listener in
+   * connectedCallback for why the pointer is not captured instead.
+   */
+  private _onPointerBoundary = (e: MouseEvent): void => {
+    if (!this._dragging) return;
+    if (e.relatedTarget) return; // a move between elements, not across the page's edge
+    if (e.buttons !== 0) return; // the button is still down: the hand is mid-drag
+    this._onMouseUp();
+  };
 
   /**
    * THE COLUMN'S OPEN/CLOSED STATE LIVES HERE, AND SO DOES ITS CONSEQUENCE.
@@ -594,20 +620,6 @@ export class WorkspaceLayout extends LitElement {
      * the boundary 300px away from a grip taken at the floor.
      */
     if (side === 'left') {
-      /*
-       * CAPTURE THE POINTER, exactly as her spacer does (see chat-panel): a release outside the
-       * window fires no mouseup anywhere, and without capture the bar would keep following a
-       * hand that had already let go.
-       */
-      const bar = e.currentTarget as HTMLElement | null;
-      const pointerId = (e as PointerEvent).pointerId;
-      if (bar?.setPointerCapture && typeof pointerId === 'number') {
-        try {
-          bar.setPointerCapture(pointerId);
-        } catch {
-          // A pointer that is already gone needs no capturing.
-        }
-      }
       this._leftOwnedByOperator = true;
       this._setLeftCollapsed(false);
     } else {
@@ -937,7 +949,7 @@ export class WorkspaceLayout extends LitElement {
            layout. In 2-column there is no middle pane, so the chat column's left
            edge is the design's spacer — see below. -->
       ${this._hasMiddle
-        ? html`<div class="gripper" @pointerdown=${(e: PointerEvent) => this._onGripDown('left', e)}></div>`
+        ? html`<div class="gripper" @mousedown=${(e: MouseEvent) => this._onGripDown('left', e)}></div>`
         : nothing}
       <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'}" style="flex: ${share(middleGrow)} 1 0%;"><slot name="middle" @slotchange=${this._onMiddleSlotChange}></slot></div>
       <!-- THE RIGHT COLUMN IS THE DESIGN'S CONTAINER, and this spacer is its FIRST

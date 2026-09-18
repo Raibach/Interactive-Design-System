@@ -137,10 +137,11 @@ const runAndSwap = async (el: LayoutEl) => {
 const gripDown = (el: LayoutEl) => {
     const grip = el.shadowRoot!.querySelector('.gripper') as HTMLElement | null;
     expect(grip).toBeTruthy();
-    // POINTERDOWN, because that is what the bar listens for now: the gesture CAPTURES the
-    // pointer, so a hand that lets go outside the window still ends the drag instead of
-    // leaving the column following a hand that is no longer there.
-    grip!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, composed: true, button: 0, clientX: 60 }));
+    // MOUSEDOWN, not pointerdown: the bar deliberately does NOT capture the pointer. Capture was
+    // tried for the one release it catches and nothing else does, and it cost the whole page — a
+    // capture that outlives its pointer sends every later pointer event to that one element, so
+    // nothing else can be grabbed (the owner, 2026-09-18: "the left is locked… Grace is locked").
+    grip!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true, button: 0, clientX: 60 }));
   };
 
   it('a Run request docks the prompt', async () => {

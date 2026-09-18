@@ -225,6 +225,8 @@ export class ChatPanel extends LitElement {
   /** The spacer's gesture while it is in flight — see _onGripDown. */
   private _gripMove: ((e: MouseEvent) => void) | null = null;
   private _gripUp: (() => void) | null = null;
+  /** The window boundary during a grip — the one channel an outside release is visible on. */
+  private _gripBoundary: ((e: MouseEvent) => void) | null = null;
 
   private _onDraftInput(e: Event) {
     const d = (e as CustomEvent).detail || {};
@@ -1259,7 +1261,7 @@ ${workspaceContext}`;
   }
 
   /**
-   * The spacer's pointerdown. "chat-left-spacer" #40001085:2598, state=Default
+   * The spacer's mousedown. "chat-left-spacer" #40001085:2598, state=Default
    * #40001085:2597 — the annotation on the MASTER (not on the instance, which is why
    * it took a second visit to find):
    *   On drag:   dispatch input-resize-start, input-resize-move, input-resize-end
@@ -1270,23 +1272,16 @@ ${workspaceContext}`;
    * raises move and end. The host does the sizing, because the column's width is its
    * to lay out. The three names are the annotation's, verbatim.
    *
-   * AND THE POINTER IS CAPTURED, so the end always comes back here. A release OUTSIDE the
-   * window fires no mouseup anywhere — the document never hears it and the window does not
-   * lose focus — so the gesture never ended: the cursor stayed held as col-resize and the
-   * column kept following a hand that had already let go. The owner, 2026-09-18: "it holds my
-   * cursor and it won't let me release it when I try to expand the tabs." With capture the
-   * pointerup is delivered to THIS strip wherever the hand lets go, including off the window,
-   * and the gesture ends the way it ends everywhere else.
+   * NO POINTER CAPTURE HERE, AND THAT IS A MEASURED DECISION. Capture was tried for the one
+   * release it catches and nothing else does — letting go OUTSIDE the window, which fires no
+   * mouseup anywhere. It cost far more than it paid: a capture that outlives its pointer sends
+   * every later pointer event to that one strip, so the page stops being grabbable at all —
+   * the owner, 2026-09-18: "the left is locked. You can't grab it… Grace is locked. You can't
+   * grab her… it hangs onto your cursor." The boundary is what tells us instead: crossing it
+   * with no button down means the hand is not holding anything, whether it just arrived or
+   * just left after letting go.
    */
-  private _onGripDown(e: PointerEvent): void {
-    const strip = e.currentTarget as HTMLElement | null;
-    if (strip?.setPointerCapture && typeof e.pointerId === 'number') {
-      try {
-        strip.setPointerCapture(e.pointerId);
-      } catch {
-        // A pointer that is already gone (a cancelled gesture) needs no capturing.
-      }
-    }
+  private _onGripDown(e: MouseEvent): void {
     this._gripMove = (ev: MouseEvent) => {
       this.dispatchEvent(
         new CustomEvent('input-resize-move', {
@@ -1303,14 +1298,29 @@ ${workspaceContext}`;
         document.removeEventListener('mouseup', this._gripUp);
         document.removeEventListener('pointerup', this._gripUp);
         document.removeEventListener('pointercancel', this._gripUp);
+        document.removeEventListener('mouseout', this._gripBoundary);
+        document.removeEventListener('mouseover', this._gripBoundary);
       }
       this._gripMove = null;
       this._gripUp = null;
+      this._gripBoundary = null;
+    };
+    /*
+     * AND THE HAND THAT LETS GO OUTSIDE THE WINDOW. A release beyond the page fires no mouseup
+     * anywhere, so the strip would keep tracking a hand that is no longer holding anything: it
+     * reads the boundary instead — crossing it with NO BUTTON DOWN means the hand is empty,
+     * whether it just arrived or just left after letting go.
+     */
+    this._gripBoundary = (ev: MouseEvent) => {
+      if (ev.relatedTarget || ev.buttons !== 0) return; // a move inside the page, or still held
+      this._gripUp?.();
     };
     document.addEventListener('mousemove', this._gripMove);
     document.addEventListener('mouseup', this._gripUp);
     document.addEventListener('pointerup', this._gripUp);
     document.addEventListener('pointercancel', this._gripUp);
+    document.addEventListener('mouseout', this._gripBoundary);
+    document.addEventListener('mouseover', this._gripBoundary);
 
     this.dispatchEvent(
       new CustomEvent('input-resize-start', {
@@ -1402,7 +1412,7 @@ ${workspaceContext}`;
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize the chat column"
-        @pointerdown=${this._onGripDown}
+        @mousedown=${this._onGripDown}
       >
         <!-- Figma "Meatballs-for-spacer-between-columns" #40001085:1478. One glyph,
              two colours, from the two states of set "chat-left-spacer"
