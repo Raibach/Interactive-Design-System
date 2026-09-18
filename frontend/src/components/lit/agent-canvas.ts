@@ -295,6 +295,13 @@ export class AgentCanvas extends LitElement {
 
   protected updated(): void {
     this._applySeatWidth();
+    // THE FIRST PAINT IS AN ARRIVAL, NOT A GESTURE — see the .seat rule above. Two frames, so
+    // the settled width is on screen before the transition is switched on: what the person then
+    // sees move is their own click, and the canvas they pressed Run for is simply there.
+    if (!this.hasAttribute('arrived')) {
+      requestAnimationFrame(() => requestAnimationFrame(() =>
+        this.isConnected && this.setAttribute('arrived', '')));
+    }
   }
 
   /** The drawing's own fit, for a host that wants it. */
@@ -392,6 +399,17 @@ export class AgentCanvas extends LitElement {
            element is not in this bundle. */
         transition: width 520ms cubic-bezier(0.22, 1, 0.36, 1);
       }
+      /* NOT ON THE WAY IN. A canvas that mounts collapsed and is handed "open" one frame later
+         animates 104px -> 650px while the panes are ALSO rebalancing, so the person sees the
+         right side pulled in toward the middle and then sliding back out — the owner's report,
+         2026-09-18: "when I hit run it's kind of starting in the middle… instead of moving to
+         the right, it's pulling the right side in towards the middle, then sliding itself to
+         the right."
+         The element is not the right thing to animate on its first paint: its opening state is
+         where it BEGINS, not a movement. `data-arrived` is set once, after the first paint, so
+         the motion belongs to the person's own gestures — the rail and the gripper — and only
+         to those. */
+      :host(:not([arrived])) .seat { transition: none; }
       /* EXCEPT WHILE A HAND IS ON THE GRIPPER. Every pointermove writes a new width, and
          easing each one makes the column chase the cursor — the owner's report of
          2026-09-18, and the reason the motion belongs to the BUTTONS and to nothing else.
