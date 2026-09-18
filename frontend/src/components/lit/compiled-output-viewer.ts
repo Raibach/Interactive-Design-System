@@ -21,12 +21,12 @@ import { LitElement, html, css } from 'lit';
 // role-tile.ts imports; the design references one asset from two places, so it
 // is imported, not re-drawn.
 import arrowDropDown from '../../assets/figma-9598a83b0a4eb9b9fc9c226f302689fd4f7075df.svg';
-// Side-effect imports for the elements the drawing instantiates. Both are
-// registry entries with their own node ids — do not re-implement either:
-//   model-selector-button  40000909:4322 + model-btn-label 40000973:24205
-//   gripper-prompt-input   40000941:23074
+// Side-effect import for the element the drawing instantiates: model-selector-button
+// (40000909:4322 + model-btn-label 40000973:24205) is a registry entry with its own node
+// id — do not re-implement it. <gripper-prompt-input> was imported here for the two
+// vertical tabs and went with them; the left column's prompt sections still draw it, so
+// the element keeps its claim.
 import './prompt-input/model-selector-button';
-import './prompt-input/gripper-prompt-input';
 
 /**
  * A fenced block longer than this is folded to one line until it is opened.
@@ -62,7 +62,8 @@ export class CompiledOutputViewer extends LitElement {
     outputType: { type: String, attribute: 'output-type' },
     /** The description line in a vertical tab — node 40001034:1041, "Figma designs". */
     outputDescription: { type: String, attribute: 'output-description' },
-    /** Cost for the vertical-tab readout — node 40001034:1039. */
+    /** Cost — the readout that showed it was in the vertical tab, which is removed; the
+     *  property stays declared because the catalog binds it. */
     cost: { type: String },
     viewMode: { type: String, state: true },
     /** Seconds the current — or the just-finished — Run has taken. Local state. */
@@ -335,7 +336,8 @@ export class CompiledOutputViewer extends LitElement {
        Nothing here comes from a screenshot or from memory.
 
        The layout arithmetic, every term of it a class string in that table:
-         531 = 451 (panel) + 40 (vertical-tab B) + 40 (vertical-tab A)
+         the column is the panel now: the two 40px tabs that used to sit beside it are
+         removed (see render)
          649 = 732 - pt10 - 40 (controls) - gap10 - pb23
          431 = 451 - px10 - px10
        ──────────────────────────────────────────────────────────────────────── */
@@ -498,7 +500,7 @@ export class CompiledOutputViewer extends LitElement {
       gap: 8px;
       flex-wrap: wrap;
       min-width: 0;
-      font-size: 11px;
+      font-size: 13px;
       color: #6b7280;
     }
     /* One row, as these four controls were before they moved — they are a
@@ -510,7 +512,7 @@ export class CompiledOutputViewer extends LitElement {
     }
 
     .actions button {
-      font-size: 10px;
+      font-size: 13px;
       padding: 2px 8px;
       margin-left: 4px;
       border: 1px solid #d1d5db;
@@ -533,99 +535,8 @@ export class CompiledOutputViewer extends LitElement {
       white-space: pre-wrap;
     }
 
-    /* ── vertical-tab-A ─────────────────────────────────────────────────────
-       40001034:1035 (carries a left border — the one tabled in spec §3.11) and
-       40001034:1775 (carries none). Both frames share data-name "vertical-tab-A"
-       and differ in that one property, so the border is applied by class rather
-       than by name. Both are 40px wide with a 5px 0 2px shadow. */
-    .vertical-tab {
-      display: flex;
-      flex-direction: column;       /* flex-col */
-      gap: 10px;                    /* gap-[10px] */
-      align-items: center;          /* items-center */
-      justify-content: center;      /* justify-center */
-      width: 40px;
-      height: 100%;
-      background: #fff;             /* bg-white */
-      box-shadow: 5px 0 2px rgba(0, 0, 0, 0.15);  /* drop-shadow-[5px_0px_2px_…] */
-      box-sizing: border-box;
-      flex-shrink: 0;
-      overflow: hidden;
-    }
-    /* 40001034:1035 only — spec §3.11 / O5 */
-    .vertical-tab.bordered { border-left: 1px solid #8b8b8b; }
-
-    /* gripper — 40001034:1036 + 1044 (frame B), 1776 + 1784 (frame A), each a
-       rotate-180 wrapper around the registry element <gripper-prompt-input>.
-       The gripper's documented contract is the LEFT column's section reordering
-       (component description 40000941:23074 — spec §5, O6); what it does in this
-       column is not stated, so no handler is attached. Deliberately not marked as a
-       behavior stub — see the note on _verticalTab for why marking is harmful. */
-    .vt-gripper {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transform: rotate(180deg);
-    }
-
-    /* Every text run inside a vertical tab is -rotate-90: it reads bottom-to-top.
-       vertical-rl plus rotate(180deg) is that rotation done with real text, so
-       the glyphs stay upright and the run stays selectable. */
-    .vt-run {
-      writing-mode: vertical-rl;
-      transform: rotate(180deg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* vertical-tab-token-readout — 40001034:1038 + 1039 (B), 1778 + 1779 (A) */
-    .vt-readout { flex-shrink: 0; display: flex; justify-content: center; width: 100%; }
-    .vt-readout .vt-run {
-      height: 197px;                /* 40001034:1039 h-[197px] */
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px;              /* text-[12px] */
-      font-weight: 600;             /* font-semibold (Inter:Semi_Bold) */
-      line-height: 20px;            /* leading-[20px] */
-      color: #767676;               /* text-[#767676] */
-      text-align: right;            /* text-right */
-    }
-
-    /* vertical-tab-tab-description — 40001034:1040 + 1041 (B), 1780 + 1781 (A).
-       This is the row that grows: flex-[1_0_0]. */
-    .vt-description {
-      flex: 1 0 0;
-      min-height: 0;
-      display: flex;
-      justify-content: center;
-      width: 100%;
-    }
-    .vt-description .vt-run {
-      height: 169px;                /* 40001034:1041 h-[169px] */
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 16px;              /* text-[16px] */
-      font-weight: 500;             /* font-medium (Inter:Medium) */
-      line-height: normal;          /* leading-[normal] */
-      color: #171717;               /* text-[#171717] */
-    }
-
-    /* horizontal-tab-label — 40001034:1042 + 1043 (B), 1782 + 1783 (A).
-       whitespace-pre-wrap is load-bearing: the drawn literal carries TWO spaces
-       between words ("Response  Format  A") and the node sets pre-wrap so they
-       survive. Collapsing them would not be this design. */
-    .vt-format { flex-shrink: 0; display: flex; justify-content: center; }
-    .vt-format .vt-run {
-      height: 169px;                /* 40001034:1043 h-[169px] */
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 16px;
-      font-weight: 500;
-      line-height: normal;
-      color: #171717;
-      white-space: pre-wrap;        /* 40001034:1043 whitespace-pre-wrap */
-    }
     .status {
-      font-size: 10px;
+      font-size: 13px;
       padding: 1px 6px;
       border-radius: 3px;
       background: #e5e7eb;
@@ -704,7 +615,7 @@ export class CompiledOutputViewer extends LitElement {
       border: 1px solid #fecaca;
       border-radius: 6px;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 11px;
+      font-size: 13px;
       line-height: 1.5;
       color: #7f1d1d;
       white-space: pre-wrap;
@@ -739,7 +650,7 @@ export class CompiledOutputViewer extends LitElement {
     .md li { margin: 2px 0; }
     .md code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
+      font-size: 13px;
       background: #f1f5f9;
       border-radius: 3px;
       padding: 1px 4px;
@@ -763,7 +674,7 @@ export class CompiledOutputViewer extends LitElement {
       overflow: auto;
       white-space: pre;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.5;
     }
     .md pre code { background: none; color: inherit; padding: 0; }
@@ -780,13 +691,13 @@ export class CompiledOutputViewer extends LitElement {
       background: #f9fafb;
       color: #234354;
       font: inherit;
-      font-size: 12px;
+      font-size: 13px;
       text-align: left;
       cursor: pointer;
     }
     .md .fold-head:hover { background: #f3f4f6; }
     .md .fold-head:focus-visible { outline: 2px solid #1B898D; outline-offset: 1px; }
-    .md .fold-caret { color: #6b7280; font-size: 10px; }
+    .md .fold-caret { color: #6b7280; font-size: 13px; }
     .md .fold-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     .md .fold-action { margin-left: auto; color: #1B898D; text-decoration: underline; }
     .md .fold pre { margin: 6px 0 0; }
@@ -879,55 +790,6 @@ export class CompiledOutputViewer extends LitElement {
       || t === '(No output returned.)';
   }
 
-  /**
-   * One vertical tab — the whole of a `vertical-tab-A` frame.
-   *
-   * The two frames are `40001034:1035` and `40001034:1775`. They share a
-   * `data-name` and differ in exactly one drawn property: `1035` carries
-   * `border-l: 1px solid #8b8b8b`, `1775` carries no border (spec §3.11/§3.12).
-   * The border therefore arrives as an argument, not from the name — keying off
-   * "vertical-tab-A" is what merges them.
-   *
-   * `1035` draws `Response  Format  B` and sits against the panel; `1775` draws
-   * `Response  Format  A` and sits outside it (spec §1.2, O8).
-   *
-   * Neither frame's click behavior is drawn in 40000914:4677. They are labels in
-   * the pull, so they render as labels and no handler is invented for them.
-   *
-   * DELIBERATE, do not "fix". catalog-check skips a component's unheard-event
-   * findings when one marker string appears ANYWHERE in its source
-   * (catalog-check.mjs, the event-unheard loop — a plain substring test). That
-   * marker is TWO fragments: `TODO` and `(behavior)`. It is not written here, and
-   * the two fragments must not be written adjacent — not even to talk about them.
-   * Doing so also silences `copy-output` and `regenerate-requested`, which are
-   * real open findings (OPEN-ITEMS.md `check:event-unheard`; AGENT_OPEN_GAPS.md
-   * §event-unheard). The marker is per-event in intent, per-file in implementation.
-   */
-  private _verticalTab(format: 'A' | 'B', bordered: boolean) {
-    // Child order is the drawn order: gripper, readout, description, label, gripper.
-    return html`
-      <div class="vertical-tab ${bordered ? 'bordered' : ''}">
-        <span class="vt-gripper"><gripper-prompt-input></gripper-prompt-input></span>
-        <!-- 40001034:1039 — the drawn literal is "Tokens: 2022 Cost: $0.00802 "
-             (one space between the fields, one trailing space that HTML
-             collapses; the spacing between the fields is the design). -->
-        <div class="vt-readout">
-          <span class="vt-run">Tokens: ${this.tokens || 0} Cost: $${this.cost}</span>
-        </div>
-        <!-- 40001034:1041 — literal "Figma designs" -->
-        <div class="vt-description">
-          <span class="vt-run">${this.outputDescription}</span>
-        </div>
-        <!-- 40001034:1043 / 40001034:1783 — literal "Response  Format  B"/"A",
-             TWO spaces per gap, kept by white-space: pre-wrap. -->
-        <div class="vt-format">
-          <span class="vt-run">Response  Format  ${format}</span>
-        </div>
-        <span class="vt-gripper"><gripper-prompt-input></gripper-prompt-input></span>
-      </div>
-    `;
-  }
-
   render() {
     /* output-vontrols — 40001034:1186. TWO children, exactly, as drawn: the
        selector tile and the model button. */
@@ -986,10 +848,14 @@ export class CompiledOutputViewer extends LitElement {
       </div>
     `;
 
-    /* The column: the panel, then the two vertical tabs. 451 + 40 + 40 = 531,
-       which is the drawn width of 40000914:4677 (spec §1.2). The bordered tab
-       (Format B, 40001034:1035) comes first because the table shows it against
-       the panel — which is why it, and not the other, carries a LEFT border. */
+    /* THE COLUMN IS THE PANEL, AND NOTHING ELSE. The two vertical tabs
+       ("Response Format B" 40001034:1035 and "A" 40001034:1775) used to sit beside it —
+       the design's 531 = 451 panel + 40 + 40 — and they are REMOVED, on the owner's
+       instruction (2026-09-18): "we don't need to show the response formats A or B so we
+       can just cut those." They compared two response formats, which is not what this
+       column is for, and he says he will work that in later. The design nodes remain in
+       Figma: removing a drawn control is the owner's call, not a reading of the design,
+       and this note is the record of the difference. */
     return html`
       <div class="panel">
         ${controls}
@@ -998,8 +864,6 @@ export class CompiledOutputViewer extends LitElement {
           ${canvasControls}
         </div>
       </div>
-      ${this._verticalTab('B', true)}
-      ${this._verticalTab('A', false)}
     `;
   }
 }

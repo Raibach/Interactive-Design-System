@@ -138,7 +138,7 @@ function _CardDescription({ text }: { text?: string }) {
     <div
       data-node-id="40000225:12834"
       data-name="CardDescription"
-      className="[word-break:break-word] absolute font-['Inter:Regular'] font-normal h-[80px] leading-[0] 
+      className="[word-break:break-word] absolute font-['Inter:Regular'] font-medium h-[80px] leading-[0] 
                  left-[19px] not-italic overflow-hidden text-[#2a2836] text-[0px] text-ellipsis 
                  top-[101px] w-[247px] whitespace-pre-wrap"
     >
@@ -611,7 +611,7 @@ export function DesignCard({ title, category, description, username, teamName, v
       </div>
 
       {/* Description */}
-      <div className="[word-break:break-word] absolute font-['Inter:Regular',sans-serif] font-normal h-[180px] leading-[0] left-[14.89px] not-italic overflow-hidden top-[60px] w-[252px] whitespace-pre-wrap"
+      <div className="[word-break:break-word] absolute font-['Inter:Regular',sans-serif] font-medium h-[180px] leading-[0] left-[14.89px] not-italic overflow-hidden top-[60px] w-[252px] whitespace-pre-wrap"
            style={{ color: textColor }}>
         <p className="mb-0 text-[12px]">
           <span className="[word-break:break-word] font-['Inter:Bold',sans-serif] font-bold leading-[22px] not-italic text-[18px]"

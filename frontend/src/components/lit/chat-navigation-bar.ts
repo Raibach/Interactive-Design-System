@@ -58,7 +58,12 @@ import toolsButtonIcon from '@/assets/figma-tools-button-icon.svg';
 // #40001088:2795. The rail is surface-dependent: Chat / Trace / Versions on both,
 // Tools in the composer, Approvals on the console. The host chooses with
 // `allowed-tabs`; this list is what is drawable.
-export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals';
+// `executions` is the CANVAS seat's own button — added 2026-09-18, drawn rather than
+// pulled from a Figma node (no node exists for it yet, so it claims none). It switches
+// the panel to its view slot, which is where a host drops the runs of this flow and the
+// flow as it ran. A seat that does not need it simply does not allow it — which is how
+// a rail button costs nothing anywhere else.
+export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals' | 'executions' | 'eval' | 'states' | 'repair';
 
 /** Detail payload for the 'tab-change' CustomEvent. */
 export interface TabChangeEventDetail {
@@ -207,6 +212,80 @@ const TABS: TabDef[] = [
     iconSrc: traceButtonIcon,
     svgPath: 'M23.07 15.6777V4.11016C24.0271 3.81716 24.7178 3.04006 24.7178 2.12013C24.7178 0.951022 23.6091 0 22.2461 0C20.883 0 19.7742 0.951022 19.7742 2.12013C19.7742 2.39688 19.8406 2.6595 19.9533 2.90176L12.3589 8.60167L4.76457 2.90204C4.87736 2.65943 4.94356 2.39688 4.94356 2.12013C4.94356 0.951022 3.83479 0 2.47179 0C1.10877 0 0 0.951022 0 2.12013C0 3.04013 0.690785 3.81723 1.64785 4.10981V15.678C0.690785 15.9707 0 16.7478 0 17.6677C0 18.8368 1.10877 19.7878 2.47179 19.7878C3.83479 19.7878 4.94356 18.8368 4.94356 17.6677C4.94356 17.1967 4.75757 16.7653 4.45317 16.413L8.84758 13.1148L10.7957 16.0389C10.2456 16.4282 9.88716 17.0096 9.88716 17.6677C9.88716 18.8368 10.9959 19.7878 12.3589 19.7878C13.722 19.7878 14.8306 18.8368 14.8306 17.6677C14.8306 17.0096 14.4721 16.4282 13.9221 16.0389L15.8702 13.1148L20.2646 16.413C19.9603 16.7653 19.7742 17.1967 19.7742 17.6677C19.7742 18.8368 20.883 19.7878 22.2461 19.7878C23.6091 19.7878 24.7178 18.8368 24.7178 17.6677C24.7178 16.7478 24.0271 15.9707 23.07 15.6777Z',
   },
+  {
+    // REUSED AND RENAMED, on the owner's instruction: the n8n-style EXECUTIONS view
+    // (a list of runs beside the flow as it ran) needs a menu item, and until the rail's
+    // taxonomy is settled this button carries it. The label is RUNS — four characters,
+    // and the word this app already uses for one execution ("a Run", "the run's
+    // answer"). The ID stays `executions` because ids are the stable key and labels are
+    // presentation. It was 'flow' for an afternoon before that.
+    id: 'executions',
+    label: 'Runs',
+    tooltip: 'Runs of this flow',
+    // A RAIL BUTTON OF OUR OWN, and there was room for it: the menu is where things
+    // get DROPPED IN. This one switches the panel to its view slot, which is the hole
+    // this view arrives through — her words on Chat, the raw trace on Trace, the runs
+    // of the flow here. Drawn rather than pulled: no Figma node exists for it yet, so
+    // it carries no nodeId instead of claiming one, and the glyph is a plain three-line
+    // list (filled shapes only, so one path can be filled the way this bar fills the
+    // rest).
+    viewBox: '0 0 24 24',
+    svgPath: 'M4 4h16v3H4zM4 10h11v3H4zM4 16h14v3H4z',
+  },
+  {
+    // EVALUATIONS — its own thing, and NOT Trace. The owner corrected this on
+    // 2026-09-18: Trace is the execution trace and stays what it is; evaluations are
+    // the checks and scores that judge a flow, and they need their own door. A
+    // placeholder until the real thing exists (AGENTIC_EDITOR/10-TODO.md).
+    id: 'eval',
+    label: 'Evals',
+    tooltip: 'Checks and scores for this flow',
+    // Drawn, not pulled: a filled check mark on the bar's grid, so it reads at 24px the
+    // way the other filled glyphs do. No Figma node exists for it yet, so it claims none.
+    viewBox: '0 0 24 24',
+    svgPath: 'M9.6 16.8 5.2 12.4l1.8-1.8 2.6 2.6 7.4-7.4 1.8 1.8z',
+  },
+  {
+    // STATES — the canvas in each of its situations, so a person can see what the
+    // drawing does before their own flow reaches that situation. The owner's call on
+    // 2026-09-18, against my advice to keep the fixtures off the rail: the view exists,
+    // and its panel says in its own words that what it shows is SAMPLE data rather than
+    // the reader's flow. That label is the condition that makes it honest.
+    //
+    // THE WORD, for the record: "States" is the weakest of the names considered
+    // (Snapshots, Previews, Samples, Demo data). It reads as statuses — running, done,
+    // failed — which is only part of what the view holds: two of its entries are edge
+    // cases of the DRAWING RULES, not states of a run at all. It is also the only rail
+    // item that is not a record of what happened, which is why its panel must say so.
+    id: 'states',
+    label: 'States',
+    tooltip: 'The canvas in each situation — sample data',
+    viewBox: '0 0 24 24',
+    svgPath: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z',
+  },
+  {
+    // REPAIRS — the console's own menu item, added on the owner's instruction, 2026-09-18:
+    // "remove runs, evals, states and trace from the console chat vertical menu… add the
+    // repair dropdown and show all repairs." The view it opens already existed — the catalog
+    // checker's findings, drawn by chat-repair-actions — so it was COPIED into this menu
+    // rather than rebuilt: the rows are composed by the backend and the element draws them.
+    //
+    // WHY IT IS THE CONSOLE'S. A finding is a statement about the CATALOG, not about one
+    // package: it is the same class of thing as Approvals, which is also console-only. A
+    // package's rail keeps its own versions, tools, runs and evals and never shows findings
+    // that belong to every package.
+    //
+    // Drawn, not pulled: no Figma node exists for a Repairs mark, so it claims none, and the
+    // glyph is the list mark — three bars — which is also what the Runs button draws. The two
+    // never share a rail: Runs is not in the console's menu and Repairs is not in a package's,
+    // so no one ever sees them side by side. If the design wants its own mark for Repairs, it
+    // needs to draw one.
+    id: 'repair',
+    label: 'Repairs',
+    tooltip: 'Open the catalog findings',
+    viewBox: '0 0 24 24',
+    svgPath: 'M4 4h16v3H4zM4 10h11v3H4zM4 16h14v3H4z',
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -342,7 +421,7 @@ export class ChatNavigationBar extends LitElement {
       align-items: center;
       justify-content: center;
       color: #fff;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
       font-family: 'Inter', system-ui, sans-serif;
     }
@@ -564,7 +643,7 @@ export class ChatNavigationBar extends LitElement {
       white-space: nowrap;
       font-size: 10pt;
       font-family: 'Inter', system-ui, sans-serif;
-      font-weight: 400;
+      font-weight: 500;
       z-index: 50;
     }
     .ta {

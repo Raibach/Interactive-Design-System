@@ -163,7 +163,7 @@ export function FeaturedCard({
 
       {/* Title block */}
       <div className="absolute bg-white h-[246px] left-[30px] top-[17px] w-[20px]">
-        <div className="[word-break:break-word] absolute font-['Inter:Regular',sans-serif] font-normal h-[170px] leading-[0] left-[11px] not-italic text-[0px] text-black top-[4px] w-[532px]">
+        <div className="[word-break:break-word] absolute font-['Inter:Regular',sans-serif] font-medium h-[170px] leading-[0] left-[11px] not-italic text-[0px] text-black top-[4px] w-[532px]">
           <p className="leading-[normal] mb-0 text-[18px]">{subtitle}</p>
           <p className="font-['Inter:Bold',sans-serif] font-bold leading-[normal] text-[24px]">{headline}</p>
         </div>

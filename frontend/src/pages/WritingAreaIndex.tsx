@@ -55,6 +55,18 @@ import { readA2UIEnvelope, envelopeRefusalError } from "@/shared/a2ui-envelope";
 import { subscribeTrace, traceSnapshot, type TraceSnapshot } from "@/lib/trace-source";
 import { buildRepairSections } from "@/shared/repairSections";
 import { repairAsk, repairBrief } from "@/shared/repairMaterial";
+// The flow — the same process the prompt is, drawn. The builder is pure (it makes
+// the graph from facts this file already holds); everything below the import is the
+// writing, the swapping and the listening.
+import {
+  buildRepairFlow,
+  type FlowNote,
+  type FlowSeatInput,
+  type RepairRunFacts,
+} from "@/shared/agentFlow";
+// The app's own logger. The flow's events land here, which is what puts them in the
+// operator's Trace view instead of inventing a place for them (see the listeners).
+import { logger } from "@/lib/logger";
 import {
   applyReadiness,
   applyRepair,
@@ -743,6 +755,248 @@ export default function Index({
   }, [currentPromptSession]);
 
   // ══════════════════════════════════════════════════════════════════════════
+  // THE FLOW — the same process, as a picture
+  //
+  // The prompt is the process READ; the canvas is the same process WORKED. Nothing
+  // in the graph is new: its nodes are the sections the left column already holds
+  // (keyed by their canonical ids, never by a label a person may rename), the
+  // finding the repair came from, and the run's own responses. shared/agentFlow.ts
+  // is the pure builder; this is the writer, the publisher, and the one swap that
+  // puts it on screen — one writer per fact, like every other path in this file.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * The Run's own inputs, snapshotted the moment it is accepted.
+   *
+   * They have to be held because the Run CONSUMES the refs they come from
+   * (repairSectionsRef and repairFindingRef are both cleared as it starts), while the
+   * graph keeps being rebuilt as the facts land afterwards. Holding the same values
+   * is also what keeps the drawing honest: it is the section list the run sent, read
+   * a second time.
+   */
+  const flowInputRef = useRef<{ finding: FlowNote | null; sections: FlowSeatInput[]; label: string } | null>(null);
+  /** Whether her column was open before the plug-in took the region. Null outside a
+   *  flow view — the swap captures it on the way in and restores it on the way back. */
+  const thirdOpenBeforeFlowRef = useRef<boolean | null>(null);
+  /** What the app knows about the run so far. Rebuilt FROM, never edited in place. */
+  const flowFactsRef = useRef<RepairRunFacts>({});
+  /** The delete handler, reachable from the card's own event listener (see onCardDelete). */
+  const deletePackageRef = useRef<(sessionId: string) => void>(() => {});
+  /** The publisher, reachable from the settle path — which is defined above it. */
+  const publishFlowRef = useRef<() => void>(() => {});
+
+  /** The answer's own first line — the RESULT line the repair prompt asks for. */
+  const firstLineOf = (text: string): string =>
+    ((text || '').split('\n').find((l) => l.trim()) || '').trim().slice(0, 96);
+
+  /** The graph, into the model. Same shape as the writers above, same bail-out. */
+  const writeFlowToSurface = useCallback((flow: ReturnType<typeof buildRepairFlow> | null) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      const middle = session.middle_column ?? {};
+      if (middle.flow === flow) return prev;
+      return {
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          session: { ...session, middle_column: { ...middle, flow } },
+        },
+      };
+    });
+  }, []);
+
+  /**
+   * Rebuild the whole graph from the facts that exist, and write it.
+   *
+   * A REBUILD, not an edit: the graph is a function of its inputs, so the drawing
+   * cannot drift from the run it draws. Called at the four awaits that change what
+   * the app knows — the run starting, the answer arriving, what the write returned,
+   * and what the fresh check found — and at no other time.
+   */
+  const publishRepairFlow = useCallback(() => {
+    const input = flowInputRef.current;
+    if (!input) return;
+    writeFlowToSurface(buildRepairFlow({
+      label: input.label,
+      finding: input.finding,
+      sections: input.sections,
+      run: flowFactsRef.current,
+    }));
+  }, [writeFlowToSurface]);
+
+  useEffect(() => {
+    publishFlowRef.current = publishRepairFlow;
+  }, [publishRepairFlow]);
+
+  /**
+   * THE MIDDLE COLUMN, SWAPPED — the PLUG-IN on Run, the output on the way back.
+   *
+   * The renderer resolves the tree's component name every render, so a swap is a
+   * tree write like any other, and the tree is the input it already reads.
+   *
+   * WHY THE PLUG-IN AND NOT THE CANVAS ALONE. `<agent-canvas>` is the canvas AND her
+   * seat as one element, so the Run opens the whole unit rather than a drawing with a
+   * chat that happens to sit beside it — the owner's decision (2026-09-18): the unit
+   * owns the region right of the prompt, and her column collapses behind it so there is
+   * exactly ONE Grace on screen. Mounting both the plug-in and the assembled chat panel
+   * would put two of her in one window, each with its own conversation, each hearing the
+   * same window events.
+   *
+   * THE BINDINGS TRAVEL WITH THE COLUMN. Every path her panel reads today is carried
+   * onto the plug-in unchanged (/session/right_column/conversation_id and the rest), so
+   * the app's own writers keep writing to the same places and the conversation machinery
+   * does not learn a second address. The trace view keeps its identity too: it moves from
+   * the right column's `view` child to the plug-in's, which re-projects it into her real
+   * slot — one component, drawn in the same place on screen.
+   *
+   * The compiled output is NOT lost by the swap: going back binds the viewer's content
+   * to the path it was documented to read (/session/middle_column/compiled_output) —
+   * today's composer assembly hands it an empty literal instead, which is why this
+   * binds it on the way back rather than trusting the assembly to.
+   */
+  const setOutputColumn = useCallback((which: 'flow' | 'output') => {
+    setWorkspaceTree((prev) => {
+      const comps = Array.isArray(prev.components) ? prev.components : [];
+      const next = comps.slice();
+
+      /**
+       * THE COLUMNS ARE FOUND BY ROLE, NEVER BY ID — and that is not fastidiousness.
+       *
+       * Every assembly names its own components: the composer's session column is
+       * `middle-column` and its seat is `right-column`, while a LOADED session's are
+       * `middle-col` and `right-col`. This function used to look for the composer's names,
+       * so on a saved package it found nothing and returned unchanged — the Run did its
+       * model call and its save, and drew no canvas at all (measured 2026-09-18: the query
+       * and save both 200, the middle column never appeared). An id belongs to the
+       * assembly that chose it; the ROLE belongs to the layout.
+       */
+      const r = next.findIndex((c: any) => c?.component === 'workspace-layout');
+      const root = r >= 0 ? next[r] : null;
+      const childMap: Record<string, unknown> = { ...((root?.children as Record<string, unknown>) ?? {}) };
+      const byComponent = (name: string): number =>
+        next.findIndex((c: any) => c?.component === name);
+      // The middle: whatever the layout points at, or the viewer the assembly emitted
+      // without pointing at it (a Run is what makes it a column).
+      const middleId =
+        (childMap.middle as string | undefined) ??
+        next.find((c: any) => c?.component === 'compiled-output-viewer' || c?.component === 'AgentCanvas')?.id;
+      // Her seat: whatever the layout points at, or the chat panel it emitted.
+      const seatId =
+        (childMap.right as string | undefined) ??
+        next.find((c: any) => c?.component === 'chat-panel')?.id;
+      const i = middleId ? next.findIndex((c: any) => c?.id === middleId) : -1;
+      if (i < 0 || !seatId) return prev;
+      const have = next[i];
+      if (which === 'flow' && have?.component === 'AgentCanvas') return prev;
+      if (which === 'output' && have?.component === 'compiled-output-viewer' && have?.content?.path) return prev;
+
+
+      if (which === 'flow') {
+        // Remember whether she was open BEFORE the Run, so the way back is where the
+        // person left her rather than where this swap decided.
+        if (thirdOpenBeforeFlowRef.current === null) {
+          thirdOpenBeforeFlowRef.current = root?.isThirdOpen !== false;
+        }
+        // THE UNIT IS COMPOSED BY THE ENVELOPE, not by an element. `agent-canvas` is a
+        // CONTAINER: it declares two slots and this surface fills them — the drawing in
+        // "flow", her seat in "seat" — exactly as workspace-layout is filled by name.
+        // An element that renders another element is nesting, and this protocol does not
+        // allow it (AGENTS-instructions/Core-Concept.md: children come from the envelope,
+        // never from a component's own template; "surfaces cannot nest").
+        //
+        // HER SEAT IS THE SAME COMPONENT, NOT A COPY. "right-column" already exists in
+        // this tree with every binding she needs — the conversation, the conversations,
+        // the session, the prompt text, the compiled output, and her own view child. The
+        // adjacency list lets one component change parents, so nothing about her contract
+        // is restated here and there is exactly one chat-panel to keep true.
+        next[i] = {
+          id: middleId,
+          component: 'AgentCanvas',
+          // HER CHAT OPENS WITH THE RUN. The container defaults to collapsed (only its
+          // rail), which is right for a page that mounts the unit by itself; a Run is
+          // different — it is the moment the flow is produced and the moment she has
+          // something to say about it, so the column arrives open (owner, 2026-09-18:
+          // "when Run is clicked, the left side closes like you currently have it and
+          // the chat's opened. That's our default").
+          // THE CANVAS IS BORN DARK (owner, 2026-09-18). The drawing's own default is the
+          // mid-tone this design was drawn in, but a Run produces a picture meant to be
+          // looked at, and dark is the tone it is shown in — the tone control in the foot
+          // takes it back.
+          collapsed: false,
+          theme: 'dark',
+          children: {
+            header: 'output-controls-view',
+            flow: 'flow-view',
+            // THE FOOT IS THE COLUMN'S TOO — the ControlBar master's bar, where the tone
+            // switch lives. A Run replaces what is under the header, and the place's own
+            // foot has to survive that.
+            footer: 'canvas-footer-view',
+            seat: seatId,
+          },
+        };
+        if (!next.some((c: any) => c?.id === 'flow-view')) {
+          next.push({
+            id: 'flow-view',
+            component: 'AgentFlow',
+            flow: { path: '/session/middle_column/flow' },
+            theme: 'dark',
+          });
+        }
+        // THE COLUMN'S HEADER, PRESENT AND UNWIRED — the owner's instruction (2026-09-18):
+        // "just add the element to the canvas and that way it'll be there when we get ready
+        // to wire it up." It is the design's own row (output-vontrols 40001034:1186): the
+        // view selector and the model selector. The selector opens nothing yet, because no
+        // menu contents exist in the Figma pull and its entries are the owner's
+        // specification — so it is drawn with its tag and role and does nothing, rather
+        // than doing something invented.
+        if (!next.some((c: any) => c?.id === 'output-controls-view')) {
+          next.push({
+            id: 'output-controls-view',
+            component: 'OutputControls',
+            outputType: 'Agent Flow',
+          });
+        }
+        if (!next.some((c: any) => c?.id === 'canvas-footer-view')) {
+          next.push({ id: 'canvas-footer-view', component: 'CanvasFooter', theme: 'dark' });
+        }
+        // THE MIDDLE COLUMN ARRIVES WITH THE RUN. Before one there is nothing to draw
+        // there — a prompt that has not been run is two columns, the prompt and Grace —
+        // so the assembly emits the component without pointing the layout at it. The Run
+        // is what makes it a column, which is also why the flow view lives in it.
+        childMap.middle = middleId;
+        // AND HER OWN COLUMN STANDS DOWN. She is drawn inside the container now, so the
+        // layout must not draw her a second time; the component itself is untouched.
+        delete childMap.right;
+        if (root) next[r] = { ...root, children: childMap, isThirdOpen: false };
+      } else {
+        next[i] = {
+          id: middleId,
+          component: 'compiled-output-viewer',
+          content: { path: '/session/middle_column/compiled_output' },
+        };
+        // She goes back to her own column, the middle column goes away again — it is a
+        // Run's column — and the drawing and the header leave with the view that used
+        // them.
+        childMap.right = seatId;
+        delete childMap.middle;
+        for (const gone of ['flow-view', 'output-controls-view', 'canvas-footer-view']) {
+          const idx = next.findIndex((c: any) => c?.id === gone);
+          if (idx >= 0) next.splice(idx, 1);
+        }
+        if (root) {
+          next[r] = {
+            ...root,
+            children: childMap,
+            isThirdOpen: thirdOpenBeforeFlowRef.current ?? true,
+          };
+        }
+        thirdOpenBeforeFlowRef.current = null;
+      }
+      return { ...prev, components: next };
+    });
+  }, []);
+
+  // ══════════════════════════════════════════════════════════════════════════
   // The middle column is the source of truth for the run output.
   // Save used to read the output from a ref, which can be stale by the time the
   // click arrives — so Save posted compiled_output:"" and the backend wrote that
@@ -1221,6 +1475,27 @@ export default function Index({
       });
       await widthPromise;
 
+      // ── The place, as the operator left it ──
+      //
+      // READ OFF THE ELEMENTS THAT OWN IT — the left column from <workspace-layout>, her
+      // column and the drawing's pan and zoom from <agent-canvas>. Not a new event and not a
+      // new prop: the components already publish these (leftCollapsed is a property; the
+      // plug-in answers workspaceState()), and a save is a read, not a gesture. A piece that
+      // is not on screen is simply absent, and the server keeps what it had.
+      const workspace = (() => {
+        const layout = document.querySelector('workspace-layout') as
+          | (HTMLElement & { leftCollapsed?: boolean })
+          | null;
+        const canvas = document.querySelector('agent-canvas') as
+          | (HTMLElement & { workspaceState?: () => Record<string, unknown> })
+          | null;
+        const state: Record<string, unknown> = {};
+        if (layout) state.leftCollapsed = !!layout.leftCollapsed;
+        const canvasState = canvas?.workspaceState?.();
+        if (canvasState) Object.assign(state, canvasState);
+        return Object.keys(state).length ? state : undefined;
+      })();
+
       const savePayload = {
         session_id: isValidSessionId ? sessionId : undefined,
         title,
@@ -1240,6 +1515,7 @@ export default function Index({
           conversation_id: currentPromptSession?.conversationId || null,
         },
         column_widths: columnWidths,
+        workspace,
       };
 
       const response = await fetch(`${API_BASE}/ai/save-surface`, {
@@ -1732,6 +2008,20 @@ export default function Index({
         ? 'Not done — the fresh check still finds it.'
         : 'Done — the fresh check no longer finds it.'
     );
+
+    // The verdict the canvas waits for. The node's mark and this sentence are the
+    // same fact — the fresh report — so nothing can go green on a hunch. A checker
+    // that did not answer returned above and settles nothing, here as everywhere.
+    if (flowInputRef.current) {
+      flowFactsRef.current = {
+        ...flowFactsRef.current,
+        verdict: {
+          cleared: !stillThere,
+          sentence: stillThere ? 'the fresh check still finds it' : 'the fresh check no longer finds it',
+        },
+      };
+      publishFlowRef.current();
+    }
   };
 
   /**
@@ -1754,11 +2044,25 @@ export default function Index({
    *   the file looks wrong      cut off, a patch, or unchanged — refused before a byte moves;
    *   the server refused it     same judgement, made again where the write happens.
    */
-  const writeAnswerBack = async (answer: string, findingId: string) => {
+  /**
+   * What a write attempt leaves behind.
+   *
+   * `report` is the SERVER's own account of the write — path, bytes, backup, line
+   * counts — and it is absent, not zero, when nothing was written. The flow's Data
+   * insert node reads this and nothing else, which is why the distinction matters:
+   * a missing report must never be drawn as a write of no bytes.
+   */
+  type WriteOutcome = {
+    written: boolean;
+    checked: boolean;
+    report?: { path: string; bytes?: number; backup?: string; linesBefore?: number; linesAfter?: number };
+  };
+
+  const writeAnswerBack = async (answer: string, findingId: string): Promise<WriteOutcome> => {
     const finding = (catalogFindings || []).find((f: any) => f.id === findingId);
     const target = finding?.file as string | undefined;
     const correction = correctionFromAnswer(answer);
-    const nothing: { written: false; checked: false } = { written: false, checked: false };
+    const nothing: WriteOutcome = { written: false, checked: false };
 
     if (!correction) {
       speakRepairVerdict('Nothing written — the answer had no file in it.');
@@ -1809,7 +2113,20 @@ export default function Index({
       `[repair] WROTE ${result.path}: ${result.lines_before} -> ${result.lines_after} lines ` +
       `(backup ${result.backup}) · check ${checked ? result.check?.verdict : "did not run"}`,
     );
-    return { written: true, checked };
+    return {
+      written: true,
+      checked,
+      // The server's own report of what it wrote, carried out of here so the flow's
+      // Data insert node can draw what actually happened — the path, the bytes, the
+      // backup and the line counts, not a sentence about them.
+      report: {
+        path: result.path ?? correction.path,
+        bytes: result.bytes,
+        backup: result.backup,
+        linesBefore: result.lines_before,
+        linesAfter: result.lines_after,
+      },
+    };
   };
 
   /**
@@ -2146,7 +2463,7 @@ export default function Index({
       // SINGLE UNIFIED ENDPOINT - A2UI v0.9 COMPLIANT
       // Include context so AI knows about unsaved changes
       // ═══════════════════════════════════════════════════════════════════
-      const response = await fetch(`${API_BASE}/ai/assemble-surface`, {
+      const response = await fetch(`${API_BASE}/ai/assemble-surface?limit=500`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2847,19 +3164,58 @@ export default function Index({
     }
   }, [aiDecision, assembleSurfaceThenRepairs]);
 
-  const _handleDeletePromptSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this prompt? This will remove all versions and the linked chat.')) return;
+  /**
+   * ONE REMOVAL, TWO WIRES — and the second wire is what was missing.
+   *
+   * The card's own two-step confirm (arm → CONFIRM, in <agent-card-element>) dispatches
+   * `card-delete`, and NOTHING in the application heard it: the handler that used to was
+   * live in the React console, which no longer draws the cards. So a confirmed delete went
+   * nowhere. The owner, 2026-09-18: "when I click confirm it reloads the entire console" —
+   * that was the old path; the new one did not reload, it did nothing.
+   *
+   * WHAT THIS DELIBERATELY DOES NOT DO: re-assemble the console. That was a MODEL CALL to
+   * tell it what it already knows. The packages are a list in the data model, so the removal
+   * is a write to the list — one card leaves, the rest do not flicker, and the pager drops a
+   * page with it if that was the last card on the last one.
+   */
+  const removePackageFromConsole = useCallback((sessionId: string) => {
+    setConsoleTree((prev) => {
+      const model = (prev.dataModel ?? {}) as Record<string, unknown>;
+      const cards = Array.isArray(model.cards) ? (model.cards as unknown[]) : null;
+      if (!cards) return prev;
+      const next = cards.filter((c) => String((c as { id?: unknown })?.id ?? '') !== String(sessionId));
+      if (next.length === cards.length) return prev;
+      return { ...prev, dataModel: { ...model, cards: next } };
+    });
+  }, []);
+
+  /**
+   * Delete a package. NO SECOND CONFIRMATION: the card's own two-step is the confirmation
+   * (arm, then CONFIRM), and a native dialog on top of it would be a third ask for one act.
+   */
+  const deletePackage = useCallback(async (sessionId: string) => {
     try {
       await promptService.deletePromptSession(sessionId, true);
-      if (currentPromptSession?.id === sessionId) {
-        setCurrentPromptSession(null);
-      }
+      if (currentPromptSession?.id === sessionId) setCurrentPromptSession(null);
+      removePackageFromConsole(sessionId);
       await loadPromptSessions();
-      setConsoleRefreshKey(k => k + 1);
     } catch (error) {
       console.error('Failed to delete prompt session:', error);
     }
+  }, [currentPromptSession?.id, loadPromptSessions, removePackageFromConsole]);
+
+  const _handleDeletePromptSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to delete this prompt? This will remove all versions and the linked chat.')) return;
+    await deletePackage(sessionId);
+    setConsoleRefreshKey(k => k + 1);
   };
+
+  // The card's own event listener sits in an effect that cannot depend on this callback —
+  // it is defined below it — so the handler travels through a ref, the same shape the run
+  // and save paths use here. One writer, one home.
+  useEffect(() => {
+    deletePackageRef.current = (sessionId: string) => { void deletePackage(sessionId); };
+  }, [deletePackage]);
 
   const handleConversationChange = useCallback((conversationId: string | null, surface: 'console' | 'composer' = 'composer') => {
     // ── WHICH SURFACE SPOKE DECIDES WHICH PATH IS WRITTEN ──────────────────
@@ -2946,13 +3302,255 @@ export default function Index({
       const consoleSpeaking = !!consoleRendererRef.current && path.includes(consoleRendererRef.current);
       handleConversationChange(detail.conversationId, consoleSpeaking ? 'console' : 'composer');
     };
+    /**
+     * THE CANVAS'S OWN FOUR EVENTS.
+     *
+     * All new names, all heard HERE, in the same pass that emits them: an emitted
+     * event with no listener is what the catalog audit reports as event-unheard, and
+     * it also reads to a person as a control that works. What each does today is
+     * stated rather than invented:
+     *
+     *   flow-node-moved  the node is where the person put it. Positions live in the
+     *                    element for now; this records them so a decision to persist
+     *                    them has somewhere to start.
+     *   flow-select      the selection, recorded. Clicking a node asks nothing of
+     *                    Grace YET — how she speaks about the flow is the open
+     *                    question in AGENTIC_EDITOR/06, not a guess to make here.
+     *   flow-connect     a connection drawn by hand. The graph's edges come from the
+     *                    run, so this records what the canvas cannot yet do.
+     *   flow-action      the node toolbar and the canvas controls.
+     *
+     * Everything lands in the app logger, which is the operator's own view — the
+     * Trace tab reads it. Honest, and out of Grace's seat until we decide her words.
+     */
+    const onFlowNodeMoved = (event: Event) => {
+      logger.info('flow node moved', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
+    };
+    const onFlowSelect = (event: Event) => {
+      logger.info('flow select', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
+    };
+    const onFlowConnect = (event: Event) => {
+      logger.info('flow connect', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
+    };
+    const onFlowAction = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as Record<string, unknown>;
+      const action = String(detail.action || '');
+      // The view's own gestures are not news: one line per wheel notch would bury
+      // the operator's feed under the canvas's zoom.
+      if (action === 'zoom' || action === 'fit') return;
+      logger.info(`flow action: ${action}`, detail);
+    };
     window.addEventListener('repair-finding', onRepairFinding);
     window.addEventListener('conversation-change', onConversationChange);
+    /**
+     * THE CANVAS ANNOUNCES ITSELF — AND SHE SAYS WHAT IT HOLDS.
+     *
+     * This is the two halves of one loop. The canvas stays the clean working area: it
+     * emits `flow-opened` with what it was handed (counts, and every row it could not
+     * name or step it did not draw). The sentence is HIS app's, spoken through the
+     * same channel the repair verdicts use, so the drawing and the conversation agree
+     * about what just happened — the canvas never carries the noise itself.
+     *
+     * The seat is where it lands; nothing about the conversation model changes.
+     */
+
+    /**
+     * THE BLANK ONES ARE NEWS TOO, and they ride the announcement the canvas already makes.
+     *
+     * A seat with nothing written in it used to pass in silence — an empty tile and a quiet
+     * chat — so the most likely first move in this demo (open a prompt nobody has written in,
+     * run it) produced a picture and no words. The owner, 2026-09-18: "we need to send her a
+     * notification for blank nodes, and tell her to load a section in the chat that represents
+     * them… just simply say they're blank — would you like to work on this one?"
+     *
+     * The turn carries the node's id and its name, which is what makes it a CARD rather than a
+     * sentence: clicking it points the canvas at the seat it is about.
+     */
+    const speakBlankSeats = (blanks: Array<{ id: string; title: string }> | undefined) => {
+      for (const node of blanks ?? []) {
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: {
+            role: 'assistant',
+            content: `"${node.title}" is blank — nothing has been written in this seat yet. Want to work on this one?`,
+            nodeId: node.id,
+            label: node.title,
+          },
+        }));
+      }
+    };
+
+    const onFlowOpened = (event: Event) => {
+      const d = ((event as CustomEvent).detail || {}) as {
+        label?: string;
+        notes?: number;
+        seats?: number;
+        blanks?: Array<{ id: string; title: string }>;
+        steps?: number;
+        unresolved?: string[];
+        absent?: Array<{ step: string; why: string }>;
+      };
+      logger.info('flow opened', d as Record<string, unknown>);
+      const count = (n: number | undefined, one: string): string =>
+        `${n ?? 0} ${(n ?? 0) === 1 ? one : one + 's'}`;
+      let line = `The flow is up — ${d.label || 'this run'}: `
+        + `${count(d.notes, 'note')}, ${count(d.seats, 'seat')}, ${count(d.steps, 'step')}.`;
+      if (d.unresolved?.length) {
+        line += ` One row I cannot name yet — ${d.unresolved.join(', ')} — so it is drawn without a seat claimed.`;
+      }
+      if (d.absent?.length) {
+        line += ` Not drawn: ${d.absent.map((a) => a.step).join(', ')} — ${d.absent.map((a) => a.why).join('; ')}.`;
+      }
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+        detail: { role: 'assistant', content: line },
+      }));
+    };
+    /**
+     * A NODE THE PERSON PULLED OUT OF THE CANVAS — a draft, and it says so.
+     *
+     * The canvas keeps its own edits locally and writes nothing back yet (the reasons
+     * are recorded in AGENTIC_EDITOR/10-TODO.md W1/W2): the node is drawn, carries an
+     * `unsaved` badge, and the session knows nothing about it. Saying that out loud is
+     * the difference between a working area and a surface that looks like it saved.
+     */
+    const onFlowNodeAdded = (event: Event) => {
+      const d = ((event as CustomEvent).detail || {}) as { nodeId?: string; kind?: string };
+      logger.info('flow node added (draft)', d as Record<string, unknown>);
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+        detail: {
+          role: 'assistant',
+          content: `Added a ${d.kind || 'node'} on the canvas. It is a draft — this drawing has it and the package does not, so nothing is saved yet.`,
+        },
+      }));
+    };
+    window.addEventListener('flow-node-moved', onFlowNodeMoved);
+    window.addEventListener('flow-node-added', onFlowNodeAdded);
+    window.addEventListener('flow-select', onFlowSelect);
+    window.addEventListener('flow-connect', onFlowConnect);
+    window.addEventListener('flow-action', onFlowAction);
+    /**
+     * THE TONE SWITCH ASKS, THE HOST WRITES — the same split as every other write here.
+     *
+     * <canvas-footer> carries the master's tone control and emits `theme-change`; it does
+     * not reach across the tree to restyle a sibling, because a footer does not know where
+     * the drawing is (and an element that did would be the wrong model twice over). Two
+     * things take the tone: the CONTAINER, whose ground her column stands on, and the
+     * DRAWING itself, which owns the ink and the grid.
+     */
+    const onThemeChange = (event: Event) => {
+      const theme = String((event as CustomEvent).detail?.theme ?? '');
+      setWorkspaceTree((prev) => {
+        const comps = Array.isArray(prev.components) ? prev.components : [];
+        const next = comps.map((c: any) => {
+          if (c?.id === 'canvas-footer-view' || c?.component === 'AgentCanvas' || c?.id === 'flow-view') {
+            return { ...c, theme };
+          }
+          return c;
+        });
+        return { ...prev, components: next };
+      });
+    };
+    window.addEventListener('theme-change', onThemeChange);
+
+    /**
+     * THE FOOT'S CONTROLS, WIRED TO THE PATHS THAT ALREADY EXIST — none of them is new.
+     *
+     *   canvas-play   the same run the control bar's RUN makes: this dispatches the request
+     *                 the editor's own button dispatches, so there is one run path, not two
+     *   canvas-reset  the way back that the column's own selector was supposed to give: the
+     *                 middle column returns to the last output (setOutputColumn('output'))
+     *   canvas-save   the same save as Save Template, which is also what a Run does before
+     *                 it runs — the owner's "save options… when they run and when they exit"
+     *
+     * A control that emitted into the void would be the `tag-inert` finding this repo keeps
+     * writing checks for: every event here has a listener in the same change.
+     */
+    const onCanvasPlay = () => window.dispatchEvent(new CustomEvent('run-requested'));
+    const onCanvasReset = () => setOutputColumn('output');
+    const onCanvasSave = () => { void handleSavePromptRef.current?.(); };
+    /**
+     * THE CONSOLE TOLD US IT TURNED A PAGE. It carries no data the shell must act on — the
+     * grid owns its own page — but an event nobody hears is the `event-unheard` finding this
+     * repo keeps writing checks for, and it is right: a control that says something into a
+     * room with nobody in it is a wire connected at one end. So the page change is recorded,
+     * like the canvas's own events are.
+     */
+    /**
+     * A CARD SAID IT WAS DELETED. Its own two-step confirm is the whole confirmation (arm,
+     * then CONFIRM), so this deletes and takes the card out of the list — see deletePackage:
+     * no re-assembly, because the packages are a list in the data model.
+     */
+    const onCardDelete = (event: Event) => {
+      const sessionId = String((event as CustomEvent).detail?.sessionId ?? '');
+      if (sessionId) void deletePackageRef.current(sessionId);
+    };
+    window.addEventListener('card-delete', onCardDelete);
+
+    const onCardPage = (event: Event) => {
+      logger.info('console page', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
+    };
+    window.addEventListener('card-page', onCardPage);
+    window.addEventListener('canvas-play', onCanvasPlay);
+    window.addEventListener('canvas-reset', onCanvasReset);
+    window.addEventListener('canvas-save', onCanvasSave);
+    window.addEventListener('flow-opened', (event: Event) => {
+      speakBlankSeats(((event as CustomEvent).detail || {}).blanks);
+    });
+    window.addEventListener('flow-opened', onFlowOpened);
     return () => {
       window.removeEventListener('repair-finding', onRepairFinding);
       window.removeEventListener('conversation-change', onConversationChange);
+      window.removeEventListener('flow-node-moved', onFlowNodeMoved);
+      window.removeEventListener('flow-node-added', onFlowNodeAdded);
+      window.removeEventListener('flow-select', onFlowSelect);
+      window.removeEventListener('flow-connect', onFlowConnect);
+      window.removeEventListener('flow-action', onFlowAction);
+      window.removeEventListener('card-delete', onCardDelete);
+      window.removeEventListener('card-page', onCardPage);
+      window.removeEventListener('canvas-play', onCanvasPlay);
+      window.removeEventListener('canvas-reset', onCanvasReset);
+      window.removeEventListener('canvas-save', onCanvasSave);
+      window.removeEventListener('theme-change', onThemeChange);
+      window.removeEventListener('flow-opened', onFlowOpened);
     };
   }, [handleRepairFinding, handleConversationChange, headerTab]);
+
+  /**
+   * A PACKAGE OPENS WHERE IT WAS LEFT.
+   *
+   * The stored workspace arrives with the session (`currentPromptSession.workspace`, mapped
+   * in promptService) and the elements that take it arrive with the surface — so this waits
+   * for both, frame by frame, and gives up quietly: an element that never appears is a view
+   * that is not open, not an error. Applying it is one call on the plug-in (her column and
+   * the drawing's view) and one property write on the layout (the left column).
+   *
+   * Only on a change of package: re-running this on every render would fight the operator,
+   * who owns the arrangement from the moment they touch it.
+   */
+  useEffect(() => {
+    const stored = currentPromptSession?.workspace;
+    if (!stored) return;
+    let frames = 0;
+    let applied = false;
+    const apply = () => {
+      if (applied) return;
+      const layout = document.querySelector('workspace-layout') as
+        | (HTMLElement & { leftCollapsed?: boolean })
+        | null;
+      const canvas = document.querySelector('agent-canvas') as
+        | (HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean })
+        | null;
+      if (canvas?.applyWorkspaceState) {
+        canvas.applyWorkspaceState(stored);
+        applied = true;
+      }
+      if (layout && typeof stored.leftCollapsed === 'boolean') {
+        layout.leftCollapsed = stored.leftCollapsed;
+      }
+      if (!applied && ++frames < 40) requestAnimationFrame(apply);
+    };
+    requestAnimationFrame(apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPromptSession?.id]);
 
   const _handleDeleteProject = (projectId: string) => {
     // Prevent deletion of the only project
@@ -3184,8 +3782,20 @@ export default function Index({
         }));
         return;
       }
-      console.log('[WritingAreaIndex] No session yet — saving first so Run has somewhere to write.');
-      await handleSavePromptRef.current?.('', sections);
+      /*
+       * A RUN DOES NOT SAVE. This used to save-then-run: with no package, Run first called the
+       * AI save endpoint — a MODEL CALL — and waited on it, behind a 20-second serialising
+       * guard. That is what made a Run hang, inconsistently, on exactly the packages that had
+       * no session yet (owner, 2026-09-18: "it doesn't seem to be running consistently… it looks
+       * like you might even be hanging up… I believe things are being blocked by some saved
+       * template process. I don't think we need to run an auto save just because somebody
+       * clicks run… people need to save manually using the button, or get them an alert if they
+       * try to exit with unsaved changes.")
+       *
+       * So the run RUNS. With no package there is nowhere for the answer to be kept, and the
+       * message below says so where the person is looking instead of holding the run hostage
+       * to a save.
+       */
       if (!currentPromptSessionRef.current) {
         // Still nothing. Say it where the person is looking, not only in the console.
         setCurrentPromptSession((prev: any) =>
@@ -3227,6 +3837,51 @@ export default function Index({
     );
     setIsComposerRunning(true);
     setMiddleOpen(true);
+
+    // ── THE PROMPT DOCKS, AND THE CANVAS TAKES THE WIDTH ────────────────────
+    //
+    // The same process, read and then worked: the sections the left column holds are
+    // the nodes, the finding is the trigger, and the run's own answers are the steps.
+    // The dock itself is the LEFT COLUMN'S OWN act — it hears the Run from its own
+    // footer and keeps its rail and one grip, so opening the prompt back up is a
+    // gesture, not a navigation (see workspace-layout's run-click). Nothing here
+    // forces it, because nothing here owns that width.
+    const repairFinding = repairingFinding
+      ? (catalogFindings || []).find((f: any) => f.id === repairingFinding)
+      : null;
+    // ── EVERY RUN DRAWS. The canvas is what the middle column is for, so it takes the
+    // column on Run whether or not a repair started it. A repair arrives with a note at
+    // the head of the flow; a plain prompt run has no finding, and the flow then starts
+    // at the prompt's own seats — the model draws both (see RepairFlowInput.finding).
+    // Nothing here asks whether there is something else to compile: there is not. The
+    // flow IS the run's output, and the compiled text stays reachable through the
+    // column's own selector and Clear.
+    flowInputRef.current = {
+      finding: repairFinding
+        ? {
+            id: repairFinding.id,
+            check: repairFinding.check,
+            component: repairFinding.component,
+            nodeId: repairFinding.nodeId,
+            file: repairFinding.file,
+            level: repairFinding.level,
+          }
+        : null,
+      sections: (sections || []).map((s: any) => ({ name: s.name, type: s.type, content: s.content })),
+      label: repairTitleRef.current
+        || (repairFinding
+          ? `Repair — ${repairFinding.check}${repairFinding.component ? ` on ${repairFinding.component}` : ''}`
+          : currentPromptSessionObjRef.current?.title || 'This run'),
+    };
+    flowFactsRef.current = { running: true };
+    setOutputColumn('flow');
+    publishRepairFlow();
+    // THE CANVAS IS UP, SO THE PROMPT MAY FOLD. The dock is queued on this signal (see
+    // workspace-layout): two frames, because a React render plus the renderer's rebuild and
+    // a paint have to happen before the new middle column is actually on screen — and the
+    // dock landing before it is what made her column take the width, then give it back.
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      window.dispatchEvent(new CustomEvent('flow-view-ready'))));
 
     // ── The Run URL is RELATIVE, like every other call in this app ────────────
     //
@@ -3359,19 +4014,35 @@ export default function Index({
           : prev
       );
 
-      // ── THE RUN'S ANSWER IS WRITTEN DOWN, OR IT IS GONE AT THE NEXT RELOAD ──
-      // The output column drew it and the package kept NOTHING: measured 2026-09-17,
-      // the column held 279 characters while `prompt_sessions.compiled_output` was still
-      // 0 — so the answer survived only as the conversation rows a run should never have
-      // written, and a reload took it off the screen entirely (the column fell back to
-      // "no output yet" in front of the owner). A Run's product belongs in the package.
-      //
-      // The SAME write Save makes, through the same path — no new endpoint — with
-      // `keepSurface` so the column does not re-assemble out from under the person who
-      // is reading the answer it just produced.
-      if (output) {
-        await handleSavePromptRef.current?.(output, sections, { keepSurface: true });
+      // The answer is a fact the canvas draws: the Answer node's news, and the tool
+      // node's warning when the declared call did not return the design. No claim is
+      // made about the file here — that is the write's to make, below.
+      if (flowInputRef.current) {
+        flowFactsRef.current = {
+          ...flowFactsRef.current,
+          running: false,
+          answer: data?.error ? 'error' : 'received',
+          answerLine: firstLineOf(output),
+          toolWarning: toolWarnings[0],
+        };
+        publishRepairFlow();
       }
+
+      // ── THE RUN'S ANSWER IS NOT WRITTEN DOWN HERE ANY MORE ─────────────────
+      //
+      // It was: the output was saved through the same AI endpoint Save uses, because the
+      // output column drew an answer the package kept nothing of (measured 2026-09-17: the
+      // column held 279 characters while `compiled_output` was still 0, so a reload took it
+      // off the screen). That fix was right about the SYMPTOM and wrong about the mechanism —
+      // it made every Run call the model a second time, to save.
+      //
+      // The owner's rule (2026-09-18) is the one that holds: "people need to save manually
+      // using the button, or get them an alert if they try to exit with unsaved changes."
+      // Save does that job, and it is one click. A Run now runs and nothing else.
+      //
+      // THE COST, STATED: an answer that has not been saved is not on screen after a reload.
+      // That is the same contract as every other edit in this column, and the person has a
+      // button for it.
 
       // ── THE ANSWER BECOMES A FILE, AND ONLY THEN IS IT CHECKED ─────────────
       //
@@ -3387,6 +4058,12 @@ export default function Index({
       // here and go into the prompt, not into a file).
       if (repairingFinding && !data?.error && toolWarnings.length === 0) {
         const outcome = await writeAnswerBack(output || '', repairingFinding);
+        // What the APP wrote, in the server's own numbers — the Data insert node's
+        // only honest source. The model's claim about the file never was one.
+        if (flowInputRef.current) {
+          flowFactsRef.current = { ...flowFactsRef.current, write: outcome.report };
+          publishRepairFlow();
+        }
         // The repair is done being MADE. Whether it is done being REPAIRED is the
         // check's call, not this app's and not the model's: a fresh report settles it.
         //
@@ -3787,13 +4464,34 @@ export default function Index({
                     onDeletePrompt={async (sessionId) => {
                       // Both confirmations already happened: step 1 in
                       // <agent-card-element> (arm → confirm), step 2 in the
-                      // ConsolePage dialog. Now delete, then re-assemble so the
-                      // grid reflects the removal.
+                      // ConsolePage dialog. Now delete it.
                       await promptService.deletePromptSession(sessionId, true);
                       if (currentPromptSession?.id === sessionId) {
                         setCurrentPromptSession(null);
                       }
-                      await assembleSurfaceThenRepairs('render-console');
+                      /*
+                       * THE CARD GOES; THE SURFACE STAYS.
+                       *
+                       * This used to re-assemble the whole console — a MODEL CALL to tell it
+                       * what it already knows. The owner, on the two-step confirm (2026-09-18):
+                       * "when I click confirm it reloads the entire console. Now I wonder —
+                       * does it have to, or can I just spend a little bit in that one section
+                       * and then remove it?" It does not have to.
+                       *
+                       * The packages are a LIST IN THE DATA MODEL — that is what the grid is
+                       * bound to — so a removal is a write to the list. One card leaves, the
+                       * page size is unchanged, and the grid re-pages itself: if that was the
+                       * last card on the last page, the pager drops a page with it. No model,
+                       * no round trip, and the rest of the console does not flicker.
+                       */
+                      setConsoleTree((prev) => {
+                        const model = (prev.dataModel ?? {}) as Record<string, unknown>;
+                        const cards = Array.isArray(model.cards) ? (model.cards as unknown[]) : null;
+                        if (!cards) return prev;
+                        const next = cards.filter((c) => String((c as { id?: unknown })?.id ?? '') !== String(sessionId));
+                        if (next.length === cards.length) return prev;
+                        return { ...prev, dataModel: { ...model, cards: next } };
+                      });
                     }}
                   />
                 </div>

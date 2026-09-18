@@ -16,7 +16,7 @@
  * Framework: Lit 3.x — no decorators, static properties + customElements.define()
  * (the convention in this folder).
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 
 // ── shared ──────────────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ class A2UIText extends LitElement {
     .h1 { font-size: 28px; font-weight: 700; }
     .h2 { font-size: 22px; font-weight: 700; }
     .h3 { font-size: 18px; font-weight: 600; }
-    .caption { font-size: 12px; color: #6c757d; }
+    .caption { font-size: 13px; color: #6c757d; }
     .body { font-size: 14px; }
   `;
 
@@ -235,13 +235,164 @@ class A2UIButton extends LitElement {
 // look. If one of these ever gains a border or a background, it has crossed
 // into design and belongs in Figma.
 
+/**
+ * THE CARD'S OWN SIZE, and the page is arithmetic on it. 276 × 372 is the card
+ * (<agent-card-element>, Figma node 40000717:17091), and 16 is the grid's gap.
+ */
+const CARD_W = 276;
+const CARD_H = 372;
+const CARD_GAP = 16;
+/** The grid's own inset, from :host below — 45px across, 75px down (2026-09-18). */
+const GRID_PAD_X = 45;
+/**
+ * HOW MANY ROWS THE CONSOLE MAY EVER SHOW.
+ *
+ * The owner's rule, 2026-09-18: "it only ever be two rows of cards on the console at any one
+ * time… I would really love it if there was no vertical scroll, and that whenever it was
+ * resized at particular breakpoints, whenever the card was getting ready to drop below two
+ * rows, that it hid and added to the pagination queue."
+ *
+ * So the console does not grow — it PAGES. The page size is one card more than fits: columns
+ * come from the grid's width, rows from its height, and a card that will not fit is not drawn,
+ * it moves to the next page.
+ */
+const MAX_ROWS = 2;
+/**
+ * The top inset and the pager's height, both already drawn below in :host and .pager —
+ * named here because the FIT TEST needs them: whether the pane can hold what this grid is
+ * about to draw is arithmetic on the same numbers the stylesheet uses.
+ *   55  — the top padding of :host ("padding: 55px 45px 0")
+ *   47  — the pager's 43px button plus its own 4px top padding
+ */
+const GRID_PAD_TOP = 55;
+const PAGER_H = 47;
+
 class A2UIConsoleCardGrid extends LitElement {
-  static properties = { items: { type: Array } };
+  static properties = {
+    items: { type: Array },
+    /** The page being shown, 0-based. Local state — the host owns the LIST, not the page. */
+    page: { state: true },
+    /** How many columns and rows fit right now, measured from this element's own box. */
+    _cols: { state: true },
+    _rows: { state: true },
+    /** Whether the pane can hold the rows this grid draws. False = no cards, and no scroller. */
+    _fits: { state: true },
+  };
   declare items: unknown[];
+  declare page: number;
+  declare private _cols: number;
+  declare private _rows: number;
+  declare private _fits: boolean;
 
   constructor() {
     super();
     this.items = [];
+    this.page = 0;
+    this._cols = 1;
+    this._rows = 1;
+    // TRUE until a measurement says otherwise: the first paint must never be an empty console.
+    this._fits = true;
+  }
+
+  /**
+   * The columns `auto-fill` will draw, and the rows the PANE can hold.
+   *
+   * THE HEIGHT COMES FROM THE PARENT, NEVER FROM THIS ELEMENT. Measuring itself is circular:
+   * the grid's own height is decided by the rows it is already drawing, so one row measured
+   * one row's worth of room and drew one row — for ever (measured 2026-09-18, the owner:
+   * "no, that's one row"). The box that CONSTRAINS the grid is the pane it is scrolled
+   * inside, and that is what its page size is measured against.
+   */
+  private _measure = (): void => {
+    const rect = this.getBoundingClientRect();
+    const inner = Math.max(0, rect.width - GRID_PAD_X * 2);
+    // HOW MANY COLUMNS FIT — and zero is an answer. This used to be Math.max(1, …), which
+    // drew one 276px column into a narrower box and pushed the grid wider than its pane.
+    const colsThatFit = Math.floor((inner + CARD_GAP) / (CARD_W + CARD_GAP));
+    const cols = Math.max(1, colsThatFit);
+
+    // TWO ROWS, ALWAYS — THE HEIGHT NO LONGER DECIDES.
+    //
+    // The height used to cap the rows, so a short window collapsed to one and centred it.
+    // The owner turned that off (2026-09-18): "I don't think we need to remove the second row
+    // when the browser resizes — you can just turn that feature off." He is right that it is
+    // the wrong trade: a person who wants the second row can pull the window down, and a
+    // console that reorganises itself under them is more surprising than one that asks for
+    // room. So the row count is fixed, and only the WIDTH decides the page.
+    const rows = MAX_ROWS;
+
+    // NO ROOM, NO CARDS — AND NO SCROLLER, EVER.
+    //
+    // The owner, 2026-09-18, in a smaller window: "the scroll bar came back — we don't give
+    // them the scroll bar. They're not gonna be able to work in it at that viewport… I'm not
+    // adding a scroller because they want to resize their browser." Two rows are fixed, so
+    // what was left to give was the scrollbar itself: the grid drew 878px of rows into a pane
+    // that could not hold them and the PANE scrolled.
+    //
+    // So the fit is TESTED before anything is drawn, against the PANE — never against this
+    // element, for the same reason the page size is measured there: the pane is the box that
+    // constrains the grid and the box that would scroll. When it cannot hold the inset, two
+    // rows and (if there is more than one page) the pager, the cards are taken away and the
+    // grid says what it needs instead. The rows never drop to one: that was turned off.
+    const pane = this.parentElement;
+    const paneH = pane ? pane.clientHeight : 0;
+    const measured = rect.width >= 2 && paneH >= 2;
+    const neededH =
+      GRID_PAD_TOP + MAX_ROWS * CARD_H + MAX_ROWS * CARD_GAP + (this._pageCount() > 1 ? PAGER_H : 0);
+    // NO BOX, NO LIMIT. In a host that has not laid the grid out yet — or in jsdom, where
+    // every box measures zero — the cards draw. A measurement is an optimisation here, and it
+    // must never be the difference between a console with cards and one that looks broken.
+    const fits = !measured || (colsThatFit >= 1 && paneH >= neededH);
+
+    if (cols !== this._cols || rows !== this._rows || fits !== this._fits) {
+      this._cols = cols;
+      this._rows = rows;
+      this._fits = fits;
+      this.requestUpdate();
+    }
+  };
+
+  private _observer: ResizeObserver | null = null;
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    // MEASURED, not guessed: the grid's own box decides the page, so a window resize can
+    // empty a page and the cards it drops are simply on the next one.
+    // GUARDED: a measurement is an optimisation, not a requirement. jsdom has no
+    // ResizeObserver (the element's own tests run there), and an exception thrown from
+    // connectedCallback would take the whole grid down with it — the cards would simply not
+    // draw, which is a far worse failure than a page size that never adapts.
+    if (typeof ResizeObserver === 'function') {
+      this._observer = new ResizeObserver(() => this._measure());
+      this._observer.observe(this);
+      // THE PANE TOO. The fit test reads the pane's height, and the pane can shrink without
+      // this element's own box changing at all — the grid is content-sized inside a box that
+      // scrolls, so a shorter window moves the pane and not the grid. Observing the parent is
+      // what turns that into a re-measure instead of a stale page.
+      if (this.parentElement) this._observer.observe(this.parentElement);
+    }
+    this._measure();
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._observer?.disconnect();
+    this._observer = null;
+  }
+
+  /** The page a change has left us on, kept inside the range the new size allows. */
+  private _pageCount(): number {
+    const size = Math.max(1, this._cols * this._rows);
+    return Math.max(1, Math.ceil((Array.isArray(this.items) ? this.items.length : 0) / size));
+  }
+
+  private _go(delta: number): void {
+    const next = Math.min(this._pageCount() - 1, Math.max(0, this.page + delta));
+    if (next === this.page) return;
+    this.page = next;
+    this.dispatchEvent(new CustomEvent('card-page', {
+      bubbles: true, composed: true, detail: { page: next },
+    }));
   }
 
   static styles = css`
@@ -270,7 +421,14 @@ class A2UIConsoleCardGrid extends LitElement {
        *
        * No backticks in this comment: this is a Lit css template literal.
        */
-      padding: 75px;
+      /* THE INSET, SIDE BY SIDE, AS THE OWNER NAMED IT (2026-09-18):
+           left and right   75 → 45   "reduce it by 30 pixels on each side… it's too wide"
+           top              75 → 55   "correction, let me reduce the top by 20 pixels"
+           bottom           75 → 0    "remove the margin on the bottom completely, which
+                                        would help prevent triggering a scroll" 
+         The side inset is not taste: it is what decides how many 276px cards a window holds,
+         and 75px on both sides was costing a column on exactly the widths where it mattered. */
+      padding: 55px 45px 0;
       box-sizing: border-box;
       /* The card is a fixed 276 × 372 (<agent-card-element>, Figma node
          40000717:17091), so the track is fixed too: auto-fill over a 276px track
@@ -299,6 +457,47 @@ class A2UIConsoleCardGrid extends LitElement {
       width: 100%;
       gap: 16px;
       align-content: start;
+    }
+
+    /* THE PAGER. Unknown in Figma — there is no node for it, so nothing here claims one;
+       the numbers are the master's secondary button (43px, radius 6, the drop shadow) and
+       the type is the system floor. It spans the full width under the last row so the two
+       card rows stay centred and the controls sit outside them. */
+    .pager {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding-top: 4px;
+    }
+    .pager button {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: #5A5A5A;
+      background: #FFFFFF;
+      height: 43px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25), -4px -4px 10px 0px rgba(0, 0, 0, 0.15);
+    }
+    .pager button:disabled { opacity: 0.4; cursor: default; }
+    .pager .count { font-size: 13px; font-weight: 500; color: #6c757d; }
+
+    /* DRAWN INSTEAD OF THE CARDS when the pane cannot hold them (see _measure). It sits in
+       the host's own inset, so it lines up with where the first card would have been, and it
+       takes the pager's muted ink — it is a statement of fact, not an error. */
+    .too-small {
+      margin: 0;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.5;
+      color: #6c757d;
+      max-width: 420px;
     }
   `;
 
@@ -329,10 +528,26 @@ class A2UIConsoleCardGrid extends LitElement {
   }
 
   render() {
+    // NO ROOM, NO CARDS. See _measure: when the pane cannot hold two rows and their inset,
+    // the console takes the cards away rather than growing the scrollbar the owner refuses.
+    // The line says what this place shows and what it needs — the same kind of answer the
+    // chat panel's empty views give, and the reason it is not a blank pane.
+    if (!this._fits) {
+      return html`<p class="too-small" role="status">
+        Packages are shown two rows at a time. This window is too small for them — widen it,
+        or make it taller, and they come back.
+      </p>`;
+    }
     // `items` arrives already resolved by the renderer's binding pass. Until that
     // pass exists it is still a {path} object, so this paints nothing — correct,
     // and visible rather than silently empty.
-    const cards = Array.isArray(this.items) ? this.items : [];
+    const all = Array.isArray(this.items) ? this.items : [];
+    const size = Math.max(1, this._cols * this._rows);
+    const pages = this._pageCount();
+    // A page that the current size has emptied is not a page: the index is clamped here so a
+    // resize can never leave the console showing nothing.
+    const page = Math.min(this.page, pages - 1);
+    const cards = all.slice(page * size, page * size + size);
     // The same prop set the hand-rendered console grid used to pass to
     // <agent-card-element> before the console became the AI's own surface. That grid
     // is gone and this is the only console now, so /cards is the single list of
@@ -364,7 +579,13 @@ class A2UIConsoleCardGrid extends LitElement {
         created-at=${item?.createdAt ?? ''}
         @click=${() => this._open(sessionId)}
       ></agent-card-element>`;
-    })}<slot></slot>`;
+    })}<slot></slot>${pages > 1
+      ? html`<nav class="pager" aria-label="Packages">
+          <button type="button" ?disabled=${page === 0} @click=${() => this._go(-1)}>Previous</button>
+          <span class="count" role="status">${page + 1} of ${pages}</span>
+          <button type="button" ?disabled=${page >= pages - 1} @click=${() => this._go(1)}>Next</button>
+        </nav>`
+      : nothing}`;
   }
 }
 
@@ -441,7 +662,7 @@ class A2UIStatusReadout extends LitElement {
     :host {
       display: inline-block;
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 13px;
       color: #6c757d;
     }
   `;
@@ -475,7 +696,7 @@ class A2UITokenCostReadout extends LitElement {
     :host {
       display: inline-block;
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 13px;
       color: #6c757d;
       font-variant-numeric: tabular-nums;
     }
@@ -506,7 +727,7 @@ class A2UIAddSectionButton extends LitElement {
     :host { display: inline-block; }
     button {
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       background: none;
       border: 1px dashed #cbd3d9;

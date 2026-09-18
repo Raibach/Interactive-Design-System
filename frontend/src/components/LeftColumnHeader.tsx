@@ -119,10 +119,16 @@ export default function LeftColumnHeader({
     }
   }, [handleTitleSave, promptTitle]);
 
+  /*
+   * EVALUATION IS DISABLED, on the owner's instruction (2026-09-18). Drawn and inert: the tab
+   * is in the design and he asked for it disabled, not for it gone — so it keeps its place in
+   * the row, takes no click, and says what it is (aria-disabled, a title, a muted label) rather
+   * than looking like a tab that is broken. Everything else in the row still works.
+   */
   const navTabDefs = [
     { id: 'console', label: 'Console' },
     { id: 'composer', label: 'Composer' },
-    { id: 'evaluation', label: 'Evaluation' },
+    { id: 'evaluation', label: 'Evaluation', disabled: true },
     { id: 'variables', label: 'Variables' },
     { id: 'metadata', label: 'Metadata' },
   ];
@@ -226,17 +232,37 @@ export default function LeftColumnHeader({
                 <div className="flex gap-1">
                   {navTabDefs.map((tab) => {
                     const isActive = activeTab === tab.id;
+                    const isDisabled = (tab as { disabled?: boolean }).disabled === true;
                     return (
                       <button
                         key={tab.id}
                         data-lit-id={`nav-tab-${tab.id}`}
                         data-lit-type="tab"
                         data-lit-parent="nav-tabs-carousel"
-                        onClick={() => setActiveTab(isActive ? null : tab.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                        /*
+                         * A TAB IS NOT A TOGGLE. This read `isActive ? null : tab.id`, so
+                         * clicking the tab you were ALREADY on set the header tab to null —
+                         * and a null tab renders the workspace slot, which is the composer's.
+                         * Clicking Console therefore landed you on Composer (owner,
+                         * 2026-09-18: "when I click console, if it's already selected,
+                         * instead of reloading the page it moves to composer").
+                         *
+                         * The rule he gave is simpler than what was here: "clicking a tab
+                         * that's already selected reloads that surface." So the click always
+                         * reports the tab it names; the host decides what a repeat means —
+                         * for the console, re-assemble it; for the composer, a fresh package,
+                         * which is what it has always meant.
+                         */
+                        disabled={isDisabled}
+                        aria-disabled={isDisabled || undefined}
+                        title={isDisabled ? 'Not wired up yet' : undefined}
+                        onClick={() => { if (!isDisabled) setActiveTab(tab.id); }}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${isDisabled ? 'cursor-default' : 'cursor-pointer'}`}
                         style={{
-                          color: isActive ? "#1a1a1a" : "rgba(0,0,0,0.65)",
-                          backgroundColor: isActive ? "rgba(0,0,0,0.10)" : "transparent",
+                          color: isDisabled
+                            ? 'rgba(0,0,0,0.3)'
+                            : isActive ? "#1a1a1a" : "rgba(0,0,0,0.65)",
+                          backgroundColor: isActive && !isDisabled ? "rgba(0,0,0,0.10)" : "transparent",
                         }}
                       >
                         <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 opacity-70">

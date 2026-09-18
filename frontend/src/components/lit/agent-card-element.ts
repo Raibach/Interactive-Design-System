@@ -101,6 +101,18 @@ export class AgentCardElement extends LitElement {
     }
 
     /* Base card — neutral gray when no category assigned */
+    /* THE LEAVING MOMENT — the card settles where it is before it is taken away. CSS
+       transition, not an animation: the element sets the flag and this does the moving.
+       Motion is a courtesy: reduced-motion gets the removal without the pause. */
+    .card.leaving {
+      transform: scale(0.94);
+      opacity: 0;
+      transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card.leaving { transform: none; transition: none; }
+    }
+
     .card {
       position: relative;
       width: 276px;
@@ -116,6 +128,13 @@ export class AgentCardElement extends LitElement {
       flex-direction: column;
       gap: 10px;
       overflow: hidden;
+      /* THE WHOLE CARD OPENS A PACKAGE, SO THE WHOLE CARD SAYS SO. There was no hand here:
+         the card's own controls carry the hand and the card itself carried nothing,
+         so hovering its title, its description or its empty space gave no sign that the area
+         was clickable (owner, 2026-09-18: "the cursor gives no indication that the area is
+         clickable"). A clickable area without a hand reads as a picture, on every platform
+         that draws one. */
+      cursor: pointer;
       font-family: 'Inter', system-ui, sans-serif;
       line-height: 0;
     }
@@ -149,7 +168,7 @@ export class AgentCardElement extends LitElement {
     .model-indicator {
       flex: 0 0 19px;
       font-weight: 700;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 14.5227px;
       color: #FFFFFF;
       overflow: hidden;
@@ -212,8 +231,8 @@ export class AgentCardElement extends LitElement {
       -webkit-box-orient: vertical;
     }
     .desc-label {
-      font-weight: 400;
-      font-size: 12px;
+      font-weight: 500;
+      font-size: 13px;
     }
     .desc-line-wrap {
       flex: 0 0 auto;
@@ -271,7 +290,7 @@ export class AgentCardElement extends LitElement {
     .author-role {
       flex: 0 0 17px;
       font-weight: 500;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 16px;
       color: #FFFFFF;
       overflow: hidden;
@@ -399,7 +418,7 @@ export class AgentCardElement extends LitElement {
     }
     .card-delete-label {
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.04em;
       line-height: 1;
@@ -422,6 +441,13 @@ export class AgentCardElement extends LitElement {
    * deletes directly, with no modal in between.
    * This control is NOT in the Figma pull for node 40000717:17091.
    */
+  /**
+   * HOW LONG THE CARD HOLDS ITS GROUND BEFORE IT GOES. Short enough to read as a
+   * consequence of the press rather than as a wait — the owner asked for "a little bit",
+   * and a list that reshuffles instantly reads as a glitch.
+   */
+  private static readonly LEAVING_MS = 180;
+
   private _onDeleteClick(e: Event) {
     // Never let this reach the wrapper's card-open handler.
     e.stopPropagation();
@@ -437,16 +463,34 @@ export class AgentCardElement extends LitElement {
     if (this._deleteTimer) clearTimeout(this._deleteTimer);
     this._deleteArmed = false;
 
-    // Event name declared in the tag contract:
-    // frontend/src/shared/tag-registry.ts → AgentCardSchema.events: 'card-delete'
-    this.dispatchEvent(
-      new CustomEvent('card-delete', {
-        detail: { sessionId: this.id, id: this.id },
-        bubbles: true,
-        composed: true,
-      })
-    );
+    /*
+     * THE CARD'S OWN MOMENT BEFORE IT GOES. The owner, on the two-step confirm
+     * (2026-09-18): "can I just spend a little bit in that one section and then remove
+     * it?" So the card settles where it stands — a short shrink and a fade, its own
+     * section and nothing else — and THEN says it was deleted.
+     *
+     * DISPATCH SECOND, deliberately. A removal that animates first and fails looks like a
+     * card that vanished on its own; the card leaves only once the host has been told, and
+     * the host is what takes it out of the list. If the delete fails, the card is still
+     * there — which is the only honest place for it to be.
+     */
+    this._leaving = true;
+    window.setTimeout(() => {
+      this._leaving = false;
+      // Event name declared in the tag contract:
+      // frontend/src/shared/tag-registry.ts → AgentCardSchema.events: 'card-delete'
+      this.dispatchEvent(
+        new CustomEvent('card-delete', {
+          detail: { sessionId: this.id, id: this.id },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }, AgentCardElement.LEAVING_MS);
   }
+
+  /** True for the moment between CONFIRM and the host being told. */
+  private _leaving = false;
 
   disconnectedCallback() {
     if (this._deleteTimer) clearTimeout(this._deleteTimer);
@@ -465,7 +509,7 @@ export class AgentCardElement extends LitElement {
     const safeTextColor = this.categoryTextColor ? this._validateColor(this.categoryTextColor) : '';
 
     return html`
-      <div class="card" data-tag="agent-card" data-node-id="40000717:17091"
+      <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40000717:17091"
            style="${safeColor ? `--card-bg: ${safeColor};` : ''}
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}
                   ${safeTextColor ? `--card-text-color: ${safeTextColor};` : ''}">

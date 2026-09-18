@@ -22,6 +22,24 @@ import "@/components/lit/trace-feed";
 // and an element that is never imported is never defined — the surface would emit the
 // name and the slot would stay empty, silently.
 import "@/components/lit/chat-repair-actions";
+// The flow canvas the output column swaps in on Run. Registration is a side effect
+// of the import, like every element above: without it the surface's AgentFlow name
+// resolves to a tag nothing defines, and the middle column draws an empty box with
+// no error anywhere.
+import "@/components/lit/agent-flow";
+// THE PLUG-IN: the canvas and her seat as one element. Imported for the same reason —
+// a tag nothing defines draws an empty box and says nothing — and it is what the surface
+// mounts when the drawing and Grace are meant to arrive together. Importing it also
+// defines <agent-flow> and <chat-panel>, which it composes.
+import "@/components/lit/agent-canvas";
+// The middle column's HEADER — the view selector and the model selector. It is its own
+// element because the header belongs to the column, not to whatever body is under it: the
+// flow view takes the column on Run, and the header has to survive the swap.
+import "@/components/lit/output-controls";
+// The canvas column's FOOT — the ControlBar master's bar, carried by any surface that
+// draws the canvas. It was the playground's own chrome until the app needed it: a row of
+// markup on one page is a row no other page can have, and the tone switch went with it.
+import "@/components/lit/canvas-footer";
 
 // ── Lit web component registry — side-effect imports auto-register custom elements ──
 import "@/components/lit/agent-card-element";

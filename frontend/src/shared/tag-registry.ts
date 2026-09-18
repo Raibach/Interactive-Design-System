@@ -1173,6 +1173,72 @@ export const TAG_REGISTRY = {
     events: ['copy-output', 'regenerate-requested', 'clear-output'],
     constraints: [],
   },
+  'agent-flow': {
+    tag: 'agent-flow',
+    surface: 'composer',
+    column: 'middle',
+    description:
+      'The flow, drawn — the output column\'s canvas, swapped in when a Run begins and the prompt docks to its rail. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph (nodes, edges, the rows it could not name, and the steps it did not draw) from facts the app already holds — the prompt\'s own seats (canonical ids from promptSections.ts, never labels), the finding, and the run\'s own responses — and the shell writes it to /session/middle_column/flow. Unset flow is its waiting state; an empty node list is the claim that there is nothing to draw, which is a different thing.',
+    props: {
+      flow: { type: 'object', optional: true },
+    },
+    events: ['flow-opened', 'flow-node-added', 'flow-node-moved', 'flow-connect', 'flow-select', 'flow-action'],
+    constraints: [
+      'a view, not a source: the whole graph arrives as one data-model binding',
+      'takes the middle column on Run; the compiled output is reached again through the column\'s own selector and Clear',
+      'the node body is one function — the Figma node replaces it without touching the canvas',
+    ],
+  },
+  'agent-canvas': {
+    tag: 'agent-canvas',
+    surface: 'composer',
+    column: 'middle',
+    description:
+      'THE PLUG-IN — the drawing and Grace\'s seat as one place, implemented as a CONTAINER. It declares two slots and the ENVELOPE fills them: the drawing in "flow", her seat in "seat" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component\'s own template (AGENTS-instructions/Core-Concept.md: "surfaces cannot nest"). It fetches nothing, draws no node, and dispatches no events of its own. What it OWNS is behaviour around its slots: the seat\'s column (its width, its motion, the gripper that sizes it and lets go on every channel) and the link between the halves — a picked node marks the turn about it and opens her, a clicked turn brings its node into view. It does NOT own her bindings: conversation-id and the rest are the envelope\'s bindings on her seat, which is what makes her a SURFACE SEAT (it aggregates only its own conversation, and renders "unattributed" rather than borrowing another scope\'s numbers). Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.',
+    props: {
+      theme: { type: 'string', optional: true },
+      collapsed: { type: 'boolean', optional: true },
+    },
+    events: [],
+    constraints: [
+      'a container, not a wrapper: its template holds slots and no component — an element that renders an element is nesting, and surfaces cannot nest',
+      'filled by name from the envelope: "flow" (the drawing) and "seat" (the chat panel)',
+      'one Grace — a surface mounts this OR a bare chat-panel, never both',
+      'her bindings belong to the envelope, not to this element',
+    ],
+  },
+  'canvas-footer': {
+    tag: 'canvas-footer',
+    surface: 'composer',
+    column: 'middle',
+    description:
+      'The canvas column\'s FOOT, built from the ControlBar master ("left-column-control bar" 40000761:261, instance 40001096:3241): 70px, fill #B5CCCE, bottom-right radius 10, padding 13px 38px, the master\'s three button treatments. It carries a slot for the host\'s own controls and the canvas\'s TONE SWITCH — the drawing ships a mid-tone and a dark surface, and this is what chooses between them. It was the standalone playground\'s own chrome first, which is why the application had no foot and no tone switch: a row of markup on one page is a row no other page can have. It EMITS and does not reach — theme-change carries {theme}, and the host writes it onto the drawing, because a footer does not know where the canvas is.',
+    props: {
+      theme: { type: 'string', optional: true },
+    },
+    events: ['theme-change'],
+    constraints: [
+      'the master\'s numbers, not re-invented: 70px, #B5CCCE, radius 0 0 10px 0, padding 13px 38px',
+      'controls sit at the LEFT: the strip spans the column and her seat can lie over its right end',
+      'it emits theme-change; the host writes the tone, never this element',
+    ],
+  },
+  'output-controls': {
+    tag: 'output-controls',
+    surface: 'composer',
+    column: 'middle',
+    description:
+      'The middle column\'s header row — the design\'s "output-vontrols" (node 40001034:1186), two children exactly as drawn: the selector tile (40001034:1187, its text run 40001034:1190) and the published <model-selector-button>. It is its own element because the header belongs to the COLUMN and not to the body under it: the flow view takes the column on Run, and the header went with the output viewer until this existed. A PLACEHOLDER BY THE OWNER\'S INSTRUCTION (2026-09-18): "that could just be a placeholder, it doesn\'t have to do anything… add the element to the canvas and that way it\'ll be there when we get ready to wire it up". The tile therefore renders with its design tag and role and opens no menu — the menu is not in the Figma pull, and what it is FOR (switching between the canvas view, the raw output, and more to come) is the owner\'s specification, not a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.',
+    props: {
+      outputType: { type: 'string', optional: true },
+    },
+    events: [],
+    constraints: [
+      'the column\'s header, not the body\'s: it is drawn in every view of the middle column',
+      'the tile is inert until the menu is designed — absent behaviour, not invented behaviour',
+      'the model control is the published <model-selector-button>, instantiated, never restyled',
+    ],
+  },
   'workspace-layout': {
     tag: 'workspace-layout',
     surface: 'composer',

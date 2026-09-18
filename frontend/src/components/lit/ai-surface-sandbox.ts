@@ -201,7 +201,7 @@ export class AISurfaceSandbox extends LitElement {
       align-items: center;
       gap: 10px;
       font-size: 20px;
-      font-weight: 800;
+      font-weight: 700;
       color: #ff4444;
       margin-bottom: 16px;
       text-transform: uppercase;
@@ -218,7 +218,7 @@ export class AISurfaceSandbox extends LitElement {
       justify-content: center;
       color: #fff;
       font-size: 18px;
-      font-weight: 900;
+      font-weight: 700;
       line-height: 1;
     }
 
@@ -242,7 +242,7 @@ export class AISurfaceSandbox extends LitElement {
       border-radius: 6px;
       padding: 16px;
       font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.6;
       color: #e0e0e0;
       white-space: pre-wrap;
@@ -282,7 +282,7 @@ export class AISurfaceSandbox extends LitElement {
 
     .error-panel .error-hint {
       margin-top: 12px;
-      font-size: 11px;
+      font-size: 13px;
       color: #666;
       font-style: italic;
     }

@@ -93,7 +93,7 @@ export class PromptContainer extends LitElement {
     .vertical-tokens {
       writing-mode: vertical-rl;
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       line-height: 20px;
       color: #767676;

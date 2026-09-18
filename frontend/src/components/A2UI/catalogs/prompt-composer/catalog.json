@@ -67,6 +67,114 @@
         "component"
       ]
     },
+    "AgentFlow": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The flow, drawn — the output column's canvas, implemented by <agent-flow> in src/components/lit/agent-flow.ts. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph from facts the app already holds (the prompt's own seats, the finding, and the run's own responses) and the shell writes it into the data model. One binding carries the whole graph, so there is exactly one path to keep true.",
+          "properties": {
+            "component": {
+              "const": "AgentFlow"
+            },
+            "flow": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` — the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note — never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
+    "agent-flow": {
+      "type": "object",
+      "description": "The same component as AgentFlow, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentFlow to <agent-flow>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the AgentFlow entry.",
+      "properties": {
+        "component": {
+          "const": "agent-flow"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "AgentCanvas": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE PLUG-IN — the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings — those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
+          "properties": {
+            "component": {
+              "const": "AgentCanvas"
+            },
+            "theme": {
+              "type": "string",
+              "description": "The drawing's tone. Empty is the mid-tone this design is drawn in; \"dark\" is the reference's near-black surface. It reaches the ground her column stands on."
+            },
+            "collapsed": {
+              "type": "boolean",
+              "description": "True when she is away and only her rail shows. The container owns the width, so the flag lives here; her rail and the gripper write it too, because it is one fact."
+            },
+            "id": {
+              "type": "string"
+            },
+            "children": {
+              "type": "object",
+              "description": "The two slots, filled BY NAME from the envelope: {\"flow\": <id of the drawing>, \"seat\": <id of her chat panel>}. Each child carries its own bindings — the drawing its graph, her seat its conversation, session and readouts — so nothing is forwarded through this element.",
+              "properties": {
+                "flow": {
+                  "type": "string"
+                },
+                "seat": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "component",
+            "children"
+          ]
+        }
+      ]
+    },
+    "agent-canvas": {
+      "type": "object",
+      "description": "The same component as AgentCanvas, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentCanvas to <agent-canvas>), while the allowlist and the catalog audit name the TAG. The slots are described on the AgentCanvas entry.",
+      "properties": {
+        "component": {
+          "const": "agent-canvas"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
     "chat-repair-actions": {
       "type": "object",
       "allOf": [
@@ -1471,6 +1579,96 @@
           ]
         }
       ]
+    },
+    "OutputControls": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The middle column's header row — the design's \"output-vontrols\" (node 40001034:1186): the selector tile (40001034:1187, text run 40001034:1190) and the published <model-selector-button>. Implemented by <output-controls> in src/components/lit/output-controls.ts, which draws it in every view of the middle column. The selector is a PLACEHOLDER by the owner's instruction (2026-09-18) — it renders with its design tag and role and opens no menu, because no menu contents exist in the Figma pull and the entries are the owner's specification rather than a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.",
+          "properties": {
+            "component": {
+              "const": "OutputControls"
+            },
+            "outputType": {
+              "type": "string",
+              "description": "What the selector tile reads — the view this column is showing. The design's drawn value is \"Agent Flow\" (40001034:1190); it is a property because this tile is the reader's choice at the top of the column, and the drawn value is the example, not the only value."
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
+    "output-controls": {
+      "type": "object",
+      "description": "The same component as OutputControls, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps OutputControls to <output-controls>), while the allowlist and the catalog audit name the TAG. The binding is described on the OutputControls entry.",
+      "properties": {
+        "component": {
+          "const": "output-controls"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "CanvasFooter": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The canvas column's foot, built from the ControlBar master (node 40000761:261, instance 40001096:3241) and implemented by <canvas-footer> in src/components/lit/canvas-footer.ts. It carries a slot for the host's own controls and the canvas's tone switch, and it EMITS `theme-change` rather than restyling the drawing itself. It was the standalone playground's own chrome until the application needed the same foot.",
+          "properties": {
+            "component": {
+              "const": "CanvasFooter"
+            },
+            "theme": {
+              "type": "string",
+              "description": "The tone the drawing is currently in — '' is the mid-tone this design is drawn in, \"dark\" is the reference's near-black surface. Set by the host AFTER the footer asks for a change; the footer never writes it itself."
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
+    "canvas-footer": {
+      "type": "object",
+      "description": "The same component as CanvasFooter, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps CanvasFooter to <canvas-footer>), while the allowlist and the catalog audit name the TAG.",
+      "properties": {
+        "component": {
+          "const": "canvas-footer"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
     }
   },
   "$defs": {
@@ -1513,6 +1711,18 @@
         },
         {
           "$ref": "#/components/compiled-output-viewer"
+        },
+        {
+          "$ref": "#/components/AgentFlow"
+        },
+        {
+          "$ref": "#/components/agent-flow"
+        },
+        {
+          "$ref": "#/components/AgentCanvas"
+        },
+        {
+          "$ref": "#/components/agent-canvas"
         },
         {
           "$ref": "#/components/gripper-prompt-input"
@@ -1627,6 +1837,18 @@
         },
         {
           "$ref": "#/components/control-bar"
+        },
+        {
+          "$ref": "#/components/OutputControls"
+        },
+        {
+          "$ref": "#/components/output-controls"
+        },
+        {
+          "$ref": "#/components/CanvasFooter"
+        },
+        {
+          "$ref": "#/components/canvas-footer"
         }
       ],
       "discriminator": {

@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..900&display=swap" rel="stylesheet">
+    <!-- Inter, in the three weights this app has: 500 (the base), 600 and 700. The range is
+         narrowed to them rather than "300..900", so a stray request for a lighter or heavier
+         weight can only land on the nearest of the three — the floor is enforced by the font
+         itself, not by discipline. Owner, 2026-09-18: "All fonts should be medium weight. Inter
+         has medium, and it has semi bold, and it has bold. Those are the only three I use." -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500..700&display=swap" rel="stylesheet">
     <title>frontend</title>
   </head>
   <body>

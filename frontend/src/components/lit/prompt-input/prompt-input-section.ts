@@ -223,9 +223,10 @@ export class PromptInputSection extends LitElement {
       font-family: 'Inter', system-ui, sans-serif;
       white-space: nowrap;
     }
-    /* Figma 40000909-4323 — " | " separator is light weight inside "Functions | Tools" */
+    /* Figma 40000909-4323 — " | " separator is light weight inside "Functions | Tools". Drawn
+       at 500: Medium is the floor weight of this app (owner, 2026-09-18). */
     .functions-label-text .functions-sep {
-      font-weight: 300;
+      font-weight: 500;
     }
     .prompt-imput {
       display: flex;
@@ -252,7 +253,7 @@ export class PromptInputSection extends LitElement {
       background: #f7f7f7;
       color: #404040;
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       line-height: 16px;
     }

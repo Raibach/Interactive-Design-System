@@ -56,11 +56,28 @@ export const designTokens = css`
        code, say so in the copy — do not change the typeface. */
     --ds-font: 'Inter', system-ui, sans-serif;
     --ds-weight: 500;
+    /*
+     * THE FLOOR IS 13. Nothing in this system is set below it, and the family is
+     * always --ds-font (Inter) — the owner's rule, 2026-09-18: "the text and the system
+     * never goes below 13 and it is always Inter font. You can use bolding medium weights
+     * intermittently to create some variation."
+     *
+     * THAT LAST SENTENCE IS THE POINT OF THE FLOOR. The three smallest steps used to be
+     * 12 / 11 / 10, so hierarchy below the body was carried by SIZE — each level a little
+     * smaller, and the smallest of them 10px. With a floor there is nowhere left to shrink
+     * to, so the same hierarchy is carried by WEIGHT: labels and badges keep their case and
+     * their letterspacing and take 700 (or 600 against 500), which reads as a level rather
+     * than as damage. The steps stay named, so a thing that is "meta" is still meta — it is
+     * simply no longer smaller than the floor.
+     *
+     * The scale therefore reads 20 / 14 / 13 / 13 / 13. If a level needs to separate
+     * further, it separates INK or WEIGHT or CASE — not size.
+     */
     --ds-fs-lg: 20px;   /* the primitives' .greeting */
     --ds-fs-md: 14px;   /* body — the chat thread and the primitives' .body */
-    --ds-fs-sm: 12px;   /* the primitives' .caption */
-    --ds-fs-meta: 11px; /* timestamps, statuses, detail lines */
-    --ds-fs-label: 10px;/* uppercase section labels and badges */
+    --ds-fs-sm: 13px;   /* the primitives' .caption — the FLOOR */
+    --ds-fs-meta: 13px; /* timestamps, statuses, detail lines (was 11) */
+    --ds-fs-label: 13px;/* uppercase section labels and badges (was 10) */
 
     /* ── ink and surface ──────────────────────────────────────────────────────
        CONTRAST FLOOR: every ink token below is at least 4.5:1 on --ds-surface, so
