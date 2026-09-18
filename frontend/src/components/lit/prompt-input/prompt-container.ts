@@ -10,7 +10,7 @@
  * Sections are provided via the default slot.
  */
 import { LitElement, html, css } from 'lit';
-import { meatballsInstanceSvg, gripperMeatballsSvg } from './prompt-icons';
+import { gripperMeatballsSvg } from './prompt-icons';
 
 export class PromptContainer extends LitElement {
   static properties = {
@@ -114,9 +114,8 @@ export class PromptContainer extends LitElement {
           </div>
           ${this.formatLabel ? html`<div class="vertical-label">${this.formatLabel}</div>` : ''}
           ${this.tokensLabel ? html`<div class="vertical-tokens">${this.tokensLabel}</div>` : ''}
-          <div class="rail-meatballs rail-bottom" data-node-id="40000881:399">
-            <span data-node-id="40000881:400">${meatballsInstanceSvg}</span>
-            <span data-node-id="40000881:401">${meatballsInstanceSvg}</span>
+          <div class="rail-gripper rail-bottom" data-node-id="40000954:23871">
+            <span class="rot">${gripperMeatballsSvg}</span>
           </div>
         </div>
       </div>
