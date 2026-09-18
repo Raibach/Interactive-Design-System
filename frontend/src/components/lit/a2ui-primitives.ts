@@ -311,38 +311,31 @@ class A2UIConsoleCardGrid extends LitElement {
     const colsThatFit = Math.floor((inner + CARD_GAP) / (CARD_W + CARD_GAP));
     const cols = Math.max(1, colsThatFit);
 
-    // TWO ROWS, ALWAYS — THE HEIGHT NO LONGER DECIDES.
+    // HOW MANY ROWS FIT — AND ONE ROW IS STILL THE CONSOLE.
     //
-    // The height used to cap the rows, so a short window collapsed to one and centred it.
-    // The owner turned that off (2026-09-18): "I don't think we need to remove the second row
-    // when the browser resizes — you can just turn that feature off." He is right that it is
-    // the wrong trade: a person who wants the second row can pull the window down, and a
-    // console that reorganises itself under them is more surprising than one that asks for
-    // room. So the row count is fixed, and only the WIDTH decides the page.
-    const rows = MAX_ROWS;
-
-    // NO ROOM, NO CARDS — AND NO SCROLLER, EVER.
+    // This has been three things. First the height capped the rows, and a short window collapsed
+    // to one and centred it; he turned that off ("I don't think we need to remove the second row
+    // when the browser resizes — you can just turn that feature off"). Then the rows were fixed
+    // at two and the fit was all-or-nothing, so a short window got NO cards at all — a message
+    // where the console should be. His words on seeing that, at 1280x720: "I love the console
+    // and I get a message instead of" the cards.
     //
-    // The owner, 2026-09-18, in a smaller window: "the scroll bar came back — we don't give
-    // them the scroll bar. They're not gonna be able to work in it at that viewport… I'm not
-    // adding a scroller because they want to resize their browser." Two rows are fixed, so
-    // what was left to give was the scrollbar itself: the grid drew 878px of rows into a pane
-    // that could not hold them and the PANE scrolled.
-    //
-    // So the fit is TESTED before anything is drawn, against the PANE — never against this
-    // element, for the same reason the page size is measured there: the pane is the box that
-    // constrains the grid and the box that would scroll. When it cannot hold the inset, two
-    // rows and (if there is more than one page) the pager, the cards are taken away and the
-    // grid says what it needs instead. The rows never drop to one: that was turned off.
+    // So the rows are as many as FIT, up to two, and the message is kept for the case that is
+    // genuinely impossible: not even one row. The one rule that never bends is the scrollbar —
+    // what is drawn must fit the pane.
     const pane = this.parentElement;
     const paneH = pane ? pane.clientHeight : 0;
     const measured = rect.width >= 2 && paneH >= 2;
-    const neededH =
-      GRID_PAD_TOP + MAX_ROWS * CARD_H + MAX_ROWS * CARD_GAP + (this._pageCount() > 1 ? PAGER_H : 0);
-    // NO BOX, NO LIMIT. In a host that has not laid the grid out yet — or in jsdom, where
-    // every box measures zero — the cards draw. A measurement is an optimisation here, and it
-    // must never be the difference between a console with cards and one that looks broken.
-    const fits = !measured || (colsThatFit >= 1 && paneH >= neededH);
+    const pagerRoom = this._pageCount() > 1 ? PAGER_H : 0;
+    const rowsThatFit = Math.max(
+      0,
+      Math.floor((paneH - GRID_PAD_TOP - pagerRoom) / (CARD_H + CARD_GAP)),
+    );
+    // NO BOX, NO LIMIT: with nothing measured (a host mid-layout, or jsdom) the full two rows
+    // draw. A measurement is an optimisation here, never the difference between a console with
+    // cards and one that looks broken.
+    const rows = measured ? Math.min(MAX_ROWS, rowsThatFit) : MAX_ROWS;
+    const fits = !measured || (colsThatFit >= 1 && rows >= 1);
 
     if (cols !== this._cols || rows !== this._rows || fits !== this._fits) {
       this._cols = cols;
