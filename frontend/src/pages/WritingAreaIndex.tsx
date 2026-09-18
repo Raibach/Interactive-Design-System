@@ -3476,7 +3476,19 @@ export default function Index({
      */
     const onCanvasPlay = () => window.dispatchEvent(new CustomEvent('run-requested'));
     const onCanvasReset = () => setOutputColumn('output');
-    const onCanvasSave = () => { void handleSavePromptRef.current?.(); };
+    const onCanvasSave = () => {
+      // THE FOOT'S SAVE TAKES THE SAME TWO READINGS its siblings do — the control bar's Save and
+      // the surface's own save-template both hand the save the sections and the live output.
+      // This one called it with NO arguments, and a save with no sections throws on the way to
+      // its payload: the foot logged "[CRUD] Save failed", no request was sent, and nothing was
+      // written (owner, 2026-09-18: "the save feature on the canvas is not saving"). Same two
+      // helpers as the others, so there is still exactly one way to read the column and one way
+      // to save it.
+      const sections = surfaceSections();
+      const compiledOutput = readLiveOutput();
+      console.log('[canvas-footer] save-click →', sections.length, 'sections +', compiledOutput.length, 'chars of output from the surface');
+      handleSavePromptRef.current?.(compiledOutput, sections);
+    };
     /**
      * THE CONSOLE TOLD US IT TURNED A PAGE. It carries no data the shell must act on — the
      * grid owns its own page — but an event nobody hears is the `event-unheard` finding this
