@@ -3390,6 +3390,16 @@ export default function Index({
         absent?: Array<{ step: string; why: string }>;
       };
       logger.info('flow opened', d as Record<string, unknown>);
+      // THE BLANKS FIRST, THEN THE SUMMARY — and from HERE, not from a second listener.
+      //
+      // They used to be two `flow-opened` listeners: a named one for this summary, and an
+      // INLINE arrow for the blank seats that the effect's cleanup never removed. The effect
+      // re-runs while a run progresses, so the inline one stacked up — measured in the running
+      // app: 88 copies of two sentences (2 blanks x 44 accumulated listeners) while this summary
+      // spoke once, which is exactly how the duplication looked on screen (owner, 2026-09-18:
+      // "when I run, Grace output — it duplicates"). One event, one listener, one place to
+      // remove it. Order kept: the seats are spoken before the sentence about the flow.
+      speakBlankSeats(d.blanks);
       const count = (n: number | undefined, one: string): string =>
         `${n ?? 0} ${(n ?? 0) === 1 ? one : one + 's'}`;
       let line = `The flow is up — ${d.label || 'this run'}: `
@@ -3492,9 +3502,6 @@ export default function Index({
     window.addEventListener('canvas-play', onCanvasPlay);
     window.addEventListener('canvas-reset', onCanvasReset);
     window.addEventListener('canvas-save', onCanvasSave);
-    window.addEventListener('flow-opened', (event: Event) => {
-      speakBlankSeats(((event as CustomEvent).detail || {}).blanks);
-    });
     window.addEventListener('flow-opened', onFlowOpened);
     return () => {
       window.removeEventListener('repair-finding', onRepairFinding);
