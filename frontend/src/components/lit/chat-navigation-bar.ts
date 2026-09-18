@@ -747,13 +747,25 @@ export class ChatNavigationBar extends LitElement {
       return;
     }
 
-    // If collapsed: expand to the clicked tab
-    if (this.collapsed) {
-      this.collapsed = false;
-    }
+    // If collapsed: expand to the clicked tab — AND TELL THE CONTAINER.
+    //
+    // The container that owns the WIDTH is not this element, so an expansion that is not
+    // announced is only half a gesture. This used to announce it solely when the previous tab
+    // was EMPTY — which is true only after the column was collapsed by clicking its own active
+    // tab (that path clears activeTab). A seat that LOADED collapsed — the console always does,
+    // isThirdOpen false — has a real active tab, so the first click on Chat moved the rail and
+    // left the column at its rail floor (owner, 2026-09-18: "the user should be able to click on
+    // the chat icon whenever the chat component is collapsed and expand it… yes, by disabling
+    // chat click-and-expand you took care of the other problems, but I don't think you meant to
+    // sacrifice the click-and-expand").
+    //
+    // ONLY WHEN IT WAS COLLAPSED. An already-open column that gets another rail click must not
+    // be resized by it — that was the other half of his report ("we would click on trace and it
+    // would expand it an additional 650 pixels").
+    const wasCollapsed = this.collapsed;
+    if (wasCollapsed) this.collapsed = false;
 
     // Set the active tab
-    const prev = this.activeTab;
     this.activeTab = tabId;
 
     // Dispatch events
@@ -765,7 +777,7 @@ export class ChatNavigationBar extends LitElement {
       })
     );
 
-    if (this.collapsed === false && (prev as string) === '') {
+    if (wasCollapsed) {
       this.dispatchEvent(
         new CustomEvent<CollapseToggleEventDetail>('collapse-toggle', {
           detail: { collapsed: false },
