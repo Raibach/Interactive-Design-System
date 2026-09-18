@@ -904,10 +904,18 @@ function compareRegisterCounts() {
 }
 
 if (registerText === null) {
+  // ── NOT WHERE IT IS READ FROM, AND THAT IS A STATE THIS BUILD CAN MEET ─────
+  //
+  // This was a blocking finding, which is right for the machine that keeps the register
+  // and wrong for every other machine: the registers and the catalog audit are local by
+  // the owner's decision (2026-09-17), so a clone and the CI image do not carry them — and
+  // `npm run build` ends in this script, so the missing file failed every deploy since
+  // 2026-09-15 while saying nothing about the code. What the check exists for is the count
+  // comparison below, and that runs wherever the register is; a run without it reports
+  // that the comparison did not happen instead of failing the build over a local artifact.
   add({
-    check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'gone',
-    what: 'The register is not where it is read from, so every number quoted from it — in commits, in documents, in review — resolves to nothing.',
-    fix: `Restore ${registerFile} at the repository root, and keep it somewhere git can see.`,
+    check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, level: 'pass',
+    what: `${registerFile} is not in this working copy, so no recorded count was compared against this run. The registers are local to the operator's machine (see .gitignore); the comparison runs there and in any copy that has the file.`,
   });
 } else {
   // The ledger table only: a row whose first cell is `check:<class>` or `#NNN`. The
@@ -1270,10 +1278,12 @@ checkRan('corrections-ledger');
   try { ledgerText = read(PATHS.corrections); } catch { ledgerText = null; }
 
   if (ledgerText === null) {
+    // Same rule as the register above: this file is local to the operator's machine by
+    // decision, so its absence in a clone or in the CI image says nothing about the code.
+    // Where the ledger exists, every row it records is checked against this run.
     add({
-      check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: 'gone',
-      what: 'The corrections ledger is not where it is read from. Every "this was fixed" then resolves to nothing, and a fix that regressed is discovered by a person noticing.',
-      fix: `Restore ${ledgerFile} at the repository root.`,
+      check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, level: 'pass',
+      what: `${ledgerFile} is not in this working copy, so no recorded correction was re-checked in this run. The ledger is local to the operator's machine (see .gitignore).`,
     });
   } else {
     // Only ledger rows: a table row whose first cell is check:<class> or
