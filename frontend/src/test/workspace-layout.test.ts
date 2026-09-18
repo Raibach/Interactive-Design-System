@@ -137,7 +137,10 @@ const runAndSwap = async (el: LayoutEl) => {
 const gripDown = (el: LayoutEl) => {
     const grip = el.shadowRoot!.querySelector('.gripper') as HTMLElement | null;
     expect(grip).toBeTruthy();
-    grip!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true, button: 0, clientX: 60 }));
+    // POINTERDOWN, because that is what the bar listens for now: the gesture CAPTURES the
+    // pointer, so a hand that lets go outside the window still ends the drag instead of
+    // leaving the column following a hand that is no longer there.
+    grip!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, composed: true, button: 0, clientX: 60 }));
   };
 
   it('a Run request docks the prompt', async () => {
@@ -237,5 +240,87 @@ const gripDown = (el: LayoutEl) => {
     await new Promise((r) => setTimeout(r, 500));
     await el.updateComplete;
     expect(el.leftCollapsed).toBe(true);
+  });
+});
+
+/**
+ * HER COLUMN'S WIDTH — a number the element holds, and the hand that changes it.
+ *
+ * These pin the shape the owner asked for on 2026-09-18, after two rounds of the width
+ * drifting: "you have removed the click feature from the icon… if I click chat she should
+ * open and close, that's the same function for those buttons that happens on the console",
+ * and, about the gripper, "I have to use the cursor. It holds my cursor and it won't let me
+ * release it."
+ *
+ * jsdom has no layout, so the box is stubbed: what is asserted is the NUMBER the element
+ * decides, and the one line of it that reaches the screen (the pane's own style).
+ */
+describe('<workspace-layout> her column: 650, and the cursor', () => {
+  type Width = { _rightPx: number };
+  const widthOf = (el: LayoutEl) => (el as unknown as Width)._rightPx;
+  const rightPaneStyle = (el: LayoutEl) =>
+    (el.shadowRoot!.querySelector('.pane.right') as HTMLElement).getAttribute('style') ?? '';
+
+  /** A layout with a panel on the right and a box big enough to size her against. */
+  const withBox = async (hostWidth = 1375) => {
+    const el = await mountWithPanel();
+    Object.defineProperty(el, 'clientWidth', { value: hostWidth, configurable: true });
+    el.getBoundingClientRect = () => ({
+      left: 0, right: hostWidth, width: hostWidth,
+      top: 0, bottom: 900, height: 900, x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+    return el;
+  };
+
+  it('opens at 650 — the design\'s width, on the pane itself', async () => {
+    const el = await withBox();
+    expect(widthOf(el)).toBe(650);
+    expect(rightPaneStyle(el)).toContain('650px');
+  });
+
+  it('the Chat button closes her and opens her again at 650', async () => {
+    const el = await withBox();
+
+    el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: true } }));
+    await el.updateComplete;
+    expect(el.isThirdOpen).toBe(false);
+    expect(rightPaneStyle(el)).toContain('104px');
+
+    el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: false } }));
+    await el.updateComplete;
+    expect(el.isThirdOpen).toBe(true);
+    expect(widthOf(el)).toBe(650);
+    expect(rightPaneStyle(el)).toContain('650px');
+  });
+
+  it('takes its width from the CURSOR, so a reflow cannot separate the edge from the hand', async () => {
+    const el = await withBox();
+
+    // The hand takes her spacer 400px from the host's right edge.
+    el.dispatchEvent(new CustomEvent('input-resize-start', { detail: { clientX: 975, clientY: 10 } }));
+    expect(widthOf(el)).toBe(400);
+
+    // THE SHELL REFLOWS UNDER THE HAND — the window narrows, a pane changes, the canvas
+    // arrives. The pointer has not moved. A drag measured by TRAVEL would keep the width it
+    // started with (400) and the edge would leave the cursor; measured by POSITION, her
+    // column is whatever is between the cursor and the edge it hangs from (300).
+    el.getBoundingClientRect = () => ({
+      left: 0, right: 1275, width: 1275,
+      top: 0, bottom: 900, height: 900, x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+    el.dispatchEvent(new CustomEvent('input-resize-move', { detail: { clientX: 975, clientY: 10 } }));
+    expect(widthOf(el)).toBe(300);
+  });
+
+  it('let go at the floor and she closes; a pull away from it is a re-open', async () => {
+    const el = await withBox();
+
+    // The hand takes her spacer 25px from the host's right edge — under her floor (the rail
+    // plus the spacer that sits inside the pane), so she lands ON the floor, never below it.
+    el.dispatchEvent(new CustomEvent('input-resize-start', { detail: { clientX: 1350, clientY: 10 } }));
+    expect(widthOf(el)).toBe(104);
+    el.dispatchEvent(new CustomEvent('input-resize-end', {}));
+    await el.updateComplete;
+    expect(el.isThirdOpen).toBe(false);
   });
 });

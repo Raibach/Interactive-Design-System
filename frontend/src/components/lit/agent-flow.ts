@@ -1127,18 +1127,16 @@ export class AgentFlow extends LitElement {
           ? html`<div class="empty" role="status">Nothing to draw yet. A Run builds the flow.</div>`
           : nothing}
 
-        <!-- The undo list the graph deliberately does not decorate: rows that could
-             not be named are DRAWN as unresolved nodes, and this says so in words. -->
-        ${flow.unresolved?.length
-          ? html`<div class="note unresolved" role="status">
-              ${flow.unresolved.length} row${flow.unresolved.length === 1 ? '' : 's'} could not be named: ${flow.unresolved.join(', ')}
-            </div>`
-          : nothing}
-        ${flow.absent?.length
-          ? html`<div class="note absent" role="status">
-              ${flow.absent.map((a) => `${a.step}: ${a.why}`).join(' · ')}
-            </div>`
-          : nothing}
+        <!-- THE DRAWING DOES NOT NARRATE — not even about itself. Two captions used to sit at
+             the foot of the canvas: the rows it could not name, and the steps it did not draw,
+             each with its reason. Both are still in the graph (unresolved, absent) and both
+             are said OUT LOUD — on the message line her column carries at the top, and in her
+             thread — because the owner's rule for this element is that it never narrates and
+             the conversation carries everything that needs saying. A caption pinned to the
+             corner of the working area was a second, quieter voice in a place the person is
+             meant to be looking at, not reading.
+             (No backticks in this file's templates: it is a tagged template literal, and one
+             raw backtick ends it — tsc will not say so; esbuild will.) -->
         <div class="controls bl" @pointerdown=${(e: PointerEvent) => e.stopPropagation()}>
           <button class="ctl" type="button" aria-label="Fit the flow to the view" title="Fit (0)"
             ?disabled=${!this._hasBox}
@@ -1538,12 +1536,6 @@ export class AgentFlow extends LitElement {
         color: var(--ds-muted); font-size: var(--ds-fs-md);
         pointer-events: none;
       }
-      .note {
-        position: absolute; left: 12px; bottom: 56px; right: 60px;
-        font-size: var(--ds-fs-meta); color: var(--ds-muted);
-        pointer-events: none;
-      }
-      .note.absent { bottom: 40px; }
 
       /* ── RESPONSIVE ──────────────────────────────────────────────────────────
          A column is what this element is dropped into, and a column is whatever
@@ -1553,10 +1545,11 @@ export class AgentFlow extends LitElement {
          container queries, never media queries, because the window's width says
          nothing about the seat this element was given.
 
-         What gives way, in order: the controls shrink, the sublabel goes (a hint),
-         and the captions below stay whatever happens — those are FACTS about the
-         drawing (rows that could not be named, steps that were not drawn), and a
-         narrow column is not a reason to stop telling the truth.
+         What gives way, in order: the controls shrink and the sublabel goes. There
+         are no captions to lose any more — the rows that could not be named and the
+         steps that were not drawn are SAID, in the message her column carries at the
+         top and in her thread (see the note in the render), so what is left here is
+         only the drawing and its controls.
          container-type: inline-size is width-only on purpose: it does not contain
          the element's height, so a host that hands over an auto-height box still
          gets the element's own sizing rather than a silent zero-height canvas. */
@@ -1566,11 +1559,9 @@ export class AgentFlow extends LitElement {
         .ctl { width: 28px; height: 28px; font-size: 13px; }
         .label { font-size: 13px; }
         .sub { display: none; }
-        .note { left: 8px; right: 44px; }
       }
       @container (max-width: 340px) {
         .ctl { width: 24px; height: 24px; font-size: 13px; }
-        .note { font-size: 13px; }
       }
     `,
   ];

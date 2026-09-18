@@ -91,15 +91,25 @@ describe('<agent-flow> — drawing', () => {
     expect(node(el, 'step:agent').querySelector('.mark')!.textContent).toBe('⚠');
   });
 
-  it('says out loud what it could not name, and what it did not draw', async () => {
+  it('carries what it could not name and what it did not draw, and prints neither', async () => {
+    // THE CAPTIONS LEFT THE DRAWING on the owner's instruction (2026-09-18): what the graph
+    // could not name and what it did not draw are said on the message line at the top of her
+    // column and in her thread — "that's where we're supposed to have messages like
+    // [tool-call: the prompt names no tool…]". The element never narrates, so the two facts
+    // ride the graph and never appear as text on the canvas.
     const el = await mount({
       ...graph(),
       unresolved: ['Hero Specs'],
       absent: [{ step: 'data-insert', why: 'the finding names no file, so there is nothing to write' }],
     });
     const text = el.shadowRoot!.textContent!;
-    expect(text).toContain('Hero Specs');
-    expect(text).toContain('the finding names no file');
+    expect(text).not.toContain('Hero Specs');
+    expect(text).not.toContain('the finding names no file');
+    expect(el.shadowRoot!.querySelector('.note')).toBeNull();
+    expect(el.flow!.unresolved).toEqual(['Hero Specs']);
+    expect(el.flow!.absent).toEqual([
+      { step: 'data-insert', why: 'the finding names no file, so there is nothing to write' },
+    ]);
   });
 
   it('unset is not empty: waiting is not the same claim as nothing to draw', async () => {

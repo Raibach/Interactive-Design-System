@@ -1259,7 +1259,7 @@ ${workspaceContext}`;
   }
 
   /**
-   * The spacer's mousedown. "chat-left-spacer" #40001085:2598, state=Default
+   * The spacer's pointerdown. "chat-left-spacer" #40001085:2598, state=Default
    * #40001085:2597 — the annotation on the MASTER (not on the instance, which is why
    * it took a second visit to find):
    *   On drag:   dispatch input-resize-start, input-resize-move, input-resize-end
@@ -1269,8 +1269,24 @@ ${workspaceContext}`;
    * So the strip owns the whole gesture: it raises start, tracks the pointer and
    * raises move and end. The host does the sizing, because the column's width is its
    * to lay out. The three names are the annotation's, verbatim.
+   *
+   * AND THE POINTER IS CAPTURED, so the end always comes back here. A release OUTSIDE the
+   * window fires no mouseup anywhere — the document never hears it and the window does not
+   * lose focus — so the gesture never ended: the cursor stayed held as col-resize and the
+   * column kept following a hand that had already let go. The owner, 2026-09-18: "it holds my
+   * cursor and it won't let me release it when I try to expand the tabs." With capture the
+   * pointerup is delivered to THIS strip wherever the hand lets go, including off the window,
+   * and the gesture ends the way it ends everywhere else.
    */
-  private _onGripDown(e: MouseEvent): void {
+  private _onGripDown(e: PointerEvent): void {
+    const strip = e.currentTarget as HTMLElement | null;
+    if (strip?.setPointerCapture && typeof e.pointerId === 'number') {
+      try {
+        strip.setPointerCapture(e.pointerId);
+      } catch {
+        // A pointer that is already gone (a cancelled gesture) needs no capturing.
+      }
+    }
     this._gripMove = (ev: MouseEvent) => {
       this.dispatchEvent(
         new CustomEvent('input-resize-move', {
@@ -1386,7 +1402,7 @@ ${workspaceContext}`;
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize the chat column"
-        @mousedown=${this._onGripDown}
+        @pointerdown=${this._onGripDown}
       >
         <!-- Figma "Meatballs-for-spacer-between-columns" #40001085:1478. One glyph,
              two colours, from the two states of set "chat-left-spacer"
