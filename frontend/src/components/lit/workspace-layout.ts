@@ -166,15 +166,32 @@ export class WorkspaceLayout extends LitElement {
    */
   private static readonly MIN_RIGHT_PX =
     WorkspaceLayout.MIN_CHAT_PX + WorkspaceLayout.GRIP_CHAT_PX;
+  /**
+   * HER COLUMN'S OPEN WIDTH — the design's 650, and the width she returns to when the rail
+   * opens her again (the owner's number, 2026-09-18).
+   */
+  private static readonly OPEN_CHAT_PX = 650;
 
-  // Flex-grow proportions. Equal (1/1/1) by default → balanced columns.
+  // Flex-grow proportions for the panes that SHARE what she leaves: the prompt and the canvas.
   private _left = 1;
   private _middle = 1;
-  private _right = 1;
+
+  /**
+   * HER COLUMN'S WIDTH — a NUMBER the element holds, not a proportion of anything.
+   *
+   * The other two panes are grow ratios because their job is to absorb what is left. Hers is
+   * a width because the design gives her one: 650, and whatever the operator's hand makes it.
+   * A proportion cannot promise that — measured on a 1375px shell the ratio that was supposed
+   * to be 650 rendered at 637, and on the composer at 455, because the panes beside her trade
+   * width with each other and with their own floors.
+   *
+   * It is also why her gripper can no longer move the prompt: her pane's width comes out of
+   * the panes beside it by ARITHMETIC (flex takes it from them), not by a second ratio that
+   * somebody has to keep in step.
+   */
+  private _rightPx = WorkspaceLayout.OPEN_CHAT_PX;
 
   private _dragging: 'left' | 'right' | null = null;
-  private _startX = 0;
-  private _start = { left: 1, middle: 1, right: 1 };
 
   constructor() {
     super();
@@ -208,6 +225,12 @@ export class WorkspaceLayout extends LitElement {
      * to appear, so the dock is recomputed now that it is here.
      */
     if (this._leftCollapsed) this._dockLeft();
+    /*
+     * AND HER COLUMN KEEPS ITS WIDTH, with nothing to re-assert: hers is a NUMBER the element
+     * holds, so the canvas arriving beside her cannot change it. That is what this block used
+     * to do — a ratio sized against a two-pane total is not the ratio that lands in a
+     * three-pane one — and it is the whole reason the width stopped being a ratio.
+     */
   };
 
   connectedCallback(): void {
@@ -268,6 +291,7 @@ export class WorkspaceLayout extends LitElement {
     this.addEventListener('run-click', this._onRunClick as EventListener);
     // The host that swaps its middle column on a Run says when the new one is up.
     this.addEventListener('flow-view-ready', this._dockNow as EventListener);
+    this.addEventListener('flow-select', this._onFlowSelect as EventListener);
   }
 
   disconnectedCallback(): void {
@@ -280,6 +304,7 @@ export class WorkspaceLayout extends LitElement {
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);
     this.removeEventListener('flow-view-ready', this._dockNow as EventListener);
+    this.removeEventListener('flow-select', this._onFlowSelect as EventListener);
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
     /*
      * A DRAG CANNOT OUTLIVE THE ELEMENT. Re-rendering the surface replaces this
@@ -340,14 +365,27 @@ export class WorkspaceLayout extends LitElement {
     if (has !== this._hasRight) {
       this._hasRight = has;
       this.requestUpdate();
+      /*
+       * HER PANEL ARRIVING NEEDS NO SIZING — the width is a number this element already holds
+       * (see _rightPx), so the pane is drawn at it the moment it can be drawn at all. This used
+       * to re-assert 650 through the ratios, on arrival only, because a ratio has nothing to
+       * remember.
+       */
     }
     this._syncRightPanel();
   };
 
   /** The rail asked for a state: the column obeys and the flag follows. */
   private _onCollapseToggle = (e: Event): void => {
-    this._setThirdOpen(!Boolean((e as CustomEvent).detail?.collapsed));
-    this._syncRightPanel();
+    const collapsed = Boolean((e as CustomEvent).detail?.collapsed);
+    // Opening her is opening her AT HER WIDTH (see _openThird); a column that is already open
+    // keeps the width the operator gave it, so this only acts on the way up from closed.
+    if (collapsed) {
+      this._setThirdOpen(false);
+      this._syncRightPanel();
+    } else if (!this.isThirdOpen) {
+      this._openThird();
+    }
   };
 
   /**
@@ -374,19 +412,61 @@ export class WorkspaceLayout extends LitElement {
   private _onTabChange = (e: Event): void => {
     if (!this._hasRight) return;
     const tab = String((e as CustomEvent).detail?.tab ?? '');
-    this._setThirdOpen(tab !== '');
-    this._syncRightPanel();
+    // An empty tab is the rail collapsing itself; any other is a request to LOOK, so she opens
+    // — at her width, and only if she was away. A column already on screen keeps its width.
+    if (tab === '') {
+      this._setThirdOpen(false);
+      this._syncRightPanel();
+    } else if (!this.isThirdOpen) {
+      this._openThird();
+    }
+  };
+
+  /**
+   * A NODE PICKED ON THE CANVAS IS A REQUEST TO SEE HER — at her width.
+   *
+   * The drawing emits `flow-select` when a node is clicked, composed and bubbling, so it
+   * arrives here the same way the rail's and the Run's requests do — and the column that
+   * answers a pick is hers. The owner, 2026-09-18: "once you see the canvas and you click on
+   * the notes in the canvas it needs to engage Grace, so she'll have to pop back open."
+   *
+   * ONLY A REAL PICK. A deselect (`nodeId: null`) is the person clearing a selection, and
+   * closing her on that would be this element inventing a reason to take her away.
+   *
+   * What she SAYS about the node is not decided here: the drawing carries the pick, the words
+   * are the conversation's business (AGENTIC_EDITOR/06 is the open question), and this element
+   * owns exactly one fact — whether she is there, and how wide.
+   */
+  private _onFlowSelect = (e: Event): void => {
+    if (!this._hasRight) return;
+    const nodeId = (e as CustomEvent).detail?.nodeId;
+    if (!nodeId) return;
+    // A pick brings her back when she is away — at her width — and leaves a column that is
+    // already on screen exactly as wide as the operator made it.
+    if (!this.isThirdOpen) this._openThird();
   };
 
   /**
    * The spacer's gesture, with the pointer's position in the detail. START takes hold
    * (the column opens under the pointer if it was collapsed); MOVE sizes it. Both run
    * through the same code as this element's own grips, so the two routes cannot drift.
+   *
+   * IS THIS THE SPACER'S GESTURE, OR THE INPUT AREA'S? Both grips inside her panel raise
+   * these three names — the spacer that drags this column's edge, and the grip under her
+   * composer that resizes the input area. Only the spacer carries a horizontal position,
+   * so that is the test, and it is the SAME test the container hosts (agent-canvas had it
+   * while this element, which owns the width, did not — the wrong way round). Answering
+   * the input grip here started a right-column drag from a drag of the input area: it set
+   * `dragging` on the whole layout, which suspends every pane's motion, and on a collapsed
+   * column it ran the open-under-the-pointer branch — which marks the pane OPERATOR-OWNED,
+   * so after one drag of the input area nothing could close her column again, the rail's
+   * own button included.
    */
   private _onGripStart = (e: Event): void => {
-    const { clientX, clientY } = ((e as CustomEvent).detail || {}) as { clientX?: number; clientY?: number };
-    const x = Number(clientX ?? this.getBoundingClientRect().right);
-    const y = Number(clientY ?? 0);
+    const detail = ((e as CustomEvent).detail || {}) as { clientX?: unknown; clientY?: unknown };
+    if (typeof detail.clientX !== 'number') return;
+    const x = detail.clientX;
+    const y = Number(detail.clientY ?? 0);
     if (this._dragging) {
       this._onMouseMove({ clientX: x, clientY: y } as MouseEvent);
       return;
@@ -448,145 +528,141 @@ export class WorkspaceLayout extends LitElement {
     this._dockLeft();
   };
 
-  /** Collapse the left pane to its floor, by the same arithmetic the drag uses. */
+  /** Collapse the left pane to its floor. */
   private _dockLeft(): void {
     this._setLeftCollapsed(true);
-    // No layout (a test environment, or before first paint): the FLAG is the fact
-    // the contract is about, and the ratios below would be arithmetic on a zero
-    // width. The drag has the same guard through its Math.max calls.
-    const w = this.clientWidth;
-    if (!w) return;
+    /*
+     * THE DOCK IS A ZERO SHARE, NOT A SUM. The pane keeps its 60px floor (min-width, in the
+     * render), so a grow of zero leaves it ON its floor — and whatever is left over goes to
+     * whoever grows: the canvas when there is one, and her column when there is not (see
+     * `absorbs` in the render). That is one line instead of the ratio arithmetic this used to
+     * do, and it is the same line in both layouts.
+     */
+    this._left = 0;
+    this.requestUpdate();
+  }
+
+  /**
+   * THE WIDTH THE HAND IS ASKING FOR — read from the POINTER, never from how far it has
+   * travelled.
+   *
+   * This is the owner's own rule for every gripper here (TO-DO.md item 1): "I have to use the
+   * cursor." A width computed as `start + travel` drifts from the hand the moment anything
+   * reflows — the pane hits its floor, the canvas arrives, a sibling changes size — and the
+   * edge ends up somewhere the cursor is not. The spacer sits immediately left of her column,
+   * so the cursor IS on the boundary it moves: her width is the distance from the pointer to
+   * the host's right edge, clamped to her floor and to what the prompt beside her needs.
+   */
+  private _rightPxFromPointer(clientX: number): number {
+    const w = Math.max(1, this.clientWidth);
     const grip = this._hasMiddle
       ? WorkspaceLayout.GRIP_LEFT_PX + WorkspaceLayout.GRIP_CHAT_PX
       : WorkspaceLayout.GRIP_CHAT_PX;
     const content = Math.max(1, w - grip);
-    // Exactly the left pane's branch of _onMouseMove, with the pointer's travel
-    // replaced by "put the boundary on its floor" — one arithmetic, two callers.
-    if (!this._hasMiddle) {
-      const total = this._left + this._right;
-      const newLeft = (WorkspaceLayout.MIN_LEFT_PX / content) * total;
-      this._left = newLeft;
-      this._right = total - newLeft;
-    } else {
-      const total = this._left + this._middle;
-      const newLeft = (WorkspaceLayout.MIN_LEFT_PX / content) * total;
-      this._left = newLeft;
-      this._middle = total - newLeft;
-    }
-    this.requestUpdate();
+    const max = Math.max(WorkspaceLayout.MIN_RIGHT_PX, content - WorkspaceLayout.MIN_LEFT_PX);
+    return Math.min(
+      Math.max(this.getBoundingClientRect().right - clientX, WorkspaceLayout.MIN_RIGHT_PX),
+      max,
+    );
+  }
+
+  /**
+   * SHE OPENS AT HER OWN WIDTH — the design's 650, and what an expand returns to. Every way of
+   * opening her that is NOT a drag goes through here: the rail's Chat button, any rail tab, a
+   * picked note. A drag sets her width from the pointer instead, which is why it does not.
+   */
+  private _openThird(): void {
+    this._rightPx = WorkspaceLayout.OPEN_CHAT_PX;
+    this._setThirdOpen(true);
+    this._syncRightPanel();
   }
 
   private _onGripDown = (side: 'left' | 'right', e: MouseEvent): void => {
     this.setAttribute('dragging', '');
     this._dragging = side;
     /*
-     * PULLING THE DIVIDER OPENS THE COLUMN — AND IT OPENS UNDER THE POINTER.
+     * THE GRAB IS THE OPERATOR TAKING THE BOUNDARY — in either layout, at any width.
      *
-     * Open/closed is `isThirdOpen`, and a drag only ever changed the grow ratios
-     * — so on a collapsed column (74px, grow 0) the gripper had nothing to size:
-     * the operator dragged and the pane did not move, because the width it was
-     * being dragged against was not the thing holding it shut. Two mechanisms for
-     * one fact is what made it feel stuck.
+     * From the first touch of a divider the operator owns the column it borders: no later
+     * payload assignment can undo what the hand does. That is the half that was missing — a
+     * drag used to move the grow ratios only, so the pane stayed unowned and the next payload
+     * write slammed a width a hand had just set.
      *
-     * Taking hold of the divider is the operator asking for the column, so the
-     * column opens first and the drag then sizes it. Letting go with it back at
-     * the floor closes it again (see _onMouseUp), so the whole gesture is one
-     * control in both directions.
-     *
-     * WHAT IT GOT WRONG was WHERE it opened. Opening restored the stored grow
-     * ratio — whatever width the last drag happened to leave — so a grip grabbed at
-     * 74px threw the boundary out to 391px and the divider left the operator's hand
-     * before the drag had begun. The pane is now sized from the POINTER's position
-     * instead: the boundary lands exactly where it was grabbed, moves by the same
-     * amount the hand does, and `_start` is captured afterwards so the drag that
-     * follows continues from there rather than from the old ratio.
-     */
-    if (!this._hasMiddle && !this.isThirdOpen) {
-      const hostRect = this.getBoundingClientRect();
-      const content = Math.max(1, this.clientWidth - WorkspaceLayout.GRIP_CHAT_PX);
-      // Distance from the pointer to the host's right edge is the pane's width —
-      // the spacer sits immediately left of the pane, so the cursor is on the
-      // boundary it is about to move.
-      const panePx = Math.min(
-        Math.max(hostRect.right - e.clientX, WorkspaceLayout.MIN_CHAT_PX),
-        content - WorkspaceLayout.MIN_LEFT_PX,
-      );
-      const total = 2; // one pane each: equal weights, then split by position
-      const leftPx = Math.max(WorkspaceLayout.MIN_LEFT_PX, content - panePx);
-      this._left = (leftPx / content) * total;
-      this._right = total - this._left;
-      this._setThirdOpen(true);
-      this._syncRightPanel();
-    }
-    /*
-     * TAKING HOLD OF THE LEFT DIVIDER IS THE OPERATOR ASKING FOR THE PROMPT BACK.
-     * Same rule as the right column, and the same reason: a collapse docked the pane
-     * to its floor, so the grip sits ON the boundary it is about to move — no
-     * restored ratio to throw the boundary away from the hand. The grab reopens it
-     * and marks the pane the operator's, and the drag's own clamp closes it again if
-     * the hand returns to the floor, so the gripper stays one control both ways.
+     * FOR HER COLUMN THE GRAB ALSO OPENS IT, and it opens to the POINTER — not with a jump to
+     * 650. A collapsed pane has no width to drag, so the grab has to give it one; the edge
+     * lands where the hand is and then follows it. Opening to the stored width instead threw
+     * the boundary 300px away from a grip taken at the floor.
      */
     if (side === 'left') {
+      /*
+       * CAPTURE THE POINTER, exactly as her spacer does (see chat-panel): a release outside the
+       * window fires no mouseup anywhere, and without capture the bar would keep following a
+       * hand that had already let go.
+       */
+      const bar = e.currentTarget as HTMLElement | null;
+      const pointerId = (e as PointerEvent).pointerId;
+      if (bar?.setPointerCapture && typeof pointerId === 'number') {
+        try {
+          bar.setPointerCapture(pointerId);
+        } catch {
+          // A pointer that is already gone needs no capturing.
+        }
+      }
       this._leftOwnedByOperator = true;
       this._setLeftCollapsed(false);
+    } else {
+      this._openOwnedByOperator = true;
+      if (!this.isThirdOpen) {
+        this._setThirdOpen(true);
+        this._syncRightPanel();
+      }
+      this._rightPx = this._rightPxFromPointer(e.clientX);
     }
-    this._startX = e.clientX;
-    this._start = { left: this._left, middle: this._middle, right: this._right };
     this.dispatchEvent(new CustomEvent('resize-start', { detail: { side } }));
     e.preventDefault();
   };
 
   private _onMouseMove = (e: MouseEvent): void => {
     if (!this._dragging) return;
-    const delta = e.clientX - this._startX;
     const w = Math.max(1, this.clientWidth);
-    // The space the grips take, so the panes' content width is honest. These are
-    // the widths the markup actually renders: the 5px left bar plus the 30px spacer
-    // in 3-column, and the spacer alone in 2-column. It used to say 10 and 5, which
-    // under-counted the spacer by 25px and left the arithmetic to the browser.
+    /*
+     * The space the grips take, so the panes' content width is honest. These are the widths the
+     * markup renders: the 5px left bar plus the 30px spacer in 3-column, and the spacer alone
+     * in 2-column. It used to say 10 and 5, which under-counted the spacer by 25px.
+     */
     const grip = this._hasMiddle
       ? WorkspaceLayout.GRIP_LEFT_PX + WorkspaceLayout.GRIP_CHAT_PX
       : WorkspaceLayout.GRIP_CHAT_PX;
+    const content = Math.max(1, w - grip);
 
-    if (!this._hasMiddle) {
-      // 2-column: left vs right. Compute left in px, snap/clamp, then convert
-      // back to a grow ratio so the baseline stays responsive.
-      const total = this._start.left + this._start.right;
-      const content = Math.max(1, w - grip);
-      let leftPx = (this._start.left / total) * content + delta;
-      if (Math.abs(leftPx - WorkspaceLayout.MIN_LEFT_PX) <= WorkspaceLayout.SNAP_PX) {
-        leftPx = WorkspaceLayout.MIN_LEFT_PX;
+    if (this._dragging === 'right') {
+      // Her column takes the width the hand is pointing at. The panes beside her give it up
+      // by flex's own arithmetic, so nothing here has to hand width to anyone — which is what
+      // makes it impossible for her gripper to swell the prompt.
+      this._rightPx = this._rightPxFromPointer(e.clientX);
+      // ...except at the very end: when she has taken everything the prompt needs, the prompt
+      // is on its floor, and that is the same collapsed state the dock and the rail speak. Only
+      // in the two-column shell — with a canvas between them there is no boundary to reach.
+      if (!this._hasMiddle) {
+        this._setLeftCollapsed(this._rightPx >= content - WorkspaceLayout.MIN_LEFT_PX - 1);
       }
-      const maxLeft = content - WorkspaceLayout.MIN_CHAT_PX;
-      leftPx = Math.max(WorkspaceLayout.MIN_LEFT_PX, Math.min(leftPx, maxLeft));
-      const newLeft = (leftPx / content) * total;
-      this._left = newLeft;
-      this._right = total - newLeft;
-      this._setLeftCollapsed(leftPx <= WorkspaceLayout.MIN_LEFT_PX + 1);
-    } else if (this._dragging === 'left') {
-      // 3-column: left vs middle.
-      const total = this._start.left + this._start.middle;
-      const content = Math.max(1, w - grip);
-      let leftPx = (this._start.left / total) * content + delta;
-      if (Math.abs(leftPx - WorkspaceLayout.MIN_LEFT_PX) <= WorkspaceLayout.SNAP_PX) {
-        leftPx = WorkspaceLayout.MIN_LEFT_PX;
-      }
-      const maxLeft = content - WorkspaceLayout.MIN_CHAT_PX;
-      leftPx = Math.max(WorkspaceLayout.MIN_LEFT_PX, Math.min(leftPx, maxLeft));
-      const newLeft = (leftPx / content) * total;
-      this._left = newLeft;
-      this._middle = total - newLeft;
-      this._setLeftCollapsed(leftPx <= WorkspaceLayout.MIN_LEFT_PX + 1);
     } else {
-      // 3-column: middle vs right.
-      const total = this._start.middle + this._start.right;
-      const content = Math.max(1, w - grip);
-      let rightPx = (this._start.right / total) * content - delta;
-      const maxRight = content - WorkspaceLayout.MIN_LEFT_PX;
-      rightPx = Math.max(WorkspaceLayout.MIN_CHAT_PX, Math.min(rightPx, maxRight));
-      const newRight = (rightPx / content) * total;
-      this._right = newRight;
-      this._middle = total - newRight;
+      // The prompt's divider: the same cursor rule, on the other boundary.
+      let leftPx = e.clientX - this.getBoundingClientRect().left;
+      // A snap, so the floor is something a hand can hit rather than a target it must find.
+      if (Math.abs(leftPx - WorkspaceLayout.MIN_LEFT_PX) <= WorkspaceLayout.SNAP_PX) {
+        leftPx = WorkspaceLayout.MIN_LEFT_PX;
+      }
+      leftPx = Math.max(
+        WorkspaceLayout.MIN_LEFT_PX,
+        Math.min(leftPx, content - WorkspaceLayout.MIN_CHAT_PX),
+      );
+      // Back into a share, because the prompt and the canvas are the panes that divide what
+      // her column leaves: 0.68 : 1.32 is the same split as 0.34 : 0.66.
+      const total = Math.max(1e-6, this._left + this._middle);
+      this._left = (leftPx / content) * total;
+      this._middle = total - this._left;
+      this._setLeftCollapsed(leftPx <= WorkspaceLayout.MIN_LEFT_PX + 1);
     }
 
     this.requestUpdate();
@@ -596,23 +672,31 @@ export class WorkspaceLayout extends LitElement {
   private _onMouseUp = (): void => {
     if (this._dragging) {
       /*
-       * Dragging the chat column back down to its floor CLOSES it — the same
-       * `isThirdOpen` the rail's Chat button flips, so the gripper and the rail
-       * are one control and cannot disagree about whether the column is open.
-       * Read from what was actually laid out rather than from the ratios, because
-       * the floor is a min-width the ratios cannot express.
+       * LETTING GO AT HER FLOOR CLOSES HER — the same `isThirdOpen` the rail's Chat button
+       * flips, so the gripper and the rail are one control and cannot disagree about whether
+       * her column is open. A pull away from the floor reopens her, so the whole gesture is one
+       * control in both directions.
+       *
+       * The test is on THE WIDTH THE HAND LEFT HER AT, which is now the number her pane is drawn
+       * from. It used to be read off the rendered box and compared with the rail's width alone
+       * (74) — a width the pane cannot render below, because its floor is the rail PLUS the
+       * spacer inside it (104). The comparison could therefore never be true, and "let go at the
+       * floor and it closes" never fired.
        */
-      if (!this._hasMiddle) {
-        const pane = this.shadowRoot?.querySelector('.pane.right') as HTMLElement | null;
-        const width = pane ? pane.getBoundingClientRect().width : 0;
-        const collapsed = width <= WorkspaceLayout.MIN_CHAT_PX + 1;
+      if (this._dragging === 'right') {
+        const collapsed = this._rightPx <= WorkspaceLayout.MIN_RIGHT_PX + WorkspaceLayout.SNAP_PX;
         if (collapsed !== !this.isThirdOpen) {
           this._setThirdOpen(!collapsed);
           this._syncRightPanel();
         }
+        // A column that was shut goes back to her width the next time it opens; a column that
+        // is open keeps exactly what the hand made it — the drag is the operator's.
+        if (collapsed) this._rightPx = WorkspaceLayout.OPEN_CHAT_PX;
       }
+      // `right` is her column's WIDTH in px; `left` and `middle` are shares, because those two
+      // panes divide what she leaves.
       this.dispatchEvent(new CustomEvent('resize-end', {
-        detail: { left: this._left, middle: this._middle, right: this._right },
+        detail: { left: this._left, middle: this._middle, right: this._rightPx },
       }));
     }
     this._dragging = null;
@@ -648,7 +732,13 @@ export class WorkspaceLayout extends LitElement {
       overflow: auto;
       min-height: 0;
       min-width: 0;
-      transition: flex-grow var(--dur-pane) var(--ease-settle);
+      /* BOTH PROPERTIES, because the panes are not all the same kind of thing: the prompt and
+         the canvas move by GROW (their widths are shares), and her column moves by BASIS (its
+         width is a number). One duration, one curve — the motion language does not change
+         because the arithmetic did. */
+      transition:
+        flex-grow var(--dur-pane) var(--ease-settle),
+        flex-basis var(--dur-pane) var(--ease-settle);
     }
     /* THE LEFT COLUMN IS THE DESIGN'S CONTAINER: content, then the ControlBar LAST.
        "left-column-panel-container" #40000954:23865 holds a panel-inner-container and
@@ -755,7 +845,18 @@ export class WorkspaceLayout extends LitElement {
 
   render() {
     const middleGrow = this._hasMiddle ? this._middle : 0;
-    const rightGrow = this.isThirdOpen ? this._right : 0;
+    /*
+     * HER PANE IS A WIDTH, NOT A SHARE — see _rightPx. Flex takes that width out of the panes
+     * beside her by its own arithmetic, so nothing here divides anything for her, and her
+     * gripper cannot hand width to the prompt: there is no second number to keep in step.
+     *
+     * SHE GROWS ONLY WHEN NOTHING ELSE CAN ABSORB THE REMAINDER: with the prompt docked and no
+     * canvas beside her — the beat before a Run's middle column arrives — the leftover has to
+     * land somewhere, and hers is the only pane left that can take it. Every other state has
+     * the prompt or the canvas absorbing it, and she keeps exactly her width.
+     */
+    const rightBasis = this.isThirdOpen ? this._rightPx : WorkspaceLayout.MIN_RIGHT_PX;
+    const rightAbsorbs = this.isThirdOpen && this._leftCollapsed && !this._hasMiddle;
     const minLeft = WorkspaceLayout.MIN_LEFT_PX;
     /*
      * THE 60px FLOOR IS THE COLLAPSED WIDTH, so it holds in BOTH states.
@@ -782,19 +883,22 @@ export class WorkspaceLayout extends LitElement {
      * Normalising changes no proportion — 0.68 : 1.32 is the same split as
      * 0.34 : 0.66 — it only guarantees the open panes sum to the whole.
      */
-    const growTotal = this._left + middleGrow + rightGrow;
+    const growTotal = this._left + middleGrow + (rightAbsorbs ? 1 : 0);
     const share = (g: number) => (growTotal > 0 ? g / growTotal : 0);
     const leftFlex = `${share(this._left)} 1 0%`;
     /*
-     * A PANE WITH NOTHING IN IT GETS NO SHARE OF THE WIDTH — and it has to be withheld HERE,
-     * because these two lines are written into the pane's own `style` attribute. An inline
-     * style beats every selector, so the `.pane.right.empty` rule that was supposed to zero an
-     * empty pane could never win: measured 2026-09-18, an empty right pane at 526px with the
-     * class applied and the width untouched — the owner's "weird large space on the right hand
-     * side when you click one of the navigation menu", which was her panel living inside the
-     * flow view's container instead of in her own column.
+     * A PANE WITH NOTHING IN IT GETS NO WIDTH AT ALL — and it has to be withheld HERE, because
+     * these two lines are written into the pane's own `style` attribute. An inline style beats
+     * every selector, so the `.pane.right.empty` rule that was supposed to zero an empty pane
+     * could never win: measured 2026-09-18, an empty right pane at 526px with the class applied
+     * and the width untouched — the owner's "weird large space on the right hand side when you
+     * click one of the navigation menu", which was her panel living inside the flow view's
+     * container instead of in her own column.
+     *
+     * Shrink stays 1 so a narrow window gives her width back rather than overflowing, and the
+     * pane's min-width is her floor, so what she gives back is bounded.
      */
-    const rightFlex = this._hasRight ? `${share(rightGrow)} 1 0%` : '0 0 0';
+    const rightFlex = this._hasRight ? `${rightAbsorbs ? 1 : 0} 1 ${rightBasis}px` : '0 0 0';
 
     return html`
       <div class="pane left" style="flex: ${leftFlex}; min-width: ${minLeft}px;">
@@ -808,7 +912,7 @@ export class WorkspaceLayout extends LitElement {
            layout. In 2-column there is no middle pane, so the chat column's left
            edge is the design's spacer — see below. -->
       ${this._hasMiddle
-        ? html`<div class="gripper" @mousedown=${(e: MouseEvent) => this._onGripDown('left', e)}></div>`
+        ? html`<div class="gripper" @pointerdown=${(e: PointerEvent) => this._onGripDown('left', e)}></div>`
         : nothing}
       <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'}" style="flex: ${share(middleGrow)} 1 0%;"><slot name="middle" @slotchange=${this._onMiddleSlotChange}></slot></div>
       <!-- THE RIGHT COLUMN IS THE DESIGN'S CONTAINER, and this spacer is its FIRST

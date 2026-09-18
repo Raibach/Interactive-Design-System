@@ -92,6 +92,31 @@ interface WritingAreaIndexProps {
 }
 
 /**
+ * FIND AN ELEMENT WHEREVER IT IS DRAWN — the shell draws the surface INSIDE the renderer's
+ * shadow root, so `document.querySelector` reaches nothing here. That is not a theory: the
+ * save's `workspace-layout` read and the restore's both came back null, and a null in either
+ * is silent — the place simply never travelled, with no error anywhere. This walks the
+ * shadow roots the surface is drawn into and returns the first match.
+ *
+ * It is a DOM read, not a new contract: the elements it finds are the same ones the envelope
+ * wrote, and the properties it sets on them are the ones they already publish.
+ */
+function deepFind<T extends Element>(selector: string): T | null {
+  const walk = (root: ParentNode): Element | null => {
+    const hit = root.querySelector(selector);
+    if (hit) return hit;
+    for (const el of root.querySelectorAll('*')) {
+      const shadow = (el as HTMLElement).shadowRoot;
+      if (!shadow) continue;
+      const found = walk(shadow);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(document) as T | null;
+}
+
+/**
  * The Figma file the tool calls address.
  *
  * The same key the catalogs carry as `x-figma-source.fileKey` and the registry
@@ -817,9 +842,6 @@ export default function Index({
    * a second time.
    */
   const flowInputRef = useRef<{ finding: FlowNote | null; sections: FlowSeatInput[]; label: string } | null>(null);
-  /** Whether her column was open before the plug-in took the region. Null outside a
-   *  flow view — the swap captures it on the way in and restores it on the way back. */
-  const thirdOpenBeforeFlowRef = useRef<boolean | null>(null);
   /** What the app knows about the run so far. Rebuilt FROM, never edited in place. */
   const flowFactsRef = useRef<RepairRunFacts>({});
   /** The delete handler, reachable from the card's own event listener (see onCardDelete). */
@@ -876,20 +898,15 @@ export default function Index({
    * The renderer resolves the tree's component name every render, so a swap is a
    * tree write like any other, and the tree is the input it already reads.
    *
-   * WHY THE PLUG-IN AND NOT THE CANVAS ALONE. `<agent-canvas>` is the canvas AND her
-   * seat as one element, so the Run opens the whole unit rather than a drawing with a
-   * chat that happens to sit beside it — the owner's decision (2026-09-18): the unit
-   * owns the region right of the prompt, and her column collapses behind it so there is
-   * exactly ONE Grace on screen. Mounting both the plug-in and the assembled chat panel
-   * would put two of her in one window, each with its own conversation, each hearing the
-   * same window events.
-   *
-   * THE BINDINGS TRAVEL WITH THE COLUMN. Every path her panel reads today is carried
-   * onto the plug-in unchanged (/session/right_column/conversation_id and the rest), so
-   * the app's own writers keep writing to the same places and the conversation machinery
-   * does not learn a second address. The trace view keeps its identity too: it moves from
-   * the right column's `view` child to the plug-in's, which re-projects it into her real
-   * slot — one component, drawn in the same place on screen.
+   * WHAT A RUN MOVES, AND WHAT IT DOES NOT. It swaps the middle column — the drawing in
+   * place of the compiled output — and the left column docks to its rail, which
+   * `workspace-layout` hears from the column's own footer and performs itself. Her column
+   * is neither moved nor told anything: she is the same seat the composer shows, with the
+   * bindings she already had, and the layout that lays her out is the only writer of her
+   * width and her open state. An earlier revision moved her panel into the plug-in (which
+   * re-created her container on every Run and lost the thread), and a later one left her in
+   * place while still writing `isThirdOpen: false` here — one fact from a second place,
+   * which closed a column the operator had just sized by hand.
    *
    * The compiled output is NOT lost by the swap: going back binds the viewer's content
    * to the path it was documented to read (/session/middle_column/compiled_output) —
@@ -930,11 +947,6 @@ export default function Index({
 
 
       if (which === 'flow') {
-        // Remember whether she was open BEFORE the Run, so the way back is where the
-        // person left her rather than where this swap decided.
-        if (thirdOpenBeforeFlowRef.current === null) {
-          thirdOpenBeforeFlowRef.current = root?.isThirdOpen !== false;
-        }
         // THE UNIT IS COMPOSED BY THE ENVELOPE, not by an element. `agent-canvas` is a
         // CONTAINER: it declares two slots and this surface fills them — the drawing in
         // "flow", her seat in "seat" — exactly as workspace-layout is filled by name.
@@ -958,17 +970,13 @@ export default function Index({
         next[i] = {
           id: middleId,
           component: 'AgentCanvas',
-          // HER CHAT OPENS WITH THE RUN. The container defaults to collapsed (only its
-          // rail), which is right for a page that mounts the unit by itself; a Run is
-          // different — it is the moment the flow is produced and the moment she has
-          // something to say about it, so the column arrives open (owner, 2026-09-18:
-          // "when Run is clicked, the left side closes like you currently have it and
-          // the chat's opened. That's our default").
           // THE CANVAS IS BORN DARK (owner, 2026-09-18). The drawing's own default is the
           // mid-tone this design was drawn in, but a Run produces a picture meant to be
           // looked at, and dark is the tone it is shown in — the tone control in the foot
           // takes it back.
-          collapsed: false,
+          // AND NO `collapsed` IS SENT, because there is no column here to state: the plug-in
+          // is the drawing, and her column belongs to the layout that lays it out. The open
+          // state a Run shows her at is the state the operator left.
           theme: 'dark',
           children: {
             header: 'output-controls-view',
@@ -1009,12 +1017,15 @@ export default function Index({
         // so the assembly emits the component without pointing the layout at it. The Run
         // is what makes it a column, which is also why the flow view lives in it.
         childMap.middle = middleId;
-        // AND HER OWN COLUMN STAYS STANDING. It used to stand down, because she was drawn
-        // inside the canvas — one Grace on screen meant one of the two columns had to go.
-        // She is not inside it any more (see the note above), so this is her column and it
-        // is left exactly as it was: the layout keeps pointing at her, and nothing about her
-        // moves on a Run.
-        if (root) next[r] = { ...root, children: childMap, isThirdOpen: false };
+        // AND HER OWN COLUMN IS NOT EVEN NAMED HERE. It used to stand down, because she was
+        // drawn inside the canvas — one Grace on screen meant one of the two columns had to go.
+        // She is not inside it any more (see the note above), and then it was left standing but
+        // still TOLD to close (`isThirdOpen: false`): the same fact written from a second place,
+        // which is what slammed a column the operator had just sized by hand. Her column has ONE
+        // writer — the layout that lays it out — and a Run is not it. Whatever the operator set
+        // with the rail or the grip is the state she keeps; the owner, 2026-09-18: "all we have to
+        // do is expose the third column, which is actually the canvas."
+        if (root) next[r] = { ...root, children: childMap };
       } else {
         next[i] = {
           id: middleId,
@@ -1022,21 +1033,14 @@ export default function Index({
           content: { path: '/session/middle_column/compiled_output' },
         };
         // The middle column goes away again — it is a Run's column — and the drawing and the
-        // header leave with the view that used them. Her column is not "restored": it was
-        // never taken, which is the point of the change above.
+        // header leave with the view that used them. Her column is not "restored" either: it was
+        // never taken and never written, so there is nothing here to put back.
         delete childMap.middle;
         for (const gone of ['flow-view', 'output-controls-view', 'canvas-footer-view']) {
           const idx = next.findIndex((c: any) => c?.id === gone);
           if (idx >= 0) next.splice(idx, 1);
         }
-        if (root) {
-          next[r] = {
-            ...root,
-            children: childMap,
-            isThirdOpen: thirdOpenBeforeFlowRef.current ?? true,
-          };
-        }
-        thirdOpenBeforeFlowRef.current = null;
+        if (root) next[r] = { ...root, children: childMap };
       }
       return { ...prev, components: next };
     });
@@ -1528,13 +1532,15 @@ export default function Index({
       // new prop: the components already publish these (leftCollapsed is a property; the
       // plug-in answers workspaceState()), and a save is a read, not a gesture. A piece that
       // is not on screen is simply absent, and the server keeps what it had.
+      //
+      // AND IT IS A SHADOW-PIERCING READ, which is the correction: `document.querySelector`
+      // reaches nothing here — the shell draws the surface INSIDE the renderer's shadow root —
+      // so both of these were null on every save and the place never travelled, silently.
+      // A null was indistinguishable from "the view is not open", which is why it took the
+      // same helper the flow's link needed to make the two reads real.
       const workspace = (() => {
-        const layout = document.querySelector('workspace-layout') as
-          | (HTMLElement & { leftCollapsed?: boolean })
-          | null;
-        const canvas = document.querySelector('agent-canvas') as
-          | (HTMLElement & { workspaceState?: () => Record<string, unknown> })
-          | null;
+        const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
+        const canvas = deepFind<HTMLElement & { workspaceState?: () => Record<string, unknown> }>('agent-canvas');
         const state: Record<string, unknown> = {};
         if (layout) state.leftCollapsed = !!layout.leftCollapsed;
         const canvasState = canvas?.workspaceState?.();
@@ -3383,8 +3389,42 @@ export default function Index({
     const onFlowNodeMoved = (event: Event) => {
       logger.info('flow node moved', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
     };
+    /**
+     * THE LINK, BOTH WAYS — the floor this view was missing.
+     *
+     * A picked note is a question about a piece of the conversation, and the playground has
+     * answered it since the canvas existed: the turn about that note is marked in her thread,
+     * her header says what the note is, and a click on that turn puts the note back under the
+     * person's eye. In the app NONE of it happened, and the reason is structural: her column
+     * and the drawing are SIBLINGS here (the drawing in the middle pane, she in the right), so
+     * the two elements never meet. The canvas unit listens for `flow-select` to mark her turn —
+     * but she is not its child any more, so it finds no seat to mark; and the turn's
+     * `turn-click` never crosses out of the right pane into the middle one. The page is the one
+     * place that knows both halves, so the wiring lives here — the playground's own rule:
+     * "Neither view reaches into the other… the wiring between them is here, in the host."
+     *
+     * WHAT SHE DOES ABOUT A PICK — opening her column, 650 wide — is deliberately NOT here:
+     * the element that owns her width hears `flow-select` itself and performs it.
+     */
     const onFlowSelect = (event: Event) => {
-      logger.info('flow select', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
+      const detail = ((event as CustomEvent).detail || {}) as { nodeId?: string | null };
+      logger.info('flow select', detail as Record<string, unknown>);
+      const nodeId = detail.nodeId ?? null;
+      const panel = deepFind<HTMLElement & { statusText?: string }>('chat-panel');
+      const messages = panel?.shadowRoot?.querySelector('chat-messages') as
+        | (HTMLElement & { highlightNodeId?: string | null })
+        | null;
+      if (messages) messages.highlightNodeId = nodeId;
+      if (!nodeId || !panel) return;
+      const nodes = deepFind<HTMLElement & { flow?: { nodes?: Array<{ id: string; title: string; kind: string; state: string }> } }>('agent-flow')?.flow?.nodes ?? [];
+      const node = nodes.find((n) => n.id === nodeId);
+      if (node) panel.statusText = `${node.title} | ${node.kind} — State: ${node.state}`;
+    };
+    /** And the other half: a turn clicked is its note brought back under the eye. */
+    const onTurnClick = (event: Event) => {
+      const nodeId = (((event as CustomEvent).detail || {}) as { nodeId?: string }).nodeId ?? '';
+      if (!nodeId) return;
+      deepFind<HTMLElement & { focusNode?: (id: string) => void }>('agent-flow')?.focusNode?.(nodeId);
     };
     const onFlowConnect = (event: Event) => {
       logger.info('flow connect', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
@@ -3467,6 +3507,24 @@ export default function Index({
       if (d.absent?.length) {
         line += ` Not drawn: ${d.absent.map((a) => a.step).join(', ')} — ${d.absent.map((a) => a.why).join('; ')}.`;
       }
+      /*
+       * AND THE SAME TWO FACTS GO WHERE THE PERSON IS ALREADY LOOKING: the message line at the
+       * top of her column. That line is the readout for whatever is on screen — the note you
+       * picked, or what this drawing could not say — and the owner pointed these facts at it
+       * (2026-09-18: "Those messages should appear at the very top of Grace… that's where we're
+       * supposed to have messages like [tool-call: the prompt names no tool…]"). The words are
+       * the graph's own, unchanged, so the drawing's omission and her sentence cannot drift.
+       * The DRAWING no longer prints them: it never narrates (see agent-flow's render).
+       */
+      const notes: string[] = [];
+      if (d.unresolved?.length) {
+        notes.push(
+          `${d.unresolved.length} row${d.unresolved.length === 1 ? '' : 's'} could not be named: ${d.unresolved.join(', ')}`,
+        );
+      }
+      if (d.absent?.length) notes.push(d.absent.map((a) => `${a.step}: ${a.why}`).join(' · '));
+      const readout = deepFind<HTMLElement & { statusText?: string }>('chat-panel');
+      if (readout && notes.length) readout.statusText = notes.join(' · ');
       window.dispatchEvent(new CustomEvent('a2ui:system-message', {
         detail: { role: 'assistant', content: line },
       }));
@@ -3492,6 +3550,7 @@ export default function Index({
     window.addEventListener('flow-node-moved', onFlowNodeMoved);
     window.addEventListener('flow-node-added', onFlowNodeAdded);
     window.addEventListener('flow-select', onFlowSelect);
+    window.addEventListener('turn-click', onTurnClick);
     window.addEventListener('flow-connect', onFlowConnect);
     window.addEventListener('flow-action', onFlowAction);
     /**
@@ -3578,6 +3637,7 @@ export default function Index({
       window.removeEventListener('flow-node-moved', onFlowNodeMoved);
       window.removeEventListener('flow-node-added', onFlowNodeAdded);
       window.removeEventListener('flow-select', onFlowSelect);
+      window.removeEventListener('turn-click', onTurnClick);
       window.removeEventListener('flow-connect', onFlowConnect);
       window.removeEventListener('flow-action', onFlowAction);
       window.removeEventListener('card-delete', onCardDelete);
@@ -3609,12 +3669,11 @@ export default function Index({
     let applied = false;
     const apply = () => {
       if (applied) return;
-      const layout = document.querySelector('workspace-layout') as
-        | (HTMLElement & { leftCollapsed?: boolean })
-        | null;
-      const canvas = document.querySelector('agent-canvas') as
-        | (HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean })
-        | null;
+      // THE SAME SHADOW-PIERCING READ AS THE SAVE'S (see there): `document.querySelector`
+      // finds neither element in this shell, so both writes below were no-ops and a package
+      // "reopened where it was left" only in the record.
+      const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
+      const canvas = deepFind<HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean }>('agent-canvas');
       if (canvas?.applyWorkspaceState) {
         canvas.applyWorkspaceState(stored);
         applied = true;

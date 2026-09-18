@@ -29,11 +29,11 @@
  * read and rewritten by @/shared/repairMaterial (`writeFieldValue`), the same module that
  * wrote it, so a value filed by hand and a value filed by a button are the same text.
  *
- * The format rail's TITLE is the last call — whatever `mode` the most recent LLM
- * call reported through `a2ui:usage`. It is read from that event, never fixed
- * here: it names where the workspace IS right now, which is simply the last thing
- * that ran. Before any call there is no last call, so the title stays empty
- * rather than inventing one.
+ * The format rail is NAMED, and its numbers are measured. The name is the panel's own (see
+ * RAIL_LABEL — the design's text at the rail's label), and the line under it is the spend
+ * the backend reported through `a2ui:usage`. Before any call there is no spend to report, so
+ * that line is absent rather than invented — but the rail still says WHICH column it is,
+ * which a bare strip with two grippers could not.
  *
  * Designer rules: System Role is sticky (first, never changes — no menu, no
  * drag, no delete); Arrow_drop_down opens/closes the selection menu (types +
@@ -54,6 +54,18 @@ export interface PromptSection {
   position?: number;
   visible?: boolean;
 }
+
+/**
+ * WHAT THE FORMAT RAIL IS CALLED, written down its edge when the column is docked.
+ *
+ * THE DESIGN'S OWN WORDS at the rail's label (40000954:23869, "Agent Prompt" — Inter 500,
+ * 16px, #171717), and the same node the rail's measurements were taken from. It was the
+ * last LLM call's `mode` before, read from `a2ui:usage` — which meant a docked column
+ * showed a bare strip with two grippers and no way to tell which column it was until
+ * something had run, and nothing at all after a reload. A NAME is not a readout: the
+ * design writes the panel's name here, and the next line carries the measured numbers.
+ */
+const RAIL_LABEL = 'Agent Prompt';
 
 class PromptSectionEditor extends LitElement {
   static properties = {
@@ -87,8 +99,6 @@ class PromptSectionEditor extends LitElement {
   private _collapsed = new Set<number>();
   private _dragIndex: number | null = null;
   private _listenersBound = false;
-  /** Mode of the most recent LLM call — the rail title. '' until a call lands. */
-  private _lastCallMode = '';
   /**
    * The spend, as the backend measured it. `_countedCalls` is keyed on the
    * backend's `call_id` so a surface that gets applied twice cannot inflate the
@@ -439,9 +449,9 @@ class PromptSectionEditor extends LitElement {
   };
 
   /**
-   * `a2ui:usage` carries the provider's own measured usage for the last call.
-   * Its `mode` is the rail title: a person needs to know where they are, not
-   * what the call did internally — the last call IS the header.
+   * `a2ui:usage` carries the provider's own measured usage for the last call, and the rail
+   * reports the running spend. The call's `mode` is NOT the rail's title — the rail is
+   * named (see RAIL_LABEL) — so only the numbers are read here.
    */
   private _onUsage = (e: Event) => {
     const detail = (e as CustomEvent).detail || {};
@@ -464,9 +474,6 @@ class PromptSectionEditor extends LitElement {
       this._totalTokens += total;
       this._calls += 1;
     }
-
-    const mode = detail.mode;
-    if (typeof mode === 'string' && mode) this._lastCallMode = mode;
 
     this.requestUpdate();
   };
@@ -519,7 +526,7 @@ class PromptSectionEditor extends LitElement {
     return html`
       <div class="sections-scroll">
         <prompt-container
-          format-label=${this._lastCallMode}
+          format-label=${RAIL_LABEL}
           tokens-label=${this._tokensLabel}
         >
           ${sectionsHtml}
