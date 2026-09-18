@@ -1186,6 +1186,26 @@ ${workspaceContext}`;
   }
 
   /**
+   * START THIS SEAT OVER — an empty thread, ready for the next run.
+   *
+   * The owner, 2026-09-18: "every time I create a new one by clicking composer, it should clear
+   * whatever Grace had and be ready to accept the new run… we're not keeping them." It did not
+   * clear: the panel is REUSED across assemblies (the surface keeps the same component id), and
+   * `_local` — the turns spoken since it mounted — was never emptied, so a fresh composer opened
+   * onto the previous run's sentences. They belong to a conversation that is no longer on
+   * screen, which is the same lie the history rule beside this one already refuses: a thread
+   * belongs to the conversation it was spoken in.
+   *
+   * The HOST calls this when it means "a new place" — the Composer click is the one that does.
+   * It clears what is DRAWN, nothing else: no request, no row deleted, no conversation touched.
+   */
+  clearThread(): void {
+    this.messages = [];
+    this._local = [];
+    this.requestUpdate();
+  }
+
+  /**
    * A conversation was picked from the selector. Adopting it IS the binding:
    * the history and local turns belong to the conversation they were spoken in,
    * so both are cleared and the new one's history loads through `updated` →
