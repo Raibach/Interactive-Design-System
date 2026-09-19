@@ -881,16 +881,17 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
             except Exception as exc:  # noqa: BLE001
                 print(f"❌ [inspection] the report could not be written to the console conversation: {exc}")
                 meta["error"] = f"the report could not be filed ({exc})"
-            # AND INTO OUR OWN STORE, so the history is queryable instead of merely filed —
-            # the next run's retrieval reads it from here.
+            # AND INTO POSTGRES FIRST — the relational home, where the row is counted,
+            # filtered and joined (a report that concerns a package links to it) — then the
+            # vector index of the same row, so the next run's retrieval can find it.
             try:
+                import governance_store
                 import governance_vector
-                governance_vector.index_rows(
-                    "inspection",
-                    [{"id": meta.get("at", ""), "at": meta.get("at", ""), "text": text}],
-                )
+                row = {"id": meta.get("at", ""), "at": meta.get("at", ""), "text": text}
+                governance_store.upsert_items("inspection", [row])
+                governance_vector.index_rows("inspection", [row])
             except Exception as exc:  # noqa: BLE001 — a store failure never kills the run
-                print(f"⚠️  [inspection] the report could not be indexed ({type(exc).__name__}: {exc})")
+                print(f"⚠️  [inspection] the report could not be stored ({type(exc).__name__}: {exc})")
                 meta["index_error"] = f"{type(exc).__name__}: {exc}"
         elif file_message:
             print("⚠️  [inspection] no console conversation available — the report was not filed")

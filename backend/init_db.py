@@ -642,6 +642,26 @@ TABLE_DEFINITIONS = {
             updated_at timestamp without time zone DEFAULT now()
         )
     """,
+    'governance_items': """
+        CREATE TABLE IF NOT EXISTS governance_items (
+            id TEXT PRIMARY KEY,
+            kind VARCHAR(32) NOT NULL,
+            status VARCHAR(32),
+            owner VARCHAR(32),
+            check_name VARCHAR(64),
+            level VARCHAR(32),
+            component VARCHAR(128),
+            node_id VARCHAR(64),
+            file_path TEXT,
+            catalog VARCHAR(64),
+            at VARCHAR(64),
+            package_id UUID,
+            text TEXT NOT NULL DEFAULT '',
+            metadata JSONB DEFAULT '{}',
+            created_at TIMESTAMP DEFAULT now(),
+            updated_at TIMESTAMP DEFAULT now()
+        )
+    """,
 }
 
 # Safe column migrations - adds column if missing, never drops
@@ -1085,7 +1105,9 @@ def init_database():
             'session_permissions', 'student_grades', 'student_profiles',
             'subscription_plans', 'tag_definitions', 'teacher_students',
             'training_data', 'usage_metrics', 'user_grace_settings',
-            'user_memory_log', 'user_subscriptions'
+            'user_memory_log', 'user_subscriptions',
+            # the governance rows — the register, the corrections, the findings, the reports
+            'governance_items'
         ]
 
         for table_name in table_order:
