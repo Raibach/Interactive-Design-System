@@ -32,6 +32,22 @@ from config import (  # noqa: E402
 from pymilvus import MilvusClient  # noqa: E402
 
 
+def _clear(client, name: str) -> None:
+    """Reset a DERIVED collection, so a reindex is a reset and not a pile.
+
+    DROP AND RECREATE, not delete-by-filter: a filter delete returned success while leaving
+    every row behind on the lite store (measured 2026-09-19 — memories went 8 → 16 across two
+    runs), and this collection is an index of Postgres/the JSONs, so dropping it loses
+    nothing that is not rebuilt in the same run.
+    """
+    try:
+        if name in client.list_collections():
+            client.drop_collection(name)
+        client.create_collection(name, dimension=EMBEDDING_DIMENSION, metric_type="COSINE", auto_id=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  could not reset {name}: {type(exc).__name__}: {exc}")
+
+
 def main() -> int:
     print(f"store: {MILVUS_URI}")
     client = MilvusClient(uri=MILVUS_URI)
@@ -56,6 +72,8 @@ def main() -> int:
     if embedder is None:
         print("reindex not possible: the embedding model did not load")
         return 1
+
+    _clear(client, "memories")
 
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     cur = conn.cursor()
@@ -97,6 +115,57 @@ def main() -> int:
         inserted += 1
 
     conn.commit()
+
+    # ── the governance rows — the register, the ledger, the findings, the reports ──
+    try:
+        import json
+
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(repo, "open-items.json")) as fh:
+            register = json.load(fh).get("rows", [])
+        with open(os.path.join(repo, "corrections.json")) as fh:
+            corrections_rows = json.load(fh).get("rows", [])
+        findings = []
+        audit_dir = os.path.join(repo, "frontend", "catalog-audit")
+        for fname in sorted(os.listdir(audit_dir)):
+            if not fname.endswith(".json"):
+                continue
+            with open(os.path.join(audit_dir, fname)) as fh:
+                report = json.load(fh)
+            for f in report.get("findings", []):
+                if f.get("level") != "pass":
+                    findings.append({**f, "catalog": report.get("catalog", fname[:-5])})
+
+        # every filed inspection report, from the console conversation
+        cur.execute(
+            "SELECT m.content, m.metadata FROM conversation_messages m "
+            "WHERE m.metadata->>'kind' = 'inspection' ORDER BY m.created_at"
+        )
+        inspections = [
+            {
+                "id": (meta or {}).get("at", ""),
+                "at": (meta or {}).get("at", ""),
+                "text": content or "",
+            }
+            for content, meta in cur.fetchall()
+        ]
+
+        # the reindex imports the app's own governance module — one writer for this collection
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from governance_vector import index_rows, count as governance_count
+
+        _clear(client, "governance")
+        n_reg = index_rows("register", register)
+        n_cor = index_rows("correction", corrections_rows)
+        n_find = index_rows("finding", findings)
+        n_ins = index_rows("inspection", inspections)
+        print(
+            "governance rows indexed: "
+            f"register={n_reg} corrections={n_cor} findings={n_find} inspections={n_ins} "
+            f"(collection now holds {governance_count()})"
+        )
+    except Exception as exc:  # noqa: BLE001 — a seeding failure is said, not hidden
+        print(f"governance seeding failed: {type(exc).__name__}: {exc}")
 
     # ── receipts ────────────────────────────────────────────────────────────────
     print("--- receipts")
