@@ -317,6 +317,20 @@ def get_milvus_client() -> Optional[MilvusClientWrapper]:
     Returns None if Milvus is unavailable to prevent crashes"""
     global _milvus_client
     if _milvus_client is None:
+        # THE STORE OPENS ONLY WHERE IT CAN LIVE. The embedded engine (milvus-lite) is real
+        # memory, and on a 512MB instance it is what the kernel kills: production,
+        # nf-compute-20, 2026-09-19 — exit 137 seconds after the collections were created,
+        # the app booting, serving, dying and restarting around this line. Small instances
+        # skip the store; every caller here already handles a None client.
+        try:
+            import psutil
+
+            available_mb = psutil.virtual_memory().available / (1024 * 1024)
+            if MILVUS_MODE == "lite" and available_mb < 700:
+                print(f"⚠️ Only {available_mb:.0f}MB memory available — the embedded vector store needs about 700MB of headroom and is not opened. Vector features are off on this instance.")
+                return None
+        except Exception:
+            pass
         try:
             _milvus_client = MilvusClientWrapper()
             result = _milvus_client.connect()
