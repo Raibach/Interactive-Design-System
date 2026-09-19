@@ -469,8 +469,12 @@ class A2UIConsoleCardGrid extends LitElement {
       font-family: inherit;
       font-size: 13px;
       font-weight: 700;
-      color: #5A5A5A;
-      background: #FFFFFF;
+      /* THE HEADER'S PURPLE, LIGHT TEXT — the owner, 2026-09-19: "give them the same purple
+         as the header and make the text light." Reversed from the white tile. */
+      color: #b6afbd;
+      /* The owner, 2026-09-19: the header's purple at 85% opaque — the same treatment the
+         cards wear, so the pair reads as one family. */
+      background: rgba(34, 23, 44, 0.85);
       height: 43px;
       padding: 0 18px;
       border: none;
@@ -479,7 +483,7 @@ class A2UIConsoleCardGrid extends LitElement {
       box-shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25), -4px -4px 10px 0px rgba(0, 0, 0, 0.15);
     }
     .pager button:disabled { opacity: 0.4; cursor: default; }
-    .pager .count { font-size: 13px; font-weight: 500; color: #6c757d; }
+    .pager .count { font-size: 13px; font-weight: 500; color: #b6afbd; }
 
     /* DRAWN INSTEAD OF THE CARDS when the pane cannot hold them (see _measure). It sits in
        the host's own inset, so it lines up with where the first card would have been, and it
