@@ -52,8 +52,7 @@ class MemoryEmbedder:
                     print(f"⚠️ SentenceTransformer not available, embedding features disabled")
                     self.model = None
                     return
-                from sentence_transformers import SentenceTransformer
-                
+
                 # MEMORY SAFETY: Check system memory before loading
                 try:
                     import psutil
@@ -67,10 +66,27 @@ class MemoryEmbedder:
                         print(f"   Embedding features will be disabled until memory usage decreases")
                         self.model = None
                         return
+
+                    # AND THE INSTANCE HAS TO BE ABLE TO AFFORD IT. Torch plus the weights
+                    # need roughly a gigabyte of headroom. On a 512MB container (production,
+                    # nf-compute-20, 2026-09-19) the load is what kills the process: SIGKILL,
+                    # exit 137, about two and a half minutes into every boot, when the
+                    # governance inspection reaches its vector step. Small instances skip the
+                    # model — the vector features stand down, and nothing else is affected.
+                    available_mb = psutil.virtual_memory().available / (1024 * 1024)
+                    if available_mb < 1200:
+                        print(f"⚠️ Only {available_mb:.0f}MB memory available — the embedding model needs about 1200MB of headroom and is skipped. Vector features are off on this instance.")
+                        self.model = None
+                        return
                 except Exception:
                     # If psutil fails, continue anyway (better to try than fail silently)
                     pass
                 
+                # THE IMPORT HAPPENS HERE, after the guards — not before them. This is the
+                # line that pulls torch into the process, and on an instance that cannot
+                # afford it the checks above must already have returned.
+                from sentence_transformers import SentenceTransformer
+
                 print(f"📦 Loading embedding model: {self.model_name}")
                 print(f"   This may take 30-60 seconds and use ~500MB-2GB memory")
                 self.model = SentenceTransformer(self.model_name)
