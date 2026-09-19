@@ -108,8 +108,11 @@ export class TraceFeed extends LitElement {
         font-weight: var(--ds-weight);
         /* 12px, one step below the thread's 14px: this is a dense log, not prose. */
         font-size: var(--ds-fs-sm);
-        color: var(--ds-text);
-        background: var(--ds-surface);
+        /* THE CHAT'S SHEET (frontend/src/index.css): the trace wears the same ground and
+           type colour as every chat seat — the owner, 2026-09-19: "do the same styling…
+           get this white background out". */
+        color: var(--chat-text, var(--ds-text));
+        background: var(--chat-bg, var(--ds-surface));
       }
       .head {
         position: sticky;
@@ -119,13 +122,13 @@ export class TraceFeed extends LitElement {
         align-items: center;
         gap: 8px;
         padding: 10px 14px;
-        background: var(--ds-surface);
-        border-bottom: 1px solid var(--ds-rule);
+        background: var(--chat-bg, var(--ds-surface));
+        border-bottom: 1px solid var(--chat-rule, var(--ds-rule));
         font-size: var(--ds-fs-label);
         font-weight: 600;
         letter-spacing: 0.09em;
         text-transform: uppercase;
-        color: var(--ds-teal);
+        color: var(--chat-text, var(--ds-teal));
       }
       /* The brand gold, spent on one meaning: this view is live. */
       .live {
@@ -145,8 +148,8 @@ export class TraceFeed extends LitElement {
         min-width: 22px;
         padding: 2px 7px;
         border-radius: var(--ds-radius-pill);
-        background: var(--ds-teal-tint);
-        color: var(--ds-teal);
+        background: var(--chat-user-bg, var(--ds-teal-tint));
+        color: #ffedab;
         font-size: var(--ds-fs-label);
         font-weight: 700;
         letter-spacing: 0.02em;
@@ -163,10 +166,10 @@ export class TraceFeed extends LitElement {
         row-gap: 2px;
         align-items: baseline;
         padding: 7px 14px;
-        border-bottom: 1px solid var(--ds-rule-soft);
+        border-bottom: 1px solid var(--chat-rule, var(--ds-rule-soft));
         transition: background 90ms linear;
       }
-      .row:hover { background: var(--ds-surface-hover); }
+      .row:hover { background: var(--chat-user-bg, var(--ds-surface-hover)); }
       /* Inter, like everything else — the digits align through tabular figures
          rather than a second typeface, which is what a narrower "data font" was
          really for. */
@@ -174,7 +177,7 @@ export class TraceFeed extends LitElement {
         font-family: var(--ds-font);
         font-size: var(--ds-fs-meta);
         font-variant-numeric: tabular-nums;
-        color: var(--ds-muted);
+        color: #9ca3af;
       }
       .kind {
         justify-self: start;
@@ -186,17 +189,19 @@ export class TraceFeed extends LitElement {
         text-transform: uppercase;
         white-space: nowrap;
       }
-      /* The badge, per kind. Classes rather than an inline style attribute, so the
-         palette stays in one place and no line's colours are decided in JS. */
-      .k-log { color: var(--ds-teal); background: var(--ds-teal-tint); }
-      .k-network { color: var(--ds-navy); background: var(--ds-navy-tint); }
-      .k-event { color: var(--ds-green); background: var(--ds-green-tint); }
-      .k-audit { color: var(--ds-cyan); background: var(--ds-cyan-tint); }
-      .k-perf { color: var(--ds-amber); background: var(--ds-amber-tint); }
-      .k-breadcrumb { color: var(--ds-muted); background: var(--ds-grey-tint); }
+      /* The badge, per kind — the chat sheet's palette: yellows and purples carry the
+         everyday kinds, and every hue holds WCAG AA on the sheet's ground (#0c142e):
+         cream 12.8:1 · violet 8.3:1 · green 11.6:1 · sky 9.8:1 · amber 11.3:1 ·
+         red 8:1 · grey 6:1. The wash behind is the same hue at 14%. */
+      .k-log { color: #86efac; background: rgba(134, 239, 172, 0.14); }
+      .k-network { color: #c4b5fd; background: rgba(196, 181, 253, 0.14); }
+      .k-event { color: #7dd3fc; background: rgba(125, 211, 252, 0.14); }
+      .k-audit { color: #ffedab; background: rgba(255, 237, 171, 0.14); }
+      .k-perf { color: #fcd34d; background: rgba(252, 211, 77, 0.14); }
+      .k-breadcrumb { color: #9ca3af; background: rgba(156, 163, 175, 0.14); }
       /* A failure and a slowdown outrank whatever produced them. */
-      .k-error { color: var(--ds-red); background: var(--ds-red-tint); }
-      .k-warn { color: var(--ds-amber); background: var(--ds-amber-tint); }
+      .k-error { color: #fca5a5; background: rgba(252, 165, 165, 0.14); }
+      .k-warn { color: #fcd34d; background: rgba(252, 211, 77, 0.14); }
 
       .msg {
         min-width: 0;
@@ -212,7 +217,7 @@ export class TraceFeed extends LitElement {
         font-family: var(--ds-font);
         font-size: var(--ds-fs-meta);
         font-variant-numeric: tabular-nums;
-        color: var(--ds-muted);
+        color: #9ca3af;
         white-space: nowrap;
       }
       .status {

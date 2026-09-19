@@ -142,7 +142,6 @@ export class AISurfaceSandbox extends LitElement {
          2px #507274 outline around everything. Kept as none (not deleted) so the
          box model is unchanged: the same rule still owns the edge. */
       border: none;
-      border-radius: 8px;
       background-color: #e5e1dd;
       overflow: hidden;
       contain: layout style;

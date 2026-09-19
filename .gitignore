@@ -100,3 +100,8 @@ governance/
 # Its README, its CHANGELOG and its numbered chapters are the working record of the
 # canvas work — a record for the session that writes it, not a document of the product.
 AGENTIC_EDITOR/
+
+#
+# THE DESIGNER PROFILE — local-only by the owner instruction (2026-09-19):
+# "put it in the gitignore, I sure as hell don't want anybody to see it."
+DESIGNER-PROFILE.md

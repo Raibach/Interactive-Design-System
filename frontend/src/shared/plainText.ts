@@ -177,3 +177,20 @@ export function asPlainText(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+/**
+ * THE CONTROL TAGS ARE INSTRUCTIONS, NOT PROSE. `<update_agent>…</update_agent>` and its
+ * siblings tell the pipeline what to write into the prompt; the retired React seat consumed
+ * them before render, and the Lit thread drew the stored reply as stored — so a person read
+ * the tags raw (owner, 2026-09-19: "you've got these strange markup"). This is the display
+ * edge performing the same extraction, on assistant text only, before asPlainText — the same
+ * place and the same reason as the marker stripping above. The stored message is untouched.
+ */
+const CONTROL_TAG =
+  /<(update_agent|update_user|update_tool|update_few_shot|update_context|update_constraints)\b[^>]*>[\s\S]*?<\/\1>/g;
+const ADD_ROLE_TAG = /<add_role\b[^>]*>[\s\S]*?<\/add_role>/g;
+
+export function stripControlTags(text: string): string {
+  if (!text) return text;
+  return text.replace(CONTROL_TAG, '').replace(ADD_ROLE_TAG, '');
+}

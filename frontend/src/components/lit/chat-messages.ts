@@ -12,6 +12,7 @@
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
 import { LitElement, html, css, nothing } from 'lit';
+import { asPlainText, stripControlTags } from '@/shared/plainText';
 
 export interface ChatMessage {
   role?: string;
@@ -67,7 +68,7 @@ export class ChatMessages extends LitElement {
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;
-      color: #171717;
+      color: var(--chat-text, #171717);
     }
     /* Full-width stacked cards, as the frame's "output-area" slots draw them — and
        TIGHTENED, because a conversation has to read as one. The frame's 20px padding and
@@ -91,7 +92,7 @@ export class ChatMessages extends LitElement {
       line-height: 1.5;
       padding: 10px 14px;
       border-radius: 6px;
-      background: #ffffff;
+      background: transparent;
       transition: background 0.12s, outline-color 0.12s;
       outline: 2px solid transparent;
     }
@@ -110,7 +111,24 @@ export class ChatMessages extends LitElement {
     .turn.linked:hover { background: #f4f8f8; }
     /* And the same turn, marked because the canvas has that node selected. */
     .turn.hl { background: #edf2f2; outline-color: #507274; }
-    .turn.user { background: #f7fafc; }
+    /* THE USER'S TURN SAYS IT IS THEIRS. The console sets --chat-user-bg (10% white over the
+       plum, the owner's 2026-09-19 ask); the composer keeps the design's own light wash. */
+    .turn.user { background: var(--chat-user-bg, #f7fafc); }
+    /* THE CHAT'S BUTTONS — the wire format's action links, drawn with the same wash the user's
+       turn uses (owner, 2026-09-19: "use that for all your buttons inside of the chat"),
+       never the Conversations dropdown. */
+    .turn .action {
+      font: inherit;
+      color: inherit;
+      background: var(--chat-user-bg, #eef2f7);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      padding: 3px 10px;
+      margin: 2px 4px 2px 0;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .turn .action:hover { background: rgba(255, 255, 255, 0.16); }
     /* THE EMPTY THREAD IS THE FIRST LESSON, not a blank panel.
        This line used to read "No conversations yet." — the Conversations dropdown's own
        empty state, one control above it — so an empty package read as an empty room with a
@@ -155,6 +173,35 @@ export class ChatMessages extends LitElement {
   private _roleOf(m: ChatMessage): string {
     const raw = String(m.role ?? (m as { type?: string }).type ?? 'assistant');
     return raw === 'user' || raw === 'question' ? 'user' : 'assistant';
+  }
+
+  /**
+   * GRACE'S WORDS AS A PERSON PRINTS THEM — and the buttons those words carry. The control
+   * tags come out (pipeline instructions, see shared/plainText), the markers are made plain,
+   * and every `[label](action:…)` link becomes a button. The user's own words are left
+   * exactly as typed; those are theirs.
+   */
+  private _segmentsOf(m: ChatMessage): Array<{ text?: string; label?: string; action?: string }> {
+    const isAssistant = this._roleOf(m) === 'assistant';
+    const raw = String(m.content ?? '');
+    const shown = isAssistant ? asPlainText(stripControlTags(raw)) : raw;
+    return shown.split(/(\[.*?\]\(action:[^)]+\))/g).map((part) => {
+      const match = part.match(/^\[(.*?)\]\(action:([^)]+)\)$/);
+      return match ? { label: match[1], action: match[2] } : { text: part };
+    });
+  }
+
+  /** An action button answers through the seat: the action goes back as a message — the
+      same wire the retired seat's buttons sent (`[action]`). */
+  private _onActionSend(e: Event, action: string): void {
+    e.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent('chat-action-send', {
+        detail: { text: `[${action}]` },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   protected updated(changed: Map<string, unknown>): void {
@@ -211,7 +258,7 @@ export class ChatMessages extends LitElement {
     return html`
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
-          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}<span class="body">${m.content ?? ''}</span></div>`)
+          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? html`<button class="action" data-action=${seg.action} @click=${(e: Event) => this._onActionSend(e, String(seg.action))}>${seg.label}</button>` : seg.text))}</span></div>`)
           : html`<div class="empty">
               Nothing here yet — and nothing has to be filled in first. Run it, and Grace
               will walk you through what an empty prompt does.
