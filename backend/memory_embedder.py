@@ -22,6 +22,7 @@ from config import (
     EMBEDDING_MODEL_VERSION,
     CHUNK_SIZE,
     CHUNK_OVERLAP,
+    available_memory_mb,
     get_collection_name
 )
 
@@ -73,7 +74,7 @@ class MemoryEmbedder:
                     # exit 137, about two and a half minutes into every boot, when the
                     # governance inspection reaches its vector step. Small instances skip the
                     # model — the vector features stand down, and nothing else is affected.
-                    available_mb = psutil.virtual_memory().available / (1024 * 1024)
+                    available_mb = available_memory_mb()
                     if available_mb < 1200:
                         print(f"⚠️ Only {available_mb:.0f}MB memory available — the embedding model needs about 1200MB of headroom and is skipped. Vector features are off on this instance.")
                         self.model = None

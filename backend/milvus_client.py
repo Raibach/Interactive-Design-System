@@ -35,6 +35,7 @@ from config import (
     MILVUS_MODE,
     MILVUS_URI,
     MILVUS_TOKEN,
+    available_memory_mb,
     get_collection_name,
     get_all_collections,
     EMBEDDING_DIMENSION,
@@ -323,9 +324,7 @@ def get_milvus_client() -> Optional[MilvusClientWrapper]:
         # the app booting, serving, dying and restarting around this line. Small instances
         # skip the store; every caller here already handles a None client.
         try:
-            import psutil
-
-            available_mb = psutil.virtual_memory().available / (1024 * 1024)
+            available_mb = available_memory_mb()
             if MILVUS_MODE == "lite" and available_mb < 700:
                 print(f"⚠️ Only {available_mb:.0f}MB memory available — the embedded vector store needs about 700MB of headroom and is not opened. Vector features are off on this instance.")
                 return None
