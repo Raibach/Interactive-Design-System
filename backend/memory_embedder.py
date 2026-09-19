@@ -5,12 +5,18 @@ Generates embeddings for conversations using sentence-transformers
 
 import os
 from typing import List, Dict, Optional, Tuple
-try:
-    from sentence_transformers import SentenceTransformer
-    HAS_SENTENCE_TRANSFORMERS = True
-except ImportError:
-    SentenceTransformer = None
-    HAS_SENTENCE_TRANSFORMERS = False
+
+# THE CLASS IS NOT IMPORTED AT MODULE SCOPE. Importing sentence_transformers pulls torch,
+# and torch's import alone costs hundreds of megabytes; this module sits on the API's
+# STARTUP path (main.py → grace_memory_api → here), so that import decided whether the
+# service could boot at all on its instance size. Production, 2026-09-19: the container
+# was SIGKILLed (exit 137) about 70 seconds into every boot, right after init_db, in a
+# crash loop that took the site down with it. The capability flag is now a cheap presence
+# check — no torch — and the class is imported where the model is actually loaded.
+import importlib.util
+
+HAS_SENTENCE_TRANSFORMERS = importlib.util.find_spec("sentence_transformers") is not None
+SentenceTransformer = None  # bound on first model load; see _load_model
 from config import (
     EMBEDDING_MODEL,
     EMBEDDING_MODEL_VERSION,
@@ -40,11 +46,13 @@ class MemoryEmbedder:
         """Lazy load the embedding model with memory safety checks"""
         if self.model is None:
             try:
-                # Check if SentenceTransformer is available
-                if SentenceTransformer is None:
+                # The class is imported HERE, not at module scope (see the module header):
+                # importing it drags torch onto the API's startup path.
+                if not HAS_SENTENCE_TRANSFORMERS:
                     print(f"⚠️ SentenceTransformer not available, embedding features disabled")
                     self.model = None
                     return
+                from sentence_transformers import SentenceTransformer
                 
                 # MEMORY SAFETY: Check system memory before loading
                 try:
