@@ -150,9 +150,21 @@ def main() -> int:
             for content, meta in cur.fetchall()
         ]
 
-        # the reindex imports the app's own governance module — one writer for this collection
+        # the reindex writes POSTGRES FIRST and the vectors second: the table is the
+        # relational home (exact queries, joins, the package link), the vector store the
+        # derived semantic index of it. One source, two readers.
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from governance_store import upsert_items, clear_kinds
         from governance_vector import index_rows, count as governance_count
+
+        # the seed REPLACES the four kinds it re-derives (stale ids from an earlier scheme
+        # must not linger beside their replacements)
+        clear_kinds(["register", "correction", "finding", "inspection"])
+
+        pg_reg = upsert_items("register", register)
+        pg_cor = upsert_items("correction", corrections_rows)
+        pg_find = upsert_items("finding", findings)
+        pg_ins = upsert_items("inspection", inspections)
 
         _clear(client, "governance")
         n_reg = index_rows("register", register)
@@ -160,8 +172,9 @@ def main() -> int:
         n_find = index_rows("finding", findings)
         n_ins = index_rows("inspection", inspections)
         print(
-            "governance rows indexed: "
-            f"register={n_reg} corrections={n_cor} findings={n_find} inspections={n_ins} "
+            "governance rows: "
+            f"postgres register={pg_reg} corrections={pg_cor} findings={pg_find} inspections={pg_ins} · "
+            f"vectors register={n_reg} corrections={n_cor} findings={n_find} inspections={n_ins} "
             f"(collection now holds {governance_count()})"
         )
     except Exception as exc:  # noqa: BLE001 — a seeding failure is said, not hidden
