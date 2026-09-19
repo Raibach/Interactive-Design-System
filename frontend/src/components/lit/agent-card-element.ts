@@ -1,25 +1,23 @@
 /**
  * <agent-card-element> — Lit web component: the A2UI console card.
  *
- * BASE TEMPLATE: Static CSS extracted from Figma node 40000717:17091.
- * This is the foundational card structure. All cards render this immediately.
+ * DESIGN SOURCE: Figma "console-card-design-system" node 40001114:5813, file
+ * 20UPR2KQMsbAxlo5NJb1se — pulled through the Figma MCP 2026-09-18. Every number
+ * below is the node's own: 262×251, padding 10, gap 10, stroke #FFFFFF 3px,
+ * radius 10, the two-part box shadow, the fills and the type.
  *
- * CATEGORY THEMING: Dynamic colors from PostgreSQL (categories table).
- * When a category is assigned, category-color/category-title-color/category-text-color
- * are applied as CSS custom properties.
+ * CATEGORY THEMING: Dynamic colors from PostgreSQL (categories table) arrive as
+ * category-color / category-title-color / category-text-color and are applied as
+ * CSS custom properties. The card's own defaults are the design's (the Design
+ * System row: #10455F / #FB8D67 / #FFFFFF).
  *
- * DESIGN UPDATES: When Figma changes, run:
- *   node frontend/scripts/sync-figma-card.mjs
- *   cd frontend && npm run build
- * This regenerates the static CSS from the Figma spec.
- *
- * Figma node: 40000717:17091 ("console-card")
- * File key: 20UPR2KQMsbAxlo5NJb1se
+ * STRUCTURE (the node's own): header (logo + function line + category line),
+ * content (title + description with the ##PROMPT## lead), footer (version pill
+ * with status, likes with the heart). No author section — the design has none.
  */
-
 import { LitElement, html, css } from 'lit';
-import { getImageAlt, isImageDecorative } from './a2ui-image-catalog';
-import cardBgDesignSystem from '@/assets/5e6d8c1ff1f88eac724c57dccba01dde4c5a1bba.png';
+import cardLogo from '@/assets/figma-card-logo.svg';
+import favoriteIcon from '@/assets/figma-card-favorite.svg';
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -28,16 +26,12 @@ export class AgentCardElement extends LitElement {
     id: { type: String },
     title: { type: String },
     category: { type: String },
+    /** The function level — the line ABOVE the category. */
+    function: { type: String },
     description: { type: String },
-    username: { type: String },
-    teamName: { type: String, attribute: 'team-name' },
     version: { type: Number },
     status: { type: String },
     likes: { type: Number },
-    modelName: { type: String, attribute: 'model-name' },
-    lastUsed: { type: String, attribute: 'last-used' },
-    createdAt: { type: String, attribute: 'created-at' },
-    avatarUrl: { type: String, attribute: 'avatar-url' },
     categoryColor: { type: String, attribute: 'category-color' },
     categoryTitleColor: { type: String, attribute: 'category-title-color' },
     categoryTextColor: { type: String, attribute: 'category-text-color' },
@@ -48,16 +42,11 @@ export class AgentCardElement extends LitElement {
   declare id: string;
   declare title: string;
   declare category: string;
+  declare function: string;
   declare description: string;
-  declare username: string;
-  declare teamName: string;
   declare version: number;
   declare status: string;
   declare likes: number;
-  declare modelName: string;
-  declare lastUsed: string;
-  declare createdAt: string;
-  declare avatarUrl: string;
   declare categoryColor: string;
   declare categoryTitleColor: string;
   declare categoryTextColor: string;
@@ -71,36 +60,26 @@ export class AgentCardElement extends LitElement {
     this.id = '';
     this.title = '';
     this.category = '';
+    this.function = '';
     this.description = '';
-    this.username = '';
-    this.teamName = '';
     this.version = 1;
     this.status = 'Active';
     this.likes = 0;
-    this.modelName = '';
-    this.lastUsed = '';
-    this.createdAt = '';
-    this.avatarUrl = '';
     this.categoryColor = '';
     this.categoryTitleColor = '';
     this.categoryTextColor = '';
     this._deleteArmed = false;
   }
 
-  // ── BASE TEMPLATE — static CSS from Figma node 40000717:17091 ────────────
-  // This is the foundational card structure. All cards render this immediately.
-  // When Figma design changes, run: node scripts/sync-figma-card.mjs
   static styles = css`
-    /* Reset */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :host {
       display: block;
-      width: 276px;
-      height: 372px;
+      width: 262px;                                   /* designedWidth */
+      height: 251px;                                  /* designedHeight */
     }
 
-    /* Base card — neutral gray when no category assigned */
     /* THE LEAVING MOMENT — the card settles where it is before it is taken away. CSS
        transition, not an animation: the element sets the flag and this does the moving.
        Motion is a courtesy: reduced-motion gets the removal without the pause. */
@@ -115,10 +94,10 @@ export class AgentCardElement extends LitElement {
 
     .card {
       position: relative;
-      width: 276px;
-      height: 372px;
-      background: var(--card-bg, #1B898D);
-      border: 1px solid #FFFFFF;
+      width: 262px;
+      height: 251px;
+      background: var(--card-bg, #10455F);            /* the design's own fill */
+      border: 3px solid #FFFFFF;                      /* stroke, 3px */
       border-radius: 10px;
       box-shadow:
         4px 4px 10px 0px rgba(0, 0, 0, 0.15),
@@ -126,22 +105,21 @@ export class AgentCardElement extends LitElement {
       padding: 10px;
       display: flex;
       flex-direction: column;
+      align-items: center;
       gap: 10px;
       overflow: hidden;
-      /* THE WHOLE CARD OPENS A PACKAGE, SO THE WHOLE CARD SAYS SO. There was no hand here:
-         the card's own controls carry the hand and the card itself carried nothing,
-         so hovering its title, its description or its empty space gave no sign that the area
-         was clickable (owner, 2026-09-18: "the cursor gives no indication that the area is
-         clickable"). A clickable area without a hand reads as a picture, on every platform
-         that draws one. */
+      /* THE WHOLE CARD OPENS A PACKAGE, SO THE WHOLE CARD SAYS SO. The card's own
+         controls carry the hand and the card itself carried nothing, so hovering its
+         title, its description or its empty space gave no sign that the area was
+         clickable (owner, 2026-09-18). A clickable area without a hand reads as a
+         picture, on every platform that draws one. */
       cursor: pointer;
       font-family: 'Inter', system-ui, sans-serif;
-      line-height: 0;
     }
 
-    /* ── card-header — 54px ─────────────────────────────────────────────── */
+    /* ── card-header — logo, function, category ──────────────────────────── */
     .card-header {
-      flex: 0 0 54px;
+      align-self: stretch;
       display: flex;
       flex-direction: row;
       align-items: center;
@@ -152,56 +130,50 @@ export class AgentCardElement extends LitElement {
       flex: 0 0 39px;
       width: 39px;
       height: 35px;
-    }
-    .card-logo svg {
       display: block;
-      width: 39px;
-      height: 35px;
     }
-    .header-text {
+    .header-labels {
       flex: 1 1 auto;
       width: 199px;
-      height: 48px;
       display: flex;
       flex-direction: column;
+      gap: 2px;
     }
-    .model-indicator {
-      flex: 0 0 19px;
-      font-weight: 700;
-      font-size: 13px;
-      line-height: 14.5227px;
-      color: #FFFFFF;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-    .category {
-      flex: 0 0 29px;
-      display: flex;
-      align-items: center;
+    /* The function — the level above the category, the design's own gold. */
+    .fn-line {
       font-weight: 700;
       font-size: 14px;
-      line-height: 16.9432px;
-      color: var(--card-title-color, #F6C031);
-      overflow: hidden;
+      line-height: 17px;
+      color: #F6C031;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* The category — 12px, the categories table's title_color (the design's #FB8D67). */
+    .cat-line {
+      height: 19px;
+      font-weight: 700;
+      font-size: 12px;
+      line-height: 19px;
+      color: var(--card-title-color, #FB8D67);
+      white-space: nowrap;
+      overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    /* ── card-content — 201px ───────────────────────────────────────────── */
+    /* ── card-content — title + description ─────────────────────────────── */
     .card-content {
-      flex: 0 0 201px;
+      align-self: stretch;
+      flex: 1 1 auto;
       display: flex;
       flex-direction: column;
       gap: 9px;
       overflow: hidden;
     }
     .card-title {
-      flex: 0 0 auto;
-      min-height: 26px;
-      max-height: 52px;
+      flex: 0 0 50px;                                 /* the node's title box */
       font-weight: 700;
-      font-size: 18px;
+      font-size: 16px;
       line-height: 26px;
       color: var(--card-text-color, #FFFFFF);
       overflow: hidden;
@@ -211,137 +183,62 @@ export class AgentCardElement extends LitElement {
       -webkit-box-orient: vertical;
     }
     .card-description {
-      flex: 1 1 auto;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      overflow: hidden;
-    }
-    .desc-text {
-      flex: 0 1 124px;
-      font-weight: 600;
+      flex: 0 0 82px;                                 /* the node's description box */
+      /* The design draws this text at Inter Regular; the app's typography law is
+         nothing below Medium, so it renders 500. Flagged to the design. */
+      font-weight: 500;
       font-size: 13px;
       line-height: 20px;
       color: var(--card-text-color, #FFFFFF);
       overflow: hidden;
       word-break: break-word;
       display: -webkit-box;
-      -webkit-line-clamp: 6;
+      -webkit-line-clamp: 4;
       -webkit-box-orient: vertical;
     }
-    .desc-label {
-      font-weight: 500;
-      font-size: 13px;
-    }
-    .desc-line-wrap {
-      flex: 0 0 auto;
-      padding: 0 3px;
-    }
-    .desc-line {
-      width: 100%;
-      height: 0;
-      border-top: 1px solid #FFFFFF;
-    }
 
-    /* ── author-section — 39px ──────────────────────────────────────────── */
-    .author-section {
-      flex: 0 0 39px;
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 10px;
-    }
-    .author-avatar {
-      flex: 0 0 41px;
-      width: 41px;
-      height: 39px;
-      border-radius: 200px;
-      box-shadow: 0 0 0 1px #FFFFFF;
-      overflow: hidden;
-    }
-    .author-avatar img {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: fill;
-    }
-    .author-meta {
-      flex: 1 1 auto;
-      width: 204px;
-      height: 39px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 2px;
-      overflow: hidden;
-    }
-    .author-username {
-      flex: 0 0 20px;
-      font-weight: 600;
-      font-size: 13px;
-      line-height: 20px;
-      color: #00437C;
-      text-decoration: underline;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-    .author-role {
-      flex: 0 0 17px;
-      font-weight: 500;
-      font-size: 13px;
-      line-height: 16px;
-      color: #FFFFFF;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    /* ── footer-details — 28px ──────────────────────────────────────────── */
+    /* ── footer-details — the flip-footer pill + likes ───────────────────── */
     .footer-details {
-      flex: 0 0 28px;
+      align-self: stretch;
       display: flex;
       flex-direction: row;
       align-items: center;
-      justify-content: space-between;
       gap: 5px;
     }
     .version-pill {
-      flex: 0 0 164px;
-      width: 164px;
-      height: 28px;
-      border: 1px solid #FFFFFF;
-      border-radius: 8px;
       display: flex;
       flex-direction: row;
       align-items: center;
       gap: 5px;
+      height: 28px;
+      padding: 0 5px;
+      border: 1px solid #FFFFFF;
+      border-radius: 8px;
       overflow: hidden;
     }
     .version-text {
-      flex: 0 0 81px;
+      width: 81px;
       height: 28px;
       display: flex;
       align-items: center;
       justify-content: flex-end;
       font-weight: 500;
       font-size: 14px;
-      line-height: 16.9432px;
+      line-height: 17px;
       color: #FFFFFF;
       white-space: nowrap;
       overflow: hidden;
     }
     .status-text {
-      flex: 0 0 78px;
+      width: 78px;
       height: 28px;
       display: flex;
       align-items: center;
       justify-content: flex-start;
       font-weight: 700;
       font-size: 14px;
-      line-height: 16.9432px;
-      color: #672223;
+      line-height: 17px;
+      color: #FCCD3D;                                 /* the node's own status gold */
       white-space: nowrap;
       overflow: hidden;
     }
@@ -350,8 +247,8 @@ export class AgentCardElement extends LitElement {
        console on the next assembly. */
     .status-text.completed { color: #1F7A3D; }
     .likes {
-      flex: 0 0 84px;
-      width: 84px;
+      margin-left: auto;
+      width: 72px;
       height: 28px;
       display: flex;
       flex-direction: row;
@@ -375,7 +272,7 @@ export class AgentCardElement extends LitElement {
       align-items: center;
       justify-content: center;
     }
-    .favorite svg {
+    .favorite img {
       display: block;
       width: 30px;
       height: 28px;
@@ -436,12 +333,6 @@ export class AgentCardElement extends LitElement {
   }
 
   /**
-   * Owner-instructed delete control. The arm → confirm here is the ONLY
-   * confirmation — on the second click it dispatches `card-delete` and the host
-   * deletes directly, with no modal in between.
-   * This control is NOT in the Figma pull for node 40000717:17091.
-   */
-  /**
    * HOW LONG THE CARD HOLDS ITS GROUND BEFORE IT GOES. Short enough to read as a
    * consequence of the press rather than as a wait — the owner asked for "a little bit",
    * and a list that reshuffles instantly reads as a glitch.
@@ -464,21 +355,14 @@ export class AgentCardElement extends LitElement {
     this._deleteArmed = false;
 
     /*
-     * THE CARD'S OWN MOMENT BEFORE IT GOES. The owner, on the two-step confirm
-     * (2026-09-18): "can I just spend a little bit in that one section and then remove
-     * it?" So the card settles where it stands — a short shrink and a fade, its own
-     * section and nothing else — and THEN says it was deleted.
-     *
-     * DISPATCH SECOND, deliberately. A removal that animates first and fails looks like a
-     * card that vanished on its own; the card leaves only once the host has been told, and
-     * the host is what takes it out of the list. If the delete fails, the card is still
-     * there — which is the only honest place for it to be.
+     * THE CARD'S OWN MOMENT BEFORE IT GOES. The card settles where it stands — a short
+     * shrink and a fade — and THEN says it was deleted. DISPATCH SECOND, deliberately: a
+     * removal that animates first and fails looks like a card that vanished on its own.
+     * If the delete fails, the card is still there — the only honest place for it to be.
      */
     this._leaving = true;
     window.setTimeout(() => {
       this._leaving = false;
-      // Event name declared in the tag contract:
-      // frontend/src/shared/tag-registry.ts → AgentCardSchema.events: 'card-delete'
       this.dispatchEvent(
         new CustomEvent('card-delete', {
           detail: { sessionId: this.id, id: this.id },
@@ -501,7 +385,6 @@ export class AgentCardElement extends LitElement {
     const v = this.version ?? 1;
     const safeStatus = this.status || 'Active';
     const likeCount = this.likes ?? 0;
-    const avatarSrc = this.avatarUrl || cardBgDesignSystem;
 
     // Category colors — validated, invalid values throw
     const safeColor = this.categoryColor ? this._validateColor(this.categoryColor) : '';
@@ -509,13 +392,13 @@ export class AgentCardElement extends LitElement {
     const safeTextColor = this.categoryTextColor ? this._validateColor(this.categoryTextColor) : '';
 
     return html`
-      <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40000717:17091"
+      <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40001114:5813"
            style="${safeColor ? `--card-bg: ${safeColor};` : ''}
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}
                   ${safeTextColor ? `--card-text-color: ${safeTextColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
-             Not in the Figma pull for node 40000717:17091. -->
+             Not in the Figma pull. -->
         <button
           class="card-delete ${this._deleteArmed ? 'armed' : ''}"
           type="button"
@@ -531,42 +414,17 @@ export class AgentCardElement extends LitElement {
 
         <!-- card-header -->
         <div class="card-header">
-          <div class="card-logo">
-            <svg viewBox="0 0 39 35" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="18.5" cy="18.5" r="6.5" fill="#FCCD3D"/>
-              <path d="M28 28C29.283 28 30 28.8345 30 29.5C30 30.1655 29.283 31 28 31C26.717 31 26 30.1655 26 29.5C26 28.8345 26.717 28 28 28Z" stroke="#FCCD3D" stroke-width="2"/>
-              <circle cx="30" cy="7" r="5" fill="#FCCD3D"/>
-              <circle cx="8" cy="8" r="4" fill="#FCCD3D"/>
-              <circle cx="8" cy="29" r="6" fill="#FCCD3D"/>
-              <path d="M29.1807 29.4248L28.3994 30.0498L27.6191 30.6738L23.2646 25.2314C23.8121 24.8433 24.3097 24.3908 24.7471 23.8838L29.1807 29.4248ZM12.0029 23.582C12.4155 24.1087 12.8904 24.5835 13.417 24.9961L10.957 27.457L9.54297 26.043L12.0029 23.582ZM13.417 12.0029C12.8904 12.4155 12.4155 12.8904 12.0029 13.417L7.89258 9.30664L9.30664 7.89258L13.417 12.0029ZM27.457 10.957L24.9961 13.417C24.5835 12.8904 24.1087 12.4155 23.582 12.0029L26.043 9.54297L27.457 10.957Z" fill="#FCCD3D"/>
-            </svg>
-          </div>
-          <div class="header-text">
-            <div class="model-indicator">${this.modelName}</div>
-            <div class="category">${this.category}</div>
+          <img class="card-logo" src=${cardLogo} alt="" aria-hidden="true" />
+          <div class="header-labels">
+            <div class="fn-line">${this.function || ''}</div>
+            <div class="cat-line">${this.category || ''}</div>
           </div>
         </div>
 
         <!-- card-content -->
         <div class="card-content">
           <div class="card-title">${this.title}</div>
-          <div class="card-description">
-            ${this.description
-              ? html`<div class="desc-text"><span class="desc-label">##PROMPT##&nbsp;&nbsp;</span>${this.description}</div>`
-              : ''}
-            <div class="desc-line-wrap"><div class="desc-line"></div></div>
-          </div>
-        </div>
-
-        <!-- author-section -->
-        <div class="author-section">
-          <div class="author-avatar">
-            <img src="${avatarSrc}" alt="${getImageAlt('card-bg-design-system')}" ?aria-hidden="${isImageDecorative('card-bg-design-system')}" loading="lazy" data-a2ui-id="card-avatar" @error=${() => { throw new Error('[agent-card] Avatar load failed'); }} />
-          </div>
-          <div class="author-meta">
-            <div class="author-username">${this.username ? '@' + this.username : ''}</div>
-            <div class="author-role">${this.teamName}</div>
-          </div>
+          <div class="card-description">${this.description ? html`##PROMPT##&nbsp;&nbsp;${this.description}` : ''}</div>
         </div>
 
         <!-- footer-details -->
@@ -577,12 +435,7 @@ export class AgentCardElement extends LitElement {
           </div>
           <div class="likes">
             <div class="like-count">${likeCount}</div>
-            <div class="favorite">
-              <svg viewBox="0 0 30 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5.87653 16.5008L14.3451 23.9258L14.3452 23.9258C14.6549 24.1974 14.8098 24.3332 14.9952 24.335H15.0048C15.1902 24.3332 15.3451 24.1974 15.6549 23.9258L24.1235 16.5008C26.6981 14.2435 27.0055 10.3459 24.8167 7.71281L24.6648 7.53011C22.1603 4.51724 17.3913 5.04596 15.6075 8.53425C15.3541 9.02979 14.6459 9.02979 14.3925 8.53425C12.6087 5.04596 7.83972 4.51724 5.33518 7.53011L5.18331 7.71281C2.99446 10.3459 3.30192 14.2435 5.87653 16.5008Z" stroke="#FFDE30" stroke-width="2"/>
-                <path d="M5.87653 16.5008L14.3451 23.9258L14.3452 23.9258C14.6549 24.1974 14.8098 24.3332 14.9952 24.335H15.0048C15.1902 24.3332 15.3451 24.1974 15.6549 23.9258L24.1235 16.5008C26.6981 14.2435 27.0055 10.3459 24.8167 7.71281L24.6648 7.53011C22.1603 4.51724 17.3913 5.04596 15.6075 8.53425C15.3541 9.02979 14.6459 9.02979 14.3925 8.53425C12.6087 5.04596 7.83972 4.51724 5.33518 7.53011L5.18331 7.71281C2.99446 10.3459 3.30192 14.2435 5.87653 16.5008Z" stroke="white" stroke-width="2"/>
-              </svg>
-            </div>
+            <div class="favorite"><img src=${favoriteIcon} alt="" aria-hidden="true" /></div>
           </div>
         </div>
 
@@ -591,7 +444,7 @@ export class AgentCardElement extends LitElement {
   }
 }
 
-customElements.define('agent-card-element', AgentCardElement);
+if (!customElements.get('agent-card-element')) customElements.define('agent-card-element', AgentCardElement);
 
 declare global {
   interface HTMLElementTagNameMap {

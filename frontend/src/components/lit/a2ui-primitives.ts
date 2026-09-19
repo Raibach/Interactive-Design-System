@@ -236,11 +236,12 @@ class A2UIButton extends LitElement {
 // into design and belongs in Figma.
 
 /**
- * THE CARD'S OWN SIZE, and the page is arithmetic on it. 276 × 372 is the card
- * (<agent-card-element>, Figma node 40000717:17091), and 16 is the grid's gap.
+ * THE CARD'S OWN SIZE, and the page is arithmetic on it. 262 × 251 is the card
+ * (<agent-card-element>, Figma node 40001114:5813 "console-card-design-system"),
+ * and 16 is the grid's gap.
  */
-const CARD_W = 276;
-const CARD_H = 372;
+const CARD_W = 262;
+const CARD_H = 251;
 const CARD_GAP = 16;
 /** The grid's own inset, from :host below — 45px across, 75px down (2026-09-18). */
 const GRID_PAD_X = 45;
@@ -423,13 +424,13 @@ class A2UIConsoleCardGrid extends LitElement {
          and 75px on both sides was costing a column on exactly the widths where it mattered. */
       padding: 55px 45px 0;
       box-sizing: border-box;
-      /* The card is a fixed 276 × 372 (<agent-card-element>, Figma node
-         40000717:17091), so the track is fixed too: auto-fill over a 276px track
-         drops a column as the viewport narrows. minmax(276px, 1fr) did the
-         opposite — it opened another column for every 276 + 16px and stretched
+      /* The card is a fixed 262 × 251 (<agent-card-element>, Figma node
+         40001114:5813), so the track is fixed too: auto-fill over a 262px track
+         drops a column as the viewport narrows. minmax(262px, 1fr) did the
+         opposite — it opened another column for every 262 + 16px and stretched
          the tracks it had — and a stretched track cannot widen a fixed card, so
          the slack only reappeared inside the track. */
-      grid-template-columns: repeat(auto-fill, 276px);
+      grid-template-columns: repeat(auto-fill, 262px);
       /*
        * The rows are CENTRED in the column, and the cards are packed TIGHT: the
        * equal 16px gap is the only space between them.
@@ -557,19 +558,14 @@ class A2UIConsoleCardGrid extends LitElement {
         data-a2ui-id=${sessionId}
         title=${item?.title ?? ''}
         category=${item?.category ?? ''}
+        function=${item?.function ?? 'Function like Repair'}
         description=${item?.description ?? ''}
-        username=${item?.username ?? item?.author ?? ''}
-        team-name=${item?.team_name ?? item?.teamName ?? ''}
         version=${item?.version || item?.message_count || 1}
         status=${item?.status || 'Active'}
         likes=${item?.likes ?? 0}
-        model-name=${item?.model_name ?? item?.modelName ?? ''}
-        avatar-url=${item?.avatar_url ?? ''}
         category-color=${item?.category_color ?? ''}
         category-title-color=${item?.category_title_color ?? ''}
         category-text-color=${item?.category_text_color ?? ''}
-        last-used=${item?.lastUsed ?? ''}
-        created-at=${item?.createdAt ?? ''}
         @click=${() => this._open(sessionId)}
       ></agent-card-element>`;
     })}<slot></slot>${pages > 1
