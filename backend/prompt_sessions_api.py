@@ -467,6 +467,18 @@ class PromptSessionsAPI:
                 # Set user context for RLS
                 cursor.execute("SET app.current_user_id = %s", (user_id,))
 
+                # THE READ IS SCOPED TO THE CALLER, AND THE CONVERSATION TO THE PACKAGE.
+                #
+                # Two holes lived in this one query, measured 2026-09-18:
+                #   · `WHERE ps.id = %s` — no owner and no permission predicate at all, so
+                #     GET /api/prompt-sessions/{id} returned ANY user's package and then
+                #     loaded its conversation's messages (below) with no check either;
+                #   · `LEFT JOIN conversations c ON ps.conversation_id = c.id` — the legacy
+                #     pointer column could name a conversation belonging to ANOTHER package,
+                #     and `c.id as conversation_id` was what the seat got bound to. A
+                #     conversation belongs to its package (the contract's rule), so the join
+                #     now says so: a pointer that is not this package's conversation reads as
+                #     no conversation, and the surface falls back to the package-scoped list.
                 cursor.execute(
                     """
                     SELECT
@@ -483,14 +495,20 @@ class PromptSessionsAPI:
                         c.id as conversation_id, c.title as conversation_title,
                         c.metadata as conversation_metadata
                     FROM prompt_sessions ps
-                    LEFT JOIN conversations c ON ps.conversation_id = c.id
+                    LEFT JOIN conversations c ON ps.conversation_id = c.id AND c.session_id = ps.id
                     LEFT JOIN prompt_versions pv ON pv.session_id = ps.id
                         AND pv.version_number = ps.current_version
                     LEFT JOIN categories cat ON cat.name = ps.category
                     LEFT JOIN users u ON u.id = ps.user_id
-                    WHERE ps.id = %s
+                    WHERE ps.id = %s AND (
+                        ps.user_id = %s
+                        OR EXISTS (
+                            SELECT 1 FROM session_permissions sp
+                            WHERE sp.session_id = ps.id AND sp.user_id = %s
+                        )
+                    )
                 """,
-                    (session_id,),
+                    (session_id, user_id, user_id),
                 )
 
                 session = cursor.fetchone()
@@ -575,7 +593,10 @@ class PromptSessionsAPI:
                     updates.append("is_archived = %s")
                     params.append(is_archived)
                 if metadata is not None:
-                    updates.append("metadata = %s")
+                    # MERGE, NOT REPLACE. A whole-column write destroyed every key the
+                    # caller did not send — stored workspace, author, score — on each save.
+                    # Postgres jsonb `||` overlays the new keys and keeps the rest of the row.
+                    updates.append("metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb")
                     params.append(json.dumps(metadata))
                 if category is not None:
                     updates.append("category = %s")
@@ -1103,7 +1124,12 @@ class PromptSessionsAPI:
                         suggestion_dict, user_id, inserted_position
                     )
                 except Exception as milvus_error:
-                    # Don't fail the operation if Milvus logging fails
+                    # Don't fail the operation if Milvus logging fails — but SAY it: the
+                    # response carries the warning (2026-09-18; the print alone was a
+                    # failure nobody was told about, which check:error-suppression counts).
+                    suggestion_dict["warnings"] = list(suggestion_dict.get("warnings") or []) + [
+                        f"the vector log for this suggestion was not written ({milvus_error}); the suggestion itself is saved."
+                    ]
                     print(f"⚠️ Failed to log to Milvus (non-blocking): {milvus_error}")
 
                 return suggestion_dict

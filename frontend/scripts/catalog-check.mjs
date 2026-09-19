@@ -61,16 +61,18 @@ const PATHS = {
   // sentence into a mechanism.
   readme: join(REPO, 'README.md'),
   conformance: join(REPO, 'READ-ME', 'IMPLEMENTATION_CONFORMANCE.md'),
-  // The register of what is still open — at the repository ROOT and TRACKED. It used
+  // The register of what is still open — at the repository ROOT, as JSON. It used
   // to live in a locally excluded directory, where nothing showed it as changed and a
   // clone did not have it, so every defect number quoted from it was unverifiable.
-  openItems: join(REPO, 'OPEN-ITEMS.md'),
+  // It is local to the operator's machine by the owner's decision (.gitignore); the
+  // drift guard is the count comparison below, not git.
+  openItems: join(REPO, 'open-items.json'),
   // The ledger of FIXES — one row per finding corrected, with the commit that carries
   // the fix. The register answers "what is still open"; this answers "what did we
   // already do, and does it still hold". Separate files because they are separate
   // questions, and because a correction that regresses must be visible as a
   // regression rather than as a count quietly going back up.
-  corrections: join(REPO, 'CORRECTIONS.md'),
+  corrections: join(REPO, 'corrections.json'),
   // The two other tracked documents that cite register numbers.
   index: join(REPO, 'INDEX.md'),
   notes: join(REPO, 'catalog-audit', 'AI-notes.md'),
@@ -109,6 +111,7 @@ const CHECK_INVENTORY = [
   { id: 'tag-inert', stage: 'deliver', live: false, asserts: 'every allowlist tag is implemented (element + schema + handler)' },
   { id: 'schema-absent', stage: 'deliver', live: false, asserts: 'every implemented allowlist tag is in the schema' },
   { id: 'allowlist-absent', stage: 'deliver', live: false, asserts: 'every schema component is drawable' },
+  { id: 'tag-unbuilt', stage: 'deliver', live: false, asserts: 'every component the schema admits is drawn by an element, or recorded as deprecated' },
   { id: 'schema-unreachable', stage: 'deliver', live: false, asserts: 'every schema component is reachable through anyComponent' },
   { id: 'element-unclaimed', stage: 'deliver', live: false, asserts: 'every shipped element is claimed by a gate, a map entry, or a source that draws it' },
   { id: 'element-refused', stage: 'deliver', live: false, asserts: 'a behavioural element is claimed by an allowlist entry, a catalog entry, a map entry, or a source that draws it' },
@@ -122,6 +125,7 @@ const CHECK_INVENTORY = [
   { id: 'geometry-drift', stage: 'deliver', live: true, asserts: 'the node and the rendering agree' },
   { id: 'check-could-not-run', stage: 'ingest', live: false, asserts: 'no check was skipped' },
   { id: 'clean-no-jsx', stage: 'clean', live: false, asserts: 'no React/JSX/Tailwind in the component sources' },
+  { id: 'error-suppression', stage: 'deliver', live: false, asserts: 'every swallowed failure on the governed path is counted, and the count is recorded' },
   { id: 'doc-claim-drift', stage: 'deliver', live: false, asserts: 'the component count and names the documents state are the catalog\'s' },
   { id: 'open-items-register', stage: 'deliver', live: false, asserts: 'the register is tracked and agrees with the findings this run derived' },
   { id: 'corrections-ledger', stage: 'deliver', live: false, asserts: 'every correction the ledger records is still earned' },
@@ -532,6 +536,31 @@ for (const a of allowlist) {
   });
 }
 
+// ═══ DELIVER — a name the schema admits must be drawable ═══════════════════
+// tag-inert and schema-absent both read SCHEMA MEMBERSHIP as implementation, so a
+// component the model may emit whose tag no element defines passed every gate while the
+// renderer answered with an empty box. Measured 2026-09-18: six names — agent-card,
+// filter-pill, search-bar, prompt-section, output-panel, version-trace — every one of them
+// admitted by the schema, drawn by nothing, and reported by no check. A hole is not a
+// schema question; it is this one.
+//
+// The catalog's own rule is deprecate-rather-than-delete, so an entry recording
+// `deprecated: true` with an `x-deprecated-reason` is the sanctioned state and passes.
+checkRan('tag-unbuilt');
+for (const name of schemaComponents) {
+  const entry = (schema.components || {})[name] || {};
+  if (entry.deprecated === true) continue;
+  if (DEFINED_TAGS.has(name)) continue;
+  if (RENDERER_OWNED.has(name)) continue;           // a renderer table resolves it (see above)
+  if (A2UI_PROTOCOL_COMPONENTS.includes(name)) continue;
+  add({
+    check: 'tag-unbuilt', stage: 'deliver', owner: 'pipeline', tier: tierOfTag(name),
+    component: name, nodeId: null, file: rel(PATHS.schema),
+    what: `The schema admits "${name}" and no element defines that tag — the model can be told to emit it and the surface draws an empty box, with nothing in any log. tag-inert and schema-absent cannot see this: both read schema membership as implementation.`,
+    fix: `Mark the entry "deprecated": true with an "x-deprecated-reason" (the catalog rule: deprecate, never delete), or implement the element.`,
+  });
+}
+
 checkRan('allowlist-absent');
 for (const tag of schemaComponents) {
   if (allowlistTags.has(tag)) continue;
@@ -846,9 +875,9 @@ if (catalogCount !== null) {
 // (`ignore-this-work-catalog-audit/`, excluded locally): `git status` never showed it
 // as changed, so nothing ever prompted an update, a clone did not have it at all, and
 // its counts had drifted — `event-unheard` 17→12, `tag-inert` 9→8, `element-unclaimed`
-// 3→0 — while the file still stated the old ones. It is now OPEN-ITEMS.md at the
-// repository root, tracked, and this check is what keeps it honest, because "someone
-// will notice" is not a mechanism:
+// 3→0 — while the file still stated the old ones. It is now open-items.json at the
+// repository root, and this check is what keeps it honest, because "someone will
+// notice" is not a mechanism:
 //
 //   · every check in CHECK_INVENTORY has exactly one ledger row, so a new check
 //     cannot be added without accounting for it;
@@ -858,8 +887,8 @@ if (catalogCount !== null) {
 //   · the one class whose count is a property of the machine rather than the tree
 //     records `—`, and no other class may — deleting a stale number is how a stale
 //     number hides (see ENV_SCOPED below);
-//   · the register is present, tracked, and not excluded by a rule — the failure
-//     that started all this.
+//   · the register is present, and a run without it says the comparison did not
+//     happen instead of failing the build over a local artifact.
 //
 // Structural faults block: the register and the run contradict each other, and one of
 // the two is lying. The count comparison is written for ONE catalog — the register is
@@ -944,22 +973,35 @@ if (registerText === null) {
     what: `${registerFile} is not in this working copy, so no recorded count was compared against this run. The registers are local to the operator's machine (see .gitignore); the comparison runs there and in any copy that has the file.`,
   });
 } else {
-  // The ledger table only: a row whose first cell is `check:<class>` or `#NNN`. The
-  // prose tables (the retired numbers) are deliberately not parsed — a register is
-  // checked where it is machine-readable.
-  const rows = registerText.split('\n')
-    .filter((l) => /^\|\s*`?(?:check:[a-z0-9-]+|#\d{3})`?\s*\|/.test(l))
-    .map((l) => {
-      const c = l.split('|').slice(1, -1).map((x) => x.trim().replace(/`/g, ''));
-      return { id: c[0], status: c[1], owner: c[2], recorded: c[4], witness: c[5] || '' };
-    });
+  // The register is JSON, not prose: its `rows` ARE the machine-readable half, so the
+  // parse is the data itself and nothing is scraped from prose. It was a markdown table
+  // until 2026-09-18 — the owner's rule is that a machine-read ledger is not a markdown
+  // file, and a scraper for one was the tell.
+  let rows = [];
+  try {
+    const parsed = JSON.parse(registerText);
+    if (Array.isArray(parsed?.rows)) {
+      rows = parsed.rows
+        .filter((r) => /^(?:check:[a-z0-9-]+|#\d{3})$/.test(String(r?.id ?? '')))
+        .map((r) => ({
+          id: String(r.id),
+          status: String(r.status ?? ''),
+          owner: String(r.owner ?? ''),
+          recorded: String(r.recorded ?? ''),
+          witness: String(r.witness ?? ''),
+        }));
+    }
+  } catch {
+    // An unparseable register is the table-unreadable finding below, not a crashed build.
+    rows = [];
+  }
   const ids = new Set(rows.map((r) => r.id));
 
   if (!rows.length) {
     add({
       check: 'open-items-register', stage: 'deliver', owner: 'pipeline', file: registerFile, key: 'table-unreadable',
-      what: 'The register exists but no ledger row parsed. The six-column table is its machine-readable half; without it this file is prose that nothing can be held against.',
-      fix: 'Restore the ledger table: | ID | Status | Owner | What it is | Recorded | Witness |.',
+      what: 'The register exists but no ledger row parsed. Its "rows" array is the machine-readable half; without it the file is prose that nothing can be held against.',
+      fix: 'Restore it as JSON: {"rows":[{"id":"check:<class> or #NNN","status":"open|decided|in-progress|watching|closed","owner":"pipeline|designer|both","what":"…","recorded":"<count>","witness":"<check:…> or why none is possible"}]}.',
     });
   }
 
@@ -1056,11 +1098,11 @@ if (registerText === null) {
 
   // ── THE REGISTER IS LOCAL-ONLY NOW, AND THE GUARD IS THE NUMBERS ───────────
   //
-  // This used to assert that OPEN-ITEMS.md was tracked by git and matched by no
+  // This used to assert that the register was tracked by git and matched by no
   // ignore rule, on the grounds that a register git cannot see is one whose counts
   // drift unnoticed — which is exactly how it happened before. The owner has decided
   // the registers and the catalog audit are not published (2026-09-17: TO-DO.md,
-  // OPEN-ITEMS.md, CORRECTIONS.md and catalog-audit/ are local), so visibility to git
+  // open-items.json, corrections.json and catalog-audit/ are local), so visibility to git
   // is no longer something this script can require.
   //
   // The guard that actually catches drift is untouched and is the one above: every
@@ -1295,6 +1337,69 @@ if (!dirty.length) {
   findings.push({ id: 'clean:no-jsx', check: 'clean-no-jsx', stage: 'clean', owner: 'pipeline', level: 'pass', component: null, nodeId: null, file: null, what: `No React, no JSX, no Tailwind in any of the ${SOURCES.length} component sources.`, fix: null });
 }
 
+// ═══ GOVERNANCE — a swallowed failure is a finding ═════════════════════════
+// The owner, 2026-09-18: "I need to know when there's a fallback, I need to know when
+// there's error suppression — we need to report it in the console trace."
+//
+// Every defect of the 2026-09-18 audit was one of two moves: a failure that became a
+// print-and-continue, or a missing value that became a default. Both are invisible at
+// runtime BY CONSTRUCTION, so reading the running app never finds them — what finds them
+// is COUNTING them, on every run, in the files whose swallowed failure decides what the
+// product says.
+//
+// THE COUNT IS THE MECHANISM. The register records it, and the register must agree with
+// the run (check:open-items-register), so ADDING a suppression site fails the build until
+// somebody records it deliberately. The governance is the disagreement.
+checkRan('error-suppression');
+{
+  // The governed set — the chat/conversation/surface path. A swallow outside this list is
+  // still a defect; this class is scoped to where it changes what a person is told.
+  const GOVERNED = [
+    'frontend/src/components/lit/chat-panel.ts',
+    'frontend/src/components/lit/a2ui-renderer.ts',
+    'frontend/src/pages/WritingAreaIndex.tsx',
+    'backend/routes/teacher.py',
+    'backend/routes/ai.py',
+    'backend/prompt_sessions_api.py',
+    'backend/conversation_api.py',
+  ];
+  for (const governed of GOVERNED) {
+    let text; try { text = read(join(REPO, governed)); } catch { continue; }
+    const isPy = governed.endsWith('.py');
+    const lines = text.split('\n');
+    lines.forEach((line, i) => {
+      let swallowed = null;
+      if (!isPy) {
+        // An empty catch: `catch {}` / `catch (e) {}`.
+        if (/catch\s*(?:\([^)]*\))?\s*\{\s*\}\s*$/.test(line)) swallowed = 'an empty catch';
+        // A promise catch that answers with a stand-in value: `.catch(() => 0)`.
+        else if (/\.catch\(\s*\(?[^)]*\)?\s*=>\s*[^;{]*\)\s*[;,]?\s*$/.test(line)) swallowed = 'a .catch() that answers with a stand-in value';
+      } else {
+        if (/except[^:]*:\s*pass\b/.test(line)) swallowed = '`except …: pass`';
+        else if (/except[^:]*:\s*$/.test(line)) {
+          // The indented block: prints and comments only = printed, never raised.
+          const indent = (line.match(/^\s*/) || [''])[0].length;
+          const body = [];
+          for (let j = i + 1; j < lines.length; j++) {
+            if (lines[j].trim() === '') continue;
+            const inner = (lines[j].match(/^\s*/) || [''])[0].length;
+            if (inner <= indent) break;
+            body.push(lines[j].trim());
+          }
+          if (body.length && body.every((l) => /^(print\(|#)/.test(l))) swallowed = 'an except block that only prints';
+        }
+      }
+      if (!swallowed) return;
+      add({
+        check: 'error-suppression', stage: 'deliver', owner: 'pipeline',
+        component: null, nodeId: null, file: governed, key: `line:${i + 1}`,
+        what: `${governed}:${i + 1} — ${swallowed}. A failure that becomes a print, a return, or a default is one nobody is told about: the person sees an empty thread, a stale value, or a clean success.`,
+        fix: 'Say it where it is seen (a rendered line, a response field, a thrown error), or delete the catch so it fails loud.',
+      });
+    });
+  }
+}
+
 // ═══ CENSUS — did every check actually run? ════════════════════════════════
 // The report used to answer this by accident: `checks` was the set of check names
 // present in the findings, so a check that ran clean and a check that never ran
@@ -1337,20 +1442,32 @@ checkRan('corrections-ledger');
       what: `${ledgerFile} is not in this working copy, so no recorded correction was re-checked in this run. The ledger is local to the operator's machine (see .gitignore).`,
     });
   } else {
-    // Only ledger rows: a table row whose first cell is check:<class> or
-    // check:<class>:<subject>. Prose is deliberately not parsed — which is why the
-    // doctrine table in that file uses a placeholder that cannot match this.
-    const rows = ledgerText.split('\n')
-      .filter((l) => l.trim().startsWith('|'))
-      .map((l) => l.split('|').slice(1, -1).map((x) => x.trim().replace(/`/g, '')))
-      .filter((c) => /^check:[a-z0-9-]+(:.+)?$/.test(c[0]))
-      .map((c) => ({ finding: c[0], corrected: c[1] || '', receipt: c[2] || '' }));
+    // The ledger is JSON, not prose: its `rows` ARE the machine-readable half, so the
+    // parse is the data itself and nothing is scraped. It was a markdown table until
+    // 2026-09-18 — a machine-read ledger is not a markdown file, and the scraper for
+    // one was the tell.
+    let rows = [];
+    try {
+      const parsed = JSON.parse(ledgerText);
+      if (Array.isArray(parsed?.rows)) {
+        rows = parsed.rows
+          .filter((r) => /^check:[a-z0-9-]+(:.+)?$/.test(String(r?.finding ?? '')))
+          .map((r) => ({
+            finding: String(r.finding),
+            corrected: String(r.corrected ?? ''),
+            receipt: String(r.receipt ?? ''),
+          }));
+      }
+    } catch {
+      // An unparseable ledger is the table-unreadable finding below, not a crashed build.
+      rows = [];
+    }
 
     if (!rows.length) {
       add({
         check: 'corrections-ledger', stage: 'deliver', owner: 'pipeline', file: ledgerFile, key: 'table-unreadable',
-        what: 'The ledger exists but no row parsed. The table is its machine-readable half; without it this file is prose that nothing can be held against.',
-        fix: 'Restore the ledger table: | Finding | Corrected | Receipt | Witness |.',
+        what: 'The ledger exists but no row parsed. Its "rows" array is the machine-readable half; without it the file is prose that nothing can be held against.',
+        fix: 'Restore it as JSON: {"rows":[{"finding":"check:<class>[:<subject>]","corrected":"YYYY-MM-DD","receipt":"<commit>","witness":"…"}]}.',
       });
     }
 

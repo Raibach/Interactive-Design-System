@@ -86,28 +86,6 @@ export default defineConfig([
   },
   {
     files: [
-      'src/components/TeacherAdmin.tsx',
-      'src/components/PromptDashboardCanvas.tsx',
-      'src/components/InteractiveChatInterface.tsx',
-    ],
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
-        {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
-          ignoreRestSiblings: true,
-        },
-      ],
-      'react-hooks/exhaustive-deps': 'warn',
-      'import/no-default-export': 'warn',
-      'no-empty': 'warn',
-    },
-  },
-  {
-    files: [
       'src/services/componentLifecycleTracker.ts',
       'src/services/networkMonitor.ts',
       'src/services/centralizedLoggingHub.ts',

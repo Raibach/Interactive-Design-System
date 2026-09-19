@@ -892,9 +892,6 @@ CREATE OR REPLACE FUNCTION save_prompt_version(
 DECLARE
     v_next_version INTEGER;
     v_session_user_id UUID;
-    -- Retention cap: a session keeps only its newest c_keep_versions rows.
-    -- Keep in sync with VERSION_KEEP in frontend VersionManager.tsx.
-    c_keep_versions CONSTANT INTEGER := 10;
 BEGIN
     -- Verify session belongs to user
     SELECT user_id INTO v_session_user_id
@@ -940,23 +937,10 @@ BEGIN
         last_accessed_at = NOW()
     WHERE id = p_session_id;
 
-    -- Retention cap: drop everything older than the newest c_keep_versions.
-    -- Version numbers come from MAX(version_number) + 1, so deleting the oldest
-    -- rows never reuses a number, and current_version always points at the
-    -- newest row, which this DELETE can never touch. Dropped versions are gone
-    -- for good — restoring beyond the cap is impossible by design.
-    DELETE FROM prompt_versions
-    WHERE session_id = p_session_id
-      AND version_number < (
-          SELECT MIN(version_number)
-          FROM (
-              SELECT version_number
-              FROM prompt_versions
-              WHERE session_id = p_session_id
-              ORDER BY version_number DESC
-              LIMIT c_keep_versions
-          ) AS kept
-      );
+    -- Every version is the record of the work growing, and a save ADDS to it — it
+    -- never takes from it. A retention cap that hard-deleted rows beyond the newest
+    -- ten stood here once; history is kept in full (THE_PACKAGE_CONTRACT: "no build
+    -- step may be able to erase the record of work").
 
     RETURN v_next_version;
 END;

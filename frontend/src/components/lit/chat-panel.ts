@@ -49,6 +49,10 @@ import './error-banner';
 import './chat-navigation-bar';
 import './prompt-input/prompt-textarea';
 import logoAsset from './assets/chat-logo-bce2fe.png';
+// The app's own logger. A turn warning from the server is written here as well as drawn in
+// the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
+// owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).
+import { logger } from '@/lib/logger';
 // Grace's surface commands. A reply that carries XML tags drives the surface the
 // same way the React seat did — through window CustomEvents and the event bus.
 import { eventBus } from '@/shared/event-bus';
@@ -219,6 +223,26 @@ export class ChatPanel extends LitElement {
   private _sending = false;
   /** Turns spoken since this element mounted; the surface supplies everything before that. */
   private _local: SeatMessage[] = [];
+  /**
+   * Turns that were answered while this seat had NO conversation to write them into.
+   *
+   * The backend refuses them by design — "this turn will not be persisted", because
+   * `conversations.session_id` is NOT NULL and a package that does not exist yet has no
+   * row to attach them to. They live here until `flushPendingTurns` hands them to the
+   * conversation the first Save creates.
+   */
+  private _pending: SeatMessage[] = [];
+  /**
+   * WHICH PACKAGE THE PENDING TURNS WERE SPOKEN IN — null when they were spoken before any
+   * package existed (a fresh composer), which is the case `flushPendingTurns` is for.
+   * A turn belongs to the conversation it was spoken in; this is what lets the seat refuse
+   * to write one package's words into another package's thread.
+   */
+  private _pendingOwner: string | null = null;
+  /** The package this seat was last told it belongs to — the measure of a package CHANGE. */
+  private _sessionHeld: string | null = null;
+  /** A failed history read, in words the person can see — never an empty thread that says nothing. */
+  private _historyError = '';
   /** The slotted input's draft, and the in-flight request's abort handle. */
   private _draft = '';
   private _abort: AbortController | null = null;
@@ -785,8 +809,68 @@ export class ChatPanel extends LitElement {
     );
   }
 
+  /**
+   * WHICH TABS DRAW THE THREAD — and `approvals` draws it.
+   *
+   * The owner, 2026-09-18: "there's no chat hooked up to the console approval button. It's
+   * dead, it does nothing — just hook one of them up so I can talk to it." The console's
+   * approvals view held the repair list, which renders nothing when no findings carry a
+   * stage, so the tab showed an empty pane. The seat draws its own conversation there
+   * instead: the same thread and the same input the Chat tab uses, against the same
+   * conversation. A message that names governance runs the inspection and its report comes
+   * back as the reply (routes/teacher.py), so this tab is a surface to ask the governance
+   * system for a report and to read the reports already filed.
+   *
+   * The view slot keeps the other tabs (trace, versions, tools, repair), and an element
+   * still never renders another element: this is the seat drawing its own thread.
+   */
+  private get _showsThread(): boolean {
+    return this.activeTab === 'chat' || this.activeTab === 'approvals';
+  }
+
   protected updated(changed: Map<PropertyKey, unknown>): void {
+    // A PACKAGE CHANGE STARTS THE SEAT OVER. The panel is REUSED across assemblies (the
+    // surface keeps the same component id — see the note on `_thread`), so without this the
+    // previous package's spoken turns (`_local`) and its loaded history stay on screen over
+    // the next package's thread. The owner, 2026-09-18: "I don't see other packages when I
+    // open up this package — I only see this package."
+    if (changed.has('sessionId')) this._enterPackage(String(this.sessionId ?? ''));
     if (changed.has('conversationId')) void this._loadHistory();
+  }
+
+  /**
+   * THE SEAT ENTERS A PACKAGE — and starting over is what that means.
+   *
+   * A thread belongs to the conversation it was spoken in. `_local` (everything typed here
+   * and every host message this seat heard) is never carried into another package, and the
+   * loaded history goes with it. The CONVERSATION ID is not cleared here: the surface binds
+   * the incoming package's own id, and clearing it would fight the binding that is arriving
+   * in this same update.
+   */
+  private _enterPackage(nextSession: string): void {
+    const prior = this._sessionHeld;
+    this._sessionHeld = nextSession;
+    if (prior === nextSession) return;
+
+    this.messages = [];
+    this._local = [];
+    this._historyError = '';
+
+    // PENDING TURNS BELONG TO THE PACKAGE THEY WERE SPOKEN IN. Spoken before any package
+    // existed (owner null), they are still owed to whatever package is saved next — that is
+    // the case flushPendingTurns serves. Spoken INSIDE a package, they can never be written
+    // anywhere else without lying about where they came from; carrying them forward is how
+    // one package's words landed in another's thread. They are dropped, and LOUDLY.
+    if (this._pending.length && this._pendingOwner && this._pendingOwner !== nextSession) {
+      console.error(
+        `[chat-panel] ${this._pending.length} turn(s) spoken in package ${this._pendingOwner.slice(0, 8)}… were never saved. ` +
+        `The seat has moved to ${nextSession ? nextSession.slice(0, 8) + '…' : '(no package)'} and will not carry them across — ` +
+        'a conversation belongs to the package it was spoken in.',
+      );
+      this._pending = [];
+      this._pendingOwner = null;
+    }
+    this.requestUpdate();
   }
 
   /**
@@ -800,23 +884,77 @@ export class ChatPanel extends LitElement {
    */
   private async _loadHistory(): Promise<void> {
     if (this.messages?.length || !this.conversationId) return;
+    if (!this._conversationBelongsToPackage(this.conversationId)) return;
     try {
       const resp = await fetch(`/api/conversations/${this.conversationId}/messages?limit=200`, {
         headers: { 'X-User-ID': this._userId() },
       });
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        // A DENIAL IS LOUD (THE_PACKAGE_CONTRACT §7, invariant 12 — the database and the
+        // API both answer a refusal with 403, deliberately). This used to `return` here, so
+        // "you may not read this conversation" drew as "nothing was ever said here" — the
+        // same pixels as an empty thread, and the same for a 404 and a 500.
+        this._historyError = `This conversation could not be read (HTTP ${resp.status}).`;
+        console.error(`[chat-panel] history read refused for ${String(this.conversationId).slice(0, 8)}…: HTTP ${resp.status}`);
+        this.requestUpdate();
+        return;
+      }
       const data = await resp.json().catch(() => ({}));
       const rows: SeatMessage[] = Array.isArray(data?.messages) ? data.messages : [];
-      if (!rows.length) return;
+      this._historyError = '';
+      if (!rows.length) { this.requestUpdate(); return; }
+      // A GOVERNANCE INSPECTION BECOMES A TRACE LINE. The inspector files its verdict in the
+      // console's own conversation (metadata kind='inspection'); the owner asked for the
+      // running history to sit in the trace, so every inspection message loaded here is handed
+      // to the app logger — which the Trace tab reads (lib/trace-source subscribes to it).
+      for (const row of rows) {
+        const meta = (row as { metadata?: { kind?: string; verdict?: string; at?: string } }).metadata;
+        if (meta?.kind === 'inspection') {
+          logger.info(`[inspection] ${meta.verdict ?? 'not done'} · ${meta.at ?? ''}`, {
+            verdict: meta.verdict ?? null,
+            at: meta.at ?? null,
+          });
+        }
+      }
       this.messages = rows.map((m) => ({ role: m.role, content: m.content }));
     } catch (err) {
+      this._historyError = 'This conversation could not be read — the server did not answer.';
       console.error('[chat-panel] could not read the package\'s history:', err);
+      this.requestUpdate();
     }
+  }
+
+  /**
+   * IS THIS CONVERSATION ONE OF THIS PACKAGE'S?
+   *
+   * The element cannot read `conversations.session_id`; what it CAN do is refuse an id that
+   * the package's own list — `/session/right_column/conversations`, what the surface binds —
+   * contradicts. An EMPTY list proves nothing (a fresh package, or a list that failed to
+   * load: routes/ai.py swallows that failure into a warning), so only a positive
+   * contradiction refuses, and the refusal is LOUD. The owner's rule is that a conversation
+   * belongs to a package; a seat told otherwise is being lied to, and silence is how it
+   * happened.
+   */
+  private _conversationBelongsToPackage(id: string): boolean {
+    const list = this.conversations ?? [];
+    if (!list.length) return true;
+    if (list.some((c) => String(c?.id ?? '') === String(id))) return true;
+    console.error(
+      `[chat-panel] refused conversation ${String(id).slice(0, 8)}…: it is not in package ` +
+      `${String(this.sessionId ?? '(none)').slice(0, 8)}'s own list of conversations.`,
+    );
+    return false;
   }
 
   private _userId(): string {
     try {
-      return localStorage.getItem('raibach_user_id') || '00000000-0000-0000-0000-000000000001';
+      // `grace_user_id` is the key this app WRITES (services/authService.ts). The key this
+      // read first — 'raibach_user_id' — had no writer anywhere in the repository, so every
+      // read and write from this element was silently the development default: an identity
+      // fallback that named a user nobody had chosen.
+      return localStorage.getItem('grace_user_id')
+        || localStorage.getItem('raibach_user_id')
+        || '00000000-0000-0000-0000-000000000001';
     } catch {
       return '00000000-0000-0000-0000-000000000001';
     }
@@ -1055,7 +1193,7 @@ ${workspaceContext}`;
     const emitTag = (tag: string, props: Record<string, string>) => {
       eventBus.emit({
         tag,
-        sessionId: 'default',
+        sessionId: this.sessionId ?? null,
         command: tag,
         timestamp: new Date().toISOString(),
         props,
@@ -1100,9 +1238,16 @@ ${workspaceContext}`;
   private async _send(text: string): Promise<void> {
     text = (text ?? '').trim();
     if (!text || this._sending) return;
+    // THE WRITE PATH IS CHECKED TOO, not just the read (2026-09-18). `_loadHistory` refuses a
+    // conversation the package's own list contradicts; this is the same guard before a turn
+    // is sent, because a foreign id in the property would otherwise be WRITTEN to — the
+    // server trusts a client-supplied conversation id, so the seat is where it stops.
+    if (this.conversationId && !this._conversationBelongsToPackage(this.conversationId)) return;
+    const before = this._local.length;
     this._local = [...this._local, { role: 'user', content: text }];
     this._sending = true;
     this.requestUpdate();
+    let answered = false;
 
     try {
       this._abort = new AbortController();
@@ -1127,17 +1272,28 @@ ${workspaceContext}`;
         signal: this._abort.signal,
       });
       const data = await resp.json().catch(() => ({}));
-      // A new package has no conversation until the first send; the backend creates
-      // one (conversations.session_id NOT NULL) and returns its id. Adopt it so the
-      // thread, the history and every later write are this package's, and tell the
-      // host so the package record keeps it too.
-      if (typeof data?.conversation_id === 'string' && data.conversation_id && !this.conversationId) {
-        this.conversationId = data.conversation_id;
+      // THE SERVER'S ANSWER IS THE THREAD — adopted whenever it DIFFERS, not only when the
+      // seat holds none. The server may have moved the thread: a CLOSED conversation starts
+      // a new one (routes/teacher.py), and a seat that keeps the old id writes nothing into
+      // the thread it is drawing — the reply is shown and then lost on reload. The move is
+      // SHOWN, not silent.
+      const returned = typeof data?.conversation_id === 'string' && data.conversation_id ? data.conversation_id : '';
+      if (returned && returned !== this.conversationId) {
+        const moved = !!this.conversationId;
+        this.conversationId = returned;
+        if (moved) {
+          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+            detail: {
+              role: 'assistant',
+              content: 'The previous conversation was closed — this reply continues in a new one.',
+            },
+          }));
+        }
         this.dispatchEvent(
           new CustomEvent('conversation-change', {
             bubbles: true,
             composed: true,
-            detail: { conversationId: data.conversation_id },
+            detail: { conversationId: returned },
           }),
         );
       }
@@ -1166,6 +1322,35 @@ ${workspaceContext}`;
         if (reply) {
           this._local = [...this._local, { role: 'assistant', content: reply }];
         }
+        answered = true;
+      }
+      // A TURN THAT DID NOT PERSIST IS SAID IN THE THREAD. The server answered it but could
+      // not write it down (routes/teacher.py `persistence_error`: a failed lookup, a failed
+      // create, a failed message write); without this the person reads a reply that is gone
+      // on reload, and nothing anywhere says so.
+      if (typeof data?.persistence_error === 'string' && data.persistence_error) {
+        this._local = [
+          ...this._local,
+          { role: 'assistant', content: `⚠️ Not saved — ${data.persistence_error}` },
+        ];
+      }
+      // AND EVERY OTHER WARNING THIS TURN PRODUCED — drawn in the thread and written to the
+      // app logger, which the Trace tab reads (the owner, 2026-09-18: "we need to report it
+      // in the console trace"). Empty on a clean turn.
+      if (Array.isArray(data?.warnings)) {
+        for (const warning of data.warnings) {
+          this._local = [...this._local, { role: 'assistant', content: `⚠️ ${String(warning)}` }];
+          try {
+            logger.warn(`[chat] ${String(warning)}`, {
+              conversationId: this.conversationId ?? null,
+              sessionId: this.sessionId ?? null,
+            });
+          } catch (logError) {
+            // A logger that throws must not cost the turn — but the fact that it threw is
+            // itself said, on the console (the gate counts `pass`, not a named failure).
+            console.error('[chat-panel] the logger refused a turn warning:', logError, warning);
+          }
+        }
       }
     } catch (err) {
       if (this._abort?.signal.aborted) {
@@ -1175,10 +1360,66 @@ ${workspaceContext}`;
         this._local = [...this._local, { role: 'assistant', content: `Connection error: ${why}` }];
       }
     } finally {
+      // A turn that was ANSWERED while this seat had no conversation lives only here:
+      // the backend refused to write it (no row to bind it to yet), so it is held and
+      // handed over by flushPendingTurns when the first Save creates the package's
+      // conversation. Failed turns are not held — an error is not a thing that was said.
+      if (answered && !this.conversationId) {
+        // The owner is recorded with the FIRST pending turn: spoken before any package
+        // existed (owner null) they are owed to whatever Save creates one; spoken INSIDE a
+        // package they belong to it and to no other (see flushPendingTurns).
+        if (!this._pending.length) this._pendingOwner = this.sessionId ? String(this.sessionId) : null;
+        this._pending = [...this._pending, ...this._local.slice(before)];
+      }
       this._sending = false;
       this._abort = null;
       this.requestUpdate();
     }
+  }
+
+  /**
+   * THE THREAD THAT PREDATES THE PACKAGE, WRITTEN DOWN WHEN THE PACKAGE APPEARS.
+   *
+   * A turn spoken before the first Save has no conversation to live in: the backend
+   * refuses it by design ("this turn will not be persisted" — conversations.session_id
+   * is NOT NULL, so there is nothing to attach it to), and it stays in `_pending` here.
+   * The Save creates the package's conversation; the host hands that id over, and what
+   * was spoken is written into it, in order — so the package opens onto the thread that
+   * was actually had, not an empty one. Only `_pending` travels; turns the backend
+   * already owns are not touched. Returns how many messages landed.
+   */
+  async flushPendingTurns(conversationId: string, sessionId?: string): Promise<number> {
+    if (!conversationId || this._pending.length === 0) return 0;
+    // PENDING TURNS BELONG TO THE PACKAGE THEY WERE SPOKEN IN. Spoken before any package
+    // existed (owner null) they are owed to the package now being saved; spoken inside a
+    // package, only THAT package may receive them — writing them anywhere else is how one
+    // package's words landed in another's thread.
+    if (this._pendingOwner && sessionId !== undefined && this._pendingOwner !== String(sessionId)) {
+      console.error(
+        `[chat-panel] refused to write ${this._pending.length} pending turn(s) spoken in package ` +
+        `${this._pendingOwner.slice(0, 8)}… into conversation ${String(conversationId).slice(0, 8)}… — ` +
+        'a conversation belongs to the package it was spoken in.',
+      );
+      return 0;
+    }
+    const pending = [...this._pending];
+    let written = 0;
+    for (const m of pending) {
+      try {
+        const resp = await fetch(`/api/conversations/${conversationId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
+          body: JSON.stringify({ role: m.role, content: m.content }),
+        });
+        if (!resp.ok) break;
+        written++;
+      } catch {
+        break;
+      }
+    }
+    this._pending = pending.slice(written);
+    if (!this._pending.length) this._pendingOwner = null;
+    return written;
   }
 
   private _onMessageSent(e: Event) {
@@ -1505,11 +1746,14 @@ ${workspaceContext}`;
                      the incentive to clean them up, and a cap would hide exactly that. -->
                 <div class="content-scroll">
                   <div class="content-header"><slot name="content-header"></slot></div>
-                  ${this.activeTab === 'chat'
+                  ${this._showsThread
                     ? html`${this._findingsSeat()
                         ? html`<div class="chat-top">
                             <slot name="view" @slotchange=${this._onSlotChange}></slot>
                           </div>`
+                        : nothing}
+                      ${this._historyError
+                        ? html`<p class="conversation-none" role="alert">${this._historyError}</p>`
                         : nothing}
                       <chat-messages
                         .messages=${this._thread}
@@ -1558,7 +1802,7 @@ ${workspaceContext}`;
   }
 }
 
-customElements.define('chat-panel', ChatPanel);
+if (!customElements.get('chat-panel')) customElements.define('chat-panel', ChatPanel);
 
 declare global {
   interface HTMLElementTagNameMap {

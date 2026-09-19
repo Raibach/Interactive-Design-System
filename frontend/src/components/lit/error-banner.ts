@@ -141,7 +141,7 @@ export class ErrorBanner extends LitElement {
   }
 }
 
-customElements.define('error-banner', ErrorBanner);
+if (!customElements.get('error-banner')) customElements.define('error-banner', ErrorBanner);
 
 declare global {
   interface HTMLElementTagNameMap {

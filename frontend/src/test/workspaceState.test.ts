@@ -18,6 +18,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import '@/components/lit/agent-flow';
 import '@/components/lit/agent-canvas';
+import '@/components/lit/workspace-layout';
 
 type El = HTMLElement & Record<string, any>;
 
@@ -113,5 +114,32 @@ describe('<agent-canvas> — the plug-in answers for her column and the drawing'
     await settle(flow);
 
     expect(canvas.workspaceState().flow).toEqual(saved);
+  });
+});
+
+describe('<workspace-layout> — the widths answer, read at Save', () => {
+  it('reports the panes it is rendering, and null for a docked prompt', async () => {
+    const layout = document.createElement('workspace-layout') as El;
+    layout.getBoundingClientRect = () => ({ width: 1200, height: 800, top: 0, left: 0, right: 1200, bottom: 800, x: 0, y: 0, toJSON: () => ({}) });
+    document.body.appendChild(layout);
+    mounted.push(layout);
+    await settle(layout);
+
+    // The panes are what the element renders; the accessor MEASURES them rather than
+    // re-deriving the flex arithmetic (a second derivation is how two numbers disagree).
+    const left = layout.renderRoot.querySelector('.pane.left') as El;
+    const right = layout.renderRoot.querySelector('.pane.right') as El;
+    expect(left).toBeTruthy();
+    expect(right).toBeTruthy();
+    left.getBoundingClientRect = () => ({ width: 420, height: 800, top: 0, left: 0, right: 420, bottom: 800, x: 0, y: 0, toJSON: () => ({}) });
+    right.getBoundingClientRect = () => ({ width: 650, height: 800, top: 0, left: 550, right: 1200, bottom: 800, x: 550, y: 0, toJSON: () => ({}) });
+
+    expect(layout.widths()).toEqual({ left: 420, chat: 650 });
+
+    // On its rail the prompt has no width to record — the ColumnWidths meaning of null.
+    layout.leftCollapsed = true;
+    await settle(layout);
+    expect(layout.widths().left).toBeNull();
+    expect(layout.widths().chat).toBe(650);
   });
 });

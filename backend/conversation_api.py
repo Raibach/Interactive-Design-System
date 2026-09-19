@@ -20,6 +20,19 @@ from database_pool import DatabasePoolManager
 class ConversationAPI:
     """PostgreSQL service for conversation and message management"""
 
+    # MIRROR-WRITE WARNINGS, SAID OUT LOUD. The memory store and the tag trigger mirror rows
+    # that already exist in Postgres: their failure must not fail the write, but it must not
+    # vanish either (2026-09-18 — each used to end in a `print`). A caller that can say it
+    # (the chat route) drains this list into its response, and the frontend writes those into
+    # the trace. check:error-suppression counts what still swallows.
+    _MIRROR_WARNINGS: List[str] = []
+
+    def drain_mirror_warnings(self) -> List[str]:
+        """Hand this turn's mirror-write failures to a caller, and reset."""
+        out = list(ConversationAPI._MIRROR_WARNINGS)
+        ConversationAPI._MIRROR_WARNINGS.clear()
+        return out
+
     _milvus_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="milvus-write")
 
     def __init__(self, database_url: str):
@@ -717,6 +730,9 @@ class ConversationAPI:
                 except Exception as mem_error:
                     # Don't fail message creation if memory save fails
                     # Heavy content may cause memory operations to fail, but DB save succeeds
+                    ConversationAPI._MIRROR_WARNINGS.append(
+                        f"the memory mirror for this message was not written ({mem_error}); the row itself is saved."
+                    )
                     print(f"⚠️  Failed to save conversation to memory (non-blocking): {mem_error}")
 
             # Trigger real-time tag detection and Milvus write after message count threshold (5 messages).
@@ -745,6 +761,9 @@ class ConversationAPI:
                             conv_project_id,
                         )
             except Exception as trigger_err:
+                ConversationAPI._MIRROR_WARNINGS.append(
+                    f"the tag-detection trigger did not fire for this conversation ({trigger_err})."
+                )
                 print(f"⚠️ Tag storage trigger failed: {trigger_err}")
             
             return str(message_id)

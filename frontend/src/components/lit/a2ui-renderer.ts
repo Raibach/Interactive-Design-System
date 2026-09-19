@@ -164,6 +164,27 @@ const tagDefaults = new Map<string, Record<string, unknown>>();
 const assignedProps = new WeakMap<Element, string[]>();
 
 /**
+ * THE DEFAULTS ARE CAPTURED BEFORE ANY PAYLOAD IS WRITTEN, AND THE ORDER IS THE WHOLE POINT.
+ *
+ * This ran inside `releaseStaleProps` first, AFTER `assignProps` — so the "constructor
+ * defaults" it recorded were the FIRST PAYLOAD'S VALUES, not the element's own. Every
+ * prop a later surface then omitted was handed back to that first payload's value and
+ * nothing else: measured 2026-09-18, the seat's `conversations` — assigned once by the
+ * first package opened in a session — stayed on every fresh composer afterwards, a
+ * conversation chip for a package that was not on screen, while the thread beside it was
+ * correctly empty. The comment below always said "captured before the renderer ever wrote
+ * to it"; the code has to do that, so the capture lives here and `_assign` calls it FIRST.
+ */
+function captureDefaults(el: HTMLElement): void {
+  const tag = el.tagName.toLowerCase();
+  if (tagDefaults.has(tag)) return;
+  const target = el as unknown as Record<string, unknown>;
+  const defaults: Record<string, unknown> = {};
+  for (const key of Object.keys(declaredProperties(el))) defaults[key] = target[key];
+  tagDefaults.set(tag, defaults);
+}
+
+/**
  * Give back the props this payload no longer carries.
  *
  * A surface has to be a pure function of the LAST emission. Lit reuses the
@@ -179,22 +200,16 @@ const assignedProps = new WeakMap<Element, string[]>();
  * chat could not be opened or expanded at all.
  *
  * ONLY PROPS THIS RENDERER SET ARE GIVEN BACK. State the element owns — the rail
- * folding the panel away, the panel's own loaded conversation list, anything a
- * person toggled — was never assigned from a payload, so it is never in the list
- * below and is never touched. This restores the payload's authority without
- * taking the component's away.
+ * folding the panel away, anything a person toggled — was never assigned from a payload,
+ * so it is never in the list below and is never touched. This restores the payload's
+ * authority without taking the component's away.
  */
 function releaseStaleProps(el: HTMLElement, props: Record<string, unknown>): string[] {
   const declared = declaredProperties(el);
-  const tag = el.tagName.toLowerCase();
   const target = el as unknown as Record<string, unknown>;
 
-  if (!tagDefaults.has(tag)) {
-    const defaults: Record<string, unknown> = {};
-    for (const key of Object.keys(declared)) defaults[key] = target[key];
-    tagDefaults.set(tag, defaults);
-  }
-  const defaults = tagDefaults.get(tag) ?? {};
+  captureDefaults(el);
+  const defaults = tagDefaults.get(el.tagName.toLowerCase()) ?? {};
 
   const now = Object.keys(props).filter((key) => declared[key]);
   const before = assignedProps.get(el) ?? [];
@@ -524,6 +539,10 @@ class A2UIRenderer extends LitElement {
   private _assign(el: HTMLElement, comp: A2UIComponent): void {
     const props = componentProps(comp, this.dataModel);
     try {
+      // THE ELEMENT'S OWN DEFAULTS, BEFORE THIS PAYLOAD TOUCHES IT. Called here, first,
+      // because releaseStaleProps below needs the values the element came with — not the
+      // ones this assignment is about to write (see captureDefaults).
+      captureDefaults(el);
       for (const unknown of assignProps(el, props)) {
         console.warn(
           `[a2ui-renderer] ${comp.id} <${comp.component}>: prop "${unknown}" is not declared by the element. ` +

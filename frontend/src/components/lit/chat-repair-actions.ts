@@ -276,7 +276,7 @@ export class ChatRepairActions extends LitElement {
   }
 }
 
-customElements.define('chat-repair-actions', ChatRepairActions);
+if (!customElements.get('chat-repair-actions')) customElements.define('chat-repair-actions', ChatRepairActions);
 
 declare global {
   interface HTMLElementTagNameMap {

@@ -75,10 +75,10 @@ AGENTS.md
 #
 # LOCAL-ONLY, BY THE OWNER'S DECISION (2026-09-17). The working registers and the
 # catalog audit are the operator's own record of what is open and what the checker
-# said — they are not published. TO-DO.md, OPEN-ITEMS.md and CORRECTIONS.md live in
+# said — they are not published. TO-DO.md, open-items.json and corrections.json live in
 # the working copy and in no clone, and so does the audit under catalog-audit/.
 #
-# This reverses an earlier rule that required OPEN-ITEMS.md to be tracked, on the
+# This reverses an earlier rule that required the register to be tracked, on the
 # grounds that a register git cannot see is one whose numbers drift unnoticed. That
 # guard is intact where it matters: `check:open-items-register` still compares the
 # numbers the register records against the numbers each run derives, and fails the
@@ -86,10 +86,14 @@ AGENTS.md
 models/
 retired-files/
 TO-DO.md
-OPEN-ITEMS.md
-CORRECTIONS.md
+open-items.json
+corrections.json
 catalog-audit/
 frontend/catalog-audit/
+# ── THE GOVERNANCE FOLDER (2026-09-18) ────────────────────────────────────────
+# The plans and the history of the work, kept for the next inspection — same rule as the
+# ledgers above: the operator's own record, local to this machine, in no clone.
+governance/
 #
 # THE AGENTIC EDITOR'S OWN FOLDER, local-only by the owner's instruction (2026-09-18):
 # "that folder is yours, I don't care what you do to it. It'll never be on GitHub."

@@ -1,0 +1,98 @@
+{
+  "$comment": "THE INSPECTION PROTOCOL. Read by backend/governance_inspector.py on every run and sent verbatim as the model's instructions. The model NEVER sees the repository: deterministic code reads everything, fills a sheet, and asks a fixed list of questions whose evidence is already quoted. The model's whole job is to answer one of TWO values per row. No prose, no reasoning loops, no tool calls, no follow-up turns.",
+  "protocol": {
+    "call": "ONE chat/completion per run: temperature 0, thinking DISABLED, max_tokens 700, no retries.",
+    "output": "ONE JSON object matching answerSheet.schema and nothing else. Anything else \u2014 prose, markdown, a second object \u2014 means the run is recorded NOT DONE, with the raw answer kept in the message metadata. There is no second attempt and no larger model.",
+    "budget": "The sheet is bounded to a few KB. The model holds no state and is loaded on demand with an idle TTL, so a run costs seconds and the machine's memory returns to its owner.",
+    "why_two_values": "A question whose answer can be argued is not a protocol. Every row has evidence quoted in the sheet; the answer is a classification of that evidence."
+  },
+  "agents": [
+    {
+      "id": "auditor",
+      "role": "governance",
+      "model_env": "INSPECTION_MODEL_ID",
+      "task": "Classify every sheet row. Two words only: ok or attention."
+    },
+    {
+      "id": "skeptic",
+      "role": "research",
+      "model_env": "INSPECTION_REVIEWER_MODEL_ID",
+      "task": "Judge whether the evidence supports the auditor's answers. Flag any row it does not."
+    },
+    {
+      "id": "deep",
+      "role": "research",
+      "model_env": "INSPECTION_DEEP_MODEL_ID",
+      "when": "only when the run's status is attention or unverified \u2014 never on a clean run",
+      "task": "Explain, in at most 80 words, what a person should look at and why. Use the A2UI primer below; do not invent facts beyond the sheet.",
+      "primer": "A2UI IN ONE PARAGRAPH. The app is a deterministic React shell; an AI assembles the working surface inside it as a JSON adjacency list of LIT web components (the catalog). Components draw, never nest; children come from the envelope, never from a component's own template. Data reaches elements BY PATH from one model (updateDataModel). The server validates every emitted component against catalogs/<pipeline>/catalog.json and fails loud (503) on anything unknown; shared/tag-registry.ts is the allowlist the AI reads; components/registry.json is the Figma provenance map. Every package (prompt_sessions row) holds its own conversations, versions and context \u2014 conversations.session_id is NOT NULL, and the console's own chat is the ONE global conversation. A save writes the workspace (seat, pan/zoom, the drawn graph) into the package's metadata. What the checker measures: catalog compliance, unheard events, swallowed failures (error-suppression), and the register/ledger agreement. What this inspection adds: two small models classifying a prepared sheet, and this deep pass only when something needs a person."
+    }
+  ],
+  "answerSheet": {
+    "schema": {
+      "verdict": "ok | attention",
+      "rows": [
+        {
+          "id": "<the row id, copied from the sheet, in the same order>",
+          "answer": "ok | attention",
+          "evidence": "<at most 12 words, quoted or counted from the sheet \u2014 required when the answer is attention>"
+        }
+      ],
+      "note": "<at most 24 words; only when verdict is attention>"
+    },
+    "rules": [
+      "every sheet row must appear exactly once, in order",
+      "ok means the evidence shown needs no action",
+      "attention means the evidence shows a fact that needs a person",
+      "verdict is attention if ANY row is attention",
+      "do not add rows; do not omit rows; do not explain beyond the fields"
+    ]
+  },
+  "checks": [
+    {
+      "id": "counts-agree",
+      "ask": "Does the register's recorded count for every compared check equal the count this run derived?",
+      "attention_when": "any pair disagrees"
+    },
+    {
+      "id": "no-orphan-findings",
+      "ask": "Does every blocking finding in the report have a register row that accounts for it?",
+      "attention_when": "a blocking finding is not accounted for"
+    },
+    {
+      "id": "open-rows-have-witnesses",
+      "ask": "Does every OPEN register row either name a check or say why no check is possible?",
+      "attention_when": "an open row has neither"
+    },
+    {
+      "id": "suppressions-not-growing",
+      "ask": "Is the error-suppression count for this run less than or equal to the count recorded in the register?",
+      "attention_when": "the run derives MORE suppressed failures than the register records"
+    },
+    {
+      "id": "uncommitted-work",
+      "ask": "Is the working tree free of uncommitted changes (work a rollback would erase)?",
+      "attention_when": "any changed file is uncommitted"
+    },
+    {
+      "id": "since-last-run",
+      "ask": "Compared with the previous inspection's verdict and counts, is anything worse?",
+      "attention_when": "the previous verdict was worse than ok, or a count moved the wrong way"
+    }
+  ],
+  "roster": {
+    "auditor": [
+      "qwen2.5-coder-0.5b-instruct",
+      "qwen2.5-coder-1.5b-instruct"
+    ],
+    "skeptic": [
+      "qwen2.5-coder-1.5b-instruct",
+      "qwen2.5-coder-0.5b-instruct"
+    ],
+    "deep": [
+      "qwen/qwen3.5-9b",
+      "qwen2.5-coder-1.5b-instruct"
+    ],
+    "$comment": "Sitting and waiting to be assigned. Every auditor candidate answers the same sheet and the CODE judges: unanimity is the verdict, a split vote turns its row to attention with every vote recorded. Nothing is averaged away and no candidate is silently dropped. The deep role wears the same roster rule: candidates in order, first that answers wins, every attempt recorded (measured: the 9B reasoning model answered with no message at 700 and 2500 tokens)."
+  }
+}

@@ -796,7 +796,10 @@ export const TAG_REGISTRY = {
       likes: { type: 'number', default: 0 },
       state: { type: 'enum', values: ['idle', 'loading', 'error'], default: 'idle' },
     },
-    events: ['card-open', 'card-delete', 'card-archive'],
+    // `card-archive` used to be declared here and was emitted by nobody (the card's own note
+    // says so: "Only `card-delete` was ever emitted by anyone"). A declared event with no
+    // dispatcher is a control a reader believes exists.
+    events: ['card-open', 'card-delete'],
     constraints: ['id must be a valid session UUID'],
   },
   'filter-pill': {
@@ -857,7 +860,11 @@ export const TAG_REGISTRY = {
       'health-count': { type: 'number', default: 0 },
       'health-state': { type: 'enum', values: ['ok', 'loading', 'unknown'], default: 'loading' },
     },
-    events: ['tab-change', 'collapse-toggle', 'right-column-drag-start', 'right-column-drag-move', 'right-column-drag-end'],
+    // The `right-column-drag-*` events were declared here and had no dispatcher: the rail's
+    // own dot-grid grip went with the column rework, "along with the right-column-drag-*
+    // events it was the only emitter of" (see the element's own note). The drag that
+    // remains is the spacer's, and it is the layout's `resize-start/move/end`.
+    events: ['tab-change', 'collapse-toggle'],
     constraints: [
       'Tabs are filtered by allowed-tabs; a list matching no known tab shows all rather than an empty bar',
       "health-state 'unknown' must never render the same as a clean result",
@@ -1152,7 +1159,7 @@ export const TAG_REGISTRY = {
       sessionId: { type: 'string', optional: true },
       isRunning: { type: 'boolean', optional: true },
     },
-    events: ['section-update', 'section-add', 'section-remove', 'section-reorder', 'run-requested', 'save-requested'],
+    events: ['section-update', 'section-add', 'section-remove', 'section-reorder'],
     constraints: [],
   },
   'compiled-output-viewer': {
@@ -1169,7 +1176,9 @@ export const TAG_REGISTRY = {
       sessionId: { type: 'string', optional: true },
     },
     events: ['copy-output', 'regenerate-requested', 'clear-output'],
-    constraints: [],
+    constraints: [
+      'RECORDED NESTING (2026-09-18): instantiates the published <model-selector-button> from its own template — the element is a registry entry with its own node id, so it is instantiated, never re-implemented. One of the two recorded exceptions to the flat-adjacency rule, recorded rather than hidden.',
+    ],
   },
   'agent-flow': {
     tag: 'agent-flow',
@@ -1185,6 +1194,7 @@ export const TAG_REGISTRY = {
       'a view, not a source: the whole graph arrives as one data-model binding',
       'takes the middle column on Run; the compiled output is reached again through the column\'s own selector and Clear',
       'the node body is one function — the Figma node replaces it without touching the canvas',
+      'HOST-COMPOSED, RECORDED (2026-09-18): the chain this view is part of is written by WritingAreaIndex.setOutputColumn on Run (AgentCanvas + AgentFlow + OutputControls + CanvasFooter). The assembly does not emit these names; this is the sanctioned exception, not an oversight.',
     ],
   },
   'agent-canvas': {
@@ -1192,7 +1202,7 @@ export const TAG_REGISTRY = {
     surface: 'composer',
     column: 'middle',
     description:
-      'THE PLUG-IN — the drawing and Grace\'s seat as one place, implemented as a CONTAINER. It declares two slots and the ENVELOPE fills them: the drawing in "flow", her seat in "seat" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component\'s own template (AGENTS-instructions/Core-Concept.md: "surfaces cannot nest"). It fetches nothing, draws no node, and dispatches no events of its own. What it OWNS is behaviour around its slots: the seat\'s column (its width, its motion, the gripper that sizes it and lets go on every channel) and the link between the halves — a picked node marks the turn about it and opens her, a clicked turn brings its node into view. It does NOT own her bindings: conversation-id and the rest are the envelope\'s bindings on her seat, which is what makes her a SURFACE SEAT (it aggregates only its own conversation, and renders "unattributed" rather than borrowing another scope\'s numbers). Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.',
+      'THE PLUG-IN — the drawing and Grace\'s seat as one place, implemented as a CONTAINER. It declares its slots and the ENVELOPE fills them: the drawing in "flow", the column\'s own header and foot in "header"/"footer" — NOT her seat: the element renders no seat slot and she is never moved in (owner, 2026-09-18: "there\'s no difference between the canvas Grace and the new-package Grace, so there\'s no reason to replace anything") — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component\'s own template (AGENTS-instructions/Core-Concept.md: "surfaces cannot nest"). It fetches nothing, draws no node, and dispatches no events of its own. What it OWNS is behaviour around its slots: the seat\'s column (its width, its motion, the gripper that sizes it and lets go on every channel) and the link between the halves — a picked node marks the turn about it and opens her, a clicked turn brings its node into view. It does NOT own her bindings: conversation-id and the rest are the envelope\'s bindings on her seat, which is what makes her a SURFACE SEAT (it aggregates only its own conversation, and renders "unattributed" rather than borrowing another scope\'s numbers). Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.',
     props: {
       theme: { type: 'string', optional: true },
       collapsed: { type: 'boolean', optional: true },
@@ -1200,9 +1210,10 @@ export const TAG_REGISTRY = {
     events: [],
     constraints: [
       'a container, not a wrapper: its template holds slots and no component — an element that renders an element is nesting, and surfaces cannot nest',
-      'filled by name from the envelope: "flow" (the drawing) and "seat" (the chat panel)',
+      'filled by name from the envelope: "header", "flow" (the drawing) and "footer" — NOT "seat": the element renders no seat slot, because she is never moved into the canvas ("there\'s no difference between the canvas Grace and the new-package Grace", owner 2026-09-18)',
       'one Grace — a surface mounts this OR a bare chat-panel, never both',
       'her bindings belong to the envelope, not to this element',
+      'HOST-COMPOSED, RECORDED (2026-09-18): the chain it heads is written by WritingAreaIndex.setOutputColumn on Run. The assembly does not emit these names; this is the sanctioned exception, not an oversight.',
     ],
   },
   'canvas-footer': {
@@ -1219,6 +1230,7 @@ export const TAG_REGISTRY = {
       'the master\'s numbers, not re-invented: 70px, #B5CCCE, radius 0 0 10px 0, padding 13px 38px',
       'controls sit at the LEFT: the strip spans the column and her seat can lie over its right end',
       'it emits theme-change; the host writes the tone, never this element',
+      'HOST-COMPOSED, RECORDED (2026-09-18): the canvas chain\'s foot is written by WritingAreaIndex.setOutputColumn on Run. The assembly does not emit it; this is the sanctioned exception, not an oversight.',
     ],
   },
   'output-controls': {
@@ -1234,7 +1246,8 @@ export const TAG_REGISTRY = {
     constraints: [
       'the column\'s header, not the body\'s: it is drawn in every view of the middle column',
       'the tile is inert until the menu is designed — absent behaviour, not invented behaviour',
-      'the model control is the published <model-selector-button>, instantiated, never restyled',
+      'RECORDED NESTING (2026-09-18): the model control is the published <model-selector-button>, instantiated from this element\'s own template, never restyled — the one place this protocol\'s flat-adjacency rule is knowingly excepted, and it is recorded rather than hidden',
+      'HOST-COMPOSED, RECORDED (2026-09-18): written by WritingAreaIndex.setOutputColumn on Run; the assembly does not emit this name.',
     ],
   },
   'workspace-layout': {
@@ -1242,9 +1255,12 @@ export const TAG_REGISTRY = {
     surface: 'composer',
     column: undefined,
     description: 'Lit Web Component (exact port of PromptWorkspace + ResizableSplitter resize/gripper/double-click logic). Provides the 3-column resizable host with CSS vars, mouse handlers, and named slots "left" | "middle" | "right". AI emits this as the container; it hosts prompt-section-editor, compiled-output-viewer, and chat-panel.',
+    // `leftWidth`/`rightWidth` used to be declared here and were never properties of the
+    // element — nothing read them, and the save's widths read was a round trip to an event
+    // nobody answers. The widths are the element's own rendered numbers; the host reads
+    // them through the shadow root at Save (`workspace-layout.widths()`), like the canvas's
+    // workspaceState.
     props: {
-      leftWidth: { type: 'number', optional: true },
-      rightWidth: { type: 'number', optional: true },
       isThirdOpen: { type: 'boolean', optional: true },
     },
     events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],

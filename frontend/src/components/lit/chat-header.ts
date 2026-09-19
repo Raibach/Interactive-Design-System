@@ -121,7 +121,7 @@ export class ChatHeader extends LitElement {
   }
 }
 
-customElements.define('chat-header', ChatHeader);
+if (!customElements.get('chat-header')) customElements.define('chat-header', ChatHeader);
 
 declare global {
   interface HTMLElementTagNameMap {

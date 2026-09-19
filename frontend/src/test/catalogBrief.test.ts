@@ -22,9 +22,9 @@ const ok = (over: Partial<Extract<CatalogHealth, { state: 'ok' }>['report']> = {
     checks: ['open-items-register'],
     findings: [
       {
-        id: 'open-items-register:OPEN-ITEMS.md:count:event-unheard',
+        id: 'open-items-register:open-items.json:count:event-unheard',
         check: 'open-items-register', stage: 'deliver', owner: 'pipeline', level: 'blocking',
-        component: null, nodeId: null, file: 'OPEN-ITEMS.md',
+        component: null, nodeId: null, file: 'open-items.json',
         what: 'The register records 2 where this run derived 1.', fix: 'Re-measure the row.',
       },
       {
@@ -48,7 +48,7 @@ describe('the brief is the report, not a recollection', () => {
     const out = text(catalogBrief(ok()));
     expect(out).toContain('CATALOG CHECK — prompt-composer');
     expect(out).toContain('2026-09-14T17:50:03.801Z');
-    expect(out).toContain('open-items-register:OPEN-ITEMS.md:count:event-unheard');
+    expect(out).toContain('open-items-register:open-items.json:count:event-unheard');
     expect(out).toContain('blocking');
     expect(out).toContain('annotation-missing:role-tile');
   });
@@ -151,8 +151,8 @@ describe('the brief lists them in the order they are to be read', () => {
       what: 'Node 40000909:4316 resolves but carries no annotation.',
     },
     {
-      id: 'open-items-register:OPEN-ITEMS.md:count:event-unheard', check: 'open-items-register',
-      owner: 'pipeline', level: 'blocking', component: null, nodeId: null, file: 'OPEN-ITEMS.md',
+      id: 'open-items-register:open-items.json:count:event-unheard', check: 'open-items-register',
+      owner: 'pipeline', level: 'blocking', component: null, nodeId: null, file: 'open-items.json',
       what: 'The register records 2 where this run derived 1.', fix: 'Re-measure the row.',
     },
   ];
@@ -160,7 +160,7 @@ describe('the brief lists them in the order they are to be read', () => {
   it('numbers the blocking finding 1 even though the check reported it last', () => {
     const out = text(catalogBrief({ state: 'unavailable', reason: 'unreachable' }, reportedLast));
     const first = out.split('\n').find((l) => /^1\. /.test(l))!;
-    expect(first).toContain('open-items-register:OPEN-ITEMS.md:count:event-unheard');
+    expect(first).toContain('open-items-register:open-items.json:count:event-unheard');
     // The advisories are still there, below it — nothing was dropped to get there.
     const numbered = out.split('\n').filter((l) => /^\d+\. /.test(l));
     expect(numbered).toHaveLength(3);
@@ -170,7 +170,7 @@ describe('the brief lists them in the order they are to be read', () => {
   it('says the order out loud, because "which one" is the question she is asked', () => {
     const out = text(catalogBrief(ok(), reportedLast));
     expect(out).toMatch(/ordered most urgent first/);
-    expect(out).toMatch(/item 1 is open-items-register:OPEN-ITEMS\.md:count:event-unheard/);
+    expect(out).toMatch(/item 1 is open-items-register:open-items\.json:count:event-unheard/);
     expect(out).toMatch(/a blocking finding is always above an advisory one/);
   });
 });

@@ -515,6 +515,8 @@
       "unevaluatedProperties": false
     },
     "agent-card": {
+      "deprecated": true,
+      "x-deprecated-reason": "No element defines this tag. The card is drawn INSIDE ConsoleCardGrid by <agent-card-element>, which that grid's own template instantiates (an internal sub-piece, like chat-messages inside chat-panel). Emitting this name draws an empty box. Use ConsoleCardGrid with items bound to /cards.",
       "type": "object",
       "x-figma-source": {
         "fileKey": "20UPR2KQMsbAxlo5NJb1se",
@@ -610,6 +612,8 @@
       "unevaluatedProperties": false
     },
     "filter-pill": {
+      "deprecated": true,
+      "x-deprecated-reason": "No element defines this tag - console toolbar filters were never built. Emitting it draws an empty box. Deprecated rather than deleted (catalogs.md: deprecate, never delete).",
       "type": "object",
       "allOf": [
         {
@@ -657,6 +661,8 @@
       "unevaluatedProperties": false
     },
     "search-bar": {
+      "deprecated": true,
+      "x-deprecated-reason": "No element defines this tag - console search was never built. Emitting it draws an empty box.",
       "type": "object",
       "allOf": [
         {
@@ -691,6 +697,8 @@
       "unevaluatedProperties": false
     },
     "prompt-section": {
+      "deprecated": true,
+      "x-deprecated-reason": "No element defines this tag. The implemented element is <prompt-section-editor> (catalog: SectionEditor / prompt-section-editor); this name predates it and nothing draws it.",
       "type": "object",
       "allOf": [
         {
@@ -748,6 +756,8 @@
       "unevaluatedProperties": false
     },
     "output-panel": {
+      "deprecated": true,
+      "x-deprecated-reason": "No element defines this tag. The implemented element is <compiled-output-viewer> (catalog: CompiledOutput / compiled-output-viewer).",
       "type": "object",
       "allOf": [
         {
@@ -795,6 +805,8 @@
       "unevaluatedProperties": false
     },
     "version-trace": {
+      "deprecated": true,
+      "x-deprecated-reason": "No element defines this tag. Versions live in the seat's own rail tab (chat-navigation-bar 'versions') and VersionManager; nothing draws a version-trace.",
       "type": "object",
       "allOf": [
         {
@@ -935,6 +947,7 @@
       "unevaluatedProperties": false
     },
     "ConsoleCardGrid": {
+      "x-internal-instantiation": "renders <agent-card-element> from its own template \u2014 an internal sub-piece (recorded nesting, 2026-09-18); the card is never emitted as a component by the model, the grid composes it from /cards",
       "type": "object",
       "allOf": [
         {

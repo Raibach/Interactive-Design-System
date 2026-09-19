@@ -3,6 +3,7 @@
 
 import { systemDiagnostics } from "@/services/systemDiagnostics";
 import { API_BASE } from "@/shared/apiHelper";
+import type { FlowGraph } from "@/shared/agentFlow";
 
 export interface PromptSection {
   id: string;
@@ -83,6 +84,10 @@ export interface WorkspaceState {
   seat?: { open?: boolean; width?: number };
   /** Where the drawing was left: pan and zoom (agent-flow). */
   flow?: { zoom?: number; panX?: number; panY?: number } | null;
+  /** Which middle view the package was left on — a package left on the canvas reopens on it. */
+  middle?: 'flow' | 'output';
+  /** The drawing as it was saved — the graph the canvas showed, the person's edits included. */
+  graph?: FlowGraph;
 }
 
 export interface PromptSession {

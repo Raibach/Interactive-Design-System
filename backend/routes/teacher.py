@@ -121,7 +121,35 @@ async def api_teacher_query(request: TeacherQueryRequest):
                     print(f"ℹ️  Conversation {str(conv_id)[:8]}… is closed — starting a new one.")
                     conv_id = None
             except Exception as e:
+                warnings.append(
+                    f"This conversation's status could not be checked ({e}) — a reply may be written to a closed thread."
+                )
                 print(f"⚠️  Could not read conversation {conv_id}: {e}")
+
+        # ── A CONVERSATION BELONGS TO ITS PACKAGE — ENFORCED HERE TOO (2026-09-18) ──
+        # The id arrives from the client and the only check on it was ownership (user_id),
+        # so a stale or foreign id the caller happens to own was written to: another
+        # package's thread. The package is the container; the id must be one of ITS
+        # conversations. If the check cannot be run, the turn is not written at all — an
+        # unverifiable write is the thing this whole pass exists to stop.
+        if conv_id and state.conversation_api and request.session_id:
+            try:
+                package_conversations = state.conversation_api.get_conversations_by_session(
+                    request.session_id, uid
+                )
+                if str(conv_id) not in [str(c.get("id")) for c in (package_conversations or [])]:
+                    warnings.append(
+                        f"The conversation this seat named does not belong to this package; "
+                        f"the turn was filed under the package's own thread."
+                    )
+                    print(f"ℹ️  Conversation {str(conv_id)[:8]}… is not package {str(request.session_id)[:8]}…'s — dropped.")
+                    conv_id = None
+            except Exception as e:
+                persistence_error = (
+                    f"The conversation could not be verified against its package ({e}), so your turn was NOT saved."
+                )
+                print(f"❌ Package check failed for conversation {conv_id}: {e}")
+                conv_id = None
 
         # ── Sentry AI monitoring: tag span with conversation + user ──
         sentry_sdk.set_user({"id": uid})
@@ -151,20 +179,40 @@ async def api_teacher_query(request: TeacherQueryRequest):
         #
         # The OUTPUT column is a Run's home. A Run is not a conversation, so it starts
         # none and joins none.
+        #
+        # AND A FAILED LOOKUP IS NOT AN EMPTY PACKAGE (2026-09-18). The lookup used to fail
+        # into a `print`, leave conv_id None, and fall through into the create branch — so a
+        # database hiccup manufactured a SECOND conversation for a package that may already
+        # have had one, and the caller saw a clean 200. The failure now refuses the write and
+        # says so in the response (`persistence_error`), which the seat draws in the thread.
+        persistence_error = None
+        # WHAT THE TURN COULD NOT READ OR WRITE, SAID OUT LOUD (2026-09-18). Each of these
+        # used to end in a `print` — a failure the answer was quietly missing — and the
+        # caller got a clean 200. They ride the response now; the seat draws them and the
+        # frontend logs them into the trace. check:error-suppression counts what still
+        # swallows, and this list is the fix for the ones that used to be here.
+        warnings: List[str] = []
         if request.mode != "chat":
             print(f"ℹ️  mode={request.mode} — not a conversation; no conversation attached or created.")
-        elif state.conversation_api and not conv_id and request.session_id:
+        elif state.conversation_api and not conv_id and request.session_id and persistence_error is None:
+            existing = []
+            lookup_failed = False
             try:
                 existing = state.conversation_api.get_conversations_by_session(
                     request.session_id, uid
                 )
-                if existing:
-                    conv_id = str(existing[0].get("id"))
-                    print(f"✅ Reusing conversation {conv_id} for session {request.session_id}")
             except Exception as e:
-                print(f"⚠️  Conversation lookup failed: {e}")
-
-            if not conv_id:
+                lookup_failed = True
+                print(f"❌ Conversation lookup failed for session {request.session_id}: {e}")
+            if lookup_failed:
+                persistence_error = (
+                    "This package's conversations could not be read, so your turn was NOT saved — "
+                    "creating one here would have manufactured a second thread for the package."
+                )
+            elif existing:
+                conv_id = str(existing[0].get("id"))
+                print(f"✅ Reusing conversation {conv_id} for session {request.session_id}")
+            else:
                 try:
                     title = request.question[:80] if request.question else "New Chat"
                     conv_id = state.conversation_api.create_conversation(
@@ -172,8 +220,12 @@ async def api_teacher_query(request: TeacherQueryRequest):
                     )
                     print(f"✅ Created conversation {conv_id} for session {request.session_id}")
                 except Exception as e:
-                    print(f"⚠️  Failed to create conversation: {e}")
+                    persistence_error = f"The conversation for this package could not be created, so your turn was NOT saved: {e}"
+                    print(f"❌ Failed to create conversation: {e}")
         elif state.conversation_api and not conv_id:
+            # NOT AN ERROR: a turn spoken in a package that does not exist yet. It is held by
+            # the seat and written when the first Save creates the package's conversation
+            # (chat-panel.flushPendingTurns) — which is why this is printed, not reported.
             print("ℹ️  No session_id supplied — this turn will not be persisted.")
 
         # ── ONLY A CONVERSATION WRITES TO A CONVERSATION ─────────────────────
@@ -188,7 +240,8 @@ async def api_teacher_query(request: TeacherQueryRequest):
             try:
                 state.conversation_api.add_message(conv_id, uid, "user", request.question)
             except Exception as e:
-                print(f"⚠️  Failed to save user message: {e}")
+                persistence_error = f"Your message could not be written to this package's conversation: {e}"
+                print(f"❌ Failed to save user message: {e}")
         elif state.conversation_api and conv_id:
             print(f"ℹ️  mode={request.mode} — not a conversation turn; not written to {str(conv_id)[:8]}…")
 
@@ -204,6 +257,9 @@ async def api_teacher_query(request: TeacherQueryRequest):
                         lines.append(f"{role}: {m.get('content', '')}")
                     conversation_context = "\n".join(lines)
             except Exception as e:
+                warnings.append(
+                    f"This package's history could not be read ({e}) — this answer was written without it."
+                )
                 print(f"⚠️  Failed to retrieve conversation history: {e}")
 
         # ── Memory context ──────────────────────────────────────────
@@ -279,16 +335,39 @@ async def api_teacher_query(request: TeacherQueryRequest):
                         + full_context
                     )
 
-        # ── Call the LLM ────────────────────────────────────────────
-        # Also off the event loop, for the same reason as the tool call above: this
-        # is a synchronous SDK call and this handler is `async def`, so an inline
-        # call blocked every other request for its whole duration. Pre-existing, and
-        # invisible while the model answered in a couple of seconds — it stopped
-        # being invisible the moment a run legitimately took a minute.
-        result = await asyncio.to_thread(
-            query_llm,
-            context=full_context,
-            question=request.question,
+        # ── A GOVERNANCE REQUEST IS ANSWERED BY THE GOVERNANCE SYSTEM ────────────
+        # The owner, 2026-09-18: "I should be able to engage the models and wake them up and ask
+        # them for a governance report and I should be able to get something back in the chat
+        # output." A message that NAMES governance runs the inspection and returns its report as
+        # the reply, through this same turn — so the question and the report are stored in the
+        # conversation like any other exchange. The trigger is deterministic, with no guessing:
+        # the message begins with "governance" or "/governance", or it contains "governance
+        # report". The tools load for the run and unload when it ends.
+        _q = (request.question or "").strip().lower()
+        result = None
+        if request.mode == "chat" and (_q.startswith("governance") or _q.startswith("/governance") or "governance report" in _q):
+            from governance_inspector import run_inspection
+
+            print("[governance] a chat turn asked for a report — running the inspection")
+            # file_message=False: THIS turn is the record (it is stored below like any other
+            # exchange), so the inspector must not file a second copy of the same report.
+            report = await run_inspection("asked-in-chat", file_message=False)
+            governance_text = report.get("text") or (
+                "The inspection did not complete: " + str((report.get("meta") or {}).get("error"))
+            )
+            result = governance_text
+
+        if result is None:
+            # ── Call the LLM ────────────────────────────────────────────
+            # Also off the event loop, for the same reason as the tool call above: this
+            # is a synchronous SDK call and this handler is `async def`, so an inline
+            # call blocked every other request for its whole duration. Pre-existing, and
+            # invisible while the model answered in a couple of seconds — it stopped
+            # being invisible the moment a run legitimately took a minute.
+            result = await asyncio.to_thread(
+                query_llm,
+                context=full_context,
+                question=request.question,
             reasoning=request.reasoning,
             reasoning_style=request.reasoning_style,
             memory_context=memory_context,
@@ -321,6 +400,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 cursor.close()
                 conn.close()
         except Exception as e:
+            warnings.append(f"This turn's audit record could not be written ({e}).")
             print(f"⚠️  Audit log write failed (non-blocking): {e}")
 
         # ── Save the assistant response — only for a real conversation ────────
@@ -330,7 +410,17 @@ async def api_teacher_query(request: TeacherQueryRequest):
             try:
                 state.conversation_api.add_message(conv_id, uid, "assistant", result)
             except Exception as e:
-                print(f"⚠️  Failed to save assistant response: {e}")
+                persistence_error = f"This reply could not be written to this package's conversation: {e}"
+                print(f"❌ Failed to save assistant response: {e}")
+
+        # The mirror writes (memory store, tag trigger) record their failures where they
+        # happen; this is the caller that can say them (see ConversationAPI._MIRROR_WARNINGS).
+        if state.conversation_api:
+            try:
+                warnings.extend(state.conversation_api.drain_mirror_warnings())
+            except Exception as drain_error:
+                # Not swallowed — a drain failure is itself said (the gate counts `pass`).
+                warnings.append(f"the mirror-write warning list could not be read ({drain_error}).")
 
         # The measured cost of this call, attributed to the conversation it
         # served. A surface seat may only show its own conversation's numbers —
@@ -351,6 +441,14 @@ async def api_teacher_query(request: TeacherQueryRequest):
             # shows it rather than letting a run look complete when the design was
             # never read.
             "tool_warnings": tool_warnings,
+            # WHAT DID NOT PERSIST, SAID OUT LOUD. The writes above fail into a server-side
+            # `print` and the caller used to get a clean 200 — the turn was drawn in the
+            # thread and gone on reload, with nothing anywhere telling the person. The seat
+            # draws this line in the thread (chat-panel._send). None on a clean turn.
+            "persistence_error": persistence_error,
+            # Everything this turn could not read or write — drawn by the seat, logged into
+            # the trace. Empty on a clean turn.
+            "warnings": warnings,
         }
 
     except Exception as e:
