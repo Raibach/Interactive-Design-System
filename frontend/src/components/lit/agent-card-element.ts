@@ -97,7 +97,7 @@ export class AgentCardElement extends LitElement {
       width: 262px;
       height: 251px;
       background: var(--card-bg, #1C2F4E);            /* the design's own fill */
-      border: 1px solid #8f1340;
+      border: 1px solid #3e243c;
       border-radius: 10px;
       box-shadow:
         4px 4px 12px 0px rgba(0, 0, 0, 0.36),
@@ -396,7 +396,7 @@ export class AgentCardElement extends LitElement {
 
     return html`
       <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40001114:5813"
-           style="${usesDesignSystemStyle ? '--card-bg: rgba(28, 47, 78, 0.90);' : `--card-bg: color-mix(in srgb, ${safeColor || '#1C2F4E'} 90%, transparent);`}
+           style="${usesDesignSystemStyle ? '--card-bg: color-mix(in srgb, #262441 90%, transparent);' : `--card-bg: color-mix(in srgb, ${safeColor || '#1C2F4E'} 90%, transparent);`}
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).

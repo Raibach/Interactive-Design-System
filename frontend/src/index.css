@@ -56,7 +56,7 @@ body {
    chat-messages, chat-repair-actions) read these; custom properties inherit through shadow
    boundaries, so every seat, wherever it lives, draws the same conversation. */
 :root {
-  --chat-bg: #0c142e;
+  --chat-bg: #19213c;
   --chat-text: #b6afbd;
   --chat-user-bg: rgba(255, 255, 255, 0.1);
   --chat-rule: transparent;

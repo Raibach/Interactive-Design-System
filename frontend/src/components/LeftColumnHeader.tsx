@@ -183,7 +183,7 @@ export default function LeftColumnHeader({
         data-ui-description="Brand logo and navigation tabs"
         className="flex items-center justify-between px-4"
         style={{
-          backgroundColor: "#251831",
+          backgroundColor: "#19213c",
           minHeight: "56px",
         }}
       >
@@ -252,8 +252,9 @@ export default function LeftColumnHeader({
                         onClick={() => { if (!isDisabled) setActiveTab(tab.id); }}
                         className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${isDisabled ? 'cursor-default' : 'cursor-pointer'}`}
                         style={{
-                          color: "#ffedab",
+                          color: "#b6afbd",
                           backgroundColor: isActive && !isDisabled ? "rgba(0,0,0,0.10)" : "transparent",
+                          border: isActive && !isDisabled ? "1px solid #3e243c" : "1px solid transparent",
                         }}
                       >
                         <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 opacity-70">
