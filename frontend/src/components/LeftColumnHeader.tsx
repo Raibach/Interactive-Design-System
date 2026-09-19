@@ -183,7 +183,7 @@ export default function LeftColumnHeader({
         data-ui-description="Brand logo and navigation tabs"
         className="flex items-center justify-between px-4"
         style={{
-          backgroundColor: "#19213c",
+          backgroundColor: "#22172c",
           minHeight: "56px",
         }}
       >

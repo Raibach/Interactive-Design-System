@@ -396,7 +396,7 @@ export class AgentCardElement extends LitElement {
 
     return html`
       <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40001114:5813"
-           style="${usesDesignSystemStyle ? '--card-bg: color-mix(in srgb, #262441 90%, transparent);' : `--card-bg: color-mix(in srgb, ${safeColor || '#1C2F4E'} 90%, transparent);`}
+           style="${usesDesignSystemStyle ? '--card-bg: color-mix(in srgb, #0e294a 90%, transparent);' : `--card-bg: color-mix(in srgb, ${safeColor || '#1C2F4E'} 90%, transparent);`}
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
