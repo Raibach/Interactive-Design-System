@@ -64,7 +64,10 @@ export class ChatMessages extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      padding: 14px 16px;
+      /* THE BOTTOM CLEARS THE RESIZE BAR — the owner, 2026-09-19: "an extra 10 pixels
+         vertical padding to the bottom of my chat outputs." The thread grows right up to
+         the input's horizontal gripper, and the last line needs air under it. */
+      padding: 14px 16px 24px;
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;

@@ -57,7 +57,9 @@ export class SmallDropdown extends LitElement {
       display: block;
       width: 100%;
     }
-    /* role-tile #40001085:1826 — white, radius 4, the frame's small shadow. */
+    /* A FAINT OUTLINE, NOT A TILE — the owner, 2026-09-19: "knock it down to 35… a very
+       faint outline of that in the chat area. I don't want that full fill." The white tile
+       and its drop are gone; the outline waits, and the hover lights it up. */
     .trigger {
       display: flex;
       align-items: center;
@@ -65,23 +67,25 @@ export class SmallDropdown extends LitElement {
       min-height: 30px;
       padding: 0 0 0 10px;
       box-sizing: border-box;
-      background: #ffffff;
-      border: none;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.35);
       border-radius: 4px;
-      box-shadow: 2px 2px 6px 0 rgba(0, 0, 0, 0.15), -2px -2px 6px 0 rgba(0, 0, 0, 0.15);
       cursor: pointer;
       font-family: 'Inter', system-ui, sans-serif;
       text-align: left;
+      transition: border-color 120ms linear;
     }
     .label {
       flex: 1 1 auto;
       min-width: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #4e68d2;
+      /* The design's blue, at the same 35% — every part of the tile rests faint. */
+      color: rgba(78, 104, 210, 0.35);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      transition: color 120ms linear;
     }
     /* chevron #40001085:1892 — a 40x30 box, padding 7, holding the 14x13 artwork.
        The DIM is the design's: 50% blue closed, full blue open. It rides on the image as
@@ -107,8 +111,10 @@ export class SmallDropdown extends LitElement {
     }
     .trigger[aria-expanded='true'] .chevron { transform: rotate(180deg); }
     .trigger[aria-expanded='true'] .chevron img { opacity: 1; }
-    /* Hover — inferred (the frame carries no hover variant). */
-    .trigger:hover { background: #f7fafc; }
+    /* Hover — inferred (the frame carries no hover variant). The light-up: the outline and
+       the word come to full, so the tile is faint until it is wanted. */
+    .trigger:hover { background: transparent; border-color: rgba(255, 255, 255, 0.9); }
+    .trigger:hover .label { color: #4e68d2; }
     .body { margin-top: 10px; }
     .body.closed { display: none; }
   `;

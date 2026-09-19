@@ -223,11 +223,36 @@ describe('<chat-panel> draws its seat', () => {
 
     expect(el.conversationId).toBe('conv-B');
     expect(calls.some((c) => c.url === '/api/conversations/conv-B/messages?limit=200')).toBe(true);
-    // AND THE COLUMN MOVES TO TRACE. Picking a conversation is a request to SEE it, and what
-    // there is to see about a run is its trace (owner, 2026-09-18). So the thread is off
-    // screen by design — the messages are still there, and the tab says where we are.
-    expect(el.activeTab).toBe('trace');
+    // AND THE COLUMN MOVES TO THE CONVERSATION'S OWN TAB. Picking a conversation is a request
+    // to continue THAT process, so the panel lands on the tab the row belongs to — the chat
+    // for a chat conversation (the old jump to trace, which the console does not even offer,
+    // is gone: owner, 2026-09-19).
+    expect(el.activeTab).toBe('chat');
     expect((el.messages || []).some((m) => String(m.content || '').includes('It reads the node.'))).toBe(true);
+  });
+
+  it('lands on Approvals when the picked conversation is an approvals one', async () => {
+    stubFetch([{ role: 'user', content: 'what did the inspection find' }]);
+
+    const el = await mount({
+      conversationId: 'conv-chat',
+      conversations: [
+        { id: 'conv-chat', title: 'Console — Chat', tab: 'chat' },
+        { id: 'conv-approvals', title: 'Console — Approvals', tab: 'approvals' },
+      ],
+    });
+    await settle(el);
+
+    const messagesEl = el.shadowRoot!.querySelector('chat-messages')!;
+    messagesEl.dispatchEvent(new CustomEvent('conversation-select', {
+      bubbles: true,
+      composed: true,
+      detail: { conversationId: 'conv-approvals' },
+    }));
+    await settle(el);
+
+    expect(el.conversationId).toBe('conv-approvals');
+    expect(el.activeTab).toBe('approvals');
   });
 
   it('resizes the input area when the gripper is dragged', async () => {
@@ -472,21 +497,24 @@ describe('<chat-panel> is not fooled by a child that names another slot', () => 
  * "this is only for the console, not anywhere else chat appears."
  *
  * Which seat is the console's is not a second flag: it is the rail's own list, written by the
- * server, and the seat that OFFERS Repairs is the seat that draws the findings above its
- * thread. A package's panel slots a TraceFeed and has no Repairs button, so nothing changes
- * there — the element is the same, the place is not.
+ * server, and the seat that OFFERS Approvals is the seat that draws the findings. And WHERE it
+ * draws them moved on the owner's instruction, 2026-09-19: "remove the repairs from the tab —
+ * repairs live under the approvals" and, of the chat tab, "from the chat tab." So the region is
+ * drawn on APPROVALS ONLY: the chat tab is the conversation and nothing else. A package's panel
+ * slots a TraceFeed and has no Approvals button, so nothing changes there — the element is the
+ * same, the place is not.
  *
  * jsdom computes no `::slotted` rules, so what is asserted is the structure the CSS then
- * filters: the region is drawn on the chat tab, and its sibling thread is still drawn.
+ * filters: the region is drawn above the thread on Approvals, absent on Chat.
  */
-describe("<chat-panel> — the console's chat carries the findings", () => {
-  const CONSOLE_SEAT = 'chat,versions,tools,approvals,repair';
+describe("<chat-panel> — the console's approvals tab carries the findings", () => {
+  const CONSOLE_SEAT = 'chat,versions,tools,approvals';
   const PACKAGE_SEAT = 'chat,trace,versions,tools,executions,eval';
 
-  it('draws the findings region above the thread, with the thread still there', async () => {
+  it('draws the findings region above the thread on Approvals, with the thread still there', async () => {
     const repair = document.createElement('chat-repair-actions');
     repair.setAttribute('slot', 'view');
-    const el = await mount({ activeTab: 'chat', allowedTabs: CONSOLE_SEAT }, repair);
+    const el = await mount({ activeTab: 'approvals', allowedTabs: CONSOLE_SEAT }, repair);
 
     expect(el.shadowRoot!.querySelector('.chat-top')).not.toBeNull();
     expect(el.shadowRoot!.querySelector('.chat-top slot[name="view"]')).not.toBeNull();
@@ -495,6 +523,15 @@ describe("<chat-panel> — the console's chat carries the findings", () => {
     const region = el.shadowRoot!.querySelector('.chat-top')!;
     const thread = el.shadowRoot!.querySelector('chat-messages')!;
     expect(region.compareDocumentPosition(thread) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('draws nothing of the findings on the chat tab — the conversation and nothing else', async () => {
+    const repair = document.createElement('chat-repair-actions');
+    repair.setAttribute('slot', 'view');
+    const el = await mount({ activeTab: 'chat', allowedTabs: CONSOLE_SEAT }, repair);
+
+    expect(el.shadowRoot!.querySelector('.chat-top')).toBeNull();
+    expect(el.shadowRoot!.querySelector('chat-messages')).not.toBeNull();
   });
 
   it("leaves every other chat alone — a package's seat draws no such region", async () => {
@@ -509,7 +546,7 @@ describe("<chat-panel> — the console's chat carries the findings", () => {
   it('draws it on a view tab too, in the view hole the rail switches to', async () => {
     const repair = document.createElement('chat-repair-actions');
     repair.setAttribute('slot', 'view');
-    const el = await mount({ activeTab: 'repair', allowedTabs: CONSOLE_SEAT }, repair);
+    const el = await mount({ activeTab: 'versions', allowedTabs: CONSOLE_SEAT }, repair);
 
     expect(el.shadowRoot!.querySelector('.chat-top')).toBeNull();
     expect(el.shadowRoot!.querySelector('.view-slot slot[name="view"]')).not.toBeNull();

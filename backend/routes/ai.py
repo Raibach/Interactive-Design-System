@@ -49,7 +49,11 @@ router = APIRouter()
 # and nowhere else). Trace, Runs and Evals leave this menu and stay where they mean something:
 # a record of a RUN, which is a package's business.
 PACKAGE_TABS = "chat,trace,versions,tools,executions,eval"
-CONSOLE_TABS = "chat,versions,tools,approvals,repair"
+# REPAIRS LEFT THIS MENU on the owner's instruction, 2026-09-19: "remove the repairs from
+# the tab — repairs live under the approvals." The findings VIEW still draws for the console
+# (the repair-view below), but under Approvals, where a finding about the whole catalog
+# belongs; the chat tab is the conversation and nothing else.
+CONSOLE_TABS = "chat,versions,tools,approvals"
 
 
 def _seat_tabs(components: list, tabs: str) -> None:
@@ -567,7 +571,7 @@ REQUIREMENTS:
    chat; collapsed it is a header with a count on it, and opening it is one click.
    There is no "trace-view" in this assembly any more: Trace left this menu on the same
    instruction, and a view with no rail button would be a hole nothing can reach.
-6. "console-chat" carries "allowedTabs": "chat,versions,tools,approvals,repair".
+6. "console-chat" carries "allowedTabs": "chat,versions,tools,approvals".
    THE MENU IS THE PLACE: the console is the ONE global seat, so it is the only one that
    offers APPROVALS — the issues that span every package — and the only one that offers
    REPAIRS, the findings of the catalog check. A package's seat omits both: a package can
@@ -582,7 +586,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
   "components": [
     {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "console-chat"}}}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
-    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,versions,tools,approvals,repair", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
+    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,versions,tools,approvals", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
     {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
   ],
   "ai_message": "Your message"

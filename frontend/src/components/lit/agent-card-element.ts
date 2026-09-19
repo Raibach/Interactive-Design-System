@@ -16,7 +16,9 @@
  * with status, likes with the heart). No author section — the design has none.
  */
 import { LitElement, html, css } from 'lit';
-import cardLogo from '@/assets/figma-card-logo.svg';
+// THE CHAT'S COPILOT MARK, the logo its column's header carries — the owner, 2026-09-19:
+// "I meant for that to be the copilot icon. It's at the very top of the chat vertical menu."
+import chatMenuIcon from './assets/chat-logo-bce2fe.png';
 import favoriteIcon from '@/assets/figma-card-favorite.svg';
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -97,12 +99,14 @@ export class AgentCardElement extends LitElement {
       width: 262px;
       height: 251px;
       background: var(--card-bg, #1C2F4E);            /* the design's own fill */
-      border: 1px solid #3e243c;
+      /* THE BORDER IS THE HOVER'S — the owner, 2026-09-19: no border at rest, the rail's
+         teal on hover. Transparent rather than absent, so the box never shifts by a pixel. */
+      border: 1px solid transparent;
       border-radius: 10px;
       box-shadow:
         4px 4px 12px 0px rgba(0, 0, 0, 0.36),
         -4px -4px 6px 0px rgba(0, 0, 0, 0.28);
-      padding: 10px;
+      padding: 0 10px 10px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -116,12 +120,19 @@ export class AgentCardElement extends LitElement {
       cursor: pointer;
       font-family: 'Inter', system-ui, sans-serif;
     }
+    /* The hover IS the border: the rail's teal, on the card that has the hand. */
+    .card:hover { border-color: #1FACC2; }
 
     /* ── card-header — logo, function, category ──────────────────────────── */
     .card-header {
       align-self: stretch;
       display: flex;
       flex-direction: row;
+      /* THE TITLE CENTRES AGAINST THE LOGO — the owner, 2026-09-19: "bring the 'function
+         like repair' title to the center of the box… then it'll be an alignment with the
+         logo." The logo centres in the row; the labels carry a top pad as tall as the
+         category line below the title, which lands the TITLE on the row's centre — the
+         logo's own centre — with the category hanging beneath both. */
       align-items: center;
       gap: 10px;
       padding: 3px 0;
@@ -131,7 +142,13 @@ export class AgentCardElement extends LitElement {
       width: 39px;
       height: 35px;
       display: block;
+      /* FORCED INTO THE BOX, not resized to it — the box stays the design's 39x35. */
+      object-fit: fill;
     }
+    /* THE CATEGORY LINE IS GONE from the card — the owner, 2026-09-19: "just remove the
+       category." Its box, its empty state and the pad that centred above it all leave with
+       it; the labels are the indicator line alone, centred against the logo. The category
+       itself is untouched in the data. */
     .header-labels {
       flex: 1 1 auto;
       width: 199px;
@@ -149,7 +166,8 @@ export class AgentCardElement extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    /* The category — 12px, the categories table's title_color (the design's #FB8D67). */
+    /* The category — 12px, the categories table's title_color (the design's #FB8D67).
+       NOT DRAWN: the line left the card on the owner's instruction, 2026-09-19. */
     .cat-line {
       height: 19px;
       font-weight: 700;
@@ -159,12 +177,16 @@ export class AgentCardElement extends LitElement {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      display: none;
     }
 
     /* ── card-content — title + description ─────────────────────────────── */
     .card-content {
       align-self: stretch;
       flex: 1 1 auto;
+      /* Same reason as the description's: a flex item may not shrink below its content
+         unless min-height says so (see .card-description). */
+      min-height: 0;
       display: flex;
       flex-direction: column;
       gap: 9px;
@@ -185,18 +207,29 @@ export class AgentCardElement extends LitElement {
       -webkit-box-orient: vertical;
     }
     .card-description {
-      flex: 1 1 82px;                                 /* takes the room the title gives back */
+      /* THE FLEXIBLE BOX — the owner, 2026-09-19: "each one of those is a vertical container
+         that flexes. The only one that's fixed is the footer. The description should flex
+         based on how much of the title area is." The title hugs its lines (0 1 auto), and
+         the description takes what remains above the footer; the node's 82 is only its
+         starting size, and the four-line clamp bounds the text inside it. */
+      flex: 1 1 82px;
       /* The design draws this text at Inter Regular; the app's typography law is
          nothing below Medium, so it renders 500. Flagged to the design. */
       font-weight: 500;
       font-size: 13px;
       line-height: 20px;
       color: var(--card-text-color, #b6afbd);
+      /* NO CLAMP — THE BOX DECIDES HOW MANY LINES SHOW. The owner, 2026-09-19: "whichever
+         one has a long title, the description needs to squeeze. If it doesn't have a long
+         title the description can expand." A fixed four-line clamp made that impossible: the
+         box grew but the text stopped.
+         AND min-height: 0 IS LOAD-BEARING — a flex item's min-height defaults to AUTO (its
+         content's height), so without this the box refuses to shrink below its text and the
+         overflow lands under the footer ("the description text sitting underneath the
+         footer… that's not possible if you built this correctly" — it was not). */
+      min-height: 0;
       overflow: hidden;
       word-break: break-word;
-      display: -webkit-box;
-      -webkit-line-clamp: 4;
-      -webkit-box-orient: vertical;
     }
 
     /* ── footer-details — the flip-footer pill + likes ───────────────────── */
@@ -214,9 +247,13 @@ export class AgentCardElement extends LitElement {
       gap: 5px;
       height: 28px;
       padding: 0 5px;
-      border: 1px solid #FFFFFF;
+      /* THE RAIL'S TEAL — the owner, 2026-09-19: the card's features wear the chat menu
+         bar's icon colour (#1FACC2) so the details read as one family. At 35% while the
+         card rests, so the details step back until they are wanted. */
+      border: 1px solid rgba(31, 172, 194, 0.35);
       border-radius: 8px;
       overflow: hidden;
+      transition: border-color 120ms linear;
     }
     .version-text {
       width: 81px;
@@ -227,10 +264,15 @@ export class AgentCardElement extends LitElement {
       font-weight: 500;
       font-size: 14px;
       line-height: 17px;
-      color: #FFFFFF;
+      /* SECONDARY INFORMATION RESTS FAINT — the owner, 2026-09-19: "the version text needs
+         to be dropped down to 35%… it just needs to be faint. And then it can light up when
+         they hover." */
+      color: rgba(255, 255, 255, 0.35);
       white-space: nowrap;
       overflow: hidden;
+      transition: color 120ms linear;
     }
+    .card:hover .version-text { color: #FFFFFF; }
     .status-text {
       width: 78px;
       height: 28px;
@@ -240,10 +282,15 @@ export class AgentCardElement extends LitElement {
       font-weight: 700;
       font-size: 14px;
       line-height: 17px;
-      color: #ffedab;                                 /* the status — the header's cream */
+      color: rgba(31, 172, 194, 0.35);                /* the status — the rail teal, rested */
       white-space: nowrap;
       overflow: hidden;
+      transition: color 120ms linear;
     }
+    /* AND THE DETAILS LIGHT UP UNDER THE HAND — the owner, 2026-09-19: "maybe they light up
+       when you have her on the card." The completed verdict keeps its own green. */
+    .card:hover .version-pill { border-color: #1FACC2; }
+    .card:hover .status-text:not(.completed) { color: #1FACC2; }
     /* A finished package says so in green — asked for by name. It is the one word this chip
        draws that is a verdict rather than a state: the work is done, and the card leaves the
        console on the next assembly. */
@@ -262,10 +309,16 @@ export class AgentCardElement extends LitElement {
       font-weight: 700;
       font-size: 13px;
       line-height: 20px;
-      color: #FFFFFF;
+      /* SECONDARY LIKE THE REST — the owner, 2026-09-19: "do the same thing with the count
+         that sits next to the heart." Faint at rest, full under the hand. */
+      color: rgba(255, 255, 255, 0.35);
       text-align: right;
       white-space: nowrap;
+      transition: color 120ms linear;
     }
+    .card:hover .like-count { color: #FFFFFF; }
+    /* THE HEART WEARS THE RAIL'S TEAL — the artwork is the design's own file, used as a
+       MASK so nothing is re-drawn: the box is filled with the colour and shaped by the SVG. */
     .favorite {
       flex: 0 0 30px;
       width: 30px;
@@ -273,12 +326,14 @@ export class AgentCardElement extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
+      background-color: #1FACC2;
+      -webkit-mask: var(--heart) center / contain no-repeat;
+      mask: var(--heart) center / contain no-repeat;
+      /* A SUGGESTION, NOT A STATE — the owner, 2026-09-19: "it should just be a suggestion
+         since there's no hearts there." Half opaque until a heart means something. */
+      opacity: 0.5;
     }
-    .favorite img {
-      display: block;
-      width: 30px;
-      height: 28px;
-    }
+    .favorite img { display: none; }
 
     /* ── card-delete — owner-instructed control (NOT in the Figma pull) ──── */
     /* Progressive: hidden until the card is hovered/focused, then trash
@@ -378,6 +433,33 @@ export class AgentCardElement extends LitElement {
   /** True for the moment between CONFIRM and the host being told. */
   private _leaving = false;
 
+  /**
+   * THE ELLIPSIS THE BOX'S OWN HEIGHT IMPLIES. The description's box is sized by the title
+   * above it (the owner's flex model), so how many lines show changes per card — and a fixed
+   * line-clamp cannot both adapt to the box and ellipsize the cut. So the text is MEASURED
+   * after each render: if it overflows, the longest prefix that fits is found (binary search
+   * over the characters) and marked with the ellipsis. The owner, 2026-09-19: "it is not
+   * using ellipses." jsdom reports 0/0 for these, so nothing is trimmed where nothing is
+   * laid out.
+   */
+  protected updated(): void {
+    const el = this.renderRoot?.querySelector('.card-description') as HTMLElement | null;
+    if (!el) return;
+    const full = String(this.description ?? '');
+    if (!full) return;
+    el.textContent = full;
+    if (el.scrollHeight <= el.clientHeight + 1) return; // it fits — nothing to trim
+    let lo = 0;
+    let hi = full.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      el.textContent = `${full.slice(0, mid).trimEnd()}…`;
+      if (el.scrollHeight <= el.clientHeight + 1) lo = mid;
+      else hi = mid - 1;
+    }
+    el.textContent = `${full.slice(0, lo).trimEnd()}…`;
+  }
+
   disconnectedCallback() {
     if (this._deleteTimer) clearTimeout(this._deleteTimer);
     super.disconnectedCallback();
@@ -396,7 +478,7 @@ export class AgentCardElement extends LitElement {
 
     return html`
       <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40001114:5813"
-           style="${usesDesignSystemStyle ? '--card-bg: color-mix(in srgb, #0e294a 90%, transparent);' : `--card-bg: color-mix(in srgb, ${safeColor || '#1C2F4E'} 90%, transparent);`}
+           style="--card-bg: color-mix(in srgb, #1c2d4c 86%, transparent);
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
@@ -416,9 +498,12 @@ export class AgentCardElement extends LitElement {
 
         <!-- card-header -->
         <div class="card-header">
-          <img class="card-logo" src=${cardLogo} alt="" aria-hidden="true" />
+          <img class="card-logo" src=${chatMenuIcon} alt="" aria-hidden="true" />
           <div class="header-labels">
-            <div class="fn-line">${this.function || ''}</div>
+            <!-- THE INDICATOR, NOT A VALUE — the owner, 2026-09-19: "'Agent Function | Category'
+                 is just an indicator. Don't insert category there." The category's own value
+                 keeps its line below. -->
+            <div class="fn-line">Agent Function | Category</div>
             <div class="cat-line">${this.category || ''}</div>
           </div>
         </div>
@@ -437,7 +522,7 @@ export class AgentCardElement extends LitElement {
           </div>
           <div class="likes">
             <div class="like-count">${likeCount}</div>
-            <div class="favorite"><img src=${favoriteIcon} alt="" aria-hidden="true" /></div>
+            <div class="favorite" style=${`--heart: url("${favoriteIcon}")`}><img src=${favoriteIcon} alt="" aria-hidden="true" /></div>
           </div>
         </div>
 

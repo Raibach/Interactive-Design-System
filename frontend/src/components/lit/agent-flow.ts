@@ -1286,7 +1286,9 @@ export class AgentFlow extends LitElement {
         --flow-step-border: #2b3a4b;
         --flow-done-border: #3f5030;
         --flow-failed-border: #5a2f28;
-        --flow-dot: #352c52;
+        /* The owner, 2026-09-19: the dark canvas's dots a little lighter — #352c52 lifted a
+           step so the grid reads without competing with the nodes. */
+        --flow-dot: #403562;
       }
       .canvas {
         position: relative;

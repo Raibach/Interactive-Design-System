@@ -625,7 +625,21 @@ export class ChatPanel extends LitElement {
     }
     .content-scroll::-webkit-scrollbar { width: 14px; }
     .content-scroll::-webkit-scrollbar-track { background: transparent; }
-    .content-scroll::-webkit-scrollbar-thumb { background: #dadee4; border-radius: 10px; }
+    /* THE BAR STEPS BACK UNTIL IT IS WANTED. The owner, 2026-09-19: the light thumb was
+       "really prominent" on the plum — a shade of the header's purple at rest, drawn THIN by
+       a transparent border the hit area keeps (the standard shrink), and it fills out and
+       brightens under the hand. The track was already transparent; it stays that way. */
+    .content-scroll::-webkit-scrollbar-thumb {
+      background: #33263e;
+      background-clip: padding-box;
+      border: 4px solid transparent;
+      border-radius: 10px;
+      transition: background 120ms linear, border-width 120ms linear;
+    }
+    .content-scroll::-webkit-scrollbar-thumb:hover {
+      background: #4a3a58;
+      border-width: 2px;
+    }
     .content-header { flex: 0 0 auto; min-height: 0; display: flex; }
     .content-header ::slotted(*) { flex: 1 1 auto; min-height: 0; }
     /* "chat-output-simple-slot-area" #40001085:2373 — the hole the surface injects into.
@@ -842,11 +856,17 @@ export class ChatPanel extends LitElement {
    * server's list rather than taking a second flag means the rail and the panel cannot
    * disagree about which seat this is — the same reason the list is not the model's to write.
    */
+  /**
+   * Is this seat the one that carries a findings view? APPROVALS is that tab now — the
+   * owner, 2026-09-19: "remove the repairs from the tab — repairs live under the approvals."
+   * The repair TAB is gone (the console's allowedTabs dropped it), and the view that used
+   * to hang off it draws under Approvals, where the findings always belonged.
+   */
   private _findingsSeat(): boolean {
     return this.allowedTabs
       .split(',')
       .map((tab) => tab.trim())
-      .includes('repair');
+      .includes('approvals');
   }
 
   private _viewSlotted(): boolean {
@@ -891,6 +911,36 @@ export class ChatPanel extends LitElement {
     // open up this package — I only see this package."
     if (changed.has('sessionId')) this._enterPackage(String(this.sessionId ?? ''));
     if (changed.has('conversationId')) void this._loadHistory();
+    // History arriving lands the column at the newest turn (see _scrollThreadToBottom)...
+    if (changed.has('messages')) this._scrollThreadToBottom();
+    // ...AND SO DOES THE COLUMN COMING BACK. The history usually loads while the column is
+    // CLOSED — the console opens with the chat collapsed — where the scroller measures 0 and
+    // the scroll is a no-op, so the first open used to land at the top of the thread
+    // (measured 2026-09-19: "it's not quite at the bottom").
+    if (changed.has('collapsed') && !this.collapsed) this._scrollThreadToBottom();
+  }
+
+  /**
+   * THE THREAD OPENS AT ITS NEWEST TURN. A conversation is read from the bottom up — the
+   * last thing said is the thing being answered — so the column's one scroller lands there
+   * whenever the thread grows: history arriving, a turn sent, a reply landing. (The COLUMN
+   * scrolls, not the thread — chat-messages says why — so the move happens here.)
+   *
+   * TWO FRAMES, because the DOM grows after this render and the scroller has to be measured
+   * once it has — the first frame lands it, the second catches anything that settled late
+   * (a wrap that changed height, the fold opening). Cheap, and it is what "at the bottom"
+   * means when the content is still arriving.
+   */
+  private _scrollThreadToBottom(): void {
+    if (!this._showsThread) return;
+    const once = () => {
+      const scroller = this.renderRoot?.querySelector('.content-scroll') as HTMLElement | null;
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    };
+    requestAnimationFrame(() => {
+      once();
+      requestAnimationFrame(once);
+    });
   }
 
   /**
@@ -1306,6 +1356,7 @@ ${workspaceContext}`;
     if (this.conversationId && !this._conversationBelongsToPackage(this.conversationId)) return;
     const before = this._local.length;
     this._local = [...this._local, { role: 'user', content: text }];
+    this._scrollThreadToBottom();
     this._sending = true;
     this.requestUpdate();
     let answered = false;
@@ -1421,6 +1472,8 @@ ${workspaceContext}`;
         this._local = [...this._local, { role: 'assistant', content: `Connection error: ${why}` }];
       }
     } finally {
+      // Her reply (or the failure) just landed — the column follows it down.
+      this._scrollThreadToBottom();
       // A turn that was ANSWERED while this seat had no conversation lives only here:
       // the backend refused to write it (no row to bind it to yet), so it is held and
       // handed over by flushPendingTurns when the first Save creates the package's
@@ -1827,7 +1880,7 @@ ${workspaceContext}`;
                 <div class="content-scroll">
                   <div class="content-header"><slot name="content-header"></slot></div>
                   ${this._showsThread
-                    ? html`${this._findingsSeat()
+                    ? html`${this.activeTab === 'approvals' && this._findingsSeat()
                         ? html`<div class="chat-top">
                             <slot name="view" @slotchange=${this._onSlotChange}></slot>
                           </div>`
