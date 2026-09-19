@@ -9,7 +9,7 @@
  * CATEGORY THEMING: Dynamic colors from PostgreSQL (categories table) arrive as
  * category-color / category-title-color / category-text-color and are applied as
  * CSS custom properties. The card's own defaults are the design's (the Design
- * System row: #10455F / #FB8D67 / #FFFFFF).
+ * System row: #1C2F4E / #FB8D67 / #FFFFFF).
  *
  * STRUCTURE (the node's own): header (logo + function line + category line),
  * content (title + description with the ##PROMPT## lead), footer (version pill
@@ -96,7 +96,7 @@ export class AgentCardElement extends LitElement {
       position: relative;
       width: 262px;
       height: 251px;
-      background: var(--card-bg, #10455F);            /* the design's own fill */
+      background: var(--card-bg, #1C2F4E);            /* the design's own fill */
       border: 3px solid #FFFFFF;                      /* stroke, 3px */
       border-radius: 10px;
       box-shadow:

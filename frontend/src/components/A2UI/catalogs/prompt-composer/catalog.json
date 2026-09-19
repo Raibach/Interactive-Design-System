@@ -566,8 +566,8 @@
             },
             "category_color": {
               "type": "string",
-              "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#10455F' (the design's own fill) when the category is unregistered.",
-              "default": "#10455F"
+              "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#1C2F4E' (the design's own fill) when the category is unregistered.",
+              "default": "#1C2F4E"
             },
             "category_title_color": {
               "type": "string",
