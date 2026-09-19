@@ -110,7 +110,7 @@ export class ChatFooter extends LitElement {
   }
 }
 
-customElements.define('chat-footer', ChatFooter);
+if (!customElements.get('chat-footer')) customElements.define('chat-footer', ChatFooter);
 
 declare global {
   interface HTMLElementTagNameMap {

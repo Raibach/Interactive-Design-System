@@ -549,7 +549,7 @@ class PromptSectionEditor extends LitElement {
   }
 }
 
-customElements.define('prompt-section-editor', PromptSectionEditor);
+if (!customElements.get('prompt-section-editor')) customElements.define('prompt-section-editor', PromptSectionEditor);
 
 declare global {
   interface HTMLElementTagNameMap {

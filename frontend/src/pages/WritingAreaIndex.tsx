@@ -28,7 +28,9 @@ import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 // retired-files/console-seat-20260917/InteractiveChatInterface.tsx. The console's
 // chat is the same Lit <chat-panel> the composer loads, assembled in the console's
 // surface and bound to the console's own conversation.
-import MobileLayout from "@/components/MobileLayout";
+// MobileLayout stood here — a stub returning null, imported and never rendered. It was
+// moved to retired-files/dead-code-20260918/ with the rest of the unreachable React set
+// (2026-09-18). The real responsive handling is MinWidthWarning + useIsMobile below.
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MinWidthWarning } from "@/components/MinWidthWarning";
 import { useLayoutState } from "@/hooks/useLayoutState";
@@ -195,11 +197,11 @@ export default function Index({
 
   // Composer-specific running state (controls middle column visibility during Run)
   const [isComposerRunning, setIsComposerRunning] = useState(false);
-  // Sticky middle-pane state. Once it opens (Run, or opening a prompt that has
-  // output) it STAYS open — only the user's Clear (or opening a prompt with no
-  // output) closes it. Previously it was derived from compiledOutput, so the
-  // pane auto-collapsed the moment a Run cleared the field.
-  const [middleOpen, setMiddleOpen] = useState(false);
+  // `middleOpen`/`setMiddleOpen` stood here — five writers and NO reader, so every sentence
+  // beside it about "the middle pane opens/closes" was a claim about nothing. The pane's
+  // presence is the MODEL's (the middle column's component, written when the column is
+  // swapped), not a React flag. Removed rather than kept: a dead mirror of a live fact reads
+  // as the place that fact lives, and the next edit to it would move nothing.
 
   // ── Request deduplication: abort previous request if new one comes in ──
   const consoleAssemblyControllerRef = useRef<AbortController | null>(null);
@@ -456,11 +458,15 @@ export default function Index({
   // canvas's own ready signal — which is the one moment that means "the canvas is up".
   const setRunControlsBusy = useCallback((busy: boolean) => {
     for (const tag of ['control-bar', 'canvas-footer']) {
-      document.querySelectorAll(tag).forEach((el) => {
-        const node = el as HTMLElement & { isRunning?: boolean; running?: boolean };
-        node.isRunning = busy;
-        node.running = busy;
-      });
+      // THE SHADOW-PIERCING READ, NOT document.querySelectorAll — these elements are drawn
+      // by the renderer inside its shadow root, so a document-level query finds nothing and
+      // the spinner silently never appeared (the silence `deepFind` exists to end; see its
+      // note above). An absent tag is a view that is not on screen yet, which is why the Run
+      // re-asserts this flag once the canvas has mounted (see the flow-view-ready frame).
+      const node = deepFind<HTMLElement & { isRunning?: boolean; running?: boolean }>(tag);
+      if (!node) continue;
+      node.isRunning = busy;
+      node.running = busy;
     }
   }, []);
   /** When the current run was asked for — the floor the spinner is held for. */
@@ -644,7 +650,10 @@ export default function Index({
   const [_expandedCard, _setExpandedCard] = useState<"a" | "b">("a");
 
   // ── Prompt Session state (Create → Edit → Save → Reopen → Delete) ──
-  const [_promptSessions, setPromptSessions] = useState<PromptSession[]>([]);
+  // A `_promptSessions` list stood here — fetched by `loadPromptSessions` after every save,
+  // create and delete, and read by NOTHING (the underscore was the tell). The console's list
+  // is the model's `/cards` and the sidebar fetches its own, so it was a request per save
+  // whose answer went nowhere. Removed with its loader.
   const [currentPromptSession, setCurrentPromptSession] = useState<PromptSession | null>(null);
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
@@ -671,39 +680,11 @@ export default function Index({
     writeCompiledOutputToSurface(currentPromptSession?.compiledOutput ?? '');
   }, [currentPromptSession?.compiledOutput, writeCompiledOutputToSurface]);
 
-  // The SURFACE SEAT's accumulative usage — what the footer shows. Seat
-  // identity rule: the package chat may only show calls attributed to ITS
-  // conversation (conversation_id in the event, matched against the seat's
-  // bound conversation). No conversation resolved → nothing accumulates and
-  // the footer reads "unattributed". Session totals are the HOST seat's
-  // numbers and are never shown here. Deduped by call_id; reset on package
-  // change.
-  const [usageTotal, setUsageTotal] = useState({
-    totalTokens: 0, inTokens: 0, outTokens: 0, calls: 0, lastCall: '',
-  });
-  useEffect(() => {
-    const seen = new Set<string>();
-    const onUsage = (e: Event) => {
-      const d = (e as CustomEvent).detail || {};
-      const seatConversation = currentPromptSessionObjRef.current?.conversationId ?? null;
-      if (!seatConversation) return;
-      if (typeof d.conversation_id !== 'string' || d.conversation_id !== seatConversation) return;
-      if (d.call_id && seen.has(d.call_id)) return;
-      if (d.call_id) seen.add(d.call_id);
-      setUsageTotal((prev) => ({
-        totalTokens: prev.totalTokens + (typeof d.total_tokens === 'number' ? d.total_tokens : 0),
-        inTokens: prev.inTokens + (typeof d.prompt_tokens === 'number' ? d.prompt_tokens : 0),
-        outTokens: prev.outTokens + (typeof d.completion_tokens === 'number' ? d.completion_tokens : 0),
-        calls: prev.calls + 1,
-        lastCall: typeof d.mode === 'string' ? d.mode : prev.lastCall,
-      }));
-    };
-    window.addEventListener('a2ui:usage', onUsage);
-    return () => window.removeEventListener('a2ui:usage', onUsage);
-  }, []);
-  useEffect(() => {
-    setUsageTotal({ totalTokens: 0, inTokens: 0, outTokens: 0, calls: 0, lastCall: '' });
-  }, [currentPromptSession?.id]);
+  // The SURFACE SEAT's usage accumulator stood here — a second sum of the seat's spend,
+  // deduped by call_id, "what the footer shows". The footer never read it: `usageTotal`
+  // was written by these effects and referenced nowhere else, and the seat's own numbers
+  // reach the surface by path. A running copy of a live fact is the second home the
+  // package contract forbids, so it is gone; the rail and the trace read the event.
   const isSavingRef = useRef(false); // Serialization guard: prevents concurrent save operations
   // Key that changes on each prompt load — forces full unmount/remount of all three columns
   const [promptLoadKey, setPromptLoadKey] = useState(0);
@@ -1394,14 +1375,9 @@ export default function Index({
   };
 
   // ── Prompt Session CRUD Handlers ──
-  const loadPromptSessions = async () => {
-    try {
-      const sessions = await promptService.getPromptSessions({ includeArchived: false });
-      setPromptSessions(sessions);
-    } catch (error) {
-      console.warn('Failed to load prompt sessions:', error);
-    }
-  };
+  // `loadPromptSessions` stood here: a fetch whose only effect was to store the list in a
+  // state nothing read (see the note at that state). Gone with it and with its three call
+  // sites — a save no longer pays for a request whose answer is discarded.
 
   const handleCreateNewPrompt = async (_title?: string) => {
     // ══════════════════════════════════════════════════════════════════════════
@@ -1511,19 +1487,17 @@ export default function Index({
 
       console.log('🤖 [AI] Calling AI save endpoint...');
 
-      // ── Collect column widths from PromptWorkspace ──
-      let columnWidths: { left: number | null; chat: number } | undefined;
-      const widthPromise = new Promise<void>((resolve) => {
-        const handler = (e: Event) => {
-          columnWidths = (e as CustomEvent).detail;
-          window.removeEventListener('column-widths-response' as any, handler);
-          resolve();
-        };
-        window.addEventListener('column-widths-response' as any, handler);
-        window.dispatchEvent(new CustomEvent('collect-column-widths'));
-        setTimeout(() => { if (!columnWidths) { resolve(); } }, 100);
-      });
-      await widthPromise;
+      // ── THE WIDTHS, READ OFF THE ELEMENT THAT OWNS THEM ────────────────────
+      //
+      // This used to dispatch `collect-column-widths` and wait 100ms for a
+      // `column-widths-response` that NOTHING in this repository ever sent: every save paid
+      // the wait and stored no column_widths at all, without a word. The widths are the
+      // layout's own numbers — it renders the panes — so the host reads them at the save
+      // exactly the way it reads workspaceState off the canvas (see the place read below),
+      // through the same shadow-piercing helper.
+      const columnWidths = deepFind<
+        HTMLElement & { widths?: () => { left: number | null; chat: number } }
+      >('workspace-layout')?.widths?.();
 
       // ── The place, as the operator left it ──
       //
@@ -1545,6 +1519,33 @@ export default function Index({
         if (layout) state.leftCollapsed = !!layout.leftCollapsed;
         const canvasState = canvas?.workspaceState?.();
         if (canvasState) Object.assign(state, canvasState);
+        // WHICH MIDDLE VIEW THE PACKAGE WAS LEFT ON — a package saved while the canvas was
+        // up reopens on the canvas; one saved on the output reopens on the output. The
+        // element's presence is the fact: Run mounts the canvas, Reset unmounts it.
+        if (canvas) state.middle = 'flow';
+        else if (deepFind('compiled-output-viewer')) state.middle = 'output';
+        // THE DRAWING AS IT WAS LEFT — the element's drawn graph carries the person's own
+        // edits (positions dragged, nodes added, edges rewired), which the published model
+        // does not. The label and the not-drawn lists come from the model the element holds.
+        //
+        // `drawn` IS A GETTER, NOT A METHOD (agent-flow.ts). This read used to call it —
+        // `flowEl?.drawn?.()` — which threw "flowEl.drawn is not a function" out of the save
+        // handler on EVERY save that had a canvas on screen, so the save never sent and the
+        // toast said exactly that. A value is read; it is not called.
+        const flowEl = deepFind<HTMLElement & {
+          flow?: { label?: string; unresolved?: string[]; absent?: unknown[] };
+          drawn?: { nodes: unknown[]; edges: unknown[] };
+        }>('agent-flow');
+        const drawn = flowEl?.drawn;
+        if (drawn) {
+          state.graph = {
+            label: flowEl?.flow?.label ?? '',
+            nodes: drawn.nodes,
+            edges: drawn.edges,
+            unresolved: flowEl?.flow?.unresolved ?? [],
+            absent: flowEl?.flow?.absent ?? [],
+          };
+        }
         return Object.keys(state).length ? state : undefined;
       })();
 
@@ -1598,7 +1599,44 @@ export default function Index({
       // The repair name has now been written down; it must not follow this user
       // into the next package they save.
       repairTitleRef.current = null;
-      await loadPromptSessions();
+
+      // THE THREAD THAT WAS SPOKEN BEFORE THE PACKAGE EXISTED IS WRITTEN DOWN WITH IT.
+      //
+      // A turn spoken before the first Save has no conversation to live in — the backend
+      // refuses it by design ("this turn will not be persisted": conversations.session_id
+      // is NOT NULL, so there is nothing to bind it to) and it lives only in the seat. The
+      // Save creates the package's conversation; without this hop that conversation starts
+      // empty, and the person who reopens their package finds their own words missing —
+      // the thread beside them is whatever the conversation carries, and an empty one
+      // carries nothing. The pending turns travel in order; turns the backend already
+      // owns are not touched. A save made from the console (a repair launched into a
+      // package) skips this: its seat is the console's, not the package's.
+      const savedConversationId = savedSession.conversationId || undefined;
+      if (headerTab !== 'console' && savedConversationId) {
+        const seat = deepFind<HTMLElement & { flushPendingTurns?: (id: string, sessionId?: string) => Promise<number> }>('chat-panel');
+        let written = 0;
+        if (seat?.flushPendingTurns) {
+          try {
+            written = await seat.flushPendingTurns(savedConversationId, savedSession.id);
+          } catch (err) {
+            // NOT SWALLOWED. The flush writes the thread that was spoken before this package
+            // existed; if it fails, those turns stay pending and the next Save retries — but
+            // nobody was told, which is exactly the defect this line removes. The logger's
+            // warn/error reach the Trace tab (lib/trace-source subscribes to it).
+            logger.error('the pre-save thread could not be written into the package conversation', {
+              conversationId: savedConversationId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        if (written) {
+          console.log(`💬 [SAVE] ${written} turn(s) spoken before the package existed written into ${savedConversationId}`);
+        }
+        // The model learns the id through the ONE writer that already owns this fact —
+        // the seat's own adoption path — so a re-render cannot drop it and every later
+        // turn persists server-side instead of waiting for the next Save.
+        handleConversationChange(savedConversationId, 'composer');
+      }
 
       // If user is on console, re-assemble to show updated cards.
       // If on composer, just update the session state (already done above).
@@ -1806,7 +1844,6 @@ export default function Index({
         if (result.session) {
           setCurrentPromptSession(result.session);
           console.log('✅ [CRUD] Created session from title:', result.session?.id);
-          await loadPromptSessions();
         }
       } catch (error) {
         console.error('❌ [CRUD] Failed to create prompt from title:', error);
@@ -1900,6 +1937,18 @@ export default function Index({
       writeSectionsToSurface(repairSectionsRef.current);
       return;
     }
+
+    // ── THE SESSION'S COPY IS A SEED, NOT AN OVERWRITER ─────────────────────
+    //
+    // This used to re-apply `currentPromptSession.leftColumnContent` whenever it was
+    // present, and the effect's deps include `headerTab` — so leaving the composer and
+    // coming back re-ran it and wrote the session's serialized copy OVER a column the
+    // model had since moved past. A keystroke updates the MODEL (see the write half of
+    // the read/write contract below) but not that serialized string, so a tab round-trip
+    // could quietly restore older text. The model is the source of truth for the current
+    // state (Handling-User-Actions.md); the session's copy is what a package OPENS with —
+    // so it is written only when the column has nothing at all.
+    if (surfaceSections().length > 0) return;
 
     try {
       const raw = currentPromptSession?.leftColumnContent 
@@ -2609,6 +2658,15 @@ export default function Index({
       // session) — the same keys the server puts there. The renderer is handed
       // the model as it is; it walks paths, it does not read this shape.
       const dataModel = reading.dataModel as Record<string, any>;
+      // ── WHAT THE ASSEMBLY COULD NOT READ, INTO THE TRACE ───────────────────
+      // The backend collects every failure it survived into the model's `warnings`
+      // (routes/ai.py `_warn`); the trace is where those are looked at (lib/trace-source
+      // subscribes to this logger). A degraded assembly says so instead of looking clean.
+      if (Array.isArray(dataModel.warnings)) {
+        for (const warning of dataModel.warnings) {
+          logger.warn(`[assembly] ${String(warning)}`, { surfaceId: reading.surfaceId ?? null });
+        }
+      }
       for (const note of reading.notes) console.warn(`🤖 [A2UI] ${note}`);
       console.log(
         `🤖 [A2UI] Envelope surface: "${reading.surfaceId ?? '(unnamed)'}"` +
@@ -2736,6 +2794,11 @@ export default function Index({
           lastAccessedAt: metadata.last_accessed_at || new Date().toISOString(),
           metadata: {},
           is_unsaved: session.is_unsaved ?? !session.id,
+          // THE PLACE IT WAS LEFT, carried through the assembly the way column_widths is —
+          // the backend puts it under /metadata/workspace, and without this hop the reopen
+          // never saw it: the restore effect reads currentPromptSession.workspace, and a
+          // session built here without it reopens "where it was left" only in the record.
+          workspace: metadata.workspace || undefined,
         };
 
         setCurrentPromptSession(assembledSession as any);
@@ -2755,9 +2818,6 @@ export default function Index({
           );
         }
         setHeaderTab('composer');
-        // Open the middle pane only if this prompt already has output; otherwise
-        // leave it closed until the user Runs.
-        setMiddleOpen(!!(session.middle_column?.compiled_output || '').trim());
 
         // ── HER GREETING, WHEN IT IS ANSWERING SOMETHING ───────────────────────
         // Every other assembly's ai_message is deliberately NOT posted (see the note
@@ -2941,6 +3001,20 @@ export default function Index({
       }
       const open = health.report.findings.filter((f) => f.level !== 'pass');
       setCatalogFindings(open);
+      // ── THE GOVERNANCE LINE, IN THE TRACE ──────────────────────────────────
+      // The owner, 2026-09-18: "I need to know when there's a fallback, I need to know
+      // when there's error suppression — we need to report it in the console trace."
+      // The checker counts every swallowed failure on the governed path
+      // (check:error-suppression); this is where that count reaches the person: a warn on
+      // the app logger is a trace entry (lib/trace-source subscribes to it), so the Trace
+      // tab says how many failures are being hidden and where the count lives.
+      const suppressed = open.filter((f: { check?: string }) => f.check === 'error-suppression');
+      if (suppressed.length) {
+        logger.warn(
+          `${suppressed.length} swallowed failure(s) recorded on the governed path — each one hides something from the person`,
+          { check: 'error-suppression', count: suppressed.length, where: 'frontend/catalog-audit/*.json' },
+        );
+      }
       // A finding the report still derives is still open, so a 'done' mark is dropped
       // the moment it comes back (shared/catalogHealth.reconcileRepairs).
       setRepairStages((s) => reconcileRepairs(s, open.map((f) => f.id)));
@@ -3074,9 +3148,12 @@ export default function Index({
       // to accept the new run." The seat is reused across assemblies, so its thread has to be
       // emptied on purpose here; nothing that was SAVED is affected (a package's conversation
       // is loaded from its own id when it is opened).
-      const seat = document.querySelector('chat-panel') as
-        | (HTMLElement & { clearThread?: () => void })
-        | null;
+      // THE SHADOW-PIERCING READ, NOT document.querySelector: the seat is drawn by the
+      // renderer inside its shadow root, so the document-level query returned null on every
+      // click and the thread was silently never emptied — the sentence above was a claim
+      // about behaviour that did not run. `deepFind` is the helper this file already uses
+      // for exactly this boundary (see its note).
+      const seat = deepFind<HTMLElement & { clearThread?: () => void }>('chat-panel');
       seat?.clearThread?.();
       // Move the header tab indicator INSTANTLY — don't wait for AI assembly
       handleHeaderTabChange('composer');
@@ -3261,11 +3338,10 @@ export default function Index({
       await promptService.deletePromptSession(sessionId, true);
       if (currentPromptSession?.id === sessionId) setCurrentPromptSession(null);
       removePackageFromConsole(sessionId);
-      await loadPromptSessions();
     } catch (error) {
       console.error('Failed to delete prompt session:', error);
     }
-  }, [currentPromptSession?.id, loadPromptSessions, removePackageFromConsole]);
+  }, [currentPromptSession?.id, removePackageFromConsole]);
 
   const _handleDeletePromptSession = async (sessionId: string) => {
     if (!confirm('Are you sure you want to delete this prompt? This will remove all versions and the linked chat.')) return;
@@ -3677,6 +3753,17 @@ export default function Index({
   useEffect(() => {
     const stored = currentPromptSession?.workspace;
     if (!stored) return;
+    // THE DRAWING COMES BACK WHENEVER THE PACKAGE LEFT ONE. `middle` is the marker a save
+    // writes now; a package saved before that marker existed still carries the graph the
+    // canvas showed, and a graph with nodes IS the canvas having been open — so both
+    // reopen the same way: the graph written into the model, the column swapped to the
+    // canvas, and the seat + view applied once the canvas mounts. A package whose save
+    // says 'output' (the canvas was closed) has no graph and opens as it always did.
+    const graph = stored.graph;
+    if (stored.middle !== 'output' && graph && graph.nodes?.length) {
+      writeFlowToSurface(graph);
+      setOutputColumn('flow');
+    }
     let frames = 0;
     let applied = false;
     const apply = () => {
@@ -3856,16 +3943,13 @@ export default function Index({
 
     // Listen for editor-send-to-model event (from MyStoryEditor) — REMOVED: MyStory is retired
 
-  // Listen for toggle-third-column event (from ResponsivePromptBuilder RUN button)
-  const handleToggleThirdColumn = () => {
-    console.log('📥 [WritingAreaIndex] Received toggle-third-column event - resetting all columns to equal widths');
-    
-    // Dispatch event to reset columns to equal widths
-    const resetEvent = new CustomEvent('reset-columns-to-equal-widths', {
-      detail: { isThirdColumnOpening: true }
-    });
-    window.dispatchEvent(resetEvent);
-  };
+  // `toggle-third-column` WAS NEVER SENT BY ANYONE. It was listened for here with a handler
+  // that dispatched `reset-columns-to-equal-widths` — which only the retired React
+  // ResizableSplitter ever heard. The element that owns her column is `workspace-layout`,
+  // and it broadcasts its own fact as `third-column-toggle` (the name its registry entry
+  // declares); the shell has nothing to do with that fact — the layout owns it, and the save
+  // reads her state off the element directly. Both dead ends are gone: a listener is not a
+  // wire when the name it waits for is one nobody speaks.
 
   // ── A2UI: Wire run-requested / save-requested from Lit <prompt-section-editor> ──
   // The Lit editor (AI-emitted) is now the source of truth for sections in the AI surface.
@@ -3919,7 +4003,6 @@ export default function Index({
           ? { ...prev, compiledOutput: '⚠️ Run did nothing: there was nothing in the left column to run.' }
           : prev
       );
-      setMiddleOpen(true);
       window.dispatchEvent(new CustomEvent('a2ui:system-message', {
         detail: {
           role: 'assistant',
@@ -3950,7 +4033,6 @@ export default function Index({
     // THE SPINNER GOES ON NOW, not when the tree catches up. See setRunControlsBusy.
     runBusyFromRef.current = Date.now();
     setRunControlsBusy(true);
-    setMiddleOpen(true);
 
     // ── THE PROMPT DOCKS, AND THE CANVAS TAKES THE WIDTH ────────────────────
     //
@@ -3994,8 +4076,14 @@ export default function Index({
     // workspace-layout): two frames, because a React render plus the renderer's rebuild and
     // a paint have to happen before the new middle column is actually on screen — and the
     // dock landing before it is what made her column take the width, then give it back.
-    requestAnimationFrame(() => requestAnimationFrame(() =>
-      window.dispatchEvent(new CustomEvent('flow-view-ready'))));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      // THE BAR THAT ARRIVES IS TOLD, NOT ASSUMED. The swap replaced the middle column, so
+      // the element that took the flag at the click is gone and the one now on screen was
+      // created while the run was already in flight. One re-assert here is what puts the
+      // spinner on the controls the person is actually looking at.
+      setRunControlsBusy(true);
+      window.dispatchEvent(new CustomEvent('flow-view-ready'));
+    }));
     // …AND THE SPINNER IS HELD FOR A FLOOR OF ITS OWN, so the canvas is PRESENTED rather than
     // watched arriving: the assembly is as fast as it is, and a control that stops spinning
     // half a second in reads as a glitch, not as work. Released on the canvas's ready signal,
@@ -4249,24 +4337,11 @@ export default function Index({
     }
   };
 
-  const handleSaveRequested = (e: Event) => {
-    const { sections = [] } = (e as CustomEvent).detail || {};
-    console.log('[WritingAreaIndex] save-requested from <prompt-section-editor>', sections.length, 'sections');
-
-    const leftColumnContent = JSON.stringify({ sections });
-    const compiledOutput = readLiveOutput();
-
-    // Saved — the session owns these sections now.
-    repairSectionsRef.current = null;
-
-    setCurrentPromptSession((prev: any) =>
-      prev ? { ...prev, leftColumnContent } : prev
-    );
-
-    // Pass BOTH compiledOutput AND the authoritative sections from the Lit editor.
-    // This bypasses the broken DOM query inside handleSavePrompt (textareas are in open shadow DOM).
-    handleSavePromptRef.current?.(compiledOutput, sections);
-  };
+  // `save-requested` HAD NO SENDER, so this whole path was unreachable — the registry
+  // declared it as the editor's event, but <prompt-section-editor> emits none of that kind
+  // (its contract is section-update/add/remove/reorder), and the control bar's Save speaks
+  // through `save-click` (below) into the same handler this used. Removed rather than kept:
+  // a listener nobody can fire is a claim that something is wired.
 
   // Clear from the compiled-output-viewer "Clear" button → collapse middle column
   const handleClearOutput = () => {
@@ -4274,18 +4349,17 @@ export default function Index({
     setCurrentPromptSession((prev: any) =>
       prev ? { ...prev, compiledOutput: '' } : prev
     );
-    // The ONLY thing (besides opening a prompt with no output) that closes it.
-    setMiddleOpen(false);
+    // The column's CLOSE was never implemented: the flag this used to write (`middleOpen`)
+    // was read by nothing, and the middle column's presence is the model's. Clearing the
+    // output empties the viewer; it does not take the column away.
   };
 
     console.log('✅ [WritingAreaIndex] Setting up event listeners');
     window.addEventListener("switchToMemoriesTab", handleSwitchToMemoriesTab);
     window.addEventListener("switchToChatTab", handleSwitchToChatTab);
-    window.addEventListener("toggle-third-column", handleToggleThirdColumn);
 
-    // Listen for save-template event from ResponsivePromptBuilder's Save Template button.
-    // Sections come from the surface's data model — the composer column's binding.
-    // This is the SAME path as save-requested — no DOM read, no fallback.
+    // Listen for save-template event. Sections come from the surface's data model — the
+    // composer column's binding. No DOM read, no fallback.
     const handleSaveTemplateEvent = () => {
       const sections = surfaceSections();
       const compiledOutput = readLiveOutput();
@@ -4295,7 +4369,6 @@ export default function Index({
     window.addEventListener("save-template", handleSaveTemplateEvent);
 
     window.addEventListener("run-requested", handleRunRequested);
-    window.addEventListener("save-requested", handleSaveRequested);
     window.addEventListener("clear-output", handleClearOutput);
 
     // Wire the bottom control bar (control-bar from Figma node 40000761:261) to the *existing* CRUD paths only.
@@ -4363,10 +4436,8 @@ export default function Index({
         handleSwitchToMemoriesTab,
       );
       window.removeEventListener("switchToChatTab", handleSwitchToChatTab);
-      window.removeEventListener("toggle-third-column", handleToggleThirdColumn);
       window.removeEventListener("save-template", handleSaveTemplateEvent);
       window.removeEventListener("run-requested", handleRunRequested);
-      window.removeEventListener("save-requested", handleSaveRequested);
       window.removeEventListener("clear-output", handleClearOutput);
       window.removeEventListener('save-click', handleControlBarSave as EventListener);
       window.removeEventListener('run-click', handleControlBarRun as EventListener);
@@ -4578,38 +4649,6 @@ export default function Index({
                         has_unsaved_changes: hasUnsavedChangesRef.current,
                         session_id: currentPromptSession?.id || null,
                         session_title: currentPromptSession?.title || '',
-                      });
-                    }}
-                    onDeletePrompt={async (sessionId) => {
-                      // Both confirmations already happened: step 1 in
-                      // <agent-card-element> (arm → confirm), step 2 in the
-                      // ConsolePage dialog. Now delete it.
-                      await promptService.deletePromptSession(sessionId, true);
-                      if (currentPromptSession?.id === sessionId) {
-                        setCurrentPromptSession(null);
-                      }
-                      /*
-                       * THE CARD GOES; THE SURFACE STAYS.
-                       *
-                       * This used to re-assemble the whole console — a MODEL CALL to tell it
-                       * what it already knows. The owner, on the two-step confirm (2026-09-18):
-                       * "when I click confirm it reloads the entire console. Now I wonder —
-                       * does it have to, or can I just spend a little bit in that one section
-                       * and then remove it?" It does not have to.
-                       *
-                       * The packages are a LIST IN THE DATA MODEL — that is what the grid is
-                       * bound to — so a removal is a write to the list. One card leaves, the
-                       * page size is unchanged, and the grid re-pages itself: if that was the
-                       * last card on the last page, the pager drops a page with it. No model,
-                       * no round trip, and the rest of the console does not flicker.
-                       */
-                      setConsoleTree((prev) => {
-                        const model = (prev.dataModel ?? {}) as Record<string, unknown>;
-                        const cards = Array.isArray(model.cards) ? (model.cards as unknown[]) : null;
-                        if (!cards) return prev;
-                        const next = cards.filter((c) => String((c as { id?: unknown })?.id ?? '') !== String(sessionId));
-                        if (next.length === cards.length) return prev;
-                        return { ...prev, dataModel: { ...model, cards: next } };
                       });
                     }}
                   />

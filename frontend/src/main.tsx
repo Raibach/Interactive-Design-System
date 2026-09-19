@@ -10,6 +10,11 @@ import "./index.css";
 
 /** A2UI v0.9.1 Lit workspace components (model-driven composer) */
 import "@/components/lit/prompt-section-editor";
+// The role selector inside a prompt-input-section. Catalogued and allowlisted, and
+// imported by NOTHING — so its guarded define never ran, the tag `role-dropdown` did
+// not exist, and the surface's name for it resolved to an empty box with no error.
+// Same rule as every import below: a tag nothing defines draws nothing and says nothing.
+import "@/components/lit/prompt-input/role-dropdown";
 import "@/components/lit/compiled-output-viewer";
 import "@/components/lit/workspace-layout";
 // The right column's seat. Registration is a side effect of this import, and no

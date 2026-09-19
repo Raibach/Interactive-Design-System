@@ -55,7 +55,7 @@ export class ChatInput extends LitElement {
   }
 }
 
-customElements.define('chat-input', ChatInput);
+if (!customElements.get('chat-input')) customElements.define('chat-input', ChatInput);
 
 declare global {
   interface HTMLElementTagNameMap {

@@ -911,7 +911,7 @@ export class ChatNavigationBar extends LitElement {
 }
 
 // ── Register custom element ──────────────────────────────────────────────────
-customElements.define('chat-navigation-bar', ChatNavigationBar);
+if (!customElements.get('chat-navigation-bar')) customElements.define('chat-navigation-bar', ChatNavigationBar);
 
 // ── JSX type declaration for React/TypeScript consumers ─────────────────────
 declare global {

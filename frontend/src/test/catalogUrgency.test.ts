@@ -23,10 +23,10 @@ describe('the most urgent finding is first, whatever order the check reported', 
   it('is the shape that was on screen: 42 advisories, then the blocking one', () => {
     const reported = [
       ...Array.from({ length: 42 }, (_, i) => f(`advisory-${String(i).padStart(2, '0')}`, 'advisory')),
-      f('open-items-register:OPEN-ITEMS.md:count:event-unheard', 'blocking'),
+      f('open-items-register:open-items.json:count:event-unheard', 'blocking'),
     ];
     const ordered = sortByUrgency(reported);
-    expect(ordered[0].id).toBe('open-items-register:OPEN-ITEMS.md:count:event-unheard');
+    expect(ordered[0].id).toBe('open-items-register:open-items.json:count:event-unheard');
     expect(ordered[0].level).toBe('blocking');
     // And the blocking item is not merely above the rest — it is item 1 of 43.
     expect(ordered.filter((x) => x.level === 'blocking')).toHaveLength(1);

@@ -807,6 +807,26 @@ export class WorkspaceLayout extends LitElement {
     this.requestUpdate();
   }
 
+  /**
+   * THE COLUMN WIDTHS, AS THE SAVE RECORDS THEM — measured off the panes this element is
+   * rendering, not re-derived from the flex maths by somebody else. `left` is the prompt's
+   * rendered width, null while it is on its rail (the same meaning ColumnWidths gives it);
+   * `chat` is her column's, which is a pixel width in both of her forms, pane or layer.
+   *
+   * A HOST READS HERE; the element does not push — the same contract as `resetArrangement`
+   * above and the canvas's `workspaceState`. (The event round trip that used to be asked
+   * for — `collect-column-widths` / `column-widths-response` — had no answerer anywhere in
+   * the repository, which is how the widths stayed out of every save without a word.)
+   */
+  widths(): { left: number | null; chat: number } {
+    const box = (selector: string): number =>
+      Math.round((this.renderRoot.querySelector(selector) as HTMLElement | null)?.getBoundingClientRect().width ?? 0);
+    return {
+      left: this.leftCollapsed ? null : box('.pane.left'),
+      chat: box('.pane.right'),
+    };
+  }
+
   static styles = css`
     :host {
       display: flex;
@@ -1124,7 +1144,7 @@ export class WorkspaceLayout extends LitElement {
   }
 }
 
-customElements.define('workspace-layout', WorkspaceLayout);
+if (!customElements.get('workspace-layout')) customElements.define('workspace-layout', WorkspaceLayout);
 
 declare global {
   interface HTMLElementTagNameMap {

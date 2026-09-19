@@ -224,7 +224,7 @@ export class ChatMessages extends LitElement {
   }
 }
 
-customElements.define('chat-messages', ChatMessages);
+if (!customElements.get('chat-messages')) customElements.define('chat-messages', ChatMessages);
 
 declare global {
   interface HTMLElementTagNameMap {

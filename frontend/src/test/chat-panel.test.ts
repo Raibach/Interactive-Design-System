@@ -543,3 +543,120 @@ describe('<chat-panel> — starting over', () => {
     expect(shadowText(el)).not.toContain('and one of mine');
   });
 });
+
+describe('a conversation belongs to its package — the seat holds that line', () => {
+  it('starting over for another package does not carry the turns spoken here across', async () => {
+    stubFetch();                                        // the teacher answers; no conversation bound
+    const el = await mount({ sessionId: 'package-a' });
+    void (el as unknown as { _send: (t: string) => Promise<void> })['_send']('spoken in package A');
+    await settle(el);
+    expect(shadowText(el)).toContain('spoken in package A');
+
+    // The package changes. The element is REUSED (the surface keeps the same component id),
+    // nothing remounts it — so the seat itself has to leave the last package behind.
+    el.sessionId = 'package-b';
+    await settle(el);
+
+    expect(shadowText(el)).not.toContain('spoken in package A');
+  });
+
+  it('does not leave the last package\'s LOADED history on screen either', async () => {
+    // The stub answers per conversation — the first version of this test replayed package A's
+    // history for package B's id, which proved nothing about the element.
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {
+      const messages = String(url).includes('conv-b') ? [] : [{ role: 'user', content: 'spoken in package A' }];
+      return { ok: true, status: 200, json: async () => ({ messages }) } as Response;
+    }));
+    const el = await mount({ sessionId: 'package-a', conversationId: 'conv-a' });
+    expect(shadowText(el)).toContain('spoken in package A');
+
+    el.sessionId = 'package-b';
+    el.conversationId = 'conv-b';
+    await settle(el);
+
+    expect(shadowText(el)).not.toContain('spoken in package A');
+  });
+
+  it('refuses a conversation id the package\'s own list contradicts — and asks for nothing', async () => {
+    const calls = stubFetch([{ role: 'user', content: 'not mine' }]);
+    const el = await mount({
+      sessionId: 'package-a',
+      conversations: [{ id: 'conv-a' }],
+      conversationId: 'conv-foreign',
+    });
+    await settle(el);
+
+    expect(calls).toHaveLength(0);                       // no read for a stranger's thread
+    expect(shadowText(el)).not.toContain('not mine');
+  });
+
+  it('will not write pending turns into another package\'s conversation', async () => {
+    const calls = stubFetch();
+    const el = await mount({ sessionId: 'package-a' }); // no conversation yet
+    const priv = el as unknown as Record<string, unknown>;
+    priv['_pending'] = [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }];
+    priv['_pendingOwner'] = 'package-a';
+
+    const refused = await el.flushPendingTurns('conv-of-b', 'package-b');
+    expect(refused).toBe(0);
+    expect(calls.filter((c) => c.init?.method === 'POST')).toHaveLength(0);
+
+    // …and the same turns DO go to their own package.
+    const written = await el.flushPendingTurns('conv-of-a', 'package-a');
+    expect(written).toBe(2);
+  });
+
+  it('adopts a conversation id the server changed, and shows that the thread moved', async () => {
+    const events: string[] = [];
+    const onConv = () => events.push('conversation-change');
+    window.addEventListener('conversation-change', onConv);
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({ content: 'Answer', conversation_id: 'conv-new' }) } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+
+    const el = await mount({ sessionId: 'package-a', conversationId: 'conv-old' });
+    void (el as unknown as { _send: (t: string) => Promise<void> })['_send']('hi');
+    await settle(el);
+    await settle(el);
+
+    expect(el.conversationId).toBe('conv-new');
+    expect(events).toContain('conversation-change');
+    expect(shadowText(el)).toContain('previous conversation was closed');
+    window.removeEventListener('conversation-change', onConv);
+  });
+
+  it('says a refusal out loud instead of drawing an empty thread', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403, json: async () => ({}) }) as Response));
+    const el = await mount({ sessionId: 'package-a', conversationId: 'conv-a' });
+    await settle(el);
+
+    expect(shadowText(el)).toContain('could not be read (HTTP 403)');
+  });
+});
+
+describe('the approvals tab carries the thread', () => {
+  it('draws the conversation and its input there, and not the empty view line', async () => {
+    // The owner, 2026-09-18: "there's no chat hooked up to the console approval button. It's
+    // dead, it does nothing — just hook one of them up so I can talk to it." The tab held the
+    // repair list, which renders nothing when no findings carry a stage.
+    stubFetch([{ role: 'assistant', content: 'INSPECTION — OK' }]);
+    const el = await mount({
+      sessionId: 'package-a',
+      conversationId: 'conv-a',
+      allowedTabs: 'chat,versions,tools,approvals,repair',
+    });
+    await settle(el);
+
+    expect(el.shadowRoot?.querySelector('chat-messages')).toBeTruthy();
+
+    el.activeTab = 'approvals';
+    await settle(el);
+
+    expect(el.shadowRoot?.querySelector('chat-messages')).toBeTruthy();
+    expect(el.shadowRoot?.querySelector('.view-waiting')).toBeFalsy();
+    expect(shadowText(el)).toContain('INSPECTION — OK');
+  });
+});

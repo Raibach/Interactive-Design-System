@@ -185,6 +185,35 @@ def _extract_json_payload(response_text: str) -> Any:
         raise
 
 
+# Warnings collected while a handler runs, drained into that handler's response. One
+# process-wide list on purpose: this server is single-process and every handler drains
+# what it collected; a warning that lands in another handler's response is still SAID,
+# which is the property that matters (nothing here is dropped silently).
+_REQUEST_WARNINGS: List[str] = []
+
+
+def _warn(message: str) -> None:
+    """A DEGRADED RUN SAYS SO — print AND carry, never just print.
+
+    The owner, 2026-09-18: "I need to know when there's a fallback; I need to know when
+    there's error suppression — we need to report it in the console trace." Every `except`
+    in this file that used to end in a `print` now records the failure here, and the
+    handler it belongs to drains the list into its response (`warnings`) or its assembled
+    model (`/warnings`); the frontend writes those into the trace (lib/trace-source
+    subscribes to the app logger). A `print` alone is a failure nobody is told about —
+    check:error-suppression counts what still swallows.
+    """
+    print(f"⚠️  {message}")
+    _REQUEST_WARNINGS.append(message)
+
+
+def _drain_warnings() -> List[str]:
+    """Hand the warnings collected during THIS handler to its response, and reset."""
+    out = list(_REQUEST_WARNINGS)
+    _REQUEST_WARNINGS.clear()
+    return out
+
+
 def _compose_sections(sections: List[Dict[str, Any]]) -> str:
     """Join a prompt's sections into one piece of text, in order, as written.
 
@@ -406,7 +435,7 @@ def ai_assemble_surface(
                     console_session_id, uid
                 )
             except Exception as e:
-                print(f"[A2UI Surface] Console conversation list warning: {e}")
+                _warn(f"the console's conversation list could not be read, so the console seat has none to offer: {e}")
 
         # ── PERFORMANCE TRACE: Milestone A (Database) ──
         t_a_start = time.perf_counter()
@@ -651,6 +680,9 @@ Output ONLY this exact JSON (no markdown, no extra text):
                         "llm_used": True,
                         "usage": dict(LAST_USAGE),  # measured, straight from the provider
                         "ai_message": ai_message,
+                        # Anything this assembly could not read, said out loud — the frontend
+                        # writes these into the trace (see _warn at the top of this file).
+                        "warnings": _drain_warnings(),
                         # What the panel's "repair-view" draws. Composed by the writer
                         # above from the report the checker wrote — the model is told not
                         # to invent values for it, and the element re-words nothing.
@@ -806,6 +838,7 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
                         "assembly_time_ms": elapsed_ms,
                         "llm_used": True,
                         "ai_message": ai_message,
+                        "warnings": _drain_warnings(),
                         "usage": usage,
                     },
                 },
@@ -1070,7 +1103,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
         try:
             milvus_versions = milvus_get_versions(prompt_id=session_id)
         except Exception as e:
-            print(f"[A2UI Surface] Milvus fetch warning: {e}")
+            _warn(f"the version list could not be read from the vector store (the row's own versions are unaffected): {e}")
 
         ms_a = (time.perf_counter() - t_a_start) * 1000
 
@@ -1112,19 +1145,20 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             try:
                 conversations_list = state.conversation_api.get_conversations_by_session(session_id, uid)
             except Exception as e:
-                print(f"[A2UI Surface] Conversation list warning for {session_id}: {e}")
+                _warn(f"package {str(session_id)[:8]}…'s conversation list could not be read, so the seat has none to offer: {e}")
 
-        messages = []
         conv_id = session.get("conversation_id")
         if not conv_id and conversations_list:
             conv_id = conversations_list[0].get("id")
             print(f"[A2UI Surface] {session_id} owns {len(conversations_list)} conversation(s) — "
                   f"bound {str(conv_id)[:8]}… (conversations.session_id, not the dropped column)")
-        if conv_id and state.conversation_api:
-            try:
-                messages = state.conversation_api.get_messages(str(conv_id), uid, limit=200)
-            except Exception as e:
-                print(f"[A2UI Surface] Messages fetch warning: {e}")
+        # NO SECOND FETCH (2026-09-18). Two hundred messages were read here on every assembly
+        # to compute ONE number for the assembler's data summary — and then written to
+        # /session/right_column/messages, a path NO component binds (the seat loads its own
+        # history through _loadHistory). `get_session` above already carries them; the count
+        # comes from there, and the catch that swallowed a PermissionError into a print went
+        # with the fetch.
+        message_count = len(session.get("messages") or [])
 
         # ── TRUE A2UI: MODEL IS THE ARCHITECT ──
         # DB supplies the data. The model MUST return the components (adjacency list).
@@ -1135,7 +1169,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             "sections_count": len(sections),
             "has_compiled": bool(session.get("compiled_output")),
             "milvus_count": len(milvus_versions),
-            "message_count": len(messages),
+            "message_count": message_count,
         }
         llm_prompt = f"""You are Grace, the A2UI surface assembler.
 
@@ -1301,7 +1335,9 @@ Output ONLY this JSON (no markdown):
                                     }
                                     for c in conversations_list
                                 ],
-                                "messages": messages,
+                                # (The messages themselves are not carried here: nothing binds
+                                # /session/right_column/messages — see the note where the
+                                # second fetch used to be.)
                             },
                         },
                         "milvus": {
@@ -1319,6 +1355,7 @@ Output ONLY this JSON (no markdown):
                             "workspace": session.get("metadata", {}).get("workspace") if session.get("metadata") else None,
                         },
                         "ai_message": ai_message,
+                        "warnings": _drain_warnings(),
                         "assembly_time_ms": elapsed_ms,
                         "llm_used": True
                     }
@@ -1403,7 +1440,7 @@ Output ONLY valid JSON:
             except json.JSONDecodeError:
                 ai_message = llm_response.strip()[:150]
     except Exception as e:
-        print(f"[AI Assembly] LLM exit confirmation warning: {e}")
+        _warn(f"the exit-confirmation sentence fell back to the default — the model did not answer: {e}")
 
     elapsed_ms = int((time.time() - start_time) * 1000)
 
@@ -1411,6 +1448,7 @@ Output ONLY valid JSON:
         "status": "ok",
         "assembly_time_ms": elapsed_ms,
         "ai_message": ai_message,
+        "warnings": _drain_warnings(),
         "grace_speaking": True,
         "actions": [
             {"label": "Save & Go", "intent": "save-and-navigate", "primary": True},
@@ -1557,9 +1595,9 @@ Output ONLY valid JSON:
                             f"{len(ai_compilation.get('tags') or [])} tags"
                         )
                     except (json.JSONDecodeError, ValueError) as e:
-                        print(f"[AI Save] LLM response not valid JSON (save continues without a summary): {e}")
+                        _warn(f"the model's summary was not valid JSON, so the save carries no summary: {e}")
             except Exception as e:
-                print(f"[AI Save] LLM summary warning: {e}")
+                _warn(f"the save summary could not be written by the model; the save continues without one: {e}")
 
         # The client's middle_column is authoritative whenever it carries a
         # compiled_output key at all: an explicit value — including an explicitly
@@ -1597,6 +1635,10 @@ Output ONLY valid JSON:
             "llm_used": llm_used,
             "ai_compiled": ai_compilation is not None,
             "column_widths": request.column_widths,
+            # A real Save un-drafts the package. Whole-column replacement used to produce
+            # this by accident — the key simply was not in the new dict. update_session now
+            # merges (see there), so the save must say it itself or drafts never surface.
+            "draft": None,
         }
         if ai_description:
             save_metadata["ai_description"] = ai_description
@@ -1617,7 +1659,7 @@ Output ONLY valid JSON:
                     session_id=request.session_id, user_id=uid
                 )
             except Exception as e:
-                print(f"[AI Save] Could not read previous state for versioning: {e}")
+                _warn(f"the row could not be read before this save, so no version was written to compare against: {e}")
 
         if request.session_id:
             # UPDATE existing session
@@ -1757,7 +1799,7 @@ Compiled Prompt:
             )
             milvus_saved = True
         except Exception as e:
-            print(f"[AI Save] Milvus save warning: {e}")
+            _warn(f"the vector index was not written — the row is saved, but semantic search will not find this version: {e}")
 
         elapsed_ms = int((time.time() - start_time) * 1000)
 
@@ -1805,6 +1847,7 @@ Compiled Prompt:
             "version_number": version_number,
             "version_error": version_error,
             "ai_message": ai_message,
+            "warnings": _drain_warnings(),
             # Include AI-generated data if available (for semantic search & display)
             "ai_description": ai_compilation.get("description") if ai_compilation else None,
             "ai_suggested_title": ai_compilation.get("suggested_title") if ai_compilation else None,

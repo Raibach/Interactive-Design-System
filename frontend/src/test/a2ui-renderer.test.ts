@@ -239,3 +239,35 @@ describe('a name that resolves to an element nobody defines', () => {
     expect(drawn).toContain('put a lock on it');
   });
 });
+
+// ── the surface is a pure function of the LAST emission ─────────────────────
+
+describe('a dropped prop returns to the element\'s OWN default', () => {
+  it('does not hand a later surface the first payload\'s value', async () => {
+    // The bug this pins, measured 2026-09-18: the seat's `conversations` was assigned
+    // once by the first package opened in a session, the next assembly's tree omitted
+    // it, and the renderer "gave it back" — to the FIRST PAYLOAD's list, because the
+    // defaults had been captured AFTER that assignment. A fresh composer then drew
+    // another package's conversation chip over an empty thread.
+    const el = document.createElement('a2ui-renderer') as HTMLElement & Record<string, any>;
+    el.components = [
+      { id: 'root', component: 'chat-panel', conversations: { path: '/session/right_column/conversations' } },
+    ];
+    el.dataModel = { session: { right_column: { conversations: [{ id: 'c1', title: 'First package - Chat' }] } } };
+    document.body.appendChild(el);
+    await el.updateComplete;
+
+    const seat = el.shadowRoot?.querySelector('chat-panel') as HTMLElement & Record<string, any>;
+    expect(seat).toBeTruthy();
+    expect(seat.conversations).toHaveLength(1);          // the first package's list
+
+    // The NEXT assembly — a fresh composer: its tree does not carry the prop at all.
+    el.components = [{ id: 'root', component: 'chat-panel' }];
+    el.dataModel = { session: { right_column: { conversations: [] } } };
+    await el.updateComplete;
+
+    // The element's own default, NOT the first payload's value.
+    expect(seat.conversations).toEqual([]);
+    el.remove();
+  });
+});

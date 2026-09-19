@@ -146,7 +146,7 @@ export class SmallDropdown extends LitElement {
   }
 }
 
-customElements.define('small-dropdown', SmallDropdown);
+if (!customElements.get('small-dropdown')) customElements.define('small-dropdown', SmallDropdown);
 
 declare global {
   interface HTMLElementTagNameMap {

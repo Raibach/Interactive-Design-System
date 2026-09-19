@@ -327,7 +327,7 @@ export class ControlBar extends LitElement {
   }
 }
 
-customElements.define('control-bar', ControlBar);
+if (!customElements.get('control-bar')) customElements.define('control-bar', ControlBar);
 
 declare global {
   interface HTMLElementTagNameMap {

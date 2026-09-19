@@ -868,7 +868,7 @@ export class CompiledOutputViewer extends LitElement {
   }
 }
 
-customElements.define('compiled-output-viewer', CompiledOutputViewer);
+if (!customElements.get('compiled-output-viewer')) customElements.define('compiled-output-viewer', CompiledOutputViewer);
 
 declare global {
   interface HTMLElementTagNameMap {

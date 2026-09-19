@@ -670,3 +670,18 @@ describe('<agent-flow> — the glide', () => {
     window.dispatchEvent(pe('pointerup', { clientX: 140, clientY: 130 }));
   });
 });
+
+describe('`drawn` is a VALUE the save reads, not a method it calls', () => {
+  it('answers as a getter — the save once called it and every save threw', async () => {
+    // Measured in the app 2026-09-18: "Save failed — flowEl?.drawn is not a function".
+    // `drawn` is a getter on this element; the save read it with a call. A value is read.
+    const el = await mount(buildRepairFlow({
+      label: 'the prompt', finding: null, sections: [{ name: 'System Role', type: 'system', content: 'hello' }],
+    }));
+
+    const drawn = (el as unknown as { drawn: unknown }).drawn;
+    expect(typeof drawn).toBe('object');
+    expect(Array.isArray((drawn as { nodes: unknown[] }).nodes)).toBe(true);
+    expect(Array.isArray((drawn as { edges: unknown[] }).edges)).toBe(true);
+  });
+});

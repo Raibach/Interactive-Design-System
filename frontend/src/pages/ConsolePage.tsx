@@ -33,7 +33,9 @@ const requestReassembly = () => {
 
 interface ConsolePageProps {
   onOpenPrompt?: (sessionId: string) => void;
-  onDeletePrompt?: (sessionId: string) => void | Promise<void>;
+  // No onDeletePrompt: deletion has ONE host path — the shell's own `card-delete`
+  // listener (WritingAreaIndex) → deletePackage. This page used to delete as well, so
+  // one confirmed delete issued TWO permanent DELETEs of the same package.
   onCreateNew?: (title: string) => void;
   refreshKey?: number;
   aiAssembledCards?: any[] | null;
@@ -46,7 +48,6 @@ interface ConsolePageProps {
 
 export default function ConsolePage({
   onOpenPrompt,
-  onDeletePrompt,
   onCreateNew,
   aiAssembledCards = null,
   isParentLoading = false,
@@ -55,31 +56,25 @@ export default function ConsolePage({
   loadingMessage = "Assembling your console..."
 }: ConsolePageProps) {
 
-  // ── Card events · the two the tag contract declares ───────────────────────
-  // <agent-card-element> dispatches `card-delete` only after its own arm→confirm
-  // (the ONLY confirmation — no modal). The host deletes directly on the event.
-  // `card-open` is dispatched by the grid when a card is clicked; opening a package
-  // is an assembly, so it goes back out to the host rather than happening here.
+  // ── Card events · card-open is this page's; card-delete is not ─────────────
+  // <agent-card-element> dispatches `card-open` when the card body is clicked; opening
+  // a package is an assembly, so it goes back out to the host rather than happening
+  // here. `card-delete` (dispatched after the card's own arm→confirm, the only
+  // confirmation) has exactly ONE host — the shell's listener beside its deletePackage —
+  // and this page used to delete as well, so every confirmed delete ran twice.
 
-  // The listeners below are registered ONCE (empty deps), while the host passes a new
-  // inline handler on every render — and the ones that matter read the OPEN session.
-  // A ref holds the current pair so a listener never calls the handler from the first
-  // render, which would have opened or deleted against stale state.
-  const liveHandlers = useRef({ onOpenPrompt, onDeletePrompt });
+  // The listener below is registered ONCE (empty deps), while the host passes a new
+  // inline handler on every render — and the one that matters reads the OPEN session.
+  // A ref holds the current handler so the listener never calls the one from the first
+  // render, which would have opened against stale state.
+  const liveHandlers = useRef({ onOpenPrompt });
   useEffect(() => {
-    liveHandlers.current = { onOpenPrompt, onDeletePrompt };
+    liveHandlers.current = { onOpenPrompt };
   });
 
   useEffect(() => {
-    const onCardDelete = (e: Event) => {
-      const sessionId = (e as CustomEvent).detail?.sessionId;
-      if (typeof sessionId === 'string' && UUID_RE.test(sessionId)) {
-        console.log('[ConsolePage] card-delete:', sessionId);
-        liveHandlers.current.onDeletePrompt?.(sessionId);
-      }
-    };
-    // Both events are `composed`, so they cross the renderer's shadow boundary and
-    // arrive here as plain window events — no ref into the surface, no per-card wiring.
+    // `composed`, so it crosses the renderer's shadow boundary and arrives here as a
+    // plain window event — no ref into the surface, no per-card wiring.
     const onCardOpen = (e: Event) => {
       const sessionId = (e as CustomEvent).detail?.sessionId;
       if (typeof sessionId === 'string' && UUID_RE.test(sessionId)) {
@@ -87,10 +82,8 @@ export default function ConsolePage({
         liveHandlers.current.onOpenPrompt?.(sessionId);
       }
     };
-    window.addEventListener('card-delete', onCardDelete);
     window.addEventListener('card-open', onCardOpen);
     return () => {
-      window.removeEventListener('card-delete', onCardDelete);
       window.removeEventListener('card-open', onCardOpen);
     };
   }, []);

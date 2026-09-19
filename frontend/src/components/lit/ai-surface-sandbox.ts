@@ -351,7 +351,7 @@ export class AISurfaceSandbox extends LitElement {
 }
 
 // ── Register the custom element ─────────────────────────────────────────────
-customElements.define('ai-surface-sandbox', AISurfaceSandbox);
+if (!customElements.get('ai-surface-sandbox')) customElements.define('ai-surface-sandbox', AISurfaceSandbox);
 
 // ── Extend JSX intrinsics for TypeScript recognition in React ───────────────
 declare global {

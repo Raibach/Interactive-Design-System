@@ -1108,7 +1108,11 @@ export class AgentFlow extends LitElement {
              question the canvas cannot answer for itself. The kinds are the prompt's own
              seats, so this view and the prompt panel cannot drift apart. -->
         ${this._picker
-          ? html`<div class="picker" style="left: ${this._picker.x * this.zoom + this.panX}px; top: ${this._picker.y * this.zoom + this.panY}px;">
+          ? html`<div
+              class="picker"
+              style="left: ${this._picker.x * this.zoom + this.panX}px; top: ${this._picker.y * this.zoom + this.panY}px;"
+              @pointerdown=${(e: PointerEvent) => e.stopPropagation()}
+            >
               <div class="picker-head">New node — what is it?</div>
               ${CREATABLE_KINDS.map((k) => html`
                 <button type="button" class="picker-kind" @click=${() => this._addNodeAt(k.kind, k.label)}>${k.label}</button>`)}

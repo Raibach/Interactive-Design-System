@@ -134,6 +134,17 @@ async def create_conversation(
 
     try:
         uid = get_user_id_from_header(x_user_id)
+        # THE PACKAGE IS NOT A FREE PARAMETER (2026-09-18). `session_id` arrived from the
+        # client and was written straight onto the row, so any caller could file a
+        # conversation under a package they had nothing to do with. It may only name a
+        # package the caller can write to — the same predicate every other package write uses.
+        if request.session_id:
+            owned = state.prompt_sessions_api.get_session(request.session_id, uid)
+            if not owned:
+                raise HTTPException(
+                    status_code=403,
+                    detail="That package does not exist, or you have no access to it.",
+                )
         conversation_id = state.conversation_api.create_conversation(
             uid,
             project_id=request.project_id,
@@ -142,6 +153,8 @@ async def create_conversation(
             session_id=request.session_id,
         )
         return {"id": conversation_id, "success": True}
+    except HTTPException:
+        raise
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

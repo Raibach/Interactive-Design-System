@@ -83,15 +83,36 @@ async def startup_event():
     from model_server_manager import ensure_grace_server
     ensure_grace_server("deepseek")
 
+    # ── THE DAILY INSPECTION (governance, 2026-09-18) ─────────────────────────
+    # One bounded local-model call a day, reported into the console's own conversation and
+    # the trace. It is a timer, not a resident worker: the model is loaded on demand with an
+    # idle TTL, and a machine without the local server records NOT RUN rather than reaching
+    # for another model. Cancelled on shutdown.
+    import asyncio as _asyncio
+    from governance_inspector import daily_loop
+    app.state.inspection_task = _asyncio.create_task(daily_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    task = getattr(app.state, "inspection_task", None)
+    if task and not task.done():
+        task.cancel()
+        try:
+            import asyncio as _asyncio
+            await _asyncio.wait_for(_asyncio.shield(task), timeout=5)
+        except Exception:  # noqa: BLE001 — shutdown must not hang on the inspector
+            pass
+
 
 # ── Route modules (extracted during modularization) ─────────────────
 from routes import (
     misc, conversations, projects, teacher, memory,
-    prompt_sessions, ai, figma, milvus, agent_rpc, files, auth,
+    prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance,
 )
 
 for _m in (misc, conversations, projects, teacher, memory,
-           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth):
+           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance):
     app.include_router(_m.router)
 
 

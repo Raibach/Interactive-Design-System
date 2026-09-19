@@ -30,10 +30,6 @@ export default function VersionManager({ sessionId: propSessionId, currentVersio
   const [eventCount, setEventCount] = useState(0);
   const eventCountRef = useRef(0);
   const AUTO_SAVE_THRESHOLD = 10;
-  // The backend keeps the newest 10 versions per session (c_keep_versions in the
-  // save_prompt_version function). This is the UI's copy of that number, so the
-  // list never promises history the database has already dropped.
-  const VERSION_KEEP = 10;
 
   const { id: routeSessionId } = useParams<{ id: string }>();
 
@@ -201,7 +197,7 @@ export default function VersionManager({ sessionId: propSessionId, currentVersio
       {showDropdown && (
         <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 w-72 max-h-[400px] overflow-y-auto">
           <div className="p-2 border-b border-gray-100">
-            <div className="text-xs text-gray-400 mb-1">Manual save only · last {VERSION_KEEP} kept</div>
+            <div className="text-xs text-gray-400 mb-1">Manual save only · full history kept</div>
             {!showSaveInput ? (
               <button
                 onClick={() => setShowSaveInput(true)}
@@ -266,11 +262,6 @@ export default function VersionManager({ sessionId: propSessionId, currentVersio
               </button>
             </div>
           ))}
-          {versions.length >= VERSION_KEEP && (
-            <div className="px-3 py-2 text-[10px] text-gray-400 border-t border-gray-100">
-              Showing the newest {VERSION_KEEP}. Older versions are dropped on save.
-            </div>
-          )}
         </div>
       )}
     </div>

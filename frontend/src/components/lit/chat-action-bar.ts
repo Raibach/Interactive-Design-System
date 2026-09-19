@@ -189,7 +189,7 @@ export class ChatActionBar extends LitElement {
   }
 }
 
-customElements.define('chat-action-bar', ChatActionBar);
+if (!customElements.get('chat-action-bar')) customElements.define('chat-action-bar', ChatActionBar);
 
 declare global {
   interface HTMLElementTagNameMap {
