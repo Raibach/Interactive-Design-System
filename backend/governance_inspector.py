@@ -520,7 +520,7 @@ def _swarm_audit_sync(
         if note:
             meta.setdefault("load_notes", {})[key] = note
         call = tools.chat(key, prompt, user, 200)
-        entry: Dict[str, Any] = {"ok": bool(call.get("ok")), "seconds": call.get("seconds")}
+        entry: Dict[str, Any] = {"ok": bool(call.get("ok")), "seconds": call.get("seconds"), "stats": call.get("stats")}
         if not call.get("ok"):
             entry["error"] = call.get("error")
         else:
@@ -578,6 +578,26 @@ def _swarm_audit_sync(
         "divergences": divergences,
         "answered_by": list(answered),
     }
+def _token_totals(meta: Dict[str, Any]) -> Dict[str, int]:
+    """The run's input/output tokens, summed from what each call itself reported.
+
+    The provider's usage object is the only place these numbers exist — LM Studio's native
+    chat returns `stats` shaped input_tokens/total_output_tokens, an OpenAI-shaped server
+    returns prompt_tokens/completion_tokens — so both shapes are read. A run where neither
+    arrived reads 0/0 rather than implying a cost it cannot show.
+    """
+    prompt = 0
+    completion = 0
+    stats_objects = [entry.get("stats") for entry in (meta.get("swarm") or {}).values()]
+    stats_objects += [meta.get("review_stats"), meta.get("deep_stats"), meta.get("stats")]
+    for stats in stats_objects:
+        if not isinstance(stats, dict):
+            continue
+        prompt += int(stats.get("prompt_tokens") or stats.get("input_tokens") or 0)
+        completion += int(stats.get("completion_tokens") or stats.get("total_output_tokens") or 0)
+    return {"prompt_tokens": prompt, "completion_tokens": completion}
+
+
 def _render_message(status: str, verdict: Optional[Dict[str, Any]], review: Optional[Dict[str, Any]],
                     facts: Dict[str, Any], meta: Dict[str, Any]) -> str:
     checker = facts.get("checker", {})
@@ -642,6 +662,12 @@ def _render_message(status: str, verdict: Optional[Dict[str, Any]], review: Opti
     costs = [f"{meta.get('model')}={meta.get('seconds')}s"] if meta.get("seconds") is not None else []
     if meta.get("review_seconds") is not None:
         costs.append(f"{meta.get('reviewer_model')}={meta['review_seconds']}s")
+    # TOKEN BURN, ON THE RECORD. Token cost underlies every initiative here, so the report
+    # carries it beside the seconds — a reduction a change claims is then readable, not
+    # asserted (owner, 2026-09-19: "token burn is always underlying our initiatives").
+    tokens = _token_totals(meta)
+    if tokens["prompt_tokens"] or tokens["completion_tokens"]:
+        costs.append(f"tokens {tokens['prompt_tokens']} in / {tokens['completion_tokens']} out")
     if costs:
         lines.append("Cost: " + " · ".join(costs))
     if meta.get("unloaded"):
@@ -683,6 +709,26 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
 
         previous = _previous_inspection(conversation_id)
         sheet = await asyncio.to_thread(build_sheet, previous)
+
+        # THE CLOSEST FILED RECORDS, FROM OUR OWN STORE. Deterministic evidence, attached to
+        # since-last-run and quoted by the code — never handed to the models as a task (the
+        # protocol's rule: the repository is read by code, not by the tool). This is the
+        # vector store's job here: the run's history stays queryable without ever being
+        # dumped into a prompt.
+        related_refs: List[str] = []
+        try:
+            import governance_vector
+            open_ids = [str(r.get("id", "")) for r in (sheet.get("facts", {}).get("register", {}).get("open") or [])]
+            query = " ".join(open_ids) or " ".join(r["id"] for r in sheet.get("rows", []))
+            hits = governance_vector.search(query, k=4)
+            related_refs = [f"{h.get('kind')}:{h.get('ref_id')}" for h in hits if h.get("ref_id")]
+        except Exception as exc:  # noqa: BLE001 — a store that cannot answer says so
+            meta["related_error"] = f"{type(exc).__name__}: {exc}"
+        if related_refs:
+            meta["related"] = related_refs
+            for row in sheet.get("rows", []):
+                if row.get("id") == "since-last-run":
+                    row["evidence"] = (row["evidence"] + f" · closest filed records: {', '.join(related_refs)}")[:400]
 
         tools = _LocalTools()
         verdict: Optional[Dict[str, Any]] = None
@@ -835,6 +881,17 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
             except Exception as exc:  # noqa: BLE001
                 print(f"❌ [inspection] the report could not be written to the console conversation: {exc}")
                 meta["error"] = f"the report could not be filed ({exc})"
+            # AND INTO OUR OWN STORE, so the history is queryable instead of merely filed —
+            # the next run's retrieval reads it from here.
+            try:
+                import governance_vector
+                governance_vector.index_rows(
+                    "inspection",
+                    [{"id": meta.get("at", ""), "at": meta.get("at", ""), "text": text}],
+                )
+            except Exception as exc:  # noqa: BLE001 — a store failure never kills the run
+                print(f"⚠️  [inspection] the report could not be indexed ({type(exc).__name__}: {exc})")
+                meta["index_error"] = f"{type(exc).__name__}: {exc}"
         elif file_message:
             print("⚠️  [inspection] no console conversation available — the report was not filed")
 

@@ -31,7 +31,9 @@ def get_collection_name(name):
     return name
 
 def get_all_collections():
-    return ["default", "prompt_versions", "ai_actions", "prompt_sessions", "conversations", "memories", "files"]
+    # "governance" joined the store on 2026-09-19: the register, the corrections, the
+    # catalog findings and every filed inspection report (backend/governance_vector.py).
+    return ["default", "prompt_versions", "ai_actions", "prompt_sessions", "conversations", "memories", "files", "governance"]
 
 # Create milvus_config submodule reference for imports
 class MilvusConfig:
