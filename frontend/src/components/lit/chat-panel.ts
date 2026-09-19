@@ -197,7 +197,7 @@ export class ChatPanel extends LitElement {
   /** Label on the Models button. */
   declare modelLabel: string;
   /** The package's conversations. */
-  declare conversations: Array<{ id?: string; title?: string }>;
+  declare conversations: Array<{ id?: string; title?: string; tab?: string }>;
   /** The input area's dragged height, px. 0 = auto. */
   declare inputHeight: number;
   /** The rail's active view. */
@@ -588,6 +588,19 @@ export class ChatPanel extends LitElement {
       cursor: pointer;
     }
     .conversation-list button:hover { background: #f7fafc; }
+    /* THE ROW'S PLACE TAG — "this isn't from here". A conversation that belongs to another
+       tab says where it belongs (the owner, 2026-09-19: "we have a little label saying this
+       isn't from approval"), in the muted type, at the floor size the type law allows. */
+    .conversation-list .tab-tag {
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.08);
+      color: #6c757d;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
     .conversation-none {
       margin: 0;
       padding: 8px 0;
@@ -1512,16 +1525,16 @@ ${workspaceContext}`;
     this._local = [];
     this.conversationId = id;
     /*
-     * AND THE COLUMN MOVES TO TRACE. Choosing a conversation in the dropdown is not only a
-     * change of thread — it is a request to SEE that conversation, and what there is to see
-     * about a run is its trace. The owner's rule, 2026-09-18: "when somebody clicks one of
-     * those, it should switch everything to trace and the tab should move to trace."
-     *
-     * The rail hears it the same way a click on it would: `active-tab` is what this panel
-     * passes down, so setting it here moves the highlight AND the view together — one
-     * writer, which is why the two can never disagree about which tab is showing.
+     * AND THE COLUMN MOVES TO THE CONVERSATION'S OWN TAB. A conversation carries the tab it
+     * belongs to (conversations.tab, on the dropdown's rows); picking one is a request to
+     * continue THAT process, so the panel moves there — approvals stays in approvals, the
+     * chat in the chat. This used to move to trace, which the console does not even offer as
+     * a tab (measured 2026-09-19). The rail hears it the same way a click on it would:
+     * `active-tab` is what this panel passes down, so the highlight and the view move
+     * together — one writer, so the two cannot disagree about which tab is showing.
      */
-    this.activeTab = 'trace';
+    const picked = (this.conversations ?? []).find((c) => String(c.id) === id);
+    this.activeTab = String(picked?.tab || 'chat') === 'approvals' ? 'approvals' : 'chat';
     this.dispatchEvent(
       new CustomEvent('conversation-change', {
         bubbles: true,
@@ -1544,6 +1557,23 @@ ${workspaceContext}`;
     }
     this.collapsed = false;
     this.activeTab = tab;
+    /*
+     * EACH TAB TALKS IN ITS OWN CONVERSATION. Approvals is a different process from the chat
+     * (conversations.tab — the column the schema always had), and the console opens both
+     * conversations under its one session. Switching tabs therefore switches which
+     * conversation this seat reads and writes, so Approvals lands exactly where that process
+     * left off — the owner, 2026-09-19: "the user is right where that particular process left
+     * off." Tabs with no conversation of their own (versions, tools, trace, repair) keep the
+     * chat's.
+     */
+    const list = this.conversations ?? [];
+    const match = list.find((c) => String(c.tab || 'chat') === tab)
+      ?? list.find((c) => String(c.tab || 'chat') === 'chat');
+    if (match && match.id && String(match.id) !== this.conversationId) {
+      this.messages = [];
+      this._local = [];
+      this.conversationId = String(match.id);
+    }
     // The VIEW switches either way; only a seat that has a run is asked the
     // question. See `tracePrompt`.
     if (tab === 'trace' && this.tracePrompt) void this._send(TRACE_PROMPT);
@@ -1644,7 +1674,9 @@ ${workspaceContext}`;
                 type="button"
                 data-conversation-id=${String(c.id ?? '')}
                 @click=${this._pickConversation}
-              >${c.title || c.id || '(untitled)'}</button>
+              >${c.title || c.id || '(untitled)'}${(c.tab || 'chat') !== (this.activeTab || 'chat')
+                ? html` <span class="tab-tag">${String(c.tab || 'chat')}</span>`
+                : nothing}</button>
             </li>
           `,
         )}

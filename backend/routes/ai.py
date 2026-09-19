@@ -421,6 +421,21 @@ def ai_assemble_surface(
         console_session_id = str(console_session["id"])
         console_conversation_id = str(console_session["conversation_id"])
 
+        # ── THE TABS' OWN CONVERSATIONS — one per process, under the same session ──
+        #
+        # Approvals is a different process from the chat: it reads what the inspection filed
+        # and continues that thread. It hangs off the SAME console session
+        # (conversations.tab — the column the schema always had), so a person returning to
+        # Approvals lands exactly where that process left off, and the chat never carries its
+        # noise. Created here so the binding always resolves; a failure is said, not hidden.
+        approvals_conversation_id = ""
+        try:
+            approvals_conversation_id = state.prompt_sessions_api.get_or_create_console_tab_conversation(
+                uid, "approvals"
+            ) or ""
+        except Exception as e:
+            _warn(f"the approvals conversation could not be opened, so that tab has no seat of its own yet: {e}")
+
         # ── THE CONSOLE'S CONVERSATIONS — the Conversations dropdown's rows here ──
         #
         # Same ownership read the composer's seat uses (`conversations.session_id`),
@@ -667,11 +682,19 @@ Output ONLY this exact JSON (no markdown, no extra text):
                         "console": {
                             "session_id": console_session_id,
                             "conversation_id": console_conversation_id,
-                            # The dropdown's rows — same shape as the composer's seat.
+                            # EACH TAB HAS ITS OWN CONVERSATION — the panel switches between
+                            # them by the tab column the dropdown rows carry; no new binding.
+                            "tab_conversations": {
+                                "chat": console_conversation_id,
+                                "approvals": approvals_conversation_id or console_conversation_id,
+                            },
+                            # The dropdown's rows — same shape as the composer's seat, plus the
+                            # tab each conversation belongs to (the label the dropdown shows).
                             "conversations": [
                                 {
                                     "id": str(c.get("id")),
                                     "title": c.get("title") or "(untitled)",
+                                    "tab": c.get("tab") or "chat",
                                 }
                                 for c in console_conversations
                             ],

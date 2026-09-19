@@ -1374,7 +1374,7 @@ class ConversationAPI:
             cursor.execute("""
                 SELECT c.id, c.user_id, c.title, c.message_count, c.is_archived,
                        c.created_at, c.updated_at, c.metadata, c.project_id,
-                       c.surface_state_json, c.surface_updated_at
+                       c.surface_state_json, c.surface_updated_at, c.tab
                 FROM conversations c
                 WHERE c.session_id = %s AND c.user_id = %s
                   AND (%s OR c.is_archived = FALSE)
