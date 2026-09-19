@@ -117,6 +117,7 @@ const CHECK_INVENTORY = [
   { id: 'node-unresolved', stage: 'ingest', live: true, asserts: 'every registry node address resolves in the file' },
   { id: 'annotation-missing', stage: 'gap', live: true, asserts: 'every resolved node carries an annotation' },
   { id: 'annotation-prose', stage: 'gap', live: true, asserts: 'every annotation is a spec, not prose' },
+  { id: 'annotation-drift', stage: 'gap', live: true, asserts: 'the catalog annotation and the Figma annotation agree wherever both exist' },
   { id: 'annotation-on-placement', stage: 'ingest', live: true, asserts: 'a control\'s spec is on its master, not on a placement of it' },
   { id: 'geometry-drift', stage: 'deliver', live: true, asserts: 'the node and the rendering agree' },
   { id: 'check-could-not-run', stage: 'ingest', live: false, asserts: 'no check was skipped' },
@@ -204,6 +205,31 @@ const dispatchNames = (name) => {
 const figmaMap = JSON.parse(read(PATHS.figmaMap));
 const schema = JSON.parse(read(PATHS.schema));
 const schemaComponents = Object.keys(schema.components || {});
+
+// The catalog entry a lit component belongs to, by its `component` const or by
+// name — schema keys are CamelCase while findings name the element tag.
+function schemaNameFor(litComponent) {
+  const lower = String(litComponent ?? '').toLowerCase();
+  if (!lower) return null;
+  for (const [name, entry] of Object.entries(schema.components || {})) {
+    if (name.toLowerCase() === lower) return name;
+    const constVal = ((((entry || {}).properties) || {}).component || {}).const;
+    if (constVal && String(constVal).toLowerCase() === lower) return name;
+  }
+  return null;
+}
+
+// Two annotations compared the way a person reads them: line by line, trimmed,
+// case-blind, blanks ignored — so a formatting difference is not a disagreement
+// while a different word is.
+function normalizeAnnotation(text) {
+  return String(text ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => l.toLowerCase())
+    .join('\n');
+}
 
 // ── The allowlist — the gatekeeper's list, and the tier grouping ───────────
 // Parsed, not imported: this is a .mjs script and tag-registry.ts is TS. The
@@ -1074,6 +1100,7 @@ if (OFFLINE || !token) {
     checkRan('node-unresolved');
     checkRan('annotation-missing');
     checkRan('annotation-prose');
+    checkRan('annotation-drift');
     checkRan('annotation-on-placement');
     checkRan('geometry-drift');
 
@@ -1148,14 +1175,27 @@ if (OFFLINE || !token) {
         continue;
       }
       const ann = readAnnotation(node, id);
+      // THE CATALOG'S OWN ANNOTATION — the home the model writes to when it makes
+      // the repair itself (backend/repair_apply.apply_annotation, the owner's
+      // self-healing decision 2026-09-18). The checker reads it as a second source:
+      // a catalog that carries what Figma does not closes annotation-missing, and
+      // annotation-drift insists the two never disagree — the AI assembles from the
+      // catalog, so a catalog that contradicts the design is the exact two-truths
+      // condition this layer exists to refuse.
+      const schemaName = schemaNameFor(c.litComponent);
+      const catalogAnn = schemaName
+        ? String((schema.components[schemaName] || {}).annotation || '').trim()
+        : '';
       const where = ann.via === 'master' ? ` (read from the component it places, ${ann.from})`
         : ann.via === 'variant' ? ` (read from its variant ${ann.from})`
         : '';
       if (!ann.text.trim()) {
-        const masterNote = ann.via === 'master-missing'
-          ? `, and neither does the component it places (${ann.from})`
-          : '';
-        add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation${masterNote}.`, fix: `Annotate the MASTER in Figma — a placement carries no annotation. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md`, dispatchedEvents: dispatchNames(c.litComponent) });
+        if (!catalogAnn) {
+          const masterNote = ann.via === 'master-missing'
+            ? `, and neither does the component it places (${ann.from})`
+            : '';
+          add({ check: 'annotation-missing', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id} ("${node.name}", ${node.type}) resolves but carries no annotation${masterNote}.`, fix: `Annotate the MASTER in Figma — a placement carries no annotation. Template: FIGMA/ANNOTATION_FIGMA_GUIDE.md`, dispatchedEvents: dispatchNames(c.litComponent) });
+        }
       } else if (ann.specOnPlacement) {
         // THE SPEC IS ON A PLACEMENT. The node is an instance, the instance is annotated,
         // and the component it places is not — so the behaviour was written somewhere the
@@ -1171,6 +1211,17 @@ if (OFFLINE || !token) {
         });
       } else if (!isStructured(ann.text)) {
         add({ check: 'annotation-prose', stage: 'gap', owner: 'designer', component: c.litComponent, nodeId: id, key: id, file: c.file, what: `Node ${id}${where} has a note, but it is prose, not a spec — so behaviour must be invented. "${ann.text.slice(0, 90)}${ann.text.length > 90 ? '…' : ''}"`, fix: 'Rewrite using the field format (Data / On click / State / A11y).', dispatchedEvents: dispatchNames(c.litComponent) });
+      }
+
+      // The catalog half, judged by the same rules as the Figma half — and then
+      // the two held side by side. A catalog annotation that is prose is the
+      // model's fault (pipeline), not the designer's. A disagreement is the one
+      // thing a self-healing catalog cannot be allowed to contain: the AI
+      // assembles from the catalog, so it would assemble from the wrong spec.
+      if (catalogAnn && !isStructured(catalogAnn)) {
+        add({ check: 'annotation-prose', stage: 'gap', owner: 'pipeline', component: c.litComponent, nodeId: id, key: `catalog:${id}`, file: rel(PATHS.schema), what: `The catalog entry for "${c.litComponent}" carries an annotation that is prose, not a spec — so behaviour must be invented from it. "${catalogAnn.slice(0, 90)}${catalogAnn.length > 90 ? '…' : ''}"`, fix: 'Rewrite the catalog annotation in the field format (Data / On click / State / A11y).', dispatchedEvents: dispatchNames(c.litComponent) });
+      } else if (catalogAnn && ann.text.trim() && normalizeAnnotation(catalogAnn) !== normalizeAnnotation(ann.text)) {
+        add({ check: 'annotation-drift', stage: 'gap', owner: 'pipeline', component: c.litComponent, nodeId: id, key: id, file: rel(PATHS.schema), what: `The catalog annotation for "${c.litComponent}" and the annotation on node ${id} disagree. The AI assembles from the catalog, so two specs means the assembled surface follows one of them wrong.`, fix: 'Make the catalog annotation match the Figma master, or fix the Figma master to say what the catalog says.' });
       }
 
       // ── Geometry convergence ────────────────────────────────────────────

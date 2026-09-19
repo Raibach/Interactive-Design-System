@@ -518,8 +518,8 @@
       "type": "object",
       "x-figma-source": {
         "fileKey": "20UPR2KQMsbAxlo5NJb1se",
-        "nodeId": "40000717:17091",
-        "nodeName": "console-card",
+        "nodeId": "40001114:5813",
+        "nodeName": "console-card-design-system",
         "description": "Design source of truth. The extracted style spec (every fill, stroke, effect, font, weight, size, line height, bounding box) is cached in PostgreSQL figma_specs and served by the spec endpoint."
       },
       "allOf": [
@@ -531,7 +531,7 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <agent-card-element>. Console prompt card (276x372px) per Figma node 40000717:17091. Renders header (molecule logo, model name, category), title + description body, author section (avatar, @username, role/team), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM — never invented or renamed. Registered as custom element: agent-card-element.",
+          "description": "Lit web component <agent-card-element>. Console prompt card (262x251px) per Figma node 40001114:5813 \"console-card-design-system\". Renders header (molecule logo, function line, category line), title + description body (with the ##PROMPT## lead), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM — never invented or renamed. Registered as custom element: agent-card-element.",
           "properties": {
             "component": {
               "const": "agent-card"
@@ -543,15 +543,15 @@
             },
             "title": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Card title displayed in the card-title row (12px, 2-line clamp)."
+              "description": "Card title displayed in the card-title row (16px bold, 2-line clamp)."
             },
-            "model_name": {
+            "function": {
               "type": "string",
-              "description": "LLM model assigned to the prompt package (e.g. 'Copilot', 'DeepSeek'). Shown in the card-model-indicator row (12px bold #FFF) above the category. From prompt_sessions.model_name."
+              "description": "The function level — the line ABOVE the category in the card header (14px bold #F6C031). Falls back to the design's own sample line 'Function like Repair' until the data supplies it."
             },
             "category": {
               "type": "string",
-              "description": "Content category label shown in the card header (14px bold #F6C031).",
+              "description": "Content category label shown under the function line (12px bold, categories table title_color).",
               "enum": [
                 "Design System",
                 "Learning Module",
@@ -564,18 +564,18 @@
             },
             "category_color": {
               "type": "string",
-              "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#658D1B' (Figma green) when the category is unregistered.",
-              "default": "#658D1B"
+              "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#10455F' (the design's own fill) when the category is unregistered.",
+              "default": "#10455F"
             },
             "category_title_color": {
               "type": "string",
-              "description": "Color of the category label text, from the categories table (title_color). Fallback '#F6C031' (Figma node gold).",
-              "default": "#F6C031"
+              "description": "Color of the category label text, from the categories table (title_color). Fallback '#FB8D67' (the design's own category line).",
+              "default": "#FB8D67"
             },
             "category_text_color": {
               "type": "string",
-              "description": "Color of the card title + description text, from the categories table (text_color). Fallback '#2A2836' (Figma node dark).",
-              "default": "#2A2836"
+              "description": "Color of the card title + description text, from the categories table (text_color). Fallback '#FFFFFF' (the design's own white).",
+              "default": "#FFFFFF"
             },
             "description": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
@@ -598,30 +598,6 @@
             "likes": {
               "type": "number",
               "default": 0
-            },
-            "username": {
-              "type": "string",
-              "description": "Author handle shown as @username in the author section (13px semibold #00437C). Derived from users.email when metadata.username is unset."
-            },
-            "author": {
-              "type": "string",
-              "description": "Author display name (users.full_name). Fallback for username."
-            },
-            "team_name": {
-              "type": "string",
-              "description": "Author team/role line under the username (12px medium #FFF). From prompt_sessions.team_name."
-            },
-            "avatar_url": {
-              "type": "string",
-              "description": "Author avatar image URL for the 41x39 pill (1px #FFF stroke). Falls back to the bundled design-system image when empty."
-            },
-            "created_at": {
-              "type": "string",
-              "description": "Package creation timestamp (ISO)."
-            },
-            "last_used": {
-              "type": "string",
-              "description": "Last accessed timestamp (ISO)."
             }
           },
           "required": [

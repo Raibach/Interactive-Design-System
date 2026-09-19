@@ -180,8 +180,8 @@
       }
     },
     {
-      "figmaName": "agent-card-element",
-      "figmaNodeId": null,
+      "figmaName": "console-card-design-system",
+      "figmaNodeId": "40001114:5813",
       "litComponent": "agent-card-element",
       "file": "frontend/src/components/lit/agent-card-element.ts",
       "status": "built",
