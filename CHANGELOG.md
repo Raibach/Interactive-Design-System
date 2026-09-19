@@ -4,6 +4,15 @@ Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
 Goddamn, damn look at you
 
 
+**[2026-09-19] — Milvus moves in: the vector store now runs locally**
+
+The system keeps its own vector storage instead of reaching for a cloud service — an embedded Milvus (`milvus-lite`) with in-process embeddings (`bge-small-en`), its rows in PostgreSQL and the vectors as that store's derived index. Local models do the work, no cloud dependency, and the console's own endpoints are unchanged.
+
+**[2026-09-19] — Styling and theme update**
+
+The console received a styling and theme update — one sheet for the header, the chat, and the cards.
+
+
 **[2026-09-18] — Governance: an inspection system that runs on local models**
 
 The system reads the repository and reports its state. Local models classify a sheet that code prepares, and the code decides every fact. A run needs one request and leaves no process in memory.
