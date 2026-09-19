@@ -36,59 +36,72 @@ router = APIRouter()
 
 @router.get("/api/milvus/info")
 async def api_milvus_info():
-    """Get Zilliz Cloud cluster metadata and live collection stats."""
-    from milvus_rest import MilvusREST
-    rest = MilvusREST()
-    collections = rest.list_collections()
+    """The vector store's metadata and live collection stats.
+
+    LOCAL NOW. These endpoints used the Zilliz-only REST client; the store is our own
+    embedded milvus-lite file (see config.py), so they read it through the same client the
+    app writes with — one store, one reader.
+    """
+    from config import MILVUS_MODE
+    from milvus_client import get_milvus_client
+    client = get_milvus_client()
+    if client is None or client.client is None:
+        raise HTTPException(status_code=503, detail="the vector store is not connected")
+    collections = client.client.list_collections()
     stats = []
     for name in collections:
+        entry: Dict[str, Any] = {"name": name}
         try:
-            desc = rest.describe_collection(name)
-            data = desc.get("data", desc) if isinstance(desc, dict) else {}
-            stats.append({
-                "name": name,
-                "loaded": data.get("load", "unknown"),
-                "indexes": [i.get("fieldName") for i in data.get("indexes", [])],
-            })
-        except Exception as e:
-            stats.append({"name": name, "error": str(e)})
+            info = client.get_collection_stats(name)
+            entry["count"] = (info or {}).get("row_count", "unknown")
+        except Exception as e:  # noqa: BLE001 — a stat that cannot be read is said
+            entry["error"] = str(e)
+        stats.append(entry)
     return {
         "exists": True,
-        "mode": "zilliz-cloud",
+        "mode": MILVUS_MODE,
+        "uri": client.uri,
         "collection_count": len(collections),
         "collections": stats,
     }
 
 @router.get("/api/milvus/collections")
 async def api_milvus_collections():
-    """List all collections in the Zilliz Cloud cluster (live)."""
-    from milvus_rest import MilvusREST
-    rest = MilvusREST()
-    collections = rest.list_collections()
+    """List every collection in the local store (live)."""
+    from milvus_client import get_milvus_client
+    client = get_milvus_client()
+    if client is None or client.client is None:
+        raise HTTPException(status_code=503, detail="the vector store is not connected")
+    collections = client.client.list_collections()
     stats = []
     for name in collections:
+        entry: Dict[str, Any] = {"name": name}
         try:
-            desc = rest.describe_collection(name)
-            data = desc.get("data", desc) if isinstance(desc, dict) else {}
-            stats.append({
-                "name": name,
-                "loaded": data.get("load", "unknown"),
-                "fields": [f.get("name") for f in data.get("fields", [])],
-            })
-        except Exception as e:
-            stats.append({"name": name, "error": str(e)})
+            desc = client.client.describe_collection(collection_name=name)
+            entry["fields"] = [f.get("name") for f in (desc or {}).get("fields", [])]
+        except Exception as e:  # noqa: BLE001
+            entry["error"] = str(e)
+        stats.append(entry)
     return {"collections": collections, "stats": stats}
 
 @router.get("/api/milvus/vectors/{collection}")
 async def api_milvus_vectors(collection: str, limit: int = 50, offset: int = 0):
-    """Retrieve entities from a specific Zilliz Cloud collection (live query)."""
-    from milvus_rest import MilvusREST
-    rest = MilvusREST()
-    entities = rest.query(collection, limit=limit, offset=offset)
+    """Retrieve entities from a collection in the local store (live query)."""
+    from milvus_client import get_milvus_client
+    client = get_milvus_client()
+    if client is None or client.client is None:
+        raise HTTPException(status_code=503, detail="the vector store is not connected")
+    entities = client.client.query(
+        collection_name=collection,
+        filter="",
+        output_fields=["*"],
+        limit=limit,
+        offset=offset,
+    )
     return {
         "collection": collection,
-        "count": len(entities),
-        "vectors": entities,
+        "count": len(entities or []),
+        "vectors": entities or [],
     }
 
 

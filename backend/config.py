@@ -5,7 +5,16 @@ import os
 
 # Milvus Configuration
 MILVUS_MODE = os.getenv("MILVUS_MODE", "lite")
-MILVUS_URI = os.getenv("MILVUS_URI", "./milvus.db")
+# LITE MODE'S PATH LIVES IN ITS OWN VARIABLE, and that is load-bearing: pymilvus's
+# connection registry reads MILVUS_URI from the environment itself at import time and
+# cannot parse a local file path ("Illegal uri … expected http[s]://…"), so a .db path
+# placed under that name breaks every `import pymilvus`. Standalone/distributed (a real
+# server or cloud endpoint) keeps the original name.
+MILVUS_URI = (
+    os.getenv("MILVUS_LITE_PATH", "./milvus.db")
+    if MILVUS_MODE == "lite"
+    else os.getenv("MILVUS_URI", "")
+)
 MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "")
 # Matches the live Zilliz collections (384-dim FloatVector, COSINE) and the
 # SentenceTransformer model actually used for embeddings (see ARCHITECTURE docs).
