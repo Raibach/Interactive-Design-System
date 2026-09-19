@@ -243,8 +243,8 @@ class A2UIButton extends LitElement {
 const CARD_W = 262;
 const CARD_H = 251;
 const CARD_GAP = 16;
-/** The grid's own inset, from :host below — 45px across, 75px down (2026-09-18). */
-const GRID_PAD_X = 45;
+/** The grid's own inset, from :host below — 40px across, 75px down (2026-09-18). */
+const GRID_PAD_X = 40;
 /**
  * HOW MANY ROWS THE CONSOLE MAY EVER SHOW.
  *
@@ -262,7 +262,7 @@ const MAX_ROWS = 2;
  * The top inset and the pager's height, both already drawn below in :host and .pager —
  * named here because the FIT TEST needs them: whether the pane can hold what this grid is
  * about to draw is arithmetic on the same numbers the stylesheet uses.
- *   55  — the top padding of :host ("padding: 55px 45px 0")
+ *   55  — the top padding of :host ("padding: 55px 40px 0")
  *   47  — the pager's 43px button plus its own 4px top padding
  */
 const GRID_PAD_TOP = 55;
@@ -422,7 +422,7 @@ class A2UIConsoleCardGrid extends LitElement {
                                         would help prevent triggering a scroll" 
          The side inset is not taste: it is what decides how many 276px cards a window holds,
          and 75px on both sides was costing a column on exactly the widths where it mattered. */
-      padding: 55px 45px 0;
+      padding: 55px 40px 0;
       box-sizing: border-box;
       /* The card is a fixed 262 × 251 (<agent-card-element>, Figma node
          40001114:5813), so the track is fixed too: auto-fill over a 262px track

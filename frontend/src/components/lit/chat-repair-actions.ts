@@ -23,10 +23,10 @@
  * open, which is a different and better claim.
  */
 import { LitElement, html, css, nothing } from 'lit';
-// THE DESIGN'S OWN CHEVRON, the same imported artwork the Conversations dropdown uses —
-// one asset, two places, so the two disclosures cannot look like different controls.
-// This header had none at all: it opened and closed with nothing to say it could.
-import arrowDropDown from '../../assets/figma-9598a83b0a4eb9b9fc9c226f302689fd4f7075df.svg';
+// THE FOLD IS ONE ELEMENT — the catalogue's 40px white dropdown tile (see chat-fold).
+// The owner, 2026-09-19: the catalog check must wear "the exact same pattern" the
+// inspections and the trace wear, so all three compose the same element.
+import './chat-fold';
 import { designTokens } from '@/shared/design-tokens';
 
 /** One row, as the writer composes it. Nothing here is derived on the client. */
@@ -84,53 +84,9 @@ export class ChatRepairActions extends LitElement {
     designTokens,
     css`
       :host { display: block; }
-      .panel {
-        border: 1px solid var(--ds-rule);
-        border-radius: var(--ds-radius);
-        background: var(--ds-surface);
-        font-family: var(--ds-font);
-        font-size: var(--ds-fs-sm);
-        color: var(--ds-text);
-      }
-      /* The chevron's box, to the master's own geometry: 40x30 padded to 7, holding the
-         14x13 artwork, dim at 50% and full when the list is open — the same values the
-         small-dropdown's chevron uses, because it is the same drawing. */
-      .header .chevron {
-        flex-shrink: 0;
-        margin-left: auto;
-        width: 40px;
-        height: 30px;
-        padding: 7px;
-        box-sizing: border-box;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.15s ease;
-      }
-      .header .chevron img {
-        display: block;
-        width: 14px;
-        height: 13px;
-        opacity: 0.5;
-        transition: opacity 0.15s ease;
-      }
-      .header[aria-expanded='false'] .chevron { transform: rotate(180deg); }
-      .header[aria-expanded='false'] .chevron img { opacity: 1; }
-      .header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        width: 100%;
-        padding: 8px 12px;
-        border: none;
-        background: var(--ds-surface-muted);
-        border-radius: var(--ds-radius) var(--ds-radius) 0 0;
-        font: inherit;
-        font-weight: var(--ds-weight);
-        color: var(--ds-navy);
-        cursor: pointer;
-        text-align: left;
-      }
+      /* The panel, the header and the chevron belong to <chat-fold> now — the catalogue's
+         40px white dropdown tile, shared with the inspections and the trace. What is left
+         here is the list and its chips. */
       .chip {
         padding: 1px 8px;
         border-radius: var(--ds-radius-pill);
@@ -140,7 +96,6 @@ export class ChatRepairActions extends LitElement {
         text-transform: uppercase;
       }
       .chip.blocking { background: var(--ds-red-tint); color: var(--ds-red); }
-      .chip.count { background: var(--ds-teal-tint); color: var(--ds-navy); }
       .waiting {
         padding: 8px 12px;
         color: var(--ds-muted);
@@ -165,7 +120,7 @@ export class ChatRepairActions extends LitElement {
         align-items: flex-start;
         gap: 10px;
         padding: 8px 0;
-        border-bottom: 1px solid var(--ds-rule-soft);
+        border-bottom: 1px solid var(--chat-rule, var(--ds-rule-soft));
       }
       li:last-child { border-bottom: none; }
       .level {
@@ -215,63 +170,53 @@ export class ChatRepairActions extends LitElement {
     );
   }
 
-  private _toggle() {
-    this.collapsed = !this.collapsed;
-  }
-
   render() {
     // NOTHING TO DRAW AT ALL — the surface has not bound the path. Distinct from an
     // empty list, which says the checker found nothing open.
     if (this.findings === undefined) {
-      return html`<div class="panel"><p class="waiting">Waiting for the surface to bind /findings…</p></div>`;
+      return html`<chat-fold label="Catalog check" open><p class="waiting">Waiting for the surface to bind /findings…</p></chat-fold>`;
     }
 
     const rows = this.findings;
     if (!rows.length) return nothing;
     const counts = this._counts();
     return html`
-      <div class="panel">
-        <button
-          class="header"
-          type="button"
-          aria-expanded=${this.collapsed ? 'false' : 'true'}
-          @click=${this._toggle}
-        >
-          Catalog check — ${rows.length} open
-          ${counts.blocking ? html`<span class="chip blocking">${counts.blocking} blocking</span>` : ''}
-          <span class="chip count">${counts.advisory} advisory</span>
-          <!-- The chevron goes at the far end, as the Conversations dropdown draws it:
-               down and dim while the list is open, turned and full blue while it is shut. -->
-          <span class="chevron" aria-hidden="true"><img src=${arrowDropDown} width="14" height="13" alt="" /></span>
-        </button>
-        ${this.collapsed
-          ? nothing
-          : html`
-            <ul>
-              ${rows.map((f) => {
-                const stage = this.stages?.[f.id];
-                return html`
-                  <li>
-                    <!-- THE ACTION LEADS THE ROW. The owner's instruction, 2026-09-18:
-                         the Repair button belongs on the LEFT — "it should be on the
-                         left side always for the most part" — not shoved against the
-                         rail by a growing text column. The stage mark takes the same
-                         place when a row has left the button behind, so the row's first
-                         column means one thing whatever state it is in; the sentence
-                         then runs right and gets the width it needs. -->
-                    ${stage === 'done'
-                      ? html`<span class="stage done">completed</span>`
-                      : stage === 'repair'
-                        ? html`<span class="stage repair">in repair</span>`
-                        : html`<button class="repair" type="button" @click=${() => this._repair(f.id)}>Repair</button>`}
-                    <span class="level ${f.level === 'blocking' ? 'blocking' : 'advisory'}">${f.level ?? 'advisory'}</span>
-                    <span class="text">${f.text}</span>
-                  </li>
-                `;
-              })}
-            </ul>
-          `}
-      </div>
+      <chat-fold
+        label=${`Catalog check — ${rows.length} open`}
+        count=${`${counts.advisory} advisory`}
+        ?open=${!this.collapsed}
+        @fold-toggle=${(e: CustomEvent<{ open: boolean }>) => { this.collapsed = !e.detail.open; }}
+      >
+        ${counts.blocking
+          ? html`<span slot="meta" class="chip blocking">${counts.blocking} blocking</span>`
+          : nothing}
+        <ul>
+          ${rows.map((f) => {
+            const stage = this.stages?.[f.id];
+            return html`
+              <li>
+                <!-- THE ACTION LEADS THE ROW. The owner's instruction, 2026-09-18:
+                     the Repair button belongs on the LEFT — "it should be on the
+                     left side always for the most part" — not shoved against the
+                     rail by a growing text column. The stage mark takes the same
+                     place when a row has left the button behind, so the row's first
+                     column means one thing whatever state it is in; the sentence
+                     then runs right and gets the width it needs. -->
+                ${stage === 'done'
+                  ? html`<span class="stage done">completed</span>`
+                  : stage === 'repair'
+                    ? html`<span class="stage repair">in repair</span>`
+                    : html`<button class="repair" type="button" @click=${() => this._repair(f.id)}>Repair</button>`}
+                <!-- THE LEVEL IS DATA, NOT DECORATION. It rides on every row and repeats the
+                     same word down the list (owner, 2026-09-19: "it doesn't need to be on
+                     every line… the AI can see it but maybe the user doesn't"). The header's
+                     count still speaks it; the row's chip is not drawn. -->
+                <span class="text">${f.text}</span>
+              </li>
+            `;
+          })}
+        </ul>
+      </chat-fold>
     `;
   }
 }

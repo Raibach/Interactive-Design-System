@@ -641,17 +641,38 @@ export class WorkspaceLayout extends LitElement {
    * so the cursor IS on the boundary it moves: her width is the distance from the pointer to
    * the host's right edge, clamped to her floor and to what the prompt beside her needs.
    */
+  /**
+   * HER COLUMN'S DRAG CEILING ON THE CONSOLE — the owner's number, 2026-09-19: the drag
+   * stops here, so the cards always keep their field. Her OPEN width stays the design's
+   * 650; this is only how far a hand may push her.
+   */
+  private static readonly CONSOLE_CHAT_MAX_PX = 800;
+
   private _rightPxFromPointer(clientX: number): number {
     const w = Math.max(1, this.clientWidth);
     const grip = this._hasMiddle
       ? WorkspaceLayout.GRIP_LEFT_PX + WorkspaceLayout.GRIP_CHAT_PX
       : WorkspaceLayout.GRIP_CHAT_PX;
     const content = Math.max(1, w - grip);
-    const max = Math.max(WorkspaceLayout.MIN_RIGHT_PX, content - WorkspaceLayout.MIN_LEFT_PX);
+    let max = Math.max(WorkspaceLayout.MIN_RIGHT_PX, content - WorkspaceLayout.MIN_LEFT_PX);
+    /*
+     * ON THE CONSOLE, HER COLUMN STOPS AT HER OWN CEILING. The console's left pane is the
+     * card grid — dragging her wider only eats the cards — so the drag clamps at 800. The
+     * console ONLY: in the composer the left pane is the prompt, which may collapse to its
+     * floor exactly as it always has.
+     */
+    if (this._isConsoleSurface()) max = Math.min(max, WorkspaceLayout.CONSOLE_CHAT_MAX_PX);
     return Math.min(
       Math.max(this.getBoundingClientRect().right - clientX, WorkspaceLayout.MIN_RIGHT_PX),
       max,
     );
+  }
+
+  /** Is the pane beside her the console's card grid? Read from the slot, like every other fact here. */
+  private _isConsoleSurface(): boolean {
+    const slot = this.shadowRoot?.querySelector('slot[name="left"]') as HTMLSlotElement | null;
+    const el = (slot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
+    return !!el && el.tagName.toLowerCase() === 'a2ui-console-card-grid';
   }
 
   /**

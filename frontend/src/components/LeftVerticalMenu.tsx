@@ -12,7 +12,6 @@ interface MenuItem {
 
 interface LeftVerticalMenuProps {
   onNewChat?: () => void;
-  onNewProject?: () => void;
   onUploadDocument?: () => void;
   // Received and destructured since the real login landed (routes/auth.py + PinGate),
   // but not declared here, so the tree did not typecheck and `npm run build` failed
@@ -108,7 +107,6 @@ const apiFetch = (url: string, options?: RequestInit): Promise<Response> => {
 
 export default function LeftVerticalMenu({
   onNewChat,
-  onNewProject,
   onUploadDocument,
   onSignOut,
   userName = "User",
@@ -116,6 +114,8 @@ export default function LeftVerticalMenu({
 }: LeftVerticalMenuProps) {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  /** THE NAV ITSELF, OPEN OR CLOSED — closed by default: the shell shows the R and nothing else. */
+  const [isNavOpen, setIsNavOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [promptList, setPromptList] = useState<Array<{id:string;title:string;updated_at:string}>>([]);
@@ -229,13 +229,7 @@ const LogoutIcon = () => (
     {
       id: "components",
       icon: <ComponentIcon />,
-      label: "Components",
-    },
-    {
-      id: "new-project",
-      icon: <FolderIcon />,
-      label: "New Project",
-      onClick: onNewProject,
+      label: "Plugins",
     },
     {
       id: "upload",
@@ -248,87 +242,122 @@ const LogoutIcon = () => (
   return (
     <div
       id="left-vertical-menu"
-      className="relative flex flex-row h-full flex-shrink-0"
-      style={{ zIndex: 50 }}
+      className="relative h-full flex-shrink-0"
+      style={{ zIndex: 50, width: 0 }}
     >
-      {/* Narrow icon strip — hidden at mobile, hamburger replaces it */}
-      <div
-        data-lit-id="left-vertical-menu"
-        data-lit-type="navigation"
-        data-lit-description="Left vertical nav — collapses to hamburger below 768px"
-        className="flex-col items-center py-4 gap-3 h-full flex-shrink-0"
-        style={{
-          display: isMobile ? "none" : "flex",
-          width: "56px",
-          backgroundColor: "#12101f",
-          borderRight: "1px solid rgba(255,255,255,0.07)",
-        }}
-      >
-        {/* Raibach Logo at top */}
-        <div className="mb-2" style={{ marginTop: "-3px" }}>
-          <StarburstIcon logo={raibachLogo} />
-        </div>
-
-        {/* Action buttons */}
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => handleItemClick(item.id, item.onClick)}
-            className={`
-              w-9 h-9 flex items-center justify-center rounded-lg transition-all duration-200
-              ${expandedItem === item.id
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40"
-                : "bg-white/8 text-gray-300 hover:bg-white/15 hover:text-white border border-white/10"
-              }
-            `}
-            title={item.label}
-            style={{ backgroundColor: expandedItem === item.id ? undefined : "rgba(255,255,255,0.06)" }}
-          >
-            <PlusIcon />
-          </button>
-        ))}
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* User Avatar */}
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all flex-shrink-0"
-          style={{ backgroundColor: "#6b4fa0" }}
-          title={userName}
+      {/* THE R — closed state only: the square that opens the nav. Nothing else is on screen. */}
+      {!isNavOpen && (
+        <button
+          data-lit-id="nav-toggle"
+          onClick={() => setIsNavOpen(true)}
+          className="absolute top-0 left-0 w-14 h-14 flex items-center justify-center"
+          style={{ backgroundColor: "#12101f", zIndex: 60 }}
+          title="Open navigation"
+          aria-label="Open navigation"
         >
-          {userAvatar ? (
-            <img src={userAvatar} alt={userName} className="w-full h-full rounded-full object-cover" />
-          ) : (
-            userName.charAt(0).toUpperCase()
-          )}
-        </div>
-      </div>
+          <StarburstIcon logo={raibachLogo} />
+        </button>
+      )}
 
+      {/* THE FLOATING STRIP — a transparent container under the R. The icons have no boxes:
+          they read as floating on the design, and the whole section opens the nav. */}
+      {!isNavOpen && (
+        <div
+          data-lit-id="nav-strip"
+          onClick={() => setIsNavOpen(true)}
+          className="absolute left-0 top-14 w-14 flex flex-col items-center gap-1 py-2 cursor-pointer"
+        >
+          {menuItems
+            .filter((item) => item.id !== "new-chat" && item.id !== "upload")
+            .map((item) => (
+            <button
+              key={item.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsNavOpen(true);
+              }}
+              className="w-9 h-9 flex items-center justify-center text-white transition-colors"
+              title={item.label}
+              aria-label={item.label}
+            >
+              {item.icon}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* OPEN: a regular navigation panel over the design — header with the name and the X,
+          then the menu items full width. Nothing empty, nothing pushed. */}
       {/* Expanded flyout panel */}
       <div
         className="h-full flex flex-col overflow-hidden transition-all duration-250 ease-out"
         style={{
-          width: isExpanded ? "200px" : "0px",
-          backgroundColor: "#1a1730",
-          borderRight: isExpanded ? "1px solid rgba(255,255,255,0.08)" : "none",
+          width: isNavOpen ? "310px" : "0px",
+          position: "absolute",
+          top: 0,
+          left: "0px",
+          zIndex: 55,
+          backgroundColor: "#000000",
+          borderRight: isNavOpen ? "1px solid rgba(255,255,255,0.08)" : "none",
+          boxShadow: isNavOpen ? "8px 0 24px rgba(0, 0, 0, 0.45)" : "none",
           overflow: "hidden",
         }}
       >
-        {isExpanded && expandedItem && (
-          <div className="flex flex-col h-full p-3 gap-1" style={{ minWidth: "200px" }}>
-            {/* Panel header */}
-            <div className="flex items-center justify-between mb-2 px-1">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
-                {menuItems.find((m) => m.id === expandedItem)?.label}
-              </span>
+        {isNavOpen && (
+          <div className="flex flex-col" style={{ minWidth: "310px" }}>
+            {/* The same R, at the same spot — the panel slides in behind it, so nothing appears to move. */}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-14 h-14 flex items-center justify-center shrink-0" style={{ backgroundColor: "#12101f" }}>
+                <StarburstIcon logo={raibachLogo} />
+              </div>
+              <div className="flex flex-col leading-tight flex-1 min-w-0">
+                <span style={{ color: "#ffffff", fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 700, letterSpacing: "-0.02em", fontSize: "24px" }}>RAIBACH IDS</span>
+                <span style={{ color: "#ffffff", letterSpacing: "0.06em", fontSize: "13px", fontWeight: 600 }}>Interactive Design System</span>
+              </div>
               <button
-                onClick={handleCollapse}
-                className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-white transition-colors text-lg leading-none"
+                onClick={() => { setIsNavOpen(false); handleCollapse(); }}
+                className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-white transition-colors text-lg leading-none shrink-0 mr-3"
+                title="Close navigation"
+                aria-label="Close navigation"
               >
                 ×
               </button>
             </div>
+          </div>
+        )}
+
+        {isNavOpen && !expandedItem && (
+          <div className="flex flex-col h-full p-3 gap-1" style={{ minWidth: "310px" }}>
+            {menuItems
+              .filter((item) => item.id !== "new-chat")
+              .map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleItemClick(item.id, item.onClick)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left"
+              >
+                <span className="w-5 h-5 flex items-center justify-center">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {isExpanded && expandedItem && (
+          <div className="flex flex-col h-full p-3 gap-1" style={{ minWidth: "310px" }}>
+            {/* Panel header — the whole row goes back, not just the icon. */}
+            <button
+              onClick={handleCollapse}
+              className="flex items-center gap-2 mb-2 px-1 w-full text-left text-gray-400 hover:text-white transition-colors"
+              title="Back"
+              aria-label="Back"
+            >
+              <svg viewBox="0 0 20 20" fill="none" className="w-5 h-5 shrink-0">
+                <path d="M11 5l-5 5 5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="text-xs font-semibold uppercase tracking-widest">
+                {menuItems.find((m) => m.id === expandedItem)?.label}
+              </span>
+            </button>
 
             {/* Divider */}
             <div className="w-full h-px bg-white/10 mb-2" />
@@ -354,10 +383,10 @@ const LogoutIcon = () => (
             )}
 
             {expandedItem === "prompts" && (
-              <div className="flex flex-col gap-1 overflow-y-auto flex-1">
+              <div className="flex flex-col gap-1 overflow-y-auto overflow-x-hidden flex-1">
                 <button
                   onClick={handleCreateNewPrompt}
-                  className="flex items-center gap-2 px-3 py-1.5 mb-1 rounded text-xs text-white bg-[#4066e3] hover:bg-[#3655c3] transition-colors text-center justify-center font-semibold"
+                  className="flex items-center gap-2 px-3 py-1.5 mb-1 rounded text-xs text-white bg-[#1f1f1f] hover:bg-[#2a2a2a] transition-colors text-center justify-center font-semibold"
                 >
                   + New Prompt
                 </button>
@@ -378,7 +407,7 @@ const LogoutIcon = () => (
                           setLoadingPromptId(null);
                           handleCollapse();
                         }}
-                        className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors text-left"
+                        className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors text-left min-w-0"
                       >
                         {loadingPromptId === p.id ? (
                           <span className="animate-spin shrink-0 text-gray-400">⟳</span>
@@ -401,7 +430,7 @@ const LogoutIcon = () => (
             )}
 
             {expandedItem === "components" && (
-              <div className="flex flex-col gap-1 overflow-y-auto flex-1">
+              <div className="flex flex-col gap-1 overflow-y-auto overflow-x-hidden flex-1">
                 {componentsLoading ? (
                   <div className="text-xs text-gray-400 px-3 py-2 italic">Loading...</div>
                 ) : componentList.length === 0 ? (
@@ -416,32 +445,13 @@ const LogoutIcon = () => (
                         }));
                         handleCollapse();
                       }}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors text-left"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors text-left min-w-0"
                     >
                       <span className="text-gray-500 shrink-0">◇</span>
                       <span className="truncate">{comp.name}</span>
                     </button>
                   ))
                 )}
-              </div>
-            )}
-
-            {expandedItem === "new-project" && (
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => { onNewProject?.(); handleCollapse(); }}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left"
-                >
-                  <span className="text-base">📁</span>
-                  <span>New Project</span>
-                </button>
-                <button
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left"
-                  onClick={handleCollapse}
-                >
-                  <span className="text-base">🗂️</span>
-                  <span>All Projects</span>
-                </button>
               </div>
             )}
 

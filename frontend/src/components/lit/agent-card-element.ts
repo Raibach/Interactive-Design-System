@@ -97,11 +97,11 @@ export class AgentCardElement extends LitElement {
       width: 262px;
       height: 251px;
       background: var(--card-bg, #1C2F4E);            /* the design's own fill */
-      border: 3px solid #FFFFFF;                      /* stroke, 3px */
+      border: 1px solid #8f1340;
       border-radius: 10px;
       box-shadow:
-        4px 4px 10px 0px rgba(0, 0, 0, 0.15),
-        -4px -4px 5px 0px rgba(0, 0, 0, 0.1);
+        4px 4px 12px 0px rgba(0, 0, 0, 0.36),
+        -4px -4px 6px 0px rgba(0, 0, 0, 0.28);
       padding: 10px;
       display: flex;
       flex-direction: column;
@@ -139,12 +139,12 @@ export class AgentCardElement extends LitElement {
       flex-direction: column;
       gap: 2px;
     }
-    /* The function — the level above the category, the design's own gold. */
+    /* The function — the level above the category, in the header's cream. */
     .fn-line {
       font-weight: 700;
       font-size: 14px;
       line-height: 17px;
-      color: #F6C031;
+      color: #ffedab;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -171,11 +171,13 @@ export class AgentCardElement extends LitElement {
       overflow: hidden;
     }
     .card-title {
-      flex: 0 0 50px;                                 /* the node's title box */
+      /* Hugs its content: a one-line title takes one line's height, so the
+         description below inherits the room the node's fixed box held back. */
+      flex: 0 1 auto;
       font-weight: 700;
       font-size: 16px;
       line-height: 26px;
-      color: var(--card-text-color, #FFFFFF);
+      color: var(--card-text-color, #b6afbd);
       overflow: hidden;
       word-break: break-word;
       display: -webkit-box;
@@ -183,13 +185,13 @@ export class AgentCardElement extends LitElement {
       -webkit-box-orient: vertical;
     }
     .card-description {
-      flex: 0 0 82px;                                 /* the node's description box */
+      flex: 1 1 82px;                                 /* takes the room the title gives back */
       /* The design draws this text at Inter Regular; the app's typography law is
          nothing below Medium, so it renders 500. Flagged to the design. */
       font-weight: 500;
       font-size: 13px;
       line-height: 20px;
-      color: var(--card-text-color, #FFFFFF);
+      color: var(--card-text-color, #b6afbd);
       overflow: hidden;
       word-break: break-word;
       display: -webkit-box;
@@ -238,7 +240,7 @@ export class AgentCardElement extends LitElement {
       font-weight: 700;
       font-size: 14px;
       line-height: 17px;
-      color: #FCCD3D;                                 /* the node's own status gold */
+      color: #ffedab;                                 /* the status — the header's cream */
       white-space: nowrap;
       overflow: hidden;
     }
@@ -389,13 +391,13 @@ export class AgentCardElement extends LitElement {
     // Category colors — validated, invalid values throw
     const safeColor = this.categoryColor ? this._validateColor(this.categoryColor) : '';
     const safeTitleColor = this.categoryTitleColor ? this._validateColor(this.categoryTitleColor) : '';
-    const safeTextColor = this.categoryTextColor ? this._validateColor(this.categoryTextColor) : '';
+    const category = (this.category || '').trim().toLowerCase();
+    const usesDesignSystemStyle = category === '' || category === 'design system';
 
     return html`
       <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40001114:5813"
-           style="${safeColor ? `--card-bg: ${safeColor};` : ''}
-                  ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}
-                  ${safeTextColor ? `--card-text-color: ${safeTextColor};` : ''}">
+           style="${usesDesignSystemStyle ? '--card-bg: rgba(28, 47, 78, 0.90);' : `--card-bg: color-mix(in srgb, ${safeColor || '#1C2F4E'} 90%, transparent);`}
+                  ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
              Not in the Figma pull. -->

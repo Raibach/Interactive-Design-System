@@ -39,6 +39,7 @@ import { LitElement, html, css, nothing } from 'lit';
 // The right column's pieces. Each import is a side effect that registers the tag,
 // so <chat-panel> stays self-contained: composing these elements requires them to
 // be defined before render, the same rule that forced the main.tsx import above.
+import './chat-fold';
 import './chat-header';
 import './chat-messages';
 import './small-dropdown';
@@ -150,6 +151,17 @@ export class ChatPanel extends LitElement {
   declare conversationId?: string;
   /** The package's history, as the server loaded it. Bound from /session/right_column/messages. */
   declare messages: SeatMessage[];
+  /**
+   * THE GOVERNANCE REPORTS, TAKEN OUT OF THE THREAD. The inspector files a report into this
+   * conversation with metadata kind='inspection'; the owner, 2026-09-19: they belong "under
+   * approvals… not under chat". Loaded with the history, drawn under the Approvals tab.
+   */
+  private _inspectionReports: SeatMessage[] = [];
+  /** The Approvals and Trace folds — the catalog check's treatment (header, count,
+      chevron), but they arrive OPEN: the content is fed and visible as it always was, and
+      the header is there to fold it away, not to hide it (owner, 2026-09-19). */
+  private _approvalsOpen = true;
+  private _traceOpen = true;
   /** The prompt package. Bound by the host from the surface's session id. */
   declare sessionId?: string;
   /** The "Analyzing: Session 222 | …" line. Empty hides the status bar. */
@@ -317,12 +329,22 @@ export class ChatPanel extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener('a2ui:system-message', this._onHostSay);
+    // A chat button's answer arrives here from <chat-messages> and goes down the one send
+    // path this seat has — the same one the input uses.
+    this.addEventListener('chat-action-send', this._onActionSend);
   }
 
   disconnectedCallback(): void {
     window.removeEventListener('a2ui:system-message', this._onHostSay);
+    this.removeEventListener('chat-action-send', this._onActionSend);
     super.disconnectedCallback();
   }
+
+  /** A chat button's answer: the action goes back as a message, like the retired seat's. */
+  private _onActionSend = (e: Event): void => {
+    const text = String((e as CustomEvent).detail?.text ?? '');
+    if (text) void this._send(text);
+  };
 
   private _onSendCommand() {
     const text = this._draft.trim();
@@ -477,7 +499,9 @@ export class ChatPanel extends LitElement {
       display: flex;
       flex-direction: column;
       min-width: 0;
-      background: #ffffff;
+      /* The console sets --chat-bg on its wrapper (the owner's #2d1831, 2026-09-19);
+         the composer sets nothing and keeps the design's white. */
+      background: var(--chat-bg, #ffffff);
       contain: layout paint;
     }
     /* The split the gripper adjusts: the OUTPUT region flexes and scrolls
@@ -513,7 +537,7 @@ export class ChatPanel extends LitElement {
       flex-direction: column;
       gap: 10px;
       padding: 10px 20px;
-      background: #FFFFFF;
+      background: var(--chat-bg, #FFFFFF);
     }
     /* "chat-output-spacer-slot-area" #40001085:2404 — same column, same 10px 20px inset,
        holding one child: a 1px #B5CCCE rule stretched to the slot's width. */
@@ -523,7 +547,7 @@ export class ChatPanel extends LitElement {
       flex-direction: column;
       gap: 10px;
       padding: 10px 20px;
-      background: #FFFFFF;
+      background: var(--chat-bg, #FFFFFF);
     }
     .output-spacer > span {
       display: block;
@@ -610,7 +634,7 @@ export class ChatPanel extends LitElement {
       gap: 10px;
       overflow-y: auto;
       padding: 10px 20px;
-      background: #FFFFFF;
+      background: var(--chat-bg, #FFFFFF);
     }
     /* TWO VIEWS SHARE THIS ONE HOLE (the design's answer: "holds plain text output and
        inserted functions", plural). The feed FILLS it; the repair list HUGS its content,
@@ -636,10 +660,28 @@ export class ChatPanel extends LitElement {
       gap: 10px;
       flex: 0 0 auto;
       padding: 10px 20px 0;
-      background: #FFFFFF;
+      background: var(--chat-bg, #FFFFFF);
     }
     .chat-top ::slotted(*) { display: none; }
     .chat-top ::slotted(chat-repair-actions) { display: block; }
+    /* THE FILED INSPECTIONS, UNDER APPROVALS — the governance reports as cards, not chat turns:
+       the header in the header's cream, the attention rows in amber, the ok rows in green. */
+    .inspection-reports { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 10px; }
+    /* THE FOLDS ARE <chat-fold> NOW — the catalogue's 40px white dropdown tile, shared
+       with the catalog check and the trace. What the panel adds is the margin around it. */
+    .fold-wrap { margin: 4px 10px 8px; }
+    .inspection-report {
+      background: rgba(0, 0, 0, 0.03);
+      border-left: 2px solid rgba(0, 0, 0, 0.12);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #444444;
+    }
+    .inspection-report .line-head { color: #171717; font-weight: 700; margin-bottom: 2px; }
+    .inspection-report .line-attention { color: #fbbf24; }
+    .inspection-report .line-ok { color: #4ade80; }
     /* What an EMPTY view slot draws. The slot is filled by the surface, so an empty
        one means the surface has not put anything there yet — a state, not a blank.
        THE LINE IS THE FIRST LESSON, NOT A SPINNER. It used to read "Loading the X view…",
@@ -903,10 +945,12 @@ export class ChatPanel extends LitElement {
       const rows: SeatMessage[] = Array.isArray(data?.messages) ? data.messages : [];
       this._historyError = '';
       if (!rows.length) { this.requestUpdate(); return; }
-      // A GOVERNANCE INSPECTION BECOMES A TRACE LINE. The inspector files its verdict in the
-      // console's own conversation (metadata kind='inspection'); the owner asked for the
-      // running history to sit in the trace, so every inspection message loaded here is handed
-      // to the app logger — which the Trace tab reads (lib/trace-source subscribes to it).
+      // A GOVERNANCE INSPECTION IS A REPORT, NOT A CHAT TURN. The inspector files its verdict in
+      // the console's own conversation (metadata kind='inspection'); the owner, 2026-09-19: "this
+      // should be under approvals… not under chat". The reports are taken OUT of the thread here —
+      // they render under the Approvals tab — and the running history still sits in the trace
+      // (lib/trace-source subscribes to the app logger).
+      const reports: SeatMessage[] = [];
       for (const row of rows) {
         const meta = (row as { metadata?: { kind?: string; verdict?: string; at?: string } }).metadata;
         if (meta?.kind === 'inspection') {
@@ -914,9 +958,13 @@ export class ChatPanel extends LitElement {
             verdict: meta.verdict ?? null,
             at: meta.at ?? null,
           });
+          reports.push({ role: row.role, content: row.content });
         }
       }
-      this.messages = rows.map((m) => ({ role: m.role, content: m.content }));
+      this._inspectionReports = reports;
+      this.messages = rows
+        .filter((row) => (row as { metadata?: { kind?: string } }).metadata?.kind !== 'inspection')
+        .map((m) => ({ role: m.role, content: m.content }));
     } catch (err) {
       this._historyError = 'This conversation could not be read — the server did not answer.';
       console.error('[chat-panel] could not read the package\'s history:', err);
@@ -1752,6 +1800,37 @@ ${workspaceContext}`;
                             <slot name="view" @slotchange=${this._onSlotChange}></slot>
                           </div>`
                         : nothing}
+                      ${this.activeTab === 'approvals' && this._inspectionReports.length
+                        ? html`<div class="fold-wrap">
+                            <chat-fold
+                              label="Inspections"
+                              count=${`${this._inspectionReports.length} filed`}
+                              ?open=${this._approvalsOpen}
+                              @fold-toggle=${(e: CustomEvent<{ open: boolean }>) => { this._approvalsOpen = e.detail.open; this.requestUpdate(); }}
+                            >
+                              <div class="inspection-reports">
+                                ${this._inspectionReports.map(
+                                  (r) => html`<article class="inspection-report">
+                                    ${String(r.content || '')
+                                      .split('\n')
+                                      .map((line) => {
+                                        const t = line.trim();
+                                        if (!t) return nothing;
+                                        const cls = t.startsWith('‼')
+                                          ? 'line-attention'
+                                          : t.startsWith('✓')
+                                            ? 'line-ok'
+                                            : t.startsWith('INSPECTION')
+                                              ? 'line-head'
+                                              : 'line-body';
+                                        return html`<div class=${cls}>${t}</div>`;
+                                      })}
+                                  </article>`,
+                                )}
+                              </div>
+                            </chat-fold>
+                          </div>`
+                        : nothing}
                       ${this._historyError
                         ? html`<p class="conversation-none" role="alert">${this._historyError}</p>`
                         : nothing}
@@ -1759,14 +1838,29 @@ ${workspaceContext}`;
                         .messages=${this._thread}
                         .sending=${this._sending}
                       ></chat-messages>`
-                    : html`<div class="view-slot">
-                        <slot name="view" @slotchange=${this._onSlotChange}></slot>
-                        ${this._viewSlotted()
-                          ? nothing
-                          : html`<div class="view-waiting" role="status">
-                              ${this._emptyViewLine()}
-                            </div>`}
-                      </div>`}
+                    : this.activeTab === 'trace'
+                      ? html`<div class="fold-wrap">
+                          <chat-fold
+                            label="Trace"
+                            ?open=${this._traceOpen}
+                            @fold-toggle=${(e: CustomEvent<{ open: boolean }>) => { this._traceOpen = e.detail.open; this.requestUpdate(); }}
+                          >
+                            <slot name="view" @slotchange=${this._onSlotChange}></slot>
+                            ${this._viewSlotted()
+                              ? nothing
+                              : html`<div class="view-waiting" role="status">
+                                  ${this._emptyViewLine()}
+                                </div>`}
+                          </chat-fold>
+                        </div>`
+                      : html`<div class="view-slot">
+                          <slot name="view" @slotchange=${this._onSlotChange}></slot>
+                          ${this._viewSlotted()
+                            ? nothing
+                            : html`<div class="view-waiting" role="status">
+                                ${this._emptyViewLine()}
+                              </div>`}
+                        </div>`}
                 </div>
               </div>
               <div class="chat-input-wrapper">

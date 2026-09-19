@@ -49,3 +49,15 @@ body {
   display: block;
   pointer-events: none;
 }
+
+/* THE CHAT'S PALETTE — ONE SHEET FOR EVERY CHAT SEAT. The owner, 2026-09-19: "can we have a
+   common styling sheet for all of our chats, even if they appear in a different location…
+   apply all of those changes to every chat location." The chat elements (chat-panel,
+   chat-messages, chat-repair-actions) read these; custom properties inherit through shadow
+   boundaries, so every seat, wherever it lives, draws the same conversation. */
+:root {
+  --chat-bg: #0c142e;
+  --chat-text: #b6afbd;
+  --chat-user-bg: rgba(255, 255, 255, 0.1);
+  --chat-rule: transparent;
+}

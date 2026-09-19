@@ -169,7 +169,9 @@ export default function LeftColumnHeader({
         flexShrink: 0,
         minHeight: '56px',
         maxHeight: '100vh',
-        borderBottom: "1px solid rgba(0,0,0,0.12)"
+        position: 'relative',
+        zIndex: 1,
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
       }}
     >
       {/* ════════════════════════════════════════════════════════════
@@ -181,7 +183,7 @@ export default function LeftColumnHeader({
         data-ui-description="Brand logo and navigation tabs"
         className="flex items-center justify-between px-4"
         style={{
-          backgroundColor: "#F2B705",
+          backgroundColor: "#251831",
           minHeight: "56px",
         }}
       >
@@ -191,18 +193,9 @@ export default function LeftColumnHeader({
           data-lit-type="content-area"
           data-lit-description="Brand logo — fixed width, centers at mobile, left-aligned at desktop"
           className="flex items-center gap-3 select-none md:justify-start justify-center md:pl-0 pl-[48px]"
-          style={{ minWidth: "320px", flexShrink: 0 }}
+          style={{ flex: "1 1 0%", minWidth: 0 }}
         >
-          {logo ?? (
-            <div className="flex flex-col leading-tight">
-              <span style={{ color: "#1a1a1a", display: "flex", alignItems: "baseline", gap: "8px" }}>
-                <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 900, letterSpacing: "-0.08em", fontSize: "24px" }}>RAIBACH IDS</span>
-              </span>
-              <span style={{ color: "rgba(0,0,0,0.55)", letterSpacing: "0.06em", fontSize: "14px", fontWeight: 600 }}>
-                Interactive Design System
-              </span>
-            </div>
-          )}
+          {logo ?? null}
         </div>
 
         {/* NAV_TABS — hidden below 768px (rolls into hamburger) */}
@@ -259,9 +252,7 @@ export default function LeftColumnHeader({
                         onClick={() => { if (!isDisabled) setActiveTab(tab.id); }}
                         className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${isDisabled ? 'cursor-default' : 'cursor-pointer'}`}
                         style={{
-                          color: isDisabled
-                            ? 'rgba(0,0,0,0.3)'
-                            : isActive ? "#1a1a1a" : "rgba(0,0,0,0.65)",
+                          color: "#ffedab",
                           backgroundColor: isActive && !isDisabled ? "rgba(0,0,0,0.10)" : "transparent",
                         }}
                       >
@@ -295,15 +286,17 @@ export default function LeftColumnHeader({
         {/* IDENTITY CHIP — always visible, every tab.
             A2UI honesty: the console assembles packages owned by THIS identity.
             If the console looks empty, check this id against the package owner. */}
-        <div
-          data-lit-id="identity-chip"
-          data-lit-type="content-area"
-          data-lit-description="Active user identity — console assembles packages owned by this user"
-          className="shrink-0 font-mono text-xs px-2 py-1 rounded select-all md:block hidden"
-          style={{ color: "rgba(0,0,0,0.75)", backgroundColor: "rgba(255,255,255,0.35)" }}
-          title={`Active identity: ${getStoredUserId()}\nThe console assembles prompt packages owned by this user.`}
-        >
-          u:{getStoredUserId().slice(0, 8)}…{getStoredUserId().slice(-4)}
+        <div style={{ flex: "1 1 0%", display: "flex", justifyContent: "flex-end", minWidth: 0 }}>
+          <div
+            data-lit-id="identity-chip"
+            data-lit-type="content-area"
+            data-lit-description="Active user identity — console assembles packages owned by this user"
+            className="shrink-0 font-mono text-xs px-2 py-1 rounded select-all md:block hidden"
+            style={{ color: "rgba(0,0,0,0.75)", backgroundColor: "rgba(255,255,255,0.35)" }}
+            title={`Active identity: ${getStoredUserId()}\nThe console assembles prompt packages owned by this user.`}
+          >
+            u:{getStoredUserId().slice(0, 8)}…{getStoredUserId().slice(-4)}
+          </div>
         </div>
       </div>
 

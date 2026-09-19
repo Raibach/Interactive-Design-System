@@ -109,7 +109,7 @@ export default function ConsolePage({
   // ✅ STRICT A2UI RULE #1: If parent is loading, show spinner INSIDE this surface only
   if (isParentLoading) {
     return (
-      <div className="flex-1 w-full h-full flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "#E5E1DD", minHeight: "calc(100vh - 120px)" }}>
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center gap-4" style={{ minHeight: "calc(100vh - 120px)" }}>
         <div className="w-8 h-8 border-3 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
         <p className="text-[#507274] text-sm font-medium font-['Inter'] animate-pulse">{loadingMessage}</p>
       </div>
@@ -125,7 +125,7 @@ export default function ConsolePage({
   // (a literal pointer), and what to do now. Raw diagnostics stay available, verbatim.
   if (errorMessage) {
     return (
-      <div className="flex-1 w-full h-full overflow-auto p-4" style={{ backgroundColor: "#E5E1DD", minHeight: "calc(100vh - 120px)" }}>
+      <div className="flex-1 w-full h-full overflow-auto p-4" style={{ minHeight: "calc(100vh - 120px)" }}>
         <div className="mx-auto w-full max-w-4xl flex flex-col gap-3">
           {!isFailureAcknowledged && (
             <error-banner
@@ -180,7 +180,7 @@ export default function ConsolePage({
   // Never claim "empty" while the surface is still waiting for the AI.
   if (!aiAssembledCards) {
     return (
-      <div className="flex-1 w-full h-full flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "#E5E1DD", minHeight: "calc(100vh - 120px)" }}>
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center gap-4" style={{ minHeight: "calc(100vh - 120px)" }}>
         <div className="w-8 h-8 border-3 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
         <p className="text-[#507274] text-sm font-medium font-['Inter'] animate-pulse">Waiting for AI assembly…</p>
       </div>
@@ -194,7 +194,7 @@ export default function ConsolePage({
   if (aiAssembledCards.length === 0) {
     const uid = getStoredUserId();
     return (
-      <div className="flex-1 w-full h-full flex items-center justify-center" style={{ backgroundColor: "#E5E1DD", minHeight: "calc(100vh - 120px)" }}>
+      <div className="flex-1 w-full h-full flex items-center justify-center" style={{ minHeight: "calc(100vh - 120px)" }}>
         <div className="bg-white border-2 border-[#507274] rounded-2xl p-8 max-w-lg text-center">
           <h2 className="text-[#234354] text-xl font-bold mb-2">AI assembled — 0 packages</h2>
           <p className="text-gray-600 mb-1 text-sm">
