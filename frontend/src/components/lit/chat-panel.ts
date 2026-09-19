@@ -397,7 +397,7 @@ export class ChatPanel extends LitElement {
        */
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 14px;
-      color: #10455f;
+      color: #1c2f4e;
     }
     /*
      * THIS ELEMENT IS THE DESIGN'S right-column-panel-container (#40001066:3272),

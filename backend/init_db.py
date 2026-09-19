@@ -819,10 +819,10 @@ ON CONFLICT (id) DO NOTHING;
 DEFAULT_CATEGORIES_SQL = """
 INSERT INTO categories (name, color, title_color, text_color) VALUES
     ('Writing',         '#658D1B', '#F6C031', '#2A2836'),
-    ('Design System',   '#10455F', '#fb8d67', '#fff'),
+    ('Design System',   '#1C2F4E', '#fb8d67', '#fff'),
     ('Learning Module', '#589678', '#f6c031', '#fff'),
     ('Graphics',        '#D3DF44', '#484460', '#484460'),
-    ('Coding',          '#10455F', '#fb8d67', '#fff')
+    ('Coding',          '#1C2F4E', '#fb8d67', '#fff')
 ON CONFLICT (name) DO NOTHING;
 """
 
