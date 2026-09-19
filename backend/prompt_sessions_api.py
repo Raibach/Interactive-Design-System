@@ -105,6 +105,59 @@ class PromptSessionsAPI:
                 conn.rollback()
                 raise e
 
+    def get_or_create_console_tab_conversation(self, user_id: str, tab: str) -> Optional[str]:
+        """The console session's conversation FOR ONE TAB — approvals has its own.
+
+        The console is the ONE global seat, and its tabs are different processes: the chat
+        talks about cards; approvals reads what the inspection filed. They are separate
+        conversations hanging off the SAME session (conversations.tab — the column that has
+        been in the schema all along, with (session_id, tab) indexed), so a person returning
+        to Approvals continues that process exactly where it left off, and the chat's thread
+        never carries its noise. The console package row in Postgres is the storage: the tab
+        conversation IS a row of it — nothing is bolted on.
+        """
+        session = self.get_or_create_console_session(user_id)
+        if not session:
+            return None
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id FROM conversations
+                WHERE session_id = %s AND tab = %s AND (is_archived IS NOT TRUE)
+                ORDER BY updated_at DESC LIMIT 1
+                """,
+                (session["id"], tab),
+            )
+            row = cursor.fetchone()
+            if row:
+                return str(row["id"])
+            cursor.execute(
+                """
+                INSERT INTO conversations (session_id, user_id, created_by, title, message_count, metadata, tab)
+                VALUES (%s, %s, %s, %s, 0, %s::jsonb, %s)
+                RETURNING id
+                """,
+                (
+                    session["id"],
+                    user_id,
+                    user_id,
+                    f"Console — {str(tab).capitalize()}",
+                    json.dumps(
+                        {
+                            "session_type": "console",
+                            "has_prompt_session": False,
+                            "tab": tab,
+                            "prompt_session_id": str(session["id"]),
+                        }
+                    ),
+                    tab,
+                ),
+            )
+            conversation_id = cursor.fetchone()["id"]
+            conn.commit()
+            return str(conversation_id)
+
     def get_or_create_console_session(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         The user's CONSOLE session — the owner of the console chat's conversations.
