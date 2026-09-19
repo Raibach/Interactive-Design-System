@@ -3,6 +3,45 @@ Simple configuration module for Milvus and other settings
 """
 import os
 
+
+def available_memory_mb() -> float:
+    """The memory this process can still use — the CONTAINER's budget, not the host's.
+
+    psutil reads /proc/meminfo, and inside a container that is the HOST's memory: on
+    production (Northflank nf-compute-20, 2026-09-19) it reported 2263MB available while
+    the cgroup's memory.max was 512000000 bytes, so every "is there room for this?" guard
+    passed and the kernel killed the process instead (exit 137, on a loop). The budget is
+    the cgroup limit minus what the cgroup already holds, whichever is smaller than the
+    host's available figure. Where no cgroup limit exists (a laptop), psutil is the truth.
+    """
+    try:
+        import psutil
+
+        budget = psutil.virtual_memory().available / 1048576.0
+    except Exception:
+        budget = float("inf")
+
+    for limit_path, used_path in (
+        ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"),
+        ("/sys/fs/cgroup/memory/memory.limit_in_bytes", "/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+    ):
+        try:
+            raw = open(limit_path).read().strip()
+            if raw == "max":
+                continue
+            limit = float(raw) / 1048576.0
+            try:
+                used = float(open(used_path).read().strip()) / 1048576.0
+            except Exception:
+                used = 0.0
+            budget = min(budget, max(limit - used, 0.0))
+            break
+        except Exception:
+            continue
+
+    return budget
+
+
 # Milvus Configuration
 MILVUS_MODE = os.getenv("MILVUS_MODE", "lite")
 # LITE MODE'S PATH LIVES IN ITS OWN VARIABLE, and that is load-bearing: pymilvus's
