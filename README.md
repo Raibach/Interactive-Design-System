@@ -9,6 +9,8 @@ Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
 Demo pin: 7377
 
+---
+
 > ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
 > The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
 >
