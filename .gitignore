@@ -105,3 +105,18 @@ AGENTIC_EDITOR/
 # THE DESIGNER PROFILE — local-only by the owner instruction (2026-09-19):
 # "put it in the gitignore, I sure as hell don't want anybody to see it."
 DESIGNER-PROFILE.md
+
+#
+# ── THE ROOT'S LOOSE DOWNLOADS (2026-09-19) ───────────────────────────────────
+# Design references and stock art that sit at the repository root and are NOT source: the
+# app's artwork lives in frontend/src/assets, and that is where anything used gets copied.
+# Two of these were un-ignored and `git add -A` would sweep them in — 55 MB of extracted
+# wave art and a 39 MB zip among them (measured 2026-09-19). The owner, on the repository's
+# weight: "Ignore, I don't want that 5 MB 500 MB whatever it is, don't put that."
+# Root-level only (the leading slash), so nothing under frontend/ or backend/ is affected.
+/data-wave-background/
+/data-wave-background.zip
+/*.zip
+/*.jpg
+/*.png
+/images/
