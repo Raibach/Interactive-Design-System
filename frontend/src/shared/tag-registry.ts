@@ -746,6 +746,27 @@ export const TAG_REGISTRY = {
     events: ['message-sent', 'command-received'],
     constraints: [],
   },
+  // THE RESPONSE ROW — v.4b's "user-response-bubble" (#40001119:6352), the row the
+  // output card draws for something the person said. It is the user's turn in a
+  // thread and nothing more: the fill, the radius and the mark are the design's, and
+  // the node carries NO annotation, so it declares no events. That is the honest
+  // state of a wireframe component, and the reason it is safe to allowlist: an
+  // element that cannot emit anything cannot invent a behaviour downstream.
+  'user-response-bubble': {
+    tag: 'user-response-bubble',
+    surface: 'both',
+    column: 'right',
+    description:
+      'One response row in the chat output card — the design\'s "user-response-bubble" (Figma #40001119:6352): a 6px-radius #CBE6E3 row holding a 19×19 mark and one line of 13/20 type. The fill follows the seat\'s own --chat-user-bg when it sets one, so the console keeps its palette and every other seat gets the drawing\'s colour.',
+    props: {
+      'text': { type: 'string', optional: true },
+    },
+    events: [],
+    constraints: [
+      'No event: the Figma node carries no annotation, so nothing here is invented',
+      'The host supplies the line; the wireframe\'s own copy is sample text',
+    ],
+  },
   'trace-feed': {
     tag: 'trace-feed',
     surface: 'both',

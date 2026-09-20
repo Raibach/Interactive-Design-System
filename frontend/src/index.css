@@ -54,10 +54,19 @@ body {
    common styling sheet for all of our chats, even if they appear in a different location…
    apply all of those changes to every chat location." The chat elements (chat-panel,
    chat-messages, chat-repair-actions) read these; custom properties inherit through shadow
-   boundaries, so every seat, wherever it lives, draws the same conversation. */
+   boundaries, so every seat, wherever it lives, draws the same conversation.
+
+   THE VALUES ARE THE v.4b DRAWING'S, and each one is a node (file 20UPR2KQMsbAxlo5NJb1se):
+   the panel's own ground and the card's type were left at the previous sheet's plum, which
+   is why the thread still read purple under a light drawing (owner, 2026-09-19: "you just
+   need to capture those colors from the text because that changed especially in the chat").
+     --chat-bg       panel-inner-container #40001119:6027 — #FFFFFF
+     --chat-text     the response card's line #40001119:6337 — #171717
+     --chat-user-bg  user-response-bubble #40001119:6352 — #CBE6E3
+     --chat-rule     no rule is drawn between the drawing's rows; kept transparent. */
 :root {
-  --chat-bg: #22172c;
-  --chat-text: #b6afbd;
-  --chat-user-bg: rgba(255, 255, 255, 0.1);
+  --chat-bg: #FFFFFF;
+  --chat-text: #171717;
+  --chat-user-bg: #CBE6E3;
   --chat-rule: transparent;
 }

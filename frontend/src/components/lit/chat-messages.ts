@@ -13,6 +13,9 @@
  */
 import { LitElement, html, css, nothing } from 'lit';
 import { asPlainText, stripControlTags } from '@/shared/plainText';
+// The user's turn is the design's own row, not a styled div — v.4b draws it as
+// "user-response-bubble" #40001119:6352 and this element draws that element.
+import './user-response-bubble';
 
 export interface ChatMessage {
   role?: string;
@@ -64,10 +67,12 @@ export class ChatMessages extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      /* THE BOTTOM CLEARS THE RESIZE BAR — the owner, 2026-09-19: "an extra 10 pixels
-         vertical padding to the bottom of my chat outputs." The thread grows right up to
-         the input's horizontal gripper, and the last line needs air under it. */
-      padding: 14px 16px 24px;
+      /* NO HORIZONTAL PADDING OF ITS OWN — the card carries the drawing's 10px — but TEN
+         EXTRA PIXELS UNDER THE LAST LINE, so the newest turn does not sit on the card's
+         edge: the owner, 2026-09-19: "can you add an extra 10 pixels to the bottom so it's
+         not sitting right on the edge." (The same ask he made for the chat outputs on
+         2026-09-19 earlier, and it is the same number.) */
+      padding: 0 0 10px;
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;
@@ -114,9 +119,13 @@ export class ChatMessages extends LitElement {
     .turn.linked:hover { background: #f4f8f8; }
     /* And the same turn, marked because the canvas has that node selected. */
     .turn.hl { background: #edf2f2; outline-color: #507274; }
-    /* THE USER'S TURN SAYS IT IS THEIRS. The console sets --chat-user-bg (10% white over the
-       plum, the owner's 2026-09-19 ask); the composer keeps the design's own light wash. */
-    .turn.user { background: var(--chat-user-bg, #f7fafc); }
+    /* THE USER'S TURN IS THE DESIGN'S BUBBLE, not a wash on this wrapper. v.4b draws
+       it as its own component — "user-response-bubble" #40001119:6352 — so the fill,
+       the padding and the radius live there now and this wrapper paints nothing. It
+       stays as the wrapper because a turn about a canvas node still answers a click
+       and still marks when its node is selected, and that is the turn's behaviour,
+       not the bubble's. */
+    .turn.user { background: transparent; padding: 0; }
     /* THE CHAT'S BUTTONS — the wire format's action links, drawn with the same wash the user's
        turn uses (owner, 2026-09-19: "use that for all your buttons inside of the chat"),
        never the Conversations dropdown. */
@@ -132,20 +141,31 @@ export class ChatMessages extends LitElement {
       transition: background 0.12s;
     }
     .turn .action:hover { background: rgba(255, 255, 255, 0.16); }
-    /* THE EMPTY THREAD IS THE FIRST LESSON, not a blank panel.
-       This line used to read "No conversations yet." — the Conversations dropdown's own
-       empty state, one control above it — so an empty package read as an empty room with a
-       sign about a different room. The empty composer is the demo (owner, 2026-09-18):
-       "I want people to go into an empty composer and click and try everything without any
-       restrictions… letting them know what an empty prompt looks like, how an empty prompt
-       is processed, how Grace handles an empty prompt." So the line offers the next move
-       AND says the thing a person would otherwise assume was wrong: an empty prompt is
-       allowed. */
+    /* THE EMPTY THREAD IS HER GREETING, IN THE CARD'S OWN TYPE.
+       Every value here is the drawing's, from "chat-output-header" #40001119:6327 — the card
+       holds its lines in Inter Medium 500 / 13px / 20px / #171717 (#40001119:6358, :6337) —
+       and none of it is mine. Nothing else is declared: no opacity, no grey, no italic, no
+       padding of its own, because the card already supplies the inset (padding 10px) and the
+       drawing has no such treatment.
+       WHAT WAS HERE BEFORE WAS NONCOMPLIANT, AND IT IS WORTH THE RECORD. Measured against the
+       card's real surface (rgba(117,142,135,0.35) over #CBE6E3 → rgb(173,199,195)), AA for
+       normal text needing 4.5:1:
+         the grey I briefly put here (#6c757d) ........ 2.62:1  FAIL
+         the 60%-opacity treatment it replaced ........ 3.80:1  FAIL
+         the drawing's own #171717 ................... 10.02:1  PASS
+       The owner caught it: "I've got noncompliant WCAG text, it's barely visible. Why are you
+       changing the color of the text?" — and the answer was that I had been inventing a style
+       for a line the drawing does not draw, instead of taking the card's own.
+       The sentence itself is hardcoded, which the owner allowed for exactly this ("you know
+       it's supposed to be gray, so if you're gonna hardcode something just say hi, how can I
+       help you today… if it's gotta be hardcoded"): her real words come from an assembly, and
+       a brand-new conversation has had none. */
     .empty {
-      opacity: 0.6;
-      font-style: italic;
-      padding: 12px;
-      line-height: 1.5;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 20px;
+      color: #171717;
     }
     .thinking {
       display: flex;
@@ -261,11 +281,8 @@ export class ChatMessages extends LitElement {
     return html`
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
-          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? html`<button class="action" data-action=${seg.action} @click=${(e: Event) => this._onActionSend(e, String(seg.action))}>${seg.label}</button>` : seg.text))}</span></div>`)
-          : html`<div class="empty">
-              Nothing here yet — and nothing has to be filled in first. Run it, and Grace
-              will walk you through what an empty prompt does.
-            </div>`}
+          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : html`<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? html`<button class="action" data-action=${seg.action} @click=${(e: Event) => this._onActionSend(e, String(seg.action))}>${seg.label}</button>` : seg.text))}</span>`}</div>`)
+          : html`<div class="empty" role="status">Hi — how can I help you today?</div>`}
         ${this.sending
           ? html`<div class="thinking"><span class="spinner" aria-hidden="true"></span> Thinking…</div>`
           : ''}

@@ -21,6 +21,11 @@ import "@/components/lit/workspace-layout";
 // other element imports it transitively — without it <chat-panel> is an
 // unregistered tag and the right column renders as an empty box.
 import "@/components/lit/chat-panel";
+// The response row inside the panel's output card — v.4b's "user-response-bubble"
+// (#40001119:6352). <chat-messages> imports it for the user's turns, but it is
+// allowlisted and map'd, which means the surface can name it too; the import here is
+// the one that guarantees the tag exists whether or not the thread ever draws one.
+import "@/components/lit/user-response-bubble";
 import "@/components/lit/trace-feed";
 // The repair list the console's chat panel draws in its "view" slot. It used to be
 // registered as a side effect of chat-panel's own import; the panel no longer draws it,

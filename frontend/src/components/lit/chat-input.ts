@@ -30,15 +30,36 @@ export class ChatInput extends LitElement {
   }
 
   static styles = css`
-    :host { display: block; }
+    /* THE CONTROL INSIDE PAINTS NOTHING. v.4b draws this region as ONE surface — a solid
+       #E4E7C8 block with the text typed straight onto it (the owner, 2026-09-19: "it
+       looks like it's got a button or something floating with rounded corners… it should
+       just be transparent… The design itself is just one solid color and then the text
+       just typed"). <prompt-textarea> carries the prompt column's designed box, so this
+       seat turns that box off by setting its three properties to nothing; the element
+       keeps every behaviour — same tag, same events, same auto-grow. */
+    :host {
+      display: block;
+      --pt-fill: transparent;
+      --pt-radius: 0;
+      --pt-shadow: none;
+      /* AND NO SECOND INSET: the region's own 20px is the design's spacing, so the control
+         inside adds none of its own (v.4b #40001119:6044 puts the line at exactly 20px). */
+      --pt-pad: 0;
+    }
+    /* v.4b: "chat-input-area" #40001119:6044 — column, stretch, padding 20px,
+       gap 10px, fill #E4E7C8, shadow inset 4px 4px 4px rgba(0,0,0,0.25). The
+       frame still contains ONLY the label "chat input"; the control inside is the
+       host's, slotted, exactly as before. The ground and the inset are the new
+       node's values — the old node (40001066:4330) was #E5E1DD with the shadow on
+       the top edge. */
     .input-area {
       display: flex;
       flex-direction: column;
       align-items: stretch;
       gap: 10px;
       padding: 20px;
-      background: #e5e1dd;
-      box-shadow: inset 0 4px 4px rgba(0, 0, 0, 0.25);
+      background: #E4E7C8;
+      box-shadow: inset 4px 4px 4px 0 rgba(0, 0, 0, 0.25);
       min-height: 80px;
       box-sizing: border-box;
       overflow: hidden;

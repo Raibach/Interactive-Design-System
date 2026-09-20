@@ -1,10 +1,24 @@
 /**
- * <chat-header> — the status card above the package chat.
+ * <chat-header> — the output area's bar, and the same shell as its response card.
  *
- * Figma source: node 40001066:4308 "output-area" (file 20UPR2KQMsbAxlo5NJb1se),
- * a white card — padding 20px, gap 10px, radius 6px — holding the status bar
- * (40001067:4486): 57px, padding 7px 10px, radius 8px, fill rgba(117,142,135,.35),
- * stroke #758E87 1px, inset 0 4px 4px rgba(0,0,0,.15), text #484460 Inter 500 14/22.
+ * v.4b source (file 20UPR2KQMsbAxlo5NJb1se, the drawing this column follows now):
+ *
+ *   the BAR   "chat-output-header" #40001119:6309 (:6318, :6579 are the same frame
+ *             drawn again with different copy — the wireframe shows the bar three
+ *             times): padding 7px 10px, radius 8, fill rgba(117,142,135,0.35), a 1px
+ *             BOTTOM stroke rgba(117,142,135,0.5), shadows inset 0 -2px 5px
+ *             rgba(0,0,0,0.15) and inset 0 2px 4px rgba(0,0,0,0.25), text #485954
+ *             Inter 500 / 13px / 22px.
+ *   the CARD  "chat-output-header" #40001119:6327: the same shell, padding 10px,
+ *             column, gap 10, holding the response itself.
+ *
+ * Each shape sits in its own "output-header-area" — a #CBE6E3 ground, padding
+ * 10px 20px 2px, column, gap 7 (#40001119:6308; the card's block is :6326 with 4px
+ * under instead of 2px) — and a BAR block carries a Meatballs row under it: the
+ * four-dot grip #40001119:6385 (dots 2.16×2.05, stroke rgba(147,58,69,0.5) at 2px,
+ * 4px apart), which is the handle a person will use to take the block away. This
+ * element draws it; it is not wired to anything yet — the drawing has no annotation
+ * for it, and the row is what remains to be made interactive.
  *
  * THE STATUS LINE IS FOUR SLOTS, not one string. The frame's sample:
  *
@@ -12,14 +26,13 @@
  *
  * maps to status / sessionLabel / sessionName / duration / qaScore, joined with
  * the frame's own separators (pipes, em-dash before Duration). `statusText`
- * remains as the flat fallback for hosts that format the line themselves.
- *
- * The conversation selector does NOT live here — it sits below the message
- * output (see <chat-messages>), where the design puts it.
+ * remains as the flat fallback for hosts that format the line themselves — which
+ * is also how the other two bars in the drawing are drawn ("23 Conversations",
+ * "23 Ready for approval" are the same bar with copy the host supplies).
  *
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 
 export class ChatHeader extends LitElement {
   static properties = {
@@ -35,6 +48,12 @@ export class ChatHeader extends LitElement {
     duration: { type: String, attribute: 'duration' },
     /** Slot 4: the QA readout, e.g. "89.38%". */
     qaScore: { type: String, attribute: 'qa-score' },
+    /**
+     * The CARD shape — #40001119:6327 — instead of the bar: same shell, more
+     * padding, and a slot for what the block holds. The grip row belongs to the
+     * bars only; the drawing's card block has none.
+     */
+    card: { type: Boolean },
   };
 
   declare statusText: string;
@@ -43,6 +62,7 @@ export class ChatHeader extends LitElement {
   declare sessionName: string;
   declare duration: string;
   declare qaScore: string;
+  declare card: boolean;
 
   constructor() {
     super();
@@ -52,49 +72,99 @@ export class ChatHeader extends LitElement {
     this.sessionName = '';
     this.duration = '';
     this.qaScore = '';
+    this.card = false;
   }
 
   static styles = css`
     :host { display: block; }
-    /* THE TOP OF HER COLUMN, AND FLUSH TO IT. This area used to sit inside a white card
-       with 20px of padding (the older frame, 40001066:4308 "output-area"), which pushed
-       the status line down and in from the edge. The owner's node for this slot is
-       40001085:1553 "output-header-area" — column, padding 10px 20px, gap 5 — and its top
-       is the column's top (owner, 2026-09-18: "the top of that design is the top of our
-       chat, technically it should be flush to the top").
-
-       ONE DELIBERATE DEVIATION from that node, recorded rather than silent: the node's
-       fills are #FFFFFF with a #999999 bottom rule, and this draws TRANSPARENT so the
-       ground behind the column shows through — which is the rule this column now follows
-       everywhere (its container and spacer paint nothing either; see chat-panel). The
-       padding, the gap, the status bar's own 57px/rgba(117,142,135,.35)/radius 8/inset
-       shadow, and the type are the node's, exactly. */
+    /* THE BLOCK'S GROUND — "output-header-area" #40001119:6308: #CBE6E3, padding
+       10px 20px 2px, column, gap 7. This is new in v.4b; the older node this
+       element was drawn from (40001085:1553) was a white strip with a #999 rule,
+       and it was drawn transparent so the column showed through. The v.4b drawing
+       paints the block, so the block is painted — the value is the node's. */
     .output-area {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 5px;
-      padding: 10px 20px;
-      background: transparent;
+      gap: 7px;
+      padding: 10px 20px 2px;
+      /* THE LEADING BLOCK IS DEEPER AT THE TOP. The drawing's FIRST block is
+         "output-header-area" #40001119:6308 — padding 20px 20px 2px — while every later one
+         carries the template's 10px 20px 2px (EL-ea5b699e). The panel marks whichever block is
+         actually first (chat-panel's first-child rule), so the 20 lands on the top
+         block even when the status bar is not drawn and the one below it leads instead — the
+         owner, 2026-09-19: "the top one, the top padding is off… it's very tight and close to
+         the top." */
+      padding-top: var(--block-pad-top, 10px);
+      background: #CBE6E3;
+    }
+    /* The card's block, #40001119:6326 — the same ground with 4px under it. */
+    .output-area.card-block { padding-bottom: 4px; }
+    /* THE CARD FILLS ITS BLOCK, AND THE BLOCK FILLS THE ELEMENT.
+       The panel hands this element the region's leftover height (chat-panel's
+       chat-header[card] rule: flex 1 0 auto), and until this rule the element was that
+       tall while the ground and the card inside it stayed the height of their CONTENT —
+       the region drew a small green card at the top of a white void instead of a card
+       that fills it (owner, 2026-09-19: "they're not flexing vertically… seems to be
+       hugging, should be expanding"). The percentage resolves because a flex item's
+       height is definite; the BARS are untouched by it, since their host is
+       content-sized and 100% of an auto height is auto. */
+    .output-area.card-block {
+      height: 100%;
+      box-sizing: border-box;
+    }
+    /* The shell both shapes share. Only the padding, the flow direction and the
+       content differ between them, so the fill, the stroke, the radii and the two
+       inset shadows are written once, here. */
+    .shell {
+      background: rgba(117, 142, 135, 0.35);
+      border-bottom: 1px solid rgba(117, 142, 135, 0.5);
+      border-radius: 8px;
+      box-shadow:
+        inset 0 -2px 5px 0 rgba(0, 0, 0, 0.15),
+        inset 0 2px 4px 0 rgba(0, 0, 0, 0.25);
     }
     .status {
       display: flex;
       align-items: center;
       gap: 10px;
-      min-height: 57px;
       padding: 7px 10px;
-      background: rgba(117, 142, 135, 0.35);
-      border: 1px solid #758e87;
-      border-radius: 8px;
-      box-shadow: inset 0 4px 4px rgba(0, 0, 0, 0.15);
       font-family: 'Inter', system-ui, sans-serif;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       line-height: 22px;
-      color: #484460;
+      color: #485954;
     }
-    /* A status bar with nothing to say should not take the column's space. */
-    .status.none { display: none; }
+    .card {
+      display: flex;
+      flex-direction: column;
+      /* It fills the ground it sits in (see .output-area.card-block above) so the card
+         reaches the bottom of the region instead of stopping at its last line. */
+      flex: 1 1 auto;
+      min-height: 0;
+      gap: 10px;
+      padding: 10px;
+      /* THE CARD IS THE SCROLLBAR'S HOME. The panel slots the drawn rail in here beside
+         the scroller, as an absolutely positioned child: this box is what it measures
+         itself against, so the thumb holds the card's right edge while the conversation
+         travels under it. Out-of-flow, so it never becomes a column item. */
+      position: relative;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 20px;
+      color: #171717;
+    }
+    /* The grip row — #40001119:6384, a 7px band whose dots are drawn at the node's
+       own size and stroke. A drawing until the design says what the gesture is. */
+    .grip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 7px;
+      padding: 0 10px;
+    }
+    .grip svg { display: block; }
   `;
 
   /** The frame's slot line: pipes between readouts, an em-dash before Duration. */
@@ -113,9 +183,35 @@ export class ChatHeader extends LitElement {
 
   render() {
     const line = this._statusLine;
+
+    if (this.card) {
+      return html`
+        <div class="output-area card-block">
+          <div class="card shell">
+            <slot></slot>
+          </div>
+        </div>
+      `;
+    }
+
+    // A bar with nothing to say paints nothing at all — no copy, no ground. The
+    // grip is part of the bar's block, so it goes with it.
+    if (!line) return nothing;
+
     return html`
       <div class="output-area">
-        <div class="status ${line ? '' : 'none'}" role="status">${line}</div>
+        <div class="status shell" role="status">${line}</div>
+        <div class="body"><slot></slot></div>
+        <div class="grip" data-node-id="40001119:6384" aria-hidden="true">
+          <!-- Figma "Meatballs" #40001119:6385, verbatim: four dots, 2.16×2.05 with
+               a 2px stroke, 4px apart, in rgba(147,58,69,0.5). -->
+          <svg width="16" height="6" viewBox="0 0 16 6" fill="none">
+            <ellipse cx="2.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
+            <ellipse cx="6.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
+            <ellipse cx="10.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
+            <ellipse cx="14.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
+          </svg>
+        </div>
       </div>
     `;
   }
@@ -140,6 +236,7 @@ declare module 'react' {
           'session-name'?: string;
           'duration'?: string;
           'qa-score'?: string;
+          card?: '' | boolean;
           ref?: React.Ref<ChatHeader>;
         },
         ChatHeader

@@ -52,6 +52,25 @@
         }
       ]
     },
+    "user-response-bubble": {
+      "type": "object",
+      "description": "The response row inside the chat output card — the design's \"user-response-bubble\", Figma node 40001119:6352 (file 20UPR2KQMsbAxlo5NJb1se), implemented by <user-response-bubble> in src/components/lit/user-response-bubble.ts. A 6px-radius #CBE6E3 row — or the seat's own --chat-user-bg when it sets one — holding a 19×19 mark and one line of Inter 500 13/20 in #171717. It is a DRAWING: the Figma node carries no annotation, so the element declares no events and nothing about it is invented; the host supplies the line.",
+      "properties": {
+        "component": {
+          "const": "user-response-bubble"
+        },
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+          "description": "The line to draw, e.g. {\"path\": \"/session/right_column/last_response\"}. Optional — the wireframe's own copy is sample text, not a default."
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
     "trace-feed": {
       "type": "object",
       "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",
@@ -1817,6 +1836,9 @@
         },
         {
           "$ref": "#/components/trace-feed"
+        },
+        {
+          "$ref": "#/components/user-response-bubble"
         },
         {
           "$ref": "#/components/TraceFeed"

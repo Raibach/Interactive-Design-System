@@ -48,25 +48,48 @@ afterEach(() => {
 describe('<chat-navigation-bar> — the seat lists the server writes', () => {
   it("the console's rail is its own four plus Repairs — and nothing else", async () => {
     // PACKAGE_TABS / CONSOLE_TABS, verbatim from backend/routes/ai.py.
-    const el = await mount('chat,versions,tools,approvals,repair');
-    expect(labels(el)).toEqual(['Chat', 'Versions', 'Tools', 'Approvals', 'Repairs']);
+    // The Approvals button's LABEL is 'Approve' since v.4b (its node, #40001119:6558);
+    // the tab id is still `approvals`, which is what the server's list names.
+    // `settings` is named by both seats since 2026-09-19 — the owner, "I'm missing my
+    // configuration icon" — and it draws no LABEL (the v.4b node has no text layer), which
+    // is why it contributes no entry to this list.
+    const el = await mount('chat,versions,tools,approvals,repair,settings');
+    expect(labels(el)).toEqual(['Chat', 'Versions', 'Tools', 'Approve', 'Repairs']);
     for (const gone of ['Trace', 'Runs', 'Evals', 'States']) {
       expect(labels(el)).not.toContain(gone);
     }
   });
 
+  it('the foot button is the gear, pinned, and it is drawn when the seat names it', async () => {
+    const el = await mount('chat,versions,tools,approvals,repair,settings');
+    const pinned = el.shadowRoot!.querySelector('button.pinned') as HTMLElement | null;
+    expect(pinned).not.toBeNull();
+    expect(pinned!.getAttribute('data-node-id')).toBe('40001119:6593');
+    expect(pinned!.querySelector('img.nci')?.getAttribute('data-node-id')).toBe('40001119:6637');
+    // It emits nothing: the design draws the gear and annotates no action (TODO(behavior)).
+    let heard = 0;
+    el.addEventListener('tab-change', () => { heard += 1; });
+    pinned!.click();
+    expect(heard).toBe(0);
+    // And a seat that does not name it draws no gear — the list is still the list.
+    const bare = await mount('chat,versions,tools,approvals,repair');
+    expect(bare.shadowRoot!.querySelector('button.pinned')).toBeNull();
+  });
+
   it("a package's rail keeps trace, runs and evals — the console's cut is not theirs", async () => {
-    const el = await mount('chat,trace,versions,tools,executions,eval');
+    // PACKAGE_TABS, verbatim from backend/routes/ai.py — including the foot button, which
+    // both seats name and which draws no label.
+    const el = await mount('chat,trace,versions,tools,executions,eval,settings');
     expect(labels(el)).toEqual(['Chat', 'Trace', 'Versions', 'Tools', 'Runs', 'Evals']);
     // The two console-only items stay out of a package: it can only approve, and only
     // repair, what belongs to it.
-    expect(labels(el)).not.toContain('Approvals');
+    expect(labels(el)).not.toContain('Approve');
     expect(labels(el)).not.toContain('Repairs');
   });
 
   it('the order is the rail\'s, not the list\'s', async () => {
     const el = await mount('repair,approvals,chat');
-    expect(labels(el)).toEqual(['Chat', 'Approvals', 'Repairs']);
+    expect(labels(el)).toEqual(['Chat', 'Approve', 'Repairs']);
   });
 
   it('an unset list shows every tab rather than an empty bar', async () => {

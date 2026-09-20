@@ -3514,6 +3514,37 @@ export default function Index({
       if (action === 'zoom' || action === 'fit') return;
       logger.info(`flow action: ${action}`, detail);
     };
+    /**
+     * THE AGENT BUTTON RUNS THE COMPOSER'S OWN CONTROL.
+     *
+     * Its annotation (#40001120:6641) reads:
+     *   On click:  dispatch loads-cards-form-console-in-prompt-area   ← the element does this
+     *   Connects:  loads the console's prompt packages into the left column
+     * and the owner, 2026-09-19, on what the click should do: "it's not opening a new [package]…
+     * you can use the same controls that you have on composer." So it calls the composer's own
+     * control — the same `handleTabChangeWithGate('composer')` the Composer tab calls — which
+     * starts a FRESH package (session_id null, title empty) and never reloads the card the
+     * person had open. Nothing new is invented for it; if the two ever diverge, they diverge in
+     * that one function.
+     *
+     * (The event NAME is the old function's, kept because it is the name the design's note
+     * dispatches — a name is an address, and the note is where this one is written down.)
+     */
+    const onAgentButton = () => {
+      void handleTabChangeWithGate('composer');
+    };
+    /**
+     * ...AND THE SAME BUTTON POINTS THE OTHER WAY FROM A PACKAGE. There it reads "Console" and
+     * opens the console — the same `handleTabChangeWithGate('console')` the Console tab calls,
+     * so the two directions are one pair of controls rather than two lookalikes.
+     * The element decides which name to dispatch from the seat it was told it is
+     * (chat-panel reads that from the session row); this end only listens.
+     */
+    const onOpenConsole = () => {
+      void handleTabChangeWithGate('console');
+    };
+    window.addEventListener('open-console', onOpenConsole);
+    window.addEventListener('loads-cards-form-console-in-prompt-area', onAgentButton);
     window.addEventListener('repair-finding', onRepairFinding);
     window.addEventListener('conversation-change', onConversationChange);
     /**
@@ -3721,6 +3752,8 @@ export default function Index({
     window.addEventListener('canvas-save', onCanvasSave);
     window.addEventListener('flow-opened', onFlowOpened);
     return () => {
+      window.removeEventListener('open-console', onOpenConsole);
+      window.removeEventListener('loads-cards-form-console-in-prompt-area', onAgentButton);
       window.removeEventListener('repair-finding', onRepairFinding);
       window.removeEventListener('conversation-change', onConversationChange);
       window.removeEventListener('flow-node-moved', onFlowNodeMoved);
@@ -3737,7 +3770,7 @@ export default function Index({
       window.removeEventListener('theme-change', onThemeChange);
       window.removeEventListener('flow-opened', onFlowOpened);
     };
-  }, [handleRepairFinding, handleConversationChange, headerTab]);
+  }, [handleRepairFinding, handleConversationChange, handleTabChangeWithGate, headerTab]);
 
   /**
    * A PACKAGE OPENS WHERE IT WAS LEFT.

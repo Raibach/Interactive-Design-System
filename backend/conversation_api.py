@@ -369,6 +369,15 @@ class ConversationAPI:
 
             cursor.execute(query, params)
 
+            # READ THIS ROWCOUNT NOW — it belongs to the statement just run, and the projects
+            # touch below is a SECOND statement that overwrites it. Returning cursor.rowcount at
+            # the end therefore reported the PROJECTS update's count: a conversation with no
+            # project_id — the console's, and every package-less one — answered a SUCCESSFUL
+            # rename with 404 "Conversation not found", from the route's `if not success`.
+            # Measured 2026-09-19: the first write of the console's new-conversation action
+            # failed exactly this way, with the row present and owned by the caller.
+            updated = cursor.rowcount > 0
+
             # Update the project's updated_at when a conversation in it is modified
             if project_id:
                 cursor.execute("""
@@ -385,7 +394,7 @@ class ConversationAPI:
                 """, (conversation_id, user_id))
 
             conn.commit()
-            return cursor.rowcount > 0
+            return updated
         except Exception as e:
             conn.rollback()
             raise e

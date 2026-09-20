@@ -100,7 +100,9 @@ describe('<chat-panel> draws its seat', () => {
   it('draws its own composer when the surface handed it nothing', async () => {
     const el = await mount();
 
-    expect(shadowText(el)).toContain('No conversations yet.');
+    // The empty thread says her line, in grey — the hardcoded greeting the owner asked for on
+    // 2026-09-19 ("just say hi, how can I help you today… if it's gotta be hardcoded").
+    expect(shadowText(el)).toContain('how can I help you today');
     expect(el.shadowRoot?.querySelector('chat-input')).toBeTruthy();
     expect(el.shadowRoot?.querySelector('chat-messages')).toBeTruthy();
   });
@@ -255,6 +257,24 @@ describe('<chat-panel> draws its seat', () => {
     expect(el.activeTab).toBe('approvals');
   });
 
+  it('the command strip draws Send and Agent, and the two trailing buttons are off it', async () => {
+    // The owner, 2026-09-19: "you can remove the models on the horizontal drag for the chat
+    // panel… we don't need those anymore: Models +", then "and the + he can remove the +".
+    // Unhooked rather than deleted — the same session's rule was "don't remove any
+    // capabilities, but we can just unhook them or disable them, comment them out" — so
+    // this pins what is DRAWN, which is the thing a person can see either way.
+    const el = await mount();
+    const bar = el.shadowRoot!.querySelector('chat-action-bar')!;
+    const drawn = Array.from(bar.shadowRoot!.querySelectorAll('.pill')).map((b) =>
+      (b.textContent || '').trim(),
+    );
+    // The trailing button's word is "Agent" since 2026-09-19 (it read "Console"); the
+    // drawing's own label, taken from the node rather than chosen here.
+    expect(drawn).toEqual(['Send', 'Agent']);
+    expect(bar.shadowRoot!.querySelector('.models')).toBeNull();
+    expect(bar.shadowRoot!.querySelector('.add')).toBeNull();
+  });
+
   it('resizes the input area when the gripper is dragged', async () => {
     const el = await mount();
     const bar = el.shadowRoot!.querySelector('chat-action-bar')!;
@@ -262,13 +282,312 @@ describe('<chat-panel> draws its seat', () => {
     const inputEl = el.shadowRoot!.querySelector('chat-input') as HTMLElement & { height: number };
 
     gripper.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 300 }));
-    window.dispatchEvent(new MouseEvent('mousemove', { clientY: 200 }));
-    window.dispatchEvent(new MouseEvent('mouseup'));
+    // Dispatched on the document, which is where a real move lands on its way up the tree
+    // (element → document → window); the gesture listens there, the way the spacer's grip does.
+    document.dispatchEvent(new MouseEvent('mousemove', { clientY: 200 }));
+    document.dispatchEvent(new MouseEvent('mouseup'));
     await settle(el);
 
     // Dragging up 100px grows the input area from its 100px floor to 200px.
     expect(inputEl.height).toBeGreaterThan(100);
     expect(inputEl.height).toBeLessThanOrEqual(600);
+
+    // AND IT LETS GO. The owner, 2026-09-19: "the same divider slide up and slide down…
+    // it's not releasing the cursor." A gesture whose listeners outlive the release keeps
+    // resizing the column as the hand moves afterwards, which is what a held cursor feels
+    // like — so the release is asserted, not assumed: a move after mouseup changes nothing.
+    const afterRelease = inputEl.height;
+    document.dispatchEvent(new MouseEvent('mousemove', { clientY: 40 }));
+    await settle(el);
+    expect(inputEl.height).toBe(afterRelease);
+  });
+
+  it('lets go of the divider when the hand leaves the page with the button up', async () => {
+    // THE CASE THE OWNER HIT, twice: "I'm still grabbing and it won't let me release it.
+    // It holds onto my cursor." The divider sits above the input stack, so dragging it DOWN
+    // walks the pointer at the page's bottom edge — and a release beyond the page fires no
+    // mouseup anywhere, so the old teardown (mouseup only) never ran and the gesture kept
+    // tracking a hand that was no longer holding anything.
+    //
+    // The boundary is what the spacer's grip reads instead: crossing the page edge with NO
+    // button down means the hand is empty, whether it just arrived or just left. This pins
+    // that read for the divider too — and that a pointercancel ends it as well.
+    const el = await mount();
+    const bar = el.shadowRoot!.querySelector('chat-action-bar')!;
+    const gripper = bar.shadowRoot!.querySelector('.gripper')!;
+    const inputEl = el.shadowRoot!.querySelector('chat-input') as HTMLElement & { height: number };
+    const dragging = () => !!(bar as unknown as { _dragging: boolean })._dragging;
+
+    gripper.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 300 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientY: 250 }));
+    await settle(el);
+    expect(dragging()).toBe(true);
+
+    // Leaving the page with the button up: relatedTarget null (nothing inside the page),
+    // buttons 0 (nothing held).
+    document.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: null, buttons: 0 }));
+    expect(dragging()).toBe(false);
+    const released = inputEl.height;
+    document.dispatchEvent(new MouseEvent('mousemove', { clientY: 120 }));
+    await settle(el);
+    expect(inputEl.height).toBe(released);
+
+    // A cancelled pointer (the browser took the gesture over) ends it too.
+    gripper.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 300 }));
+    await settle(el);
+    expect(dragging()).toBe(true);
+    document.dispatchEvent(new Event('pointercancel', { bubbles: true }));
+    expect(dragging()).toBe(false);
+  });
+
+  it('the Send label is the button that sends, and a drag on its grip is not a click', async () => {
+    // The v.4b control is ONE pill holding the label AND the grip (#40001119:6370), so the
+    // grip lives inside the same box as the send action. That is exactly why the pill is a
+    // div with a button inside it rather than a button: a drag that began on the grip must
+    // not finish as a click on Send.
+    const el = await mount();
+    const bar = el.shadowRoot!.querySelector('chat-action-bar')!;
+    const sr = bar.shadowRoot!;
+    const send = sr.querySelector('.send-label') as HTMLButtonElement;
+    const grip = sr.querySelector('.gripper')!;
+    let sent = 0;
+    let ended = 0;
+    bar.addEventListener('send-input-to-model', () => { sent += 1; });
+    bar.addEventListener('input-resize-end', () => { ended += 1; });
+
+    // Give the input a draft, so the send state is enabled (Disabled: while empty).
+    el.shadowRoot!.querySelector('prompt-textarea')!.dispatchEvent(
+      new CustomEvent('value-input', { bubbles: true, composed: true, detail: { value: 'hello' } }),
+    );
+    await settle(el);
+
+    grip.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 300 }));
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await settle(el);
+    expect(sent).toBe(0);
+    expect(ended).toBe(1);
+
+    send.click();
+    expect(sent).toBe(1);
+  });
+
+  it('starts a new conversation from the foot\'s add mark, and archives the one being left', async () => {
+    // The owner, 2026-09-19: "make it work at the bottom so that I can create a new
+    // conversation and archive the one that's there… it would get assigned a default title
+    // based on the first part of the conversation."
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      calls.push({ url: u, init });
+      // The CONSOLE's seat, which is the only one this mark acts on.
+      if (u.startsWith('/api/prompt-sessions/') && (!init || init.method === undefined)) {
+        return json({ session: { id: 'sess-console', metadata: { session_type: 'console' } } });
+      }
+      if (u === '/api/conversations' && init?.method === 'POST') return json({ id: 'conv-new', success: true });
+      // The history the seat loads for the conversation it was given — it REPLACES whatever
+      // the host pushed in, so the first turn the title is taken from has to be here too.
+      if (u.includes('/messages')) return json({ messages: [{ role: 'user', content: 'what does the tool call do' }] });
+      return json({ success: true });
+    }));
+
+    const el = await mount({
+      conversationId: 'conv-chat',
+      sessionId: 'sess-console',
+      conversations: [{ id: 'conv-chat', title: 'Console — Chat', tab: 'chat' }],
+      messages: [
+        { role: 'user', content: 'what does the tool call do' },
+        { role: 'assistant', content: 'It reads the node.' },
+      ],
+    });
+    await settle(el);
+
+    const mark = el.shadowRoot!.querySelector('chat-footer')!.shadowRoot!
+      .querySelector('button[data-node-id="40001119:6483"]') as HTMLButtonElement;
+    expect(mark).toBeTruthy();
+    mark.click();
+    for (let i = 0; i < 12; i++) { await Promise.resolve(); await el.updateComplete; }
+
+    const put = calls.find((c) => c.url === '/api/conversations/conv-chat' && c.init?.method === 'PUT');
+    const archived = calls.find((c) => c.url === '/api/conversations/conv-chat/archive');
+    const created = calls.find((c) => c.url === '/api/conversations' && c.init?.method === 'POST');
+    const pointed = calls.find((c) => c.url === '/api/prompt-sessions/sess-console' && c.init?.method === 'PUT');
+
+    // 1. Named from the first part of the conversation — the rule routes/teacher.py uses (80).
+    expect(JSON.parse(String(put?.init?.body)).title).toBe('what does the tool call do');
+    // 2. Archived, not deleted.
+    expect(archived).toBeTruthy();
+    // 3. A successor filed under THIS seat's package, keeping the naming scheme in use.
+    expect(JSON.parse(String(created?.init?.body))).toEqual({ session_id: 'sess-console', title: 'Console — Chat' });
+    // 4. The session points at it, so a reload lands on the new one.
+    expect(JSON.parse(String(pointed?.init?.body))).toEqual({ conversation_id: 'conv-new' });
+    // 5. And the seat moved to it.
+    expect(el.conversationId).toBe('conv-new');
+  });
+
+  it('leaves a package seat alone: the console is the only one whose chat is global', async () => {
+    // "Each package has its own set of conversations, so don't just apply it to both areas."
+    // The gate is the session row's own metadata — a package row has no session_type: console.
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      calls.push({ url: u, init });
+      if (u.startsWith('/api/prompt-sessions/') && (!init || init.method === undefined)) {
+        return json({ session: { id: 'sess-package', metadata: { has_prompt_session: true } } });
+      }
+      if (u.includes('/messages')) return json({ messages: [] });
+      return json({ success: true });
+    }));
+
+    const el = await mount({
+      conversationId: 'conv-package',
+      sessionId: 'sess-package',
+      messages: [{ role: 'user', content: 'a package turn' }],
+    });
+    await settle(el);
+
+    el.shadowRoot!.querySelector('chat-footer')!.shadowRoot!
+      .querySelector('button[data-node-id="40001119:6483"]')!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+    for (let i = 0; i < 12; i++) { await Promise.resolve(); await el.updateComplete; }
+
+    // Nothing was written, nothing was archived, and the seat stayed where it was.
+    expect(calls.filter((c) => c.init?.method === 'PUT' || c.init?.method === 'POST')).toEqual([]);
+    expect(el.conversationId).toBe('conv-package');
+  });
+
+  it('and the three marks without an event still emit nothing', async () => {
+    const el = await mount();
+    const marks = el.shadowRoot!.querySelector('chat-footer')!.shadowRoot!.querySelectorAll('button.mark');
+    expect(marks.length).toBe(4);
+    const heard: string[] = [];
+    el.addEventListener('conversation-new', () => heard.push('conversation-new'));
+    for (const m of Array.from(marks)) {
+      const id = m.getAttribute('data-node-id');
+      if (id === '40001119:6483') continue;
+      m.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+    await settle(el);
+    expect(heard).toEqual([]);
+  });
+
+  it('counts the package\'s conversations from the server, archived ones included', async () => {
+    // The owner, 2026-09-19: "I should've seen that count go up… can you tie the conversation
+    // count to that?" The surface's list is as fresh as the last assembly AND carries active
+    // rows only, so the count could neither move nor include what was just archived.
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.startsWith('/api/conversations?')) {
+        return json({ conversations: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] });
+      }
+      if (u.includes('/messages')) return json({ messages: [] });
+      return json({ success: true });
+    }));
+
+    const el = await mount({
+      conversationId: 'conv-chat',
+      sessionId: 'sess-console',
+      // The surface says two; the package has three (one of them archived).
+      conversations: [{ id: 'conv-chat', title: 'Console — Chat', tab: 'chat' }, { id: 'conv-approvals', title: 'Console — Approvals', tab: 'approvals' }],
+    });
+    await settle(el);
+
+    const bar = [...el.shadowRoot!.querySelectorAll('chat-header')][0] as HTMLElement & { statusText: string };
+    expect(bar.statusText).toBe('3 Conversations');
+  });
+
+  it('removes a conversation on the second click of its trash, and refuses the one you are in', async () => {
+    // The owner, 2026-09-19: "add a delete icon at the end of each of those conversation
+    // tiles that are loading so that I can remove them from the data." The mark is the trash
+    // every console card carries, and so is the gesture: one click arms, the second removes.
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      calls.push({ url: u, init });
+      if (u.startsWith('/api/conversations?') && (!init || init.method === undefined)) {
+        return json({ conversations: [{ id: 'conv-a' }, { id: 'conv-b' }] });
+      }
+      if (u.includes('/messages')) return json({ messages: [] });
+      return json({ success: true });
+    }));
+
+    const el = await mount({ sessionId: 'sess-console', conversationId: 'conv-a' });
+    await settle(el);
+
+    // The bar opens the list.
+    (el.shadowRoot!.querySelector('chat-header') as HTMLElement).click();
+    await settle(el);
+    const trash = (id: string) =>
+      [...el.shadowRoot!.querySelectorAll('.conv-remove')].find(
+        (b) => (b as HTMLElement).dataset.conversationId === id,
+      ) as HTMLElement;
+    const removed = () => calls.filter((c) => c.init?.method === 'DELETE');
+    expect(el.shadowRoot!.querySelectorAll('.conversation-list li').length).toBe(2);
+
+    // A row you are IN is refused — and the refusal is said under the list.
+    trash('conv-a').click();
+    await settle(el);
+    trash('conv-a').click();
+    await settle(el);
+    expect(removed()).toHaveLength(0);
+    expect(el.shadowRoot!.textContent).toContain('the conversation you are in');
+
+    // Any other row: the first click only arms it, the second removes it from the data.
+    trash('conv-b').click();
+    await settle(el);
+    expect(removed()).toHaveLength(0);
+    trash('conv-b').click();
+    await settle(el);
+    expect(removed().map((c) => c.url)).toEqual(['/api/conversations/conv-b']);
+  });
+
+  it('points the trailing button at the surface you are NOT on, and acts on that', async () => {
+    // The owner, 2026-09-19: "that same button on the composer is actually going to open the
+    // console. So you would want to change the text to console." Which seat this is comes from
+    // the session row's own metadata (session_type), the same read the new-conversation gate
+    // uses — so one fact, two readers.
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    const mountWithScope = async (sessionType: string) => {
+      vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+        const u = String(url);
+        if (u.startsWith('/api/prompt-sessions/') && (!init || init.method === undefined)) {
+          return json({ session: { id: 'sess-1', metadata: { session_type: sessionType } } });
+        }
+        if (u.startsWith('/api/conversations?')) return json({ conversations: [] });
+        if (u.includes('/messages')) return json({ messages: [] });
+        return json({ success: true });
+      }));
+      const el = await mount({ sessionId: 'sess-1' });
+      await settle(el);
+      const bar = el.shadowRoot!.querySelector('chat-action-bar')!;
+      const btn = bar.shadowRoot!.querySelector('.agent') as HTMLButtonElement;
+      const heard: string[] = [];
+      window.addEventListener('open-console', () => heard.push('open-console'));
+      window.addEventListener('loads-cards-form-console-in-prompt-area', () => heard.push('agent'));
+      btn.click();
+      await settle(el);
+      const out = { label: (btn.textContent || '').trim(), trailing: (bar as unknown as { trailing: string }).trailing, heard: [...heard] };
+      window.removeEventListener('open-console', () => {});
+      return out;
+    };
+
+    // The console's seat: the drawing's word, and a new package.
+    const onConsole = await mountWithScope('console');
+    expect(onConsole.label).toBe('Agent');
+    expect(onConsole.trailing).toBe('agent');
+    expect(onConsole.heard).toContain('agent');
+    expect(onConsole.heard).not.toContain('open-console');
+
+    // A package's seat: it reads Console, and opens the console.
+    const onPackage = await mountWithScope('assistant');
+    expect(onPackage.label).toBe('Console');
+    expect(onPackage.trailing).toBe('console');
+    expect(onPackage.heard).toContain('open-console');
+    expect(onPackage.heard).not.toContain('agent');
   });
 
   it('sends the slotted input\'s draft when the bar\'s submit is clicked, and clears it', async () => {
@@ -623,7 +942,9 @@ describe('a conversation belongs to its package — the seat holds that line', (
     });
     await settle(el);
 
-    expect(calls).toHaveLength(0);                       // no read for a stranger's thread
+    // No read for a stranger's THREAD. (The seat does ask for its own package's conversation
+    // COUNT when it learns which package it is — a different read, of its own session.)
+    expect(calls.filter((c) => c.url.includes('/messages'))).toHaveLength(0);
     expect(shadowText(el)).not.toContain('not mine');
   });
 

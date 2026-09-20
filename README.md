@@ -5,6 +5,10 @@
 **Raibach Interactive Design Studio** · John Holt  
 Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
+## Demo: Wireframe interactive prototype
+- ** https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
+- ** Demo user john@raibach.net password: 7377
+
 > ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
 > The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
 >
@@ -98,7 +102,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-49 trusted components — 17 A2UI Basic Catalog primitives + 32 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 49 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+50 trusted components — 17 A2UI Basic Catalog primitives + 33 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 50 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
@@ -114,7 +118,7 @@ Workspace:      workspace-layout · prompt-section-editor · compiled-output-vie
                 ai-surface-sandbox · error-banner · prompt-container
                 prompt-input-section · gripper-prompt-input · role-dropdown
                 role-tile · status-bar-prompt-input · prompt-textarea
-                model-selector-button
+                model-selector-button · user-response-bubble
 ```
 
 ---

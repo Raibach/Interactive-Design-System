@@ -358,6 +358,399 @@
         "The node is a detached FRAME, not a component. Its address is therefore not stable: deleting and re-placing the slot area changes the id, and node-unresolved fires.",
         "The annotation's On click: contract is `conversation-select { conversationId }`. The element currently dispatches `dropdown-toggle`; the conversation event belongs to the wrapper that supplies the list, not to the generic <small-dropdown>."
       ]
+    },
+    {
+      "figmaName": "right-column-panel-container",
+      "figmaNodeId": "40001119:6025",
+      "litComponent": "chat-panel",
+      "file": "frontend/src/components/lit/chat-panel.ts",
+      "status": "built",
+      "container": "right-column-panel",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "litComponent": "inferred",
+        "values": "verbatim"
+      },
+      "values": {
+        "container": {
+          "w": 634,
+          "h": 964,
+          "layout": "row",
+          "padding": "10px 0px 0px",
+          "children": ["chat-left-spacer (20, component 40001085:2597)", "chat-main-menu-vert (74)", "chat-panel-outer (540)"]
+        },
+        "panel": {
+          "w": 540,
+          "h": 954,
+          "fill": "#FFFFFF"
+        },
+        "inputWrapper": {
+          "h": 294,
+          "fill": "#CBE6E3",
+          "padding": "5px 0px 0px"
+        }
+      },
+      "gaps": [
+        "v.4b renames nothing and moves everything: this node carries the same name as the older right-column-panel-container the element was built from (40001066:3272) and a new id. The element's own provenance comment names both.",
+        "Node carries no annotation. The three summary bars, the response card and the input stack below it are all drawn from this node's children with their own values and no behaviour.",
+        "The element's spacer is 30px wide (chat-panel's .gripper-chat, with the reason recorded in the host layout tests); the drawing's is 20."
+      ]
+    },
+    {
+      "figmaName": "chat-output-header",
+      "figmaNodeId": "40001119:6327",
+      "litComponent": "chat-header",
+      "file": "frontend/src/components/lit/chat-header.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "bar": {
+          "w": 500,
+          "padding": "7px 10px",
+          "radius": 8,
+          "fill": "rgba(117, 142, 135, 0.35)",
+          "stroke": "rgba(117, 142, 135, 0.5) bottom 1px",
+          "effect": "inset 0px -2px 5px rgba(0,0,0,0.15), inset 0px 2px 4px rgba(0,0,0,0.25)",
+          "textFill": "#485954",
+          "textStyle": "Inter Medium 500 / 13px / 22px"
+        },
+        "block": {
+          "fill": "#CBE6E3",
+          "padding": "10px 20px 2px",
+          "gap": 7
+        },
+        "grip": {
+          "node": "40001119:6385",
+          "dot": "2.16x2.05, stroke rgba(147,58,69,0.5) 2px, 4px apart",
+          "rowPadding": "1px 2px"
+        }
+      },
+      "gaps": [
+        "One Figma name covers two shapes: the one-line BAR (#40001119:6309, drawn three times in the wireframe with different copy) and the response CARD (#40001119:6327, padding 10, gap 10). The element draws both; this row carries the card as its address.",
+        "Node carries no annotation: the grip row and the bars have no On click:, so nothing is wired and nothing invented.",
+        "The bar is drawn 500 wide in the wireframe because the frame is hand-placed; in the panel it takes its block's width."
+      ]
+    },
+    {
+      "figmaName": "user-response-bubble",
+      "figmaNodeId": "40001119:6352",
+      "litComponent": "user-response-bubble",
+      "file": "frontend/src/components/lit/user-response-bubble.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "row": {
+          "layout": "row",
+          "padding": 4,
+          "gap": 4,
+          "radius": 6,
+          "fill": "#CBE6E3"
+        },
+        "mark": {
+          "node": "40001119:6354",
+          "w": 19,
+          "h": 19,
+          "columnPaddingTop": 5
+        },
+        "line": {
+          "node": "40001119:6358",
+          "textFill": "#171717",
+          "textStyle": "Inter Medium 500 / 13px / 20px",
+          "designedWidth": 451
+        }
+      },
+      "gaps": [
+        "Node carries no annotation and no events: the element declares none and nothing about it is invented.",
+        "The wireframe draws it twice with sample copy (\"User response Sample text - Carbon, IBM's design system\u2026\"); a host supplies the real line through `text`."
+      ]
+    },
+    {
+      "figmaName": "chat-input-menu",
+      "figmaNodeId": "40001119:6035",
+      "litComponent": "chat-action-bar",
+      "file": "frontend/src/components/lit/chat-action-bar.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "dispatchedEvents": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "bar": {
+          "layout": "row",
+          "padding": "10px 20px 20px",
+          "gap": 9,
+          "fill": "#CBE6E3"
+        },
+        "send": {
+          "node": "40001119:6370",
+          "w": 127,
+          "h": 35,
+          "radius": 6,
+          "fill": "rgba(255,255,255,0.5)",
+          "effect": "4px 4px 10px rgba(0,0,0,0.15), -4px -4px 10px rgba(0,0,0,0.15)",
+          "icon": "send--alt 40001119:6380, 24x25, fill #948FBA",
+          "labelFill": "#948FBA",
+          "labelStyle": "Inter Bold 700 / 16px"
+        },
+        "console": {
+          "node": "40001120:6641",
+          "w": 126,
+          "h": 35,
+          "labelFill": "#838383",
+          "labelStyle": "Inter Bold 700 / 16px"
+        },
+        "grip": {
+          "node": "40001120:6644",
+          "height": 15,
+          "padding": "5px 10px 10px"
+        }
+      },
+      "gaps": [
+        "Node carries no annotation. The two dispatched names in the element (send-input-to-model, stop-model-thinking, loads-cards-form-console-in-prompt-area) are the ones the element already declared; the v.4b nodes do not restate them.",
+        "The stop state is not drawn in v.4b. The element keeps it (a call in flight must be stoppable) and its block takes the control's own #948FBA.",
+        "Models and '+' are not in the drawing and are kept: they are functions, and a function does not leave with a drawing (owner, 2026-09-19)."
+      ]
+    },
+    {
+      "figmaName": "chat-input-area",
+      "figmaNodeId": "40001119:6044",
+      "litComponent": "chat-input",
+      "file": "frontend/src/components/lit/chat-input.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "fills": "verbatim",
+        "geometry": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "region": {
+          "layout": "column",
+          "padding": 20,
+          "gap": 10,
+          "fill": "#E4E7C8",
+          "effect": "inset 4px 4px 4px rgba(0,0,0,0.25)"
+        },
+        "label": {
+          "node": "40001119:6045",
+          "text": "chat input",
+          "textFill": "#171717",
+          "textStyle": "Inter Medium 500 / 13px"
+        }
+      },
+      "gaps": [
+        "Node carries no annotation. The frame contains only the label 'chat input'; the control inside is the host's, slotted, as before.",
+        "The label is drawn as the slotted textarea's placeholder, which is the same region and the same words."
+      ]
+    },
+    {
+      "figmaName": "chat-input-menu (foot)",
+      "figmaNodeId": "40001119:6470",
+      "litComponent": "chat-footer",
+      "file": "frontend/src/components/lit/chat-footer.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "bar": {
+          "layout": "row",
+          "h": 71,
+          "padding": "10px 20px 5px",
+          "gap": 9,
+          "fill": "#0E325F",
+          "effect": "-4px 0px 4px rgba(0,0,0,0.25)"
+        },
+        "marks": {
+          "nodes": ["40001119:6626", "40001119:6622", "40001119:6483", "40001119:6486"],
+          "w": 32,
+          "h": 32,
+          "gap": 35
+        },
+        "copyright": {
+          "node": "40001119:6605",
+          "text": "\u00a9 2026 Raibach IDS",
+          "textFill": "#FFFFFF 50%",
+          "textStyle": "Inter Bold 700 / 16px",
+          "width": 127
+        }
+      },
+      "gaps": [
+        "Node carries no annotation: the four marks are drawn as the design draws them and emit nothing. The owner's intent (a click opening that panel at the top of the output area) is not yet a spec.",
+        "The layer text is `{ts1}\u00a9{/ts1} {ts2}2026 Raibach IDS{/ts2}` \u2014 Figma text-style tokens that never resolved, not a second type style.",
+        "The four token readouts the element used to draw on this bar are kept on the new bar: a function does not leave with a drawing (owner, 2026-09-19)."
+      ]
+    },
+    {
+      "figmaName": "approval-button",
+      "figmaNodeId": "40001119:6549",
+      "litComponent": "chat-navigation-bar",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "status": "built",
+      "container": "chat-menu-item",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "iconArtwork": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "button": {
+          "w": 74,
+          "h": 74
+        },
+        "tile": {
+          "node": "40001119:6556",
+          "fill": "#CBE6E3",
+          "effect": "inset 4px 4px 4px rgba(0,0,0,0.25)"
+        },
+        "icon": {
+          "node": "40001119:6560",
+          "w": 32,
+          "h": 32,
+          "fill": "#1FACC2",
+          "art": "ibm--engineering-workflow-mgmt \u2014 exported to frontend/src/assets/figma-approve-icon.svg"
+        },
+        "label": {
+          "node": "40001119:6558",
+          "text": "Approve",
+          "fill": "#2793A3",
+          "style": "Inter Semi Bold 600 / 13px / 20px"
+        }
+      },
+      "gaps": [
+        "Node carries no annotation; the tab id stays `approvals` and its view is unchanged.",
+        "This is the button the drawing shows SELECTED: the tile's #CBE6E3 with the inset is where the amber #FCCD3D used to be. The label colour is the node's own; whether it darkens because the tile is selected or because it is Approve's colour is not stated anywhere in the file.",
+        "Its own artwork now, where the old Approvals button borrowed the trace glyph."
+      ]
+    },
+    {
+      "figmaName": "versions-button (Evals)",
+      "figmaNodeId": "40001119:6427",
+      "litComponent": "chat-navigation-bar",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "status": "built",
+      "container": "chat-menu-item",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "iconArtwork": "verbatim",
+        "typography": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "icon": {
+          "node": "40001119:6615",
+          "w": 43,
+          "h": 43,
+          "fill": "#1FACC2",
+          "art": "ai-governance--lifecycle \u2014 exported to frontend/src/assets/figma-evals-icon.svg"
+        },
+        "label": {
+          "node": "40001119:6436",
+          "text": "Evals",
+          "fill": "#1FACC2",
+          "style": "Inter Bold 700 / 13px / 20px"
+        }
+      },
+      "gaps": [
+        "The frame is still named \"versions-button\" in the file and it draws Evals \u2014 the layer name is stale, the node beside it is labelled Evals. The element claims the node, not the name.",
+        "Node carries no annotation. The element's own `eval` tab keeps its id and its view slot."
+      ]
+    },
+    {
+      "figmaName": "tools-button",
+      "figmaNodeId": "40001119:6535",
+      "litComponent": "chat-navigation-bar",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "status": "built",
+      "container": "chat-menu-item",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "iconArtwork": "verbatim",
+        "typography": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "icon": {
+          "node": "40001119:6538",
+          "w": 38,
+          "h": 35,
+          "fill": "#1FACC2",
+          "art": "tools-api \u2014 exported to frontend/src/assets/figma-tools-api-icon.svg"
+        },
+        "label": {
+          "node": "40001119:6540",
+          "text": "Tools",
+          "fill": "#1FACC2",
+          "style": "Inter Bold 700 / 13px / 20px"
+        }
+      },
+      "gaps": [
+        "Node carries no annotation. The element's own `tools` tab keeps its id and its view slot; only the artwork and the node address are new."
+      ]
+    },
+    {
+      "figmaName": "tools-button (Settings)",
+      "figmaNodeId": "40001119:6593",
+      "litComponent": "chat-navigation-bar",
+      "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+      "status": "built",
+      "container": "chat-menu-item",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "iconArtwork": "verbatim",
+        "litComponent": "inferred"
+      },
+      "values": {
+        "frame": {
+          "layout": "column",
+          "justify": "flex-end"
+        },
+        "button": {
+          "node": "40001119:6599",
+          "w": 74,
+          "h": 67
+        },
+        "icon": {
+          "node": "40001119:6637",
+          "w": 32,
+          "h": 32,
+          "fill": "#1FACC2",
+          "art": "settings \u2014 exported to frontend/src/assets/figma-settings-icon.svg"
+        },
+        "label": null
+      },
+      "gaps": [
+        "The frame's layer name is \"tools-button\" and it draws the gear; the button has NO label layer on the node, so the element draws none.",
+        "Node carries no annotation, so the button emits nothing: the element's own click handler returns before dispatching (TODO(behavior): action undefined in Figma \u2014 node 40001119:6600).",
+        "It is 74x67 while the rail's container constrains 74x74 (40001119:6599), so geometry-drift reports it \u2014 the same shape of finding the trace button has carried. Recorded, not smoothed over."
+      ]
     }
   ]
 }

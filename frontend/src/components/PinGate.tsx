@@ -1,30 +1,58 @@
 import { useState } from 'react';
 import raibachLogo from '@/assets/raibach-logo.jpg';
-import { login, storeUserId } from '@/services/authService';
+import { storeUserId } from '@/services/authService';
 
 /**
- * Sign in. Was a hardcoded 4-digit PIN held in this file pointing at one user —
- * which is why the system only ever had one. It now asks the database.
+ * THE DEMO GATE — AN ILLUSION OF A LOGIN, ON PURPOSE.
+ *
+ * The owner, 2026-09-19: "would you just make a simple gate? I'm just trying to give the
+ * impression of a login. It's not a real login. It's just an illusion."
+ *
+ * So the pair below is accepted HERE, in the browser. Nothing is sent anywhere, and that is
+ * the point: the real endpoint is a credential check the app's own code performs — bcrypt
+ * against `users.password_hash`, a lockout after five misses, a network and a database that
+ * must all be in order — and an illusion that depends on all of that is an illusion that
+ * breaks. This one cannot: it needs no server, no row, and no password that has survived.
+ *
+ * WHAT IT WRITES IS THE SAME THREE KEYS the real sign-in wrote, so the rest of the app is
+ * untouched by the swap: the signed-in flag, the user id, and the role. The pair is the DEMO
+ * ACCOUNT ITSELF — `dev@local`, the email that `users` row carries, with the password set on
+ * it 2026-09-19 — and the id stored is that same account's (00000000-…-0001), the one
+ * tonight's conversations belong to, so the demo opens onto the data that exists instead of
+ * an empty seat. The role is that account's own.
+ *
+ * THE USER IS FIXED AND SHOWN, on the owner's instruction: "give them a break. dev@local."
+ * It is prefilled and read-only — one thing to type, the pin — and the field is a TEXT input,
+ * not `type="email"`: the demo account's email carries no domain, and an email input silently
+ * refuses to submit a value its own pattern rejects, so the button would do nothing and
+ * nothing would say why.
+ *
+ * THE REAL PATH IS NOT DELETED, ONLY UNUSED: `services/authService.ts::login()` still posts
+ * to `POST /api/auth/login` and still works; this form simply does not call it while the
+ * demo wants an illusion.
  */
+const DEMO_EMAIL = 'dev@local';
+const DEMO_PASSWORD = '7377';
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
+const DEMO_ROLE = 'student';
+
+/** Sign in — against the pair above, in this browser, with no request. */
 export default function PinGate({ onLoginSuccess }: { onLoginSuccess: () => void }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(DEMO_EMAIL);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
-    setBusy(true);
     setError('');
-    const res = await login(email.trim(), password);
-    setBusy(false);
-    if (!res.success) {
-      setError(res.error || 'Invalid email or password');
+    // THE PIN IS THE CREDENTIAL. The user above it is fixed and shown, not asked for and not
+    // checked — the owner, 2026-09-19: "then it is a real pin gate with 7377." A wrong pin is
+    // refused with the words the endpoint used, so the illusion reads the same from outside.
+    if (password !== DEMO_PASSWORD) {
+      setError('Invalid email or password');
       return;
     }
-    if (res.userId) storeUserId(res.userId);
-    if (res.role) localStorage.setItem('grace_user_role', res.role);
+    storeUserId(DEMO_USER_ID);
+    localStorage.setItem('grace_user_role', DEMO_ROLE);
     localStorage.setItem('grace_is_authenticated', 'true');
     onLoginSuccess();
   };
@@ -129,15 +157,16 @@ export default function PinGate({ onLoginSuccess }: { onLoginSuccess: () => void
         />
 
         <input
-          type="email"
-          autoFocus
+          type="text"
+          autoComplete="username"
           placeholder="Email"
           value={email}
-          onChange={(e) => { setEmail(e.target.value); setError(''); }}
+          readOnly
           style={field}
         />
         <input
           type="password"
+          autoFocus
           placeholder="Password"
           value={password}
           onChange={(e) => { setPassword(e.target.value); setError(''); }}
@@ -160,7 +189,6 @@ export default function PinGate({ onLoginSuccess }: { onLoginSuccess: () => void
 
         <button
           type="submit"
-          disabled={busy}
           style={{
             width: '100%',
             height: '46px',
@@ -172,11 +200,10 @@ export default function PinGate({ onLoginSuccess }: { onLoginSuccess: () => void
             background: 'linear-gradient(-90deg, rgb(240,179,35), rgb(254,209,65))',
             border: 'none',
             borderRadius: '10px',
-            cursor: busy ? 'default' : 'pointer',
-            opacity: busy ? 0.6 : 1,
+            cursor: 'pointer',
           }}
         >
-          {busy ? 'Signing in…' : 'Sign in'}
+          Sign in
         </button>
       </form>
     </div>

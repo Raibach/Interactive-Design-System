@@ -57,10 +57,17 @@ class AddMessageRequest(BaseModel):
 @router.get("/api/conversations")
 async def get_conversations(
     projectId: Optional[str] = Query(None),
+    session_id: Optional[str] = Query(None),
     include_archived: bool = Query(False),
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ):
-    """Get all conversations for a user"""
+    """Get all conversations for a user, optionally for ONE package.
+
+    `session_id` is the package a conversation is owned by — the same column the seat's own
+    list is built from (`get_conversations_by_session`, what the console's assembly reads).
+    Without it this answers for the whole USER, which is a different question: the console
+    chat's count needs the package's conversations, not every conversation the user has.
+    """
     if not state.conversation_api:
         raise HTTPException(
             status_code=503,
@@ -69,11 +76,23 @@ async def get_conversations(
 
     try:
         uid = get_user_id_from_header(x_user_id)
-        conversations = state.conversation_api.get_all_conversations(
-            uid,
-            project_id=projectId,  # Use projectId from query param
-            include_archived=include_archived,
-        )
+        if session_id:
+            # THE OWNERSHIP COLUMN IS `conversations.session_id`, AND get_all_conversations
+            # DOES NOT READ IT — it takes the id and never filters on it (measured
+            # 2026-09-19: asking for one package's conversations returned all 13 of the
+            # user's). A package-scoped read therefore goes through the method that owns that
+            # fact, the same one the console's assembly builds its own list from.
+            conversations = state.conversation_api.get_conversations_by_session(
+                session_id,
+                uid,
+                include_archived=include_archived,
+            )
+        else:
+            conversations = state.conversation_api.get_all_conversations(
+                uid,
+                project_id=projectId,  # Use projectId from query param
+                include_archived=include_archived,
+            )
         return {"conversations": conversations}
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))

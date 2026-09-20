@@ -1,21 +1,71 @@
 /**
- * <chat-footer> — the frame's "chat-footer-area" (node 40001066:4394).
+ * <chat-footer> — the input stack's foot.
  *
- * Figma source: column, stretch, padding 20px, gap 10px, HUG height
- * (contextual), fill #CFD7D5, "button drop" shadow, radius 6px, text
- * Inter Medium 500 / 14px / #171717.
+ * v.4b source (file 20UPR2KQMsbAxlo5NJb1se): "chat-input-menu" #40001119:6470 —
+ * row, align centre, gap 9, padding 10px 20px 5px, fill #0E325F, shadow
+ * -4px 0px 4px rgba(0,0,0,0.25), height 71. It holds:
  *
- * Content: the four state readouts, ON A ROW — Total Tokens, In / Out,
- * Calls, Last Call. A value with nothing real behind it shows '—'.
+ *   the four marks #40001119:6626 (:6622, :6483, :6486) — 32×32 each, 35 apart (the third
+ *   was renamed "add-new-conversation" on 2026-09-19; same artwork, and it is the one the
+ *   owner has wired),
+ *   "user--feedback", "chat history", "add-new-conversation", "ml-model--reference";
+ *   and the copyright #40001119:6605, right-aligned, white at 50% opacity, drawn
+ *   in Inter Bold 700 / 16px. Its layer text is `{ts1}©{/ts1} {ts2}2026 Raibach
+ *   IDS{/ts2}` — the braces are Figma text-style tokens that never resolved, not a
+ *   second type style, so the line renders as "© 2026 Raibach IDS" in the node's
+ *   own resolved style.
+ *
+ * THE FOUR MARKS ARE NOT WIRED: none of them carries an annotation, so there is no
+ * event name to emit and none is invented (see the note above the row). The owner's
+ * intent for them — a click opening that panel at the top of the output area — is
+ * the interaction the annotation pass still has to specify; node for node:
+ *   40001119:6626 · 40001119:6622 · 40001119:6483 · 40001119:6486
+ *
+ * THE READOUT LINE IS KEPT, NOT DRAWN BY THE DESIGN. The frame this element was
+ * built from (40001066:4394 / #40001085:2697) put four token readouts on a #CFD7D5
+ * bar; v.4b's bar draws marks and a copyright instead. The numbers stay on the bar
+ * because a function does not leave with a drawing (owner, 2026-09-19: "none of our
+ * current functions should disappear just because we're updating a design or
+ * changing a node") — the row takes the bar's own text treatment (white, 50%, the
+ * one the copyright uses) so it reads as belonging to the navy bar rather than to
+ * the bar it replaced.
  *
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
 import { LitElement, html, css } from 'lit';
+import feedbackIcon from '@/assets/figma-chat-footer-feedback.svg';
+import historyIcon from '@/assets/figma-chat-history-icon.svg';
+import newConversationIcon from '@/assets/figma-add-new-conversation-icon.svg';
+import modelRefIcon from '@/assets/figma-ml-model-reference-icon.svg';
+
+/** The four marks, in the drawing's order, each with the node it is drawn from. */
+const MARKS = [
+  { nodeId: '40001119:6626', src: feedbackIcon, label: 'user feedback' },
+  { nodeId: '40001119:6622', src: historyIcon, label: 'chat history' },
+  {
+    nodeId: '40001119:6483',
+    src: newConversationIcon,
+    label: 'new conversation',
+    /**
+     * THE ONE WIRED MARK. The owner, 2026-09-19: "this is the icon I want you to make it
+     * work at the bottom so that I can create a new conversation and archive the one that's
+     * there." It emits the event; the seat that owns the conversation does the three
+     * writes (title, archive, create) — this element composes nothing and reaches nothing.
+     *
+     * The NAME is the one thing here that has no annotation behind it: the note that will
+     * name this event is still to be written in Figma, so this is the name this repository
+     * proposed for it ("conversation-new { tab }", beside the existing
+     * "conversation-select { conversationId }"). When the note lands, the name follows it.
+     */
+    event: 'conversation-new',
+  },
+  { nodeId: '40001119:6486', src: modelRefIcon, label: 'model reference' },
+];
 
 export class ChatFooter extends LitElement {
   static properties = {
     /** True when the seat has no bound conversation: show "unattributed", never
-        another scope's numbers. */
+        another scope's numbers. Not drawn in v.4b — see the header note. */
     unattributed: { type: Boolean },
     tokens: { type: Number },
     inTokens: { type: Number, attribute: 'in-tokens' },
@@ -43,37 +93,67 @@ export class ChatFooter extends LitElement {
 
   static styles = css`
     :host { display: block; }
+    /* Figma "chat-input-menu" #40001119:6470, verbatim: height 71, padding
+       10px 20px 5px, fill #0E325F, shadow -4px 0px 4px rgba(0,0,0,0.25). */
     .footer {
       display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 10px;
-      /* THE MASTER'S OWN NUMBERS: chat-footer-area #40001085:2697, instance
-         #40001085:2698 — 540x70, padding 20, gap 10, fill #CFD7D5, radius 6, the button
-         drop (4 4 10 / -4 -4 10 at 15%), one text line: Inter Medium 14, #171717.
-
-         The padding is 20 and the bar lands on 70 because there is ONE line: 20 + a
-         14px line's box (30) + 20 = 70. It was 8px while four readouts wrapped into two
-         rows — the padding was bending to content that was not the design's, and the
-         owner's note that the footer was "a little off" was that arithmetic showing.
-         min-height, not height: a long readout grows the bar rather than being clipped. */
-      padding: 20px;
-      min-height: 70px;
-      background: #cfd7d5;
-      border-radius: 6px;
-      box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.15), -4px -4px 10px rgba(0, 0, 0, 0.15);
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      line-height: 22px;
-      color: #171717;
+      align-items: center;
+      gap: 9px;
+      height: 71px;
+      padding: 10px 20px 5px;
+      background: #0E325F;
+      box-shadow: -4px 0 4px 0 rgba(0, 0, 0, 0.25);
       box-sizing: border-box;
+      font-family: 'Inter', system-ui, sans-serif;
     }
-    /* THE LINE. One, filling the box's width, ellipsised rather than wrapped — the
-       master draws a single text layer with horizontal fill, and a footer that grows to
-       two lines stops being 70px tall. */
-    .line {
-      width: 100%;
+    /* The marks sit 35 apart (#40001119:6472). */
+    .marks {
+      display: flex;
+      align-items: center;
+      gap: 35px;
+    }
+    /* A mark is a control in the drawing, so it is a button — and it does nothing
+       until the annotation says what it does. No border, no fill: the design draws
+       the artwork alone on the navy. */
+    .mark {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+    }
+    .mark img {
+      display: block;
+      width: 32px;
+      height: 32px;
+      pointer-events: none;
+    }
+    /* The copyright — #40001119:6605: fill #FFFFFF at 50%, Inter Bold 700 / 16px,
+       right-aligned, in a 127-wide box at the end of the row. */
+    .copy {
+      width: 127px;
+      text-align: right;
+      color: #FFFFFF;
+      opacity: 0.5;
+      font-size: 16px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    /* THE READOUT LINE — the older frame's four numbers, kept (see the header note).
+       One line, ellipsised rather than wrapped, so the bar stays 71px tall; it takes
+       the bar's text treatment rather than the #CFD7D5 bar it was drawn on. */
+    .readouts {
+      margin-left: auto;
+      min-width: 0;
+      color: #FFFFFF;
+      opacity: 0.5;
+      font-size: 13px;
+      font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -106,7 +186,33 @@ export class ChatFooter extends LitElement {
   }
 
   render() {
-    return html`<div class="footer"><div class="line">${this._line}</div></div>`;
+    return html`
+      <div class="footer" data-node-id="40001119:6470">
+        <!-- THE MARK THAT ACTS IS THE ONE WITH AN EVENT ON IT (see MARKS). The three
+             without one carry no handler and no event: the design draws them and nothing
+             says what they do yet. -->
+        <div class="marks">
+          ${MARKS.map(
+            (m) => html`
+              <button
+                class="mark"
+                type="button"
+                data-node-id=${m.nodeId}
+                aria-label=${m.label}
+                title=${m.label}
+                @click=${() => {
+                  if (m.event) this.dispatchEvent(new CustomEvent(m.event, { bubbles: true, composed: true }));
+                }}
+              >
+                <img src=${m.src} alt="" />
+              </button>
+            `,
+          )}
+        </div>
+        <span class="readouts">${this._line}</span>
+        <span class="copy" data-node-id="40001119:6605">© 2026 Raibach IDS</span>
+      </div>
+    `;
   }
 }
 
