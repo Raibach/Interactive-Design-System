@@ -1,7 +1,6 @@
 # Changelog — Design System Lifecycle Management
 
 Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
-Goddamn, damn look at you
 
 
 **[2026-09-19] — Milvus moves in: the vector store now runs locally**
