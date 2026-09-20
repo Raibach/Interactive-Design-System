@@ -48,12 +48,19 @@ router = APIRouter()
 # show: a finding belongs to the catalog, not to a package (the same reason Approvals is here
 # and nowhere else). Trace, Runs and Evals leave this menu and stay where they mean something:
 # a record of a RUN, which is a package's business.
-PACKAGE_TABS = "chat,trace,versions,tools,executions,eval"
+PACKAGE_TABS = "chat,trace,versions,tools,executions,eval,settings"
 # REPAIRS LEFT THIS MENU on the owner's instruction, 2026-09-19: "remove the repairs from
 # the tab — repairs live under the approvals." The findings VIEW still draws for the console
 # (the repair-view below), but under Approvals, where a finding about the whole catalog
 # belongs; the chat tab is the conversation and nothing else.
-CONSOLE_TABS = "chat,versions,tools,approvals"
+#
+# `settings` joined both lists on the owner's instruction, 2026-09-19: "I'm missing my
+# configuration icon." It was DRAWN but filtered out of every seat, because a rail tab only
+# draws when the seat's list names it — the pinned foot button was in the rail's TABS and in
+# no seat's menu, which is exactly the silent drop the rail's own note warns about ("a typo
+# on the server is not an error anywhere — it is a button that quietly is not there"). The
+# button is drawn unwired (see chat-navigation-bar: TODO(behavior), node 40001119:6600).
+CONSOLE_TABS = "chat,versions,tools,approvals,settings"
 
 
 def _seat_tabs(components: list, tabs: str) -> None:
@@ -571,7 +578,7 @@ REQUIREMENTS:
    chat; collapsed it is a header with a count on it, and opening it is one click.
    There is no "trace-view" in this assembly any more: Trace left this menu on the same
    instruction, and a view with no rail button would be a hole nothing can reach.
-6. "console-chat" carries "allowedTabs": "chat,versions,tools,approvals".
+6. "console-chat" carries "allowedTabs": "chat,versions,tools,approvals,settings".
    THE MENU IS THE PLACE: the console is the ONE global seat, so it is the only one that
    offers APPROVALS — the issues that span every package — and the only one that offers
    REPAIRS, the findings of the catalog check. A package's seat omits both: a package can
@@ -586,7 +593,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
   "components": [
     {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "console-chat"}}}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
-    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,versions,tools,approvals", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
+    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,versions,tools,approvals,settings", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
     {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
   ],
   "ai_message": "Your message"
@@ -931,7 +938,7 @@ REQUIREMENTS:
    open and Grace is gone"). "middle-column" is still EMITTED below — the shell moves the
    flow view into it at Run time — it is simply not in the layout's children yet, so the
    layout does not draw it.
-5. "right-column" carries "allowedTabs": "chat,trace,versions,tools,executions,eval".
+5. "right-column" carries "allowedTabs": "chat,trace,versions,tools,executions,eval,settings".
    THE MENU IS THE PLACE, not a filter over data: a rail button is a request to look at
    something THIS place has, so a package offers its own versions, its own tools, its own
    runs and its own evals — and NOT approvals, because approvals are the console's job:
@@ -946,7 +953,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
     {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
-    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,versions,tools,executions,eval", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,versions,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "initial_sections": [
@@ -1221,7 +1228,7 @@ REQUIREMENTS:
    name; the array form fills nothing.
 2. Bind the panes to the paths above
 3. Short ai_message that says what is on screen
-4. "right-col" carries "allowedTabs": "chat,trace,versions,tools,executions,eval".
+4. "right-col" carries "allowedTabs": "chat,trace,versions,tools,executions,eval,settings".
    THE MENU IS THE PLACE: this is a package's own seat, so it offers the versions,
    tools, runs and evals THIS package has — and not approvals, which belong to the
    console, the one seat that sees every package at once. Emit it exactly as written.
@@ -1236,7 +1243,7 @@ Output ONLY this JSON (no markdown):
     {{"id": "left-col", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
-    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,versions,tools,executions,eval", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,versions,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "ai_message": "Session open — your three panes are loaded."

@@ -236,7 +236,16 @@ describe('a name that resolves to an element nobody defines', () => {
     await (messagesEl as (HTMLElement & { updateComplete: Promise<unknown> }) | null)?.updateComplete;
     const drawn = messagesEl?.shadowRoot?.textContent || '';
     expect(drawn).toContain('Composer ready.');
-    expect(drawn).toContain('put a lock on it');
+    // The user's turn is drawn by <user-response-bubble> — the design's own row
+    // (#40001119:6352) — so the bound value sits one shadow root deeper than it did.
+    // The claim is unchanged: the value the {path} binding points at is the value drawn.
+    const bubble = messagesEl?.shadowRoot?.querySelector('user-response-bubble') as
+      | (HTMLElement & { text?: string })
+      | null;
+    expect(bubble).toBeTruthy();
+    // Read off the element the parent's template bound, without waiting on a second
+    // update cycle: the property is set as the parent renders, which is the thing here.
+    expect(bubble?.text).toBe('put a lock on it');
   });
 });
 

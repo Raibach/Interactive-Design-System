@@ -162,6 +162,83 @@ export class ChatPanel extends LitElement {
       the header is there to fold it away, not to hide it (owner, 2026-09-19). */
   private _approvalsOpen = true;
   private _traceOpen = true;
+  /**
+   * THE CONVERSATIONS DROPDOWN — OFF, NOT GONE. The owner, 2026-09-19: "get that drop-down
+   * out of the top… we'll rewire everything later, don't remove any capabilities, but we can
+   * just unhook them or disable them, comment them out so that they're still there."
+   *
+   * v.4b draws no dropdown here (the bar above it is the drawing; the selector is not), and
+   * the plan is that conversations open from the FOOTER's own mark — the "chat history" icon
+   * #40001119:6622, drawn — so this is the switch, not a deletion: flip it to true and the
+   * block below renders exactly what it always did.
+   *
+   * NOTHING IT NEEDS WAS CUT. The `conversations` list, `_conversationItems()`,
+   * `_pickConversation()` and the `conversation-select` listener on the output wrapper are
+   * all still here and still live, so re-hooking it is this one flag (or moving the block
+   * under the footer's mark) and nothing else.
+   */
+  private _conversationsTopSlot = false;
+  /**
+   * THE DRAWN SCROLLBAR — the small thumb that rides over the output region's right edge
+   * (owner, 2026-09-19: "put a scroll feature inside of the chat panel, just a very small
+   * little tiny scroll on the right hand side… it can be on top of and over the bubbles").
+   *
+   * These three are its state, and `_railVisible` doubles as the switch: false draws no
+   * rail at all, so a region whose content fits shows nothing rather than an empty track.
+   * `_syncScrollThumb()` is the only writer, and it writes only on a real change —
+   * a redraw per scroll frame would be a render loop.
+   */
+  private _railVisible = false;
+  private _thumbH = 0;
+  private _thumbTop = 0;
+  /**
+   * THE DRAWN SCROLLBAR IS OFF — the wheel is the bar.
+   *
+   * The owner, 2026-09-19: "you don't really need a scroll bar for now, I can just use my
+   * roller on my mouse to move it up and down." So the rail is not drawn; the conversation
+   * still scrolls (the card's body carries overflow-y auto, and a hidden native bar does not
+   * stop the wheel), and the thread still opens at its newest turn.
+   *
+   * OFF, NOT GONE, and the mechanism is still wired and still tested: _syncScrollThumb keeps
+   * measuring, and the four tests in chatPanelScrollbar.test.ts drive it with this flipped on.
+   * Turn it back on when the design wants a bar drawn again — nothing else has to change.
+   */
+  private _showScrollBar = false;
+  /** The scroller's own numbers, carried for the thumb's aria-valuenow/max. */
+  private _scrollPos = 0;
+  private _scrollMax = 0;
+  /**
+   * HOW MANY CONVERSATIONS THIS SEAT'S PACKAGE HAS, archived ones included — read from the
+   * server, not counted off the surface's list.
+   *
+   * The owner, 2026-09-19: "when I clicked new chat it created a new chat but I should've
+   * seen that count go up… can you tie the conversation count to that?" The bar counted
+   * `conversations`, which is the SURFACE's array: it is as fresh as the last assembly, so
+   * the count could not move when this seat created or archived one. And the surface's list
+   * carries ACTIVE rows only, while what the owner counts is the package's conversations
+   * (the archived one is exactly what he asked to keep "into the conversations list").
+   *
+   * `session_id` is the package's own column — the read the console's assembly itself uses —
+   * with archived rows included. Until it is read (or if it cannot be), the bar falls back
+   * to the surface's list length, which is real data too, just staler.
+   */
+  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean }> | null = null;
+  /** Whether the leading bar's conversation list is open. */
+  private _conversationsOpen = false;
+  /**
+   * Whether this seat is the console's — read from its session row's own metadata, and what
+   * decides which way the trailing button points (see chat-action-bar's `trailing`). Null
+   * until read, and the drawing's default stands until it is.
+   */
+  private _seatIsConsole: boolean | null = null;
+  /** The row whose trash is armed (first click); a second click removes it. */
+  private _armedDelete: string | null = null;
+  /** Auto-disarm, so an armed trash never stays armed behind a person's back. */
+  private _deleteTimer: ReturnType<typeof setTimeout> | null = null;
+  /** A refusal or a failure about the list, said where the list is (never swallowed). */
+  private _listNote = '';
+  /** Watches the scroller's children so a growing thread moves the thumb without a render. */
+  private _outputRO: ResizeObserver | null = null;
   /** The prompt package. Bound by the host from the surface's session id. */
   declare sessionId?: string;
   /** The "Analyzing: Session 222 | …" line. Empty hides the status bar. */
@@ -332,12 +409,117 @@ export class ChatPanel extends LitElement {
     // A chat button's answer arrives here from <chat-messages> and goes down the one send
     // path this seat has — the same one the input uses.
     this.addEventListener('chat-action-send', this._onActionSend);
+    // The thumb's length depends on the region's height, so a window resize re-measures it.
+    window.addEventListener('resize', this._onOutputScroll);
   }
 
   disconnectedCallback(): void {
     window.removeEventListener('a2ui:system-message', this._onHostSay);
     this.removeEventListener('chat-action-send', this._onActionSend);
+    window.removeEventListener('resize', this._onOutputScroll);
+    this._outputRO?.disconnect();
+    this._outputRO = null;
+    if (this._deleteTimer) {
+      clearTimeout(this._deleteTimer);
+      this._deleteTimer = null;
+    }
     super.disconnectedCallback();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // The drawn scrollbar over the output region
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** The column's one scroller: the card's body, which the drawn thumb rides over. */
+  private _scrollerEl(): HTMLElement | null {
+    return (this.renderRoot?.querySelector('.content-scroll') as HTMLElement) ?? null;
+  }
+
+  /**
+   * MEASURE, THEN MOVE ONLY IF SOMETHING CHANGED. Called on scroll, on resize, after every
+   * render, and whenever the scroller's children change size — which is how a streaming
+   * reply moves the thumb without the panel re-rendering.
+   *
+   * The thumb's length is the visible FRACTION of the content (clamped to 24px so a very
+   * long thread still leaves something to grab), and its offset is that fraction of the
+   * free track. Both are whole pixels: the panel is drawn on a grid and a half-pixel here
+   * reads as a shimmer while scrolling.
+   */
+  private _syncScrollThumb(): void {
+    const wrap = this._scrollerEl();
+    if (!wrap) return;
+    const max = Math.max(0, Math.round(wrap.scrollHeight - wrap.clientHeight));
+    const visible = max > 1;
+    const h = visible
+      ? Math.max(24, Math.round(wrap.clientHeight * (wrap.clientHeight / wrap.scrollHeight)))
+      : 0;
+    const track = visible ? wrap.clientHeight - h : 0;
+    const pos = Math.round(wrap.scrollTop);
+    const top = visible && max > 0 ? Math.round((pos / max) * track) : 0;
+    if (
+      visible === this._railVisible &&
+      h === this._thumbH &&
+      top === this._thumbTop &&
+      pos === this._scrollPos &&
+      max === this._scrollMax
+    ) {
+      return;
+    }
+    this._railVisible = visible;
+    this._thumbH = h;
+    this._thumbTop = top;
+    this._scrollPos = pos;
+    this._scrollMax = max;
+    this.requestUpdate();
+  }
+
+  /** The wrapper's own scroll — the thumb follows the content, not the other way round. */
+  private _onOutputScroll = (): void => {
+    this._syncScrollThumb();
+  };
+
+  /**
+   * DRAGGING THE THUMB SCROLLS THE REGION — the same gesture idiom this file already uses
+   * for the spacer's grip (press here, move on the window, release ends it), so a pointer
+   * that leaves the 4px thumb mid-drag keeps scrolling, and nothing is captured that the
+   * element forgets to release.
+   */
+  private _onThumbDown = (e: MouseEvent): void => {
+    const wrap = this._scrollerEl();
+    const thumb = e.currentTarget as HTMLElement | null;
+    if (!wrap || !thumb) return;
+    const overflow = wrap.scrollHeight - wrap.clientHeight;
+    if (overflow <= 0) return;
+    const track = wrap.clientHeight - thumb.offsetHeight;
+    const perPx = track > 0 ? overflow / track : 0;
+    const startY = e.clientY;
+    const startTop = wrap.scrollTop;
+    thumb.classList.add('dragging');
+    const onMove = (ev: MouseEvent) => {
+      wrap.scrollTop = startTop + (ev.clientY - startY) * perPx;
+    };
+    const onUp = () => {
+      thumb.classList.remove('dragging');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    e.preventDefault();
+  };
+
+  /** Fires once the region and its children have a box to measure. */
+  protected firstUpdated(): void {
+    this._syncScrollThumb();
+    if (typeof ResizeObserver === 'undefined') return;
+    const wrap = this._scrollerEl();
+    if (!wrap) return;
+    this._outputRO = new ResizeObserver(() => this._syncScrollThumb());
+    // The scroller AND its children: the scroller's own box catches the card being
+    // resized (the input dragged, the column opened), and a child's catches the thread
+    // growing inside it — which is what a streaming reply does.
+    this._outputRO.observe(wrap);
+    for (const child of Array.from(wrap.children)) this._outputRO.observe(child);
   }
 
   /** A chat button's answer: the action goes back as a message, like the retired seat's. */
@@ -422,14 +604,11 @@ export class ChatPanel extends LitElement {
       color: #1c2f4e;
     }
     /*
-     * THIS ELEMENT IS THE DESIGN'S right-column-panel-container (#40001066:3272),
-     * so the container's own two properties live here, applied to the box that
-     * actually holds its three children:
+     * THIS ELEMENT IS THE DESIGN'S right-column-panel-container, and the node it names
+     * moved with v.4b: it was #40001066:3272 and it is now #40001119:6025 — same name,
+     * same three siblings, new drawing. The container is 634 wide = spacer (20) + rail
+     * (74) + panel (540), with paddingTop 10; the drawing's own panel is 540x954.
      *   paddingTop 10 — why the design's rail is 954 tall inside a 964 container.
-     *   the fill — #9C9C9C by the owner's instruction (2026-09-17). The last Figma
-     *   pull still said #FFFFFF for the node, so this is the instruction and not a
-     *   reading; the spacer is transparent by design, so what shows through it is
-     *   THIS fill, and the rail's edge shadow lands on it.
      * With the strip and the panel both inside this box, the padding insets both and
      * the fill sits behind both — which is what could not happen while the strip was
      * outside it.
@@ -510,6 +689,14 @@ export class ChatPanel extends LitElement {
        grows the input area and shrinks the output; down reveals more output.
        No fixed heights, no empty slot wells — the frame's 519px was a
        wireframe value, not a contract. */
+    /* THE FRAME DOES NOT MOVE — ONLY WHAT IS INSIDE IT. The owner, 2026-09-19: "you've got
+       the entire contents of the chat panel scrolling when actually it's supposed to just be
+       that window where you chat with the model — so nothing else moves. The frame stays, but
+       only the content inside of the frames moves."
+       So this region is a fixed frame again: overflow hidden, the bars hold their place,
+       and the ONE scroller is the card's own body (.content-scroll, inside the response
+       card). That is also where it was before the drawn scrollbar existed; what the drawn
+       bar changed is only HOW it is drawn, not WHAT scrolls. */
     .chat-output-wrapper {
       flex: 1 1 auto;
       display: flex;
@@ -520,39 +707,81 @@ export class ChatPanel extends LitElement {
       min-height: 120px;
       overflow: hidden;
     }
+    /* The rail is the thumb's track: 4px at the CARD's right edge, transparent, and it
+       takes no pointer events of its own — only the thumb is grabbable, so a click that
+       lands beside it goes to the bubble underneath. It rides the card, not the column:
+       the frame stays put while the conversation scrolls inside it (owner, 2026-09-19). */
+    .scroll-rail {
+      position: absolute;
+      top: 0;
+      right: 2px;
+      bottom: 0;
+      width: 4px;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .scroll-thumb {
+      position: absolute;
+      right: 0;
+      width: 4px;
+      border-radius: 10px;
+      /* The same thumb the other panes draw (#dadee4) — a value this repository already
+         has, not a new one. */
+      background: #dadee4;
+      opacity: 0.8;
+      pointer-events: auto;
+      cursor: grab;
+      touch-action: none;
+    }
+    .scroll-thumb:hover,
+    .scroll-thumb.dragging {
+      opacity: 1;
+      cursor: grabbing;
+    }
     .chat-input-wrapper {
       flex: 0 0 auto;
       display: flex;
       flex-direction: column;
       min-height: 0;
+      /* v.4b: "chat-input-wrapper" #40001119:6034 — the input stack's own ground,
+         #CBE6E3, with 5px above it. The action bar, the input area and the footer
+         inside it each paint their own fills over this one. */
+      background: #CBE6E3;
+      padding-top: 5px;
     }
     chat-header { flex-shrink: 0; }
+    /* THE LEADING BLOCK'S TOP IS DEEPER — 20px, the drawing's own value for the first block
+       ("output-header-area" #40001119:6308: padding 20px 20px 2px; every later block is the
+       template's 10px). Written as :first-child rather than set per block, so it follows
+       whatever is actually at the top: when the status bar draws nothing the conversations
+       bar leads, and it takes the 20 (owner, 2026-09-19: "the top padding is off… it's very
+       tight and close to the top"). The card is never first — two bars always precede it. */
+    .chat-output-wrapper > chat-header:first-child { --block-pad-top: 20px; }
+    /* THE CARD IS BOUNDED BY THE REGION, AND THAT IS WHAT MAKES THE THREAD SCROLL.
+       It GROWS to fill what the bars leave (a short thread still fills the region, the
+       design's own view) and it SHRINKS no further than the region allows — flex 1 1 auto
+       with min-height 0. Its own body (.content-scroll, overflow-y auto) is then the box
+       that runs out of room, which is what a wheel needs: while this was flex 1 0 auto the
+       card grew to its CONTENT instead, so the inner scroller never overflowed and the
+       conversation could not be rolled at all (owner, 2026-09-19: "still cannot scroll, it's
+       weird"). The note that used to stand here — that allowing shrink would stop the region
+       scrolling — was true while the REGION was the scroller, which it no longer is. */
+    chat-header[card] { flex: 1 1 auto; min-height: 0; }
     small-dropdown { flex-shrink: 0; }
     /* "chat-output-slot-area" #40001085:1521 — column, padding 10px 20px, gap 10px,
-       vertical HUG, white. The HUG is why the Conversations row is as tall as the dropdown
-       and no taller; only the two below it are drawn to fill. */
+       vertical HUG. The HUG is why the Conversations row is as tall as the dropdown
+       and no taller; only the two below it are drawn to fill.
+       ITS GROUND IS THE v.4b BLOCK'S: this row heads the conversations bar and sits in
+       the block the drawing paints #CBE6E3, so it paints that instead of the column's
+       own token — otherwise a white (or, in the console, plum) strip would cut the
+       block in two. */
     .output-slot {
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
       gap: 10px;
       padding: 10px 20px;
-      background: var(--chat-bg, #FFFFFF);
-    }
-    /* "chat-output-spacer-slot-area" #40001085:2404 — same column, same 10px 20px inset,
-       holding one child: a 1px #B5CCCE rule stretched to the slot's width. */
-    .output-spacer {
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 10px 20px;
-      background: var(--chat-bg, #FFFFFF);
-    }
-    .output-spacer > span {
-      display: block;
-      height: 1px;
-      background: #b5ccce;
+      background: #CBE6E3;
     }
     /* Collapsed to the rail — chat-button state=Selected, clicked again. */
     .panel.collapsed { display: none; }
@@ -567,27 +796,66 @@ export class ChatPanel extends LitElement {
       flex-direction: column;
       gap: 5px;
     }
-    .conversation-list button {
-      display: block;
-      width: 100%;
+    /* THE ROW IS THE TILE, AND IT HOLDS TWO CONTROLS — the conversation (open it) and the
+       trash (remove it). The tile could not stay a <button>: a button inside a button is not
+       HTML, and the inner click would fire both. So the tile's own look (white, radius 4, the
+       twin shadows, 30 tall) lives on the row and the controls inside it are transparent. */
+    .conversation-list li {
+      display: flex;
+      align-items: center;
       height: 30px;
-      padding: 0 10px;
-      box-sizing: border-box;
-      background: #ffffff;
-      border: none;
       border-radius: 4px;
+      background: #ffffff;
       box-shadow: 2px 2px 6px 0 rgba(0, 0, 0, 0.15), -2px -2px 6px 0 rgba(0, 0, 0, 0.15);
+    }
+    .conversation-list button {
+      border: none;
+      background: none;
       font-family: inherit;
+      cursor: pointer;
+    }
+    .conversation-list .conv-open {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
+      padding: 0 10px;
+      text-align: left;
       font-size: 14px;
       font-weight: 600;
       color: #4e68d2;
-      text-align: left;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      cursor: pointer;
     }
-    .conversation-list button:hover { background: #f7fafc; }
+    .conversation-list .conv-open:hover { background: #f7fafc; border-radius: 4px 0 0 4px; }
+    /* The trash, at the row's end. The mark is the one the console cards already carry
+       (agent-card-element: the same 24-grid stroke path), and so is the gesture: first click
+       arms it, second click removes — a conversation is not deleted by one stray click. */
+    .conversation-list .conv-remove {
+      flex: 0 0 30px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6c757d;
+      border-radius: 0 4px 4px 0;
+    }
+    .conversation-list .conv-remove:hover { background: #f7fafc; color: #b91c1c; }
+    .conversation-list .conv-remove svg { display: block; width: 14px; height: 14px; }
+    .conversation-list .conv-remove.armed,
+    .conversation-list .conv-remove.armed:hover {
+      background: #b91c1c;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    /* The list's own line — for a refusal that must be said where it happened. */
+    .conv-note {
+      margin: 0;
+      padding: 6px 0 0;
+      font-size: 13px;
+      color: #6c757d;
+    }
     /* THE ROW'S PLACE TAG — "this isn't from here". A conversation that belongs to another
        tab says where it belongs (the owner, 2026-09-19: "we have a little label saying this
        isn't from approval"), in the muted type, at the floor size the type law allows. */
@@ -612,33 +880,26 @@ export class ChatPanel extends LitElement {
     /* The host's slot above the content. It takes what its content asks for and
        NOTHING when it is empty — no height, no border, no gap. This is what keeps the
        new slot cost-free for every assembly that does not fill it. */
-    /* The column's single scroller, and the design's scrollbar: 14px, a transparent
-       track, a rounded #dadee4 thumb — the same one the left column and the output pane
-       draw, so all three scroll alike. */
+    /* THE ONE SCROLLER: the card's own body, and the bar over it is DRAWN.
+       The owner, 2026-09-19: "just be that window where you chat with the model so nothing
+       else moves… only the content inside of the frames moves." So the thread and whatever
+       view the rail selected scroll inside the card, the card and the bars stay put, and the
+       native bar is switched off in favour of the 4px thumb (see .scroll-rail) — nothing is
+       narrowed to make room for it. Only the card's CONTENT travels. */
     .content-scroll {
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      /* Firefox: no native bar — the drawn thumb is the only one. */
+      scrollbar-width: none;
     }
-    .content-scroll::-webkit-scrollbar { width: 14px; }
-    .content-scroll::-webkit-scrollbar-track { background: transparent; }
-    /* THE BAR STEPS BACK UNTIL IT IS WANTED. The owner, 2026-09-19: the light thumb was
-       "really prominent" on the plum — a shade of the header's purple at rest, drawn THIN by
-       a transparent border the hit area keeps (the standard shrink), and it fills out and
-       brightens under the hand. The track was already transparent; it stays that way. */
-    .content-scroll::-webkit-scrollbar-thumb {
-      background: #33263e;
-      background-clip: padding-box;
-      border: 4px solid transparent;
-      border-radius: 10px;
-      transition: background 120ms linear, border-width 120ms linear;
-    }
-    .content-scroll::-webkit-scrollbar-thumb:hover {
-      background: #4a3a58;
-      border-width: 2px;
+    .content-scroll::-webkit-scrollbar {
+      width: 0;
+      height: 0;
     }
     .content-header { flex: 0 0 auto; min-height: 0; display: flex; }
     .content-header ::slotted(*) { flex: 1 1 auto; min-height: 0; }
@@ -903,13 +1164,30 @@ export class ChatPanel extends LitElement {
     return this.activeTab === 'chat' || this.activeTab === 'approvals';
   }
 
+  /**
+   * Whether the status bar will draw a line — the same condition <chat-header> applies to its
+   * own slots (a flat statusText, or any of the four readouts). The panel asks it so an EMPTY
+   * status block is left out of the tree entirely rather than rendered hollow: a hollow block
+   * is still the first child, and the leading block is the one that carries the drawing's
+   * deeper top padding (see the note in the template).
+   */
+  private get _hasStatusLine(): boolean {
+    return Boolean(
+      this.statusText || this.status || this.sessionLabel || this.sessionName || this.duration || this.qaScore,
+    );
+  }
+
   protected updated(changed: Map<PropertyKey, unknown>): void {
     // A PACKAGE CHANGE STARTS THE SEAT OVER. The panel is REUSED across assemblies (the
     // surface keeps the same component id — see the note on `_thread`), so without this the
     // previous package's spoken turns (`_local`) and its loaded history stay on screen over
     // the next package's thread. The owner, 2026-09-18: "I don't see other packages when I
     // open up this package — I only see this package."
-    if (changed.has('sessionId')) this._enterPackage(String(this.sessionId ?? ''));
+    if (changed.has('sessionId')) {
+      this._enterPackage(String(this.sessionId ?? ''));
+      void this._readPackageConversations(this._userId());
+      void this._readSeatScope(this._userId());
+    }
     if (changed.has('conversationId')) void this._loadHistory();
     // History arriving lands the column at the newest turn (see _scrollThreadToBottom)...
     if (changed.has('messages')) this._scrollThreadToBottom();
@@ -918,6 +1196,18 @@ export class ChatPanel extends LitElement {
     // the scroll is a no-op, so the first open used to land at the top of the thread
     // (measured 2026-09-19: "it's not quite at the bottom").
     if (changed.has('collapsed') && !this.collapsed) this._scrollThreadToBottom();
+    // NO THUMB SYNC HERE, and that is deliberate. `updated()` runs on EVERY render, and a
+    // drag of the input's divider renders on every mousemove — so syncing from here read
+    // `scrollHeight`/`clientHeight` per frame, which is the synchronous-layout pattern this
+    // file already warns about for the same gesture ("Reading getBoundingClientRect on every
+    // mousemove forces synchronous layout per frame — the classic resize-lag pattern", see
+    // the resize clamps above). The owner felt exactly that on 2026-09-19: "the same divider
+    // slide up and slide down… it's not releasing the cursor."
+    //
+    // The sync has three other callers and they are the right ones: firstUpdated, the
+    // scroller's own scroll event, and a ResizeObserver that fires after layout when the
+    // region or its children change size — which is what a drag of the divider actually
+    // changes.
   }
 
   /**
@@ -930,11 +1220,16 @@ export class ChatPanel extends LitElement {
    * once it has — the first frame lands it, the second catches anything that settled late
    * (a wrap that changed height, the fold opening). Cheap, and it is what "at the bottom"
    * means when the content is still arriving.
+   *
+   * THE SCROLLER IS THE OUTPUT REGION (.chat-output-wrapper), not the card's inner column:
+   * the drawn scrollbar moved the scrolling out to the region so the bars and the card
+   * travel together under one bar (owner, 2026-09-19). This is the same move the thumb
+   * makes — the column still opens at its newest turn.
    */
   private _scrollThreadToBottom(): void {
     if (!this._showsThread) return;
     const once = () => {
-      const scroller = this.renderRoot?.querySelector('.content-scroll') as HTMLElement | null;
+      const scroller = this._scrollerEl();
       if (scroller) scroller.scrollTop = scroller.scrollHeight;
     };
     requestAnimationFrame(() => {
@@ -1048,6 +1343,11 @@ export class ChatPanel extends LitElement {
    */
   private _conversationBelongsToPackage(id: string): boolean {
     const list = this.conversations ?? [];
+    // The surface's list carries ACTIVE rows only; this seat's own server read carries the
+    // archived ones too, and a conversation archived from here is still this package's and
+    // must stay openable (owner, 2026-09-19: "it should expand so that I can see the message
+    // that you just archived").
+    if ((this._conversationRows ?? []).some((r) => String(r.id) === String(id))) return true;
     if (!list.length) return true;
     if (list.some((c) => String(c?.id ?? '') === String(id))) return true;
     console.error(
@@ -1598,6 +1898,348 @@ ${workspaceContext}`;
   }
 
   /**
+   * A NEW CONVERSATION — the foot's add mark (chat-footer dispatches `conversation-new`).
+   *
+   * The owner, 2026-09-19: "make it work at the bottom so that I can create a new
+   * conversation and archive the one that's there… it would get assigned a default title
+   * based on the first part of the conversation." And on where it belongs: the console's
+   * chat is GLOBAL — "there's conversation IDs per package and in this case it's a
+   * conversation ID for the console only… This is the Console package" — so the successor
+   * is filed under THIS seat's own session, which is what `sessionId` already is.
+   *
+   * THE PATHWAY IS THE APP'S OWN; nothing new was added to the server for this:
+   *   1. NAME the conversation being left, from the first part of what was said in it —
+   *      the rule routes/teacher.py already uses when it creates one (its question's first
+   *      80 characters), so a conversation named here and one named there read the same in
+   *      the list. Without it the row keeps its working title ("Console — Chat"), and three
+   *      of those are three rows nobody can tell apart.
+   *   2. ARCHIVE it — POST /api/conversations/{id}/archive. Archived, never deleted.
+   *   3. Its successor: POST /api/conversations with this seat's session_id, then point the
+   *      session at it (PUT /api/prompt-sessions/{id}), so a reload lands on the new
+   *      conversation instead of resurrecting the archived one. Both bindings the seat
+   *      reads — /console/conversation_id and /session/right_column/conversation_id — are
+   *      the session's own column, which is why repointing it is what makes the move stick.
+   *
+   * A FAILURE STOPS THE SEQUENCE AND IS SAID IN THE THREAD. Moving the seat to an id that
+   * was never created, or archiving without a successor, would leave a person talking into
+   * a conversation that is not there.
+   *
+   * AND IT IS THE CONSOLE'S ACT, ONLY. The owner, 2026-09-19: "it's really important to
+   * understand that this is the only place that this global chat is associated. Each package
+   * has its own set of conversations, so don't just apply it to both areas." So the gate is
+   * first and it is read from the session's own row — `metadata.session_type === 'console'`
+   * (GET /api/prompt-sessions/{id}) — not inferred from a tab list or from which props a
+   * payload happened to include. A package seat does nothing here: starting a conversation
+   * inside a package's own set is a different action, and this design has not specified it.
+   */
+  private _onConversationNew(): void {
+    void this._startNewConversation();
+  }
+
+  private async _startNewConversation(): Promise<void> {
+    const userId = this._userId();
+    const scope = this._seatIsConsole === null
+      ? await this._readSeatScope(userId)
+      : (this._seatIsConsole ? 'console' : 'package');
+    if (scope === 'package') return;
+    if (scope === 'unknown') {
+      // The gate could not be read, so nothing is attempted — and the reason is said rather
+      // than shown as a button that quietly does nothing.
+      this._historyError =
+        'Whether this chat is the console’s could not be read, so nothing was changed — no conversation was archived.';
+      this.requestUpdate();
+      return;
+    }
+    const leaving = this.conversationId;
+    const title = this._firstTurnTitle();
+    const writing = this._conversationWrite;
+    this._historyError = '';
+    try {
+      if (leaving && title) {
+        await writing(`/api/conversations/${leaving}`, 'PUT', { title }, userId);
+      }
+      if (leaving) {
+        await writing(`/api/conversations/${leaving}/archive`, 'POST', undefined, userId);
+      }
+      const created = await writing(
+        '/api/conversations',
+        'POST',
+        { session_id: this.sessionId ?? undefined, title: this._successorTitle() },
+        userId,
+      );
+      const next = typeof created?.id === 'string' ? created.id : '';
+      if (!next) throw new Error('the new conversation came back without an id');
+      if (this.sessionId) {
+        await writing(`/api/prompt-sessions/${this.sessionId}`, 'PUT', { conversation_id: next }, userId);
+      }
+      // The seat moves, exactly as it does when a conversation is picked from the list.
+      this.messages = [];
+      this._local = [];
+      this._inspectionReports = [];
+      this.conversationId = next;
+      // AND THE COUNT MOVES WITH IT: one archived, one created — the package's total is
+      // what the leading bar counts, so it is re-read rather than guessed at.
+      void this._readPackageConversations(userId);
+      // NO GREETING EVENT, AND NO ASSEMBLY. The owner, 2026-09-19: "I don't care about a
+      // greeting. I care that the conversations create and then are they retrievable" — and
+      // a greeting raised by re-assembling would reload the whole surface, which this must
+      // never do: everything a new conversation touches stays inside this chat.
+      this.dispatchEvent(
+        new CustomEvent('conversation-change', {
+          bubbles: true,
+          composed: true,
+          detail: { conversationId: next },
+        }),
+      );
+    } catch (err) {
+      const why = String((err as Error)?.message ?? err);
+      this._historyError = `A new conversation could not be started, so this one is still yours: ${why}`;
+      this.requestUpdate();
+    }
+  }
+
+  /**
+   * WHICH CHAT THIS SEAT IS. The console's chat is the GLOBAL one, and the reason it can be
+   * read reliably is the database's own shape: the console HAS a package — the owner,
+   * 2026-09-19: "the console has its own package in the database and everything that happens
+   * on the console gets associated with that package… these packages are really important in
+   * a database driven system." Its session row carries `session_type: "console"` in its own
+   * metadata, written when prompt_sessions_api provisions it. That marker is the gate.
+   *
+   * 'unknown' IS A THIRD ANSWER ON PURPOSE. A gate that cannot be read must not be treated as
+   * a 'no' (the button would do nothing and say nothing), and it must not be treated as a
+   * 'yes' (a package's own conversations would be archived under the console's rule).
+   */
+  /**
+   * Read the scope and KEEP it: the trailing button's direction and the new-conversation gate
+   * are the same fact, so it is read once and both read it from here.
+   */
+  private async _readSeatScope(userId: string): Promise<'console' | 'package' | 'unknown'> {
+    const scope = await this._seatScope(userId);
+    if (scope !== 'unknown' && this._seatIsConsole !== (scope === 'console')) {
+      this._seatIsConsole = scope === 'console';
+      this.requestUpdate();
+    }
+    return scope;
+  }
+
+  private async _seatScope(userId: string): Promise<'console' | 'package' | 'unknown'> {
+    const sessionId = this.sessionId;
+    if (!sessionId) return 'package';
+    try {
+      const res = await fetch(`/api/prompt-sessions/${sessionId}`, {
+        headers: { 'X-User-ID': userId },
+      });
+      if (!res.ok) return 'unknown';
+      const body = (await res.json()) as { session?: { metadata?: Record<string, unknown> } };
+      const type = String(body?.session?.metadata?.session_type ?? '');
+      return type === 'console' ? 'console' : 'package';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Read the package's conversation count (archived rows included) and show it in the
+   * leading bar. Called when the seat learns which package it is and whenever this seat
+   * changes the set — creating a conversation, archiving one — so the number moves when the
+   * thing it counts moves.
+   *
+   * A FAILED READ CHANGES NOTHING. The count keeps whatever it last had, which is the
+   * surface's own list length until the first successful read — real data either way, so
+   * there is no stand-in value here and nothing is swallowed: the number simply stays as
+   * true as it was.
+   */
+  private async _readPackageConversations(userId: string): Promise<void> {
+    if (!this.sessionId) return;
+    try {
+      const res = await fetch(
+        `/api/conversations?session_id=${encodeURIComponent(this.sessionId)}&include_archived=true`,
+        { headers: { 'X-User-ID': userId } },
+      );
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        conversations?: Array<{ id?: unknown; title?: unknown; tab?: unknown; is_archived?: unknown }>;
+      };
+      if (!Array.isArray(body?.conversations)) return;
+      const rows = body.conversations.map((c) => ({
+        id: String(c?.id ?? ''),
+        title: String(c?.title || '(untitled)'),
+        tab: String(c?.tab || 'chat'),
+        archived: c?.is_archived === true,
+      })).filter((r) => r.id);
+      if (rows.length === this._conversationRows?.length
+          && rows.every((r, i) => r.id === this._conversationRows?.[i]?.id && r.title === this._conversationRows?.[i]?.title)) {
+        return;
+      }
+      this._conversationRows = rows;
+      this.requestUpdate();
+    } catch {
+      // Unreachable server: keep the number that was already true (see the header note).
+    }
+  }
+
+  /** The bar's own click: open or close its list. */
+  private _toggleConversations = (): void => {
+    this._conversationsOpen = !this._conversationsOpen;
+    // Opening re-reads, so a conversation created or archived a moment ago is in the list
+    // rather than missing until the next assembly.
+    if (this._conversationsOpen) void this._readPackageConversations(this._userId());
+    this.requestUpdate();
+  };
+
+  /** The same gesture from the keyboard, because the header is announced as a button. */
+  private _onConversationsKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    this._toggleConversations();
+  };
+
+  /**
+   * The bar's rows: this package's conversations in the server's order, each one openable.
+   * A row that is ARCHIVED says so in the chip the list already uses for a row that is not
+   * from here — the row is still reachable, it is just not the live one. Until the server
+   * read lands (or if it cannot), the surface's own list is drawn, exactly as before.
+   */
+  private _conversationRowsForList() {
+    const rows = this._conversationRows
+      ?? (this.conversations ?? []).map((c) => ({
+        id: String(c?.id ?? ''),
+        title: String(c?.title || '(untitled)'),
+        tab: String(c?.tab || 'chat'),
+        archived: false,
+      })).filter((r) => r.id);
+    if (!rows.length) {
+      return html`<p class="conversation-none">No conversations yet for this package.</p>`;
+    }
+    return rows.map(
+      (r) => html`<li>
+        <button class="conv-open" data-conversation-id=${r.id} @click=${this._pickConversation}>
+          ${r.title}${r.archived ? html`<span class="tab-tag">archived</span>` : nothing}
+        </button>
+        <button
+          class="conv-remove ${this._armedDelete === r.id ? 'armed' : ''}"
+          type="button"
+          data-conversation-id=${r.id}
+          title=${this._armedDelete === r.id ? 'Click again to remove this conversation' : 'Remove this conversation'}
+          aria-label=${this._armedDelete === r.id ? 'Confirm remove' : 'Remove this conversation'}
+          @click=${this._onConversationRemove}
+        >
+          ${this._armedDelete === r.id
+            ? html`REMOVE`
+            : html`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+        </button>
+      </li>`,
+    );
+  }
+
+  /**
+   * THE TRASH ON A ROW — the mark every console card already carries, and its gesture too:
+   * first click arms, second removes. A conversation is not deleted by one stray click, and
+   * the arming disarms itself so a row cannot be left loaded.
+   *
+   * THE ONE YOU ARE IN IS REFUSED, and the refusal is said under the list. Deleting it would
+   * leave the seat reading a conversation that is not there, and the package's own pointer on
+   * a dead row — so a person switches (or starts a new one) and removes it after.
+   */
+  private _onConversationRemove = (e: Event): void => {
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement | null;
+    const id = el?.dataset.conversationId ?? '';
+    if (!id) return;
+    if (this._armedDelete !== id) {
+      this._armedDelete = id;
+      this._listNote = '';
+      if (this._deleteTimer) clearTimeout(this._deleteTimer);
+      this._deleteTimer = setTimeout(() => {
+        this._armedDelete = null;
+        this._deleteTimer = null;
+        this.requestUpdate();
+      }, 4000);
+      this.requestUpdate();
+      return;
+    }
+    if (this._deleteTimer) {
+      clearTimeout(this._deleteTimer);
+      this._deleteTimer = null;
+    }
+    this._armedDelete = null;
+    if (String(id) === String(this.conversationId ?? '')) {
+      this._listNote = 'That is the conversation you are in — start a new one, then remove it.';
+      this.requestUpdate();
+      return;
+    }
+    void this._removeConversation(id, this._userId());
+  }
+
+  /** Remove one conversation from the data, then re-read the list and the count. */
+  private async _removeConversation(id: string, userId: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'X-User-ID': userId },
+      });
+      if (!res.ok) {
+        this._listNote = `That conversation could not be removed — HTTP ${res.status}.`;
+        this.requestUpdate();
+        return;
+      }
+      this._listNote = '';
+      await this._readPackageConversations(userId);
+    } catch (err) {
+      this._listNote = `That conversation could not be removed: ${String((err as Error)?.message ?? err)}`;
+      this.requestUpdate();
+    }
+  }
+
+  /**
+   * The first part of what was said here, or nothing — the naming rule routes/teacher.py
+   * uses for a new conversation ("request.question[:80]"), so both paths name rows alike.
+   * A conversation nobody has spoken in yet has no title to take and keeps whatever it has.
+   */
+  private _firstTurnTitle(): string {
+    const first = (this._thread ?? []).find((m) => String(m.role ?? '') === 'user');
+    const text = String(first?.content ?? '').replace(/\s+/g, ' ').trim();
+    return text ? text.slice(0, 80) : '';
+  }
+
+  /**
+   * The successor's title: the naming SCHEME already in use, kept. The console's rows are
+   * "Console — Chat" / "Console — Approvals" (prompt_sessions_api gives them that shape), so
+   * its new one reads the same way rather than arriving as "New Chat" among them. A package
+   * seat, whose conversation is titled from a question, has no such scheme: nothing is sent
+   * and the column's own default holds until the conversation is archived and named by step 1.
+   */
+  private _successorTitle(): string | undefined {
+    const current = (this.conversations ?? []).find((c) => String(c.id) === this.conversationId);
+    const title = String(current?.title ?? '');
+    const scheme = title.match(/^(\S+)\s+—\s+(.+)$/);
+    return scheme ? `${scheme[1]} — ${scheme[2]}` : undefined;
+  }
+
+  /**
+   * One conversation write. Throws with what the server said, so the thread can say it —
+   * and deliberately WITHOUT a `.catch()` stand-in on the response: swallowing a failure
+   * here is the class the catalog check counts (error-suppression) and the class the owner
+   * asked to be told about. An endpoint that does not answer is an error the caller sees,
+   * not an empty string it reasons around.
+   */
+  private async _conversationWrite(
+    url: string,
+    method: 'POST' | 'PUT',
+    body: unknown,
+    userId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`${method} ${url} — HTTP ${res.status}`);
+    return (await res.json()) as Record<string, unknown> | null;
+  }
+
+  /**
    * The rail's `tab-change`. Chat and Trace are view switches, except that Trace
    * is also a PROMPT — its note's `AI:` line says the reply is the trace.
    * An EMPTY tab is the rail collapsing itself (the active tab clicked twice).
@@ -1822,27 +2464,78 @@ ${workspaceContext}`;
               <!-- The listener sits on the WRAPPER so it hears conversation-select
                    from the Conversations dropdown below and from the thread. -->
               <div class="chat-output-wrapper" @conversation-select=${this._onConversationSelect}>
+                <!-- THE STATUS BLOCK IS ABSENT WHEN IT HAS NOTHING TO SAY, not merely empty.
+                     chat-header draws nothing inside such a block, but the ELEMENT would still
+                     be there — and it is :first-child, so the leading block's deeper top
+                     padding (20px, the drawing's own value for the first block) landed on an
+                     empty box while the bar below it kept 10 and sat tight against the top
+                     (owner, 2026-09-19). Absent, the block after it leads and takes the 20. -->
+                ${this._hasStatusLine
+                  ? html`<chat-header
+                      status-text=${this.statusText ?? ''}
+                      status=${this.status ?? ''}
+                      session-label=${this.sessionLabel ?? ''}
+                      session-name=${this.sessionName ?? ''}
+                      duration=${this.duration ?? ''}
+                      qa-score=${this.qaScore ?? ''}
+                    ></chat-header>`
+                  : nothing}
+                <!-- THE OTHER TWO BARS, AS v.4b DRAWS THEM. The wireframe stacks three
+                     single-line bars above the response card — the session status
+                     (#40001119:6309), "23 Conversations" (#40001119:6318) and
+                     "23 Ready for approval" (#40001119:6579) — and each sits on its own
+                     #CBE6E3 block. The numbers here are the panel's own: the package's
+                     conversations and the reports filed for approval. The wireframe's
+                     "23" is sample copy and is not drawn — a count that is not the real
+                     count is the one thing a status bar must never say. The Conversations
+                     bar is the drawing; the SELECTOR that used to hang under it
+                     ("chat-output-slot-area" #40001085:1521) is switched off below. -->
+                <!-- THE LEADING BAR OPENS THE CONVERSATIONS — the owner, 2026-09-19: "I should be
+                     able to go to the chat at the top and it should expand so that I can see the
+                     message that you just archived." It is the list's header, so it acts like
+                     one: click (or Enter/Space) to open it, and the rows below come from the same
+                     read as the count — the package's own conversations, ARCHIVED ONES INCLUDED,
+                     which is how a conversation this seat archived stays reachable. -->
                 <chat-header
-                  status-text=${this.statusText ?? ''}
-                  status=${this.status ?? ''}
-                  session-label=${this.sessionLabel ?? ''}
-                  session-name=${this.sessionName ?? ''}
-                  duration=${this.duration ?? ''}
-                  qa-score=${this.qaScore ?? ''}
+                  status-text=${(() => {
+                    const n = this._conversationRows?.length ?? (this.conversations ?? []).length;
+                    // The drawing's copy is "23 Conversations"; one of them is one conversation.
+                    return `${n} ${n === 1 ? 'Conversation' : 'Conversations'}`;
+                  })()}
+                  role="button"
+                  tabindex="0"
+                  aria-expanded=${this._conversationsOpen ? 'true' : 'false'}
+                  aria-label="Show this package's conversations"
+                  @click=${this._toggleConversations}
+                  @keydown=${this._onConversationsKey}
                 ></chat-header>
-                <!-- "chat-output-slot-area" #40001085:1521 — padding 10px 20px.
-                     The design places <small-dropdown> here; the panel labels it
-                     "Conversations". Its body is a slot, left empty until the
-                     dropdown's own contents are designed (the open variant's rows
-                     are still "item" placeholders). -->
-                <div class="output-slot">
-                  <small-dropdown label="Conversations">
-                    ${this._conversationItems()}
-                  </small-dropdown>
-                </div>
-                <!-- "chat-output-spacer-slot-area" #40001085:2404 — padding 10px
-                     20px over a 1px #B5CCCE rule. -->
-                <div class="output-spacer"><span></span></div>
+                ${this._conversationsOpen
+                  ? html`<div class="output-slot">
+                      <ul class="conversation-list">${this._conversationRowsForList()}</ul>
+                      ${this._listNote ? html`<p class="conv-note" role="status">${this._listNote}</p>` : nothing}
+                    </div>`
+                  : nothing}
+                <!-- THE DROPDOWN IS OUT OF THE TOP; ITS CAPABILITY IS NOT. See the
+                     _conversationsTopSlot field above: v.4b draws no selector here, and the
+                     owner's plan is that conversations open from the footer's own mark
+                     (#40001119:6622), so the block is switched off rather than deleted. -->
+                ${this._conversationsTopSlot
+                  ? html`
+                      <div class="output-slot">
+                        <small-dropdown label="Conversations">
+                          ${this._conversationItems()}
+                        </small-dropdown>
+                      </div>
+                    `
+                  : nothing}
+                <chat-header
+                  status-text=${`${this._inspectionReports.length} Ready for approval`}
+                ></chat-header>
+                <!-- THE 1px RULE THAT WAS HERE IS GONE WITH ITS NODE. v.4b draws no
+                     rule between the output blocks — they are #CBE6E3 grounds separated
+                     by their own 2px — so the old "chat-output-spacer-slot-area"
+                     (#40001085:2404, a 1px #B5CCCE line) is not drawn. Nothing else
+                     used it and no control lived in it. -->
                 ${unannotated
                   ? html`<error-banner
                       code="UNANNOTATED-IN-USE"
@@ -1877,8 +2570,14 @@ ${workspaceContext}`;
                      movement, and the owner's rule is one (2026-09-18). It also means a
                      list GROWS as long as it is: 500 repairs is 500 rows down, which is
                      the incentive to clean them up, and a cap would hide exactly that. -->
-                <div class="content-scroll">
-                  <div class="content-header"><slot name="content-header"></slot></div>
+                <!-- THE RESPONSE CARD — v.4b's fourth block is the card itself
+                     (#40001119:6327 / its block :6326): the same shell as the bars with
+                     the response inside it. The scroller and every view that was in the
+                     output area before are inside it, unchanged: the thread, the trace
+                     fold, the view slot, the content-header slot. -->
+                <chat-header card>
+                  <div class="content-scroll" @scroll=${this._onOutputScroll}>
+                    <div class="content-header"><slot name="content-header"></slot></div>
                   ${this._showsThread
                     ? html`${this.activeTab === 'approvals' && this._findingsSeat()
                         ? html`<div class="chat-top">
@@ -1946,11 +2645,34 @@ ${workspaceContext}`;
                                 ${this._emptyViewLine()}
                               </div>`}
                         </div>`}
-                </div>
+                  </div>
+                  <!-- THE DRAWN SCROLLBAR, INSIDE THE CARD. It is a SIBLING of the scroller
+                       and a child of the card, so it holds the card's right edge while the
+                       conversation travels under it — the card owns position: relative for
+                       it (see chat-header). Nothing at all when the content fits
+                       (_railVisible false); a 4px thumb over the card when it does not —
+                       _syncScrollThumb holds its length and offset. -->
+                  ${this._showScrollBar && this._railVisible
+                    ? html`<div class="scroll-rail">
+                        <div
+                          class="scroll-thumb"
+                          role="scrollbar"
+                          aria-orientation="vertical"
+                          aria-label="Scroll the chat"
+                          aria-valuemin="0"
+                          aria-valuemax=${this._scrollMax}
+                          aria-valuenow=${this._scrollPos}
+                          style=${`height: ${this._thumbH}px; top: ${this._thumbTop}px`}
+                          @mousedown=${this._onThumbDown}
+                        ></div>
+                      </div>`
+                    : nothing}
+                </chat-header>
               </div>
               <div class="chat-input-wrapper">
                 <chat-action-bar
                   model-label=${this.modelLabel ?? 'Models'}
+                  trailing=${this._seatIsConsole === false ? 'console' : 'agent'}
                   ?busy=${this._sending}
                   ?has-text=${this._draft.trim().length > 0}
                   @input-resize-start=${this._onResizeStart}
@@ -1963,6 +2685,7 @@ ${workspaceContext}`;
                   @message-sent=${this._onMessageSent}
                 >
                   <prompt-textarea
+                    placeholder="chat input"
                     @value-input=${this._onDraftInput}
                   ></prompt-textarea>
                 </chat-input>
@@ -1973,6 +2696,7 @@ ${workspaceContext}`;
                   .outTokens=${(usage.outTokens as number) ?? 0}
                   .calls=${(usage.calls as number) ?? 0}
                   .lastCall=${(usage.lastCall as string) ?? ''}
+                  @conversation-new=${this._onConversationNew}
                 ></chat-footer>
               </div>
             </div>

@@ -42,7 +42,25 @@ import chatButtonIcon from '@/assets/figma-chat-button-icon.svg';
 // #AC8CEC gradient — stale artwork from an earlier state of the file).
 import traceButtonIcon from '@/assets/figma-trace-button-icon.svg';
 import versionsButtonIcon from '@/assets/figma-versions-button-icon.svg';
-import toolsButtonIcon from '@/assets/figma-tools-button-icon.svg';
+
+// ── The v.4b rail's new artwork ────────────────────────────────────────────
+// The drawing this rail now follows is "chat-main-menu-vert" #40001119:6047 in
+// the v.4b wireframe. Its Chat and Trace buttons place the SAME components as
+// before (40001010:25768 and 40001011:26266), so those two assets are unchanged;
+// the other four buttons are new nodes, and their artwork is pulled from the node
+// it is drawn on rather than traced by hand:
+//
+//   Approve  "ibm--engineering-workflow-mgmt 1" #40001119:6560, 32×32, fill #1FACC2
+//   Evals    "ai-governance--lifecycle 1"       #40001119:6615, 43×43, fill #1FACC2
+//   Tools    "tools-api 1"                      #40001119:6538, 38×35, fill #1FACC2
+//   Settings "settings 1"                       #40001119:6637, 32×32, fill #1FACC2
+//
+// Every one of them carries its own fill in the exported vector, the way the
+// trace button's did, so nothing here recolours artwork by hand.
+import approveButtonIcon from '@/assets/figma-approve-icon.svg';
+import evalButtonIcon from '@/assets/figma-evals-icon.svg';
+import toolsApiButtonIcon from '@/assets/figma-tools-api-icon.svg';
+import settingsButtonIcon from '@/assets/figma-settings-icon.svg';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types — exported for React consumers (InteractiveChatInterface.tsx)
@@ -63,7 +81,13 @@ import toolsButtonIcon from '@/assets/figma-tools-button-icon.svg';
 // the panel to its view slot, which is where a host drops the runs of this flow and the
 // flow as it ran. A seat that does not need it simply does not allow it — which is how
 // a rail button costs nothing anywhere else.
-export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals' | 'executions' | 'eval' | 'states' | 'repair';
+//
+// `settings` is the v.4b rail's bottom-pinned button — Figma "tools-button" frame
+// #40001119:6593 (the frame's layer name is stale; the node it holds draws the gear),
+// icon "settings 1" #40001119:6637. It is drawn because the design draws it and it is
+// NOT wired: the node carries no annotation, so there is no event name to emit and
+// inventing one is the thing the annotation rule exists to stop. See the click handler.
+export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals' | 'executions' | 'eval' | 'states' | 'repair' | 'settings';
 
 /** Detail payload for the 'tab-change' CustomEvent. */
 export interface TabChangeEventDetail {
@@ -110,6 +134,19 @@ interface TabDef {
    * 0 0 22.75 21.8752.
    */
   svgPath?: string;
+  /**
+   * The label's colour, when the design draws it differently from the rail's own
+   * #1FACC2. Only Approve does: Figma text node #40001119:6558 carries #2793A3
+   * (Inter Semi Bold 600 / 13px), a darker teal than its own icon (#1FACC2, node
+   * #40001119:6560) — read off the node, not inferred from "selected looks darker".
+   */
+  labelFill?: string;
+  /**
+   * Pinned to the FOOT of the rail, below a gap, rather than stacked under the
+   * logo. The v.4b drawing puts Settings at the bottom: frame #40001119:6593 is
+   * `justify-content: flex-end` inside the 74-wide column.
+   */
+  pinned?: boolean;
   /**
    * Optional per-icon viewBox. The shared default (0 0 22.75 21.8752) is exactly
    * the chat glyph's own extent, so an icon drawn on a 24x24 grid gets clipped
@@ -187,30 +224,34 @@ const TABS: TabDef[] = [
     id: 'tools',
     label: 'Tools',
     tooltip: 'Tool registry and usage',
-    iconSrc: toolsButtonIcon,
-    // Figma "tools-button" #40001085:2634 — the fifth rail button, which was the
-    // old trace-button set until the design renamed it.
-    // Wrench / tools icon — Material Design "build". Drawn on a 24x24 grid, so
-    // it declares its own viewBox; the shared default would clip its handle.
-    viewBox: '0 0 24 24',
-    svgPath: 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z',
+    // v.4b: frame "tools-button" #40001119:6535 → chat-menu-item #40001119:6537, icon
+    // "tools-api 1" #40001119:6538 (38×35, fill #1FACC2), label "Tools" #40001119:6540.
+    // Replaces the old tools-button set (#40001085:2634) and its traced wrench.
+    nodeId: '40001119:6535',
+    iconNodeId: '40001119:6538',
+    labelNodeId: '40001119:6540',
+    iconSrc: toolsApiButtonIcon,
   },
   {
     id: 'approvals',
-    label: 'Approvals',
+    label: 'Approve',
     tooltip: 'Pending approvals',
-    // Figma "approval-button" #40001088:2795 — the CONSOLE rail's fourth button.
+    // Figma "approval-button" #40001119:6549 — the v.4b rail's third button, and the
+    // button the drawing shows in its SELECTED state: the tile (#40001119:6556) carries
+    // fill #CBE6E3 with `inset 4px 4px 4px rgba(0,0,0,0.25)` (effect_670724be), which is
+    // the shape the old selected state had with a new fill. The amber #FCCD3D that used
+    // to mean selected appears nowhere in the v.4b drawing, on any button.
     //
-    // The artwork is the TRACE glyph: the design's variant carries
-    // "Model-trace" (40000122:3408), instance node I40001088:2797;40001011:26260,
-    // which is the same icon the Trace button uses. Read verbatim rather than
-    // substituted — but if Approvals is meant to have its own mark, the design
-    // needs to draw one, because right now the two buttons read identically.
-    nodeId: '40001088:2795',
-    iconNodeId: '40001088:2797;40001011:26260',
-    labelNodeId: '40001088:2797;40001011:26259',
-    iconSrc: traceButtonIcon,
-    svgPath: 'M23.07 15.6777V4.11016C24.0271 3.81716 24.7178 3.04006 24.7178 2.12013C24.7178 0.951022 23.6091 0 22.2461 0C20.883 0 19.7742 0.951022 19.7742 2.12013C19.7742 2.39688 19.8406 2.6595 19.9533 2.90176L12.3589 8.60167L4.76457 2.90204C4.87736 2.65943 4.94356 2.39688 4.94356 2.12013C4.94356 0.951022 3.83479 0 2.47179 0C1.10877 0 0 0.951022 0 2.12013C0 3.04013 0.690785 3.81723 1.64785 4.10981V15.678C0.690785 15.9707 0 16.7478 0 17.6677C0 18.8368 1.10877 19.7878 2.47179 19.7878C3.83479 19.7878 4.94356 18.8368 4.94356 17.6677C4.94356 17.1967 4.75757 16.7653 4.45317 16.413L8.84758 13.1148L10.7957 16.0389C10.2456 16.4282 9.88716 17.0096 9.88716 17.6677C9.88716 18.8368 10.9959 19.7878 12.3589 19.7878C13.722 19.7878 14.8306 18.8368 14.8306 17.6677C14.8306 17.0096 14.4721 16.4282 13.9221 16.0389L15.8702 13.1148L20.2646 16.413C19.9603 16.7653 19.7742 17.1967 19.7742 17.6677C19.7742 18.8368 20.883 19.7878 22.2461 19.7878C23.6091 19.7878 24.7178 18.8368 24.7178 17.6677C24.7178 16.7478 24.0271 15.9707 23.07 15.6777Z',
+    // Its own artwork, unlike the mark it replaces: the old Approvals button borrowed the
+    // TRACE glyph (the old design's fault, recorded here since 2026-09-17), and v.4b draws
+    // it its own — "ibm--engineering-workflow-mgmt 1" #40001119:6560, pulled from the node.
+    // The label is "Approve" on the node (#40001119:6558); the ID stays `approvals` because
+    // ids are the stable key and labels are presentation.
+    nodeId: '40001119:6549',
+    iconNodeId: '40001119:6560',
+    labelNodeId: '40001119:6558',
+    iconSrc: approveButtonIcon,
+    labelFill: '#2793A3',
   },
   {
     // REUSED AND RENAMED, on the owner's instruction: the n8n-style EXECUTIONS view
@@ -240,10 +281,16 @@ const TABS: TabDef[] = [
     id: 'eval',
     label: 'Evals',
     tooltip: 'Checks and scores for this flow',
-    // Drawn, not pulled: a filled check mark on the bar's grid, so it reads at 24px the
-    // way the other filled glyphs do. No Figma node exists for it yet, so it claims none.
-    viewBox: '0 0 24 24',
-    svgPath: 'M9.6 16.8 5.2 12.4l1.8-1.8 2.6 2.6 7.4-7.4 1.8 1.8z',
+    // v.4b DRAWS IT, so it now claims a node instead of a hand-drawn glyph: the frame the
+    // design's own layer list still calls "versions-button" (#40001119:6427 — stale name,
+    // the node beside it is labelled Evals) holds chat-menu-item #40001119:6434, icon
+    // "ai-governance--lifecycle 1" #40001119:6615 (43×43, fill #1FACC2) and text
+    // #40001119:6436. The artwork is pulled from that node; the drawn check mark that used
+    // to stand in for it is gone rather than kept as an unused second drawing.
+    nodeId: '40001119:6427',
+    iconNodeId: '40001119:6615',
+    labelNodeId: '40001119:6436',
+    iconSrc: evalButtonIcon,
   },
   {
     // STATES — the canvas in each of its situations, so a person can see what the
@@ -285,6 +332,27 @@ const TABS: TabDef[] = [
     tooltip: 'Open the catalog findings',
     viewBox: '0 0 24 24',
     svgPath: 'M4 4h16v3H4zM4 10h11v3H4zM4 16h14v3H4z',
+  },
+  {
+    // THE RAIL'S FOOT BUTTON, AND IT IS LAST IN THIS LIST ON PURPOSE. The drawing pins it
+    // to the bottom of the rail (`justify-content: flex-end`, frame #40001119:6593), and
+    // the element does that with `margin-top: auto` — an auto margin absorbs the free
+    // space ABOVE the button, so every entry listed after it is pushed past the gap to the
+    // very bottom. Placed among the tabs, it drew a spacer in the middle of the rail and
+    // sent the buttons below it to the foot (seen live, 2026-09-19: "the chat menu bar has
+    // got a new spacer"). The array's order IS the rail's order, so the foot button goes
+    // last here as well as on screen.
+    //
+    // v.4b: frame #40001119:6593 → #40001119:6599 (74×67) → chat-menu-item #40001119:6600,
+    // icon "settings 1" #40001119:6637 (32×32). NO LABEL on the node — it draws the gear
+    // alone, so the label is empty and no label layer is written.
+    id: 'settings',
+    label: '',
+    tooltip: 'Settings',
+    nodeId: '40001119:6593',
+    iconNodeId: '40001119:6637',
+    iconSrc: settingsButtonIcon,
+    pinned: true,
   },
 ];
 
@@ -453,11 +521,11 @@ export class ChatNavigationBar extends LitElement {
       padding: 0;
     }
     .nb:hover {
-      background: rgb(252, 205, 61);
+      background: #CBE6E3;
       height: 77px;
     }
     .na {
-      background: rgb(252, 205, 61);
+      background: #CBE6E3;
       height: 77px;
     }
 
@@ -582,6 +650,18 @@ export class ChatNavigationBar extends LitElement {
     .nb.nbc.na .lw {
       top: calc(var(--nb-label-y, 46px) - 10px);
     }
+    /* THE LABEL IS CENTRED ON THE BUTTON, NOT ON .ni. The label wrapper lives INSIDE
+       .ni, which is 67.58px wide starting 7.42px in — so the wrapper's own
+       "left: 0; width: 100%" centred the word on .ni's box, 4px right of the button's
+       centre. Measured in the running rail (2026-09-19): button centre 2144, label box
+       centre 2148, with the owner's own reading — "the text underneath the chat icon…
+       seems to be a little bit to the right". Pulling the box back by .ni's own left and
+       giving it the button's width centres the word under the glyph it names. Only
+       designed buttons are corrected; the mask-based tabs keep the drawing of record. */
+    .nb.nbc .lw {
+      left: -7.42px;
+      width: var(--nb-w, 74px);
+    }
     /* Sized from the same properties as its wrapper, so the artwork and the box
        can never disagree. object-fit is contain, not fill: the two icons are
        different artwork at different aspect ratios (chat's 38×38 glyph, trace's
@@ -603,29 +683,44 @@ export class ChatNavigationBar extends LitElement {
        provenance rule exists to stop. Figma 40001010:25768, text node
        40001010:25751: fill #1FACC2, Inter Bold 700 / 13px / 20px. */
     .nb.nbc .lt {
-      color: #1FACC2;
+      color: var(--nb-label-fill, #1FACC2);
     }
     /* Figma "chat-button" state=Selected #40001085:2663 — the inset the registry
-       has carried as "not yet in CSS": inset 0 4px 4px rgba(0,0,0,0.25).
-       ONLY Selected carries it. state=Hover is the same yellow with no inset. */
+       has carried as "not yet in CSS": inset 0 4px 4px rgba(0,0,0,0.25), now read
+       off the v.4b drawing's selected tile instead. That tile is Approve
+       (#40001119:6556): fill #CBE6E3 with effect_670724be, an inset of
+       4px 4px 4px rgba(0,0,0,0.25) — the offset moved from the top edge to the
+       top-left with the new fill, and this is the node's own value, not the old one
+       re-used. ONLY selected carries it. Hover is the same fill with no inset. */
     .nb.nbc.na {
-      box-shadow: inset 0 4px 4px 0 rgba(0, 0, 0, 0.25);
+      box-shadow: inset 4px 4px 4px 0 rgba(0, 0, 0, 0.25);
+    }
+    /* The pinned foot button — v.4b frame #40001119:6599 is 74×67, shorter than the
+       buttons above it, and frame #40001119:6593 pins it to the bottom of the rail
+       (justify-content: flex-end) whatever the rail's height. The height rides the
+       same --nb-h the rest of the rail uses, so the .nbc rules below still win. */
+    .nb.pinned {
+      --nb-h: 67px;
+      margin-top: auto;
     }
 
     /* ── Selected vs closed — from the annotation, verbatim ──────────────────
        "Chat button selected: it's yellow when it's selected and it's transparent
        when the chat is closed and it's not selected."
 
-       So closed-and-unselected is just transparent — the design's state=Default.
-       NOTHING MOVES. This used to pulse the whole button; that pulse was never in
-       the design (it was marked "inferred" in registry.json), and drawing the
-       states settled it: a resting state that moves reads as an alert, and the
-       design already spends motion on state=Alert. */
+       The WORDS are the old design's and the FILL is v.4b's: the drawing's selected
+       tile is #CBE6E3, and no button in v.4b draws the amber the annotation names.
+       So the rule stands and the value moved — selected is the filled tile, closed
+       and unselected is transparent, which is still state=Default. NOTHING MOVES.
+       This used to pulse the whole button; that pulse was never in the design (it
+       was marked "inferred" in registry.json), and drawing the states settled it: a
+       resting state that moves reads as an alert, and the design spends motion on
+       state=Alert. */
     .nb.nbc.nb-closed {
       background: none;
     }
     .nb.nbc.nb-closed:hover {
-      background: rgb(252, 205, 61);
+      background: #CBE6E3;
     }
 
     /* ── Tooltip ──────────────────────────────────────────────────────── */
@@ -725,6 +820,14 @@ export class ChatNavigationBar extends LitElement {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private _handleTabClick(tabId: TabId) {
+    // TODO(behavior): action undefined in Figma — node 40001119:6600 (the settings
+    // button). The v.4b drawing draws the gear and annotates nothing, so there is no
+    // event name to emit, and inventing one is the thing the annotation rule exists to
+    // stop: an invented event cannot be told from a decision someone actually made.
+    // Until that master carries an `On click:`, the button is a drawing — it takes the
+    // rail's hover and does nothing else.
+    if (tabId === 'settings') return;
+
     // If clicking the already-active tab: toggle collapse
     if (tabId === this.activeTab && !this.collapsed) {
       this.collapsed = true;
@@ -833,6 +936,29 @@ export class ChatNavigationBar extends LitElement {
   // Render
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * A tab's own style properties, or nothing when the rail's shared constraint
+   * already describes it. Two things can differ per tab: the box (`box`, for a button
+   * whose frame is not the chat button's) and the label's colour (`labelFill`, which
+   * only Approve carries in v.4b). Both ride custom properties so the CSS keeps one
+   * home for each rule — nothing here is a second definition of a value.
+   */
+  private _tabStyle(tab: TabDef): string {
+    const parts: string[] = [];
+    if (tab.box) {
+      parts.push(
+        `--nb-h: ${tab.box.h}px`,
+        `--nb-icon-w: ${tab.box.iconW}px`,
+        `--nb-icon-h: ${tab.box.iconH}px`,
+        `--nb-icon-x: ${tab.box.iconX}px`,
+        `--nb-icon-y: ${tab.box.iconY}px`,
+        `--nb-label-y: ${tab.box.labelY}px`,
+      );
+    }
+    if (tab.labelFill) parts.push(`--nb-label-fill: ${tab.labelFill}`);
+    return parts.join('; ');
+  }
+
   render() {
     const currentTab = this.activeTab;
 
@@ -865,12 +991,11 @@ export class ChatNavigationBar extends LitElement {
             <button
               type="button"
               data-node-id=${tab.nodeId ?? nothing}
-              class="nb ${tab.iconSrc ? 'nbc' : ''} ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''}"
-              style=${tab.box
-                ? `--nb-h: ${tab.box.h}px; --nb-icon-w: ${tab.box.iconW}px; --nb-icon-h: ${tab.box.iconH}px; --nb-icon-x: ${tab.box.iconX}px; --nb-icon-y: ${tab.box.iconY}px; --nb-label-y: ${tab.box.labelY}px`
-                : ''}
+              class="nb ${tab.iconSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''}"
+              style=${this._tabStyle(tab)}
               @click=${() => this._handleTabClick(tab.id)}
               title="${tab.tooltip}"
+              aria-label=${tab.label ? nothing : tab.tooltip}
             >
               ${tab.id === 'chat' ? this._healthStatus() : ''}
               <div class="ni ${currentTab === tab.id ? 'ns' : ''}">
@@ -893,7 +1018,13 @@ export class ChatNavigationBar extends LitElement {
                   </div>
                 </div>
                 <div class="lw ${currentTab === tab.id ? 'ls' : ''}">
-                  <span class="lt" data-node-id=${tab.labelNodeId ?? nothing}>${tab.label}</span>
+                  <!-- A TAB WITH NO LABEL DRAWS NO LABEL LAYER. The v.4b foot button
+                       (#40001119:6600) has no text layer at all — it is the gear alone —
+                       so an empty .lt is not written rather than written blank. Its name
+                       is still spoken: see the button's aria-label above. -->
+                  ${tab.label
+                    ? html`<span class="lt" data-node-id=${tab.labelNodeId ?? nothing}>${tab.label}</span>`
+                    : nothing}
                 </div>
               </div>
             </button>

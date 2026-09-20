@@ -60,13 +60,25 @@ export class PromptTextarea extends LitElement {
       display: block;
       flex: 1;
       min-width: 0;
-      background: rgba(255, 255, 255, 0.50);
-      border-radius: 6px;
+      /* THE BOX IS THE PROMPT COLUMN'S, AND IT IS A DEFAULT. This element IS the prompt
+         composer's designed field — 50% white, radius 6, the twin drop shadows — and it
+         keeps that shape wherever a surface draws it as designed. A seat that wants the
+         control BARE sets the three to nothing on itself and they inherit down to here:
+         the chat's input region is one solid colour with the text typed onto it, and the
+         owner's reading of what was wrong was exact — "it looks like it's got a button or
+         something floating with rounded corners… it should just be transparent"
+         (2026-09-19). One element, one set of behaviours; only the box is optional. */
+      background: var(--pt-fill, rgba(255, 255, 255, 0.50));
+      border-radius: var(--pt-radius, 6px);
       box-sizing: border-box;
-      box-shadow: 4px 4px 10px rgba(0,0,0,0.15), -4px -4px 10px rgba(0,0,0,0.15);
+      box-shadow: var(--pt-shadow, 4px 4px 10px rgba(0,0,0,0.15), -4px -4px 10px rgba(0,0,0,0.15));
     }
     .text-input-placeholder {
-      padding: 10px 13px;
+      /* THE INNER INSET IS THE COMPOSER'S, AND IT IS A DEFAULT. A seat that already provides
+         the spacing sets --pt-pad to nothing and the text sits at the seat's own padding —
+         which is what the chat's input area asks for (owner, 2026-09-19: "the chat input area
+         inside of a… seems like a larger padding, try to match what I've got"). */
+      padding: var(--pt-pad, 10px 13px);
       box-sizing: border-box;
     }
     textarea {
