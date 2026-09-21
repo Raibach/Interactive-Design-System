@@ -192,11 +192,11 @@ export class AISurfaceSandbox extends LitElement {
          2px #507274 outline around everything. Kept as none (not deleted) so the
          box model is unchanged: the same rule still owns the edge. */
       border: none;
-      /* THE SCENE'S GROUND, not the light beige — so a slot swap never flashes
-         white. The surface paints this dark immediately, and the incoming
-         content's own background (the wave, the cards) layers over it. A light
-         base here is what showed a white gap between "assembly done" and the
-         cards mounting. */
+      /* THE SCENE'S OWN GROUND, matched to the surface — so a slot swap never
+         flashes the wrong colour. The base paints immediately and the incoming
+         content layers over it; if the base is a fixed single colour it shows
+         through the fade when one surface's ground differs from the other's
+         (console #270F31 vs composer #582846). */
       background-color: #582846;
       overflow: hidden;
       contain: layout style;
@@ -204,6 +204,9 @@ export class AISurfaceSandbox extends LitElement {
       box-shadow:
         inset 0 2px 4px rgba(0, 0, 0, 0.06),
         0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    #ai-surface.ground-console {
+      background-color: #270F31;
     }
 
     /* ── Scroll viewport — absolute fill, overflow-x: hidden prevents
@@ -392,10 +395,13 @@ export class AISurfaceSandbox extends LitElement {
     // right=chat-panel) is the layout framework — pre-ordered locations for modules.
     // This is correct per owner design: slots are the contract, blocks are the content.
     const activeSlot = this._committedSlot || this._activeSlot;
+    // The base ground follows the surface so the fade never reveals the other surface's
+    // colour: console paints #270F31, everything else (composer/spinner) the #582846 default.
+    const groundClass = activeSlot === 'console' ? 'ground-console' : '';
 
     try {
       return html`
-        <section id="ai-surface">
+        <section id="ai-surface" class=${groundClass}>
           <div class="viewport ${this._fadeClass}">
             <slot name=${activeSlot}></slot>
           </div>
