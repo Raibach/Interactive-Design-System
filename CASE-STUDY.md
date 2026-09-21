@@ -4,7 +4,7 @@
 
 ## Situation
 
-I am a designer who works in isolation, without a software team and without the ability to write code by hand. Over the last several months I have built an enterprise AI prompt platform in which every interface begins as a drawing in Figma, becomes a registered component, and is audited before it can ship. The platform lets people assemble prompt packages, run them against different AI models behind one interface, review what comes back, and export the interfaces themselves as components others can lift out and own.
+Over the last several months I have built an enterprise AI prompt platform in which every interface begins as a drawing in Figma, becomes a registered component, and is audited before it can ship. The platform lets people assemble prompt packages, run them against different AI models behind one interface, review what comes back, and export the interfaces themselves as components others can lift out and own.
 
 My working method is unusual: I direct an AI agent in plain language. I do not read the code it writes. What I supply instead is the picture — Figma files, node by node, with annotations — and a set of standing rules about what may and may not happen. The system I asked it to build carries those rules inside it: an audit that refuses components that cannot be traced to a drawing, and documentation that must match what the catalog actually holds.
 
