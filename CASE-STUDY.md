@@ -1,41 +1,112 @@
-# Case Study — Design Intent as the Source
+# Case Study — Raibach Interactive Design System (IDS)
 
-*Structured with STARR: Situation · Task · Action · Result · Reflection.*
+**Project:** Raibach IDS — an A2UI-compliant enterprise AI prompt-package platform
+**Timeline:** June 2026 – September 2026
+**Role:** Principal Designer — system design, UX strategy, governance architecture, React/TypeScript and Python frontend development
+**Team:** John Holt, with AI-assisted engineering (DeepSeek)
+**Status:** Live — deployed, audited, and running · [Demo](https://site--semantic-design-systems--mgtvxtd7xr2v.code.run) (pin `7377`)
 
-## Situation
+## Project Summary
 
-Over the last several months I have built an enterprise AI prompt platform in which every interface begins as a drawing in Figma, becomes a registered component, and is audited before it can ship. The platform lets people assemble prompt packages, run them against different AI models behind one interface, review what comes back, and export the interfaces themselves as components others can lift out and own.
+This project is a continuation of Southern California Edison's AI lifecycle management project, which ran as a three-month discovery engagement. During discovery, I researched agentic interfaces and agent flows in depth. I decided to continue the build AI-native, using A2UI protocols — the application assembles itself fully from a Lit catalog using only AI, wrapped in a React shell that holds the AI-native surface. The goal was a seamless interface that keeps every function inside a prompt package, tying all governance and artifacts to a particular prompt ID.
 
-My working method is unusual: I direct an AI agent in plain language. I do not read the code it writes. What I supply instead is the picture — Figma files, node by node, with annotations — and a set of standing rules about what may and may not happen. The system I asked it to build carries those rules inside it: an audit that refuses components that cannot be traced to a drawing, and documentation that must match what the catalog actually holds.
+## The Product
 
-When version 4b of the wireframes arrived, they replaced the product's conversation panel — new palette, new navigation rail, new input stack — on a platform that was already live in production. The change had to land on a running system, not a prototype.
+**The Console** is the central prompt-management surface: a card grid of packages, reshuffled and filtered by AI commands over the same assembly channel. A Trace tab records everything the page can see about itself — network calls with status and duration, events, errors, audit summaries, and main-thread stalls — so a slow load is explained, not guessed at.
 
-## Task
+**The Prompt Composer** is the working surface: a section editor on the left, compiled output in the middle, and the conversation panel on the right, with version trace, token-cost and status readouts, and per-package chat scoped from the first keystroke. Packages carry role-based capability (what each role sees and can do), provenance, and audit history as first-class metadata — the package is the aggregate root, and governance travels inside it.
 
-My responsibility was larger than the artwork. I had to implement the new panel so it matched the drawing's values exactly; keep every existing capability, because a redesign is not permission for functions to disappear; register each element in the platform's three layers so the compliance audit would pass; repair whatever the redesign surfaced beneath the surface; and ship it to a live site, where the first load is the only load a client ever judges.
+Both surfaces are drawn from the same single catalog of **51 trusted components** — 17 A2UI protocol primitives plus 34 project-specific Lit elements. The backend loads that catalog's schema at startup and refuses to start if it fails to; every AI payload is validated against it on each request, and a component the catalog doesn't own is answered with HTTP 503; and a blocking build check holds the documented component count against the actual catalog file, so the number cannot drift from what the documentation claims.
 
-## Action
+## Key Challenges
 
-I read the new panel out of the design file region by region, matched each region to an existing component, and built the one element the drawing had no home for. Eight existing elements were updated in place, and one — the user's own message bubble — is new, drawn to the file's measurements.
+**The original problem: AI-generated interfaces are ungoverned, and ungoverned interfaces drift.**
 
-Redesigns tempt you to delete. I refused. Controls the new drawing no longer showed — the model selector, the add button, several readouts — were unhooked and left in place, so nothing the product could do before was lost; each is marked as a decision waiting, not an accidental casualty.
+A runtime model asked to "build the screen" will paraphrase the design into something plausible but wrong, invent components that were never drawn, and quietly replace a failed response with its own inner monologue dressed as a result. For an enterprise, that means three things at once: no standardization (every session produces a different surface), no auditability (nothing traces a pixel back to a decision), and silent failure (the screen goes blank or wrong without a record of why). Meanwhile the design file — the one artifact that actually states intent — sits outside the build entirely, so code and design drift apart in both directions.
 
-Every element was then registered in all three of the platform's layers: the allowlist, the design map, and the catalog schema, including the reference that makes it reachable. The audit that gates delivery checks exactly this, and it does not accept intent as evidence — only records.
+**The insight: constraint is the product.**
 
-The redesign also surfaced two real defects: a rename that returned "not found" because the database reported the wrong count of touched rows, and a conversation list that ignored its package and returned every conversation in the system instead of the one package's. Both were fixed at the source rather than papered over.
+The fix is not to ask the model to behave; it is to structure the system so the model *cannot* misbehave. Fix the catalog, bind values by path, and the answer space collapses — the model copies instead of chooses, and the remaining invention happens exactly where the structure has a gap, which is precisely where checks should live. Governance is not a layer added to the product; it is the spine of it.
 
-Then the conversation lifecycle, end to end: create a new conversation from the footer mark, name the one you leave from its own first words, archive it, list archived and active threads with a per-row delete that refuses the open one, and start the successor already selected.
+## Solution Overview
 
-Finally, production. I traced the failures that followed every deploy to the deploy window itself — the minutes when the old version is gone and the new one is not yet answering. I put memory guards in front of the platform's heaviest AI library after the host killed the container for exceeding its limit, and I took the repository's local weight from roughly a quarter of a terabyte down to under two gigabytes by removing model experiments and years of accumulated file history. Verification now stands at 372 automated tests, with the catalog audit run on every change.
+**A deterministic shell, with AI filling slots.** The React + Lit shell renders unconditionally — navigation, frame, error states, slot containers — regardless of what the AI does or doesn't do. The AI decides which prompt blocks, data, and chat populate the left/middle/right slots; it cannot create or remove them. If the AI fails, the shell shows the failure. If it is slow, the shell shows loading. The user never stares at a blank page.
 
-## Result
+**Design intent as the source of truth.** The Figma-to-Lit pipeline makes the drawing the specification: every component is extracted node by node, with the designer's Dev Mode annotations as the single source of its behavior. Each element is registered in three places, and all three must agree:
 
-The new panel is live in production. Both pipelines' catalogs pass their audit with zero blocking findings; 372 tests pass; the conversation lifecycle works as described, counts included, with archived threads recoverable rather than lost. The container now runs at about half its memory ceiling, with no out-of-memory kills since the guards went in, and the repository is small enough that a deploy is minutes, not hours. Every element on the screen traces back to a drawn node and an annotation that states what it is for.
+1. **The allowlist** — what may be rendered (`tag-registry.ts`)
+2. **The design map** — which Figma node each component came from (`registry.json`, with provenance)
+3. **The catalog schema** — what the server validates every AI payload against (`catalog.json`, per pipeline; unknown components get a 503)
 
-## Reflection
+The audit that gates delivery checks exactly this, and it does not accept intent as evidence — only records. A behavioral element that no allowlist entry, catalog entry, design-map entry, or drawing parent claims is **refused at build time**, not argued with.
 
-The work changed what I think design is. My job is no longer to draw screens for someone else to build, and it is no longer to write instructions and hope they are followed. It is to make intent so precise that a machine cannot wander — and to build the machinery that catches it when it does. I stopped trusting output and started building verification: the audit gates, the annotation rules, the registers that record what remains unfinished. That machinery is now the spine of the product, not a safety net around it.
+**The economics of constraint.** With reasoning turned off for surfaces, the same prompt returns the same valid JSON: **251 completion tokens instead of 460, 1.53 seconds instead of 6.05**. Assembly moved from three model calls racing against a 10-second contract (about 11,280 tokens per console load, 27% of requests failing with 503) to **one call at 3,551 tokens — roughly 68% fewer, with zero failures** — because the catalog fixes the answer space and every value is checked.
 
-Two lessons I would carry into the next project. First, annotate before building — a drawing without an annotation gets flagged empty by the audit, and rightly so; the missing specification is the work, not an obstacle to it. Second, keep the laboratory out of the shipping lane: a multi-gigabyte model experiment I ran alongside the product very nearly took the delivery pipeline down with it. The fix was not to stop experimenting, but to build a wall between the experiment and the line.
+## Annotations and the Import Pipeline
 
-What I would do differently: I would design the deploy window as deliberately as I design the screens. A live product is judged on the first load after every change, and I had been treating that moment as an implementation detail. It is a design surface like any other.
+The behavioral spec lives inside the design file. Every component in the Figma drawing carries a **Dev Mode annotation** — a note tied to its node ID that states what the element is for and what it dispatches. The annotation is the single source of behavior: a button's states, a grip's drag contract, a dropdown's event. The import pipeline pulls the design context node by node, extracts layout, visual, and typographic values together with the annotation, and writes each component into the three catalog locations — the Lit element, the allowlist, and the design map, which records which Figma node the component came from and whether its registration is verbatim or inferred.
+
+The import is audited as it lands. A per-component report classifies every element as **ANNOTATED / MISSING / NO-NODE / PULL-FAIL**, so an unannotated drawing is flagged the moment it arrives rather than after it ships. A fidelity harness then compares the Figma tree against the Lit templates by `data-node-id` — same address, same multiplicity — which turns "does this match the design?" into a structural fact a machine answers the same way every time: a missing or doubled element is caught by count, not by eye. The first component built end to end this way, `role-dropdown`, has been followed by the full catalog.
+
+**Sovereignty: Figma is the drafting table, not the foundation.** Once a component is imported and registered, its home is the Lit catalog in this repository. The application at runtime never calls Figma — the catalog, the schema, the audit, and the site all run independently, and the drawings are cached at authoring time. **If the connection to Figma is lost, the design system loses nothing: every component, its annotation, and its provenance already live in the repo.** Components are deliberately added to our own catalog rather than rented from a platform.
+
+## Model-Agnostic by Design
+
+The platform is built on open standards — A2UI and MCP — with **no dependency on any one model provider, and no cloud requirement at all**. The assembly path runs on a small local model because the catalog fixes the answer space and every value is checked; the conversation runs on a larger one. Models are swapped by configuration, not rework: replacing a provider never gives up the component tree or the production logic.
+
+The whole stack can live on owned hardware — PostgreSQL for the data, an embedded vector store with local embeddings, and local models for assembly, conversation, and governance. Nothing in the platform requires a cloud service. **Wire any local system or any cloud service to it you want — the platform is the harness, not the subscription.**
+
+## The Case Within the Case: a redesign that had to land on a live system
+
+When wireframe revision 4b replaced the conversation panel — new palette, new navigation rail, new input stack — it had to land on a platform already live in production, not a prototype. The work broke into five moves:
+
+**Read the drawing region by region.** The new panel was extracted from the design file area by area and matched to existing components: the four-button rail (Chat, Trace, Versions, Tools), each button a component with named states; send and stop merged into the single control the design specified; the conversations dropdown carrying the thread list; the 20-pixel grip with its dot glyph. Eight existing elements were updated in place, and one — the user's own message bubble — was built new, to the file's measurements.
+
+**Refuse the temptation to delete.** Controls the new drawing no longer showed — the model selector, the add button, several readouts — were unhooked and left in place, each recorded as a decision waiting rather than an accidental casualty. A redesign is not permission for capabilities to disappear.
+
+**Register everything in all three layers.** Every element — including the one reference that makes each reachable — was registered in the allowlist, the design map, and the catalog schema. The audit gates on exactly this, and it accepts only records.
+
+**Fix what the redesign surfaced beneath the surface.** Two real defects came up: a rename that returned "not found" because the database reported the wrong count of touched rows, and a conversation list that ignored its package scope and returned every conversation in the system. Both were fixed at the source rather than papered over.
+
+**Prove the lifecycle end to end.** Create a conversation from the footer mark, name it from its own first words, archive it, list archived and active threads with a per-row delete that refuses the open one, and start the successor already selected — each behavior verified live at runtime, not from a report.
+
+## Production
+
+**The deploy window is a design surface.** Failures that followed every deploy were traced to the window itself — the minutes when the old version is gone and the new one is not yet answering. Memory guards went in front of the platform's heaviest AI library after the host killed the container for exceeding its limit, and the repository's local weight came down from roughly a quarter of a terabyte to under two gigabytes by removing model experiments and years of accumulated file history. The container now runs at about half its memory ceiling with no out-of-memory kills since the guards went in, and a deploy is minutes, not hours.
+
+## Governance and Verification: the product's spine
+
+Verification is structural, not cultural. On every build and every change, the pipeline runs:
+
+- **The catalog audit** — every component must trace to a drawn node and an annotation; zero blocking findings.
+- **Doc-claim drift** — a stale number in the documentation fails the build; it does not wait to be remembered.
+- **The registers** — the open-items register and the corrections ledger, whose recorded counts, cited findings, and even tracked status are checked; drift fails the build, and a corrected finding that comes back fails it as a regression.
+- **372 automated tests**, covering the surface contract, the envelope, the panels, and the failure modes.
+
+Beyond the build, a **governance inspector** runs daily on local models: the code prepares an evidence sheet and decides every fact, two models classify it independently, and any disagreement is stored with both answers — a second opinion over the state of the repository itself.
+
+## The Method
+
+The working doctrine behind the platform is **live-verification design engineering**: claims are hypotheses; only observed runtime behavior is knowledge. Every assertion earns a mark — verified with a receipt, partial, or specified-not-built — and anything unverifiable is demoted until it can be verified. Documentation synchronizes after behavior, never before; if the record and the runtime disagree, the runtime wins and the record is corrected publicly. And frontend behavior is verified like a person experiences it: does the loading state exist, does failure render as guidance rather than blankness, can the user undo it — not just does the happy path pass a parser.
+
+This is design work expressed as engineering: intelligence is spent once, at the moment of naming — the Figma node, the annotation, the registration — and after that the system runs free, holding itself honest without re-arguing what the design is.
+
+## Outcomes
+
+- **A live, audited platform** built on open standards (A2UI, MCP) with no dependency on any one model provider; models can be replaced without giving up the component tree or the production logic.
+- **Zero blocking audit findings** across both pipeline catalogs; 372 tests passing; the catalog audit and doc-claim checks running on every change.
+- **A 68% reduction in tokens and roughly a 4× reduction in latency** per console load, with the 27% request-failure rate eliminated entirely — assembly runs on a small local model because the catalog fixes the answer space.
+- **The conversation lifecycle working end to end**, counts included, with archived threads recoverable rather than lost.
+- **A production system that survives its own deployment**: memory-guarded containers, no out-of-memory kills since the guards went in, and a repository light enough that a deploy is minutes instead of hours.
+- **Every element on screen traceable** to a drawn node and an annotation that states what it is for.
+
+## What Carries Forward
+
+- **Annotate before building.** A drawing without an annotation gets flagged empty by the audit — the missing specification is the work, not an obstacle to it.
+- **Governance-first architecture.** Audit trails, role capability, and provenance ride inside every package, so adoption and compliance are the same motion rather than competing ones.
+- **Keep the laboratory out of the shipping lane.** A multi-gigabyte model experiment run alongside the product very nearly took the delivery pipeline down with it. The fix was not to stop experimenting, but to build a wall between the experiment and the line.
+- **Design the deploy window as deliberately as the screens.** A live product is judged on the first load after every change; that moment is a design surface like any other.
+
+---
+
+*References: [`README.md`](README.md) · [`READ-ME/IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) (A2UI v0.9.1 conformance map) · [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) (live-verification design engineering) · [`CHANGELOG.md`](CHANGELOG.md) (measured verification receipts)*
