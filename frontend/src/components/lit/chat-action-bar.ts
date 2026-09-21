@@ -200,7 +200,9 @@ export class ChatActionBar extends LitElement {
       display: inline-block;
     }
     /* The four-dot grip under Send — #40001120:6644, height 15, padding 5px 10px 10px,
-       dots drawn at the same size and stroke as the bars' (2.16×2.05, 2px, 4px apart).
+       itemSpacing 10, primary CENTER, counter CENTER; the row it holds is #40001120:6645
+       (HUG, padding 1px 2px, itemSpacing 4) with the dots at the same size and stroke as
+       the bars' (2.16×2.05, 2px).
        Its class stays .gripper: that is the handle the pinned test drives by name, and
        the drag it witnesses is the same drag this element has always dispatched. */
     /* The grip: a #CBE6E3 strip 15 tall that FILLS the space between Send and Console
@@ -211,6 +213,7 @@ export class ChatActionBar extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 10px;
       height: 15px;
       padding: 5px 10px 10px;
       box-sizing: border-box;
@@ -230,7 +233,22 @@ export class ChatActionBar extends LitElement {
       top: 0;
       bottom: -12px;
     }
-    .gripper svg { display: block; }
+    /* The dot row hugs its dots (#40001120:6645) and the gripper centres it. */
+    .gripper .row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 2px;
+      box-sizing: border-box;
+    }
+    .dot {
+      display: block;
+      width: 2.16px;
+      height: 2.05px;
+      border: 2px solid rgba(147, 58, 69, 0.5);
+      border-radius: 50%;
+      box-sizing: border-box;
+    }
     .send-stack .pill img { pointer-events: none; }
   `;
 
@@ -376,12 +394,9 @@ export class ChatActionBar extends LitElement {
             title="Drag to resize the input area"
             @mousedown=${this._startDrag}
           >
-            <svg width="16" height="6" viewBox="0 0 16 6" fill="none" aria-hidden="true">
-              <ellipse cx="2.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
-              <ellipse cx="6.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
-              <ellipse cx="10.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
-              <ellipse cx="14.08" cy="3" rx="1.08108" ry="1.02564" stroke="rgba(147,58,69,0.5)" stroke-width="2"/>
-            </svg>
+            <div class="row" data-node-id="40001120:6645" aria-hidden="true">
+              <span class="dot" data-node-id="40001120:6646"></span><span class="dot" data-node-id="40001120:6647"></span><span class="dot" data-node-id="40001120:6648"></span><span class="dot" data-node-id="40001120:6649"></span>
+            </div>
           </div>
           <!-- THE TRAILING BUTTON IS "AGENT" NOW (2026-09-19): the drawing's word for it is
                Agent (#I40001120:6642;40000973:24203) where it read "Console", and it is filled

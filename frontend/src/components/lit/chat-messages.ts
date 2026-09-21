@@ -73,7 +73,7 @@ export class ChatMessages extends LitElement {
          not sitting right on the edge." (The same ask he made for the chat outputs on
          2026-09-19 earlier, and it is the same number.) */
       padding: 0 0 10px;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;
       color: var(--chat-text, #171717);
@@ -161,7 +161,7 @@ export class ChatMessages extends LitElement {
        help you today… if it's gotta be hardcoded"): her real words come from an assembly, and
        a brand-new conversation has had none. */
     .empty {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 20px;

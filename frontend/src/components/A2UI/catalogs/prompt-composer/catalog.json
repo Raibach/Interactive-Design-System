@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
   "title": "Raibach Prompt Composer Catalog",
-  "whatThisFileIs": "THE SCHEMA. What the server validates an A2UI payload against — an unknown component fails loud with HTTP 503. Three files in this repository are called some version of 'registry' — this is the validation schema, NOT the allowlist the AI reads and NOT the Figma map. The allowlist is frontend/src/shared/tag-registry.ts; the design relationship is frontend/src/components/registry.json.",
+  "whatThisFileIs": "THE SCHEMA. What the server validates an A2UI payload against \u2014 an unknown component fails loud with HTTP 503. Three files in this repository are called some version of 'registry' \u2014 this is the validation schema, NOT the allowlist the AI reads and NOT the Figma map. The allowlist is frontend/src/shared/tag-registry.ts; the design relationship is frontend/src/components/registry.json.",
   "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. Agent can only render components from this allowlist.",
   "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
   "components": {
@@ -27,7 +27,7 @@
               "description": "Data-bound list of trace entries, newest first. Object form: {\"path\": \"/trace/entries\"}. Unset is NOT empty: the feed draws its waiting state until the path has been written, because an empty list is a claim that the app has logged nothing."
             },
             "breadcrumbCount": {
-              "description": "How many breadcrumbs Sentry's global scope is holding, bound as {\"path\": \"/trace/breadcrumbCount\"}. Written on the same channel as entries. Both forms are spelled out here because common_types.json has no DynamicNumber and the bound form is an object, not a number — a bare \"type\": \"number\" would describe a payload this catalog refuses.",
+              "description": "How many breadcrumbs Sentry's global scope is holding, bound as {\"path\": \"/trace/breadcrumbCount\"}. Written on the same channel as entries. Both forms are spelled out here because common_types.json has no DynamicNumber and the bound form is an object, not a number \u2014 a bare \"type\": \"number\" would describe a payload this catalog refuses.",
               "oneOf": [
                 {
                   "type": "number"
@@ -54,7 +54,7 @@
     },
     "user-response-bubble": {
       "type": "object",
-      "description": "The response row inside the chat output card — the design's \"user-response-bubble\", Figma node 40001119:6352 (file 20UPR2KQMsbAxlo5NJb1se), implemented by <user-response-bubble> in src/components/lit/user-response-bubble.ts. A 6px-radius #CBE6E3 row — or the seat's own --chat-user-bg when it sets one — holding a 19×19 mark and one line of Inter 500 13/20 in #171717. It is a DRAWING: the Figma node carries no annotation, so the element declares no events and nothing about it is invented; the host supplies the line.",
+      "description": "The response row inside the chat output card \u2014 the design's \"user-response-bubble\", Figma node 40001119:6352 (file 20UPR2KQMsbAxlo5NJb1se), implemented by <user-response-bubble> in src/components/lit/user-response-bubble.ts. A 6px-radius #CBE6E3 row \u2014 or the seat's own --chat-user-bg when it sets one \u2014 holding a 19\u00d719 mark and one line of Inter 500 13/20 in #171717. It is a DRAWING: the Figma node carries no annotation, so the element declares no events and nothing about it is invented; the host supplies the line.",
       "properties": {
         "component": {
           "const": "user-response-bubble"
@@ -64,7 +64,7 @@
         },
         "text": {
           "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-          "description": "The line to draw, e.g. {\"path\": \"/session/right_column/last_response\"}. Optional — the wireframe's own copy is sample text, not a default."
+          "description": "The line to draw, e.g. {\"path\": \"/session/right_column/last_response\"}. Optional \u2014 the wireframe's own copy is sample text, not a default."
         }
       },
       "required": [
@@ -73,7 +73,7 @@
     },
     "trace-feed": {
       "type": "object",
-      "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",
+      "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG \u2014 so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",
       "properties": {
         "component": {
           "const": "trace-feed"
@@ -97,14 +97,14 @@
         },
         {
           "type": "object",
-          "description": "The flow, drawn — the output column's canvas, implemented by <agent-flow> in src/components/lit/agent-flow.ts. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph from facts the app already holds (the prompt's own seats, the finding, and the run's own responses) and the shell writes it into the data model. One binding carries the whole graph, so there is exactly one path to keep true.",
+          "description": "The flow, drawn \u2014 the output column's canvas, implemented by <agent-flow> in src/components/lit/agent-flow.ts. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph from facts the app already holds (the prompt's own seats, the finding, and the run's own responses) and the shell writes it into the data model. One binding carries the whole graph, so there is exactly one path to keep true.",
           "properties": {
             "component": {
               "const": "AgentFlow"
             },
             "flow": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` — the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note — never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
+              "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` \u2014 the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note \u2014 never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
             },
             "id": {
               "type": "string"
@@ -118,7 +118,7 @@
     },
     "agent-flow": {
       "type": "object",
-      "description": "The same component as AgentFlow, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentFlow to <agent-flow>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the AgentFlow entry.",
+      "description": "The same component as AgentFlow, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentFlow to <agent-flow>), while the allowlist and the catalog audit name the TAG \u2014 so a payload or a client validating by tag has to find it here as well. The binding is described on the AgentFlow entry.",
       "properties": {
         "component": {
           "const": "agent-flow"
@@ -142,7 +142,7 @@
         },
         {
           "type": "object",
-          "description": "THE PLUG-IN — the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings — those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
+          "description": "THE PLUG-IN \u2014 the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" \u2014 the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings \u2014 those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
           "properties": {
             "component": {
               "const": "AgentCanvas"
@@ -160,7 +160,7 @@
             },
             "children": {
               "type": "object",
-              "description": "The two slots, filled BY NAME from the envelope: {\"flow\": <id of the drawing>, \"seat\": <id of her chat panel>}. Each child carries its own bindings — the drawing its graph, her seat its conversation, session and readouts — so nothing is forwarded through this element.",
+              "description": "The two slots, filled BY NAME from the envelope: {\"flow\": <id of the drawing>, \"seat\": <id of her chat panel>}. Each child carries its own bindings \u2014 the drawing its graph, her seat its conversation, session and readouts \u2014 so nothing is forwarded through this element.",
               "properties": {
                 "flow": {
                   "type": "string"
@@ -205,7 +205,7 @@
         },
         {
           "type": "object",
-          "description": "The catalog checker's open findings, drawn in the chat panel's \"view\" slot. Implemented by <chat-repair-actions> in src/components/lit/chat-repair-actions.ts. A VIEW: it fetches nothing and composes no sentence about a finding — the writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them here, so the list cannot disagree with the check that produced it.",
+          "description": "The catalog checker's open findings, drawn in the chat panel's \"view\" slot. Implemented by <chat-repair-actions> in src/components/lit/chat-repair-actions.ts. A VIEW: it fetches nothing and composes no sentence about a finding \u2014 the writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them here, so the list cannot disagree with the check that produced it.",
           "properties": {
             "component": {
               "const": "chat-repair-actions"
@@ -552,7 +552,7 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <agent-card-element>. Console prompt card (262x251px) per Figma node 40001114:5813 \"console-card-design-system\". Renders header (molecule logo, function line, category line), title + description body (with the ##PROMPT## lead), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM — never invented or renamed. Registered as custom element: agent-card-element.",
+          "description": "Lit web component <agent-card-element>. Console prompt card (262x251px) per Figma node 40001114:5813 \"console-card-design-system\". Renders header (molecule logo, function line, category line), title + description body (with the ##PROMPT## lead), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM \u2014 never invented or renamed. Registered as custom element: agent-card-element.",
           "properties": {
             "component": {
               "const": "agent-card"
@@ -568,7 +568,7 @@
             },
             "function": {
               "type": "string",
-              "description": "The function level — the line ABOVE the category in the card header (14px bold #F6C031). Falls back to the design's own sample line 'Function like Repair' until the data supplies it."
+              "description": "The function level \u2014 the line ABOVE the category in the card header (14px bold #F6C031). Falls back to the design's own sample line 'Function like Repair' until the data supplies it."
             },
             "category": {
               "type": "string",
@@ -585,7 +585,7 @@
             },
             "category_color": {
               "type": "string",
-              "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#1C2F4E' (the design's own fill) when the category is unregistered.",
+              "description": "Hex color tinting the card background, from the categories table (name \u2192 color). Fallback '#1C2F4E' (the design's own fill) when the category is unregistered.",
               "default": "#1C2F4E"
             },
             "category_title_color": {
@@ -700,7 +700,7 @@
             "placeholder": {
               "type": "string",
               "description": "Placeholder text shown when empty.",
-              "default": "Search…"
+              "default": "Search\u2026"
             },
             "value": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
@@ -865,7 +865,7 @@
         "fileKey": "20UPR2KQMsbAxlo5NJb1se",
         "nodeId": "40001010:25768",
         "nodeName": "chat-button",
-        "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] — the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
+        "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] \u2014 the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
       },
       "allOf": [
         {
@@ -876,14 +876,14 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <chat-navigation-bar>. Right-column tab rail — chat, trace, tools, evaluation, variables, metadata — filtered by the user's departmental role, carrying the catalog-health marker on the chat tab. Renders the designed buttons (Figma chat-button 40001010:25768, trace-button 40001011:26266). Replaces React SidebarNavigation + NavigationButton.",
+          "description": "Lit web component <chat-navigation-bar>. Right-column tab rail \u2014 chat, trace, tools, evaluation, variables, metadata \u2014 filtered by the user's departmental role, carrying the catalog-health marker on the chat tab. Renders the designed buttons (Figma chat-button 40001010:25768, trace-button 40001011:26266). Replaces React SidebarNavigation + NavigationButton.",
           "properties": {
             "component": {
               "const": "chat-navigation-bar"
             },
             "activeTab": {
               "type": "string",
-              "description": "The currently active tab. Matches the element's TabId union — 'approval' was listed here and is not one.",
+              "description": "The currently active tab. Matches the element's TabId union \u2014 'approval' was listed here and is not one.",
               "enum": [
                 "chat",
                 "trace",
@@ -938,7 +938,7 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <error-banner>. The system's error channel — the tag the runtime model is already instructed to report failures through (backend/grace_gui.py: 'Use <error-banner message=\"...\"/> only'). Rendered LOUD on purpose: it also carries the case where a component is generated WITHOUT its annotation, which means behaviour is being invented downstream on every surface that places it. Alert, don't block — the surface still renders underneath.",
+          "description": "Lit web component <error-banner>. The system's error channel \u2014 the tag the runtime model is already instructed to report failures through (backend/grace_gui.py: 'Use <error-banner message=\"...\"/> only'). Rendered LOUD on purpose: it also carries the case where a component is generated WITHOUT its annotation, which means behaviour is being invented downstream on every surface that places it. Alert, don't block \u2014 the surface still renders underneath.",
           "properties": {
             "component": {
               "const": "error-banner"
@@ -977,7 +977,7 @@
         },
         {
           "type": "object",
-          "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Implemented by a2ui-console-card-grid in src/components/lit/a2ui-primitives.ts, and it is the only renderer of this component — nothing in the React shell draws a second copy, so /cards is the single list of packages in play.",
+          "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Implemented by a2ui-console-card-grid in src/components/lit/a2ui-primitives.ts, and it is the only renderer of this component \u2014 nothing in the React shell draws a second copy, so /cards is the single list of packages in play.",
           "properties": {
             "component": {
               "const": "ConsoleCardGrid"
@@ -1006,7 +1006,7 @@
         },
         {
           "type": "object",
-          "description": "AI decision surface — shown when the agent needs user confirmation before proceeding (e.g. unsaved changes). Contains a Text message and an ActionGroup of choices.",
+          "description": "AI decision surface \u2014 shown when the agent needs user confirmation before proceeding (e.g. unsaved changes). Contains a Text message and an ActionGroup of choices.",
           "properties": {
             "component": {
               "const": "DecisionDialog"
@@ -1122,7 +1122,7 @@
         },
         {
           "type": "object",
-          "description": "Right-column chat panel — the surface command interface. Conversation scoped to the bound conversation id. Backed by InteractiveChatInterface.",
+          "description": "Right-column chat panel \u2014 the surface command interface. Conversation scoped to the bound conversation id. Backed by InteractiveChatInterface.",
           "properties": {
             "component": {
               "const": "ChatPanel"
@@ -1167,11 +1167,11 @@
             },
             "saveShortcut": {
               "type": "string",
-              "default": "⌘ S"
+              "default": "\u2318 S"
             },
             "runShortcut": {
               "type": "string",
-              "default": "⌘ ⏎"
+              "default": "\u2318 \u23ce"
             }
           },
           "required": [
@@ -1244,11 +1244,11 @@
             },
             "userId": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Active user UUID, displayed truncated, e.g. u:00000000…0001."
+              "description": "Active user UUID, displayed truncated, e.g. u:00000000\u20260001."
             },
             "message": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Transient status line, e.g. Saved, Compiling…, Error text."
+              "description": "Transient status line, e.g. Saved, Compiling\u2026, Error text."
             },
             "level": {
               "type": "string",
@@ -1371,7 +1371,7 @@
         },
         "conversations": {
           "type": "object",
-          "description": "The Conversations dropdown's rows — the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
+          "description": "The Conversations dropdown's rows \u2014 the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
         },
         "id": {
           "type": "string"
@@ -1406,7 +1406,8 @@
       },
       "required": [
         "component"
-      ]
+      ],
+      "annotation": "Data: formatLabel \u2014 the vertical rail's format line; tokensLabel \u2014 the vertical tokens/cost readout line.\nState: expanded \u2014 the container is always drawn; the rail is its right edge.\nA11y: no role of its own \u2014 a container."
     },
     "prompt-input-section": {
       "type": "object",
@@ -1437,11 +1438,12 @@
       "required": [
         "component",
         "name"
-      ]
+      ],
+      "annotation": "Data: name, type, content, sticky, minHeight.\nOn click: section-menu-select { role } when a role is chosen from the tile's menu; section-collapse-toggle { collapsed } on the tile's chevron.\nOn change: section-content-input { value } as the textarea is typed in.\nState: collapsed | expanded.\nDisabled: the System Role section is sticky \u2014 first, no menu, not draggable, not deletable.\nA11y: group, labelled by the role tile's text."
     },
     "gripper-prompt-input": {
       "type": "object",
-      "description": "Meatballs drag handle (49x37) — the only drag anchor of a prompt-input-section (Figma 40000746-94).",
+      "description": "Meatballs drag handle (49x37) \u2014 the only drag anchor of a prompt-input-section (Figma 40000746-94).",
       "properties": {
         "component": {
           "const": "gripper-prompt-input"
@@ -1489,11 +1491,12 @@
       "required": [
         "component",
         "label"
-      ]
+      ],
+      "annotation": "Data: label, showMenu.\nOn click: role-menu-toggle { open } from the caret; role-tile-collapse-toggle { collapsed } from the chevron.\nState: collapsed | expanded; menu closed | open.\nDisabled: no menu when showMenu is false.\nA11y: button, labelled by the tile's own text."
     },
     "status-bar-prompt-input": {
       "type": "object",
-      "description": "Vertical activity rail (40px) — Database_fill + lightning_alt_fill_light icons grow with prompt activity (Figma 40000954-23865).",
+      "description": "Vertical activity rail (40px) \u2014 Database_fill + lightning_alt_fill_light icons grow with prompt activity (Figma 40000954-23865).",
       "properties": {
         "component": {
           "const": "status-bar-prompt-input"
@@ -1507,7 +1510,8 @@
       },
       "required": [
         "component"
-      ]
+      ],
+      "annotation": "Data: icons \u2014 the activity icons drawn in the rail.\nState: idle | active \u2014 the icons grow with prompt activity.\nA11y: decorative; no label."
     },
     "prompt-textarea": {
       "type": "object",
@@ -1531,7 +1535,8 @@
       },
       "required": [
         "component"
-      ]
+      ],
+      "annotation": "Data: value, placeholder, minHeight.\nOn change: value-input { value } on every keystroke.\nState: idle | focused.\nA11y: textbox, multiline; labelled by the section's name."
     },
     "model-selector-button": {
       "type": "object",
@@ -1549,7 +1554,8 @@
       },
       "required": [
         "component"
-      ]
+      ],
+      "annotation": "Data: label \u2014 the current model's name, or \"Models\" when none is chosen.\nOn click: model-selector-toggle { open }.\nState: idle | open.\nA11y: button, labelled by its own text."
     },
     "control-bar": {
       "type": "object",
@@ -1562,7 +1568,7 @@
         },
         {
           "type": "object",
-          "description": "The left column's bottom bar: undo, Save Template, RUN — and nothing else. Figma \"Left-column-ControlBar\" #40000761:261, placed as the last child of the left column container #40000954:23865. Implemented by <control-bar> in src/components/lit/control-bar.ts; the shell listens for its undo-click / save-click / run-click.",
+          "description": "The left column's bottom bar: undo, Save Template, RUN \u2014 and nothing else. Figma \"Left-column-ControlBar\" #40000761:261, placed as the last child of the left column container #40000954:23865. Implemented by <control-bar> in src/components/lit/control-bar.ts; the shell listens for its undo-click / save-click / run-click.",
           "properties": {
             "component": {
               "const": "control-bar"
@@ -1599,14 +1605,14 @@
         },
         {
           "type": "object",
-          "description": "The middle column's header row — the design's \"output-vontrols\" (node 40001034:1186): the selector tile (40001034:1187, text run 40001034:1190) and the published <model-selector-button>. Implemented by <output-controls> in src/components/lit/output-controls.ts, which draws it in every view of the middle column. The selector is a PLACEHOLDER by the owner's instruction (2026-09-18) — it renders with its design tag and role and opens no menu, because no menu contents exist in the Figma pull and the entries are the owner's specification rather than a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.",
+          "description": "The middle column's header row \u2014 the design's \"output-vontrols\" (node 40001034:1186): the selector tile (40001034:1187, text run 40001034:1190) and the published <model-selector-button>. Implemented by <output-controls> in src/components/lit/output-controls.ts, which draws it in every view of the middle column. The selector is a PLACEHOLDER by the owner's instruction (2026-09-18) \u2014 it renders with its design tag and role and opens no menu, because no menu contents exist in the Figma pull and the entries are the owner's specification rather than a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.",
           "properties": {
             "component": {
               "const": "OutputControls"
             },
             "outputType": {
               "type": "string",
-              "description": "What the selector tile reads — the view this column is showing. The design's drawn value is \"Agent Flow\" (40001034:1190); it is a property because this tile is the reader's choice at the top of the column, and the drawn value is the example, not the only value."
+              "description": "What the selector tile reads \u2014 the view this column is showing. The design's drawn value is \"Agent Flow\" (40001034:1190); it is a property because this tile is the reader's choice at the top of the column, and the drawn value is the example, not the only value."
             },
             "id": {
               "type": "string"
@@ -1651,7 +1657,7 @@
             },
             "theme": {
               "type": "string",
-              "description": "The tone the drawing is currently in — '' is the mid-tone this design is drawn in, \"dark\" is the reference's near-black surface. Set by the host AFTER the footer asks for a change; the footer never writes it itself."
+              "description": "The tone the drawing is currently in \u2014 '' is the mid-tone this design is drawn in, \"dark\" is the reference's near-black surface. Set by the host AFTER the footer asks for a change; the footer never writes it itself."
             },
             "id": {
               "type": "string"
@@ -1676,6 +1682,308 @@
       },
       "required": [
         "component"
+      ]
+    },
+    "chat-header": {
+      "type": "object",
+      "description": "One block of the chat column output area: the card, and on a bar the grip row under the card. Draws the readout line and the model mark at the card trailing edge.",
+      "properties": {
+        "component": {
+          "const": "chat-header"
+        },
+        "id": {
+          "type": "string"
+        },
+        "statusText": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "sessionLabel": {
+          "type": "string"
+        },
+        "sessionName": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "string"
+        },
+        "qaScore": {
+          "type": "string"
+        },
+        "card": {
+          "type": "boolean"
+        },
+        "tokens": {
+          "type": "number"
+        },
+        "inTokens": {
+          "type": "number"
+        },
+        "outTokens": {
+          "type": "number"
+        },
+        "calls": {
+          "type": "number"
+        },
+        "lastCall": {
+          "type": "string"
+        },
+        "unattributed": {
+          "type": "boolean"
+        },
+        "children": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "component",
+        "id"
+      ]
+    },
+    "output-header": {
+      "type": "object",
+      "description": "The readout block \u2014 Figma 40001119-6308, drawn above the conversations bar.",
+      "properties": {
+        "component": {
+          "const": "output-header"
+        },
+        "id": {
+          "type": "string"
+        },
+        "line": {
+          "type": "string"
+        },
+        "attributed": {
+          "type": "boolean"
+        },
+        "tokens": {
+          "type": "string"
+        },
+        "calls": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ],
+      "x-layers": [
+        {
+          "nodeId": "40001119:6308",
+          "name": "output-header",
+          "type": "FRAME",
+          "size": "540 \u00d7 83"
+        },
+        {
+          "nodeId": "40001119:6309",
+          "name": "chat-output-readout-area",
+          "type": "FRAME",
+          "size": "500 \u00d7 55"
+        },
+        {
+          "nodeId": "40001123:6763",
+          "name": "textarea",
+          "type": "FRAME",
+          "size": "450 \u00d7 40"
+        },
+        {
+          "nodeId": "40001123:6750",
+          "name": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text",
+          "type": "TEXT",
+          "size": "450 \u00d7 43"
+        },
+        {
+          "nodeId": "40001124:7096",
+          "name": "model-readout-tokens-etc",
+          "type": "IMAGE-SVG",
+          "size": "20 \u00d7 20"
+        },
+        {
+          "nodeId": "40001124:7442",
+          "name": "model-icon",
+          "type": "FRAME",
+          "size": "18.75 \u00d7 17.5  (carried by export)"
+        },
+        {
+          "nodeId": "40001124:7097",
+          "name": "Vector",
+          "type": "VECTOR",
+          "size": "18.75 \u00d7 17.5  (carried by export)"
+        },
+        {
+          "nodeId": "40001123:6773",
+          "name": "gripper-prompt-input-chat-menu",
+          "type": "FRAME",
+          "size": "500 \u00d7 7"
+        },
+        {
+          "nodeId": "40001123:6774",
+          "name": "Meatballs",
+          "type": "FRAME",
+          "size": "480 \u00d7 4.05"
+        },
+        {
+          "nodeId": "40001123:6775",
+          "name": "Ellipse 209",
+          "type": "ELLIPSE",
+          "size": "2.16 \u00d7 2.05"
+        },
+        {
+          "nodeId": "40001123:6776",
+          "name": "Ellipse 210",
+          "type": "ELLIPSE",
+          "size": "2.16 \u00d7 2.05"
+        },
+        {
+          "nodeId": "40001123:6777",
+          "name": "Ellipse 207",
+          "type": "ELLIPSE",
+          "size": "2.16 \u00d7 2.05"
+        },
+        {
+          "nodeId": "40001123:6778",
+          "name": "Ellipse 206",
+          "type": "ELLIPSE",
+          "size": "2.16 \u00d7 2.05"
+        },
+        {
+          "nodeId": "40001123:6779",
+          "name": "Ellipse 208",
+          "type": "ELLIPSE",
+          "size": "2.16 \u00d7 2.05"
+        }
+      ]
+    },
+    "output-footer-area": {
+      "type": "object",
+      "description": "The footer block of the chat column output area \u2014 Figma 40001123-6689, imported via the Figma Dev Mode MCP server (get_design_context). The output column's closing shell: the Active/Plugins control, the four 32x32 panel marks (forum, chat history, add-new-conversation, user feedback), the credit line in its own button, and the block's own gripper. This is where the plug-in tool bar loads \u2014 the drawing's default view shows the first five tools.",
+      "properties": {
+        "component": {
+          "const": "output-footer-area"
+        },
+        "id": {
+          "type": "string"
+        },
+        "credit": {
+          "type": "string"
+        },
+        "historySelected": {
+          "type": "boolean"
+        },
+        "pluginLabel": {
+          "type": "string"
+        },
+        "gripEnabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "component"
+      ],
+      "x-layers": [
+        {
+          "nodeId": "40001123:6689",
+          "name": "output-footer-area",
+          "type": "FRAME",
+          "size": "col \u00b7 gap 7 \u00b7 pad 10/20/20/20"
+        },
+        {
+          "nodeId": "40001123:6692",
+          "name": "gripper-prompt-input-chat-menu",
+          "type": "FRAME",
+          "size": "7 tall \u00b7 pad 0/10"
+        },
+        {
+          "nodeId": "40001123:6693",
+          "name": "Meatballs",
+          "type": "IMAGE-SVG",
+          "size": "24.649 \u00d7 4.051 \u00b7 rotate 180"
+        },
+        {
+          "nodeId": "40001124:7035",
+          "name": "forum 1",
+          "type": "IMAGE-SVG",
+          "size": "32 \u00d7 32 \u00b7 fill #3D515B"
+        },
+        {
+          "nodeId": "40001123:6728",
+          "name": "chat history",
+          "type": "IMAGE-SVG",
+          "size": "32 \u00d7 32 \u00b7 fill #507274"
+        },
+        {
+          "nodeId": "40001123:6732",
+          "name": "add-new-conversation",
+          "type": "IMAGE-SVG",
+          "size": "32 \u00d7 32 \u00b7 fill #3D515B"
+        },
+        {
+          "nodeId": "40001123:6724",
+          "name": "user--feedback 1",
+          "type": "IMAGE-SVG",
+          "size": "32 \u00d7 32 \u00b7 fill #3D515B"
+        },
+        {
+          "nodeId": "40001123:6690",
+          "name": "chat-output-footer",
+          "type": "FRAME",
+          "size": "500 \u00b7 radius 8 \u00b7 2 inset shadows"
+        },
+        {
+          "nodeId": "40001123:6722",
+          "name": "",
+          "type": "FRAME",
+          "size": "row \u00b7 gap 9"
+        },
+        {
+          "nodeId": "40001123:6723",
+          "name": "",
+          "type": "FRAME",
+          "size": "307 \u00b7 row \u00b7 gap 20"
+        },
+        {
+          "nodeId": "40001123:6829",
+          "name": "",
+          "type": "FRAME",
+          "size": "54 \u00b7 row"
+        },
+        {
+          "nodeId": "40001123:6830",
+          "name": "Function - loads cards form console in prompt area",
+          "type": "FRAME",
+          "size": "54 \u00b7 radius 6 \u00b7 2 drop shadows"
+        },
+        {
+          "nodeId": "40001123:6831",
+          "name": "btn-label",
+          "type": "FRAME",
+          "size": "col"
+        },
+        {
+          "nodeId": "40001123:6832",
+          "name": "Active / Plugins",
+          "type": "TEXT",
+          "size": "58 \u00b7 Arial Rounded MT Bold 12px #3D515B"
+        },
+        {
+          "nodeId": "40001123:6738",
+          "name": "Function - loads cards form console in prompt area",
+          "type": "FRAME",
+          "size": "156 \u00b7 radius 6 \u00b7 2 drop shadows"
+        },
+        {
+          "nodeId": "40001123:6739",
+          "name": "btn-label",
+          "type": "FRAME",
+          "size": "156 \u00d7 35"
+        },
+        {
+          "nodeId": "40001123:6740",
+          "name": "Created by John Travis Holt / Raibach.net \u00a9 2026 Raibach IDS",
+          "type": "TEXT",
+          "size": "Arial Rounded MT Bold 9px / 12px #3D515B right-bottom"
+        }
       ]
     }
   },
@@ -1860,6 +2168,15 @@
         },
         {
           "$ref": "#/components/canvas-footer"
+        },
+        {
+          "$ref": "#/components/chat-header"
+        },
+        {
+          "$ref": "#/components/output-header"
+        },
+        {
+          "$ref": "#/components/output-footer-area"
         }
       ],
       "discriminator": {

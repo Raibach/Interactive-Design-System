@@ -30,11 +30,13 @@ export class RoleTile extends LitElement {
     :host {
       display: flex;
       align-items: center;
-      gap: 10px;
+      /* #40000909:3999 — the file's tile: itemSpacing 53, padding 0 18px (the
+         declaration had kept 10/10 from the pre-rebuild tile). */
+      gap: 53px;
       width: 100%;
       height: 40px;
       box-sizing: border-box;
-      padding: 0 10px;
+      padding: 0 18px;
       /* Figma 40000954-23865 role-tile: px-[10px], max-w-[500px] */
       background: #ffffff;
       border-radius: 6px;

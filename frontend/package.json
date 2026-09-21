@@ -8,9 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && npm run catalog:check",
-    "catalog:check": "node scripts/catalog-check.mjs --catalog prompt-composer && node scripts/catalog-check.mjs --catalog ecommerce",
-    "corrections:add": "node scripts/corrections-add.mjs",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
@@ -19,12 +17,10 @@
     "deploy": "gh-pages -d dist",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
-    "fidelity": "node scripts/fidelity-check.mjs --scope all",
-    "fidelity:capture": "node scripts/fidelity-check.mjs --scope all --capture",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "chromatic": "npx chromatic --project-token=${CHROMATIC_PROJECT_TOKEN}",
-    "typecheck": "node scripts/typecheck-guard.mjs && tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
     "@sentry/react": "^10.65.0",

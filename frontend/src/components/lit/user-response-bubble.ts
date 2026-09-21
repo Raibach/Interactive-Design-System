@@ -73,7 +73,7 @@ export class UserResponseBubble extends LitElement {
     .line {
       flex: 1 1 auto;
       min-width: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 20px;
@@ -84,7 +84,7 @@ export class UserResponseBubble extends LitElement {
     ::slotted(*) {
       flex: 1 1 auto;
       min-width: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 20px;

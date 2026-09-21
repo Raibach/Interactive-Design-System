@@ -18,6 +18,44 @@ deliberately strict: a component the model names that the catalog does not defin
 rejected before it reaches the screen. That gate is correct — do not relax it to make
 a surface pass.
 
+## The requirement that comes before all of them: the layer's NAME
+
+**Every layer carried into the catalog states its Figma layer name, beside its node id.**
+This is not optional and it is not cosmetic. It is the requirement whose absence produced
+eleven hours of edits to `output-header-area.ts` while `chat-panel.ts` drew that same block
+from `chat-header` — the designer could not see the node ids, the agent read past the layer
+names, and nothing in between could tell either of them which file was on screen.
+
+| where | what it carries | who reads it |
+|---|---|---|
+| the Lit element | `data-node-id="40001127:2062" data-layer-name="textarea"` | the value check, the designer's eye |
+| the registry `layers` array | `{ nodeId, name, type, size }` | the allowlist, the audit |
+| the catalog `x-layers` | the same array | the schema, and any reader of the catalog |
+
+**The designer reads names. The agent reads ids. The catalog must carry BOTH**, because a
+discrepancy is only visible when the two meet: if the name in the catalog is not the name in
+the drawing, that is a finding, and it is arithmetic.
+
+**The id is the identity; the name is the label.** An id never changes. It is either present
+or deleted — so:
+
+- an id in the catalog and not in the drawing → the layer was **deleted**; the marker is a
+  dangling reference that renders nothing
+- an id in the drawing and not in the catalog → a **new layer** nothing covers yet
+- an id in both, and the names differ → the **name moved** on a layer that still exists, and
+  the code must follow it
+
+A new id in an old layer's place is a **new component**, whatever you called it. It is not the
+old one relocated.
+
+**And it is checked on every run** — `layer-name-drift` in `catalog-check.mjs`, blocking. A
+layer whose name disagrees with the drawing fails the build rather than waiting for someone to
+notice. Check it by hand any time with:
+
+```bash
+cd frontend && node scripts/design-layer-names.mjs --capture <scope>
+```
+
 ## The steps
 
 1. **Write the element** — `frontend/src/components/lit/<element>.ts`, `LitElement`,
@@ -51,7 +89,25 @@ a surface pass.
    in the tree. For a container with named slots, `children` is keyed by slot name:
    `"children": {"view-trace": "trace-view"}`.
 
-7. **Update the counts** — README and `READ-ME/IMPLEMENTATION_CONFORMANCE.md` state
+   **AND CHECK THAT THE FILE YOU WROTE IS THE FILE THAT RENDERS.** This is the step whose
+   absence cost eleven hours on 2026-09-20: `output-header-area.ts` was written, registered,
+   imported and audited green — while `chat-panel.ts` still drew that block from
+   `chat-header`, so the screen never changed and every check agreed with every other check.
+   After emitting, put the drawing's node id in the live DOM and confirm the element you
+   wrote is the one carrying it. `grep` for the tag in `chat-panel.ts` first; if the block is
+   drawn by a different element, the element you wrote is dead code.
+
+7. **Carry every layer's NAME beside its node id** — in the Lit element
+   (`data-node-id="…" data-layer-name="…"` on every layer), in the registry's `layers`
+   array, and in the catalog's `x-layers`. **The name is what makes it possible to tell
+   which file you are editing**; an id alone is an address with nothing to read. Check it
+   with `node scripts/design-layer-names.mjs --capture <scope>`.
+
+   **One name means one component with the same parameters, drawn by one file.** If two
+   layers share a name and not a size, that is a naming mistake in the drawing — the screen
+   will show it, and the fix is to rename in Figma.
+
+8. **Update the counts** — README and `READ-ME/IMPLEMENTATION_CONFORMANCE.md` state
    the catalog size ("N trusted components", "X + Y primitives") and README carries
    the name list. `doc-claim-drift` is **blocking**, so a stale number fails the
    build. The checker prints the correct numbers; copy them from it.

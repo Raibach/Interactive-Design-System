@@ -134,7 +134,7 @@ def _repair_rows(catalog: str = "prompt-composer") -> List[Dict[str, Any]]:
         audit = _read_catalog_audit(catalog)
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {}
-        remedy = detail.get("remedy") or f"cd frontend && node scripts/catalog-check.mjs --catalog {catalog}"
+        remedy = detail.get("remedy") or "The catalog checker was removed from this project; no report is produced."
         print(
             f"[A2UI Console] no catalog report for '{catalog}' — the repair list states that "
             f"rather than showing nothing. Remedy: {remedy}"

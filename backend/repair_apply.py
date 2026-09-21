@@ -201,14 +201,12 @@ def apply_repair(path: str, content: str) -> dict:
 
 # ── After the write: a verdict worth having ────────────────────────────────
 #
-# The report the app reads (/api/catalog/audit) is a FILE, written by
-# frontend/scripts/catalog-check.mjs — it is not produced on demand. So a "fresh
-# check" after a repair is only fresh if something runs the checker, and nothing
-# did: the report on disk was whatever the last run left there. That makes the
-# verdict wrong in BOTH directions, which is worse than having none — a change
-# that worked is reported as not done, and a change that did nothing is reported
-# done because the report predates it. Running it here is what makes the sentence
-# after a repair mean something. It takes about two seconds.
+# The report the app reads (/api/catalog/audit) is produced by
+# frontend/scripts/catalog-check.mjs, which was removed from this project along
+# with the rest of the governance tooling. This function is kept because it fails
+# honestly: with the checker absent it returns {"ran": False, "why": …}, and the
+# caller reports that the check did not run instead of inventing a verdict. A
+# stale report left on disk must never be read as a fresh one.
 
 DEFAULT_CATALOG = "prompt-composer"
 CHECK_TIMEOUT = 180

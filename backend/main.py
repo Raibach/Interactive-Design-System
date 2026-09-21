@@ -108,11 +108,12 @@ async def shutdown_event():
 # ── Route modules (extracted during modularization) ─────────────────
 from routes import (
     misc, conversations, projects, teacher, memory,
-    prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance,
+    prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance, figma_intake,
 )
 
 for _m in (misc, conversations, projects, teacher, memory,
-           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance):
+           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance,
+           figma_intake):
     app.include_router(_m.router)
 
 

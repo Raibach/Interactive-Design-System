@@ -1,18 +1,18 @@
 {
   "_meta": {
-    "whatThisFileIs": "THE FIGMA MAP. Which Figma node each component came from. Three files in this repository are called some version of 'registry' \u2014 this is the one that records the design relationship, NOT the one that decides what may be rendered. The allowlist is frontend/src/shared/tag-registry.ts; the schema the server validates against is frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json.",
-    "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it \u2014 do NOT regenerate. If absent, ask before building.",
+    "whatThisFileIs": "THE FIGMA MAP. Which Figma node each component came from. Three files in this repository are called some version of 'registry' — this is the one that records the design relationship, NOT the one that decides what may be rendered. The allowlist is frontend/src/shared/tag-registry.ts; the schema the server validates against is frontend/src/components/A2UI/catalogs/<pipeline>/catalog.json.",
+    "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it — do NOT regenerate. If absent, ask before building.",
     "ruleFile": ".continue/rules/design-system.md",
-    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09); chat-button re-pulled from Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes (2026-09-11) after the design edited the node \u2014 the previously recorded icon node 40001010:25766 no longer exists.",
-    "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented \u2014 audit against the source annotation)."
+    "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09); chat-button re-pulled from Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes (2026-09-11) after the design edited the node — the previously recorded icon node 40001010:25766 no longer exists.",
+    "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented — audit against the source annotation)."
   },
   "containers": {
     "chat-menu-item": {
-      "whatThisIs": "The rail nav button. Every designed button inside the navigation rail inherits this \u2014 it is a constraint of the CONTAINER, not a property of each button.",
+      "whatThisIs": "The rail nav button. Every designed button inside the navigation rail inherits this — it is a constraint of the CONTAINER, not a property of each button.",
       "renderedBy": [
         "chat-navigation-bar"
       ],
-      "definedIn": "frontend/src/components/lit/chat-navigation-bar.ts \u2014 the :host cascade block",
+      "definedIn": "frontend/src/components/lit/chat-navigation-bar.ts — the :host cascade block",
       "provenance": "inferred",
       "geometry": {
         "button": {
@@ -241,13 +241,13 @@
         "Chat button selected: it's yellow when it's selected and it's transparent when the chat is closed and it's not selected."
       ],
       "annotationChannel": {
-        "read": "Figma MCP get_design_context (http://127.0.0.1:3845/mcp \u2014 Figma Dev Mode MCP Server v1.0.0); cross-checked against Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes?ids=40001010:25768",
+        "read": "Figma MCP get_design_context (http://127.0.0.1:3845/mcp — Figma Dev Mode MCP Server v1.0.0); cross-checked against Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes?ids=40001010:25768",
         "attributeNameFound": [
           "data-annotations",
           "data-interaction-annotations"
         ],
-        "note": "TWO attributes, not one \u2014 and they carry DIFFERENT halves of the spec. `data-annotations` holds the STATE note (\"...yellow when it's selected and transparent when the chat is closed...\"); `data-interaction-annotations` holds the INTERACTION note (the `On click:` contract). Both match /^data-.*annotation/i, so a regex matcher catches them, but an implementation that expects a SINGLE attribute silently loses the `On click:` half \u2014 the one field that makes behaviour verbatim instead of invented. The REST node.annotations[] carries the same two notes. SUPERSEDES an earlier record of `attributeNameFound: null`: that was an artifact of a layout-only Figma tool that dropped annotation attributes, NOT a property of this design \u2014 the names are observable, and were observed.",
-        "namesMustStayUntrusted": "Match by regex and record what was seen. \u00a72 of the pipeline rules forbids hardcoding the name; \u00a79.3's recorded name is stale (see below)."
+        "note": "TWO attributes, not one — and they carry DIFFERENT halves of the spec. `data-annotations` holds the STATE note (\"...yellow when it's selected and transparent when the chat is closed...\"); `data-interaction-annotations` holds the INTERACTION note (the `On click:` contract). Both match /^data-.*annotation/i, so a regex matcher catches them, but an implementation that expects a SINGLE attribute silently loses the `On click:` half — the one field that makes behaviour verbatim instead of invented. The REST node.annotations[] carries the same two notes. SUPERSEDES an earlier record of `attributeNameFound: null`: that was an artifact of a layout-only Figma tool that dropped annotation attributes, NOT a property of this design — the names are observable, and were observed.",
+        "namesMustStayUntrusted": "Match by regex and record what was seen. §2 of the pipeline rules forbids hardcoding the name; §9.3's recorded name is stale (see below)."
       },
       "children": {
         "frame": {
@@ -259,7 +259,7 @@
           "nodeId": "40001012:26436",
           "componentId": "40000122:3412",
           "type": "INSTANCE",
-          "art": "vector \u2014 exported to frontend/src/assets/figma-chat-button-icon.svg"
+          "art": "vector — exported to frontend/src/assets/figma-chat-button-icon.svg"
         },
         "label": {
           "name": "Chat",
@@ -311,9 +311,9 @@
         "geometrySharing": "inferred"
       },
       "gaps": [
-        "The annotation dispatches tab-change { tab: \"chat conversations\" }; the element emits { tab: 'chat' }. One of the two is wrong \u2014 the payload string is the designer's, the enum is the element's.",
+        "The annotation dispatches tab-change { tab: \"chat conversations\" }; the element emits { tab: 'chat' }. One of the two is wrong — the payload string is the designer's, the enum is the element's.",
         "The frame's inset shadow (0 4 4 rgba(0,0,0,0.25), node 40001010:25749) is not rendered by the element. Carried in `values`, not yet in CSS.",
-        "Icon instance 40001012:26436 resolves to component 40000122:3412 (\"Machine-learning-model\"), which carries no annotation \u2014 a property-only marker at most. Reported per \u00a75; the icon's behaviour is the button's, so this is expected, not a missing spec."
+        "Icon instance 40001012:26436 resolves to component 40000122:3412 (\"Machine-learning-model\"), which carries no annotation — a property-only marker at most. Reported per §5; the icon's behaviour is the button's, so this is expected, not a missing spec."
       ]
     },
     {
@@ -345,7 +345,7 @@
       "annotations": [
         "Conversation Dropdown",
         "Data: the package's conversations",
-        "Source: packages.conversation_id \u2192 conversations",
+        "Source: packages.conversation_id → conversations",
         "On click: dispatch conversation-select { conversationId }",
         "Connects: the chosen conversation loads into the thread below"
       ],
@@ -378,7 +378,11 @@
           "h": 964,
           "layout": "row",
           "padding": "10px 0px 0px",
-          "children": ["chat-left-spacer (20, component 40001085:2597)", "chat-main-menu-vert (74)", "chat-panel-outer (540)"]
+          "children": [
+            "chat-left-spacer (20, component 40001085:2597)",
+            "chat-main-menu-vert (74)",
+            "chat-panel-outer (540)"
+          ]
         },
         "panel": {
           "w": 540,
@@ -474,7 +478,7 @@
       },
       "gaps": [
         "Node carries no annotation and no events: the element declares none and nothing about it is invented.",
-        "The wireframe draws it twice with sample copy (\"User response Sample text - Carbon, IBM's design system\u2026\"); a host supplies the real line through `text`."
+        "The wireframe draws it twice with sample copy (\"User response Sample text - Carbon, IBM's design system…\"); a host supplies the real line through `text`."
       ]
     },
     {
@@ -583,14 +587,19 @@
           "effect": "-4px 0px 4px rgba(0,0,0,0.25)"
         },
         "marks": {
-          "nodes": ["40001119:6626", "40001119:6622", "40001119:6483", "40001119:6486"],
+          "nodes": [
+            "40001119:6626",
+            "40001119:6622",
+            "40001119:6483",
+            "40001119:6486"
+          ],
           "w": 32,
           "h": 32,
           "gap": 35
         },
         "copyright": {
           "node": "40001119:6605",
-          "text": "\u00a9 2026 Raibach IDS",
+          "text": "© 2026 Raibach IDS",
           "textFill": "#FFFFFF 50%",
           "textStyle": "Inter Bold 700 / 16px",
           "width": 127
@@ -598,7 +607,7 @@
       },
       "gaps": [
         "Node carries no annotation: the four marks are drawn as the design draws them and emit nothing. The owner's intent (a click opening that panel at the top of the output area) is not yet a spec.",
-        "The layer text is `{ts1}\u00a9{/ts1} {ts2}2026 Raibach IDS{/ts2}` \u2014 Figma text-style tokens that never resolved, not a second type style.",
+        "The layer text is `{ts1}©{/ts1} {ts2}2026 Raibach IDS{/ts2}` — Figma text-style tokens that never resolved, not a second type style.",
         "The four token readouts the element used to draw on this bar are kept on the new bar: a function does not leave with a drawing (owner, 2026-09-19)."
       ]
     },
@@ -632,7 +641,7 @@
           "w": 32,
           "h": 32,
           "fill": "#1FACC2",
-          "art": "ibm--engineering-workflow-mgmt \u2014 exported to frontend/src/assets/figma-approve-icon.svg"
+          "art": "ibm--engineering-workflow-mgmt — exported to frontend/src/assets/figma-approve-icon.svg"
         },
         "label": {
           "node": "40001119:6558",
@@ -667,7 +676,7 @@
           "w": 43,
           "h": 43,
           "fill": "#1FACC2",
-          "art": "ai-governance--lifecycle \u2014 exported to frontend/src/assets/figma-evals-icon.svg"
+          "art": "ai-governance--lifecycle — exported to frontend/src/assets/figma-evals-icon.svg"
         },
         "label": {
           "node": "40001119:6436",
@@ -677,7 +686,7 @@
         }
       },
       "gaps": [
-        "The frame is still named \"versions-button\" in the file and it draws Evals \u2014 the layer name is stale, the node beside it is labelled Evals. The element claims the node, not the name.",
+        "The frame is still named \"versions-button\" in the file and it draws Evals — the layer name is stale, the node beside it is labelled Evals. The element claims the node, not the name.",
         "Node carries no annotation. The element's own `eval` tab keeps its id and its view slot."
       ]
     },
@@ -701,7 +710,7 @@
           "w": 38,
           "h": 35,
           "fill": "#1FACC2",
-          "art": "tools-api \u2014 exported to frontend/src/assets/figma-tools-api-icon.svg"
+          "art": "tools-api — exported to frontend/src/assets/figma-tools-api-icon.svg"
         },
         "label": {
           "node": "40001119:6540",
@@ -742,15 +751,62 @@
           "w": 32,
           "h": 32,
           "fill": "#1FACC2",
-          "art": "settings \u2014 exported to frontend/src/assets/figma-settings-icon.svg"
+          "art": "settings — exported to frontend/src/assets/figma-settings-icon.svg"
         },
         "label": null
       },
       "gaps": [
         "The frame's layer name is \"tools-button\" and it draws the gear; the button has NO label layer on the node, so the element draws none.",
-        "Node carries no annotation, so the button emits nothing: the element's own click handler returns before dispatching (TODO(behavior): action undefined in Figma \u2014 node 40001119:6600).",
-        "It is 74x67 while the rail's container constrains 74x74 (40001119:6599), so geometry-drift reports it \u2014 the same shape of finding the trace button has carried. Recorded, not smoothed over."
+        "Node carries no annotation, so the button emits nothing: the element's own click handler returns before dispatching (TODO(behavior): action undefined in Figma — node 40001119:6600).",
+        "It is 74x67 while the rail's container constrains 74x74 (40001119:6599), so geometry-drift reports it — the same shape of finding the trace button has carried. Recorded, not smoothed over."
       ]
+    },
+    {
+      "figmaName": "output-footer-area",
+      "figmaNodeId": "40001123:6689",
+      "litComponent": "output-footer-area",
+      "file": "frontend/src/components/lit/output-footer-area.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "iconArtwork": "verbatim",
+        "litComponent": "inferred",
+        "behavior": "inferred"
+      }
+    },
+    {
+      "figmaName": "output-header-area",
+      "figmaNodeId": "40001119:6308",
+      "litComponent": "chat-header",
+      "file": "frontend/src/components/lit/chat-header.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "iconArtwork": "verbatim",
+        "litComponent": "inferred",
+        "behavior": "inferred"
+      }
+    },
+    {
+      "figmaName": "output-conversations-area",
+      "figmaNodeId": "40001119:6317",
+      "litComponent": "chat-header",
+      "file": "frontend/src/components/lit/chat-header.ts",
+      "status": "built",
+      "annotations": [],
+      "provenance": {
+        "geometry": "verbatim",
+        "fills": "verbatim",
+        "typography": "verbatim",
+        "litComponent": "inferred",
+        "behavior": "inferred"
+      }
     }
   ]
 }
