@@ -32,18 +32,26 @@ export class CanvasFooter extends LitElement {
     /** True while the host's run is in flight — the play control is disabled, so a second
      *  press cannot start a second run. */
     running: { type: Boolean, reflect: true },
+    /** True while the host's SAVE is in flight — the save control shows a spinner and is
+     *  disabled until the host clears this. Set from the host's own save call (its
+     *  finally), never by a timer and never with a minimum display time: the owner,
+     *  2026-09-21 — "it's not got a spinner like the other buttons… to let the user know
+     *  it's doing something." */
+    saving: { type: Boolean, reflect: true },
     /** What the save control reads once the host has saved. Empty reads "Save". */
     savedLabel: { type: String, attribute: 'saved-label' },
   };
 
   declare theme: string;
   declare running: boolean;
+  declare saving: boolean;
   declare savedLabel: string;
 
   constructor() {
     super();
     this.theme = '';
     this.running = false;
+    this.saving = false;
     this.savedLabel = '';
   }
 
@@ -96,8 +104,10 @@ export class CanvasFooter extends LitElement {
        "canvas-save" #canvas-save — the secondary treatment.
          Data:     the package: its prompt and its last output
          On click: canvas-save {} — the host saves, and it may say when it last did
-         State:    idle | saved (the host sets `savedLabel` when it has just saved)
-         A11y:     an ordinary button; the label says what is saved
+         State:    idle | saving | saved (the host sets `saving` for exactly as long as
+                   the write is in flight, and `savedLabel` when it has just saved)
+         A11y:     an ordinary button; while saving it is disabled and its label reads
+                   "Saving…", so the state is spoken as well as drawn
     ─────────────────────────────────────────────────────────────────────────────── */
     return html`
       <div class="bar">
@@ -121,8 +131,11 @@ export class CanvasFooter extends LitElement {
           id="canvas-save"
           class="secondary"
           type="button"
+          ?disabled=${this.saving}
           @click=${() => this._emit('canvas-save', {})}
-        >${this.savedLabel || 'Save'}</button>
+        >${this.saving
+            ? html`<span class="spin" aria-hidden="true"></span>Saving…`
+            : this.savedLabel || 'Save'}</button>
         <slot></slot>
         <span class="tone">
           <button
@@ -173,6 +186,24 @@ export class CanvasFooter extends LitElement {
     .bar button.secondary {
       padding: 0 15px;
       font-size: 16px; font-weight: 700; color: #5A5A5A; background: #FFFFFF;
+    }
+    .bar button.secondary:disabled { opacity: 0.5; cursor: default; }
+
+    /* THE SAVE CONTROL'S SPINNER — the same mark the rest of the app uses for work in
+       flight, at the secondary's own grey. It turns only while the host reports saving;
+       under reduced motion it holds still as a partial ring, which still reads as
+       "working" without moving. */
+    .spin {
+      display: inline-block; width: 12px; height: 12px; margin-right: 8px;
+      border: 2px solid rgba(90, 90, 90, 0.3);
+      border-top-color: #5A5A5A;
+      border-radius: 50%;
+      vertical-align: -2px;
+      animation: canvas-footer-turn 700ms linear infinite;
+    }
+    @keyframes canvas-footer-turn { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .spin { animation: none; }
     }
 
     /* THE TONE SWITCH SITS WITH THE OTHER CONTROLS, AT THE LEFT — and that is not

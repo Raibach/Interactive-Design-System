@@ -44,6 +44,7 @@
 import { LitElement, html, css, nothing, svg } from 'lit';
 import { designTokens } from '@/shared/design-tokens';
 import { CREATABLE_KINDS, NODE_TILE, type FlowGraph, type FlowNode } from '@/shared/agentFlow';
+import canvasArt from '@/assets/agent-canvas-art.jpg';
 
 const LABEL_BLOCK = 54;
 /** How far the connection curve leaves a port before it bends. */
@@ -1049,6 +1050,11 @@ export class AgentFlow extends LitElement {
         @wheel=${this._onWheel}
         @keydown=${this._onKeyDown}
       >
+        <!-- THE ARTIST'S BACKDROP, BEHIND THE GRID: the dot field draws over it, and
+             the nodes draw over both. The image rides as an inline style because lit
+             rejects a string in the stylesheet above. -->
+        <div class="art" aria-hidden="true" style="background-image: url(${canvasArt});"></div>
+
         <div
           class="grid"
           style="background-position: ${this.panX}px ${this.panY}px; background-size: ${GRID * this.zoom}px ${GRID * this.zoom}px;"
@@ -1287,8 +1293,10 @@ export class AgentFlow extends LitElement {
         --flow-done-border: #3f5030;
         --flow-failed-border: #5a2f28;
         /* The owner, 2026-09-19: the dark canvas's dots a little lighter — #352c52 lifted a
-           step so the grid reads without competing with the nodes. */
-        --flow-dot: #403562;
+           step so the grid reads without competing with the nodes.
+           The owner, 2026-09-21: in the homepage's purple family, and a fifth less
+           opaque so the artwork behind them shows through. */
+        --flow-dot: rgba(107, 74, 158, 0.8);
       }
       .canvas {
         position: relative;
@@ -1297,6 +1305,8 @@ export class AgentFlow extends LitElement {
         overflow: hidden;
         outline: none;
         cursor: default;
+        /* The owner, 2026-09-21: no ground of its own again — the dark backdrop it sits
+           on shows through, and only the dots carry the purple. */
       }
       .canvas:focus-visible { outline: 2px solid var(--ds-teal); outline-offset: -2px; }
       /* GRABBING THE CANVAS MOVES IT — in either tool. The cursor says so, because a
@@ -1316,11 +1326,26 @@ export class AgentFlow extends LitElement {
         height: 100%; color: var(--ds-muted); font-size: var(--ds-fs-md);
       }
 
+      /* THE ART THE DOTS SIT ON. The owner, 2026-09-21: the canvas carries no ground of
+         its own, the artwork rides at FULL strength as the canvas's backdrop, and the
+         dot grid draws above it. Stretched edge to edge the way the console's own
+         ground is (100% by 100%, no repeat). The image URL is set on the element
+         itself in render: a string cannot be interpolated into this stylesheet (lit
+         refuses non-literal values here — measured 2026-09-21, the module threw). */
+      .art {
+        position: absolute; inset: 0;
+        background-size: 100% 100%;
+        background-repeat: no-repeat;
+        background-position: top left;
+        opacity: 1;
+        pointer-events: none;
+      }
+
       /* The dot grid is drawn, not transformed, so it never blurs and never has to
          be a huge element: only its spacing and offset follow the view. */
       .grid {
         position: absolute; inset: 0;
-        background-image: radial-gradient(var(--flow-dot) 1.3px, transparent 1.3px);
+        background-image: radial-gradient(var(--flow-dot) 2.1px, transparent 2.1px);
         background-repeat: repeat;
       }
 
@@ -1360,7 +1385,9 @@ export class AgentFlow extends LitElement {
         text-align: center;
       }
       .node:active { cursor: grabbing; }
-      .node.sel .tile { box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 6px var(--ds-teal); }
+      /* The owner, 2026-09-21: selecting a node keeps its drop shadow — the ring and
+         the lift are both on this rule, or the second one silently cancels the other. */
+      .node.sel .tile { box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 6px var(--ds-teal), 0 6px 16px rgba(0, 0, 0, 0.35); }
       .node:focus-visible .tile { outline: 2px solid var(--ds-teal); outline-offset: 3px; }
 
       .tile {
@@ -1373,6 +1400,8 @@ export class AgentFlow extends LitElement {
         border: 2px solid var(--ds-rule);
         color: var(--ds-text-strong);
         box-sizing: border-box;
+        /* The owner, 2026-09-21: the tiles lift off the artwork behind them. */
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
       }
       /* The families read apart in GREYSCALE: a note is square-ish and light, a seat
          is rounder and tinted, a step carries the darker frame. Colour only sharpens

@@ -24,6 +24,12 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // The owner, 2026-09-21: the local site is served from source, so Vite resolved
+    // Lit's DEVELOPMENT build and every load printed "Lit is in dev mode. Not
+    // recommended for production!". Pinning the production condition takes that
+    // build out of the dev server too. React's own dev/prod choice rides on
+    // process.env.NODE_ENV, which this does not touch.
+    conditions: ['module', 'browser', 'production'],
   },
   build: {
     // Generate hidden source maps — Sentry needs these to de-minify stack traces.
