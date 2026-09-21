@@ -508,6 +508,21 @@ export default function Index({
   const consoleRendererRef = useRef<any>(null);
   const composerRendererRef = useRef<any>(null);
 
+  // Preload both surface backgrounds at mount so a transition never paints a
+  // half-decoded image in sections. The browser fetches and decodes them eagerly
+  // here, into cache, before the first console→composer swap. decode() is the part
+  // that matters: setting .src only queues the fetch — a busy/oversized image (the
+  // composer background ships as a photographic JPEG) can still be mid-decode when
+  // the swap paints, which reads as "the background is still loading". Awaiting
+  // decode() finishes that work up front so the paint is instant.
+  useEffect(() => {
+    for (const src of [consoleBackground, composerBackground]) {
+      const img = new Image();
+      img.src = src;
+      if (img.decode) img.decode().catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     const el = consoleRendererRef.current;
     if (!el) return;
