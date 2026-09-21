@@ -23,7 +23,7 @@ import LeftVerticalMenu from "@/components/LeftVerticalMenu";
 import LeftColumnHeader from "@/components/LeftColumnHeader";
 import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
-import consoleBackground from "@/assets/data-wave2.jpg";
+import consoleBackground from "@/assets/data-wave3.png";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 // InteractiveChatInterface is RETIRED — archived, not deleted, at
 // retired-files/console-seat-20260917/InteractiveChatInterface.tsx. The console's
@@ -4619,12 +4619,12 @@ export default function Index({
                      the live request via isAIAssembling, one true sentence.
                      No scripted message rotation, no fake progress bar,
                      no artificial minimum display time. */}
-                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? '#071440' : '#E5E1DD', paddingBottom: '200px', ...(isConsoleView ? { backgroundImage: `linear-gradient(rgba(7, 20, 64, 0.552), rgba(7, 20, 64, 0.552)), url(${consoleBackground})`, backgroundSize: '100% calc(100% - 150px)', backgroundRepeat: 'no-repeat', backgroundPosition: 'left 150px' } : {}) }}>
+                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? '#582846' : '#E5E1DD', paddingBottom: '200px', ...(isConsoleView ? { backgroundImage: `linear-gradient(rgba(88, 40, 70, 0.15), rgba(88, 40, 70, 0.15)), url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' } : {}) }}>
                   <div className="w-8 h-8 border-4 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
                   <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
-                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#160F39', backgroundImage: `linear-gradient(rgba(22, 15, 57, 0.25), rgba(22, 15, 57, 0.25)), url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#582846', backgroundImage: `linear-gradient(rgba(88, 40, 70, 0.15), rgba(88, 40, 70, 0.15)), url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
                   {/* A FAILED ASSEMBLY MUST SAY SO, IN THE SLOT THAT IS SHOWN.
                       The full failure pane lives in slot="workspace", and the sandbox
                       projects ONE slot — so a console failure wrote its message into
@@ -4689,7 +4689,7 @@ export default function Index({
                 {/* slot="workspace" — AI-driven Lit tree (A2UI v0.9.1).
                     Slots are the loading contract. AI fills them with prompt blocks.
                     When assembly FAILS, show the error — no hiding. */}
-                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#271E53' }}>
+                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `linear-gradient(rgba(88, 40, 70, 0.15), rgba(88, 40, 70, 0.15)), url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
                   {aiAssemblyFailed ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
                       {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc
