@@ -448,14 +448,14 @@ export class ChatNavigationBar extends LitElement {
       height: 100%;
       width: 74px;
       /* Figma "chat-main-menu-vert" #40001066:4301, verbatim: radius 10px 0 0 0,
-         shadow -4px 4px 10px rgba(0,0,0,.25), "blue gradient" at 181deg. */
+         shadow -4px 4px 10px rgba(0,0,0,.25), gradient 180deg (#231A4B → #37356F → #2F0A45). */
       border-radius: 10px 0px 0px 0px;
       box-shadow: -4px 4px 10px 0px rgba(0, 0, 0, 0.25);
       background-image: linear-gradient(
-        181deg,
-        rgba(28, 47, 78, 1) 0%,
-        rgba(27, 80, 145, 1) 38%,
-        rgba(13, 48, 91, 1) 100%
+        180deg,
+        rgba(35, 26, 75, 1) 0%,
+        rgba(55, 53, 111, 1) 51%,
+        rgba(47, 10, 69, 1) 100%
       );
       overflow: hidden;
     }
