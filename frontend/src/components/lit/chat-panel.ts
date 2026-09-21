@@ -45,7 +45,11 @@ import './chat-messages';
 import './small-dropdown';
 import './chat-input';
 import './chat-action-bar';
-import './chat-footer';
+import historyIcon from '@/assets/figma-chat-history-icon.svg';
+// THE READOUT'S MODEL MARK, handed in by the instance that draws it: the file's own node is
+// #40001124:7096 and its size moved to 20 in the drawing (2026-09-20).
+import readoutModelMark from '@/assets/figma-readout-model-mark.svg';
+import './chat-plugin-tray';
 import './error-banner';
 import './chat-navigation-bar';
 import './prompt-input/prompt-textarea';
@@ -555,29 +559,76 @@ export class ChatPanel extends LitElement {
   private _barHeight = 82;
   private _footerHeight = 142;
 
+  /**
+   * WHAT THE TRAY'S MARKS REPORT AS PLACED — the windows the output area above is
+   * actually showing. The drawing's own state dims "chat history" for exactly one
+   * reason (the owner, 2026-09-20): "the reason it's deactivated in the bottom footer is
+   * because the conversations are being displayed at the top." This panel draws the
+   * Conversations bar at the top of the output unconditionally, so that is the truth it
+   * hands the tray. When the stack exists and the user composes it, this reads the stack
+   * instead — until then it says what is really on screen rather than guessing.
+   */
+  /**
+   * WHICH OUTPUT WINDOWS ARE SHOWING. The conversations window leads, so conversations
+   * starts in the list. The footer mark toggles a window in and out; the control inside a
+   * window removes that window. Both arrive as events carrying the window name, so this
+   * element holds the list and the drawing follows.
+   */
+  private _outputWindows: string[] = ['conversations'];
+
+  private _onOutputWindow(e: Event) {
+    const d = ((e as CustomEvent).detail || {}) as { window?: string };
+    const id = String(d.window || '');
+    if (!id) return;
+    const showing = this._outputWindows.includes(id);
+    const next = e.type === 'toggle-output-window' ? !showing : false;
+    this._outputWindows = next
+      ? [...this._outputWindows, id]
+      : this._outputWindows.filter((w) => w !== id);
+    this.requestUpdate();
+  }
+
+  /** A window's tray label, so the footer mark reads as placed while that window is up. */
+  private get _trayPlaced(): string {
+    return this._outputWindows.map((w) => (w === 'conversations' ? 'chat history' : w)).join(',');
+  }
+
   private _onResizeStart(e: Event) {
     const d = (e as CustomEvent).detail || {};
     this._dragStartY = typeof d.startY === 'number' ? d.startY : 0;
     this._dragStartHeight = this.inputHeight || 100;
     const bar = this.renderRoot?.querySelector('chat-action-bar') as HTMLElement | null;
-    const footer = this.renderRoot?.querySelector('chat-footer') as HTMLElement | null;
+    // THE TRAY, not <chat-footer>: the drawing's foot replaces it, so the bar the input
+    // height must reserve is the tray's block — the design's own 97px (#40001123:6689),
+    // which is what the fallback carries if the element is not up yet.
+    const footer = this.renderRoot?.querySelector('chat-plugin-tray') as HTMLElement | null;
     this._barHeight = bar?.getBoundingClientRect().height || 82;
-    this._footerHeight = footer?.getBoundingClientRect().height || 142;
+    this._footerHeight = footer?.getBoundingClientRect().height || 97;
   }
 
   private _onResizeMove(e: Event) {
     const d = (e as CustomEvent).detail || {};
     if (typeof d.clientY !== 'number') return;
-    const deltaY = this._dragStartY - d.clientY;
-    // The cap must RESERVE the bar, the footer, and the output floor, so a big
-    // drag shrinks the output region instead of stretching the panel and
-    // dragging the footer along.
+    // THE HEIGHT THE HAND IS ASKING FOR — read from the POINTER, never from how far it has
+    // travelled. This is the owner's rule for every gripper here (TO-DO.md item 1: "I have to
+    // use the cursor"), and the same rule `workspace-layout._rightPxFromPointer` already
+    // follows for the width. A height computed as `start + travel` drifts from the hand the
+    // moment anything reflows — the cap below clamps, the pane resizes, the footer
+    // re-measures — and the edge ends up somewhere the cursor is not, for the rest of the drag.
+    //
+    // The input area sits above the footer and below this bar, so its floor is the host's
+    // bottom edge less the footer. The pointer IS the top edge.
+    //
+    // The cap must RESERVE the bar, the footer, and the output floor, so a big drag shrinks
+    // the output region instead of stretching the panel and dragging the footer along.
     const dynamicMax = this.clientHeight > 0
       ? Math.max(100, this.clientHeight - this._barHeight - this._footerHeight - 120)
       : 600;
+    const floor = this.getBoundingClientRect().bottom - this._footerHeight;
+    const wanted = floor - d.clientY;
     this.inputHeight = Math.max(
       100,
-      Math.min(Math.min(600, dynamicMax), this._dragStartHeight + deltaY),
+      Math.min(Math.min(600, dynamicMax), wanted),
     );
   }
 
@@ -599,7 +650,7 @@ export class ChatPanel extends LitElement {
        * thread and the view slot both carry overflow-y: auto — so this box is not a
        * scroll container and has no overflow to contain.
        */
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
       font-size: 14px;
       color: #1c2f4e;
     }
@@ -750,13 +801,12 @@ export class ChatPanel extends LitElement {
       padding-top: 5px;
     }
     chat-header { flex-shrink: 0; }
-    /* THE LEADING BLOCK'S TOP IS DEEPER — 20px, the drawing's own value for the first block
-       ("output-header-area" #40001119:6308: padding 20px 20px 2px; every later block is the
-       template's 10px). Written as :first-child rather than set per block, so it follows
-       whatever is actually at the top: when the status bar draws nothing the conversations
-       bar leads, and it takes the 20 (owner, 2026-09-19: "the top padding is off… it's very
-       tight and close to the top"). The card is never first — two bars always precede it. */
-    .chat-output-wrapper > chat-header:first-child { --block-pad-top: 20px; }
+    /* THE LEADING BLOCK'S TOP IS THE DRAWING'S OWN — #40001119:6308 says 16 (it said 20
+       before the file moved, 2026-09-20), and every later block takes 6. It is marked on the
+       instance that leads (the readout passes variant="lead") rather than left in a custom
+       property: the value check compares what it can read, and a var() was a value neither it
+       nor a reader could hold against the file. */
+    .chat-output-wrapper > chat-header:first-child { --block-pad-top: 16px; }
     /* THE CARD IS BOUNDED BY THE REGION, AND THAT IS WHAT MAKES THE THREAD SCROLL.
        It GROWS to fill what the bars leave (a short thread still fills the region, the
        design's own view) and it SHRINKS no further than the region allows — flex 1 1 auto
@@ -1000,6 +1050,7 @@ export class ChatPanel extends LitElement {
     chat-action-bar { flex-shrink: 0; }
     chat-input { flex-shrink: 0; }
     chat-footer { flex-shrink: 0; }
+    chat-plugin-tray { flex-shrink: 0; }
     /* A seat handed over by the host fills the column. The empty modifier is display:none rather
        than a zero-height box on purpose: an empty flex child with flex-grow would take the space
        the element's own pieces are supposed to have. */
@@ -1171,6 +1222,7 @@ export class ChatPanel extends LitElement {
    * is still the first child, and the leading block is the one that carries the drawing's
    * deeper top padding (see the note in the template).
    */
+
   private get _hasStatusLine(): boolean {
     return Boolean(
       this.statusText || this.status || this.sessionLabel || this.sessionName || this.duration || this.qaScore,
@@ -2463,23 +2515,27 @@ ${workspaceContext}`;
             <div class="panel ${this.collapsed ? 'collapsed' : ''}">
               <!-- The listener sits on the WRAPPER so it hears conversation-select
                    from the Conversations dropdown below and from the thread. -->
-              <div class="chat-output-wrapper" @conversation-select=${this._onConversationSelect}>
+              <div class="chat-output-wrapper" @conversation-select=${this._onConversationSelect}
+                     @toggle-output-window=${this._onOutputWindow}
+                     @remove-output-window=${this._onOutputWindow}>
                 <!-- THE STATUS BLOCK IS ABSENT WHEN IT HAS NOTHING TO SAY, not merely empty.
                      chat-header draws nothing inside such a block, but the ELEMENT would still
                      be there — and it is :first-child, so the leading block's deeper top
                      padding (20px, the drawing's own value for the first block) landed on an
                      empty box while the bar below it kept 10 and sat tight against the top
                      (owner, 2026-09-19). Absent, the block after it leads and takes the 20. -->
-                ${this._hasStatusLine
-                  ? html`<chat-header
-                      status-text=${this.statusText ?? ''}
-                      status=${this.status ?? ''}
-                      session-label=${this.sessionLabel ?? ''}
-                      session-name=${this.sessionName ?? ''}
-                      duration=${this.duration ?? ''}
-                      qa-score=${this.qaScore ?? ''}
-                    ></chat-header>`
-                  : nothing}
+                <!-- THE TOP PANEL IS ALWAYS DRAWN — it is the first block of the output
+                     area in v.4b (#40001119:6308), not a conditional one. It was gated on
+                     _hasStatusLine, so a seat with no status text lost the block entirely
+                     and the Conversations bar took the top. The owner, 2026-09-20: "you
+                     left out the top panel." The drawing stacks four blocks and the status
+                     line is the first of them; whether it HAS anything to say is
+                     chat-header's business, not whether the block exists.
+                     THE TOKEN READOUT LIVES HERE NOW, not in the foot: the owner,
+                     2026-09-20: "The top panel contains Tokens: 0, it doesn't go into
+                     footer anymore." The drawing's status line is the readout line — the
+                     numbers are joined into it by chat-header, which is where the navy
+                     bar's readouts went when it was replaced. -->
                 <!-- THE OTHER TWO BARS, AS v.4b DRAWS THEM. The wireframe stacks three
                      single-line bars above the response card — the session status
                      (#40001119:6309), "23 Conversations" (#40001119:6318) and
@@ -2496,7 +2552,23 @@ ${workspaceContext}`;
                      one: click (or Enter/Space) to open it, and the rows below come from the same
                      read as the count — the package's own conversations, ARCHIVED ONES INCLUDED,
                      which is how a conversation this seat archived stays reachable. -->
-                <chat-header
+                <!-- THE CONVERSATIONS BAR'S OWN LAYERS, from the file: the block 40001119:6317
+                     holds #40001126:2014 (500x7, centred), its row #40001126:2015, and five
+                     dots #40001126:2016-2020. Each copy of this bar carries its own ids.
+                     RE-POINTED: the designer re-drew this gripper, so the file deleted
+                     40001123:6765-6771 and created the same layer under new ids — same name,
+                     same size, same place in the block. The markers follow the layer the file
+                     draws today; a marker left on a dead id claims nothing and compares
+                     nothing. (The re-draw also dropped the gold accent dot: all five now carry
+                     the one stroke, as the readout's five already did.) -->
+                <output-header
+                  line=${this._statusLine}
+                  ?attributed=${attributed}
+                  tokens=${String((usage.totalTokens as number) ?? 0)}
+                  calls=${String((usage.calls as number) ?? 0)}
+                ></output-header>
+                ${this._outputWindows.includes('conversations')
+                  ? html`<chat-header
                   status-text=${(() => {
                     const n = this._conversationRows?.length ?? (this.conversations ?? []).length;
                     // The drawing's copy is "23 Conversations"; one of them is one conversation.
@@ -2506,9 +2578,20 @@ ${workspaceContext}`;
                   tabindex="0"
                   aria-expanded=${this._conversationsOpen ? 'true' : 'false'}
                   aria-label="Show this package's conversations"
+                  icon=${historyIcon}
+                  icon-node="40001123:6745"
+                  icon-size="22"
+                  block-node="40001119:6317"
+                  bar-node="40001119:6318"
+                  text-node="40001123:6744"
+                  grip-node="40001126:2014"
+                  grip-row-node="40001126:2015"
+                  grip-dots="40001126:2016,40001126:2017,40001126:2018,40001126:2019,40001126:2020"
+                  dm-sans
                   @click=${this._toggleConversations}
                   @keydown=${this._onConversationsKey}
-                ></chat-header>
+                ></chat-header>`
+                  : nothing}
                 ${this._conversationsOpen
                   ? html`<div class="output-slot">
                       <ul class="conversation-list">${this._conversationRowsForList()}</ul>
@@ -2528,9 +2611,6 @@ ${workspaceContext}`;
                       </div>
                     `
                   : nothing}
-                <chat-header
-                  status-text=${`${this._inspectionReports.length} Ready for approval`}
-                ></chat-header>
                 <!-- THE 1px RULE THAT WAS HERE IS GONE WITH ITS NODE. v.4b draws no
                      rule between the output blocks — they are #CBE6E3 grounds separated
                      by their own 2px — so the old "chat-output-spacer-slot-area"
@@ -2689,15 +2769,17 @@ ${workspaceContext}`;
                     @value-input=${this._onDraftInput}
                   ></prompt-textarea>
                 </chat-input>
-                <chat-footer
-                  .unattributed=${!attributed}
-                  .tokens=${(usage.totalTokens as number) ?? 0}
-                  .inTokens=${(usage.inTokens as number) ?? 0}
-                  .outTokens=${(usage.outTokens as number) ?? 0}
-                  .calls=${(usage.calls as number) ?? 0}
-                  .lastCall=${(usage.lastCall as string) ?? ''}
+                <!-- THE TRAY IS v.4b's FOOT. The navy <chat-footer> that stood here is
+                     REPLACED: the drawing does not draw it, and the owner's ruling is that
+                     the drawing is the truth — "If the design doesn't draw it, then it's
+                     been replaced. This is the new truth replace it." Its token readouts are
+                     a live FUNCTION, and a function does not leave with a drawing, so they
+                     move onto this bar and take its treatment — the same move that put them
+                     on the navy bar when the #CFD7D5 bar it replaced went away. -->
+                <chat-plugin-tray
+                  .placed=${this._trayPlaced}
                   @conversation-new=${this._onConversationNew}
-                ></chat-footer>
+                ></chat-plugin-tray>
               </div>
             </div>
           `}

@@ -146,10 +146,12 @@ async def api_health():
 
 
 # ── Catalog health — the report the console chat shows on load ─────────────
-# Reads the findings written by frontend/scripts/catalog-check.mjs.
 #
-# FAIL LOUD. A missing report is a 503, never an empty list: "no findings" and
-# "the checker never ran" must not look the same to the person relying on this.
+# The checker that used to write these reports (frontend/scripts/catalog-check.mjs)
+# was removed with the rest of the governance tooling, so this directory is no
+# longer produced by anything. FAIL LOUD is kept as-is: a missing report is a 503,
+# never an empty list — "no findings" and "the checker never ran" must not look the
+# same to the person relying on this.
 
 _CATALOG_AUDIT_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "catalog-audit")
@@ -158,7 +160,7 @@ DEFAULT_CATALOG = "prompt-composer"
 
 
 def _read_catalog_audit(catalog: str) -> dict:
-    """Read one pipeline's audit report. 503 when the checker has not run."""
+    """Read one pipeline's audit report. 503 when no report is present."""
     path = os.path.join(_CATALOG_AUDIT_DIR, f"{catalog}.json")
     if not os.path.exists(path):
         raise HTTPException(
@@ -166,7 +168,7 @@ def _read_catalog_audit(catalog: str) -> dict:
             detail={
                 "error": "CATALOG_AUDIT_UNAVAILABLE",
                 "message": f"No audit report for pipeline '{catalog}'. This is NOT a clean result.",
-                "remedy": f"cd frontend && node scripts/catalog-check.mjs --catalog {catalog}",
+                "remedy": "The catalog checker was removed from this project; no report is produced.",
                 "expected_at": path,
             },
         )
@@ -179,7 +181,7 @@ def _read_catalog_audit(catalog: str) -> dict:
             detail={
                 "error": "CATALOG_AUDIT_UNREADABLE",
                 "message": f"{type(_e).__name__}: {_e}",
-                "remedy": "Re-run: cd frontend && node scripts/catalog-check.mjs",
+                "remedy": "The catalog checker was removed from this project; no report is produced.",
                 "expected_at": path,
             },
         )
@@ -187,7 +189,7 @@ def _read_catalog_audit(catalog: str) -> dict:
 
 @router.get("/api/catalog/audit")
 async def api_catalog_audit():
-    """The default pipeline's catalog health. 503 when the checker has not run."""
+    """The default pipeline's catalog health. 503 when no report is present."""
     return _read_catalog_audit(DEFAULT_CATALOG)
 
 

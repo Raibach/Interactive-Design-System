@@ -1,0 +1,116 @@
+{
+  "capture": "prompt-accordion",
+  "nodeId": "40000909:3998",
+  "sealedAt": "2026-09-20",
+  "compared": 23,
+  "values": {
+    "40000909:3998.itemSpacing": {
+      "file": 10,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3998.padding": {
+      "file": "{\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3998.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3998.width": {
+      "file": 547,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3998.height": {
+      "file": 43,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.fill": {
+      "file": "rgba(255,255,255,1)",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.cornerRadius": {
+      "file": 6,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.itemSpacing": {
+      "file": 53,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.padding": {
+      "file": "{\"paddingLeft\":18,\"paddingRight\":18,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.width": {
+      "file": 337,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.height": {
+      "file": 43,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:3999.color": {
+      "file": "rgba(255,255,255,1)",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4005.fill": {
+      "file": "rgba(255,255,255,1)",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4005.cornerRadius": {
+      "file": 6,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4005.padding": {
+      "file": "null",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4005.width": {
+      "file": 177.04,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4005.height": {
+      "file": 43,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4005.color": {
+      "file": "rgba(255,255,255,1)",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.fill": {
+      "file": "rgba(139,139,139,1)",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.padding": {
+      "file": "null",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.width": {
+      "file": 165,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.height": {
+      "file": 43,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.fontFamily": {
+      "file": "Inter",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.fontSize": {
+      "file": 16,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.lineHeight": {
+      "file": "AUTO",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000909:4006.color": {
+      "file": "rgba(139,139,139,1)",
+      "source": "prompt-input/prompt-input-section.ts"
+    }
+  }
+}

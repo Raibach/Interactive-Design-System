@@ -65,6 +65,8 @@ import "@/components/lit/error-banner";
 // into DOM — without this import the <a2ui-renderer> tag in WritingAreaIndex is
 // an unknown element and renders as an empty inline box, silently.
 import "@/components/lit/a2ui-renderer";
+import "@/components/lit/output-header";
+import "@/components/lit/output-footer-area";
 
 // ── Production Sentry guard ──────────────────────────────────────────────────
 if (import.meta.env.PROD && !isSentryReady()) {

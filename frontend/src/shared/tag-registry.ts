@@ -733,6 +733,117 @@ export const TAG_REGISTRY = {
   },
 
   // Composer — Right Column / Both
+  // THE OUTPUT PANEL — one element drawing every block of the output area. The drawing
+  // stacks four of them (#40001119:6308 the readout, #40001119:6317 the conversations,
+  // #40001123:6978 the approvals, #40001119:6326 the response card), each with its own
+  // annotation; this element draws the shell they share, and the figma map carries one
+  // row per block so a finding names the panel the drawing names.
+  'chat-header': {
+    tag: 'chat-header',
+    surface: 'both',
+    column: 'right',
+    description:
+      'One block of the chat column output area: the card, and on a bar the grip row under the card. Draws the readout line — the seat status joined with the usage figures — and the model mark at the card trailing edge. Dispatches no events of its own: a block is a readout, and the controls a bar carries belong to its host.',
+    props: {
+      statusText: { type: 'string', optional: true },
+      status: { type: 'string', optional: true },
+      sessionLabel: { type: 'string', optional: true },
+      sessionName: { type: 'string', optional: true },
+      duration: { type: 'string', optional: true },
+      qaScore: { type: 'string', optional: true },
+      card: { type: 'boolean', default: false },
+      tokens: { type: 'number', optional: true },
+      inTokens: { type: 'number', optional: true },
+      outTokens: { type: 'number', optional: true },
+      calls: { type: 'number', optional: true },
+      lastCall: { type: 'string', optional: true },
+      unattributed: { type: 'boolean', optional: true },
+    },
+    events: [],
+    constraints: [
+      'the usage figures belong to the readout panel alone — a bar the host gives no figure to shows its text and nothing else',
+      'the readout panel is sticky: always drawn, never removed, never moved',
+    ],
+  },
+
+  'output-header': {
+    tag: 'output-header',
+    surface: 'both',
+    column: 'right',
+    description:
+      'The readout block — Figma 40001119-6308, drawn above the conversations bar. The seat status line, the usage figures it is handed, the model mark at the trailing edge, and its own gripper.',
+    props: {
+      line: { type: 'string', optional: true },
+      attributed: { type: 'boolean', optional: true },
+      tokens: { type: 'string', optional: true },
+      calls: { type: 'string', optional: true },
+    },
+    events: [],
+    constraints: [
+      'Data: the readout line — the seat\'s own status, and the usage figures it is handed: tokens, calls',
+      'Source: the seat\'s conversation; never another scope\'s totals',
+      'State: always drawn — the leading block of the output area; never moved',
+      'A11y: role="status"',
+      'Failure: a seat that cannot resolve its own conversation reads "unattributed"',
+    ],
+    layers: [
+      { nodeId: '40001119:6308', name: "output-header", type: 'FRAME', size: '540 × 83' },
+      { nodeId: '40001119:6309', name: "chat-output-readout-area", type: 'FRAME', size: '500 × 55' },
+      { nodeId: '40001123:6763', name: "textarea", type: 'FRAME', size: '450 × 40' },
+      { nodeId: '40001123:6750', name: "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text", type: 'TEXT', size: '450 × 43' },
+      { nodeId: '40001124:7096', name: "model-readout-tokens-etc", type: 'IMAGE-SVG', size: '20 × 20' },
+      { nodeId: '40001124:7442', name: "model-icon", type: 'FRAME', size: '18.75 × 17.5  (carried by export)' },
+      { nodeId: '40001124:7097', name: "Vector", type: 'VECTOR', size: '18.75 × 17.5  (carried by export)' },
+      { nodeId: '40001123:6773', name: "gripper-prompt-input-chat-menu", type: 'FRAME', size: '500 × 7' },
+      { nodeId: '40001123:6774', name: "Meatballs", type: 'FRAME', size: '480 × 4.05' },
+      { nodeId: '40001123:6775', name: "Ellipse 209", type: 'ELLIPSE', size: '2.16 × 2.05' },
+      { nodeId: '40001123:6776', name: "Ellipse 210", type: 'ELLIPSE', size: '2.16 × 2.05' },
+      { nodeId: '40001123:6777', name: "Ellipse 207", type: 'ELLIPSE', size: '2.16 × 2.05' },
+      { nodeId: '40001123:6778', name: "Ellipse 206", type: 'ELLIPSE', size: '2.16 × 2.05' },
+      { nodeId: '40001123:6779', name: "Ellipse 208", type: 'ELLIPSE', size: '2.16 × 2.05' },
+    ],
+  },
+
+  'output-footer-area': {
+    tag: 'output-footer-area',
+    surface: 'both',
+    column: 'right',
+    description:
+      'The footer block — Figma 40001123-6689. The output column\'s closing shell: the Active/Plugins control, the four 32x32 panel marks, the credit line in its own button, and the block\'s own gripper. This is where the plug-in tool bar loads; the drawing\'s default view shows the first five tools.',
+    props: {
+      credit: { type: 'string', optional: true },
+      pluginLabel: { type: 'string', optional: true },
+      historySelected: { type: 'boolean', optional: true },
+      gripEnabled: { type: 'boolean', optional: true },
+    },
+    events: [],
+    constraints: [
+      'The gripper pulls the window and everything above it up, expanding the section below — it has a limit the drawing does not yet define',
+      'chat history is drawn deactivated in appearance but really selected: the history appears above in the output as an insert section',
+      'Both buttons carry "On click: dispatch URL (http://raibach.net) / launch save check before leaving application" — the host owns the action, this element draws it',
+      'The credit line is Arial Rounded MT Bold 9px, below the 13px type floor — flagged, drawn as the file states it',
+    ],
+    layers: [
+      { nodeId: '40001123:6689', name: "output-footer-area", type: 'FRAME', size: 'col · gap 7 · pad 10/20/20/20' },
+      { nodeId: '40001123:6692', name: "gripper-prompt-input-chat-menu", type: 'FRAME', size: '7 tall · pad 0/10' },
+      { nodeId: '40001123:6693', name: "Meatballs", type: 'IMAGE-SVG', size: '24.649 × 4.051 · rotate 180' },
+      { nodeId: '40001124:7035', name: "forum 1", type: 'IMAGE-SVG', size: '32 × 32 · fill #3D515B' },
+      { nodeId: '40001123:6728', name: "chat history", type: 'IMAGE-SVG', size: '32 × 32 · fill #507274' },
+      { nodeId: '40001123:6732', name: "add-new-conversation", type: 'IMAGE-SVG', size: '32 × 32 · fill #3D515B' },
+      { nodeId: '40001123:6724', name: "user--feedback 1", type: 'IMAGE-SVG', size: '32 × 32 · fill #3D515B' },
+      { nodeId: '40001123:6690', name: "chat-output-footer", type: 'FRAME', size: '500 · radius 8 · 2 inset shadows' },
+      { nodeId: '40001123:6722', name: "", type: 'FRAME', size: 'row · gap 9' },
+      { nodeId: '40001123:6723', name: "", type: 'FRAME', size: '307 · row · gap 20' },
+      { nodeId: '40001123:6829', name: "", type: 'FRAME', size: '54 · row' },
+      { nodeId: '40001123:6830', name: "Function - loads cards form console in prompt area", type: 'FRAME', size: '54 · radius 6 · 2 drop shadows' },
+      { nodeId: '40001123:6831', name: "btn-label", type: 'FRAME', size: 'col' },
+      { nodeId: '40001123:6832', name: "Active / Plugins", type: 'TEXT', size: '58 · Arial Rounded MT Bold 12px #3D515B' },
+      { nodeId: '40001123:6738', name: "Function - loads cards form console in prompt area", type: 'FRAME', size: '156 · radius 6 · 2 drop shadows' },
+      { nodeId: '40001123:6739', name: "btn-label", type: 'FRAME', size: '156 × 35' },
+      { nodeId: '40001123:6740', name: "Created by John Travis Holt / Raibach.net © 2026 Raibach IDS", type: 'TEXT', size: 'Arial Rounded MT Bold 9px / 12px #3D515B right-bottom' },
+    ],
+  },
+
   'chat-panel': {
     tag: 'chat-panel',
     surface: 'both',

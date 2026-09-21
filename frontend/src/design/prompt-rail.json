@@ -1,0 +1,327 @@
+{
+  "_capture": {
+    "scope": "prompt-rail",
+    "nodeId": "40000880:270",
+    "name": "right-panel-horiz-tab",
+    "fileKey": "20UPR2KQMsbAxlo5NJb1se",
+    "source": "Figma REST /v1/files/{key}/nodes (geometry=paths) — every node, every style field",
+    "captured": "2026-09-20",
+    "layers": 20,
+    "deepestLevel": 3
+  },
+  "result": {
+    "nodes": [
+      {
+        "id": "40000880:270",
+        "name": "right-panel-horiz-tab",
+        "type": "FRAME",
+        "w": 39,
+        "h": 962,
+        "layout": "VERTICAL",
+        "pad": {
+          "paddingLeft": 0,
+          "paddingRight": 0,
+          "paddingTop": 0,
+          "paddingBottom": 0
+        },
+        "gap": 10,
+        "sizingH": "FIXED",
+        "sizingV": "FIXED",
+        "parent": null,
+        "depth": 0,
+        "children": [
+          "40000941:23177",
+          "40000746:13",
+          "40000746:14",
+          "40000881:399"
+        ]
+      },
+      {
+        "id": "40000941:23177",
+        "name": "gripper-prompt-input",
+        "type": "INSTANCE",
+        "w": 40,
+        "h": 40,
+        "layout": "HORIZONTAL",
+        "pad": {
+          "paddingLeft": 10,
+          "paddingRight": 10,
+          "paddingTop": 8,
+          "paddingBottom": 8
+        },
+        "gap": 10,
+        "primaryAlign": "CENTER",
+        "counterAlign": "CENTER",
+        "sizingH": "FIXED",
+        "sizingV": "FIXED",
+        "fill": "rgba(255,255,255,1)",
+        "parent": "40000880:270",
+        "depth": 1,
+        "children": [
+          "I40000941:23177;40001010:25333"
+        ]
+      },
+      {
+        "id": "I40000941:23177;40001010:25333",
+        "name": "Meatballs",
+        "type": "INSTANCE",
+        "w": 17,
+        "h": 21,
+        "sizingH": "FIXED",
+        "sizingV": "FIXED",
+        "parent": "40000941:23177",
+        "depth": 2,
+        "children": [
+          "I40000941:23177;40001010:25333;40001010:25325",
+          "I40000941:23177;40001010:25333;40001010:25326",
+          "I40000941:23177;40001010:25333;40001010:25327",
+          "I40000941:23177;40001010:25333;40001010:25328",
+          "I40000941:23177;40001010:25333;40001010:25329",
+          "I40000941:23177;40001010:25333;40001010:25330"
+        ]
+      },
+      {
+        "id": "I40000941:23177;40001010:25333;40001010:25325",
+        "name": "Ellipse 206",
+        "type": "ELLIPSE",
+        "w": 2.05,
+        "h": 2.16,
+        "stroke": "rgba(126,114,227,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "I40000941:23177;40001010:25333",
+        "depth": 3
+      },
+      {
+        "id": "I40000941:23177;40001010:25333;40001010:25326",
+        "name": "Ellipse 207",
+        "type": "ELLIPSE",
+        "w": 2.05,
+        "h": 2.16,
+        "stroke": "rgba(126,114,227,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "I40000941:23177;40001010:25333",
+        "depth": 3
+      },
+      {
+        "id": "I40000941:23177;40001010:25333;40001010:25327",
+        "name": "Ellipse 208",
+        "type": "ELLIPSE",
+        "w": 2.05,
+        "h": 2.16,
+        "stroke": "rgba(126,114,227,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "I40000941:23177;40001010:25333",
+        "depth": 3
+      },
+      {
+        "id": "I40000941:23177;40001010:25333;40001010:25328",
+        "name": "Ellipse 206",
+        "type": "ELLIPSE",
+        "w": 2.05,
+        "h": 2.16,
+        "stroke": "rgba(126,114,227,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "I40000941:23177;40001010:25333",
+        "depth": 3
+      },
+      {
+        "id": "I40000941:23177;40001010:25333;40001010:25329",
+        "name": "Ellipse 207",
+        "type": "ELLIPSE",
+        "w": 2.05,
+        "h": 2.16,
+        "stroke": "rgba(126,114,227,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "I40000941:23177;40001010:25333",
+        "depth": 3
+      },
+      {
+        "id": "I40000941:23177;40001010:25333;40001010:25330",
+        "name": "Ellipse 208",
+        "type": "ELLIPSE",
+        "w": 2.05,
+        "h": 2.16,
+        "stroke": "rgba(126,114,227,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "I40000941:23177;40001010:25333",
+        "depth": 3
+      },
+      {
+        "id": "40000746:13",
+        "name": "Agent Prompting",
+        "type": "TEXT",
+        "w": 36,
+        "h": 463,
+        "sizingH": "FIXED",
+        "sizingV": "FIXED",
+        "fill": "rgba(23,23,23,1)",
+        "text": {
+          "family": "Inter",
+          "weight": 500,
+          "size": 16,
+          "lh": "AUTO",
+          "align": "LEFT",
+          "valign": "CENTER",
+          "characters": "Agent Prompting"
+        },
+        "parent": "40000880:270",
+        "depth": 1
+      },
+      {
+        "id": "40000746:14",
+        "name": "Tokens: 2022 Cost: $0.00802",
+        "type": "TEXT",
+        "w": 39,
+        "h": 388,
+        "sizingH": "FIXED",
+        "sizingV": "FIXED",
+        "fill": "rgba(118,118,118,1)",
+        "text": {
+          "family": "Inter",
+          "weight": 600,
+          "size": 12,
+          "lh": "AUTO",
+          "align": "RIGHT",
+          "valign": "CENTER",
+          "characters": "Tokens: 2022 Cost: $0.00802 "
+        },
+        "annotations": [],
+        "parent": "40000880:270",
+        "depth": 1
+      },
+      {
+        "id": "40000881:399",
+        "name": "gripper-prompt-input",
+        "type": "FRAME",
+        "w": 39,
+        "h": 37,
+        "sizingH": "FIXED",
+        "sizingV": "FIXED",
+        "parent": "40000880:270",
+        "depth": 1,
+        "children": [
+          "40000881:400",
+          "40000881:401"
+        ]
+      },
+      {
+        "id": "40000881:400",
+        "name": "Meatballs_menu",
+        "type": "INSTANCE",
+        "w": 24,
+        "h": 24,
+        "parent": "40000881:399",
+        "depth": 2,
+        "children": [
+          "I40000881:400;175:1037",
+          "I40000881:400;175:1038",
+          "I40000881:400;175:1039"
+        ]
+      },
+      {
+        "id": "I40000881:400;175:1037",
+        "name": "Ellipse 206",
+        "type": "ELLIPSE",
+        "w": 2,
+        "h": 2,
+        "stroke": "rgba(118,118,118,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "40000881:400",
+        "depth": 3
+      },
+      {
+        "id": "I40000881:400;175:1038",
+        "name": "Ellipse 207",
+        "type": "ELLIPSE",
+        "w": 2,
+        "h": 2,
+        "stroke": "rgba(118,118,118,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "40000881:400",
+        "depth": 3
+      },
+      {
+        "id": "I40000881:400;175:1039",
+        "name": "Ellipse 208",
+        "type": "ELLIPSE",
+        "w": 2,
+        "h": 2,
+        "stroke": "rgba(118,118,118,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "40000881:400",
+        "depth": 3
+      },
+      {
+        "id": "40000881:401",
+        "name": "Meatballs_menu",
+        "type": "INSTANCE",
+        "w": 24,
+        "h": 24,
+        "parent": "40000881:399",
+        "depth": 2,
+        "children": [
+          "I40000881:401;175:1037",
+          "I40000881:401;175:1038",
+          "I40000881:401;175:1039"
+        ]
+      },
+      {
+        "id": "I40000881:401;175:1037",
+        "name": "Ellipse 206",
+        "type": "ELLIPSE",
+        "w": 2,
+        "h": 2,
+        "stroke": "rgba(118,118,118,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "40000881:401",
+        "depth": 3
+      },
+      {
+        "id": "I40000881:401;175:1038",
+        "name": "Ellipse 207",
+        "type": "ELLIPSE",
+        "w": 2,
+        "h": 2,
+        "stroke": "rgba(118,118,118,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "40000881:401",
+        "depth": 3
+      },
+      {
+        "id": "I40000881:401;175:1039",
+        "name": "Ellipse 208",
+        "type": "ELLIPSE",
+        "w": 2,
+        "h": 2,
+        "stroke": "rgba(118,118,118,1)",
+        "strokeW": 2,
+        "strokeAlign": "CENTER",
+        "strokeCap": "ROUND",
+        "parent": "40000881:401",
+        "depth": 3
+      }
+    ]
+  }
+}

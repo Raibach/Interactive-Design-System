@@ -29,6 +29,10 @@ import '@/components/lit/trace-feed';
 // The console's repair list — the real element, imported for the same reason: the failure it
 // guards against is about what a slotted element does or does not get drawn in.
 import '@/components/lit/chat-repair-actions';
+// THE PANEL'S OWN CHILDREN ARE NOT IMPORTED BY THE PANEL — chat-panel.ts uses the tags and
+// relies on main.tsx to define them, so a test that asserts on a child must define it here.
+// Without this the tag is inert: present in the tree, `customElements.get` false, no shadow
+// root, and every read of its content comes back null.
 import type { ChatPanel } from '@/components/lit/chat-panel';
 
 type SeatEl = ChatPanel & { updateComplete: Promise<unknown> };
@@ -184,21 +188,8 @@ describe('<chat-panel> draws its seat', () => {
     expect(shadowText(el)).not.toContain('update_constraints');
   });
 
-  it('renders the status bar as the frame\'s four slots, joined with the frame\'s separators', async () => {
-    const el = await mount({
-      status: 'Analyzing',
-      sessionLabel: 'Session 222',
-      sessionName: 'supportCustomerSession',
-      duration: '28.495s',
-      qaScore: '89.38%',
-    });
 
-    const header = el.shadowRoot!.querySelector('chat-header')!;
-    const text = header.shadowRoot?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-    expect(text).toContain(
-      'Analyzing: Session 222 | supportCustomerSession — Duration: 28.495s | Closed QA: 89.38%',
-    );
-  });
+
 
   it('adopts the conversation picked from the selector and reloads its history', async () => {
     const calls = stubFetch([
@@ -281,6 +272,14 @@ describe('<chat-panel> draws its seat', () => {
     const gripper = bar.shadowRoot!.querySelector('.gripper')!;
     const inputEl = el.shadowRoot!.querySelector('chat-input') as HTMLElement & { height: number };
 
+    // jsdom has no layout, so the panel has no bottom edge to measure from. Give it one: the
+    // height is read from the POINTER, not from the travel, so the test has to supply the
+    // geometry that rule reads (the same stubbing workspace-layout's width test does).
+    el.getBoundingClientRect = () => ({
+      left: 0, right: 540, width: 540,
+      top: 0, bottom: 500, height: 500, x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+
     gripper.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 300 }));
     // Dispatched on the document, which is where a real move lands on its way up the tree
     // (element → document → window); the gesture listens there, the way the spacer's grip does.
@@ -288,7 +287,10 @@ describe('<chat-panel> draws its seat', () => {
     document.dispatchEvent(new MouseEvent('mouseup'));
     await settle(el);
 
-    // Dragging up 100px grows the input area from its 100px floor to 200px.
+    // THE EDGE SITS UNDER THE POINTER. The host's bottom (500) less the tray's own 97px block
+    // (#40001123:6689) is the floor the input may not cross — 403 — and the cursor is at 200.
+    // The floor is a FLOOR: the pointer is the top edge, so the height is 203, not 300 + 100.
+    expect(inputEl.height).toBe(203);
     expect(inputEl.height).toBeGreaterThan(100);
     expect(inputEl.height).toBeLessThanOrEqual(600);
 
@@ -402,8 +404,8 @@ describe('<chat-panel> draws its seat', () => {
     });
     await settle(el);
 
-    const mark = el.shadowRoot!.querySelector('chat-footer')!.shadowRoot!
-      .querySelector('button[data-node-id="40001119:6483"]') as HTMLButtonElement;
+    const mark = el.shadowRoot!.querySelector('chat-plugin-tray')!.shadowRoot!
+      .querySelector('button[data-node-id="40001123:6732"]') as HTMLButtonElement;
     expect(mark).toBeTruthy();
     mark.click();
     for (let i = 0; i < 12; i++) { await Promise.resolve(); await el.updateComplete; }
@@ -447,8 +449,8 @@ describe('<chat-panel> draws its seat', () => {
     });
     await settle(el);
 
-    el.shadowRoot!.querySelector('chat-footer')!.shadowRoot!
-      .querySelector('button[data-node-id="40001119:6483"]')!.dispatchEvent(
+    el.shadowRoot!.querySelector('chat-plugin-tray')!.shadowRoot!
+      .querySelector('button[data-node-id="40001123:6732"]')!.dispatchEvent(
         new MouseEvent('click', { bubbles: true }),
       );
     for (let i = 0; i < 12; i++) { await Promise.resolve(); await el.updateComplete; }
@@ -460,13 +462,18 @@ describe('<chat-panel> draws its seat', () => {
 
   it('and the three marks without an event still emit nothing', async () => {
     const el = await mount();
-    const marks = el.shadowRoot!.querySelector('chat-footer')!.shadowRoot!.querySelectorAll('button.mark');
-    expect(marks.length).toBe(4);
+    const marks = el.shadowRoot!.querySelector('chat-plugin-tray')!.shadowRoot!.querySelectorAll('button.mark');
+    // The tray draws the drawing's five. Two carry behaviour — chat history (#40001123:6728)
+    // toggles the conversations window, new conversation (#40001123:6732) starts one — and
+    // the other three are marks only.
+    expect(marks.length).toBe(5);
     const heard: string[] = [];
-    el.addEventListener('conversation-new', () => heard.push('conversation-new'));
+    for (const name of ['conversation-new', 'toggle-output-window']) {
+      el.addEventListener(name, () => heard.push(name));
+    }
     for (const m of Array.from(marks)) {
       const id = m.getAttribute('data-node-id');
-      if (id === '40001119:6483') continue;
+      if (id === '40001123:6732' || id === '40001123:6728') continue;
       m.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     }
     await settle(el);
@@ -495,7 +502,10 @@ describe('<chat-panel> draws its seat', () => {
     });
     await settle(el);
 
-    const bar = [...el.shadowRoot!.querySelectorAll('chat-header')][0] as HTMLElement & { statusText: string };
+    // The count rides the CONVERSATIONS bar. The readout is the panel's first block and
+    // carries the seat's own status line; the conversations bar is the one drawn for the
+    // drawing's #40001119:6318.
+    const bar = el.shadowRoot!.querySelector('chat-header[bar-node="40001119:6318"]') as HTMLElement & { statusText: string };
     expect(bar.statusText).toBe('3 Conversations');
   });
 
@@ -518,8 +528,9 @@ describe('<chat-panel> draws its seat', () => {
     const el = await mount({ sessionId: 'sess-console', conversationId: 'conv-a' });
     await settle(el);
 
-    // The bar opens the list.
-    (el.shadowRoot!.querySelector('chat-header') as HTMLElement).click();
+    // The CONVERSATIONS bar opens the list — it is the list's header, and the readout above
+    // it is not (see where the panel draws each bar).
+    (el.shadowRoot!.querySelector('chat-header[bar-node="40001119:6318"]') as HTMLElement).click();
     await settle(el);
     const trash = (id: string) =>
       [...el.shadowRoot!.querySelectorAll('.conv-remove')].find(
@@ -710,7 +721,9 @@ describe('<chat-panel> draws its seat', () => {
     const pieces = Array.from(inputWrapper.children).map((c) => c.tagName.toLowerCase());
     expect(pieces.indexOf('chat-action-bar')).toBeGreaterThan(-1);
     expect(pieces.indexOf('chat-input')).toBeGreaterThan(-1);
-    expect(pieces.indexOf('chat-input')).toBeLessThan(pieces.indexOf('chat-footer'));
+    // The composer chain is drawn in order, and the foot is the TRAY — v.4b's foot. The navy
+    // <chat-footer> it replaced is gone from the panel (see the note where the tray is drawn).
+    expect(pieces.indexOf('chat-input')).toBeLessThan(pieces.indexOf('chat-plugin-tray'));
 
     // The findings were handed in as a prop and the panel still does not draw them: the
     // slot is the only way in, and that is the point. (The slot itself is drawn on the

@@ -1,0 +1,68 @@
+{
+  "capture": "prompt-section",
+  "nodeId": "40000746:94",
+  "sealedAt": "2026-09-20",
+  "compared": 9,
+  "values": {
+    "40000746:94.itemSpacing": {
+      "file": 10,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:94.padding": {
+      "file": "{\"paddingLeft\":3,\"paddingRight\":3,\"paddingTop\":15,\"paddingBottom\":15}",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:94.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:94.width": {
+      "file": 624,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:94.height": {
+      "file": 132,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:102.itemSpacing": {
+      "file": 0,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:102.padding": {
+      "file": "{\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:102.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:102.width": {
+      "file": 595,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000746:102.height": {
+      "file": 40,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000878:240.itemSpacing": {
+      "file": 6,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000878:240.padding": {
+      "file": "{\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000878:240.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000878:240.width": {
+      "file": 596,
+      "source": "prompt-input/prompt-input-section.ts"
+    },
+    "40000878:240.height": {
+      "file": 45,
+      "source": "prompt-input/prompt-input-section.ts"
+    }
+  }
+}

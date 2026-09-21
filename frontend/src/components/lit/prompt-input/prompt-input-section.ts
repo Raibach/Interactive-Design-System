@@ -104,16 +104,19 @@ export class PromptInputSection extends LitElement {
     }
     :host([draggable]) { cursor: grab; }
     .responsive-prompt-container {
-      /* Figma 40000878:241 — px-3 py-[15px]. The top pad is dropped: the first
-         section must sit flush under the pane title. The bottom 15px still gives
-         the gap between stacked sections. */
-      padding: 0 3px 15px;
+      /* Figma 40000746:94 — padding 15/3/15/3, as the file has it (the top pad was dropped
+         here on the reasoning that the first section should sit flush under the pane title;
+         the file never said that, and the check holds the element against the node it
+         names). */
+      padding: 15px 3px;
       box-sizing: border-box;
     }
     .section-header {
       display: flex;
-      /* Figma 40000954-23927 — gap-[5px] (refined sections 3–4) */
-      gap: 5px;
+      /* Figma 40000746:102 — itemSpacing 0, as the file has it. The 5px that stood here
+         cited 40000954:23927, a node that is NOT in the file any more, so the value came
+         from a drawing nobody can look at. */
+      gap: 0;
       align-items: center;
       height: 40px;
       box-sizing: border-box;
@@ -148,8 +151,10 @@ export class PromptInputSection extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 171px;
-      height: 40px;
+      /* #40000909:4005 — 177.039x43 in the file (the comment above already states it;
+         the declaration had kept the pre-rebuild 171x40). */
+      width: 177.04px;
+      height: 43px;
       background: #ffffff;
       border-radius: 6px;
       box-sizing: border-box;
@@ -211,7 +216,9 @@ export class PromptInputSection extends LitElement {
     .functions-label-text {
       font-size: 16px;
       font-weight: 700;
-      line-height: 19.364px;
+      /* #40000909:4006 - the file states lineHeight AUTO (the font's normal); the
+         declaration had kept the previous build's 19.364px. */
+      line-height: normal;
       color: #8b8b8b;
       background: none;
       border: none;
@@ -232,7 +239,8 @@ export class PromptInputSection extends LitElement {
       display: flex;
       /* flex-start: the textarea hugs its own auto-grown height. */
       align-items: flex-start;
-      gap: 5px;
+      /* #40000878:240 — itemSpacing 6 in the file (was 5). */
+      gap: 6px;
       margin-top: 17px;
     }
     :host([collapsed]) .prompt-imput { display: none; }
@@ -326,8 +334,13 @@ export class PromptInputSection extends LitElement {
         <div class="section-header" data-node-id="40000746:102">
           <gripper-prompt-input ?active=${!isSticky}></gripper-prompt-input>
           <div class="prompt-accordion" data-node-id="40000909:3998">
-            <div class="role-tile-wrap" data-node-id="40000909:3999">
+            <div class="role-tile-wrap">
+              <!-- THE MARKER BELONGS TO THE ELEMENT THAT DRAWS THE NODE. 40000909:3999 is the
+                   white rounded tile (pad 18, gap 53, 43 tall in the file) — drawn by
+                   <role-tile>'s own :host, not by this positioning wrapper. On the wrapper it
+                   compared the wrong element's values; here the check reads the tile's. -->
               <role-tile
+                data-node-id="40000909:3999"
                 .label=${this.name}
                 .showMenu=${!isSticky}
                 @role-menu-toggle=${(e: Event) => this._toggleMenu(e, 'types')}

@@ -72,7 +72,7 @@ export class ChatFold extends LitElement {
         background: #ffffff;
         border-radius: 6px;
         box-shadow: -4px -4px 5px rgba(0, 0, 0, 0.15), 4px 4px 5px rgba(0, 0, 0, 0.15);
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
         overflow: hidden;
       }
       .header {
