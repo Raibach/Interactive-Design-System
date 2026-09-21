@@ -34,6 +34,10 @@ COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ ./backend/
 
+# config.py was moved to the repo root (from backend/config.py); the backend's
+# imports (`from config import ...`) resolve against /app, so it must ride along.
+COPY config.py ./
+
 # Built frontend + generated manifest.json
 COPY --from=frontend-build /repo/frontend/dist ./frontend/dist
 

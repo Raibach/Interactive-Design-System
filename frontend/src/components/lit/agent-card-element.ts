@@ -98,7 +98,7 @@ export class AgentCardElement extends LitElement {
       position: relative;
       width: 262px;
       height: 251px;
-      background: var(--card-bg, #1C2F4E);            /* the design's own fill */
+      background: var(--card-bg, #2C2A48);            /* the design's own fill */
       /* THE BORDER IS THE HOVER'S — the owner, 2026-09-19: no border at rest, the rail's
          teal on hover. Transparent rather than absent, so the box never shifts by a pixel. */
       border: 1px solid transparent;
@@ -118,7 +118,7 @@ export class AgentCardElement extends LitElement {
          clickable (owner, 2026-09-18). A clickable area without a hand reads as a
          picture, on every platform that draws one. */
       cursor: pointer;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
     }
     /* The hover IS the border: the rail's teal, on the card that has the hand. */
     .card:hover { border-color: #1FACC2; }
@@ -199,7 +199,7 @@ export class AgentCardElement extends LitElement {
       font-weight: 700;
       font-size: 16px;
       line-height: 26px;
-      color: var(--card-text-color, #b6afbd);
+      color: var(--card-text-color, #EBEBEB);
       overflow: hidden;
       word-break: break-word;
       display: -webkit-box;
@@ -218,7 +218,7 @@ export class AgentCardElement extends LitElement {
       font-weight: 500;
       font-size: 13px;
       line-height: 20px;
-      color: var(--card-text-color, #b6afbd);
+      color: var(--card-text-color, #EBEBEB);
       /* NO CLAMP — THE BOX DECIDES HOW MANY LINES SHOW. The owner, 2026-09-19: "whichever
          one has a long title, the description needs to squeeze. If it doesn't have a long
          title the description can expand." A fixed four-line clamp made that impossible: the
@@ -371,7 +371,7 @@ export class AgentCardElement extends LitElement {
       border-color: #FFFFFF;
     }
     .card-delete-label {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.04em;
@@ -478,7 +478,7 @@ export class AgentCardElement extends LitElement {
 
     return html`
       <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40001114:5813"
-           style="--card-bg: color-mix(in srgb, #1c2d4c 86%, transparent);
+           style="--card-bg: color-mix(in srgb, #2C2A48 87%, transparent);
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
