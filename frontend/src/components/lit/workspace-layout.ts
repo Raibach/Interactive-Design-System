@@ -881,7 +881,7 @@ export class WorkspaceLayout extends LitElement {
          leaves fast and decelerates hard into the stop, so a pane arrives
          rather than halts. Slow enough to read as movement, not as a jump. */
       --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
-      --dur-pane: 520ms;
+      --dur-pane: 650ms;
     }
 
     .pane {
