@@ -140,7 +140,7 @@ export class AISurfaceSandbox extends LitElement {
         this._fadePhase = '';
         this._fadeTimer = null;
         this.requestUpdate();
-      }, 700);
+      }, 875);
       this.requestUpdate();
     }
   }
@@ -218,7 +218,7 @@ export class AISurfaceSandbox extends LitElement {
       flex-direction: column;
     }
     .viewport.fade-in {
-      animation: surface-fade 700ms ease-out;
+      animation: surface-fade 875ms ease-out;
     }
     @keyframes surface-fade {
       from { opacity: 0; }
