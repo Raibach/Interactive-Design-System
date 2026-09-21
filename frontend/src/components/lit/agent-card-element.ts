@@ -104,8 +104,8 @@ export class AgentCardElement extends LitElement {
       border: 1px solid transparent;
       border-radius: 10px;
       box-shadow:
-        4px 4px 12px 0px rgba(0, 0, 0, 0.36),
-        -4px -4px 6px 0px rgba(0, 0, 0, 0.28);
+        4px 4px 12px 0px rgba(0, 0, 0, 0.31),
+        -4px -4px 6px 0px rgba(0, 0, 0, 0.23);
       padding: 0 10px 10px;
       display: flex;
       flex-direction: column;

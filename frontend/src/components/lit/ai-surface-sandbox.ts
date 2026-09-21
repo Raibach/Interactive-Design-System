@@ -75,6 +75,15 @@ export class AISurfaceSandbox extends LitElement {
   /** @internal — stack trace for inline display */
   declare _errorStack: string;
 
+  /**
+   * The slot being PROJECTED right now. Follows `headerTab`/`isAIAssembling`; the
+   * incoming surface fades in over the dark ground on each change.
+   */
+  private _committedSlot = '';
+  /** Cross-fade phase: '' (settled) | 'out' (fading the old away) | 'in' (fading the new in). */
+  private _fadePhase: '' | 'out' | 'in' = '';
+  private _fadeTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor() {
     super();
     this.isAIAssembling = false;
@@ -92,7 +101,48 @@ export class AISurfaceSandbox extends LitElement {
 
   disconnectedCallback(): void {
     this.removeEventListener('error', this._onSlotError as EventListener, true);
+    if (this._fadeTimer) { clearTimeout(this._fadeTimer); this._fadeTimer = null; }
     super.disconnectedCallback();
+  }
+
+  /** The fade class — a single gentle fade-in on the incoming surface. */
+  private get _fadeClass(): string {
+    return this._fadePhase === 'in' ? 'fade-in' : '';
+  }
+
+  /**
+   * The slot the shell is asking for, right now — the same three-way contract render()
+   * uses: spinner while assembling, console for the console header tab, workspace
+   * otherwise.
+   */
+  private get _activeSlot(): string {
+    return this.isAIAssembling
+      ? 'spinner'
+      : this.headerTab === 'console'
+        ? 'console'
+        : 'workspace';
+  }
+
+  /**
+   * SIMPLE FADE-IN, NO TEARDOWN. The slot swaps immediately (so the chat and the
+   * rest of the surface never linger after they should be gone) and the incoming
+   * surface fades in over the already-dark #582846 ground. No fade-out, no deferred
+   * commit — a two-beat teardown held the outgoing tree (chat included) on screen
+   * for an extra beat and then dropped it at once, which is the "flies out" jerk.
+   */
+  updated(): void {
+    const wanted = this._activeSlot;
+    if (wanted !== this._committedSlot) {
+      this._committedSlot = wanted;
+      this._fadePhase = 'in';
+      if (this._fadeTimer) clearTimeout(this._fadeTimer);
+      this._fadeTimer = setTimeout(() => {
+        this._fadePhase = '';
+        this._fadeTimer = null;
+        this.requestUpdate();
+      }, 700);
+      this.requestUpdate();
+    }
   }
 
   /** Catch errors bubbling up from slotted child elements. */
@@ -142,7 +192,12 @@ export class AISurfaceSandbox extends LitElement {
          2px #507274 outline around everything. Kept as none (not deleted) so the
          box model is unchanged: the same rule still owns the edge. */
       border: none;
-      background-color: #e5e1dd;
+      /* THE SCENE'S GROUND, not the light beige — so a slot swap never flashes
+         white. The surface paints this dark immediately, and the incoming
+         content's own background (the wave, the cards) layers over it. A light
+         base here is what showed a white gap between "assembly done" and the
+         cards mounting. */
+      background-color: #582846;
       overflow: hidden;
       contain: layout style;
       margin: 0;
@@ -161,6 +216,17 @@ export class AISurfaceSandbox extends LitElement {
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+    }
+    .viewport.fade-in {
+      animation: surface-fade 700ms ease-out;
+    }
+    @keyframes surface-fade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    /* Motion is a courtesy, never a requirement: honour the OS-level opt-out. */
+    @media (prefers-reduced-motion: reduce) {
+      .viewport.fade-in { animation: none; }
     }
 
     /* ── Scrollbar — same as the left composer column (.sections-scroll) and all
@@ -318,23 +384,19 @@ export class AISurfaceSandbox extends LitElement {
       `;
     }
 
-    // Normal rendering — project the active slot into the viewport
+    // Normal rendering — project the COMMITTED slot (deferred across the cross-fade)
     // HONEST STATUS (2026-08-01): Slot routing is FIXED: console | workspace | spinner.
     // The AI controls WHAT fills the slots (which prompt blocks, which data),
     // but it cannot create new slot names or change the routing logic.
     // The slot contract (left=prompt-section-editor, middle=compiled-output-viewer,
     // right=chat-panel) is the layout framework — pre-ordered locations for modules.
     // This is correct per owner design: slots are the contract, blocks are the content.
-    const activeSlot = this.isAIAssembling
-      ? 'spinner'
-      : this.headerTab === 'console'
-        ? 'console'
-        : 'workspace';
+    const activeSlot = this._committedSlot || this._activeSlot;
 
     try {
       return html`
         <section id="ai-surface">
-          <div class="viewport">
+          <div class="viewport ${this._fadeClass}">
             <slot name=${activeSlot}></slot>
           </div>
         </section>

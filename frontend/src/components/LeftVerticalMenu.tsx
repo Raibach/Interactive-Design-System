@@ -13,6 +13,8 @@ interface MenuItem {
 interface LeftVerticalMenuProps {
   onNewChat?: () => void;
   onUploadDocument?: () => void;
+  /** The header tab the surrounding shell is on — "console" vs "composer". */
+  currentTab?: string;
   // Received and destructured since the real login landed (routes/auth.py + PinGate),
   // but not declared here, so the tree did not typecheck and `npm run build` failed
   // with TS2339 on the destructuring below. Declared, not wired: LogoutIcon exists at
@@ -111,6 +113,7 @@ export default function LeftVerticalMenu({
   onSignOut,
   userName = "User",
   userAvatar,
+  currentTab = "console",
 }: LeftVerticalMenuProps) {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -237,7 +240,12 @@ const LogoutIcon = () => (
       label: "Upload Document",
       onClick: onUploadDocument,
     },
-  ];
+  ].filter((item) => {
+    // Saved Prompts and Plugins are console-only: on the composer they cover the
+    // header, so they come off the floating strip and the flyout there.
+    if (currentTab === 'console') return true;
+    return item.id !== 'prompts' && item.id !== 'components';
+  });
 
   return (
     <div
@@ -251,7 +259,7 @@ const LogoutIcon = () => (
           data-lit-id="nav-toggle"
           onClick={() => setIsNavOpen(true)}
           className="absolute top-0 left-0 w-14 h-14 flex items-center justify-center"
-          style={{ backgroundColor: "#12101f", zIndex: 60 }}
+          style={{ backgroundColor: "#110E1F", zIndex: 60 }}
           title="Open navigation"
           aria-label="Open navigation"
         >
@@ -297,7 +305,7 @@ const LogoutIcon = () => (
           top: 0,
           left: "0px",
           zIndex: 55,
-          backgroundColor: "#000000",
+          backgroundColor: "#110E1F",
           borderRight: isNavOpen ? "1px solid rgba(255,255,255,0.08)" : "none",
           boxShadow: isNavOpen ? "8px 0 24px rgba(0, 0, 0, 0.45)" : "none",
           overflow: "hidden",
@@ -307,7 +315,7 @@ const LogoutIcon = () => (
           <div className="flex flex-col" style={{ minWidth: "310px" }}>
             {/* The same R, at the same spot — the panel slides in behind it, so nothing appears to move. */}
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-14 h-14 flex items-center justify-center shrink-0" style={{ backgroundColor: "#12101f" }}>
+              <div className="w-14 h-14 flex items-center justify-center shrink-0" style={{ backgroundColor: "#110E1F" }}>
                 <StarburstIcon logo={raibachLogo} />
               </div>
               <div className="flex flex-col leading-tight flex-1 min-w-0">
@@ -485,7 +493,7 @@ const LogoutIcon = () => (
             data-lit-id="mobile-hamburger"
             data-lit-type="navigation-toggle"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="fixed top-2 left-2 z-[60] w-10 h-10 flex items-center justify-center rounded-lg bg-[#12101f] text-white hover:bg-[#1a1730] transition-colors shadow-lg"
+            className="fixed top-2 left-2 z-[60] w-10 h-10 flex items-center justify-center rounded-lg bg-[#110E1F] text-white hover:bg-[#1d1a35] transition-colors shadow-lg"
             title="Menu"
           >
             {mobileMenuOpen ? (
@@ -504,7 +512,7 @@ const LogoutIcon = () => (
             className="fixed top-0 left-0 h-full z-[55] flex flex-col overflow-y-auto transition-transform duration-250 ease-out shadow-2xl"
             style={{
               width: "260px",
-              backgroundColor: "#12101f",
+              backgroundColor: "#110E1F",
               transform: mobileMenuOpen ? "translateX(0)" : "translateX(-100%)",
             }}
           >
