@@ -52,7 +52,6 @@ export class OutputHeader extends LitElement {
        #CBE6E3, primary CENTER (the blocks centre across the column). */
     :host {
       display: block;
-      align-self: flex-start;
     }
     .area {
       display: flex;
@@ -72,6 +71,7 @@ export class OutputHeader extends LitElement {
       flex-direction: row;
       align-items: center;
       gap: 10px;
+      align-self: stretch;
       height: 55px;
       padding: 7px 10px;
       background-color: rgba(117, 142, 135, 0.35);
@@ -87,7 +87,8 @@ export class OutputHeader extends LitElement {
       flex-direction: row;
       align-items: center;
       gap: 10px;
-      width: 450px;
+      flex: 1 1 auto;
+      min-width: 0;
       height: 40px;
     }
 
@@ -101,6 +102,7 @@ export class OutputHeader extends LitElement {
       color: #3D515B;
       text-align: left;
       margin: 0;
+      flex: 1 1 auto;
       min-width: 0;
     }
 
