@@ -4654,12 +4654,12 @@ export default function Index({
                      the live request via isAIAssembling, one true sentence.
                      No scripted message rotation, no fake progress bar,
                      no artificial minimum display time. */}
-                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? `url(${consoleBackground})` : `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? '#270F31' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? `url(${consoleBackground})` : `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
                   <div className="w-8 h-8 border-4 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
                   <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
-                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#582846', position: 'relative' }}>
+                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#270F31', position: 'relative' }}>
                   {/* The image at 85%, on its own layer so only IT is faded — the cards
                       and the chat above stay fully opaque (an element-level opacity would
                       dim them too). */}
