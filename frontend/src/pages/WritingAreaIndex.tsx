@@ -3746,7 +3746,19 @@ export default function Index({
       deepFind<HTMLElement & { resetArrangement?: () => void }>('workspace-layout')
         ?.resetArrangement?.();
     };
-    const onCanvasSave = () => {
+    /* THE FOOT SAYS IT IS WORKING, BECAUSE IT IS. The save control carried no state while
+       the write was in flight (owner, 2026-09-21: "it's not got a spinner like the other
+       buttons… to let the user know it's doing something"). Set here and cleared in the
+       finally below, so the spinner lasts exactly as long as the save — no timer, no
+       minimum display time, no fake progress. */
+    const setFooterSaving = (saving: boolean) => {
+      setWorkspaceTree((prev) => {
+        const comps = Array.isArray(prev.components) ? prev.components : [];
+        const next = comps.map((c: any) => (c?.id === 'canvas-footer-view' ? { ...c, saving } : c));
+        return { ...prev, components: next };
+      });
+    };
+    const onCanvasSave = async () => {
       // THE FOOT'S SAVE TAKES THE SAME TWO READINGS its siblings do — the control bar's Save and
       // the surface's own save-template both hand the save the sections and the live output.
       // This one called it with NO arguments, and a save with no sections throws on the way to
@@ -3757,7 +3769,12 @@ export default function Index({
       const sections = surfaceSections();
       const compiledOutput = readLiveOutput();
       console.log('[canvas-footer] save-click →', sections.length, 'sections +', compiledOutput.length, 'chars of output from the surface');
-      handleSavePromptRef.current?.(compiledOutput, sections);
+      setFooterSaving(true);
+      try {
+        await handleSavePromptRef.current?.(compiledOutput, sections);
+      } finally {
+        setFooterSaving(false);
+      }
     };
     /**
      * THE CONSOLE TOLD US IT TURNED A PAGE. It carries no data the shell must act on — the
