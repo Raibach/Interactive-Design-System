@@ -1229,6 +1229,22 @@ export class ChatPanel extends LitElement {
     );
   }
 
+  /**
+   * The status line for <output-header> — the frame's own line built from the live slots,
+   * in the same order and punctuation chat-header uses. The usage figures are NOT joined
+   * here: output-header owns the Tokens/Calls readouts it is handed.
+   */
+  private get _statusLine(): string {
+    if (this.statusText) return this.statusText;
+    const parts: string[] = [];
+    const lead = [this.status ? `${this.status}:` : '', this.sessionLabel ?? ''].join(' ').trim();
+    const named = [this.sessionName ?? '', this.duration ? `Duration: ${this.duration}` : ''].join(' ').trim();
+    if (lead) parts.push(lead);
+    if (named) parts.push(named);
+    if (this.qaScore) parts.push(`Closed QA: ${this.qaScore}`);
+    return parts.join('  |  ');
+  }
+
   protected updated(changed: Map<PropertyKey, unknown>): void {
     // A PACKAGE CHANGE STARTS THE SEAT OVER. The panel is REUSED across assemblies (the
     // surface keeps the same component id — see the note on `_thread`), so without this the
