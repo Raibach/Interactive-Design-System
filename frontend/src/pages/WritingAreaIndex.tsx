@@ -24,6 +24,7 @@ import LeftColumnHeader from "@/components/LeftColumnHeader";
 import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
 import consoleBackground from "@/assets/data-wave3.png";
+import composerBackground from "@/assets/composer-image-bg.jpg";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 // InteractiveChatInterface is RETIRED — archived, not deleted, at
 // retired-files/console-seat-20260917/InteractiveChatInterface.tsx. The console's
@@ -2407,6 +2408,12 @@ export default function Index({
     // A2UI v0.9: Open session via unified surface assembly
     // ══════════════════════════════════════════════════════════════════════════
     console.log(`🤖 [A2UI] Opening session → intent: render-session:${sessionId}`);
+    // Move the assembling flag and the header tab INSTANTLY so the composer's
+    // spinner/surface (not the console's) shows during the assembly — the spinner
+    // already carries the composer background, so the transition is a gentle
+    // dark→composer fade, not the console's image lingering until the cards land.
+    setIsAIAssembling(true);
+    handleHeaderTabChange('composer');
     // Opening a package ends any repair: the repair prompt belongs to the finding
     // that produced it, not to the package being opened — so the finding it came from
     // is released with it, and a Run of this package settles nothing.
@@ -3127,7 +3134,11 @@ export default function Index({
     };
 
     if (tabId === 'console') {
-      // Move the header tab indicator INSTANTLY — don't wait for AI assembly
+      // Set the assembling flag FIRST so the sandbox goes composer → spinner (which
+      // already carries the console background) → console, instead of flashing the
+      // bare console slot for a tick and then snapping. The header tab still moves
+      // instantly for the indicator; the spinner covers the surface during assembly.
+      setIsAIAssembling(true);
       handleHeaderTabChange('console');
       // Console is read-only — unsaved changes in the composer do not block navigation.
       console.log('🤖 [A2UI] Console clicked → intent: render-console (direct, no gate)');
@@ -3172,6 +3183,14 @@ export default function Index({
     // Other tabs - just switch for now (TODO: wire to AI assembly)
     handleHeaderTabChange(tabId);
   }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab]);
+
+  // The copilot logo in the chat rail navigates back to the console — the same
+  // path the Console header tab uses.
+  useEffect(() => {
+    const onNavigateConsole = () => { void handleTabChangeWithGate('console'); };
+    window.addEventListener('navigate-console', onNavigateConsole);
+    return () => window.removeEventListener('navigate-console', onNavigateConsole);
+  }, [handleTabChangeWithGate]);
 
   // ══════════════════════════════════════════════════════════════════════════
   // A2UI v0.9: INITIAL MOUNT - AI ALWAYS ASSEMBLES THE INITIAL SURFACE
@@ -4564,6 +4583,7 @@ export default function Index({
       {/* Left Vertical Menu — full-height icon strip */}
       <LeftVerticalMenu
         onNewChat={() => window.dispatchEvent(new CustomEvent("new-chat"))}
+        currentTab={headerTab}
       />
 
       {/* Main content area — flex column that takes remaining height after header.
@@ -4619,12 +4639,16 @@ export default function Index({
                      the live request via isAIAssembling, one true sentence.
                      No scripted message rotation, no fake progress bar,
                      no artificial minimum display time. */}
-                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? '#582846' : '#E5E1DD', paddingBottom: '200px', ...(isConsoleView ? { backgroundImage: `linear-gradient(rgba(88, 40, 70, 0.15), rgba(88, 40, 70, 0.15)), url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' } : {}) }}>
+                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? `url(${consoleBackground})` : `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
                   <div className="w-8 h-8 border-4 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
                   <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
-                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#582846', backgroundImage: `linear-gradient(rgba(88, 40, 70, 0.15), rgba(88, 40, 70, 0.15)), url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#582846', position: 'relative' }}>
+                  {/* The image at 85%, on its own layer so only IT is faded — the cards
+                      and the chat above stay fully opaque (an element-level opacity would
+                      dim them too). */}
+                  <div aria-hidden="true" style={{ position: 'absolute', inset: 0, backgroundImage: `url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left', opacity: 0.75 }} />
                   {/* A FAILED ASSEMBLY MUST SAY SO, IN THE SLOT THAT IS SHOWN.
                       The full failure pane lives in slot="workspace", and the sandbox
                       projects ONE slot — so a console failure wrote its message into
@@ -4648,7 +4672,7 @@ export default function Index({
                       cards float inside their pane by the grid's own rules
                       (max-width + centred). Insets belong to the components that
                       were designed with them, not to a shell wrapper. */}
-                  <div style={{ flex: '1 1 0%', minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden' }}>
+                  <div style={{ flex: '1 1 0%', minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden', position: 'relative' }}>
                     {/* ONLY THE SURFACE THAT IS ON SCREEN IS BUILT. Both slots used to
                         render at once and <ai-surface-sandbox> hid the one it was not
                         projecting, so the whole other screen — its cards, its chat panel,
@@ -4677,19 +4701,19 @@ export default function Index({
                       });
                     }}
                     onOpenPrompt={async (sessionId) => {
-                      await assembleSurfaceThenRepairs(`render-session:${sessionId}`, {
-                        current_surface: headerTab || 'console',
-                        has_unsaved_changes: hasUnsavedChangesRef.current,
-                        session_id: currentPromptSession?.id || null,
-                        session_title: currentPromptSession?.title || '',
-                      });
+                      // Card-open goes through the SAME path as the shell's own open:
+                      // it flips the header to composer and sets the assembling flag
+                      // first, so the composer background (not the console's) fades in
+                      // during assembly. The old inline call skipped the flip, so the
+                      // spinner kept showing the console's image until the composer landed.
+                      await handleOpenPromptFromConsole(sessionId);
                     }}
                   />
                 </div>
                 {/* slot="workspace" — AI-driven Lit tree (A2UI v0.9.1).
                     Slots are the loading contract. AI fills them with prompt blocks.
                     When assembly FAILS, show the error — no hiding. */}
-                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `linear-gradient(rgba(88, 40, 70, 0.15), rgba(88, 40, 70, 0.15)), url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
                   {aiAssemblyFailed ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
                       {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc

@@ -474,6 +474,7 @@ export class ChatNavigationBar extends LitElement {
       overflow: clip;
       flex-shrink: 0;
       align-items: flex-start;
+      cursor: pointer;
     }
     .lc {
       height: 65.984px;
@@ -819,6 +820,11 @@ export class ChatNavigationBar extends LitElement {
   // Tab click handler
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /** The copilot mark navigates back to the console, like the Console header tab. */
+  private _onLogoClick(): void {
+    window.dispatchEvent(new CustomEvent('navigate-console'));
+  }
+
   private _handleTabClick(tabId: TabId) {
     // TODO(behavior): action undefined in Figma — node 40001119:6600 (the settings
     // button). The v.4b drawing draws the gear and annotates nothing, so there is no
@@ -977,7 +983,7 @@ export class ChatNavigationBar extends LitElement {
     return html`
       <div class="sb">
         <!-- Logo -->
-        <div class="lo">
+        <div class="lo" @click=${this._onLogoClick} role="button" tabindex="0" title="Back to console" aria-label="Back to console">
           <div class="lc">
             <slot name="logo">
               <div class="lp">LOGO</div>
