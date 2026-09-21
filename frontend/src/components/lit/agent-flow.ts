@@ -58,10 +58,10 @@ const START_OVERHANG = 44;
 /** The corner's padding: where the flow's first node is put, and how far down. */
 /**
  * HOW LONG A GLIDE TAKES — the application's own pane duration, because that is the motion
- * this whole interface moves on (workspace-layout's `--dur-pane`: 650ms on the settle
+ * this whole interface moves on (workspace-layout's `--dur-pane`: 520ms on the settle
  * curve). It belongs to the moves the ELEMENT makes; a hand's moves are exact. See _glide.
  */
-const GLIDE_MS = 650;
+const GLIDE_MS = 520;
 
 const START_PAD_X = 58;
 const START_PAD_Y = 44;
