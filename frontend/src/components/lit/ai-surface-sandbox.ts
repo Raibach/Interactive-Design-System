@@ -51,6 +51,14 @@ export class AISurfaceSandbox extends LitElement {
     headerTab: { type: String, attribute: 'header-tab' },
 
     /**
+     * The console's ground layer: a looping video the shell hands in, painted
+     * behind the viewport as the console's backdrop. Handed in rather than
+     * imported so this element stays asset-free. Empty means no layer — the
+     * flat ground colour alone, which is what every other shell gets.
+     */
+    consoleVideoSrc: { type: String, attribute: 'console-video-src' },
+
+    /**
      * Internal error boundary state. NOT reflected as an attribute —
      * managed entirely inside the Shadow DOM. When true, the viewport
      * is replaced with an inline error panel.
@@ -67,6 +75,7 @@ export class AISurfaceSandbox extends LitElement {
   // ── Defaults ─────────────────────────────────────────────────────────────
   declare isAIAssembling: boolean;
   declare headerTab: string;
+  declare consoleVideoSrc: string;
 
   /** @internal — error boundary state */
   declare _hasRuntimeError: boolean;
@@ -88,6 +97,7 @@ export class AISurfaceSandbox extends LitElement {
     super();
     this.isAIAssembling = false;
     this.headerTab = 'console';
+    this.consoleVideoSrc = '';
     this._hasRuntimeError = false;
     this._errorMessage = '';
     this._errorStack = '';
@@ -207,6 +217,42 @@ export class AISurfaceSandbox extends LitElement {
     }
     #ai-surface.ground-console {
       background-color: #270F31;
+    }
+
+    /* ── The console's ground layer — the waves video the shell hands in.
+       A CHILD OF #ai-surface, NOT OF THE VIEWPORT, and that placement is the whole
+       point. .viewport is what fades on a slot swap, so a video living inside a
+       slotted surface faded out with the outgoing one and faded back in with the
+       incoming one, over a playhead that had restarted from zero in a second,
+       independently-loaded element — which read as a flash of flat ground with the
+       waves jumping. Outside the fade, this element is created once and plays
+       continuously across every swap: only the content over it moves.
+       It paints above the ground colour (so the ground still tints it exactly as it
+       tinted the still image it replaces) and below .viewport, which follows it in
+       DOM order. Non-console surfaces are unaffected: the ground paints #582846 and
+       every non-console slot covers the full box with its own opaque art. ── */
+    .ground-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.75;
+      /* A backdrop is never a target: it must not eat clicks meant for the cards. */
+      pointer-events: none;
+      /* NOT THE CONSOLE'S TURN → stop painting the layer, but never unmount it.
+         visibility (not display) is deliberate and was measured: a hidden video keeps
+         playing — it advanced 1.61s across a 1.6s hidden window — so the moment the
+         console comes back the frame is current and there is nothing to re-buffer.
+         Unmounting instead would restart it at zero in a fresh element, which is the
+         flash this whole layer exists to remove. Hiding it here also matters for a
+         surface the video must not tint at all: .viewport's scrollbar track is
+         transparent, so on the composer a drawn-but-wrong backdrop leaks a 14px
+         sliver of waves down the right edge. */
+      visibility: hidden;
+    }
+    .ground-video.on {
+      visibility: visible;
     }
 
     /* ── Scroll viewport — absolute fill, overflow-x: hidden prevents
@@ -397,11 +443,33 @@ export class AISurfaceSandbox extends LitElement {
     const activeSlot = this._committedSlot || this._activeSlot;
     // The base ground follows the surface so the fade never reveals the other surface's
     // colour: console paints #270F31, everything else (composer/spinner) the #582846 default.
-    const groundClass = activeSlot === 'console' ? 'ground-console' : '';
+    //
+    // The DESTINATION decides, which is read off headerTab rather than the committed slot:
+    // the shell flips the tab before it raises the assembly flag, so during assembly the tab
+    // already names the surface being assembled. Grounding to it keeps the colour right from
+    // the first frame of the spinner instead of flipping it under the spinner's last frame —
+    // and it is what lets the console's video layer hold steady across spinner→console with
+    // no tint change beneath it.
+    const destinationIsConsole = this.headerTab === 'console';
+    const groundClass = destinationIsConsole ? 'ground-console' : '';
 
     try {
       return html`
         <section id="ai-surface" class=${groundClass}>
+          ${this.consoleVideoSrc
+            ? html`
+                <video
+                  class="ground-video ${destinationIsConsole ? 'on' : ''}"
+                  src=${this.consoleVideoSrc}
+                  autoplay
+                  muted
+                  loop
+                  playsinline
+                  preload="auto"
+                  aria-hidden="true"
+                ></video>
+              `
+            : ''}
           <div class="viewport ${this._fadeClass}">
             <slot name=${activeSlot}></slot>
           </div>
@@ -434,6 +502,7 @@ declare module 'react' {
         React.HTMLAttributes<AISurfaceSandbox> & {
           'is-ai-assembling'?: '' | undefined;
           'header-tab'?: string;
+          'console-video-src'?: string;
           ref?: React.Ref<AISurfaceSandbox>;
         },
         AISurfaceSandbox

@@ -23,7 +23,7 @@ import LeftVerticalMenu from "@/components/LeftVerticalMenu";
 import LeftColumnHeader from "@/components/LeftColumnHeader";
 import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
-import consoleBackground from "@/assets/data-wave3.png";
+import consoleVideo from "@/assets/No-Copyright-waves.mp4";
 import composerBackground from "@/assets/composer-image-bg.jpg";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 // InteractiveChatInterface is RETIRED — archived, not deleted, at
@@ -508,19 +508,22 @@ export default function Index({
   const consoleRendererRef = useRef<any>(null);
   const composerRendererRef = useRef<any>(null);
 
-  // Preload both surface backgrounds at mount so a transition never paints a
-  // half-decoded image in sections. The browser fetches and decodes them eagerly
-  // here, into cache, before the first console→composer swap. decode() is the part
+  // Preload the composer background at mount so a transition never paints a
+  // half-decoded image in sections. The browser fetches and decodes it eagerly
+  // here, into cache, before the first composer swap. decode() is the part
   // that matters: setting .src only queues the fetch — a busy/oversized image (the
   // composer background ships as a photographic JPEG) can still be mid-decode when
   // the swap paints, which reads as "the background is still loading". Awaiting
   // decode() finishes that work up front so the paint is instant.
+  //
+  // The console needs none of this: its ground is the waves VIDEO, and
+  // <ai-surface-sandbox> mounts it (preload="auto") the moment it has the src — so it
+  // is buffered and already playing long before the console is ever shown. That is
+  // also why the video is a single element the sandbox owns rather than one per slot.
   useEffect(() => {
-    for (const src of [consoleBackground, composerBackground]) {
-      const img = new Image();
-      img.src = src;
-      if (img.decode) img.decode().catch(() => {});
-    }
+    const img = new Image();
+    img.src = composerBackground;
+    if (img.decode) img.decode().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -4666,21 +4669,34 @@ export default function Index({
                 // capability that was never used, with the state of the app.
                 is-ai-assembling={isAIAssembling ? '' : undefined}
                 header-tab={headerTab}
+                // THE CONSOLE'S GROUND, handed to the surface rather than painted by the
+                // slots: one element, owned by the sandbox, living outside the viewport's
+                // fade. See .ground-video in ai-surface-sandbox.ts for why the two slots
+                // below carry no backdrop of their own.
+                console-video-src={consoleVideo}
               >
                 {/* slot="spinner" — honest loading state: one real spinner bound to
                      the live request via isAIAssembling, one true sentence.
                      No scripted message rotation, no fake progress bar,
-                     no artificial minimum display time. */}
-                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? '#270F31' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? `url(${consoleBackground})` : `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                     no artificial minimum display time.
+
+                     NO BACKDROP OF ITS OWN on the console side: the console's ground
+                     (video + #270F31) belongs to <ai-surface-sandbox>, which paints it
+                     BEHIND this slot and outside the viewport's fade — so the waves run
+                     unbroken from the spinner through to the assembled console instead of
+                     fading out and back in mid-transition. The composer keeps its image. */}
+                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? 'transparent' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? 'none' : `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
                   <div className="w-8 h-8 border-4 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
                   <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
-                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', backgroundColor: '#270F31', position: 'relative' }}>
-                  {/* The image at 85%, on its own layer so only IT is faded — the cards
-                      and the chat above stay fully opaque (an element-level opacity would
-                      dim them too). */}
-                  <div aria-hidden="true" style={{ position: 'absolute', inset: 0, backgroundImage: `url(${consoleBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left', opacity: 0.75 }} />
+                <div slot="console" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'auto', position: 'relative' }}>
+                  {/* NO GROUND HERE — not the #270F31, not the waves. Both come from
+                      <ai-surface-sandbox> (console-video-src + the ground-console class),
+                      which paints them behind the whole viewport. A backdrop inside this
+                      slot lives inside the fade, so it went out with the spinner and came
+                      back in with the console: that swap was the flash. The cards and chat
+                      above stay fully opaque, since the video sits at 0.75 behind them. */}
                   {/* A FAILED ASSEMBLY MUST SAY SO, IN THE SLOT THAT IS SHOWN.
                       The full failure pane lives in slot="workspace", and the sandbox
                       projects ONE slot — so a console failure wrote its message into
