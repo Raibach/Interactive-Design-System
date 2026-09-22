@@ -98,7 +98,7 @@ export class AgentCardElement extends LitElement {
       position: relative;
       width: 262px;
       height: 251px;
-      background: var(--card-bg, #2C2A48);            /* the design's own fill */
+      background: var(--card-bg, #302256);            /* the design's own fill */
       /* THE BORDER IS THE HOVER'S — the owner, 2026-09-19: no border at rest, the rail's
          teal on hover. Transparent rather than absent, so the box never shifts by a pixel. */
       border: 1px solid transparent;
@@ -478,7 +478,7 @@ export class AgentCardElement extends LitElement {
 
     return html`
       <div class="card ${this._leaving ? 'leaving' : ''}" data-tag="agent-card" data-node-id="40001114:5813"
-           style="--card-bg: color-mix(in srgb, #2C2A48 87%, transparent);
+           style="--card-bg: #302256;
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
