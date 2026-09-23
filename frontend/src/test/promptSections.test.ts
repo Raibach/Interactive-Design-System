@@ -196,6 +196,39 @@ describe('normalising what can be decided', () => {
     expect(normalizeSectionType('Custom Data')).toBe('custom-data');
   });
 
+  it('treats the separator as spelling, not as part of the name', () => {
+    /*
+     * `agent_role`, `agent role` and `agent-role` are one seat written three ways, and only the
+     * third was understood. The alias table had grown a hand-added entry each time one came up —
+     * `tool_call`, `few_shot`, `custom_data` — and the two nobody had hit yet were `agent_role`
+     * and `user_role`. Measured 2026-09-23: her button said `write-seat:agent_role|…`, it
+     * resolved to nothing, and the write MADE A NEW ROW called `agent_role` beside the Agent Role
+     * seat. The owner, watching it: "she added an additional agent role with an underscore
+     * instead of using the existing one."
+     */
+    for (const spelling of ['agent_role', 'agent role', 'agent-role', 'AGENT_ROLE', '  agent_role  ']) {
+      expect(normalizeSectionType(spelling), spelling).toBe('agent-role');
+    }
+    expect(normalizeSectionType('user_role')).toBe('user-role');
+    expect(normalizeSectionType('system_role')).toBe('system-role');
+    expect(normalizeSectionType('few_shot')).toBe('few-shot');
+    expect(normalizeSectionType('custom_data')).toBe('custom-data');
+    expect(normalizeSectionType('tool_call')).toBe('tool-call');
+    // And a name that is genuinely NOT a seat is still undecided, PRESERVED as written — the
+    // tolerance is for separators, not for guessing. (Keeping the spelling is what lets the
+    // editor make a row named for it rather than silently calling the row Custom.)
+    expect(normalizeSectionType('hero specs')).toBe('hero specs');
+    expect(isUndecidedType('hero specs')).toBe(true);
+  });
+
+  it('finds the seat by any spelling a write may use', () => {
+    // The other direction: the name a WRITE carries, against the names the column HOLDS.
+    const named = ['System', 'User', 'Agent'];
+    expect(resolveSectionName('agent_role', named)).toBe(2);
+    expect(resolveSectionName('Agent Role', named)).toBe(2);
+    expect(resolveSectionName('agent-role', named)).toBe(2);
+  });
+
   it('is case- and whitespace-insensitive', () => {
     expect(normalizeSectionType('  SYSTEM  ')).toBe('system-role');
     expect(normalizeSectionType('Few Shot')).toBe('few-shot');

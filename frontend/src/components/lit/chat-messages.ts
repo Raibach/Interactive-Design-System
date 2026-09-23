@@ -29,6 +29,16 @@ export interface ChatMessage {
   nodeId?: string;
   /** The small note above a linked turn: what part of the flow it is. */
   label?: string;
+  /**
+   * AN ALERT, NOT A REMARK. A turn that STOPS the person — a held run that will not go until
+   * something is fixed — is not the same kind of thing as a sentence in a conversation, and it
+   * may not wear the same weight. The owner, 2026-09-23: "you can't serve alert messages with
+   * the same visual weight as every other message."
+   *
+   * It travels WITH the turn rather than being decided here by matching words in it: the seat
+   * that knows why it is an alert is the one that says so.
+   */
+  alert?: boolean;
 }
 
 export interface ChatConversation {
@@ -44,17 +54,55 @@ export class ChatMessages extends LitElement {
     sending: { type: Boolean },
     /** The node the canvas has selected, if any: the turn about it is marked. */
     highlightNodeId: { type: String, attribute: false },
+    /**
+     * THE BUTTONS THAT HAVE BEEN PRESSED, by their action — AND THE TURN THEY WERE PRESSED IN.
+     *
+     * A row of buttons is a LIST, not a choice between them, and nothing said so: the person
+     * pressed one and the other two stayed exactly as they were, so the row still read as
+     * "pick one" and they could not tell whether the work was done or whether the rest were
+     * still waiting. The owner, 2026-09-23: "when I click Fill User Role that button should
+     * change state ... by deactivating one when it's done that lets the user know it's a list."
+     *
+     * SCOPED TO ONE TURN, because an action name alone is not unique in a thread. Every
+     * proposing reply ends with the same `[Confirm](action:confirm)`, so a mark kept by action
+     * alone would draw the SECOND Confirm this conversation ever offered as already pressed.
+     * `spentTurn` is the CONTENT of the turn the press came from, and a button is spent only
+     * inside that turn — an offer repeated word for word is the same offer, which is the one
+     * case where sharing the mark is right.
+     *
+     * The seat owns the answers: <chat-panel> handles the press and outlives this element's
+     * re-renders, and passes these down as plain values (a Lit property compared by identity
+     * is what makes a re-render happen).
+     */
+    spentActions: { type: Array },
+    spentTurn: { type: String },
+    /**
+     * THE BUTTONS THE PROMPT ITSELF SAYS ARE DONE — read from the seats, not remembered.
+     *
+     * A press is remembered by the seat and lasts as long as the tab does; this is the half that
+     * SURVIVES, because the work it stands for is in the prompt the person saved. Reopening a
+     * package used to draw her review again with every button live over seats that had been
+     * filled (the owner, 2026-09-23: "it's not saving states … it represents the list again as
+     * if it wasn't done"). See shared/buttonState for what can and cannot be derived.
+     */
+    doneActions: { type: Array },
   };
 
   declare messages: ChatMessage[];
   declare sending: boolean;
   declare highlightNodeId?: string;
+  declare spentActions: string[];
+  declare spentTurn: string;
+  declare doneActions: string[];
 
   constructor() {
     super();
     this.messages = [];
     this.sending = false;
     this.highlightNodeId = undefined;
+    this.spentActions = [];
+    this.spentTurn = '';
+    this.doneActions = [];
   }
 
   static styles = css`
@@ -119,6 +167,30 @@ export class ChatMessages extends LitElement {
     .turn.linked:hover { background: #f4f8f8; }
     /* And the same turn, marked because the canvas has that node selected. */
     .turn.hl { background: #edf2f2; outline-color: #507274; }
+    /* AN ALERT IS A RING INSIDE THE TURN AND A WASH BEHIND THE WORDS.
+       Both of those are the owner's own instruction, given after seeing the first version
+       (which was an outline): "the red border needs to be inside of the container instead of
+       outside and we need to have a fill that is like 20% red."
+
+       AN INSET SHADOW, NOT A BORDER AND NOT AN OUTLINE. An outline is drawn OUTSIDE the box —
+       that is what it is for — and a border would add 4px to a turn that hugs its own lines,
+       moving every message under it the moment a reply is marked. An INSET box-shadow costs no
+       layout at all: the ring sits inside the turn's own edge, exactly where the instruction
+       puts it, and nothing on the page moves when it appears.
+       No backticks in this comment, deliberately: this is a Lit css literal.
+
+       THE WASH IS 20% AND IT IS MEASURED, not chosen by eye. The turn's ink is the card's own
+       #171717 (see the empty-thread rule below for why the card's colours are used at all),
+       and 20% of the alarm over the card's green lands at roughly rgb(176,170,165): against
+       #171717 that is about 7.9:1, well past AA's 4.5. A stronger wash would start eating that
+       margin — which is the failure this file already carries a note about. */
+    .turn.alert {
+      background: rgba(192, 57, 43, 0.2);
+      box-shadow: inset 0 0 0 2px #c0392b;
+    }
+    /* The alarm's own note colour, so a labelled alert does not carry a grey marker. */
+    .turn.alert .note { color: #a5281b; }
+
     /* THE USER'S TURN IS THE DESIGN'S BUBBLE, not a wash on this wrapper. v.4b draws
        it as its own component — "user-response-bubble" #40001119:6352 — so the fill,
        the padding and the radius live there now and this wrapper paints nothing. It
@@ -141,6 +213,27 @@ export class ChatMessages extends LitElement {
       transition: background 0.12s;
     }
     .turn .action:hover { background: rgba(255, 255, 255, 0.16); }
+    /* A BUTTON THAT HAS BEEN PRESSED IS SPENT — it says so, and it stops answering.
+       The row is a LIST OF THINGS TO DO, and this is what makes that legible: one press and
+       the pressed one reads done while the others stay live and pressable.
+       HOW IT READS, and why: the fill goes (it is no longer offering anything), the ink is
+       held at the card's own colour rather than greyed — a spent button is still a label the
+       person may want to re-read, and this file already has the note about what grey does to
+       contrast on this surface (see the empty-thread rule below: #6c757d measured 2.62:1,
+       a fail). What marks it is the check, the absence of fill, and the default cursor.
+       NOT struck through: the words are the work that was done, not a mistake. */
+    .turn .action.spent {
+      background: transparent;
+      border-color: rgba(23, 23, 23, 0.12);
+      color: inherit;
+      cursor: default;
+      padding-left: 4px;
+    }
+    .turn .action.spent::before { content: '\\2713\\00a0'; }
+    .turn .action.spent:hover { background: transparent; }
+    /* A button that is not pressable must not invite a press with a pointing hand, and it
+       must not be reachable by keyboard as though it were still an answer. */
+    .turn .action.spent:disabled { pointer-events: none; }
     /* THE EMPTY THREAD IS HER GREETING, IN THE CARD'S OWN TYPE.
        Every value here is the drawing's, from "chat-output-header" #40001119:6327 — the card
        holds its lines in Inter Medium 500 / 13px / 20px / #171717 (#40001119:6358, :6337) —
@@ -216,11 +309,13 @@ export class ChatMessages extends LitElement {
 
   /** An action button answers through the seat: the action goes back as a message — the
       same wire the retired seat's buttons sent (`[action]`). */
-  private _onActionSend(e: Event, action: string): void {
+  private _onActionSend(e: Event, action: string, turn: string): void {
     e.stopPropagation();
     this.dispatchEvent(
       new CustomEvent('chat-action-send', {
-        detail: { text: `[${action}]` },
+        // `turn` travels with it so the seat can mark the pressed button spent IN ITS OWN TURN
+        // and nowhere else — see the spentTurn note on the properties above.
+        detail: { text: `[${action}]`, turn },
         bubbles: true,
         composed: true,
       }),
@@ -262,6 +357,31 @@ export class ChatMessages extends LitElement {
   }
 
   /**
+   * ONE BUTTON OF HER OFFER — pressed or still waiting.
+   *
+   * `disabled` on a spent one, so it cannot be pressed twice: what the app does for the ones it
+   * handles itself would happen again (a second insertion of the same tool, a second write),
+   * and for the ones that go back to her it would spend a model call to repeat an answer. The
+   * label stays on screen either way, because the record of what was offered is part of the
+   * conversation.
+   */
+  private _actionButton(label: unknown, action: unknown, turn: string) {
+    const a = String(action);
+    // TWO WAYS A BUTTON IS DONE, and either is enough: the prompt says the work exists, or the
+    // person pressed it in this session. The first survives a reload because the prompt does;
+    // the second covers what the prompt cannot show — an answer to a question. See buttonState.
+    const spent =
+      this.doneActions.includes(a) ||
+      (turn !== '' && this.spentTurn === turn && this.spentActions.includes(a));
+    return html`<button
+      class="action ${spent ? 'spent' : ''}"
+      data-action=${action}
+      ?disabled=${spent}
+      @click=${(e: Event) => this._onActionSend(e, String(action), turn)}
+    >${label}</button>`;
+  }
+
+  /**
    * A TURN THAT IS ABOUT A NODE ANSWERS A CLICK — the other half of the link.
    *
    * It does not act: it says which node this turn is about and lets the host decide
@@ -281,7 +401,7 @@ export class ChatMessages extends LitElement {
     return html`
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
-          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : html`<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? html`<button class="action" data-action=${seg.action} @click=${(e: Event) => this._onActionSend(e, String(seg.action))}>${seg.label}</button>` : seg.text))}</span>`}</div>`)
+          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.alert ? 'alert' : ''} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : html`<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? this._actionButton(seg.label, seg.action, String(m.content ?? '')) : seg.text))}</span>`}</div>`)
           : nothing}
         ${this.sending
           ? html`<div class="thinking"><span class="spinner" aria-hidden="true"></span> Thinking…</div>`

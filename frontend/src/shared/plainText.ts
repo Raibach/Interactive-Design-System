@@ -185,12 +185,39 @@ export function asPlainText(text: string): string {
  * the tags raw (owner, 2026-09-19: "you've got these strange markup"). This is the display
  * edge performing the same extraction, on assistant text only, before asPlainText — the same
  * place and the same reason as the marker stripping above. The stored message is untouched.
+ *
+ * AND THE LIST HAS TO KEEP UP WITH WHAT SHE IS TOLD TO WRITE. A tag missing from here is a
+ * tag the person READS: measured 2026-09-23, a stored reply ended in a literal
+ * `<run_blocked/>` under her sentence, because the verdict tags are newer than this rule. The
+ * live panel strips them from the turn that produces them; the HISTORY path is this function,
+ * which had never heard of them. Anything added to her instructions belongs here too.
  */
 const CONTROL_TAG =
-  /<(update_agent|update_user|update_tool|update_few_shot|update_context|update_constraints)\b[^>]*>[\s\S]*?<\/\1>/g;
+  /<(update_agent|update_user|update_agent_role|update_tool|update_tool_call|update_few_shot|update_context|update_constraints|add_role|set_title|set_description|insert_tool|load_version|show_version|reassemble-console|project-card-element|add-button)\b[^>]*>[\s\S]*?<\/\1>/g;
 const ADD_ROLE_TAG = /<add_role\b[^>]*>[\s\S]*?<\/add_role>/g;
+
+/**
+ * AND ONE OF THEM MAY ARRIVE WITH A BODY. She is asked for `<run_blocked/>`, and the live
+ * panel strips a body-bearing `<run_blocked>…</run_blocked>` whole — so the same form is
+ * taken whole here. Reading her aside about why it stopped would be a different decision,
+ * and not this function's to make.
+ */
+const SOLO_PAIRED = /<(run_ok|run_blocked|save|get_versions)>[\s\S]*?<\/\1>/g;
+
+/**
+ * THE ONES THAT STAND ALONE. No body, so there is no closing tag to pair with: `<save/>`,
+ * `<run_ok/>`, and the forms she writes WITHOUT the slash — `<run_blocked>` was written bare,
+ * which is why a paired-only pattern could never have caught it. Opening and closing halves
+ * are both stripped, so a stray one does not survive as punctuation.
+ */
+const SOLO_TAG =
+  /<\/?(?:run_ok|run_blocked|save|clear_all|get_versions|eval_grounding|clear-surface)\s*\/?>/g;
 
 export function stripControlTags(text: string): string {
   if (!text) return text;
-  return text.replace(CONTROL_TAG, '').replace(ADD_ROLE_TAG, '');
+  return text
+    .replace(CONTROL_TAG, '')
+    .replace(SOLO_PAIRED, '')
+    .replace(SOLO_TAG, '')
+    .replace(ADD_ROLE_TAG, '');
 }

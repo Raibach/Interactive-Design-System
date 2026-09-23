@@ -21,6 +21,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { asPlainText } from '@/shared/plainText';
+import { stripControlTags } from '@/shared/plainText';
 
 /** The reply as it reached the screen, in the shape it was reported. */
 const reportedReply = [
@@ -152,5 +153,48 @@ describe('what is not markup is not touched', () => {
   it('leaves a pipe inside a sentence alone', () => {
     const sentence = 'Use "a | b" as the OR, quoted.';
     expect(asPlainText(sentence)).toBe(sentence);
+  });
+});
+
+
+describe('every tag she is told to write comes off the screen', () => {
+  /**
+   * THE HISTORY PATH, WHICH IS NOT THE LIVE ONE.
+   *
+   * `<chat-panel>._processReply` strips these tags from the turn that produces them. A stored
+   * reply is drawn from the DATABASE, through this function — and this list had fallen behind
+   * what she is told to write. Measured 2026-09-23: a conversation reopened with a literal
+   * `<run_blocked/>` sitting under her sentence, because the verdict tags are newer than the
+   * strip rule. A tag missing here is a tag the PERSON READS.
+   */
+  it('takes the verdict off, in both spellings she writes', () => {
+    expect(stripControlTags('The User Role is empty. <run_blocked>')).toBe('The User Role is empty. ');
+    expect(stripControlTags('The User Role is empty. <run_blocked/>')).toBe('The User Role is empty. ');
+    expect(stripControlTags('Everything it needs is here. <run_ok/>')).toBe('Everything it needs is here. ');
+    // A body-carrying form, if she ever writes one, goes whole.
+    expect(stripControlTags('No. <run_blocked>no tool</run_blocked>')).toBe('No. ');
+  });
+
+  it('takes the package setters and the tool insert off', () => {
+    expect(stripControlTags('Named it. <set_title>Insurance News Scout</set_title>')).toBe('Named it. ');
+    expect(stripControlTags('Added it. <set_description>Scouts the news.</set_description>')).toBe('Added it. ');
+    expect(stripControlTags('Put it in. <insert_tool>search-the-internet</insert_tool>')).toBe('Put it in. ');
+  });
+
+  it('takes every write tag off, including the one with a suffix the alternation missed', () => {
+    // `<update_agent_role>` is a DIFFERENT tag from `<update_agent>`, and a word-boundary
+    // alternation reads them as one: the older pattern stripped five of the seven steps and
+    // left the two it had not been told about on screen.
+    for (const tag of ['update_agent', 'update_user', 'update_agent_role', 'update_tool',
+                       'update_few_shot', 'update_context', 'update_constraints']) {
+      expect(stripControlTags(`Said it. <${tag}>the words</${tag}>`), tag).toBe('Said it. ');
+    }
+  });
+
+  it('leaves a sentence that merely mentions angle brackets alone', () => {
+    // The test that keeps this honest: the strip is a list of known tags, not a net for
+    // anything in brackets, so a comparison or a tag-shaped WORD survives.
+    expect(stripControlTags('Set it to <5 and it passes.')).toBe('Set it to <5 and it passes.');
+    expect(stripControlTags('Wrap it in <span> in the markup.')).toBe('Wrap it in <span> in the markup.');
   });
 });

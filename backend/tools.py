@@ -72,6 +72,14 @@ def _row_to_tool(row: Dict[str, Any], with_body: bool = False) -> Dict[str, Any]
         "sections": list(row["sections"] or [DEFAULT_SECTION]),
         "kind": row["kind"],
         "source": row["source"],
+        # WHETHER ANYTHING ANSWERS TO THIS NAME. `kind` says what the tool would
+        # do — reach out, or hand over words the system follows. This says whether
+        # the reaching out is wired: a service, named here, that tool_run knows
+        # how to ask. NULL is the honest answer for a tool that is a description
+        # of a capability and nothing else, and it is what the review before a Run
+        # reads to decide whether a prompt can run at all.
+        "runner": row.get("runner"),
+        "can_run": bool(row.get("runner")),
     }
     if with_body:
         tool["body"] = row["body"]
@@ -91,7 +99,7 @@ def list_tools(section: Optional[str] = None) -> List[Dict[str, Any]]:
             + "."
         )
 
-    sql = "SELECT name, summary, category, sections, kind, source FROM tools"
+    sql = "SELECT name, summary, category, sections, kind, source, runner FROM tools"
     params: tuple = ()
     if section is not None:
         sql += " WHERE %s = ANY(sections)"
@@ -137,7 +145,7 @@ def get_tool(name: str) -> Dict[str, Any]:
         with _pool().get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT name, summary, body, category, sections, kind, source "
+                "SELECT name, summary, body, category, sections, kind, source, runner "
                 "FROM tools WHERE name = %s",
                 (name,),
             )

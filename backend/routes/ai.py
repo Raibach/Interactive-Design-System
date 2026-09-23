@@ -971,7 +971,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
     {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
-    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "initial_sections": [
@@ -1104,6 +1104,10 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                         "session": {
                             "id": None,  # in-memory only until explicit Save
                             "title": suggested_title,  # AI-generated
+                            # A package being drafted has no description until someone writes
+                            # one; stated, so the seat reads "none" from the model rather than
+                            # from a missing key it has to interpret.
+                            "description": "",
                             "is_unsaved": True,
                             "left_column": {
                                 "saving": False,
@@ -1266,7 +1270,7 @@ Output ONLY this JSON (no markdown):
     {{"id": "left-col", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
-    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
   ],
   "ai_message": "Session open — your three panes are loaded."
@@ -1363,6 +1367,12 @@ Output ONLY this JSON (no markdown):
                             # so the prompt's bar had nothing to bind and drew its empty
                             # label. One value, one path, the same as the title.
                             "version": session.get("current_version") or 1,
+                            # THE DESCRIPTION, WHICH SHE IS ASKED TO JUDGE. The review before a
+                            # Run requires one, so the seat that asks for it has to be able to
+                            # READ it — measured 2026-09-23: the description was written and she
+                            # went on saying the package had none, because nothing ever put it
+                            # in front of her. One value, one path, the same as the title.
+                            "description": session.get("description") or "",
                             "is_unsaved": False,
                             "left_column": {
                                 "sections": sections,

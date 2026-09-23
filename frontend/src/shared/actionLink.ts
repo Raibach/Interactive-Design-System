@@ -98,6 +98,148 @@ export function parseWriteSeatAction(action: string): { section: string; value: 
 }
 
 /**
+ * The action of a `set-description` button: the package's one-line description is `text`.
+ *
+ * NOT `write-seat`, AND THAT IS THE WHOLE POINT. The description belongs to the PACKAGE — the
+ * line under its name in the library — and not to any seat of the prompt. She offered it as a
+ * button, and `write-seat` is the shape she reaches for, so a description sent down that path
+ * would add a row called "description" to the prompt: a seat that changes what runs, for a
+ * value that does not.
+ *
+ * BOTH SPELLINGS ARE READ. She wrote `set-description|<the words>` — one separator, no name —
+ * while every other action in this file is `name:arg`. A reader that insisted on the colon
+ * turned her button into a message to the model, which then said it had added a description.
+ * Tolerant here, once, rather than teaching her a spelling and hoping.
+ */
+export const SET_DESCRIPTION = 'set-description';
+
+export function setDescriptionAction(description: string): string {
+  return `${SET_DESCRIPTION}:${encodeActionArg(description)}`;
+}
+
+export function parseDescriptionAction(action: string): { description: string } | null {
+  const m = String(action ?? '').match(/^set[-_]description\s*[:|]\s*([\s\S]+)$/);
+  if (!m) return null;
+  // Encoded when it came from this file's own writer; raw when it came from her. Both are the
+  // words, and decoding a raw string is the identity.
+  const description = decodeActionArg(unescapeParens(m[1])).trim();
+  return description ? { description } : null;
+}
+
+/** Her payloads carry raw parens, which the render would end the link on. Undo that once. */
+function unescapeParens(raw: string): string {
+  return raw.replace(/%28/gi, '(').replace(/%29/gi, ')');
+}
+
+/**
+ * The action of a `merge-seat` button: move `from`'s words into `into`, and drop `from`.
+ *
+ * WHY THIS IS AN ACTION AND NOT TWO WRITES. Two rows standing for one step is the mistake a
+ * person makes by typing, and the repair is to put both texts in one row — which she could
+ * attempt with `<update_agent_role>the whole merged text</update_agent_role>` followed by a
+ * removal. That route goes through a model, which means the words come back REPHRASED: a
+ * 400-character identity returned as 380 characters of almost-the-same sentence. The person's
+ * text is theirs; a merge that rewrites it is a merge that loses it.
+ *
+ * So the move happens in the app, on the strings themselves — append, then remove — and the
+ * words arrive exactly as they were typed.
+ */
+export const MERGE_SEAT = 'merge-seat';
+
+export function mergeSeatAction(from: string, into: string): string {
+  return `${MERGE_SEAT}:${[from, into].map(encodeActionArg).join(ACTION_ARG_SEP)}`;
+}
+
+export function parseMergeSeatAction(action: string): { from: string; into: string } | null {
+  const head = `${MERGE_SEAT}:`;
+  if (!String(action ?? '').startsWith(head)) return null;
+  const parts = String(action).slice(head.length).split(ACTION_ARG_SEP).map(decodeActionArg);
+  const [from, into] = parts;
+  if (!from || !into) return null;
+  return { from, into };
+}
+
+/**
+ * The action of a `set-seat` button: this seat's text BECOMES `text` — it is not appended to.
+ *
+ * `write-seat` ADDS to a seat, which is right when the person is being given words to start
+ * from. The repairs she is asked to offer are the other kind: a seat that holds a tool block it
+ * should not, or placeholder text instead of an identity, is fixed by REPLACING what is there.
+ *
+ * She reached for this one herself, as a made-up action (`clean-agent-role`), which the app
+ * reported as something it does not know how to do. The intent was right; the name was hers.
+ */
+export const SET_SEAT = 'set-seat';
+
+export function setSeatAction(seat: string, text: string): string {
+  return `${SET_SEAT}:${[seat, text].map(encodeActionArg).join(ACTION_ARG_SEP)}`;
+}
+
+export function parseSetSeatAction(action: string): { seat: string; text: string } | null {
+  const head = `${SET_SEAT}:`;
+  if (!String(action ?? '').startsWith(head)) return null;
+  const parts = String(action).slice(head.length).split(ACTION_ARG_SEP).map(decodeActionArg);
+  const [seat, text] = parts;
+  if (!seat || text === undefined) return null;
+  return { seat, text };
+}
+
+/**
+ * The action of a `move-tool` button: take tool `name` out of wherever it sits and put it in `into`.
+ *
+ * THE REPAIR FOR A TOOL IN THE WRONG STEP, and she asked for it by this name before it existed —
+ * "Move tool to Tool Call step" was offered, pressed, and answered with "this app does not know
+ * how to do that". A tool may legitimately live beside the agent that uses it, so moving one is
+ * not a correction of a mistake; it is the person deciding where the step belongs, and the app
+ * moving the words without putting them through a model.
+ */
+export const MOVE_TOOL = 'move-tool';
+
+export function moveToolAction(name: string, into: string): string {
+  return `${MOVE_TOOL}:${[name, into].map(encodeActionArg).join(ACTION_ARG_SEP)}`;
+}
+
+export function parseMoveToolAction(action: string): { name: string; into: string } | null {
+  const head = `${MOVE_TOOL}:`;
+  if (!String(action ?? '').startsWith(head)) return null;
+  const parts = String(action).slice(head.length).split(ACTION_ARG_SEP).map(decodeActionArg);
+  const [name, into] = parts;
+  if (!name) return null;
+  return { name, into: into || 'Tool Call' };
+}
+
+/**
+ * THE TWO WORDS SHE READS BACK — her own answers to her own offer.
+ *
+ * Her instructions fix them: "The words are fixed: Confirm and Not now." They are not commands
+ * the app performs; they are the person's reply, and they go to her as a message like typed
+ * words would. They are named here because the panel has to tell them apart from a BUTTON THAT
+ * ASKS FOR SOMETHING THE APP CANNOT DO — and the shape does not say which is which: "confirm"
+ * and "set-description" are both single tokens.
+ */
+export const HER_ANSWERS = ['confirm', 'not-now'];
+
+/**
+ * The action of a `remove-seat` button: take row `seat` out of the prompt.
+ *
+ * The tag form (`<remove_role name="X"/>`) has existed all along; this is the same act as a
+ * button, because a repair the person cannot press is a repair they have to type out. It is the
+ * only destructive action in the set, so it is also the one she is told to ask about first.
+ */
+export const REMOVE_SEAT = 'remove-seat';
+
+export function removeSeatAction(seat: string): string {
+  return `${REMOVE_SEAT}:${encodeActionArg(seat)}`;
+}
+
+export function parseRemoveSeatAction(action: string): { seat: string } | null {
+  const head = `${REMOVE_SEAT}:`;
+  if (!String(action ?? '').startsWith(head)) return null;
+  const seat = decodeActionArg(String(action).slice(head.length)).trim();
+  return seat ? { seat } : null;
+}
+
+/**
  * `no-advice` — the way out of what she just offered.
  *
  * She ends an advisory turn with suggestions, and a suggestion you do not want is a
@@ -109,3 +251,31 @@ export function parseWriteSeatAction(action: string): { section: string; value: 
  * It takes no arguments. There is nothing to say.
  */
 export const NO_ADVICE = 'no-advice';
+
+/**
+ * The action of a `write-tool` button: put tool `name` into its seat, as the menu does.
+ *
+ * A TOOL IS NOT WORDS, WHICH IS WHY THIS IS NOT `write-seat`. The seat's own Functions /
+ * Tools menu inserts a tool as two things at once: a line naming the tool, and the tool's
+ * own text under it. `_insertTool` reads the text from the register when the menu is used.
+ * A button carrying the tool's NAME reaches the same code, so a tool inserted from the chat
+ * and a tool inserted by hand produce the same seat — the person can read what will run, and
+ * the prompt says which tool it names.
+ *
+ * The name is the register's own (`tools.name`), never a label: the token written into the
+ * prompt has to match a row.
+ */
+export const WRITE_TOOL = 'write-tool';
+
+export function writeToolAction(name: string): string {
+  return `${WRITE_TOOL}:${encodeActionArg(name)}`;
+}
+
+/** Read a `write-tool` action back. `null` for anything else, or a missing name. */
+export function parseWriteToolAction(action: string): { name: string } | null {
+  const head = `${WRITE_TOOL}:`;
+  if (!String(action ?? '').startsWith(head)) return null;
+  const name = decodeActionArg(String(action).slice(head.length)).trim();
+  if (!name || name.includes(ACTION_ARG_SEP)) return null;
+  return { name };
+}

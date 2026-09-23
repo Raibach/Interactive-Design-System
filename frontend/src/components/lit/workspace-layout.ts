@@ -140,12 +140,6 @@ export class WorkspaceLayout extends LitElement {
    */
   private static readonly DOCK_FALLBACK_MS = 420;
 
-  /**
-   * HOW LONG AN INVERTED BOX IS HELD BEFORE ITS TRANSFORM IS CLEARED — the pane's own duration
-   * plus a frame of slack, so the glide has landed before the inline styles come off.
-   */
-  private static readonly FLIP_CLEAR_MS = 560;
-
   private static readonly MIN_LEFT_PX = 60;
   /**
    * The collapsed chat column's floor — and it is the RAIL'S width, not the 60px
@@ -322,8 +316,34 @@ export class WorkspaceLayout extends LitElement {
      * and the grip still can.
      */
     this.addEventListener('run-click', this._onRunClick as EventListener);
+    /*
+     * AND ON THE WINDOW, WHICH IS WHERE IT IS SAID.
+     *
+     * `flow-view-ready` is the host's statement that the canvas is on screen — the moment the
+     * dock is waiting for. It was listened for on THIS ELEMENT while the host dispatches it on
+     * window, so the two never met: the element heard it only when the event happened to be
+     * raised from inside its own subtree, which is to say never. The dock then depended entirely
+     * on the run-click timer below, which means it happened only for a Run the PERSON pressed —
+     * a run released after her review, or one she started herself, moved nothing, and the prompt
+     * stayed open over the drawing. The owner, 2026-09-23: "on run in all instances … they should
+     * collapse."
+     */
+    window.addEventListener('flow-view-ready', this._dockNow as EventListener);
+    /*
+     * AND A RUN CAN BE STOPPED BEFORE IT STARTS. The host holds a Run and asks the person's
+     * assistant to check the prompt first; when it is held, no canvas is coming and the dock
+     * above would take the prompt down to its rail and give the width to an empty middle
+     * column — the whole workspace collapsing around a background. Measured 2026-09-23 on a
+     * package the assistant then blocked.
+     *
+     * The host speaks this the moment it holds the run, which is the same task as the click,
+     * so the timer below is always still pending when it arrives; nothing has moved yet and
+     * cancelling the timer is the whole of the undo. A held run that is later released draws
+     * its canvas through `flow-view-ready` like any other, so the dock is not lost — it lands
+     * when there is something for it to reveal.
+     */
+    window.addEventListener('a2ui:run-held', this._onRunHeld);
     // The host that swaps its middle column on a Run says when the new one is up.
-    this.addEventListener('flow-view-ready', this._dockNow as EventListener);
     this.addEventListener('flow-select', this._onFlowSelect as EventListener);
   }
 
@@ -340,10 +360,10 @@ export class WorkspaceLayout extends LitElement {
     this.removeEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);
-    this.removeEventListener('flow-view-ready', this._dockNow as EventListener);
+    window.removeEventListener('a2ui:run-held', this._onRunHeld);
+    window.removeEventListener('flow-view-ready', this._dockNow as EventListener);
     this.removeEventListener('flow-select', this._onFlowSelect as EventListener);
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
-    if (this._midFlipTimer !== null) window.clearTimeout(this._midFlipTimer);
     /*
      * A DRAG CANNOT OUTLIVE THE ELEMENT. Re-rendering the surface replaces this
      * element mid-gesture, and the flag that says "follow the mouse" went with it
@@ -608,19 +628,27 @@ export class WorkspaceLayout extends LitElement {
    */
   private _dockTimer: number | null = null;
 
-  /**
-   * THE MODE FLIP'S BOOKKEEPING — see _flipMiddleWidth. `_rightOverDrawn` is the decision the
-   * last render painted, so a FLIP can be told from an ordinary re-render; `_middleWidthBefore`
-   * is the box she is leaving, captured before the DOM changes.
-   */
-  private _rightOverDrawn: boolean | null = null;
-  private _middleWidthBefore: number | null = null;
-  private _midFlipTimer: number | null = null;
-
   private _onRunClick = (): void => {
+    this._leftOwnedBeforeRun = this._leftOwnedByOperator;
     this._leftOwnedByOperator = true;
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
     this._dockTimer = window.setTimeout(() => this._dockNow(), WorkspaceLayout.DOCK_FALLBACK_MS);
+  };
+
+  /**
+   * THE RUN WAS STOPPED BEFORE IT DREW. Undo exactly what the click did: the queued dock is
+   * cancelled, and the pane's ownership goes back to whoever held it — a hand that had already
+   * dragged this column owns it and must keep owning it, while a click that was the only thing
+   * at stake leaves the payload free to place the column again.
+   */
+  private _leftOwnedBeforeRun = false;
+
+  private _onRunHeld = (): void => {
+    if (this._dockTimer !== null) {
+      window.clearTimeout(this._dockTimer);
+      this._dockTimer = null;
+    }
+    this._leftOwnedByOperator = this._leftOwnedBeforeRun;
   };
 
   /** The dock, once — from the host's signal or from the fallback, whichever arrives first. */
@@ -643,70 +671,46 @@ export class WorkspaceLayout extends LitElement {
     return this._hasRight && !!middleEl && middleEl.tagName.toLowerCase() === 'agent-canvas';
   }
 
-  /**
-   * THE MIDDLE COLUMN'S WIDTH IS THE ONE BOX CSS CANNOT ANIMATE HERE — and it is why the Run
-   * read as two events rather than one movement.
+  /*
+   * THE FLIP IS GONE, AND THIS IS WHY.
    *
-   * Measured 2026-09-22, on the flip from pane to overlay: the middle column goes 1165px ->
-   * 1814px, while her column's own box does not move at all (left 1230, width 650, both
-   * states). The jump is 649px in ONE frame, and nothing in the stylesheet can catch it:
-   * .pane transitions flex-grow and flex-basis, and BOTH ARE UNCHANGED across the flip
-   * (measured 0.96748 before and after) — her column stops taking 650px of the row, so the
-   * free space changes, and free space is not a property of this element. A transition only
-   * fires when a transitioned property's value changes, and nothing did. So the drawing
-   * widened instantly while the dock glided 520ms behind it: one cut, then one movement.
+   * The middle column's width could not be animated, because on the mode change her column stops
+   * taking 650px of the row and the free space changes — and free space is not a property of this
+   * element, so no transition fires. The repair was a FLIP: put the box back where it was with a
+   * transform, then release it, so the width arrived on the pane's own curve. It worked, and it
+   * cost exactly what the note below used to admit: for 520ms the drawing's CONTENTS were
+   * stretched by scaleX.
    *
-   * THE FIX IS A FLIP — First, Last, Invert, Play — which is the technique for exactly this
-   * case, a layout change that has no transitionable property behind it. The box is put back
-   * where it was with a transform (no transition, so it is the frame that paints), then the
-   * transform is released with one, so the width arrives on the pane's own curve instead of
-   * appearing.
+   * The owner, watching a run, 2026-09-23: "some trailing pieces of component that follows in …
+   * it is actually pulling over the canvas controls with it. They should not be sliding in, they
+   * should load behind."
    *
-   * scaleX on the pane, deliberately, and not a pinned width: pinning would set flex and width
-   * inline, and the DOCK starts two frames later and moves the left column — a pinned middle
-   * could not absorb that and would snap when the pin came off. A transform costs no layout,
-   * so the dock still lands through the glide and both settle together.
-   *
-   * The cost is real and bounded: scaleX distorts the drawing's CONTENTS for 520ms. The middle
-   * column at this moment is a surface that has just arrived, so what the person sees is the
-   * drawing opening into place rather than a box appearing at full width.
+   * The ordering fixed it instead. The prompt now FOLDS before the drawing is published, so by
+   * the time the middle column appears there is no width left to jump — the panes have already
+   * settled, and the drawing mounts into a box that is its final size. Nothing to animate, so
+   * nothing needs faking, and nothing of the drawing is distorted on its way in.
    */
-  private _flipMiddleWidth(from: number): void {
-    const m = this.shadowRoot?.querySelector('.pane.middle') as HTMLElement | null;
-    if (!m) return;
-    const to = m.getBoundingClientRect().width;
-    if (!(from > 0) || !(to > 0) || Math.abs(to - from) < 1) return;
-    // Motion is a courtesy, never a requirement — as everywhere else in this file.
-    if (typeof window.matchMedia === 'function'
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    m.style.transformOrigin = 'left center';
-    m.style.transition = 'none';
-    m.style.transform = 'scaleX(' + (from / to) + ')';
-    // Force the inverted box to be the frame that paints, so releasing it has a start value.
-    void m.offsetWidth;
-    m.style.transition = 'transform var(--dur-pane) var(--ease-settle)';
-    m.style.transform = '';
-
-    if (this._midFlipTimer !== null) window.clearTimeout(this._midFlipTimer);
-    this._midFlipTimer = window.setTimeout(() => {
-      m.style.transition = '';
-      m.style.transform = '';
-      m.style.transformOrigin = '';
-      this._midFlipTimer = null;
-    }, WorkspaceLayout.FLIP_CLEAR_MS);
-  }
-
-  /** Capture the box she is leaving, BEFORE the render that changes her layout mode. */
-  protected willUpdate(): void {
-    const next = this._rightOverDrawing;
-    if (this._rightOverDrawn !== null && next !== this._rightOverDrawn) {
-      const m = this.shadowRoot?.querySelector('.pane.middle') as HTMLElement | null;
-      this._middleWidthBefore = m ? m.getBoundingClientRect().width : null;
-    } else {
-      this._middleWidthBefore = null;
+  /**
+   * CLOSE THE PROMPT — asked for by the HOST, at the moment a run starts.
+   *
+   * The dock used to be armed by the Run button and landed by the canvas arriving, which put the
+   * two movements on top of each other: the picture took the width while the prompt was still
+   * folding, and the drawing's own contents were stretched across the gap in between (see the
+   * note where the FLIP used to be). The order the owner asked for, watching it: "close it
+   * slowly, do not slam things shut … the canvas controls should not be sliding in, they should
+   * load behind."
+   *
+   * So the host calls this when the run starts, lets the fold finish, and only then publishes the
+   * drawing — which mounts into a pane that is already its final size, so nothing about it moves
+   * on arrival.
+   */
+  dockPrompt(): void {
+    this._leftOwnedByOperator = true;
+    if (this._dockTimer !== null) {
+      window.clearTimeout(this._dockTimer);
+      this._dockTimer = null;
     }
-    this._rightOverDrawn = next;
+    this._dockLeft();
   }
 
   /** Collapse the left pane to its floor. */
@@ -918,6 +922,29 @@ export class WorkspaceLayout extends LitElement {
     this._middle = 1;
     // Her column opens at her width, and `_openThird` claims it as the operator's on the way.
     this._openThird();
+    this.requestUpdate();
+  }
+
+  /**
+   * ANOTHER PACKAGE IS OPEN: THE PROMPT IS ON SCREEN, AND THE PANE IS THE PAYLOAD'S AGAIN.
+   *
+   * Two things have to happen here and neither is a restore.
+   *
+   * The prompt is OPENED, because a folded prompt is what a RUN left behind (the dock) and a
+   * package being opened is not a run — there is no drawing on screen to watch instead. The
+   * owner, 2026-09-23: "when I open an existing prompt ... the agent prompt area is not
+   * expanded. It's collapsed and it makes me think that the prompt text areas are not loading."
+   *
+   * And its OWNERSHIP IS HANDED BACK. `_leftOwnedByOperator` is set by the dock and by any drag
+   * of the divider, and this element is REUSED across packages — so after one Run in a session,
+   * every later package would open with the prompt folded and the public setter refusing to
+   * change it. That is the same complaint a second time, from a different cause, and it is why
+   * this is a method rather than a property write.
+   */
+  openPrompt(): void {
+    this._leftOwnedByOperator = false;
+    this._setLeftCollapsed(false);
+    this._left = 1;
     this.requestUpdate();
   }
 
@@ -1215,7 +1242,26 @@ export class WorkspaceLayout extends LitElement {
      */
     const growTotal = this._left + middleGrow + (rightAbsorbs ? 1 : 0);
     const share = (g: number) => (growTotal > 0 ? g / growTotal : 0);
-    const leftFlex = `${share(this._left)} 1 0%`;
+    /*
+     * A COLLAPSED PROMPT IS ITS RAIL, WHATEVER SET THE FLAG.
+     *
+     * `_left` is the prompt's SHARE of what her column leaves, and the flag is whether the
+     * prompt is folded away — two facts, and they were only ever moved together by the DOCK
+     * (see _dockLeft, which zeroes the share). Every other writer moved the flag alone: the
+     * payload restoring a saved arrangement, and the rail. So a package whose save said
+     * `leftCollapsed: true` reopened with the seats hidden and the pane still holding its
+     * share of the row — measured 2026-09-23 at 417px of empty column beside her, which the
+     * owner read, exactly rightly, as "the prompt text areas are not loading" and then found
+     * filled in the moment a drag gave the pane width again.
+     *
+     * The floor is a fact about the COLLAPSED column (the file's own header says so: "the 60px
+     * left rail ... COLLAPSED widths"), so it is decided here, from the flag, and cannot drift
+     * from it. `_left` keeps its value for the moment the column opens again — the hand that
+     * reopens it sets a share from the pointer, and nothing reopens it to the old share.
+     */
+    const leftFlex = this._leftCollapsed
+      ? `0 0 ${minLeft}px`
+      : `${share(this._left)} 1 0%`;
     /*
      * HER BOX IS SIZED HERE, IN THE INLINE STYLE, and it is sized differently depending on what
      * she is standing on — which is not a detail to be tidied away:
@@ -1285,11 +1331,6 @@ export class WorkspaceLayout extends LitElement {
   /** A change to the column's state is also a change to what the panel is told. */
   protected updated(changed: Map<string, unknown>): void {
     if (changed.has('isThirdOpen')) this._syncRightPanel();
-    // THE MODE FLIP'S GLIDE, run once the DOM carries the new box — see _flipMiddleWidth.
-    // `_middleWidthBefore` is written by willUpdate, so it is only non-null on a flip.
-    const before = this._middleWidthBefore;
-    this._middleWidthBefore = null;
-    if (before !== null) this._flipMiddleWidth(before);
   }
 }
 

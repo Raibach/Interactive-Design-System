@@ -23,6 +23,10 @@ import {
   fillFieldAction,
   parseFillFieldAction,
   ACTION_ARG_SEP,
+  writeToolAction,
+  parseWriteToolAction,
+  writeSeatAction,
+  parseWriteSeatAction,
 } from '@/shared/actionLink';
 
 /** The render's own matcher, so the test fails the way the app does. */
@@ -70,5 +74,25 @@ describe('an action link survives the render that finds it', () => {
     // An encoded argument that will not decode is returned as read, not thrown on: a
     // broken button is worth reporting, and it must not take the chat panel down.
     expect(decodeActionArg('%E0%A4%A')).toBe('%E0%A4%A');
+  });
+
+  it('carries a TOOL by name, and never confuses the two write actions', () => {
+    /*
+     * A tool button names a row in the register, and the register's names are the only thing
+     * that resolves. Two properties matter and both were live failures on 2026-09-23: the two
+     * write actions must not read each other's payloads (a `write-tool` reaching the seat writer
+     * would put the tool's NAME in as prose), and a name carrying the separator must be refused
+     * rather than split.
+     */
+    const link = actionLink('Search the internet', writeToolAction('search-the-internet'));
+    const m = BUTTON.exec(link);
+    expect(m).not.toBeNull();
+    expect(parseWriteToolAction(m![2])).toEqual({ name: 'search-the-internet' });
+
+    // Each reader refuses the other's action, and the seat reader refuses a bare tool name.
+    expect(parseWriteToolAction(writeSeatAction('Tool Call', '{{tool:read-a-wiki}}'))).toBeNull();
+    expect(parseWriteSeatAction(writeToolAction('read-a-wiki'))).toBeNull();
+    expect(parseWriteToolAction('write-tool:')).toBeNull();
+    expect(parseWriteToolAction(`write-tool:a${ACTION_ARG_SEP}b`)).toBeNull();
   });
 });

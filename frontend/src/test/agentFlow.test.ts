@@ -299,6 +299,75 @@ describe('buildRepairFlow — a run with no finding (the plain prompt run)', () 
   });
 });
 
+describe('a tool is drawn where it was named, and joined to that seat', () => {
+  /**
+   * THE RELATIONSHIP THE OWNER ASKED FOR.
+   *
+   * "You can put the tool in the agent role if the agent is the one using the tool … it has to be
+   * represented in that diagram after we run. That's the relationship that the prompt has to
+   * make."
+   *
+   * The drawing previously read the Tool Call seat alone, and looked there for a repair prompt's
+   * `tool figma node …` line — so a register tool written as `{{tool:search-the-internet}}`,
+   * which is what the seat's own menu writes, was invisible ANYWHERE. Measured 2026-09-23: a
+   * tool named in the prompt and a drawing reporting "the prompt names no tool".
+   */
+  const withToolIn = (seatName: string, seatType: string) => [
+    { name: 'System Role', type: 'system-role', content: 'You are a precise assistant.' },
+    { name: 'User Role', type: 'user-role', content: 'Find the news.' },
+    {
+      name: seatName,
+      type: seatType,
+      content: 'You are the news scout.\n\n{{tool:search-the-internet}}\nWrite the question you want answered.',
+    },
+  ];
+
+  it('puts the node on the row of the seat that names it, whatever seat that is', async () => {
+    const g = buildRepairFlow({ label: 'Scout', finding: null, sections: withToolIn('Agent Role', 'agent-role') });
+    const tool = g.nodes.find((n) => n.id === 'step:tool');
+    const agentSeat = g.nodes.find((n) => n.id === 'seat:2:agent-role');
+    expect(tool).toBeTruthy();
+    expect(tool!.title).toBe('search-the-internet');
+    // Level with the seat that named it — the relationship is the row.
+    expect(tool!.y).toBe(agentSeat!.y);
+  });
+
+  it('joins it to that seat, not to a Tool Call seat it does not use', async () => {
+    const g = buildRepairFlow({ label: 'Scout', finding: null, sections: withToolIn('Agent Role', 'agent-role') });
+    expect(g.edges).toContainEqual({ from: 'seat:2:agent-role', to: 'step:tool' });
+  });
+
+  it('still draws a tool in the Tool Call seat, off that seat', async () => {
+    const g = buildRepairFlow({ label: 'Scout', finding: null, sections: withToolIn('Tool Call', 'tool-call') });
+    expect(g.edges).toContainEqual({ from: 'seat:2:tool-call', to: 'step:tool' });
+  });
+
+  it('draws one node per tool when a prompt names several', async () => {
+    const sections = [
+      { name: 'System Role', type: 'system-role', content: 'x' },
+      {
+        name: 'Agent Role',
+        type: 'agent-role',
+        content: 'Scout.\n{{tool:search-the-internet}}\n{{tool:read-a-wiki}}',
+      },
+    ];
+    const g = buildRepairFlow({ label: 'Scout', finding: null, sections });
+    const ids = g.nodes.filter((n) => n.kind === 'tool-call').map((n) => n.id);
+    expect(ids).toEqual(['step:tool:search-the-internet', 'step:tool:read-a-wiki']);
+    expect(g.edges).toContainEqual({ from: 'seat:1:agent-role', to: 'step:tool:read-a-wiki' });
+  });
+
+  it('still reports an absent tool when the prompt really names none', async () => {
+    const g = buildRepairFlow({
+      label: 'Scout',
+      finding: null,
+      sections: [{ name: 'System Role', type: 'system-role', content: 'x' }],
+    });
+    expect(g.nodes.some((n) => n.kind === 'tool-call')).toBe(false);
+    expect(g.absent.map((a) => a.step)).toContain('tool-call');
+  });
+});
+
 describe('toolFromSections — the address the prompt itself names', () => {
   it('reads the tool and the Figma node out of the Tool Call seat', () => {
     expect(toolFromSections(sections)).toEqual({

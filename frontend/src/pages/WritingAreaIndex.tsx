@@ -41,6 +41,7 @@ import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { markArrival } from "@/shared/arrival";
+import { autoAdviceOn } from "@/shared/autoAdvice";
 import { CORE_ROLE_LABELS } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
 import { aiOrchestrator } from "@/utils/aiOrchestrator";
@@ -148,6 +149,23 @@ const FIGMA_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
  * delay added to the work.
  */
 const MIN_RUN_BUSY_MS = 3200;
+
+/**
+ * HOW LONG THE PROMPT TAKES TO FOLD — the pane's own `--dur-pane`, restated here because the
+ * shell has to WAIT for it before it shows what the fold was making room for. Two places, one
+ * number: if the stylesheet's curve changes, this changes with it (workspace-layout's
+ * stylesheet is where it is declared).
+ */
+const RUN_DOCK_MS = 520;
+
+/**
+ * THE BEAT BETWEEN THE FOLD AND THE DRAWING — the deliberate pause that lets a person see the
+ * prompt close as one event and the picture arrive as the next. The owner, 2026-09-23: "add an
+ * intentional 300 ms spinner delay on the canvas, loaded after the agent prompt panel has had a
+ * chance to close … we're creating intentional delays so that the user can track what's
+ * happening."
+ */
+const RUN_CANVAS_AFTER_DOCK_MS = 300;
 
 export default function Index({
   onLogout: _onLogout,
@@ -353,6 +371,86 @@ export default function Index({
     // was on screen, find no sections, and give up in silence.
     const s = (surfaceDataModelRef.current as any)?.session?.left_column?.sections;
     return Array.isArray(s) ? s : [];
+  }, []);
+
+  /**
+   * THE TOOLS A PROMPT NAMES THAT NOTHING CAN RUN.
+   *
+   * Two kinds of tool live in the register (backend/tools.py): `read`, which is words the
+   * system follows and needs nothing behind it, and `call`, which asks another program for
+   * something. A `call` tool is only real if a service answers it, and that is what the row's
+   * `runner` says (backend/tool_run.py). No runner: the prompt names a step that cannot
+   * happen, and the owner's rule is flat — "we cannot allow a prompt that's not operational to
+   * be run."
+   *
+   * THE REGISTER IS THE AUTHORITY, AND IT IS READ, NOT GUESSED. A tool becomes real by being
+   * given a runner in one row; this stops naming it with no second list to keep in step, and a
+   * tool that loses its service starts being named again the same way.
+   *
+   * It answers with NAMES, and an empty answer means "none found" — never "none exist". A
+   * register that cannot be read does not block a run: the review happens either way, and the
+   * tool list normally reaches her with the workspace context besides.
+   */
+  const toolsThatCannotRun = useCallback(async (held: any[]): Promise<string[]> => {
+    try {
+      const resp = await fetch(`${API_BASE}/ai/tools`);
+      if (!resp.ok) return [];
+      const data = await resp.json().catch(() => null);
+      const list: any[] = Array.isArray(data) ? data : Array.isArray(data?.tools) ? data.tools : [];
+      const reachOut = list
+        .filter((t) => t?.kind === 'call' && !t?.runner && t?.name)
+        .map((t) => String(t.name));
+      if (!reachOut.length) return [];
+      // The whole of what a prompt says, lowercased once: a tool is named either as the menu's
+      // own token ({{tool:search-the-internet}}) or in a sentence, and both are the same fact.
+      const text = held.map((s: any) => String(s?.content ?? '')).join('\n').toLowerCase();
+      return reachOut.filter((name) => text.includes(name.toLowerCase()));
+    } catch {
+      return [];
+    }
+  }, []);
+
+  /**
+   * ONE ROW, APPLIED TO THE MODEL — replaced where it already sits, and ADDED where it does not.
+   *
+   * There was no add path at all, and that is why a row the assistant made did not survive: the
+   * element CAN grow its own list (`_seatFor`, the seat menu's Add Section, an add-role), it
+   * reports the new row, and every writer here dropped anything whose index was past the end of
+   * the model — `if (index < held.length)` — so the model never learned about it and the next
+   * model-driven render handed the element its old list back. Measured 2026-09-23: she added a
+   * constraint, and it was gone.
+   *
+   * `index: null` is a row with no position yet — `<prompt-section-editor>` reports those with
+   * `section-add`, which carries the row and no index.
+   *
+   * APPLIED INSIDE THE UPDATER, never from a read of the model outside it, because both reports
+   * for one new row (`section-add` and then the `section-update` that follows it) arrive in the
+   * same tick and `surfaceSections()` would hand both of them the same stale list — the second
+   * would compute an array without the first one's row. The shape test is what makes the second
+   * report a no-op instead of a duplicate, and `same` is what keeps any of it from looping.
+   */
+  const patchSectionAt = useCallback((index: number | null, section: any) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      const left = session.left_column ?? {};
+      const have = Array.isArray(left.sections) ? left.sections : [];
+      const shape = (s: any) => `${s?.type ?? ''}\u0000${s?.name ?? ''}\u0000${s?.content ?? ''}`;
+      const sections = index !== null && index < have.length
+        ? have.map((s: any, i: number) => (i === index ? { ...s, ...section } : s))
+        : have.some((s: any) => shape(s) === shape(section))
+          ? have
+          : [...have, section];
+      const same = have.length === sections.length
+        && have.every((s: any, i: number) => shape(s) === shape(sections[i]));
+      if (same) return prev;
+      return {
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          session: { ...session, left_column: { ...left, sections } },
+        },
+      };
+    });
   }, []);
 
   const surfaceCompiledOutput = useCallback((): string => {
@@ -734,6 +832,20 @@ export default function Index({
   // Same reason: listeners registered once must be able to read the LIVE session
   // object (the effect that wires them does not re-run on session change).
   const currentPromptSessionObjRef = useRef<any>(null);
+
+  /**
+   * HER REVIEW IS CLEARED BY HER, NOT BY THE CLOCK. Set when she emits `<run_ok/>` and
+   * read by the Run gate, which lets exactly one run through per approval — the released
+   * run arrives as the same `run-requested` it was just held from.
+   */
+  const runApprovedRef = useRef(false);
+
+  /**
+   * WHAT WAS HELD IS WHAT RUNS. A held Run keeps the sections it arrived with, so the run
+   * that her approval releases is the one she reviewed — not a fresh read of the column,
+   * which by then may have been edited, swapped out, or emptied by whatever she said.
+   */
+  const heldRunRef = useRef<{ sections?: any[] } | null>(null);
 
   /**
    * THE BAR'S ID AND VERSION ARE SET HERE, NOT BOUND — and this effect sits below the
@@ -1930,6 +2042,78 @@ export default function Index({
     return typeof s?.title === 'string' ? s.title : '';
   }, []);
 
+  /**
+   * THE DESCRIPTION INTO THE SURFACE, WHERE THE SEAT THAT JUDGES IT READS IT.
+   *
+   * The same pair as the title above, for the same reason: <chat-panel> is bound to
+   * /session/description and it is the seat that says whether a package has one. A write that
+   * only reached React state would persist and leave the seat reading the old value — so the
+   * button that added the description would stay live, and the next review would be told the
+   * package has none. One fact, one path, written where it is read.
+   */
+  const writeDescriptionToSurface = useCallback((next: string) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      if ((session.description ?? null) === next) return prev;
+      return {
+        ...prev,
+        dataModel: { ...prev.dataModel, session: { ...session, description: next } },
+      };
+    });
+  }, []);
+
+  /**
+   * THE DESCRIPTION, WRITTEN WHERE IT LIVES — the second half of `set-package-description`.
+   *
+   * The session row carries it (prompt-sessions PUT takes a partial update), the React copy
+   * follows so the console card reads the new line without a reload, and the SURFACE is written
+   * too (see writeDescriptionToSurface) so the seat that judges the package sees it at once.
+   *
+   * AN UNSAVED PACKAGE HAS NOWHERE TO PUT IT YET. There is no row to write to, and inventing one
+   * is exactly the mistake the title path stopped making — the first SAVE creates the row, and a
+   * save generates the description from the prompt anyway. So a draft's description is said back
+   * as unsaved rather than dropped in silence; the person is told, once, in the console's own
+   * voice, and the next save carries it.
+   */
+  const handlePromptDescriptionChange = useCallback(async (description: string) => {
+    const id = currentPromptSessionObjRef.current?.id;
+    if (!id) {
+      writeDescriptionToSurface(description);
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+        detail: {
+          role: 'assistant',
+          content: 'That description will be saved with the package — this draft has no record yet.',
+        },
+      }));
+      return;
+    }
+    try {
+      const resp = await fetch(`${API_BASE}/prompt-sessions/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': getStoredUserId(),
+        },
+        body: JSON.stringify({ description }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      setCurrentPromptSession((prev: any) =>
+        prev ? { ...prev, description, updatedAt: new Date().toISOString() } : prev,
+      );
+      writeDescriptionToSurface(description);
+      console.log('📝 [CRUD] Description written:', description.slice(0, 60));
+    } catch (error) {
+      // Said out loud: a description the person cannot see is one they will write again.
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+        detail: {
+          role: 'assistant',
+          content: `The description was not saved — ${String(error)}`,
+          alert: true,
+        },
+      }));
+    }
+  }, []);
+
   const handlePromptTitleChange = async (newTitle: string) => {
     // Serialization guard: share mutex with handleSavePrompt to prevent double-record race
     if (isSavingRef.current) {
@@ -2113,13 +2297,12 @@ export default function Index({
       // `surfaceSections()`. That is how a package gets written with 42 characters while
       // a person watches their prompt on screen. Measured 2026-09-17: typing "ZQ" into
       // System Role left the element holding 2 characters and the model still holding 0.
+      //
+      // AND A ROW THAT IS PAST THE END IS AN ADDED ROW, not a write to ignore. See
+      // patchSectionAt: the drop was silent, so a row the assistant made never reached the
+      // model and came back off the next render.
       if (typeof index === 'number' && index >= 0 && section) {
-        const held = surfaceSections();
-        if (index < held.length) {
-          const next = held.slice();
-          next[index] = { ...next[index], ...section };
-          writeSectionsToSurface(next);
-        }
+        patchSectionAt(index, section);
       }
 
       const held = repairSectionsRef.current;
@@ -2134,11 +2317,88 @@ export default function Index({
       hasUnsavedChangesRef.current = true;
     };
     window.addEventListener('section-update', handler);
-    return () => window.removeEventListener('section-update', handler);
+
+    /*
+     * AND A ROW THE ELEMENT MADE. `<prompt-section-editor>` grows its own list — the seat
+     * menu's Add Section, an add-role, and now a write to a seat the prompt does not have —
+     * and says so with `section-add`, which carries the row itself. Nothing anywhere listened,
+     * so the row existed only inside the element: drawn, and not in the model. This is that
+     * event's other end. (The repair copy needs nothing here: a repair prompt's rows are the
+     * finding's, and a row added to one is not part of the finding.)
+     */
+    const onSectionAdd = (e: Event) => {
+      const section = ((e as CustomEvent).detail || {}).section;
+      if (!section) return;
+      patchSectionAt(null, section);
+      hasUnsavedChangesRef.current = true;
+    };
+    window.addEventListener('section-add', onSectionAdd);
+
+    /*
+     * AND A ROW TAKEN OUT, WHICH NOTHING LISTENED FOR EITHER.
+     *
+     * The element has reported removals and reorders since it was written — its own header lists
+     * both as events it emits, and the tag registry repeats it — and neither had a listener. So
+     * the seat menu's Delete, the assistant's `<remove_role>`, and a merge all removed a row from
+     * the ELEMENT: drawn as gone, still in the model, and back on screen at the next
+     * model-driven render. Measured 2026-09-23 while adding the merge.
+     *
+     * REMOVED BY INDEX, GUARDED BY NAME. An index alone would cut whatever had moved into that
+     * slot if a write landed between the report and this listener; the name is what the element
+     * meant, and a row whose name no longer matches is not the row that was removed.
+     */
+    const onSectionRemove = (e: Event) => {
+      const { index, name } = ((e as CustomEvent).detail || {}) as { index?: number; name?: string };
+      if (typeof index !== 'number' || index < 0) return;
+      setWorkspaceTree((prev) => {
+        const session = prev.dataModel.session ?? {};
+        const left = session.left_column ?? {};
+        const have: any[] = Array.isArray(left.sections) ? left.sections : [];
+        if (index >= have.length) return prev;
+        const named = (s: any) => String(s?.name || s?.section || s?.role || s?.type || '');
+        if (name && named(have[index]) !== String(name)) return prev;
+        const sections = have.filter((_, i) => i !== index);
+        return {
+          ...prev,
+          dataModel: { ...prev.dataModel, session: { ...session, left_column: { ...left, sections } } },
+        };
+      });
+      hasUnsavedChangesRef.current = true;
+    };
+    window.addEventListener('section-remove', onSectionRemove);
+
+    // A REORDER IS THE SAME KIND OF REPORT: the element decided the order, and the model follows.
+    const onSectionReorder = (e: Event) => {
+      const { from, to } = ((e as CustomEvent).detail || {}) as { from?: number; to?: number };
+      if (typeof from !== 'number' || typeof to !== 'number') return;
+      if (from < 0 || to < 0 || from === to) return;
+      setWorkspaceTree((prev) => {
+        const session = prev.dataModel.session ?? {};
+        const left = session.left_column ?? {};
+        const have: any[] = Array.isArray(left.sections) ? left.sections : [];
+        if (from >= have.length || to >= have.length) return prev;
+        const sections = have.slice();
+        const [moved] = sections.splice(from, 1);
+        sections.splice(to, 0, moved);
+        return {
+          ...prev,
+          dataModel: { ...prev.dataModel, session: { ...session, left_column: { ...left, sections } } },
+        };
+      });
+      hasUnsavedChangesRef.current = true;
+    };
+    window.addEventListener('section-reorder', onSectionReorder);
+
+    return () => {
+      window.removeEventListener('section-update', handler);
+      window.removeEventListener('section-add', onSectionAdd);
+      window.removeEventListener('section-remove', onSectionRemove);
+      window.removeEventListener('section-reorder', onSectionReorder);
+    };
     // The writers are re-created when the model changes, so the listener is re-registered
     // with them: a handler holding the first render's copy would write from the model as
     // it was when the page loaded.
-  }, [surfaceSections, writeSectionsToSurface]);
+  }, [surfaceSections, writeSectionsToSurface, patchSectionAt]);
 
   // ── Keep a repair prompt in the column ────────────────────────────────────
   // No dependency array, on purpose: this re-asserts AFTER EVERY COMMIT.
@@ -3976,6 +4236,35 @@ export default function Index({
    */
   useEffect(() => {
     const stored = currentPromptSession?.workspace;
+    /*
+     * THE PROMPT IS ON SCREEN WHEN A PACKAGE OPENS, AND THAT DOES NOT DEPEND ON A SAVE.
+     *
+     * Above the `stored` guard on purpose: an unsaved package, or one whose workspace was never
+     * recorded, still has to open with its prompt visible — and the pane may be folded from a
+     * Run in the package before this one, because the layout element is reused and the dock
+     * marks it operator-owned. See workspace-layout's `openPrompt`, which opens the column and
+     * hands the pane's ownership back to the payload in the same act.
+     *
+     * What the person reported (2026-09-23): "when I open an existing prompt ... the agent
+     * prompt area is not expanded. It's collapsed and it makes me think that the prompt text
+     * areas are not loading."
+     */
+    const openThePrompt = (): boolean => {
+      const el = deepFind<HTMLElement & { openPrompt?: () => void }>('workspace-layout');
+      if (!el?.openPrompt) return false;
+      el.openPrompt();
+      return true;
+    };
+    if (!openThePrompt()) {
+      // The layout arrives with the surface, so a package opened from a cold start has no
+      // element to speak to yet. Same retry the stored view uses below, same give-up.
+      let frames = 0;
+      const open = () => {
+        if (openThePrompt() || ++frames >= 40) return;
+        requestAnimationFrame(open);
+      };
+      requestAnimationFrame(open);
+    }
     if (!stored) return;
     // THE GRAPH COMES BACK; THE DRAWING DOES NOT — NOT UNTIL A RUN SHOWS IT.
     //
@@ -4009,15 +4298,20 @@ export default function Index({
       // THE SAME SHADOW-PIERCING READ AS THE SAVE'S (see there): `document.querySelector`
       // finds neither element in this shell, so both writes below were no-ops and a package
       // "reopened where it was left" only in the record.
-      const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
       const canvas = deepFind<HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean }>('agent-canvas');
       if (canvas?.applyWorkspaceState) {
         canvas.applyWorkspaceState(stored);
         applied = true;
       }
-      if (layout && typeof stored.leftCollapsed === 'boolean') {
-        layout.leftCollapsed = stored.leftCollapsed;
-      }
+      /*
+       * THE PROMPT IS NOT RESTORED FOLDED — see `openThePrompt` above, which has already put it
+       * back. `leftCollapsed: true` is in a package's save because a RUN docked the prompt, and
+       * a package being opened is not a run: there is no drawing on screen to watch instead, so
+       * the prompt is the only thing there is to look at. This is the owner's own rule for the
+       * other column, applied to this one — "the canvas is not supposed to appear until you
+       * click run" (2026-09-22): a save records what a run looked like, and a reopened package
+       * does not inherit a run.
+       */
       if (!applied && ++frames < 40) requestAnimationFrame(apply);
     };
     requestAnimationFrame(apply);
@@ -4220,6 +4514,141 @@ export default function Index({
       fromEditor.length ? '' : `— editor empty, running the ${sections.length} the column holds`,
     );
 
+    // ── HER REVIEW, BEFORE THE RUN ───────────────────────────────────────────
+    //
+    // A Run used to go straight to the model. Now it is held and she is asked whether the
+    // prompt is ready — the list is READ-ME/FLOW-REQUIREMENTS.md, and the point is not
+    // compliance but that a bad prompt is caught while it is cheap to fix, by the person
+    // who wrote it, before it becomes a bad flow.
+    //
+    // THE RUN IS RELEASED BY HER SAYING SO, NOT BY HER SILENCE. `<run_ok/>` in her reply
+    // is the only thing that proceeds; a `<run_blocked>` or no tag at all leaves it held.
+    // Defaulting to "go" on a missing answer is how a prompt with a named problem goes
+    // through because the machinery assumed yes.
+    //
+    // AND IT IS HERS TO SWITCH OFF. `autoAdvice` is the same flag that stops her greeting
+    // packages and offering next steps — one preference, one switch, because "I do not
+    // want to be advised" is one preference. A run that reaches this point with it off
+    // proceeds as it always did.
+    //
+    // `runApprovedRef` is set by the approval event and read here: the released run
+    // arrives as the same `run-requested` and must pass the gate it was just cleared by.
+    const gateOn = autoAdviceOn();
+    if (gateOn && !runApprovedRef.current) {
+      // Held, and the held payload is what her approval will release.
+      heldRunRef.current = detail;
+      /*
+       * THE BUTTON ANSWERS THE PRESS. A held run used to leave the controls exactly as they
+       * were — no spinner, no change — so the button read as dead while she was in fact
+       * reading the prompt. The owner, 2026-09-23: "run should not be a dead button."
+       *
+       * NOTHING ELSE OF THE RUN'S OPENING MOVE IS TAKEN: the output is NOT cleared and the
+       * middle column is not told a run is on, because no run started. The spinner is the
+       * whole of it, and she takes it down again — with her verdict (run-approved re-enters
+       * this handler and runs, run-blocked stops it) — never on a timer of the shell's.
+       */
+      runBusyFromRef.current = Date.now();
+      setRunControlsBusy(true);
+      const heldSections = sections;
+      const title = surfaceTitle() || currentPromptSessionObjRef.current?.title || '';
+      const description = String(currentPromptSessionObjRef.current?.description || '').trim();
+      // SHE REVIEWS THE WORDS, NOT A SUMMARY OF THEM. "Agent Role: has content" tells her
+      // nothing she can act on — a seat can be non-empty and still be a bad instruction,
+      // which is the thing this gate exists to catch. Each seat goes in whole, cut only
+      // when it runs long, so what she judges is what will be run.
+      const seatLines = heldSections
+        .map((s: any) => {
+          const label = s.name || s.section || s.type || 'section';
+          const body = String(s.content || '').trim();
+          if (!body) return `- ${label}: (EMPTY)`;
+          return `- ${label}: ${body.length > 600 ? `${body.slice(0, 600)}…` : body}`;
+        })
+        .join('\n');
+      /*
+       * WHAT IT NAMES THAT CANNOT RUN — the requirement the gate could not see without this.
+       *
+       * The register has two kinds of tool (backend/tools.py): `read`, which is words the system
+       * follows and works today, and `call`, which asks another program for something. NOTHING
+       * EXECUTES A `call` TOOL YET, so a prompt whose job depends on one is not operational — it
+       * says the system will reach out and no part of the system does. The owner, 2026-09-23:
+       * "we cannot allow a prompt that's not operational to be run."
+       *
+       * SHE IS THE ONE WHO SAYS IT, which is why this is a FACT HANDED OVER and not a refusal
+       * here: the register is read, the prompt's own words are searched for a tool that cannot
+       * run, and the answer becomes a line in her review. Grace stops the run and talks to the
+       * person; the shell does not take that conversation away from her.
+       *
+       * A failure to read the register is NOT a block: the run is held for review either way,
+       * and the list of tools is a fact she is usually given anyway (the workspace context
+       * carries it). An empty answer here says "nothing found", not "nothing exists".
+       */
+      const cannotRun = await toolsThatCannotRun(heldSections);
+      window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+        detail: {
+          // THIS TURN CAN STOP SOMETHING, so the seat is told which kind of turn it is. It owes
+          // a verdict for a run review, and it marks its own reply as an alert when the answer
+          // is no — the message's weight is decided there, not here.
+          review: 'run',
+          request: [
+            'A person has pressed Run and the prompt is held until you say it is ready.',
+            `Its name: ${title || '(none)'}. Its description: ${description || '(none)'}.`,
+            'Its seats, as the person left them:',
+            seatLines || '(the column is empty)',
+            '',
+            ...(cannotRun.length
+              ? [
+                  `THIS PROMPT NAMES TOOLS THAT CANNOT RUN YET: ${cannotRun.join(', ')}.`,
+                  'Those tools have no service behind them, so the step they stand for will not',
+                  'happen — a prompt that needs one is NOT operational and must not be run. That',
+                  'alone is reason enough to block it: say which tool has nothing behind it, name',
+                  'the tools that DO run as buttons the person can press instead, and end with',
+                  '<run_blocked/>.',
+                  '',
+                ]
+              : []),
+            'Review it against the requirements list before Run:',
+            'the package needs a name and a description; the Agent Role and the User Role need',
+            'content; no seat may be present and empty; any tool it names must exist in the',
+            'register; no two seats may stand for the same step; and the instruction has to say',
+            'one job completely enough that a person who did not write it could still do it.',
+            'THE SEATS ARE THE DRAWING. What is listed above is exactly what the canvas will',
+            'draw as nodes, so two rows for one step is two nodes for one step, and it is a',
+            'reason to hold this Run. It is not a reason to tell anybody off: the person may',
+            'have made the second row without meaning to, or may want two — say what you see in',
+            'one sentence and offer to combine them as a button the person can press. The merge',
+            'moves their words as they wrote them; it does not retype them.',
+            'NAME EVERYTHING THAT IS WRONG, IN THIS ONE REPLY, AND NEVER ONE AT A TIME. Every',
+            'unmet requirement goes in this single answer, each with its own button, so the person',
+            'can work the whole list in one pass. A reply that names one thing and waits costs',
+            'them a trip to the prompt and back for every item, and hides how much is left — they',
+            'cannot tell a nearly-finished prompt from one that is barely started. Watched at the',
+            'screen, 2026-09-23: "she is making the user click again, then go to the list, then',
+            'click again." This is the whole list, once.',
+            'If everything it needs is there, say so in one sentence and end with <run_ok/>.',
+            'If something is missing — or it names a tool that is not in the register, or one',
+            'that nothing can run — offer each fix as a button the person can press, and end with',
+            '<run_blocked/>. Do not emit <run_ok/> until it is ready. A prompt that is not',
+            'operational does not run.',
+            'DO NOT recite the rules themselves and do not congratulate; name only what is',
+            'actually wrong with THIS prompt. If nothing is wrong, one short sentence will do.',
+          ].join('\n'),
+        },
+      }));
+      /*
+       * AND THE ROOM STAYS WHERE IT IS. The Run button docks the prompt and gives the width to
+       * the canvas — the layout's own act, armed the moment the button is clicked (see
+       * workspace-layout's run-click). A held run draws no canvas, so the dock would take the
+       * prompt down to its rail and leave the person looking at a background: measured
+       * 2026-09-23, pressing Run on a package she then blocked collapsed the whole workspace.
+       * A run that never started must not rearrange the screen, so the layout is told.
+       */
+      window.dispatchEvent(new CustomEvent('a2ui:run-held'));
+      console.log('[WritingAreaIndex] Run held for review');
+      return;
+    }
+    heldRunRef.current = null;
+    runApprovedRef.current = false; // one run per approval
+
     // ── NOTHING TO RUN IS THE ONLY THING THAT STOPS A RUN ────────────────────
     //
     // A RUN DOES NOT NEED A PACKAGE. This used to be nested inside "if there is no
@@ -4308,20 +4737,41 @@ export default function Index({
           : currentPromptSessionObjRef.current?.title || 'This run'),
     };
     flowFactsRef.current = { running: true };
-    setOutputColumn('flow');
-    publishRepairFlow();
-    // THE CANVAS IS UP, SO THE PROMPT MAY FOLD. The dock is queued on this signal (see
-    // workspace-layout): two frames, because a React render plus the renderer's rebuild and
-    // a paint have to happen before the new middle column is actually on screen — and the
-    // dock landing before it is what made her column take the width, then give it back.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      // THE BAR THAT ARRIVES IS TOLD, NOT ASSUMED. The swap replaced the middle column, so
-      // the element that took the flag at the click is gone and the one now on screen was
-      // created while the run was already in flight. One re-assert here is what puts the
-      // spinner on the controls the person is actually looking at.
-      setRunControlsBusy(true);
-      window.dispatchEvent(new CustomEvent('flow-view-ready'));
-    }));
+    /*
+     * THE PROMPT CLOSES FIRST. THE PICTURE ARRIVES AFTER IT.
+     *
+     * These are two movements, and they used to be one: the canvas was published immediately and
+     * the prompt folded around it, so the drawing took its width while the pane beside it was
+     * still moving — and the drawing's own contents were stretched across the gap that opened
+     * between them. Watched at the screen, 2026-09-23: "the left panel slams to the left real
+     * fast and then there's some trailing pieces of component that follows … it's actually
+     * pulling over the canvas controls with it. They should not be sliding in, they should load
+     * behind."
+     *
+     * SO THE TWO ARE SEPARATED BY A BEAT THE PERSON CAN SEE. The prompt closes at its own pace
+     * (the pane's 520ms curve, from the layout's own stylesheet), and only then is the drawing
+     * mounted — into a pane that is already the size it will be, so nothing about it slides,
+     * stretches or follows anything in. What the person tracks is: the button spins, the prompt
+     * folds, the picture is there.
+     *
+     * THE DELAYS ARE THE FEATURE. They are what makes an event legible as an event rather than
+     * as a glitch, and they are named here so they can be tuned as one thing rather than hunted
+     * for across three files.
+     */
+    const layoutEl = deepFind<HTMLElement & { dockPrompt?: () => void }>('workspace-layout');
+    layoutEl?.dockPrompt?.();
+    window.setTimeout(() => {
+      setOutputColumn('flow');
+      publishRepairFlow();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        // THE BAR THAT ARRIVES IS TOLD, NOT ASSUMED. The swap replaced the middle column, so
+        // the element that took the flag at the click is gone and the one now on screen was
+        // created while the run was already in flight. One re-assert here is what puts the
+        // spinner on the controls the person is actually looking at.
+        setRunControlsBusy(true);
+        window.dispatchEvent(new CustomEvent('flow-view-ready'));
+      }));
+    }, RUN_DOCK_MS + RUN_CANVAS_AFTER_DOCK_MS);
     // …AND THE SPINNER IS HELD FOR A FLOOR OF ITS OWN, so the canvas is PRESENTED rather than
     // watched arriving: the assembly is as fast as it is, and a control that stops spinning
     // half a second in reads as a glitch, not as work. Released on the canvas's ready signal,
@@ -4607,6 +5057,75 @@ export default function Index({
     window.addEventListener("save-template", handleSaveTemplateEvent);
 
     window.addEventListener("run-requested", handleRunRequested);
+
+    /*
+     * THE RUN SHE APPROVED IS THE RUN THAT GOES.
+     *
+     * The chat panel speaks this event when her reply carries `<run_ok/>`. It releases the
+     * Run this file is holding, and it releases exactly that one: the sections kept in
+     * `heldRunRef` are re-dispatched as the same `run-requested`, which now passes a gate
+     * that has already been answered and clears both records on the way through.
+     *
+     * AN APPROVAL WITH NOTHING HELD IS IGNORED. She can emit `<run_ok/>` in a conversation
+     * about something else, and a flag set then would silently wave through the NEXT run —
+     * which is a person's prompt going out unreviewed because of a sentence she wrote
+     * about a different one. With nothing held there is nothing to release.
+     */
+    const handleRunApproved = () => {
+      const held = heldRunRef.current;
+      if (!held) {
+        console.log('[WritingAreaIndex] Run approval arrived with nothing held — ignored');
+        return;
+      }
+      heldRunRef.current = null;
+      runApprovedRef.current = true;
+      console.log('[WritingAreaIndex] Run released by her review');
+      window.dispatchEvent(new CustomEvent('run-requested', { detail: held }));
+    };
+    window.addEventListener('a2ui:run-approved', handleRunApproved);
+
+    /*
+     * AND SHE SAID NO. The run stays held and the button comes back out of its spin — the whole
+     * of what this event does. Nothing here closes the panel, clears the column, or takes her
+     * words off the screen: she has just told the person what to fix, and the next thing they
+     * do is read it and fix it.
+     */
+    const handleRunBlocked = () => {
+      if (!heldRunRef.current) return;
+      setRunControlsBusy(false);
+      console.log('[WritingAreaIndex] Run stays held — she blocked it');
+    };
+    window.addEventListener('a2ui:run-blocked', handleRunBlocked);
+
+    /*
+     * SHE ASKS FOR THE RUN HERSELF — `<run_prompt/>` in a reply.
+     *
+     * The tag has been in her instructions since the retired React seat, and it has been
+     * dispatching `ai-run-prompt` the whole time with NOTHING on the other end (the listener
+     * that used to exist went with the seat). So a reply that said "I'll run it now" ran
+     * nothing: the person read a promise and watched a screen that did not change. The owner,
+     * 2026-09-23: "the AI can initiate the run again — I want to see the spinner."
+     *
+     * IT SKIPS THE REVIEW, AND MUST. The gate exists so that a prompt is checked before it
+     * runs; she IS the check, and asking her to re-approve her own decision is a loop — she
+     * would review it, answer `<run_ok/>`, and the released run would arrive at the same gate
+     * again. `runApprovedRef` is set here for exactly that reason, and the released run clears
+     * it on the way through like any other approval.
+     *
+     * THE SPINNER IS THE RUN'S OWN, from the same place the button's click gets it: the
+     * controls are told the run is on, so a run she starts looks identical to one the person
+     * pressed — which is the whole point of her being able to start one.
+     */
+    const handleAiRun = () => {
+      if (runApprovedRef.current) return; // a run is already released and on its way
+      const held = heldRunRef.current;
+      heldRunRef.current = null;
+      runApprovedRef.current = true;
+      console.log('[WritingAreaIndex] Run asked for by Grace');
+      if (!held) setRunControlsBusy(true);
+      window.dispatchEvent(new CustomEvent('run-requested', { detail: held ?? { sections: surfaceSections() } }));
+    };
+    window.addEventListener('ai-run-prompt', handleAiRun);
     window.addEventListener("clear-output", handleClearOutput);
 
     /*
@@ -4626,6 +5145,25 @@ export default function Index({
     };
     window.addEventListener("title-change", handleTitleSet);
     window.addEventListener("set-prompt-title", handleTitleSet);
+
+    /*
+     * THE DESCRIPTION, WHICH HAD NO WRITER.
+     *
+     * The package's one-line description is on the console card and is asked for by name in the
+     * review before a Run — and nothing in the app could write it. Grace tried, with a tag she
+     * invented, and the description stayed empty while her reply said it was added (measured
+     * 2026-09-23).
+     *
+     * IT GOES THROUGH THE SAVE PATH, because the description lives on the session row and that
+     * path is what knows how to reach it. Unsaved packages are not a special case: a name on a
+     * draft lives on the surface until the first save, and the same is true of this.
+     */
+    const handleDescriptionSet = (e: Event) => {
+      const description = String(((e as CustomEvent).detail || {}).description ?? '').trim();
+      if (!description) return;
+      void handlePromptDescriptionChange(description);
+    };
+    window.addEventListener("set-package-description", handleDescriptionSet);
 
     // Wire the bottom control bar (control-bar from Figma node 40000761:261) to the *existing* CRUD paths only.
     // No new save/run/version logic — re-uses handleSavePromptRef + run-requested dispatch exactly as the Lit editor does.
@@ -4694,9 +5232,13 @@ export default function Index({
       window.removeEventListener("switchToChatTab", handleSwitchToChatTab);
       window.removeEventListener("save-template", handleSaveTemplateEvent);
       window.removeEventListener("run-requested", handleRunRequested);
+      window.removeEventListener('a2ui:run-approved', handleRunApproved);
+      window.removeEventListener('a2ui:run-blocked', handleRunBlocked);
+      window.removeEventListener('ai-run-prompt', handleAiRun);
       window.removeEventListener("clear-output", handleClearOutput);
       window.removeEventListener("title-change", handleTitleSet);
       window.removeEventListener("set-prompt-title", handleTitleSet);
+      window.removeEventListener("set-package-description", handleDescriptionSet);
       window.removeEventListener('save-click', handleControlBarSave as EventListener);
       window.removeEventListener('run-click', handleControlBarRun as EventListener);
       window.removeEventListener('undo-click', handleControlBarUndo as EventListener);

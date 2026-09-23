@@ -207,6 +207,10 @@ TABLE_DEFINITIONS = {
             kind VARCHAR(10) NOT NULL DEFAULT 'read',
             source VARCHAR(60) NOT NULL DEFAULT 'authored',
             origin TEXT,
+            -- WHO ANSWERS WHEN THIS TOOL IS CALLED. NULL is a tool that is a
+            -- description of a capability and nothing more: readable, writable
+            -- into a prompt, and not runnable. See tool_run.py for the runners.
+            runner VARCHAR(40),
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW(),
             CONSTRAINT tools_kind_check CHECK (kind IN ('read', 'call'))
@@ -761,6 +765,11 @@ COLUMN_MIGRATIONS = [
     ("user_memories", "promoted_at", "TIMESTAMP"),
     ("user_memories", "promoted_by", "UUID"),
     ("user_memories", "project_id", "UUID"),
+    # A tool's runner: which service answers when a prompt calls it. Blank on every
+    # database that predates it, so the column arrives saying "nothing runs this
+    # yet" — which is the truth about those rows until TOOL_RUNNERS_SQL says
+    # otherwise, and what the review before a Run reads.
+    ("tools", "runner", "VARCHAR(40)"),
 ]
 
 # SQL to run after column migrations — fixes NOT NULL constraints that should be nullable
@@ -899,77 +908,112 @@ ON CONFLICT (name) DO NOTHING;
 # Everything else belongs to the seat it was written for: a written procedure
 # sits in agent-role, and something the system reaches out and calls sits in
 # tool-call, which is the seat that has always been the shared one.
+#: THE RUNNER EACH TOOL'S NAME IS WIRED TO, or NULL for a tool that is only a
+#: description. A runner is a service `tool_run` knows how to ask; a tool with no
+#: runner can be read, written into a prompt, and described — and pressing Run will
+#: not make it do anything, which is what the review before a Run is told.
+#:
+#: NO KEYS, DELIBERATELY. Every runner here answers without an account. A tool that
+#: needs a key is broken until somebody buys something, and a register of those is a
+#: register that lies about what the system can do.
+TOOL_RUNNERS_SQL = """
+UPDATE tools SET
+    runner = CASE name
+        WHEN 'search-the-internet' THEN 'news'
+        WHEN 'research-a-topic'    THEN 'research'
+        WHEN 'read-a-wiki'         THEN 'wikipedia'
+        WHEN 'query-a-database'    THEN 'this-database'
+        ELSE NULL
+    END,
+    summary = CASE name
+        WHEN 'search-the-internet' THEN 'Look something up on the internet and bring the answer back.'
+        WHEN 'research-a-topic'    THEN 'Run structured research across several sources and pull it together.'
+        WHEN 'read-a-wiki'         THEN 'Look a subject up in the encyclopaedia and bring the opening back.'
+        WHEN 'query-a-database'    THEN 'Ask this system its own records a question and get the answer back.'
+        ELSE summary
+    END,
+    body = CASE name
+        WHEN 'read-a-wiki' THEN
+            'Ask about anything with an article: the answer is what the encyclopaedia says, quoted from the article and cited. Background, not news and not opinion. Put the subject on the last line.'
+        WHEN 'query-a-database' THEN
+            'Ask about what this system holds — the prompt packages that exist, the conversations and how much was said in them. Plain words, not a query language: this reads the records this system already keeps and nothing else. Put the question on the last line.'
+        WHEN 'search-the-internet' THEN
+            'Write the question you want answered. The system reaches out, reads what it finds, and returns what it learned. Say what you are looking for in plain words. Put the question on the last line.'
+        ELSE body
+    END
+"""
+
 DEFAULT_TOOLS_SQL = """
-INSERT INTO tools (name, summary, body, category, sections, kind, source) VALUES
+INSERT INTO tools (name, summary, body, category, sections, kind, source, runner) VALUES
     ('search-the-internet',
      'Look something up on the internet and bring the answer back.',
-     'Write the question you want answered. The system reaches out, reads what it finds, and returns what it learned. Say what you are looking for in plain words.',
-     'connecting', ARRAY['*'], 'call', 'authored'),
+     'Write the question you want answered. The system reaches out, reads what it finds, and returns what it learned. Say what you are looking for in plain words. Put the question on the last line.',
+     'connecting', ARRAY['*'], 'call', 'authored', 'news'),
 
     ('research-a-topic',
      'Run structured research across several sources and pull it together.',
-     'Gather from more than one place, weigh what agrees against what does not, and report what held up. Say the question and how deep to go.',
-     'research', ARRAY['*'], 'call', 'trueforge'),
+     'Gather from more than one place, weigh what agrees against what does not, and report what held up. Say the question and how deep to go. Put the question on the last line.',
+     'research', ARRAY['*'], 'call', 'trueforge', 'research'),
 
     ('read-a-wiki',
-     'Read a repository wiki and answer questions about it.',
-     'Ask about the codebase in plain words. The answer comes from the generated wiki rather than from guessing.',
-     'research', ARRAY['*'], 'call', 'trueforge'),
+     'Look a subject up in the encyclopaedia and bring the opening back.',
+     'Ask about anything with an article: the answer is what the encyclopaedia says, quoted from the article and cited. Background, not news and not opinion. Put the subject on the last line.',
+     'research', ARRAY['*'], 'call', 'trueforge', 'wikipedia'),
 
     ('plan-a-wiki',
      'Lay out the structure of a repository wiki before it is written.',
      'Decide what a wiki should cover and in what order, from the shape of the codebase.',
-     'research', ARRAY['agent-role'], 'read', 'trueforge'),
+     'research', ARRAY['agent-role'], 'read', 'trueforge', NULL),
 
     ('capture-notes',
      'Capture what was learned into a shared knowledge page.',
      'Turn a finding into a written page someone else can read later. Say what to capture and where it goes.',
-     'research', ARRAY['tool-call'], 'call', 'trueforge'),
+     'research', ARRAY['tool-call'], 'call', 'trueforge', NULL),
 
     ('query-a-database',
-     'Ask a database a question and get the rows back.',
-     'Write what you want to know in plain words. The query is built and run, and the rows come back.',
-     'research', ARRAY['tool-call'], 'call', 'trueforge'),
+     'Ask this system its own records a question and get the answer back.',
+     'Ask about what this system holds — the prompt packages that exist, the conversations and how much was said in them. Plain words, not a query language: this reads the records this system already keeps and nothing else. Put the question on the last line.',
+     'research', ARRAY['tool-call'], 'call', 'trueforge', 'this-database'),
 
     ('analyse-data',
      'Load data, work it over, and show what it says.',
      'For counting, comparing and charting. Say the question the data should answer.',
-     'research', ARRAY['tool-call'], 'call', 'trueforge'),
+     'research', ARRAY['tool-call'], 'call', 'trueforge', NULL),
 
     ('build-a-web-page',
      'Build a page that stands on its own and renders in a browser.',
      'Make something whole and self-contained that can be opened and used on its own.',
-     'building', ARRAY['agent-role'], 'read', 'trueforge'),
+     'building', ARRAY['agent-role'], 'read', 'trueforge', NULL),
 
     ('build-a-connection',
      'Build a new connection to another program so the system can reach it.',
      'For when something needs to be reachable that is not reachable yet. Describe what it does and what it needs.',
-     'building', ARRAY['agent-role'], 'read', 'trueforge'),
+     'building', ARRAY['agent-role'], 'read', 'trueforge', NULL),
 
     ('make-art',
      'Make drawn or generated imagery from a description.',
      'Describe what should be shown. Seeded so the same description gives the same result twice.',
-     'making', ARRAY['agent-role'], 'read', 'trueforge'),
+     'making', ARRAY['agent-role'], 'read', 'trueforge', NULL),
 
     ('track-work',
      'Create, update and search tracked work items.',
      'For keeping a list of what is in flight and who has it.',
-     'flows', ARRAY['tool-call'], 'call', 'trueforge'),
+     'flows', ARRAY['tool-call'], 'call', 'trueforge', NULL),
 
     ('fix-failing-builds',
      'Look at a failing check on a change and fix it.',
      'Read the failure, work out why, and correct it.',
-     'building', ARRAY['tool-call'], 'call', 'trueforge'),
+     'building', ARRAY['tool-call'], 'call', 'trueforge', NULL),
 
     ('triage-errors',
      'Look into reported errors and work out what to do about them.',
      'Read the report, find the cause, and say what the fix is.',
-     'building', ARRAY['tool-call'], 'call', 'trueforge'),
+     'building', ARRAY['tool-call'], 'call', 'trueforge', NULL),
 
     ('write-a-new-tool',
      'Write a new tool and package it so the system can offer it.',
      'For making a tool that is not here yet. Describe what it should do.',
-     'building', ARRAY['agent-role'], 'read', 'trueforge')
+     'building', ARRAY['agent-role'], 'read', 'trueforge', NULL)
 ON CONFLICT (name) DO NOTHING;
 """
 
@@ -1321,6 +1365,21 @@ def init_database():
             print("  Tools seeded or already exist")
         except Exception as e:
             print(f"  Warning: Could not seed tools: {e}")
+
+        # Step 7b: Wire the tools a service answers.
+        #
+        # AN UPDATE, NOT PART OF THE INSERT. Every database already has these rows, so
+        # an insert-on-conflict would leave the runners unwritten on all of them — the
+        # wiring would exist only on a database created after today. This states the
+        # wiring for every tool on every start, NULL included: "nothing answers this"
+        # is as much a fact as a runner is, and it is what the review before a Run
+        # reads to decide whether a prompt can run at all.
+        print("Wiring tool runners...")
+        try:
+            cur.execute(TOOL_RUNNERS_SQL)
+            print("  Tool runners set")
+        except Exception as e:
+            print(f"  Warning: Could not set tool runners: {e}")
 
         cur.close()
         conn.close()

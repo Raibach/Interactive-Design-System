@@ -223,11 +223,12 @@ export const LEGACY_TYPE_ALIASES: Record<string, string> = {
  *
  * Anything here that also reaches a diagram is a reason not to draw yet.
  */
-export const UNDECIDED: Array<{ value: string; seenAt: string; why: string }> = [
+export const UNDECIDED: Array<{ value: string; seenAt: string; why: string; decided?: string }> = [
   {
     value: 'custom',
     seenAt: 'prompt-section-editor.ts:248 ("Add Section")',
     why: 'The menu tile is "Custom Data" (custom-data); Add Section creates "Custom Role N" with type "custom". Whether a free-form extra row is the same seat is a product decision, not a rename.',
+    decided: '2026-09-23 — YES, and it is a row like any other. The owner, on the assistant being unable to add one: "she should be able to insert a section right into the prompt… I can do it by going to custom… it creates the role and then I have to change the name." So a write to a name with no declared seat makes a row with type custom and that name (prompt-section-editor `_seatFor`), which is exactly the row the person\'s own path makes. It is NOT a declared seat: a diagram still cannot name its kind, and agentFlow draws it as an unresolved seat rather than refusing it — the same treatment the person\'s own Custom row already gets.',
   },
   {
     value: '<any string>',
@@ -253,10 +254,26 @@ type SectionTypeResolution =
 function resolveSectionType(raw: unknown): SectionTypeResolution {
   const s = String(raw ?? '').trim().toLowerCase();
   if (!s) return { kind: 'empty' };
-  const alias = LEGACY_TYPE_ALIASES[s];
+  /*
+   * THE SEPARATOR IS NOT PART OF THE NAME.
+   *
+   * `agent_role` and `agent role` and `agent-role` are one seat written three ways, and only the
+   * third was understood. The alias table below had grown entries for exactly this reason —
+   * `tool_call`, `few_shot`, `custom_data` were each added by hand when one came up — and the two
+   * nobody had hit yet were `agent_role` and `user_role`. Measured 2026-09-23: her button said
+   * `write-seat:agent_role|…`, the name resolved to nothing, and the write MADE A NEW ROW called
+   * `agent_role` beside the Agent Role seat. The owner, watching it: "she added an additional
+   * agent role with an underscore instead of using the existing one."
+   *
+   * So the comparison happens on a form where spaces and underscores are hyphens, and the aliases
+   * that remain in the table are the ones that are genuinely DIFFERENT WORDS (`system` for
+   * `system-role`, `assistant` for `agent-role`) rather than one word spelled differently.
+   */
+  const sep = s.replace(/[\s_]+/g, '-');
+  const alias = LEGACY_TYPE_ALIASES[s] ?? LEGACY_TYPE_ALIASES[sep];
   if (alias) return { kind: 'seat', id: alias, how: 'alias' };
-  if (SECTION_TYPES.some((t) => t.id === s)) return { kind: 'seat', id: s, how: 'id' };
-  const byLabel = SECTION_TYPES.find((t) => t.label.toLowerCase() === s);
+  if (SECTION_TYPES.some((t) => t.id === sep)) return { kind: 'seat', id: sep, how: 'id' };
+  const byLabel = SECTION_TYPES.find((t) => t.label.toLowerCase().replace(/[\s_]+/g, '-') === sep);
   if (byLabel) return { kind: 'seat', id: byLabel.id, how: 'label' };
   return { kind: 'undecided', raw: s };
 }
