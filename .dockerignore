@@ -12,3 +12,15 @@ venv
 *.venv
 Keys
 backend/logs
+
+# The vendored reference — the TrueForge codebase, kept on disk to read and out of the
+# history (see .gitignore). The Dockerfile copies the repository with `COPY . .`, so what
+# is present locally rides into the image: 105 MB of someone else's code in a production
+# container that never reads a byte of it. A build from a clone does not have these; this
+# is for the one built on a machine that does.
+trueforge
+packages
+docs
+python
+RELEASING.md
+SECURITY.md
