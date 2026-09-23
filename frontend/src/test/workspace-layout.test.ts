@@ -378,13 +378,19 @@ describe('<workspace-layout> her column: 650, and the cursor', () => {
     return el;
   };
 
-  it('opens at 650 — the design\'s width, on the pane itself', async () => {
+  it('opens with the two columns EQUAL, and only a choice pins her', async () => {
+    /*
+     * A SHARE, NOT A NUMBER. The owner, 2026-09-23: "each column for a package is equal width …
+     * until the user makes adjustments … and it should be an equal flex for both on browser
+     * resize." A share stays equal at every window size; a pinned number cannot, which is how a
+     * column dragged wide in a big window crushed the prompt in a small one.
+     */
     const el = await withBox();
-    expect(widthOf(el)).toBe(650);
-    expect(rightPaneStyle(el)).toContain('650px');
+    expect(rightPaneStyle(el)).toContain('flex: 1 1 0%');
+    expect(rightPaneStyle(el)).not.toContain('650px');
   });
 
-  it('the Chat button closes her and opens her again at 650', async () => {
+  it('the Chat button closes her and opens her again as a share', async () => {
     const el = await withBox();
 
     el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: true } }));
@@ -395,8 +401,67 @@ describe('<workspace-layout> her column: 650, and the cursor', () => {
     el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: false } }));
     await el.updateComplete;
     expect(el.isThirdOpen).toBe(true);
-    expect(widthOf(el)).toBe(650);
+    // Reopened as a SHARE: the person asked to see her, not for a width.
+    expect(rightPaneStyle(el)).toContain('flex: 1 1 0%');
+  });
+
+  it('a resized browser keeps the two columns equal, which a pinned number could not', async () => {
+    /*
+     * THE REPORT, IN THE OWNER'S WORDS: "she doesn't resize when you resize the browser, she stays
+     * open, which forces the prompt side to crush and collapse." A share is the fix, and this is
+     * the property that makes it one: the same rule at three window sizes, no re-measuring and no
+     * clamp — because nothing is holding a number.
+     */
+    for (const wide of [1900, 1375, 1100]) {
+      const el = await withBox(wide);
+      expect(rightPaneStyle(el), 'at ' + wide).toContain('flex: 1 1 0%');
+      // No pinned BASIS — the floor in min-width is a different thing and legitimately in px.
+      expect(rightPaneStyle(el), 'at ' + wide).not.toMatch(/flex: [0-9.]+ [0-9.]+ [0-9]+px/);
+    }
+  });
+
+  it('a choice pins her — a drag does, and so does a saved package', async () => {
+    // Once a number IS chosen the style stops being a share, and that is the difference between
+    // "a package loads equal" and "the person set this and it is remembered".
+    const el = await withBox(1900);
+    el.dispatchEvent(new CustomEvent('input-resize-start', { detail: { clientX: 700, clientY: 10 } }));
+    el.dispatchEvent(new CustomEvent('input-resize-move', { detail: { clientX: 700, clientY: 10 } }));
+    await el.updateComplete;
+    expect(rightPaneStyle(el)).toMatch(/flex: 0 1 [0-9]+px/);
+    expect(rightPaneStyle(el)).not.toContain('flex: 1 1 0%');
+  });
+
+  it('never lets a chosen width take the prompt below its own floor', async () => {
+    /*
+     * THE BUG THAT LOOKED LIKE A COLLAPSE. A pinned width is a decision made in one window, and
+     * nothing clamped it when the window changed: measured 2026-09-23 at 1100 wide with her column
+     * pinned at 1001, the prompt was 99px, its rows clipped by its own overflow, and it read as
+     * the seats having failed to load.
+     */
+    const el = await withBox(1100);
+    (el as unknown as { _rightPx: number })._rightPx = 1001;
+    (el as unknown as { _rightIsOperatorSet: boolean })._rightIsOperatorSet = true;
+    el.requestUpdate();
+    await el.updateComplete;
+    // 1100 - the 30px grip - the prompt's 420 floor = 650, so that is as far as she may reach.
     expect(rightPaneStyle(el)).toContain('650px');
+  });
+
+  it('restores the width a package was SAVED with, and only on save', async () => {
+    // The save has always written column_widths and nothing ever read it back, so an adjustment a
+    // person made and saved came back as the default.
+    const el = await withBox(1900);
+    el.openPrompt();
+    el.setColumnWidths({ left: 700, chat: 700 });
+    await el.updateComplete;
+    expect(rightPaneStyle(el)).toContain('700px');
+
+    // A package with nothing saved opens equal again — one package's adjustment is not the next
+    // package's starting layout.
+    el.openPrompt();
+    el.setColumnWidths(null);
+    await el.updateComplete;
+    expect(rightPaneStyle(el)).toContain('flex: 1 1 0%');
   });
 
   it('takes its width from the CURSOR, so a reflow cannot separate the edge from the hand', async () => {
@@ -499,7 +564,8 @@ describe('<workspace-layout> her column is a layer, not a pane', () => {
     const el = await withDrawing();
     const drawing = styleOf(el, '.pane.middle');
     const herOpen = styleOf(el, '.pane.right');
-    expect(herOpen).toContain('650px');
+    // Over a drawing she is a LAYER, and with no width chosen she covers half of it.
+    expect(herOpen).toContain('width: 50%');
 
     el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: true } }));
     await el.updateComplete;

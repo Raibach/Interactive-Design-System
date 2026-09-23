@@ -172,6 +172,24 @@ export class WorkspaceLayout extends LitElement {
    */
   private static readonly OPEN_CHAT_PX = 650;
 
+  /**
+   * THE NARROWEST THE PROMPT MAY BE BEFORE IT STOPS BEING A PROMPT.
+   *
+   * Its own floor is 60px — the rail — and that is the right floor for a column the operator
+   * has folded away. It is the wrong floor for a column that is meant to be READ: her column's
+   * width is a pinned number, so at any window narrower than that number plus a form's worth of
+   * room, the prompt is squeezed to whatever is left and its rows are clipped by its own
+   * `overflow: hidden`. Measured 2026-09-23 at a 1100px window: her column held 1001px, the
+   * prompt was 99px wide, and the owner read it — exactly as anyone would — as the seats having
+   * failed to load: "the left column is not the right size … it makes me think the prompt text
+   * areas are not loading."
+   *
+   * 420 is the width below which the prompt's own header wraps mid-word and a seat is unusable.
+   * It is a floor for the pane, not for its content: the rows do not move, there is simply a
+   * width beneath which this element will not let anything take from them.
+   */
+  private static readonly MIN_PROMPT_PX = 420;
+
   // Flex-grow proportions for the panes that SHARE what she leaves: the prompt and the canvas.
   private _left = 1;
   private _middle = 1;
@@ -190,6 +208,13 @@ export class WorkspaceLayout extends LitElement {
    * somebody has to keep in step.
    */
   private _rightPx = WorkspaceLayout.OPEN_CHAT_PX;
+
+  /**
+   * HAS ANYBODY CHOSEN HER WIDTH? Until they have, the two columns are EQUAL SHARES — see the
+   * note where the style is written. Set by a drag, by the rail's own open, and by a saved
+   * package's widths; cleared when another package opens.
+   */
+  private _rightIsOperatorSet = false;
 
   /**
    * THE GROUND HER COLUMN STANDS ON, while a drawing is on screen — the canvas's OWN colour,
@@ -247,8 +272,18 @@ export class WorkspaceLayout extends LitElement {
      */
   };
 
+  /**
+   * A WINDOW THAT CHANGES SIZE CHANGES WHAT THIS LAYOUT CAN HOLD. `_columnWidth` clamps on every
+   * render, and a resize is the one event that makes the clamp matter with no other reason to
+   * re-render — without this the panes keep the widths they were given in the old window.
+   */
+  private _onWindowResize = (): void => {
+    this.requestUpdate();
+  };
+
   connectedCallback(): void {
     super.connectedCallback();
+    window.addEventListener('resize', this._onWindowResize);
     document.addEventListener('mousemove', this._onMouseMove as EventListener);
     document.addEventListener('mouseup', this._onMouseUp as EventListener);
     // The release is caught on more than one channel on purpose. A mousedown that
@@ -348,6 +383,7 @@ export class WorkspaceLayout extends LitElement {
   }
 
   disconnectedCallback(): void {
+    window.removeEventListener('resize', this._onWindowResize);
     document.removeEventListener('mousemove', this._onMouseMove as EventListener);
     document.removeEventListener('mouseup', this._onMouseUp as EventListener);
     document.removeEventListener('pointerup', this._onMouseUp as EventListener);
@@ -809,6 +845,7 @@ export class WorkspaceLayout extends LitElement {
         this._syncRightPanel();
       }
       this._rightPx = this._rightPxFromPointer(e.clientX);
+      this._rightIsOperatorSet = true;
     }
     this.dispatchEvent(new CustomEvent('resize-start', { detail: { side } }));
     e.preventDefault();
@@ -832,6 +869,7 @@ export class WorkspaceLayout extends LitElement {
       // by flex's own arithmetic, so nothing here has to hand width to anyone — which is what
       // makes it impossible for her gripper to swell the prompt.
       this._rightPx = this._rightPxFromPointer(e.clientX);
+      this._rightIsOperatorSet = true;
       // ...except at the very end: when she has taken everything the prompt needs, the prompt
       // is on its floor, and that is the same collapsed state the dock and the rail speak. Only
       // in the two-column shell — with a canvas between them there is no boundary to reach.
@@ -945,6 +983,37 @@ export class WorkspaceLayout extends LitElement {
     this._leftOwnedByOperator = false;
     this._setLeftCollapsed(false);
     this._left = 1;
+    // AND THE SPLIT STARTS OVER: the next pass gives the two columns equal room again, unless a
+    // saved width arrives in the same breath (`setColumnWidths`, which the host calls after this).
+    // Without this, one package's adjustment would be the next package's starting layout.
+    this._rightIsOperatorSet = false;
+    this.requestUpdate();
+  }
+
+  /**
+   * THE WIDTHS A PACKAGE WAS SAVED WITH, PUT BACK — the other half of `widths()` below.
+   *
+   * A COMPOSER LOADS EQUAL, AND A SAVED ADJUSTMENT WINS. The owner, 2026-09-23: "each column for
+   * a package is equal width … until the user makes adjustments, and then it must remember the
+   * user's adjustment. Only on save — it only has to remember that state on save."
+   *
+   * The save has recorded `column_widths` all along (`widths()` below reads the panes) and NOTHING
+   * HAS EVER READ IT BACK: the value went into the package's metadata and stayed there, so a
+   * person who widened her column and saved found it back at its default the next time. This is
+   * the reader. It is called on open, after `openPrompt`, so the saved number is applied to the
+   * equal split rather than being overwritten by it.
+   *
+   * A width that cannot fit the room is not restored as-is — `_columnWidth` clamps it — so an
+   * adjustment made in a wide window still opens sanely in a narrow one.
+   */
+  setColumnWidths(saved: { left?: number | null; chat?: number | null } | null | undefined): void {
+    const chat = saved?.chat;
+    if (typeof chat === 'number' && Number.isFinite(chat) && chat > 0) {
+      this._rightPx = Math.round(chat);
+      // Marked chosen: a saved number IS the operator's decision, and the equal split is only
+      // for the packages that have none.
+      this._rightIsOperatorSet = true;
+    }
     this.requestUpdate();
   }
 
@@ -1175,6 +1244,30 @@ export class WorkspaceLayout extends LitElement {
     }
   `;
 
+  /**
+   * HER COLUMN'S WIDTH, AS THIS LAYOUT CAN ACTUALLY HOLD IT.
+   *
+   * A pinned pixel width is a decision made in one window, and the window is not obliged to stay
+   * that size. So the number is clamped on every render to what the room can give: her floor at
+   * one end, and the prompt's own floor at the other. The clamp is what makes a resize safe —
+   * without it, a column dragged wide in a big window crushes the prompt in a small one and the
+   * rows vanish behind `overflow: hidden` (see MIN_PROMPT_PX for the measurement).
+   *
+   * THE MIDDLE IS WHERE IT STARTS, AND NOT THE DESIGN'S 650. The owner, 2026-09-23: "from now on
+   * when we load a composer … instead of trying to get it to be 30%, just put it right in the
+   * middle." At 1900 the design's 650 puts the divider at 34% and the prompt gets the rest; half
+   * each is what a person expects to see, and it is what makes both columns usable. 650 stays
+   * the FLOOR for her column, so a narrow window gives the stage its designed width rather than
+   * a sliver.
+   *
+   * A drag still wins — the operator's number is honoured, clamped to the same two bounds.
+   */
+  private _columnWidth(): number {
+    const room = Math.max(1, this.clientWidth) - WorkspaceLayout.GRIP_CHAT_PX;
+    const ceiling = Math.max(WorkspaceLayout.MIN_RIGHT_PX, room - WorkspaceLayout.MIN_PROMPT_PX);
+    return Math.min(Math.max(this._rightPx, WorkspaceLayout.MIN_RIGHT_PX), ceiling);
+  }
+
   render() {
     const middleGrow = this._hasMiddle ? this._middle : 0;
     /*
@@ -1182,7 +1275,7 @@ export class WorkspaceLayout extends LitElement {
      * _rightPx, and see the .pane.right rule: she is a LAYER over the drawing, so this width
      * is how much of the drawing she covers and nothing else.
      */
-    const rightWidth = this.isThirdOpen ? this._rightPx : WorkspaceLayout.MIN_RIGHT_PX;
+    const rightWidth = this.isThirdOpen ? this._columnWidth() : WorkspaceLayout.MIN_RIGHT_PX;
     /*
      * SHE IS A LAYER ONLY OVER A DRAWING — and "there is a drawing" is read off the ELEMENT in
      * the middle: the plug-in that draws it (<agent-canvas>), which is what the flow view puts
@@ -1211,9 +1304,28 @@ export class WorkspaceLayout extends LitElement {
      *   over nothing     flex, because she is a PANE beside the prompt, as she has always been
      *                    in a console or a prompt that has not run.
      */
+    /*
+     * AND WHEN NOBODY HAS CHOSEN A WIDTH, THE TWO COLUMNS ARE EQUAL SHARES.
+     *
+     * This is the half that a pinned number could never do: a share stays equal at EVERY window
+     * size, so resizing the browser keeps the two columns in proportion instead of letting hers
+     * hold a number the new window cannot afford. The owner, watching exactly that: "she doesn't
+     * resize when you resize the browser, she stays open, which forces the prompt side to crush
+     * and collapse — so it should be an equal flex for both on browser resize."
+     *
+     * A share on the flex line for a pane, and half the room for a layer (an absolutely
+     * positioned box has no flex to share, and 50% needs no JavaScript to follow a resize).
+     * `_rightPx` is only consulted once somebody has chosen it — a drag, or a saved package.
+     */
+    // AND ONLY WHEN SHE IS OPEN. A closed column is its floor — the rail plus the spacer — and
+    // that is not a share of anything. (Caught by the layer test: without the open check, a
+    // closed column kept `width: 50%` and drew itself as half the drawing with the rail inside it.)
+    const equal = !this._rightIsOperatorSet && this.isThirdOpen;
     const rightStyle = rightOver
-      ? `width: ${this._hasRight ? rightWidth : 0}px;`
-      : `flex: ${rightAbsorbs ? 1 : 0} 1 ${rightWidth}px; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`;
+      ? (equal ? 'width: 50%;' : `width: ${this._hasRight ? rightWidth : 0}px;`)
+      : (equal
+          ? `flex: 1 1 0%; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`
+          : `flex: ${rightAbsorbs ? 1 : 0} 1 ${rightWidth}px; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`);
     const minLeft = WorkspaceLayout.MIN_LEFT_PX;
     /*
      * THE 60px FLOOR IS THE COLLAPSED WIDTH, so it holds in BOTH states.

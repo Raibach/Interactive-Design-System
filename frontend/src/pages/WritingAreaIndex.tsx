@@ -834,6 +834,12 @@ export default function Index({
   // Same reason: listeners registered once must be able to read the LIVE session
   // object (the effect that wires them does not re-run on session change).
   const currentPromptSessionObjRef = useRef<any>(null);
+  /**
+   * THE WIDTHS THIS PACKAGE WAS SAVED WITH, kept where the open effect can read them without
+   * depending on the session object. Written by the same effect that reads
+   * `currentPromptSession.columnWidths` at the top of a package's life.
+   */
+  const storedWidthsRef = useRef<{ left?: number | null; chat?: number | null } | null>(null);
 
   /**
    * HER REVIEW IS CLEARED BY HER, NOT BY THE CLOCK. Set when she emits `<run_ok/>` and
@@ -4238,6 +4244,7 @@ export default function Index({
    */
   useEffect(() => {
     const stored = currentPromptSession?.workspace;
+    storedWidthsRef.current = currentPromptSession?.columnWidths ?? null;
     /*
      * THE PROMPT IS ON SCREEN WHEN A PACKAGE OPENS, AND THAT DOES NOT DEPEND ON A SAVE.
      *
@@ -4252,9 +4259,19 @@ export default function Index({
      * areas are not loading."
      */
     const openThePrompt = (): boolean => {
-      const el = deepFind<HTMLElement & { openPrompt?: () => void }>('workspace-layout');
+      const el = deepFind<HTMLElement & {
+        openPrompt?: () => void;
+        setColumnWidths?: (w: { left?: number | null; chat?: number | null } | null) => void;
+      }>('workspace-layout');
       if (!el?.openPrompt) return false;
+      // A PACKAGE LOADS WITH ITS COLUMNS EQUAL, AND WITH THE WIDTHS IT WAS SAVED WITH.
+      // `openPrompt` puts the split back to the middle and hands the pane to the payload; the
+      // saved widths then override it, because an adjustment a person made and SAVED is their
+      // decision and outranks the default. The owner, 2026-09-23: "each column for a package is
+      // equal width until the user makes adjustments, and then it must remember the user's
+      // adjustment. Only on save."
       el.openPrompt();
+      el.setColumnWidths?.(currentPromptSessionRef.current ? storedWidthsRef.current : null);
       return true;
     };
     if (!openThePrompt()) {
