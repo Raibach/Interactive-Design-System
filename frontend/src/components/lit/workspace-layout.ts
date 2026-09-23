@@ -140,6 +140,12 @@ export class WorkspaceLayout extends LitElement {
    */
   private static readonly DOCK_FALLBACK_MS = 420;
 
+  /**
+   * HOW LONG AN INVERTED BOX IS HELD BEFORE ITS TRANSFORM IS CLEARED — the pane's own duration
+   * plus a frame of slack, so the glide has landed before the inline styles come off.
+   */
+  private static readonly FLIP_CLEAR_MS = 560;
+
   private static readonly MIN_LEFT_PX = 60;
   /**
    * The collapsed chat column's floor — and it is the RAIL'S width, not the 60px
@@ -337,6 +343,7 @@ export class WorkspaceLayout extends LitElement {
     this.removeEventListener('flow-view-ready', this._dockNow as EventListener);
     this.removeEventListener('flow-select', this._onFlowSelect as EventListener);
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
+    if (this._midFlipTimer !== null) window.clearTimeout(this._midFlipTimer);
     /*
      * A DRAG CANNOT OUTLIVE THE ELEMENT. Re-rendering the surface replaces this
      * element mid-gesture, and the flag that says "follow the mouse" went with it
@@ -601,6 +608,15 @@ export class WorkspaceLayout extends LitElement {
    */
   private _dockTimer: number | null = null;
 
+  /**
+   * THE MODE FLIP'S BOOKKEEPING — see _flipMiddleWidth. `_rightOverDrawn` is the decision the
+   * last render painted, so a FLIP can be told from an ordinary re-render; `_middleWidthBefore`
+   * is the box she is leaving, captured before the DOM changes.
+   */
+  private _rightOverDrawn: boolean | null = null;
+  private _middleWidthBefore: number | null = null;
+  private _midFlipTimer: number | null = null;
+
   private _onRunClick = (): void => {
     this._leftOwnedByOperator = true;
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
@@ -615,6 +631,83 @@ export class WorkspaceLayout extends LitElement {
     }
     this._dockLeft();
   };
+
+  /**
+   * IS HER COLUMN A LAYER OVER A DRAWING, OR A PANE BESIDE THE PROMPT? The rule and its history
+   * are on the use of this in render(); it is a method because the FLIP below has to ask the
+   * same question BEFORE the DOM changes.
+   */
+  private get _rightOverDrawing(): boolean {
+    const middleSlot = this.shadowRoot?.querySelector('slot[name="middle"]') as HTMLSlotElement | null;
+    const middleEl = (middleSlot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
+    return this._hasRight && !!middleEl && middleEl.tagName.toLowerCase() === 'agent-canvas';
+  }
+
+  /**
+   * THE MIDDLE COLUMN'S WIDTH IS THE ONE BOX CSS CANNOT ANIMATE HERE — and it is why the Run
+   * read as two events rather than one movement.
+   *
+   * Measured 2026-09-22, on the flip from pane to overlay: the middle column goes 1165px ->
+   * 1814px, while her column's own box does not move at all (left 1230, width 650, both
+   * states). The jump is 649px in ONE frame, and nothing in the stylesheet can catch it:
+   * .pane transitions flex-grow and flex-basis, and BOTH ARE UNCHANGED across the flip
+   * (measured 0.96748 before and after) — her column stops taking 650px of the row, so the
+   * free space changes, and free space is not a property of this element. A transition only
+   * fires when a transitioned property's value changes, and nothing did. So the drawing
+   * widened instantly while the dock glided 520ms behind it: one cut, then one movement.
+   *
+   * THE FIX IS A FLIP — First, Last, Invert, Play — which is the technique for exactly this
+   * case, a layout change that has no transitionable property behind it. The box is put back
+   * where it was with a transform (no transition, so it is the frame that paints), then the
+   * transform is released with one, so the width arrives on the pane's own curve instead of
+   * appearing.
+   *
+   * scaleX on the pane, deliberately, and not a pinned width: pinning would set flex and width
+   * inline, and the DOCK starts two frames later and moves the left column — a pinned middle
+   * could not absorb that and would snap when the pin came off. A transform costs no layout,
+   * so the dock still lands through the glide and both settle together.
+   *
+   * The cost is real and bounded: scaleX distorts the drawing's CONTENTS for 520ms. The middle
+   * column at this moment is a surface that has just arrived, so what the person sees is the
+   * drawing opening into place rather than a box appearing at full width.
+   */
+  private _flipMiddleWidth(from: number): void {
+    const m = this.shadowRoot?.querySelector('.pane.middle') as HTMLElement | null;
+    if (!m) return;
+    const to = m.getBoundingClientRect().width;
+    if (!(from > 0) || !(to > 0) || Math.abs(to - from) < 1) return;
+    // Motion is a courtesy, never a requirement — as everywhere else in this file.
+    if (typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    m.style.transformOrigin = 'left center';
+    m.style.transition = 'none';
+    m.style.transform = 'scaleX(' + (from / to) + ')';
+    // Force the inverted box to be the frame that paints, so releasing it has a start value.
+    void m.offsetWidth;
+    m.style.transition = 'transform var(--dur-pane) var(--ease-settle)';
+    m.style.transform = '';
+
+    if (this._midFlipTimer !== null) window.clearTimeout(this._midFlipTimer);
+    this._midFlipTimer = window.setTimeout(() => {
+      m.style.transition = '';
+      m.style.transform = '';
+      m.style.transformOrigin = '';
+      this._midFlipTimer = null;
+    }, WorkspaceLayout.FLIP_CLEAR_MS);
+  }
+
+  /** Capture the box she is leaving, BEFORE the render that changes her layout mode. */
+  protected willUpdate(): void {
+    const next = this._rightOverDrawing;
+    if (this._rightOverDrawn !== null && next !== this._rightOverDrawn) {
+      const m = this.shadowRoot?.querySelector('.pane.middle') as HTMLElement | null;
+      this._middleWidthBefore = m ? m.getBoundingClientRect().width : null;
+    } else {
+      this._middleWidthBefore = null;
+    }
+    this._rightOverDrawn = next;
+  }
 
   /** Collapse the left pane to its floor. */
   private _dockLeft(): void {
@@ -955,7 +1048,32 @@ export class WorkspaceLayout extends LitElement {
       top: 0;
       right: 0;
       bottom: 0;
+      /* THE OVERLAY'S OWN LEVEL, STATED RATHER THAN LEFT TO PAINT ORDER — and this is the
+         whole of the bug the owner reported on 2026-09-22: "the controls in the canvas
+         underneath the chat… these are loading on top and they should be underneath."
+
+         An absolutely positioned box with NO z-index is z-index auto, and CSS paints auto
+         in step 8 of its stacking context while a POSITIVE z-index is painted in step 9. The
+         drawing's control cluster (agent-flow's .controls) carries z-index 2, and nothing
+         between it and this element's stacking context creates one of its own — measured, so
+         the two were compared directly and the drawing's controls came out ON TOP of her
+         column. That contradicts this file's own rule: "the canvas does not respond to
+         anything on the right-hand side. It always covers it."
+
+         3 clears every z-index the drawing uses. The isolation on the middle pane below is
+         the other half: this states the layer, that traps the levels. */
+      z-index: 3;
       transition: width var(--dur-pane) var(--ease-settle);
+    }
+    /* THE DRAWING CANNOT PAINT OUTSIDE ITS OWN PANE — the trap half of the pair above.
+       isolation makes this pane a stacking context, so a z-index inside the canvas is
+       resolved WITHIN the drawing instead of competing with the columns laid over it.
+       Measured before this: the controls' z-index 2 resolved against her column's auto in a
+       shared context and won. Nothing inside the canvas has to be lowered to keep it behind
+       her, and a future z-index inside the drawing cannot escape again.
+       No layout cost: isolation is paint-time only, and the pane already clips its content. */
+    .pane.middle {
+      isolation: isolate;
     }
     /* The MIDDLE pane hides its content when collapsed — that column is simply not
        shown in the 2-column layout, so hiding it is the point.
@@ -1048,9 +1166,7 @@ export class WorkspaceLayout extends LitElement {
      * console too — so her layer landed across the console's own column: the owner, 2026-09-18,
      * "Restore the console. The console is responsive. You've just broke it just now."
      */
-    const middleSlot = this.shadowRoot?.querySelector('slot[name="middle"]') as HTMLSlotElement | null;
-    const middleEl = (middleSlot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
-    const rightOver = this._hasRight && !!middleEl && middleEl.tagName.toLowerCase() === 'agent-canvas';
+    const rightOver = this._rightOverDrawing;
     /*
      * AS A PANE SHE GROWS ONLY WHEN NOTHING ELSE CAN ABSORB THE REMAINDER: with the prompt
      * docked and no canvas beside her — the beat before a Run's middle column arrives — the
@@ -1116,6 +1232,13 @@ export class WorkspaceLayout extends LitElement {
 
     return html`
       <div class="pane left" style="flex: ${leftFlex}; min-width: ${minLeft}px;">
+        <!-- THE PROMPT'S OWN BAR, ABOVE THE SCROLLER AND NOT INSIDE IT.
+             The title, the version and the package id belong to the PROMPT, so they stay
+             put while its sections scroll under them — the same reason the control bar has
+             its own slot at the other end. Put in the left body instead, the bar would be
+             the first thing to scroll away, which is the opposite of what a header is for.
+             Its own slot, so a surface that has no header for this column draws none. -->
+        <slot name="left-header"></slot>
         <div class="left-body"><slot name="left"></slot></div>
         <!-- THE CONTROL BAR'S HOME, as the design draws it: the LAST child of the left
              column's container, below the prompt input area. Its own slot rather than
@@ -1162,6 +1285,11 @@ export class WorkspaceLayout extends LitElement {
   /** A change to the column's state is also a change to what the panel is told. */
   protected updated(changed: Map<string, unknown>): void {
     if (changed.has('isThirdOpen')) this._syncRightPanel();
+    // THE MODE FLIP'S GLIDE, run once the DOM carries the new box — see _flipMiddleWidth.
+    // `_middleWidthBefore` is written by willUpdate, so it is only non-null on a flip.
+    const before = this._middleWidthBefore;
+    this._middleWidthBefore = null;
+    if (before !== null) this._flipMiddleWidth(before);
   }
 }
 

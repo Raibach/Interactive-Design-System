@@ -183,6 +183,35 @@ TABLE_DEFINITIONS = {
             created_at TIMESTAMP DEFAULT NOW()
         )
     """,
+    # ── Tools ───────────────────────────────────────────────────────────────
+    # Work the system can do, in two kinds. `read` is written procedure the
+    # system reads before it works. `call` is a connection to another program
+    # it asks for something. They are one table because everything about them
+    # is the same except what happens at the moment one is used.
+    #
+    # A tool is inserted into a prompt as a section. `sections` says which
+    # sections of a prompt a tool belongs in, and a tool listed in two appears
+    # in both. `tool-call` is the section that is shared by default.
+    #
+    # `source` records where a tool came from — 'authored' when it was written
+    # here, otherwise the name of the place it was taken from. Nothing reads it
+    # to decide anything; it is provenance, not permission.
+    'tools': """
+        CREATE TABLE IF NOT EXISTS tools (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(120) UNIQUE NOT NULL,
+            summary TEXT NOT NULL,
+            body TEXT NOT NULL DEFAULT '',
+            category VARCHAR(60) NOT NULL,
+            sections TEXT[] NOT NULL DEFAULT ARRAY['tool-call']::TEXT[],
+            kind VARCHAR(10) NOT NULL DEFAULT 'read',
+            source VARCHAR(60) NOT NULL DEFAULT 'authored',
+            origin TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT tools_kind_check CHECK (kind IN ('read', 'call'))
+        )
+    """,
     # Figma design-spec cache — extracted style specs (fills, strokes,
     # effects, fonts, layout, bounds) pulled from the Figma API and served
     # to the Lit catalog. PostgreSQL caches; Figma authors.
@@ -846,6 +875,104 @@ INSERT INTO categories (name, color, title_color, text_color) VALUES
 ON CONFLICT (name) DO NOTHING;
 """
 
+# ── Tools, seeded ───────────────────────────────────────────────────────────
+# Seeded so the system has something real to list and test from the first run.
+# A seeded tool is not special: it is a row like any other and can be edited or
+# replaced. Its `source` says where it came from, and that is all that field is
+# for.
+#
+# Two names from the source carried words that never appear on a screen in this
+# system, so they were renamed here: what was named after a connection protocol
+# is `build-a-connection`, and what was named after a vendor CI product is
+# `fix-failing-builds`. The work each one does is unchanged.
+#
+# `sections` is a text array naming the prompt seats a tool belongs in. A tool
+# listed in two seats appears in both, and the menu in each seat draws only the
+# tools that name it — so a tool for the agent's work is not offered to someone
+# writing the user's words.
+#
+# The value '*' means EVERY seat. Three are marked that way: the two that go
+# looking for answers and the one that reads a wiki. Those are as useful while
+# writing the system role as while writing the user's, and listing every seat on
+# them would be a list to keep in step with the schema for no gain.
+#
+# Everything else belongs to the seat it was written for: a written procedure
+# sits in agent-role, and something the system reaches out and calls sits in
+# tool-call, which is the seat that has always been the shared one.
+DEFAULT_TOOLS_SQL = """
+INSERT INTO tools (name, summary, body, category, sections, kind, source) VALUES
+    ('search-the-internet',
+     'Look something up on the internet and bring the answer back.',
+     'Write the question you want answered. The system reaches out, reads what it finds, and returns what it learned. Say what you are looking for in plain words.',
+     'connecting', ARRAY['*'], 'call', 'authored'),
+
+    ('research-a-topic',
+     'Run structured research across several sources and pull it together.',
+     'Gather from more than one place, weigh what agrees against what does not, and report what held up. Say the question and how deep to go.',
+     'research', ARRAY['*'], 'call', 'trueforge'),
+
+    ('read-a-wiki',
+     'Read a repository wiki and answer questions about it.',
+     'Ask about the codebase in plain words. The answer comes from the generated wiki rather than from guessing.',
+     'research', ARRAY['*'], 'call', 'trueforge'),
+
+    ('plan-a-wiki',
+     'Lay out the structure of a repository wiki before it is written.',
+     'Decide what a wiki should cover and in what order, from the shape of the codebase.',
+     'research', ARRAY['agent-role'], 'read', 'trueforge'),
+
+    ('capture-notes',
+     'Capture what was learned into a shared knowledge page.',
+     'Turn a finding into a written page someone else can read later. Say what to capture and where it goes.',
+     'research', ARRAY['tool-call'], 'call', 'trueforge'),
+
+    ('query-a-database',
+     'Ask a database a question and get the rows back.',
+     'Write what you want to know in plain words. The query is built and run, and the rows come back.',
+     'research', ARRAY['tool-call'], 'call', 'trueforge'),
+
+    ('analyse-data',
+     'Load data, work it over, and show what it says.',
+     'For counting, comparing and charting. Say the question the data should answer.',
+     'research', ARRAY['tool-call'], 'call', 'trueforge'),
+
+    ('build-a-web-page',
+     'Build a page that stands on its own and renders in a browser.',
+     'Make something whole and self-contained that can be opened and used on its own.',
+     'building', ARRAY['agent-role'], 'read', 'trueforge'),
+
+    ('build-a-connection',
+     'Build a new connection to another program so the system can reach it.',
+     'For when something needs to be reachable that is not reachable yet. Describe what it does and what it needs.',
+     'building', ARRAY['agent-role'], 'read', 'trueforge'),
+
+    ('make-art',
+     'Make drawn or generated imagery from a description.',
+     'Describe what should be shown. Seeded so the same description gives the same result twice.',
+     'making', ARRAY['agent-role'], 'read', 'trueforge'),
+
+    ('track-work',
+     'Create, update and search tracked work items.',
+     'For keeping a list of what is in flight and who has it.',
+     'flows', ARRAY['tool-call'], 'call', 'trueforge'),
+
+    ('fix-failing-builds',
+     'Look at a failing check on a change and fix it.',
+     'Read the failure, work out why, and correct it.',
+     'building', ARRAY['tool-call'], 'call', 'trueforge'),
+
+    ('triage-errors',
+     'Look into reported errors and work out what to do about them.',
+     'Read the report, find the cause, and say what the fix is.',
+     'building', ARRAY['tool-call'], 'call', 'trueforge'),
+
+    ('write-a-new-tool',
+     'Write a new tool and package it so the system can offer it.',
+     'For making a tool that is not here yet. Describe what it should do.',
+     'building', ARRAY['agent-role'], 'read', 'trueforge')
+ON CONFLICT (name) DO NOTHING;
+"""
+
 # Stored procedure for creating prompt sessions
 # FIXED 2026-07-26: conversations.session_id has a NOT NULL FK → prompt_sessions.id.
 # We must pre-generate the UUID and INSERT into prompt_sessions FIRST, then
@@ -1185,6 +1312,15 @@ def init_database():
             print("  Default categories seeded or already exist")
         except Exception as e:
             print(f"  Warning: Could not seed categories: {e}")
+
+        # Step 7: Seed tools. Seeded so the list is not empty on a fresh
+        # install — a seeded row is ordinary and can be edited or removed.
+        print("Seeding tools...")
+        try:
+            cur.execute(DEFAULT_TOOLS_SQL)
+            print("  Tools seeded or already exist")
+        except Exception as e:
+            print(f"  Warning: Could not seed tools: {e}")
 
         cur.close()
         conn.close()

@@ -87,13 +87,28 @@ describe('the vocabulary it replaces', () => {
     expect(CORE_ROLE_LABELS).toHaveLength(CORE_ROLES_AS_TYPED.length);
   });
 
-  it('reproduces the four menu tiles the user actually sees', () => {
-    expect(SECTION_MENU_TYPES).toEqual([
+  it('reproduces the menu tiles the user actually sees, with a description each', () => {
+    // System Role is absent because it is sticky — always the first row, no menu.
+    // Few Shot, Constraints and Context are here because they are offered now
+    // rather than only declared, and Custom Data wears the label "Custom Skill".
+    expect(SECTION_MENU_TYPES.map((m) => ({ type: m.type, label: m.label }))).toEqual([
       { type: 'user-role', label: 'User Role' },
       { type: 'agent-role', label: 'Agent Role' },
       { type: 'tool-call', label: 'Tool Call' },
-      { type: 'custom-data', label: 'Custom Data' },
+      { type: 'custom-data', label: 'Custom Skill' },
+      { type: 'few-shot', label: 'Few Shot' },
+      { type: 'constraints', label: 'Constraints' },
+      { type: 'context', label: 'Context' },
     ]);
+  });
+
+  it('gives every tile a description a person could act on', () => {
+    // The tile's fly-out and the chat's reply are the SAME sentence, so an empty
+    // one is a seat nobody can be told about. Length is the only mechanical
+    // check available; the rest is read by a person.
+    for (const tile of SECTION_MENU_TYPES) {
+      expect(tile.description.length, tile.type).toBeGreaterThan(80);
+    }
   });
 
   it('keeps every label TYPE_LABELS already served', () => {
@@ -106,27 +121,36 @@ describe('the vocabulary it replaces', () => {
   });
 });
 
-describe('the two authors still disagree, and that is on the record', () => {
-  it('names exactly the seats the schema declares and no tile ships', () => {
-    expect(DECLARED_BUT_UNSHIPPED).toEqual(['few-shot', 'constraints']);
+describe('the two authors disagree on exactly one seat, and that is on the record', () => {
+  it('leaves no seat the schema declares without a tile', () => {
+    // Few Shot, Constraints and Context were declared and unshipped. The chat
+    // could write to all three — its own tags carry <update_few_shot>,
+    // <update_constraints> and <update_context> — while a person had no way to
+    // create the seat. They are offered now, so the gap is empty.
+    expect(DECLARED_BUT_UNSHIPPED).toEqual([]);
   });
 
   it('leaves exactly ONE shipped seat undeclared: custom-data', () => {
     expect(SHIPPED_BUT_UNDECLARED).toEqual(['custom-data']);
   });
 
-  it('shares FOUR seats once spelling is normalised — it was one', () => {
+  it('shares SEVEN seats once spelling is normalised — it was one', () => {
     const shared = SECTION_TYPES
       .filter((t) => t.inSchema && (t.inMenu || t.sticky))
       .map((t) => t.id);
-    expect(shared).toEqual(['system-role', 'user-role', 'agent-role', 'tool-call']);
+    expect(shared).toEqual([
+      'system-role', 'user-role', 'agent-role', 'tool-call',
+      'few-shot', 'constraints', 'context',
+    ]);
   });
 
-  it('shares THREE in the menu — System is sticky and has no menu', () => {
+  it('shares SIX in the menu — System is sticky and has no menu', () => {
     const shared = SECTION_TYPES
       .filter((t) => t.inSchema && t.inMenu)
       .map((t) => t.id);
-    expect(shared).toEqual(['user-role', 'agent-role', 'tool-call']);
+    expect(shared).toEqual([
+      'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints', 'context',
+    ]);
   });
 
   it('matches the enum at VALUE level only once — and that is why it hid', () => {
@@ -162,6 +186,13 @@ describe('normalising what can be decided', () => {
 
   it('accepts a display label and returns the id', () => {
     expect(normalizeSectionType('System Role')).toBe('system-role');
+    expect(normalizeSectionType('Custom Skill')).toBe('custom-data');
+  });
+
+  it('still resolves the label the seat wore before it was renamed', () => {
+    // The id never changed, so a section already on disk under "Custom Data"
+    // must still find its home. Renaming a label is free; orphaning stored rows
+    // is not.
     expect(normalizeSectionType('Custom Data')).toBe('custom-data');
   });
 
@@ -214,7 +245,7 @@ describe('preserving what cannot be decided', () => {
 describe('the declaration itself', () => {
   it('copies the schema enum verbatim', () => {
     expect(SCHEMA_SECTION_TYPES).toEqual([
-      'system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints',
+      'system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints', 'context',
     ]);
   });
 

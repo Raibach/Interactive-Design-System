@@ -8,6 +8,7 @@ Assembly/chat hard-fail if ALL providers are down — no fake surfaces.
 
 import itertools
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -56,7 +57,40 @@ LLM_TIMEOUT_WRITING = int(os.getenv(WRITING_TIMEOUT_ENV, "120"))
 # request model defaulted to 0.45, and this file passed whatever arrived), and a number
 # with three homes is three numbers waiting to disagree. A surface pins 0.0; this is the
 # only place a temperature belongs.
-CHAT_TEMPERATURE = 1.5
+#
+# IT WAS 1.5 AND THAT WAS TOO HIGH. Measured on this provider, the same question:
+#
+#     temp 1.5 -> 4652 chars    temp 1.0 -> 1415 chars    temp 0.7 -> 1248 chars
+#
+# Three to four times the length for the same answer, and length is what a runaway is
+# made of. With the full workspace context in front of her the same setting produced
+# 11,008 characters in 60.7s and 21,805 in 132.6s — a reply that never found its ending
+# and ran to the ceiling, which is what a person experiences as "she is taking a minute
+# and then answering with a wall of text". At 0.5 the distribution is peaked enough that
+# the model keeps its footing.
+#
+# The owner: "I think I've got the temperature idea wrong." Both of these are the same
+# number doing one job — a high temperature is variety, and variety in a reply that is
+# supposed to be instructions is drift.
+CHAT_TEMPERATURE = 0.5
+
+# THE CEILING ON A CHAT REPLY, so a runaway costs seconds and not minutes.
+#
+# A normal answer here is 200–500 tokens; a long one might reach 1200. The ceiling was
+# 8000 by inheritance from the writing modes, which meant a reply that lost its way had
+# room to spend two minutes proving it. 2000 is four times a generous answer and about
+# eleven seconds at the measured rate — enough that nothing legitimate is cut off, and
+# short enough that a loop ends while the person is still watching.
+#
+# IT APPLIES ONLY WHEN SHE IS NOT THINKING. A reasoning turn spends completion tokens
+# BEFORE it writes a word, so a ceiling sized for the answer alone is a ceiling the
+# thinking eats: measured, a typed turn came back empty with
+# "2000 of 2000 tokens were reasoning" and the seat drew an error where her reply should
+# have been. The ceiling follows the SETTING, not the mode — which is what the note on
+# token_budgets below has said all along, applied to the one mode where both settings
+# are live.
+CHAT_MAX_TOKENS = 2000
+CHAT_REASONING_MAX_TOKENS = 8000
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # A2UI MISSION HEADER — top-of-context anchor for maximum model attention
@@ -194,10 +228,24 @@ def query_llm(
     # BEFORE it writes anything (verified live — 18 reasoning tokens to answer
     # "Say OK"). Budgets must therefore cover reasoning + the actual output, or
     # `content` comes back empty with finish_reason="length".
+    #
+    # `chat` IS THE ONE MODE THAT REASONS (see the note below), and it was the one
+    # mode missing from this table — so it fell to the 4000 default and reasoned
+    # its way through most of it. Measured: a chat turn whose answer ran 917 chars
+    # came back EMPTY with finish_reason=length, and the seat drew "Error: DeepSeek
+    # API request failed: Empty response" where her reply should have been. The
+    # larger ceiling costs nothing when it is not reached: max_tokens bounds the
+    # turn, and a turn that reasons briefly still spends only what it reasons.
     token_budgets = {
         "console_assembly": 4000,
         "surface_assembly": 8000,
         "prompt_output": 8000,
+        # A CHAT REPLY IS BOUNDED SEPARATELY AND MUCH TIGHTER. It was 8000 for the
+        # reason above — a reasoning turn needs room to think before it writes — but
+        # 8000 is also room for a reply that has lost its way to spend two minutes
+        # proving it. See CHAT_MAX_TOKENS: the two needs are not the same size, and
+        # only one of them was ever measured.
+        "chat": CHAT_MAX_TOKENS,
     }
     max_tokens = token_budgets.get(mode, 4000)
     # ── TEMPERATURE AND REASONING LIVE IN ONE PLACE: THE CHAT. ───────
@@ -228,12 +276,37 @@ def query_llm(
     if mode in ("console_assembly", "surface_assembly"):
         payload["response_format"] = {"type": "json_object"}
 
-    # ── NO REASONING ANYWHERE BUT THE CHAT ───────────────────────────
-    # Off is explicit, for every mode that is not a conversation — including the writing
-    # ones. Reasoning that nobody asked for is latency and tokens spent guessing at an
-    # answer that was already dictated.
-    if mode != "chat":
-        payload["reasoning_effort"] = "none"
+    # ── NO REASONING IN THIS APPLICATION, IN ANY MODE ────────────────
+    # Off for every mode, and the note below about a conversation being the one place
+    # it belongs was a judgement that the measurements have since settled against.
+    #
+    # Measured on this provider: reasoning on a chat turn spent 2000 tokens in 36.2
+    # seconds and produced no answer at all — 55 tokens a second, which is the model's
+    # speed and nobody's overhead. An off turn answers in two to ten seconds.
+    #
+    # Reasoning is what the model spends when the choice set is wide. The answer to a
+    # wide set is to NARROW IT BEFORE THE CALL — which is what the catalog, the seats,
+    # the tool list and the asks all exist to do — rather than to pay for it during.
+    # The owner, 2026-09-28: "make it zero".
+    #
+    # Kept as an explicit assignment rather than by deleting the parameter, so a caller
+    # passing reasoning=True is overruled HERE, in one place, instead of rediscovering
+    # the delay through a request that looked fine.
+    payload["reasoning_effort"] = "none"
+
+    # A THINKING TURN NEEDS A CEILING FOR BOTH, and this is the only place that can be
+    # decided: it depends on the setting written two lines up, and the payload is where
+    # that lives. `chat` is the only mode where reasoning can be either way, so it is the
+    # only mode whose ceiling has to follow the setting — and on the answer-sized ceiling
+    # a thinking turn spent all of it thinking and answered with nothing (measured: "2000
+    # of 2000 tokens were reasoning", 36.2s, no reply).
+    #
+    # IT IS READ HERE AND NOT ABOVE, after the payload exists. Placed one edit earlier it
+    # read a name that had not been bound yet, so every chat request raised
+    # "local variable 'payload' referenced before assignment" and the seat drew
+    # "(no answer)" — a wrong order that looked exactly like a model that would not talk.
+    if mode == "chat" and payload.get("reasoning_effort", "default") != "none":
+        max_tokens = CHAT_REASONING_MAX_TOKENS
 
     # ── ONE PROVIDER, ONE ATTEMPT. No fallback, no retry. ───────────
     #
@@ -258,7 +331,16 @@ def query_llm(
     # Surfaces keep the tight cap; anything that writes gets room. See SURFACE_MODES.
     # `chat` is a writing mode — a person is waiting on an answer, not on a canvas.
     client_timeout = LLM_TIMEOUT if mode in SURFACE_MODES else LLM_TIMEOUT_WRITING
-    print(f"[{provider['name']}] {model_name} — one attempt, {client_timeout}s")
+    # THE MODE AND THE REASONING SETTING ARE IN THE LINE, not just the ceiling.
+    # "one attempt, 120s" says how long a call MAY take; it does not say what it is,
+    # and `chat` and `prompt_output` share that number. The two things that explain a
+    # slow call are which mode it was and whether it was told to think — the second
+    # being worth roughly ten times the first. Measured on this provider: the same
+    # question answered in 2.4s with reasoning off and 19.0s at medium.
+    print(
+        f"[{provider['name']}] {model_name} — mode={mode} "
+        f"reasoning={payload.get('reasoning_effort', 'default')} one attempt, {client_timeout}s"
+    )
     try:
         client = OpenAI(
             base_url=provider["base_url"],
@@ -266,11 +348,24 @@ def query_llm(
             timeout=client_timeout,
             max_retries=0,
         )
+        # THE WAIT IS MEASURED, because a hold with no number attached is
+        # indistinguishable from a hang. The line above says the CEILING (how long
+        # this call may take); this says how long it DID take, and the two being
+        # different is the whole question when someone asks why she is slow.
+        call_started = time.time()
         response = client.chat.completions.create(**payload, model=model_name)
+        call_elapsed = time.time() - call_started
         message = response.choices[0].message
         # Capture what this actually cost. Providers report it; guessing it
         # would put an invented number above a real action.
         _usage = getattr(response, "usage", None)
+        # HOW MUCH OF THE ANSWER WAS THINKING. A reasoning model reports its
+        # reasoning tokens inside completion_tokens, so a call that looked like it
+        # produced nothing still spent a full budget. The split is carried when the
+        # provider offers it, and absent when it does not — never guessed, because
+        # the number that explains an empty answer must not itself be invented.
+        _details = getattr(_usage, "completion_tokens_details", None)
+        _reasoning_tokens = getattr(_details, "reasoning_tokens", None) if _details else None
         if _usage is not None:
             LAST_USAGE.clear()
             LAST_USAGE.update({
@@ -286,6 +381,8 @@ def query_llm(
                 # feed report the temperature and the reasoning budget that were applied.
                 "temperature": request_temp,
                 "reasoning_effort": payload.get("reasoning_effort", "default"),
+                "elapsed_s": round(call_elapsed, 2),
+                "reasoning_tokens": _reasoning_tokens,
                 "prompt_tokens": getattr(_usage, "prompt_tokens", None),
                 "completion_tokens": getattr(_usage, "completion_tokens", None),
                 "total_tokens": getattr(_usage, "total_tokens", None),
@@ -295,13 +392,23 @@ def query_llm(
             # NO SUBSTITUTION. An empty answer is an empty answer — the model's
             # inner monologue is not its output, and printing it as the result is a
             # decorative stand-in for a missing one. It fails instead, naming why.
+            #
+            # THE REASONING SPLIT IS NAMED TOO, when the provider reported one. "Empty
+            # response" says what happened; "3600 of 4000 tokens were reasoning" says
+            # why, and it is the difference between raising a budget and hunting a
+            # provider fault.
+            _spent = (
+                f" {_reasoning_tokens} of {getattr(_usage, 'completion_tokens', '?')} tokens were reasoning"
+                if _reasoning_tokens
+                else ""
+            )
             raise RuntimeError(
                 f"Empty response (finish_reason={response.choices[0].finish_reason}) — "
-                f"no content for mode={mode}"
+                f"no content for mode={mode} after {call_elapsed:.1f}s, max_tokens={max_tokens}.{_spent}"
             )
 
         content = _process_backend_tags(content, context, prompt_id)
-        print(f"[{provider['name']}] OK — {len(content)} chars")
+        print(f"[{provider['name']}] OK — {len(content)} chars in {call_elapsed:.1f}s")
         return content
 
     except Exception as exc:

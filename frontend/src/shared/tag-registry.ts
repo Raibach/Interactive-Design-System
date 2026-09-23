@@ -44,7 +44,7 @@ export type RegistryMeta = z.infer<typeof RegistryMetaSchema>;
 export const PromptSectionSchema = z.object({
   tag: z.literal('prompt-section'),
   props: z.object({
-    type: z.enum(['system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints']),
+    type: z.enum(['system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints', 'context']),
     content: z.string(),
     order: z.number(),
     state: z.enum(['idle', 'editing', 'saving', 'error']).default('idle'),
@@ -580,9 +580,9 @@ export const TAG_REGISTRY = {
     tag: 'prompt-section',
     surface: 'composer',
     column: 'left',
-    description: 'A prompt builder section — System Role, User Role, Agent Role, Tool Call, Few Shot, or Constraints.',
+    description: 'A prompt builder section — System Role, User Role, Agent Role, Tool Call, Few Shot, Constraints, or Context.',
     props: {
-      type: { type: 'enum', values: ['system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints'] },
+      type: { type: 'enum', values: ['system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints', 'context'] },
       content: { type: 'string' },
       order: { type: 'number' },
       state: { type: 'enum', values: ['idle', 'editing', 'saving', 'error'], default: 'idle' },
@@ -1363,6 +1363,26 @@ export const TAG_REGISTRY = {
       'controls sit at the LEFT: the strip spans the column and her seat can lie over its right end',
       'it emits theme-change; the host writes the tone, never this element',
       'HOST-COMPOSED, RECORDED (2026-09-18): the canvas chain\'s foot is written by WritingAreaIndex.setOutputColumn on Run. The assembly does not emit it; this is the sanctioned exception, not an oversight.',
+    ],
+  },
+  'left-column-header': {
+    tag: 'left-column-header',
+    surface: 'composer',
+    column: 'left',
+    description:
+      'The prompt\'s own bar, above the sections: what this package is called, which version is on screen, and what is known about it. MOVED OUT OF THE REACT SHELL (2026-09-28) so the TITLE is a value of the surface like every other — while it was owned by the shell it could only be changed through a callback handed down, with no path and no tag, so nothing the AI could reach could read or set it. This is row 2 of the old LeftColumnHeader; row 1 (the Console/Composer/Evaluation/Variables/Metadata tabs, the logo, the identity chip) is SHELL NAVIGATION and stays in the shell — the owner, 2026-09-28: "that is a part of the react shell and that would stay outside of the surface". CARRIED, NOT INVENTED: colours, sizes and spacing are the React bar\'s own, which that file\'s docstring says came from the design. WIRED: the title (editable here, settable by the AI), the version label, the package id (display only — the owner reads it while testing; a customer need not). PLACEHOLDERS, drawn and inert with a dashed underline and aria-disabled so they do not read as broken: tags, author, score. INACTIVE: flip — "you don\'t have to do the flip function. You can just keep that inactive at the moment". The version LIST and restore are still the React VersionManager\'s and are marked as not yet moved.',
+    props: {
+      title: { type: 'string', optional: true },
+      version: { type: 'number', optional: true },
+      promptId: { type: 'string', optional: true },
+    },
+    events: ['title-change'],
+    constraints: [
+      'the title is the reason this moved: it is a surface value now, so the AI can read it and write it',
+      'an empty submit is a CANCEL — blurring an empty field does not clear a title',
+      'tags, author and score are placeholders by the owner\'s instruction: "if they\'re not active at the moment, just mark them as placeholders"',
+      'flip is drawn and takes no click, by the same instruction',
+      'row 1 of the old header is navigation and is NOT in this element',
     ],
   },
   'output-controls': {

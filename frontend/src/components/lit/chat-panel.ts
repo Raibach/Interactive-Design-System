@@ -61,6 +61,9 @@ import { logger } from '@/lib/logger';
 // Grace's surface commands. A reply that carries XML tags drives the surface the
 // same way the React seat did — through window CustomEvents and the event bus.
 import { eventBus } from '@/shared/event-bus';
+import { parseWriteSeatAction, NO_ADVICE } from '@/shared/actionLink';
+import { consumeArrival } from '@/shared/arrival';
+import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
 
 interface SeatMessage {
   role?: string;
@@ -78,6 +81,21 @@ interface SeatMessage {
  */
 const TRACE_PROMPT =
   'Load the latest activity and report tokens, cost, latency and evaluation for this session.';
+
+/**
+ * THE WAY OUT, ASKED FOR IN EVERY ADVISORY TURN.
+ *
+ * A suggestion you do not want is a suggestion you have to get past. Every turn where
+ * she offers something ends with this button, and the app handles it: pressed, the
+ * offer is withdrawn and nothing is sent — no model call to be told "understood", no
+ * three seconds spent dismissing a sentence.
+ *
+ * ONE LINE, USED IN BOTH ADVISORY REQUESTS, so the button reads the same wherever it
+ * appears and a change to it cannot land in one turn and miss the other.
+ */
+const OFFER_THE_WAY_OUT =
+  'Finish with one more button, exactly [No thanks](action:no-advice), so they can '
+  + 'dismiss what you offered and carry on without answering you.';
 
 export class ChatPanel extends LitElement {
   static properties = {
@@ -314,6 +332,33 @@ export class ChatPanel extends LitElement {
   }
 
   private _sending = false;
+  /**
+   * THE NEXT REPLY OFFERS AND DOES NOT WRITE. Set when the panel asks her a
+   * question on its own behalf (a seat was chosen — offer what could go in it) and
+   * read once by _processReply. Until the person presses one of her buttons,
+   * nothing belongs in the prompt.
+   */
+  private _offerOnly = false;
+  /**
+   * THE ARRIVAL GREETING'S BOOKKEEPING. `_historyChecked` says the thread has been
+   * read or found absent, so "no turns" is a fact rather than a not-yet; `_greeted`
+   * makes the greeting happen once per seat, however many times this element
+   * re-renders.
+   */
+  private _historyChecked = false;
+  private _greeted = false;
+  /**
+   * THE TOOLS THAT EXIST, fetched once for the workspace context. Undefined until the
+   * fetch answers; empty means the table is empty, which is a different thing and is
+   * said rather than shown as "none".
+   */
+  private _tools: Array<{ name: string; summary: string }> | undefined = undefined;
+  /**
+   * WHETHER SHE VOLUNTEERS. Read from shared/autoAdvice rather than held here,
+   * because the seat is created once per package and this has to survive one — see
+   * that module for why. "No thanks" is what turns it off.
+   */  /** A surface opened, for a seat that may have been created by that same commit. */
+  private _wantsGreeting: 'blank' | 'resume' | '' = '';
   /** Turns spoken since this element mounted; the surface supplies everything before that. */
   private _local: SeatMessage[] = [];
   /**
@@ -407,9 +452,46 @@ export class ChatPanel extends LitElement {
     this.requestUpdate();
   };
 
+  /**
+   * SOMETHING HAPPENED — ASK HER TO SAY WHAT IT MEANS.
+   *
+   * The panel's other window channel, `a2ui:system-message`, DRAWS a line without
+   * asking her anything: the shell says "the save failed" and that sentence is
+   * what appears. This one asks: the request goes to the model, the working state
+   * shows while it is in flight, and her answer is what lands in the thread.
+   *
+   * The request is not shown as the person's turn (see `silent` on _send). What
+   * the person did was choose a seat on the left; they did not type a sentence,
+   * and a thread that puts words in their mouth stops being a record of what they
+   * said.
+   */
+  private _onHostAsk = (e: Event) => {
+    const request = String(((e as CustomEvent).detail || {}).request ?? '');
+    if (!request) return;
+    /*
+     * THIS TURN OFFERS, IT DOES NOT WRITE. The flag outlives the send and is read
+     * by _processReply when the answer lands — see the note there.
+     */
+    this._offerOnly = true;
+    void this._send(request, { silent: true });
+  };
+
   connectedCallback(): void {
     super.connectedCallback();
+    /*
+     * THE OPENING MAY HAVE BEEN ANNOUNCED BEFORE THIS SEAT EXISTED. A composer
+     * announces itself in the same commit that creates this element, so the event
+     * can be gone by the time there is anything to hear it — measured, and the
+     * reason the announcement is also recorded (shared/arrival). This is the other
+     * half of that: the record is consumed on arrival, and the greeting waits for
+     * the history attempt either way.
+     */
+    const arrived = consumeArrival();
+    if (arrived) this._wantsGreeting = arrived;
+    void this._loadTools();
     window.addEventListener('a2ui:system-message', this._onHostSay);
+    window.addEventListener('a2ui:ask-grace', this._onHostAsk as EventListener);
+    window.addEventListener('a2ui:composer-opened', this._onComposerOpened as EventListener);
     // A chat button's answer arrives here from <chat-messages> and goes down the one send
     // path this seat has — the same one the input uses.
     this.addEventListener('chat-action-send', this._onActionSend);
@@ -419,6 +501,8 @@ export class ChatPanel extends LitElement {
 
   disconnectedCallback(): void {
     window.removeEventListener('a2ui:system-message', this._onHostSay);
+    window.removeEventListener('a2ui:ask-grace', this._onHostAsk as EventListener);
+    window.removeEventListener('a2ui:composer-opened', this._onComposerOpened as EventListener);
     this.removeEventListener('chat-action-send', this._onActionSend);
     window.removeEventListener('resize', this._onOutputScroll);
     this._outputRO?.disconnect();
@@ -526,11 +610,95 @@ export class ChatPanel extends LitElement {
     for (const child of Array.from(wrap.children)) this._outputRO.observe(child);
   }
 
-  /** A chat button's answer: the action goes back as a message, like the retired seat's. */
+  /**
+   * A chat button was pressed.
+   *
+   * MOST ACTIONS GO BACK AS A MESSAGE — that is what the retired seat's buttons
+   * did, and it is right for "ask her about this": pressing tells her what to talk
+   * about next.
+   *
+   * A `write-seat` ACTION DOES NOT. It is not a question, it is an edit: the
+   * person pressed "add these rules to Constraints", and the answer to that is the
+   * seat appearing in the prompt with those words in it — the same thing typing
+   * them would produce. Sending it to her instead put her reply where the work
+   * should have been, and the work never happened: measured, the seat stayed
+   * absent and the thread gained a paragraph.
+   *
+   * So it is handed to the editor, which owns the sections, and nothing is sent.
+   */
   private _onActionSend = (e: Event): void => {
     const text = String((e as CustomEvent).detail?.text ?? '');
-    if (text) void this._send(text);
+    if (!text) return;
+    /*
+     * THE BRACKETS COME OFF FIRST. A button's action arrives as `[<action>]` —
+     * that is the wire the retired seat's buttons sent and the seat still sends
+     * it. Parsing the raw text meant every action failed to match, because the
+     * string began with `[` rather than with the action name, so a write-seat
+     * button fell through to the model and the seat it was supposed to fill was
+     * never written. The unwrapping is here because this is where the envelope and
+     * the action are separated; below it, `text` is an action.
+     */
+    const action = text.startsWith('[') && text.endsWith(']') ? text.slice(1, -1) : text;
+    /*
+     * THE WAY OUT IS HANDLED HERE, NOT SENT. "Skip the advice" is not a question and a
+     * dismissal should not cost a model call and three seconds to be acknowledged. The
+     * offer is withdrawn and nothing goes to her.
+     */
+    if (action === NO_ADVICE) {
+      this._withdrawOffer();
+      return;
+    }
+    const edit = parseWriteSeatAction(action);
+    if (edit) {
+      window.dispatchEvent(new CustomEvent('a2ui:write-seat', { detail: edit }));
+      return;
+    }
+    // A button carries words she wrote, so the shape is known and there is nothing to
+    // work out. Reasoning is off for every chat turn; see _send's note.
+    void this._send(text);
   };
+
+  /**
+   * WITHDRAW WHAT SHE OFFERED, AND LEAVE WHAT SHE SAID.
+   *
+   * The buttons live in her turn's own text — that is the wire format — so withdrawing
+   * them means rewriting that one turn without the action links. The prose stays: it
+   * was read, and it is her answer to what the person did. What goes is the part that
+   * was asking them to choose.
+   *
+   * Only the LAST assistant turn: an older offer that has already been answered is
+   * history, and rewriting history because someone dismissed a later one would be a
+   * different act than the button describes.
+   */
+  /**
+   * TAKE THE HINT, NOT JUST THE OFFER — and without telling her.
+   *
+   * "No thanks" is not only a dismissal of what was on screen. Someone who has just
+   * waved away an offer does not want the next one either, so this also switches the
+   * seat out of volunteering: the next package they open will not be greeted with
+   * suggestions. She is still there and still answers — the person just has to ASK.
+   *
+   * IT IS A LOCAL FLAG, NOT A MESSAGE TO HER, and that is deliberate. Telling the
+   * model would cost a call to say "understood" and would only bind the conversation
+   * it was said in — a new conversation would have to be told again, and a reload
+   * would forget. This belongs to the seat, so it lives on the seat.
+   *
+   * The owner asked for this as a per-person setting that can be turned off and on;
+   * `_autoAdvice` is the same state, in the smallest place it can start.
+   */
+  private _withdrawOffer(): void {
+    declineAutoAdvice();
+    const turns = this._local.slice();
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      if (turns[i].role !== 'assistant') continue;
+      const stripped = String(turns[i].content ?? '').replace(/\[[^\]]*\]\(action:[^)]*\)/g, '').trimEnd();
+      if (stripped === String(turns[i].content ?? '').trimEnd()) return; // nothing to withdraw
+      turns[i] = { ...turns[i], content: stripped };
+      this._local = turns;
+      this.requestUpdate();
+      return;
+    }
+  }
 
   private _onSendCommand() {
     const text = this._draft.trim();
@@ -1257,6 +1425,13 @@ export class ChatPanel extends LitElement {
       void this._readSeatScope(this._userId());
     }
     if (changed.has('conversationId')) void this._loadHistory();
+    /*
+     * AND AFTER EVERY RENDER, because the greeting waits on facts that arrive in
+     * either order: the announcement (which can land before this seat exists) and
+     * the history attempt (which is async). Whichever finishes last is the one that
+     * runs it; `_greeted` makes that happen once.
+     */
+    this._greetIfArriving();
     // History arriving lands the column at the newest turn (see _scrollThreadToBottom)...
     if (changed.has('messages')) this._scrollThreadToBottom();
     // ...AND SO DOES THE COLUMN COMING BACK. The history usually loads while the column is
@@ -1351,8 +1526,8 @@ export class ChatPanel extends LitElement {
    * NOT NULL), so the element asks the package's conversation for its own history.
    */
   private async _loadHistory(): Promise<void> {
-    if (this.messages?.length || !this.conversationId) return;
-    if (!this._conversationBelongsToPackage(this.conversationId)) return;
+    if (this.messages?.length || !this.conversationId) { this._historyChecked = true; return; }
+    if (!this._conversationBelongsToPackage(this.conversationId)) { this._historyChecked = true; return; }
     try {
       const resp = await fetch(`/api/conversations/${this.conversationId}/messages?limit=200`, {
         headers: { 'X-User-ID': this._userId() },
@@ -1364,12 +1539,14 @@ export class ChatPanel extends LitElement {
         // same pixels as an empty thread, and the same for a 404 and a 500.
         this._historyError = `This conversation could not be read (HTTP ${resp.status}).`;
         console.error(`[chat-panel] history read refused for ${String(this.conversationId).slice(0, 8)}…: HTTP ${resp.status}`);
+        this._historyChecked = true;
         this.requestUpdate();
         return;
       }
       const data = await resp.json().catch(() => ({}));
       const rows: SeatMessage[] = Array.isArray(data?.messages) ? data.messages : [];
       this._historyError = '';
+      this._historyChecked = true;
       if (!rows.length) { this.requestUpdate(); return; }
       // A GOVERNANCE INSPECTION IS A REPORT, NOT A CHAT TURN. The inspector files its verdict in
       // the console's own conversation (metadata kind='inspection'); the owner, 2026-09-19: "this
@@ -1393,9 +1570,130 @@ export class ChatPanel extends LitElement {
         .map((m) => ({ role: m.role, content: m.content }));
     } catch (err) {
       this._historyError = 'This conversation could not be read — the server did not answer.';
+      this._historyChecked = true;
       console.error('[chat-panel] could not read the package\'s history:', err);
       this.requestUpdate();
     }
+  }
+
+  /**
+   * SHE INTRODUCES HERSELF ON ARRIVAL — BY BEING ASKED, NOT BY A PRINTED LINE.
+   *
+   * The thread used to open with "Hi — how can I help you today?", drawn by the
+   * messages element whenever the thread was empty. It was a fixed string: nothing
+   * thought, nothing had read anything, and it said the same thing to everyone. The
+   * owner, 2026-09-28: "I don't want a hardcoded message… I want her to be thinking
+   * and reply."
+   *
+   * So she is ASKED, the working state shows while she answers, and the words in the
+   * thread are hers. THE REQUEST DOES NOT TELL HER WHAT TO SAY — it says a person has
+   * arrived at a blank composer and that nobody has said anything yet. What she opens
+   * with is her own; a prompt that dictated it would be the hardcoded line again,
+   * written in a longer way.
+   *
+   * WHERE IT FIRES. The host says a composer opened (`a2ui:composer-opened`) — this
+   * element cannot tell, because the only property that differs between the seats
+   * arrives as an empty array here rather than as absent, so "no console cards" and
+   * "not the console" read the same. The seat still decides whether there is
+   * anything to greet: it holds the thread, and it is the only thing that knows
+   * whether that thread is empty. Once per seat, and never over an unreadable
+   * thread — a refusal is not an empty thread, and greeting into one would bury the
+   * error.
+   *
+   * A silent send, so the ask is not drawn as the person's own turn. And it does not
+   * re-assemble anything: everything this touches stays inside the chat, which is the
+   * rule this seat was given when the greeting was first considered.
+   */
+  private _onComposerOpened = (e: Event): void => {
+    const kind = String(((e as CustomEvent).detail || {}).kind ?? 'blank');
+    this._wantsGreeting = kind === 'resume' ? 'resume' : 'blank';
+    this._greetIfArriving();
+  };
+
+  /**
+   * SHE OPENS, WHOEVER OPENED — and she only SUGGESTS when there is something to
+   * suggest about.
+   *
+   * BLANK: nobody has said anything and the prompt is empty, so there is nothing to
+   * read and nothing to advise on. She introduces herself and asks what to work on.
+   * NO OFFER, AND SO NO WAY OUT — a "No thanks" on a turn that offered nothing is a
+   * door out of a room with no walls. The owner, 2026-09-28: "You've got the no thanks
+   * at the beginning… she doesn't make a suggestion on an empty composer."
+   *
+   * RESUME: an existing package was opened. She has its conversation — the backend puts
+   * the last twenty turns in front of her as CONVERSATION HISTORY, and the workspace
+   * rides the request — so she can say where the work stands and OFFER WHERE TO GO NEXT
+   * as buttons. That is the same shape as the seat ask, deliberately.
+   *
+   * AND ONLY IF THE PACKAGE HAS SOMETHING IN IT. An opened package that is empty — no
+   * turns, no prompt — gives her nothing to read, and a suggestion about nothing is
+   * invention. She says nothing instead. That is the same rule as the blank composer,
+   * reached from the other side.
+   *
+   * AND THE SAME RULE HOLDS: this turn offers, it does not write. `_offerOnly` is set
+   * so nothing lands in the prompt before the person picks — the package may have
+   * unsaved work in it, and a greeting that edited it would be the worst kind of
+   * surprise.
+   */
+  private _greetIfArriving(): void {
+    const kind = this._wantsGreeting;
+    if (!kind || this._greeted || !this._historyChecked) return;
+    if (this._historyError || this._sending) return;
+    if (kind === 'resume' && !autoAdviceOn()) return;
+
+    const empty = (this.messages?.length ?? 0) === 0 && this._local.length === 0;
+    if (kind === 'blank' && !empty) return;
+    // Nothing to reference, nothing to suggest.
+    if (kind === 'resume' && !this._packageHasSomething()) return;
+
+    this._greeted = true;
+    if (kind === 'blank') {
+      void this._send(
+        'A person has just opened a blank composer and has not said anything yet. '
+        + 'Introduce yourself in a sentence or two, and ask what they want to work on. '
+        + 'Do not guess what they are building, do not list what you can do, and offer '
+        + 'no suggestions and no buttons — there is nothing yet to have an opinion about.',
+        { silent: true },
+      );
+      return;
+    }
+
+    this._offerOnly = true;
+    void this._send(
+      'A person has just opened an existing piece of work. You can see the conversation '
+      + 'so far and the prompt as it stands. Say briefly where the work is — one or two '
+      + 'sentences, concrete, about THIS prompt — then offer two or three things to do '
+      + 'next as buttons: [short label](action:write-seat:the seat|the words to put in it) '
+      + 'for anything you would write into a seat, or [short label](action:the request) '
+      + 'for anything you would do yourself. Keep labels to a few words and use no '
+      + 'parentheses inside a button. Ask which one they want and wait. '
+      + OFFER_THE_WAY_OUT,
+      { silent: true },
+    );
+  }
+
+  /**
+   * IS THERE ANYTHING IN THIS PACKAGE TO READ?
+   *
+   * Either the conversation has turns, or the prompt has words in it. Both are things
+   * she can see and speak about; neither means she should guess.
+   *
+   * Read from `leftColumnContent`, which is the persisted left column — a JSON string
+   * on the wire and already an object in some paths, so both are handled rather than
+   * one being assumed. A section with no content is not information: an empty System
+   * Role is a row, not something to advise on.
+   */
+  private _packageHasSomething(): boolean {
+    if ((this.messages?.length ?? 0) > 0) return true;
+    const raw = this.leftColumnContent as unknown;
+    if (!raw) return false;
+    let parsed: unknown = raw;
+    if (typeof raw === 'string') {
+      try { parsed = JSON.parse(raw); } catch { return false; }
+    }
+    const sections = (parsed as { sections?: Array<{ content?: string }> })?.sections;
+    if (!Array.isArray(sections)) return false;
+    return sections.some((s) => String(s?.content ?? '').trim().length > 0);
   }
 
   /**
@@ -1503,6 +1801,28 @@ export class ChatPanel extends LitElement {
       parts.push(this.compiledOutput.trim());
     }
 
+    /*
+     * THE TOOLS THAT ACTUALLY EXIST — the same list the menu offers and the assembly
+     * prompts carry, read from the same table.
+     *
+     * Without it she does the only thing she can with the Tool Call step: INVENTS a name.
+     * Observed before this was added — "I've proposed a generic tool named web_search;
+     * give me the exact API or tool name if yours differs" — which puts a call in the
+     * prompt that nothing can make. A step whose whole purpose is to reach a real system
+     * cannot be written from imagination.
+     *
+     * Names and one line each: the same words the menu's fly-out shows and the prompt
+     * carries, so all three say one thing. The bodies are not here — they arrive when a
+     * tool is actually inserted.
+     */
+    if (this._tools?.length) {
+      parts.push('');
+      parts.push(`=== TOOLS AVAILABLE (${this._tools.length} — these are the only ones that exist) ===`);
+      for (const tool of this._tools) {
+        parts.push(`  ${tool.name} — ${tool.summary}`);
+      }
+    }
+
     if (this.consoleCards && this.consoleCards.length > 0) {
       parts.push('');
       parts.push(`=== CONSOLE — PROMPT LIBRARY (${this.consoleCards.length} packages) ===`);
@@ -1526,6 +1846,29 @@ export class ChatPanel extends LitElement {
     return parts.join('\n');
   }
 
+  /**
+   * ASK THE SERVER WHAT TOOLS THERE ARE, once, for the workspace context.
+   *
+   * The same endpoint the composer's menu reads, so the list she is given and the list
+   * a person can pick from are one list. A failure leaves it undefined and the context
+   * says nothing about tools rather than claiming there are none.
+   */
+  private async _loadTools(): Promise<void> {
+    if (this._tools !== undefined) return;
+    try {
+      const res = await fetch('/api/ai/tools');
+      if (!res.ok) return;
+      const body = await res.json();
+      const rows = Array.isArray(body?.tools) ? body.tools : [];
+      this._tools = rows.map((t: { name: string; summary?: string }) => ({
+        name: String(t.name ?? ''),
+        summary: String(t.summary ?? ''),
+      }));
+    } catch {
+      // Left undefined: saying nothing about tools is honest, saying "none exist" is not.
+    }
+  }
+
   /** Grace's identity and the XML command reference, ending with the current workspace. */
   private _graceInstructions(): string {
     const workspaceContext = this._buildWorkspaceContext();
@@ -1543,6 +1886,13 @@ AGENTIC FLOW STEPS — choose from these seven; do not invent new ones:
 2. User Role — <update_user> — the user's request, task or query template.
 3. Agent Role — <update_agent_role> — what THIS agent is and does.
 4. Tool Call — <update_tool> — functions, APIs or tools the agent can invoke.
+
+THE TOOL CALL STEP IS THE ONE YOU MAY NOT INVENT. Every other step is words you can
+write from what the user told you. A tool call has to name something that EXISTS, and
+the list of what exists is at the bottom of this message under TOOLS AVAILABLE. Use a
+name from that list and no other. If nothing in it fits what the user asked for, say so
+in one sentence and offer the closest thing — do not make a name up, because a prompt
+naming a tool that does not exist is a flow that cannot run.
 5. Few Shot — <update_few_shot> — examples of the input and the output wanted.
 6. Context — <update_context> — background, domain knowledge, reference material.
 7. Constraints — <update_constraints> — hard rules the agent must never violate.
@@ -1555,11 +1905,45 @@ HOW YOU WORK:
 5. USER has veto — if they say move it to a different step, do it.
 
 CONFIRMATION BUTTONS
-When you need a decision from the user, put the buttons on their own line, in this exact form:
-[Confirm](action:confirm) [Refuse](action:refuse) [Cancel](action:cancel)
-That line is the whole ask. Do not print the options underneath it.
+EVERY REPLY THAT PROPOSES SOMETHING ENDS WITH THESE TWO. If you ask the user anything,
+suggest anything, or say what you would do next — anything that leaves them a choice —
+the last line of your reply is exactly this, on its own line:
+
+[Confirm](action:confirm) [Not now](action:not-now)
+
+A suggestion is a question. "Next, I'd fill the System Role" is you proposing something
+and waiting for an answer, whether or not it has a question mark — and without the two
+buttons the user has to type a sentence to say yes or no to something you offered.
+Offer it with buttons and it is one press.
+
+That line IS the ask; do not also print the options underneath it. The words are
+fixed: "Confirm" and "Not now". Not "Refuse", not "Cancel", not "Yes"/"No" — the
+panel promises two answers, and a reply offering three, or different ones, breaks that.
+
+The one exception: when you have already offered your own buttons (a set of things to
+write into a prompt), those ARE the answers and this line would be a second question
+stacked on the first — leave it off there.
+
+A reply that only reports or explains, and proposes nothing, gets no buttons.
 
 Never proceed with a destructive or irreversible action (save, clear, delete) without explicit user confirmation.
+
+WHAT [confirm] MEANS — AND IT CREDITS THE PERSON
+When the user answers with [confirm], they are saying yes to the ONE thing you proposed
+in your previous message. Do it, now, in that same reply: write the step, then say in a
+sentence what changed. Do not acknowledge and wait — "Great, I'll do that" and then
+stopping is the most annoying answer this panel can give, because they already said yes.
+
+AND THEN MOVE THE WORK FORWARD. A prompt is built step by step, and a confirmed step
+leaves a next one. Work out what the next one is from where the prompt now stands, say
+it in a sentence, and offer THAT. If they told you the task is searching the internet
+and you have just placed it, the next step is the thing that does the searching — a
+tool call that reaches out, or the skill that defines it. Name the concrete next thing
+for THIS prompt, not the next row in a list.
+
+When the user answers with [not-now], they are declining that one thing. Do not do it,
+do not ask again, and do not offer it a different way. Ask what they would rather do,
+or move to something else that is genuinely next — whichever the prompt calls for.
 
 # CONTROL SURFACE (XML COMMAND TAGS)
 WRITE TO STEPS:
@@ -1570,6 +1954,10 @@ WRITE TO STEPS:
 <update_few_shot>text</update_few_shot>
 <update_context>text</update_context>
 <update_constraints>text</update_constraints>
+THE PACKAGE'S NAME:
+<set_title>text</set_title> — name this package. The title is the package's own name, shown
+in the bar above the prompt; ask the user for it rather than inventing one, and write it
+once they have said it.
 MEMORY COMMANDS:
 <save/>
 <get_versions/>
@@ -1601,13 +1989,30 @@ ${workspaceContext}`;
       { regex: /<update_context>([\s\S]*?)<\/update_context>/g, target: 'Context' },
       { regex: /<update_constraints>([\s\S]*?)<\/update_constraints>/g, target: 'Constraints' },
     ];
-    for (const { regex, target } of writeTags) {
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(content)) !== null) {
-        write(target, match[1].trim());
+    /*
+     * A REPLY TO AN OFFER MAY NOT WRITE. When the panel asked her a question on its
+     * own behalf — a seat was chosen, offer what could go in it — the person has not
+     * chosen anything yet, and the answer must not appear in the prompt before they
+     * do. She is told to offer buttons, and she is also TOLD, by the control-surface
+     * list in her own instructions, that `<update_constraints>` writes into that seat
+     * directly. Obeying both would put words in the prompt nobody picked.
+     *
+     * So the tags are stripped and NOT executed on that turn. The words stay in her
+     * reply where they can be read, and the buttons remain the only way in. The flag
+     * is cleared here, so it covers exactly one reply: the person's next message
+     * keeps every one of its powers.
+     */
+    const offeringOnly = this._offerOnly;
+    this._offerOnly = false;
+    if (!offeringOnly) {
+      for (const { regex, target } of writeTags) {
+        let match: RegExpExecArray | null;
+        while ((match = regex.exec(content)) !== null) {
+          write(target, match[1].trim());
+        }
       }
-      content = content.replace(regex, '');
     }
+    for (const { regex } of writeTags) content = content.replace(regex, '');
 
     const addRoleRegex = /<add_role\s+name="([^"]+)">([\s\S]*?)<\/add_role>/g;
     let addMatch: RegExpExecArray | null;
@@ -1618,8 +2023,7 @@ ${workspaceContext}`;
     }
     content = content.replace(addRoleRegex, '');
 
-    const removeRoleRegex = /<remove_role\s+name="([^"]+)"\s*\/>/g;
-    let remMatch: RegExpExecArray | null;
+    const removeRoleRegex = /<remove_role\s+name="([^"]+)"\s*\/>/g;    let remMatch: RegExpExecArray | null;
     while ((remMatch = removeRoleRegex.exec(content)) !== null) {
       window.dispatchEvent(new CustomEvent('remove-prompt-role', {
         detail: { roleName: remMatch[1].trim() },
@@ -1639,6 +2043,25 @@ ${workspaceContext}`;
       eventBus.emit({ command: 'save-button' } as never);
       content = content.replace(/<save\s*\/>/g, '');
     }
+    /*
+     * THE PACKAGE'S TITLE — the one piece of the prompt that used to have no path at all.
+     *
+     * It was React state behind a callback the shell handed down, so nothing the AI could
+     * reach could read or set it. <left-column-header> moved into the surface for exactly
+     * this reason, and this is the tag that uses it: a name in, the same rename the bar's
+     * own field runs, and the database, the console card and the header all follow because
+     * there is one writer.
+     *
+     * Stripped from the prose like every other tag, so the person reads a sentence about
+     * the name rather than the name wearing angle brackets.
+     */
+    const titleRegex = /<set_title>([\s\S]*?)<\/set_title>/g;
+    let titleMatch: RegExpExecArray | null;
+    while ((titleMatch = titleRegex.exec(content)) !== null) {
+      const title = titleMatch[1].trim();
+      if (title) window.dispatchEvent(new CustomEvent('set-prompt-title', { detail: { title } }));
+    }
+    content = content.replace(titleRegex, '');
     if (/<eval_grounding\s*\/>/.test(content)) {
       window.dispatchEvent(new CustomEvent('ai-eval-grounding'));
       content = content.replace(/<eval_grounding\s*\/>/g, '');
@@ -1714,17 +2137,51 @@ ${workspaceContext}`;
     return content.trim();
   }
 
-  private async _send(text: string): Promise<void> {
+  /**
+   * ASK HER, WITHOUT PUTTING THE ASK IN THE THREAD.
+   *
+   * `silent` is the difference between "the person said this" and "something
+   * happened and she should say what it means". A silent send still goes to the
+   * model, still shows the working state, and still draws her reply; it does not
+   * draw a user bubble, because the person did not type anything.
+   *
+   * That distinction is why this is an option on one send path rather than a
+   * second path. A channel that asked on the user's behalf used to exist and was
+   * removed for exactly this reason — the ask appeared in the thread as though
+   * the person had written it, and it was a wall of instructions nobody could
+   * read. The fix is not to stop asking; it is to stop showing the ask.
+   */
+  private async _send(text: string, opts: { silent?: boolean } = {}): Promise<void> {
     text = (text ?? '').trim();
     if (!text || this._sending) return;
+    /*
+     * THE CHAT DOES NOT REASON, AND THAT IS A MEASUREMENT, NOT A PREFERENCE.
+     *
+     * It used to reason on every turn the person typed. Measured on this provider, the
+     * reasoning is the whole of what they waited for: 2000 reasoning tokens took 36.2
+     * seconds and produced no answer at all once the ceiling was reached — 55 tokens a
+     * second, which is simply the model's speed. A turn with it off answers in two to
+     * ten seconds.
+     *
+     * The owner, 2026-09-28, after watching several: "make it zero".
+     *
+     * WHAT REPLACES IT IS STRUCTURE, NOT THINKING. Reasoning is what the model spends
+     * when the choice set is wide, and the answer to a wide set is to narrow it before
+     * the call rather than to pay for it during — which is what this codebase does for
+     * every surface, and what the Few Shot seat exists for on the prompt side. The asks
+     * already do it: the ones that state the shape come back in two seconds.
+     */
+    const wantsReasoning = false;
     // THE WRITE PATH IS CHECKED TOO, not just the read (2026-09-18). `_loadHistory` refuses a
     // conversation the package's own list contradicts; this is the same guard before a turn
     // is sent, because a foreign id in the property would otherwise be WRITTEN to — the
     // server trusts a client-supplied conversation id, so the seat is where it stops.
     if (this.conversationId && !this._conversationBelongsToPackage(this.conversationId)) return;
     const before = this._local.length;
-    this._local = [...this._local, { role: 'user', content: text }];
-    this._scrollThreadToBottom();
+    if (!opts.silent) {
+      this._local = [...this._local, { role: 'user', content: text }];
+      this._scrollThreadToBottom();
+    }
     this._sending = true;
     this.requestUpdate();
     let answered = false;
@@ -1738,7 +2195,22 @@ ${workspaceContext}`;
           question: text,
           context: this._graceInstructions(),
           mode: 'chat',
-          reasoning: true,
+          /*
+           * THE PERSON'S OWN TURN REASONS; THE PANEL'S ASK DOES NOT.
+           *
+           * Reasoning is what makes this wait long — the model is a reasoning
+           * model, and `chat` is the one mode that turns thinking on, because a
+           * person's message can be complicated and thinking about it is worth
+           * the seconds. A seat description is not complicated: the sentence is
+           * already written and handed over in the same request. There is nothing
+           * to work out, and the delay was the whole of what a person noticed.
+           *
+           * This is the project's own rule, not a new one: reasoning belongs to
+           * the chat input and the reply to it, and a summary or a tag pass does
+           * not reason. Measured on this provider, reasoning off returned the same
+           * valid answer in 1.53s where reasoning on took 6.05s.
+           */
+          reasoning: wantsReasoning,
           reasoning_style: 'chain_of_thought',
           include_memory: true,
           // No temperature here. It used to send 0.45 while the request model defaulted

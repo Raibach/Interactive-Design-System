@@ -44,8 +44,9 @@ import { LitElement, html, css } from 'lit';
 import './prompt-input/prompt-container';
 import './prompt-input/prompt-input-section';
 import { TYPE_LABELS, SECTION_MENU_TYPES } from './prompt-input/prompt-input-section';
-import { normalizeSectionType, resolveSectionName } from '@/shared/promptSections';
+import { normalizeSectionType, resolveSectionName, SECTION_TYPES, isUndecidedType } from '@/shared/promptSections';
 import { writeFieldValue } from '@/shared/repairMaterial';
+import { API_BASE } from '@/shared/apiHelper';
 
 export interface PromptSection {
   name: string;
@@ -66,6 +67,16 @@ export interface PromptSection {
  * design writes the panel's name here, and the next line carries the measured numbers.
  */
 const RAIL_LABEL = 'Agent Prompt';
+
+/**
+ * THE SECTION A TOOL BELONGS TO WHEN NOTHING ELSE IS SAID.
+ *
+ * Tool Call is the seat that was always shared — the one the schema has carried
+ * longest and the one a tool that reaches outward naturally lands in. A tool row
+ * whose `sections` is empty is treated as belonging here rather than to nothing,
+ * because a tool that appears nowhere is a tool nobody can reach.
+ */
+const DEFAULT_TOOL_SECTION = 'tool-call';
 
 class PromptSectionEditor extends LitElement {
   static properties = {
@@ -107,6 +118,18 @@ class PromptSectionEditor extends LitElement {
   private _countedCalls = new Set<number>();
   private _totalTokens = 0;
   private _calls = 0;
+  /**
+   * THE TOOLS THE SERVER OFFERS, in the shape the menu draws.
+   *
+   * Held here rather than fetched per section, because every section's functions
+   * menu offers the same list and there may be eight sections on screen. Fetched
+   * once when this editor connects and again after a tool is added, so the menu
+   * reflects the table rather than a snapshot taken at build time.
+   *
+   * `undefined` means the server has not answered yet, which is a different thing
+   * from an empty list and is drawn differently.
+   */
+  private _tools: Array<{ name: string; token: string; sections: string[] }> | undefined = undefined;
 
   static styles = css`
     :host {
@@ -138,6 +161,43 @@ class PromptSectionEditor extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._bindOnce();
+    void this._loadTools();
+  }
+
+  /**
+   * ASK THE SERVER WHAT TOOLS THERE ARE.
+   *
+   * The list is a table row set, not a constant, so it is fetched rather than
+   * compiled in — a tool added on the tools screen is in the menu on the next
+   * open without a rebuild. A failure leaves `_tools` undefined and the menu
+   * draws the wireframe's example; it does not announce itself here, because
+   * the tools screen is where an unreadable table is worth reporting and this
+   * is only the menu.
+   */
+  private async _loadTools(): Promise<void> {
+    try {
+      const res = await fetch(`${API_BASE}/ai/tools`);
+      if (!res.ok) return;
+      const body = await res.json();
+      const rows = Array.isArray(body?.tools) ? body.tools : [];
+      // `sections` is carried with each tool because the menu is drawn per
+      // section: a section offers the tools that name it, and the ones that
+      // belong everywhere. Fetching once and filtering per section keeps this
+      // one request however many sections are on screen.
+      this._tools = rows.map((t: { name: string; sections?: string[]; summary?: string }) => ({
+        name: t.name,
+        token: `{{tool:${t.name}}}`,
+        sections: Array.isArray(t.sections) ? t.sections : [DEFAULT_TOOL_SECTION],
+        // Carried so the menu can say what a tool is for. It is the same one line
+        // the prompts carry and the same one the tools screen shows, so a person
+        // reading it in three places is reading one sentence.
+        summary: String(t.summary ?? ''),
+      }));
+      this.requestUpdate();
+    } catch {
+      // Left undefined on purpose: the fallback is drawn, and the reason a real
+      // list is missing belongs on the tools screen rather than in this menu.
+    }
   }
 
   // External data ingestion (React host / AI) — canonical normalization
@@ -152,12 +212,17 @@ class PromptSectionEditor extends LitElement {
        * re-renders the whole editor — on every keystroke. The textarea owns the caret;
        * a re-render mid-typing is how a person loses their place.
        *
-       * Compared by name and content, which is all the two copies can differ by when the
-       * host is echoing back what this element just reported.
+       * TYPE IS COMPARED TOO, and it was the one field left out. The comment above
+       * used to say name and content are "all the two copies can differ by" — but a
+       * seat's type is a third thing a copy can carry, and changing it leaves the name
+       * and the text alone. So a host echoing back the OLD type read as identical here
+       * too, and the two guards agreed the seat had never changed: measured, a seat set
+       * to `constraints` came back as `agent-role` on the next model-driven render.
        */
+      const shape = (s: { type?: string; name?: string; content?: string }) =>
+        `${s.type ?? ''}\u0000${s.name ?? ''}\u0000${s.content ?? ''}`;
       const same = next.length === this._sections.length
-        && next.every((s, i) => s.name === this._sections[i].name
-          && s.content === this._sections[i].content);
+        && next.every((s, i) => shape(s) === shape(this._sections[i]));
       if (same) return;
       this._sections = next;
     } else {
@@ -265,15 +330,13 @@ class PromptSectionEditor extends LitElement {
         this._sections[idx] = { ...this._sections[idx], type: value, name: label };
         this._emitUpdate(idx);
         this.requestUpdate();
+        this._sayWhatTheSeatIsFor(value, label);
       } else if (action === 'add') {
         this._addSection();
       } else if (action === 'delete') {
         this._removeSection(idx);
       } else if (action === 'tool' && value) {
-        const prev = this._sections[idx].content || '';
-        this._sections[idx] = { ...this._sections[idx], content: prev ? `${prev} ${value}` : value };
-        this._emitUpdate(idx);
-        this.requestUpdate();
+        void this._insertTool(idx, String(value));
       }
     });
 
@@ -285,6 +348,16 @@ class PromptSectionEditor extends LitElement {
     window.addEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
     // The rail title is where we are now — the last call.
     window.addEventListener('a2ui:usage', this._onUsage as EventListener);
+    /*
+     * A BUTTON THAT EDITS THE PROMPT RATHER THAN ASKING ABOUT IT.
+     *
+     * `a2ui:write-seat` arrives when a chat button carried a `write-seat` action —
+     * "add these rules to Constraints". It is dispatched by the chat panel instead
+     * of being sent to the model, because the answer to it is a change to the
+     * prompt, not a sentence. This element owns `_sections`, so this is the only
+     * place that can make the change.
+     */
+    window.addEventListener('a2ui:write-seat', this._onWriteSeat as EventListener);
   }
 
   disconnectedCallback() {
@@ -294,6 +367,7 @@ class PromptSectionEditor extends LitElement {
     window.removeEventListener('add-prompt-role', this._onAddRole as EventListener);
     window.removeEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
     window.removeEventListener('a2ui:usage', this._onUsage as EventListener);
+    window.removeEventListener('a2ui:write-seat', this._onWriteSeat as EventListener);
     super.disconnectedCallback();
   }
 
@@ -304,12 +378,28 @@ class PromptSectionEditor extends LitElement {
 
   /**
    * The <prompt-input-section> that originally dispatched a composed event.
+   *
    * Shadow DOM retargeting rewrites `e.target` to the nearest shadow host
    * (prompt-container, then prompt-section-editor), so `e.target` loses the
-   * `data-idx` attribute. `composedPath()[0]` is always the real dispatcher.
+   * `data-idx` attribute — which is why this walks the composed path at all.
+   *
+   * BUT THE FIRST ENTRY IN THE PATH IS NOT THE SECTION. It is whatever actually
+   * dispatched: a `<prompt-textarea>`, a `<role-tile>`'s arrow, or one of the
+   * seat menu's `<button>`s. None of those carries `data-idx`, so reading the
+   * attribute off `composedPath()[0]` returned null and every one of these
+   * handlers took its `idx < 0` branch and returned. The seat menu looked alive —
+   * the tile highlighted, the menu closed — and changed nothing: measured, the
+   * model stayed `user-role` after choosing Constraints.
+   *
+   * So the path is searched instead of sampled: the section is the first node in
+   * it that carries the index.
    */
   private _sectionHost(e: CustomEvent): HTMLElement {
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    for (const node of path) {
+      const el = node as HTMLElement | undefined;
+      if (typeof el?.getAttribute === 'function' && el.hasAttribute('data-idx')) return el;
+    }
     return (path.length ? path[0] : e.target) as HTMLElement;
   }
 
@@ -441,6 +531,179 @@ class PromptSectionEditor extends LitElement {
     this.requestUpdate();
   };
 
+  /**
+   * A TOOL IS INSERTED AS ITS WORDS, NOT AS ITS NAME.
+   *
+   * The menu hands over a token — `{{tool:search-the-internet}}` — and until now
+   * that token was the whole insertion: the prompt said a tool was there and
+   * never said what the tool would do, so the words were never on screen and the
+   * person could not read or change them.
+   *
+   * What goes in is the token line followed by the tool's text. The line stays so
+   * it is visible that these words came from a tool rather than from typing, and
+   * the text follows so the prompt is the whole truth about what will be sent.
+   * That is the point of this system: no hidden layer, the prompt is what runs.
+   *
+   * A FAILURE WRITES NOTHING into the person's prompt — an error message is not a
+   * tool's contribution and would be sent on the next run as if they had typed
+   * it. It goes to the error channel, which has had a listener in
+   * WritingAreaIndex and no sender until now.
+   */
+  private async _insertTool(idx: number, token: string): Promise<void> {
+    const name = token.replace(/^\{\{tool:/, '').replace(/\}\}$/, '').trim();
+    if (!name) return;
+
+    const report = (message: string) => {
+      window.dispatchEvent(new CustomEvent('a2ui-update-error-banner', {
+        detail: { props: { message, code: 'TOOL_UNREADABLE', intent: 'tool-insert' } },
+      }));
+    };
+
+    let written: string;
+    try {
+      const res = await fetch(`${API_BASE}/ai/read-tool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        report(`The tool "${name}" could not be read. ${body?.detail?.error?.message ?? res.statusText}`);
+        return;
+      }
+      const tool = await res.json();
+      written = `{{tool:${tool.name}}}\n${tool.body}`;
+    } catch (error) {
+      report(`The tool "${name}" could not be reached. ${String(error)}`);
+      return;
+    }
+
+    const prev = String(this._sections[idx]?.content || '');
+    const next = prev.trim() ? `${prev.trimEnd()}\n\n${written}` : written;
+    this._sections[idx] = { ...this._sections[idx], content: next };
+    this._emitUpdate(idx);
+    this.requestUpdate();
+  }
+
+  /**
+   * A SEAT WAS CHOSEN — ASK HER TO SAY WHAT IT MEANS.
+   *
+   * This used to DROP the seat's description into the thread as a fixed line. It
+   * read as static text sitting in a live conversation: nothing was thinking, the
+   * panel had printed a sentence it already knew. This chat column is never a
+   * display surface — it is a conversation, and everything in it is an answer.
+   *
+   * So the seat is described TO her, along with what the person just did, and her
+   * reply is what the thread gets. She says it in her own words, she can see the
+   * prompt she is talking about, and the person gets an answer instead of a
+   * caption.
+   *
+   * THE DESCRIPTION IS STILL HANDED OVER rather than left to her imagination: it
+   * is the same sentence the fly-out showed, so the tile and the reply cannot
+   * describe the seat differently. She is asked to say it plainly and to offer
+   * next steps — not to repeat the description word for word.
+   *
+   * THE NEXT STEPS ARE HERS TO CHOOSE, AND THEY ARE BUTTONS THAT DO THE WORK. She
+   * can see the prompt, the package and what the person came in with, so she is
+   * the one who knows which moves make sense here.
+   *
+   * A STEP IS AN EDIT, NOT A QUESTION. Pressing "add these rules to Constraints"
+   * must put those rules in the Constraints seat — the same column the person
+   * would have got by typing them — so the action is `write-seat`, which the chat
+   * hands to the editor instead of to her. A plain action would go back to her as
+   * a message and the seat would never be written: measured, the prompt stayed
+   * unchanged and the thread gained a paragraph.
+   *
+   * The format is written out because it is short and she has to get it exactly
+   * right: a label in brackets, then `write-seat:`, then the seat, a `|`, and the
+   * words. PARENTHESES ARE BANNED IN THE WORDS — a `)` ends the button early and
+   * it stops being a button, which is why the instruction says so rather than
+   * trusting the text to avoid them.
+   */
+  private _sayWhatTheSeatIsFor(type: string, label: string): void {
+    const seat = SECTION_TYPES.find((s) => s.id === type);
+    if (!seat) return;
+    window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+      detail: {
+        request: [
+          `The person just changed one of the prompt seats to "${label}".`,
+          `What that seat is for: ${seat.description}`,
+          'Tell them in your own words, briefly, what this seat is for and what belongs in it.',
+          'Say it for someone who has never heard the term.',
+          `Then offer two or three concrete things you could write into that seat for them, as buttons.`,
+          `Write each button EXACTLY like this: [short label](action:write-seat:${label}|the words to put in the seat)`,
+          'Use no parentheses anywhere inside the button, and keep the label to a few words.',
+          'Make the words complete and ready to use — they go straight into the prompt as written.',
+          'Pick steps that fit the prompt in front of you rather than describing the seat generally.',
+          'DO NOT WRITE INTO THE SEAT YOURSELF and do not use any update_ tag — nothing goes in',
+          'until they press one of the buttons, so ask which one they want and wait.',
+          'Finish with one more button, exactly [No thanks](action:no-advice), so they can',
+          'dismiss what you offered and carry on without answering you.',
+        ].join(' '),
+      },
+    }));
+  }
+
+  /**
+   * PUT WORDS INTO A SEAT — MAKING THE SEAT IF IT IS NOT THERE.
+   *
+   * This is what a next-step button does. "Add exactness rules to Constraints" is
+   * an edit to the prompt, and the honest result is the Constraints seat appearing
+   * with those rules in it — the same column the person would have produced by
+   * typing them.
+   *
+   * THE SEAT IS RESOLVED THROUGH THE SAME READER EVERYTHING ELSE USES, so she can
+   * say "Constraints", "constraints" or "constraints" and land on one seat rather
+   * than creating a second one beside it. `normalizeSectionType` knows every
+   * spelling; a name nobody has decided (`custom`) is refused instead of guessed.
+   *
+   * AN EXISTING SEAT IS APPENDED TO, NOT REPLACED. The person may already have
+   * written rules there, and a button that overwrote them would be destroying work
+   * they cannot see while pressing it.
+   */
+  private _onWriteSeat = (e: Event) => {
+    const { section, value } = ((e as CustomEvent).detail || {}) as {
+      section?: string; value?: string;
+    };
+    if (!section || !value) return;
+
+    const wanted = normalizeSectionType(section);
+    const seat = SECTION_TYPES.find((s) => s.id === wanted);
+    let idx = this._sections.findIndex(
+      (s) => normalizeSectionType(s.type || s.name) === wanted,
+    );
+
+    if (idx < 0) {
+      // A seat the prompt does not have yet. Named from the declaration rather
+      // than from her spelling of it, so the row reads the same as one the menu
+      // makes. `isUndecidedType` guards the guess: a name with no decided seat is
+      // refused, because inventing one would put a row in the prompt that the
+      // diagram cannot name.
+      if (isUndecidedType(section) || !seat) {
+        this._writeFailed(String(section), 'no seat by that name');
+        return;
+      }
+      const created: PromptSection = {
+        name: seat.label,
+        type: seat.id,
+        content: value,
+        position: this._sections.length,
+      };
+      this._sections.push(created);
+      this.dispatchEvent(new CustomEvent('section-add', {
+        bubbles: true, composed: true, detail: { section: created },
+      }));
+      this.requestUpdate();
+      return;
+    }
+
+    const prev = String(this._sections[idx].content || '');
+    const next = prev.trim() ? `${prev.trimEnd()}\n\n${value}` : value;
+    this._sections[idx] = { ...this._sections[idx], content: next };
+    this._emitUpdate(idx);
+    this.requestUpdate();
+  };
+
   private _onRemoveRole = (e: Event) => {
     const { roleName } = (e as CustomEvent).detail || {};
     if (!roleName) return;
@@ -514,6 +777,7 @@ class PromptSectionEditor extends LitElement {
           .sticky=${sticky}
           .minHeight=${minHeight}
           .menuOpen=${menuOpen}
+          .tools=${this._tools}
           ?collapsed=${this._collapsed.has(i)}
           ?draggable=${!sticky}
           @dragstart=${(ev: DragEvent) => this._onDragStart(ev, i)}

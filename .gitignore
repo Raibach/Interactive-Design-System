@@ -121,3 +121,11 @@ DESIGNER-PROFILE.md
 /*.jpg
 /*.png
 /images/
+
+# The TrueForge clone, kept locally as the reference the Phase 3 work was read from.
+# Its packages/, docs/ and python/ are ALREADY at the repository root as the copies they
+# are — so committing the clone too would store the same files twice, 65 MB against the
+# 40 MB those copies weigh. This follows the rule above: heavy reference material at the
+# root is not source. The three LightForge catalog files it shipped are the only thing
+# taken from it that this app runs on, and they live in frontend/ where source belongs.
+/trueforge/

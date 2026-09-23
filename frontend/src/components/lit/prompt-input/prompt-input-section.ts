@@ -26,7 +26,7 @@
  *   `section-content-input` {value} · `section-menu-select` {action, value?} ·
  *   `section-collapse-toggle` {collapsed}
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import './gripper-prompt-input';
 import './role-tile';
 import './status-bar-prompt-input';
@@ -37,14 +37,19 @@ import {
 } from '@/shared/promptSections';
 import { repairPromptFlag } from '@/shared/repairMaterial';
 
-export interface MenuType { type: string; label: string }
+/**
+ * One tile in the seat menu. `description` is not drawn on the tile — it is the
+ * fly-out beside it, and the same sentence the chat posts when the seat is picked.
+ */
+export interface MenuType { type: string; label: string; description: string }
 
 // System is deliberately absent — it is sticky and has no menu.
-// Menu contents are the Figma component-set. Live node: 40001003:25249
-// ("accordion-dropdown", open state), which carries FOUR role tiles —
-// User Role · Agent Role · Tool Call · Custom Data — plus Remove and Add Section.
-// "Custom Data" is the addition the older three-item menu was missing
-// (the earlier node 40000934:22868 called this tile "Custom").
+// The Figma component-set (live node 40001003:25249, "accordion-dropdown") drew
+// FOUR role tiles — User Role · Agent Role · Tool Call · Custom Data — while the
+// declaration in @/shared/promptSections has since grown three more: Few Shot,
+// Constraints and Context were declared and never given a tile, and Custom Data
+// is now Custom Skill. The list is derived from that declaration rather than
+// retyped here, so the drawing no longer decides what a person may choose.
 export const SECTION_MENU_TYPES: MenuType[] = SHARED_MENU_TYPES;
 
 /**
@@ -58,9 +63,26 @@ export const TYPE_LABELS: Record<string, string> = SECTION_TYPE_LABELS;
 
 // Pre-labeled Functions / Tools — from the wireframe's own Tool Call example
 // (node 40000747-217). Extend in Figma + here; never free-typed by the AI.
+//
+// THIS IS THE FALLBACK, NOT THE LIST. The real tools come from the server and
+// arrive on the `tools` property, because a tool is a row someone can add or
+// change without a deploy. This single example is drawn only until the server
+// answers — an empty menu would say "there are no tools" when the truth is
+// "the list has not arrived yet", and those are different claims.
 export const PRELABELED_TOOLS: Array<{ name: string; token: string }> = [
   { name: 'generate_solar_system_design', token: '{{tool:generate_solar_system_design}}' },
 ];
+
+/**
+ * A TOOL MARKED THIS BELONGS TO EVERY SECTION.
+ *
+ * Most tools belong to one or two seats — the composer's rules belong with the
+ * agent, a lookup belongs where calls are made. A few belong anywhere: something
+ * that answers a question is as useful while writing the system role as while
+ * writing the user role. Rather than list every seat on such a tool and keep that
+ * list in step with the schema, it is marked with this and drawn everywhere.
+ */
+export const ALL_SECTIONS = '*';
 
 export class PromptInputSection extends LitElement {
   static properties = {
@@ -71,7 +93,8 @@ export class PromptInputSection extends LitElement {
     minHeight: { type: Number, attribute: 'min-height' },
     menuOpen: { type: String, attribute: 'menu-open' },
     placeholder: { type: String },
-  };
+    /** The tools the server offers. Undefined = not answered yet; [] = none. */
+    tools: { type: Array },  };
 
   declare name: string;
   declare type: string;
@@ -80,6 +103,97 @@ export class PromptInputSection extends LitElement {
   declare minHeight: number;
   declare menuOpen: '' | 'types' | 'functions';
   declare placeholder: string;
+  declare tools: Array<{ name: string; token: string; sections?: string[]; summary?: string }> | undefined;
+
+  /**
+   * WHICH SEAT'S DESCRIPTION IS SHOWING, if any, and WHERE TO DRAW IT.
+   *
+   * Not a reactive property, so a write does not schedule a render by itself —
+   * every write goes through _showTip, which asks for the update.
+   *
+   * THE BOX IS STORED, NOT MEASURED AT RENDER TIME, and the tip is drawn
+   * `position: fixed` from it. Both are the same decision: the tip has to float
+   * free of the prompt column. That column's body is an `overflow: auto` scroller,
+   * so anything absolutely positioned inside it is CLIPPED at the scroll box — the
+   * tip was drawn under the chat and cut off at the column edge. Fixed positioning
+   * resolves against the viewport and ignores every ancestor's overflow, and taking
+   * the coordinates at hover time is what lets it be fixed rather than absolute.
+   */
+  private _tipType = '';
+  /** The card's anchored edge: the seats' card grows right, a tool's grows left. */
+  private _tipBox: { left?: number; right?: number; top: number } | null = null;
+
+  /**
+   * THE TOOL TIP, ON THE OTHER SIDE.
+   *
+   * `_tip` holds the words — a tool's name and its one line — and `_tipBox` is
+   * shared with the seat tips, because only one card is ever up at a time. What
+   * differs is the EDGE IT IS ANCHORED TO: the seats' card grows rightward from
+   * the menu, and a tool's card grows LEFTWARD, because the tools menu is at the
+   * right-hand end of the row and a card on its right would run off the column.
+   *
+   * So the box carries `right` instead of `left` for that side, and the style is
+   * built from whichever edge is set. Measuring the card's width instead would
+   * hard-code a number that changes with its content.
+   */
+  private _tip: { title: string; body: string } | null = null;
+
+  /**
+   * Show a seat's description, or clear it when `type` is empty.
+   *
+   * ONE PLACE, EVERY TIME: the card appears under the Functions | Tools button
+   * and to the right of the menu items, whichever tile the pointer is on. Only
+   * the words change. A card that followed the pointer would move while it was
+   * being read and would land differently for a tile on the left of the grid
+   * than for one on the right; a fixed spot is a place a person learns once.
+   *
+   * The box comes from the accordion's bottom edge (the row the button sits in)
+   * and the menu's right edge, so it sits in the corner the layout already
+   * leaves empty rather than over the tiles it is describing.
+   */
+  private _showTip(type: string): void {
+    if (type) {
+      const accordion = this.shadowRoot?.querySelector('.prompt-accordion') as HTMLElement | null;
+      const anchor = this.shadowRoot?.querySelector('.role-tile-wrap') as HTMLElement | null;
+      if (accordion && anchor) {
+        const row = accordion.getBoundingClientRect();
+        const menu = anchor.getBoundingClientRect();
+        this._tipBox = { left: Math.round(menu.right + 10), top: Math.round(row.bottom + 4) };
+      }
+    } else {
+      this._tipBox = null;
+    }
+    this._tipType = type;
+    this._tip = null; // one card at a time — the other menu's is cleared
+    this.requestUpdate();
+  }
+
+  /**
+   * THE SAME CARD, ON THE OTHER SIDE, FOR A TOOL.
+   *
+   * The tools menu is the right-hand end of the row, so the seats' card — which
+   * grows rightward from the menu — would run off the column. This one is anchored
+   * to the menu's LEFT edge instead, and grows leftward into the space the prompt
+   * body already occupies. Same place every time, like the seat card: only the
+   * words change.
+   *
+   * `right` rather than a computed `left`, because the card's width depends on how
+   * long the tool's line is; measuring it would mean reading layout in a render.
+   * Anchoring the edge that does not move is what makes that unnecessary.
+   */
+  private _showToolTip(toolName: string): void {
+    const menu = this.shadowRoot?.querySelector('.selection-menu') as HTMLElement | null;
+    const tool = (this.tools ?? []).find((t) => t.name === toolName);
+    if (!menu || !tool) return;
+    const box = menu.getBoundingClientRect();
+    this._tipType = '';
+    this._tip = { title: tool.name, body: tool.summary || '' };
+    this._tipBox = {
+      right: Math.round(window.innerWidth - box.left + 10),
+      top: Math.round(box.top),
+    };
+    this.requestUpdate();
+  }
 
   constructor() {
     super();
@@ -159,6 +273,25 @@ export class PromptInputSection extends LitElement {
       border-radius: 6px;
       box-sizing: border-box;
       box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
+      /* The width is the one thing here that moves — see .functions-open below. */
+      transition: width 240ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    /*
+     * THE HORIZONTAL ACCORDION. Opening the tools widens this side, and the role
+     * tile gives up the room — it does not need a rule of its own, because
+     * .role-tile-wrap is flex: 1 0 0 and simply takes what is left.
+     *
+     * WHY IT IS NEEDED. The menu below is width: 100% of this wrap, so with the
+     * closed 177px it drew a two-column grid of 86px cells and every tool name
+     * was cut off at the tile edge — search-the-internet read search-the-inter.
+     * A menu that cannot show the name of the thing it is offering is a menu that
+     * cannot be used.
+     *
+     * 46% rather than a pixel width so it holds on a docked column as well as a
+     * wide one: the tile shrinks with the column instead of overflowing it.
+     */
+    .prompt-accordion.functions-open .functions-wrap {
+      width: 46%;
     }
     /* Figma 40001003:25249 "accordion-dropdown" (live node, open state) — a
        TWO-COLUMN grid of white tile-cards with 5px gaps. Container itself has no
@@ -213,6 +346,62 @@ export class PromptInputSection extends LitElement {
       cursor: default;
     }
     .menu-item.placeholder:hover { background: #ffffff; }
+    /*
+     * THE SEAT'S DESCRIPTION — a floating card, not a box in the menu.
+     *
+     * Fixed positioning is the whole point. The prompt column's body is an
+     * overflow-auto scroller, so an absolutely positioned card is clipped at
+     * that scroll box; and anything painted inside the left pane sits under the
+     * chat column however high its z-index, because the panes are separate
+     * stacking contexts and the chat comes later in paint order. Fixed resolves
+     * against the viewport and ignores both — it floats over everything.
+     *
+     * The coordinates come from the tile's own rect, taken when the pointer
+     * arrived (see _showTip), so it sits beside the tile that earned it rather
+     * than at a position guessed at render time.
+     *
+     * It does not take pointer events: a card that can be hovered is a card that
+     * can steal the hover that opened it, and this one only has to be read.
+     */
+    .seat-tip {
+      position: fixed;
+      /*
+       * THE BROWSER'S OWN POPOVER RULES HAVE TO BE CANCELLED FIRST.
+       *
+       * A [popover] gets inset: 0 and margin: auto from the user-agent
+       * stylesheet, which CENTRES it in the viewport — measured: a card told to
+       * sit at 1026 drew at 1302, and its top moved between one tile and the next
+       * because the two had different heights and auto margins split the
+       * difference. inset: auto and margin: 0 hand positioning back to the
+       * left/top this element sets inline.
+       */
+      inset: auto;
+      margin: 0;
+      width: 288px;
+      background: #ffffff;
+      border-radius: 6px;
+      padding: 12px 14px;
+      /* Deeper and softer than the menu tiles' button drop, because this floats
+         further from the surface than they do. */
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.10);
+      z-index: 9999;
+      pointer-events: none;
+    }
+    .seat-tip-title {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: #171717;
+      margin-bottom: 6px;
+    }
+    .seat-tip-body {
+      margin: 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.45;
+      color: #4b5563;
+    }
     .functions-label-text {
       font-size: 16px;
       font-weight: 700;
@@ -279,6 +468,11 @@ export class PromptInputSection extends LitElement {
       outline: 2px solid #c50000;
       outline-offset: 3px;
     }
+    /* The accordion is a movement, so it is the first thing that should stop
+       moving when someone has asked the system not to move things. */
+    @media (prefers-reduced-motion: reduce) {
+      .functions-wrap { transition: none; }
+    }
   `;
 
   render() {
@@ -286,23 +480,103 @@ export class PromptInputSection extends LitElement {
     const isSticky = this.sticky;
     const menuOpen = this.menuOpen;
 
+    // WHAT A SEAT IS FOR, shown while the pointer rests on its tile.
+    //
+    // The menu draws the names of the seats and nothing else — "Few Shot",
+    // "Constraints" — and a person who has not been taught the vocabulary has no
+    // way to tell what choosing one will do to their prompt. The words are the
+    // same ones the chat uses when a seat is picked (see _onMenuSelect in the
+    // editor), so the tile and the reply agree rather than being two accounts.
+    //
+    // It is a card this element draws itself rather than a browser tooltip: a
+    // `title` attribute is slow, unstyled, and unreadable in a demo. Where it is
+    // positioned, and why that takes it out of the column, is on .seat-tip below.
     const typesMenu = !isSticky && menuOpen === 'types' ? html`
-      <div class="selection-menu" role="menu">
+      <div class="selection-menu" role="menu" @mouseleave=${() => { this._showTip(''); }}>
         ${SECTION_MENU_TYPES.map((mt) => html`
           <button class="menu-item${t === mt.type ? ' selected' : ''}" role="menuitem"
                   data-action="type" data-value="${mt.type}"
+                  @mouseenter=${() => { this._showTip(mt.type); }}
+                  @focus=${() => { this._showTip(mt.type); }}
                   @click=${(e: Event) => this._onMenuSelect(e)}>${mt.label}</button>`)}
         <button class="menu-item danger" role="menuitem" data-action="delete"
+                @mouseenter=${() => { this._showTip(''); }}
                 @click=${(e: Event) => this._onMenuSelect(e)}>Remove</button>
         <button class="menu-item" role="menuitem" data-action="add"
+                @mouseenter=${() => { this._showTip(''); }}
                 @click=${(e: Event) => this._onMenuSelect(e)}>Add Section</button>
         <div class="menu-item placeholder" role="presentation">Placeholder row</div>
       </div>` : '';
 
+    // THE DESCRIPTION FLOATS, so it is drawn OUTSIDE the menu's box. Fixed
+    // positioning takes it out of the prompt column's scroll box, which would
+    // otherwise clip it at the column edge — and out from under the chat column,
+    // which paints over anything inside the left pane however high its z-index.
+    //
+    // ONE CARD, TWO MENUS. Which edge it is anchored to is the only difference:
+    // the seats' card grows right from the menu, a tool's grows left. Both are
+    // built here because only one can be showing at a time — hovering a tool
+    // clears the seat's tip and the other way round (see _showTip).
+    const tipWords = this._tip
+      ?? (this._tipType
+        ? (() => {
+            const seat = SECTION_MENU_TYPES.find((m) => m.type === this._tipType);
+            return seat ? { title: seat.label, body: seat.description } : null;
+          })()
+        : null);
+    const tipCard = tipWords && this._tipBox
+      ? (() => {
+          // The whole declaration is ONE expression, not two interpolations in
+          // one attribute. Two expressions leave the attribute unset here — the
+          // card rendered at its static position instead of beside its tile.
+          const edge = this._tipBox!.right !== undefined
+            ? `right: ${this._tipBox!.right}px`
+            : `left: ${this._tipBox!.left}px`;
+          const place = `${edge}; top: ${this._tipBox!.top}px;`;
+          /*
+           * `popover` PUTS IT IN THE TOP LAYER, and that is what makes the
+           * coordinates above mean what they say. A plain `position: fixed` card
+           * inside this shadow tree drew 100px low — measured, not guessed: the
+           * same card at the same coordinates rendered correctly from
+           * `document.body` and wrong from here, because something in this tree
+           * is a containing block for fixed positioning. The top layer has the
+           * viewport as its containing block by definition and is painted above
+           * everything, which is what "floats over the chat" requires.
+           *
+           * `manual` because the card must not be dismissed by a click or Escape
+           * — it is not a dialog, it follows a pointer. It is opened in
+           * updated() and removed from the DOM when the pointer leaves, which
+           * closes it.
+           */
+          return html`
+            <div class="seat-tip" role="tooltip" popover="manual" style=${place}>
+              <div class="seat-tip-title">${tipWords.title}</div>
+              <p class="seat-tip-body">${tipWords.body}</p>
+            </div>`;
+        })()
+      : nothing;
+
+    // THE TOOLS THIS SECTION OFFERS. A tool names the sections it belongs to,
+    // and a section draws only the tools that name it — plus the ones belonging
+    // everywhere, so a general tool does not have to be listed eight times.
+    //
+    // The fallback while the list is in flight is the wireframe's single example,
+    // drawn only under the section that example was written for. Showing it in
+    // every section would put a tool in front of someone in a place it does not
+    // belong, which is the thing this filter exists to stop.
+    const offeredTools = this.tools === undefined
+      ? (this.type === 'tool-call' ? PRELABELED_TOOLS : [])
+      : this.tools.filter(
+          (tool) => tool.sections?.includes(this.type) || tool.sections?.includes(ALL_SECTIONS),
+        );
     const functionsMenu = menuOpen === 'functions' ? html`
-      <div class="selection-menu" role="menu">
-        ${PRELABELED_TOOLS.map((tool) => html`
+      <div class="selection-menu" role="menu" @mouseleave=${() => { this._showTip(''); }}>
+        ${offeredTools.length === 0
+          ? html`<div class="menu-item placeholder" role="presentation">No tools for this seat</div>`
+          : offeredTools.map((tool) => html`
           <button class="menu-item" role="menuitem" data-action="tool" data-value="${tool.token}"
+                  @mouseenter=${() => { this._showToolTip(tool.name); }}
+                  @focus=${() => { this._showToolTip(tool.name); }}
                   @click=${(e: Event) => this._onMenuSelect(e)}>${tool.name}</button>`)}
       </div>` : '';
 
@@ -333,7 +607,7 @@ export class PromptInputSection extends LitElement {
       <div class="responsive-prompt-container" data-tag="prompt-section" data-node-id="40000746:94" data-section-name="${this.name}">
         <div class="section-header" data-node-id="40000746:102">
           <gripper-prompt-input ?active=${!isSticky}></gripper-prompt-input>
-          <div class="prompt-accordion" data-node-id="40000909:3998">
+          <div class="prompt-accordion${menuOpen === 'functions' ? ' functions-open' : ''}" data-node-id="40000909:3998">
             <div class="role-tile-wrap">
               <!-- THE MARKER BELONGS TO THE ELEMENT THAT DRAWS THE NODE. 40000909:3999 is the
                    white rounded tile (pad 18, gap 53, 43 tall in the file) — drawn by
@@ -367,13 +641,41 @@ export class PromptInputSection extends LitElement {
           ></prompt-textarea>
         </div>
       </div>
+      ${tipCard}
     `;
   }
 
   private _toggleMenu(e: Event, kind: 'types' | 'functions') {
     e.stopPropagation();
     this.menuOpen = this.menuOpen === kind ? '' : kind;
+    // Closing the menu closes its description too — the card describes a choice
+    // CLOSING THE MENU CLOSES ITS CARD, and opening one starts with no tile under
+    // the pointer. Either way nothing is being hovered, so neither menu's card
+    // applies — this used to check for 'types' specifically, which was true when
+    // only the seat menu had one.
+    this._showTip('');
     this.requestUpdate();
+  }
+
+  /**
+   * OPEN THE DESCRIPTION IN THE TOP LAYER.
+   *
+   * The card carries `popover="manual"`, so it only becomes visible once
+   * showPopover() runs and only after the render that created it. Doing it here
+   * rather than in the template is the whole reason the card can be positioned
+   * with viewport coordinates and still appear where the numbers say: an element
+   * in the top layer has the viewport as its containing block, while the same
+   * element inside this shadow tree did not — it drew 100px low, measured.
+   *
+   * showPopover() throws if the element is already open, so the state is checked
+   * rather than assumed; nothing else in this element ever opens it.
+   */
+  protected updated(): void {
+    const tip = this.shadowRoot?.querySelector('.seat-tip') as (HTMLElement & { showPopover?: () => void }) | null;
+    if (!tip || typeof tip.showPopover !== 'function') return;
+    if (!tip.matches(':popover-open')) {
+      try { tip.showPopover(); } catch { /* already open, or the platform has no top layer */ }
+    }
   }
 
   private _onCollapseToggle(_e: Event) {
@@ -395,6 +697,19 @@ export class PromptInputSection extends LitElement {
     const action = btn.getAttribute('data-action');
     const value = btn.getAttribute('data-value') || undefined;
     this.menuOpen = '';
+    /*
+     * THE CARD GOES WITH THE MENU. It is drawn outside the menu's block — it has
+     * to be, to escape the column — so closing the menu does not remove it, and a
+     * chosen seat left its own description floating over the prompt with nothing
+     * to explain it. A card describing a choice that has been made is clutter on
+     * top of the work.
+     *
+     * The chat carries the same words (see _sayWhatTheSeatIsFor in the editor),
+     * so nothing is lost by dismissing it here: it moves from the corner of the
+     * screen into the conversation, which is where a record of what was chosen
+     * belongs.
+     */
+    this._showTip('');
     this.dispatchEvent(new CustomEvent('section-menu-select', {
       bubbles: true, composed: true, detail: { action, value },
     }));

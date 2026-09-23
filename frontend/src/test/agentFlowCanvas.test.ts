@@ -391,9 +391,15 @@ describe('<agent-flow> — the operator gestures', () => {
     const picker = el.shadowRoot!.querySelector('.picker') as HTMLElement;
     expect(picker).toBeTruthy();
     const kinds = [...picker.querySelectorAll('.picker-kind')].map((b) => b.textContent);
-    // The vocabulary the prompt panel uses, not a second one. Custom Role is absent on
+    // The vocabulary the prompt panel uses, not a second one — derived from the
+    // same declaration, so the two cannot drift. It is every seat the panel can
+    // show: the six the menu offers plus System Role, which is sticky and has no
+    // menu of its own but is still a seat a node can be. Custom Role is absent on
     // purpose: it is on promptSections.ts's UNDECIDED list (10-TODO W5).
-    expect(kinds).toEqual(['System Role', 'User Role', 'Agent Role', 'Tool Call', 'Custom Data']);
+    expect(kinds).toEqual([
+      'System Role', 'User Role', 'Agent Role', 'Tool Call',
+      'Custom Skill', 'Few Shot', 'Constraints', 'Context',
+    ]);
 
     // Choosing a kind makes the node there, wired to the port the line came from.
     (picker.querySelectorAll('.picker-kind')[1] as HTMLElement).click();

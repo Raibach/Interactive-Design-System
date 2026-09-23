@@ -453,10 +453,11 @@ function decideSeatId(raw: unknown): string {
  * keyed on an undecided value would claim a seat nobody declared. Retiring that entry
  * is a decision, and it is written down as AGENTIC_EDITOR/10-TODO.md W5.
  */
-export const CREATABLE_KINDS: Array<{ kind: string; label: string }> =
-  ['system-role', 'user-role', 'agent-role', 'tool-call', 'custom-data'].map((id) => ({
-    kind: id,
-    label: SECTION_TYPES.find((t) => t.id === id)?.label ?? id,
+export const CREATABLE_KINDS: Array<{ kind: string; label: string; description: string }> =
+  SECTION_TYPES.filter((t) => t.inMenu || t.sticky).map((t) => ({
+    kind: t.id,
+    label: t.label,
+    description: t.description,
   }));
 
 /** The address a repair prompt names, read from the Tool Call seat's own words. */export function toolFromSections(sections: FlowSeatInput[]): { name: string; nodeId?: string | null } | null {
