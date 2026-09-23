@@ -26,8 +26,15 @@ from grace_gui import (
 from agent_rpc_handler import AgentRpcHandler
 from milvus_rest import MilvusREST
 from role_caps import get_filtered_manifest, get_user_role, get_role_capabilities
+from tools import render_tools_block, get_tool, list_tools, categories, ToolError
 
 router = APIRouter()
+
+# The prompt block listing the tools is built by render_tools_block() at each
+# assembly rather than cached here, so a tool added on screen is offered on the
+# very next call instead of after a restart. If the table cannot be read the
+# block is empty and the assembly continues — the failure shows on the tools
+# screen, not on every prompt.
 
 
 # ── THE MENU IS THE PLACE, AND THE SERVER WRITES IT ─────────────────────────────
@@ -534,6 +541,7 @@ def ai_assemble_surface(
         SAMPLE = 12
         cards_for_prompt = json.dumps(cards[:SAMPLE])
         llm_prompt = f"""You are Grace, the A2UI surface assembler for the console.
+{render_tools_block()}
 
 The user opened the Console. There are {len(cards)} prompt packages. The first
 {min(SAMPLE, len(cards))} are shown below as examples of the card shape; bind the grid to the
@@ -766,6 +774,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
         findings_for_prompt = json.dumps(findings)
 
         llm_prompt = f"""You are Grace, the A2UI surface assembler for the catalog check.
+{render_tools_block()}
 
 The user's index is "{index_name}". The checker ran at {generated_at} and found
 {len(findings)} open findings.
@@ -892,6 +901,7 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
         ms_a = 0.0
 
         llm_prompt = f"""You are Grace, the A2UI surface assembler for the Composer.
+{render_tools_block()}
 
 The user clicked "Composer". Assemble the FULL blank composer surface.
 
@@ -899,6 +909,13 @@ COMPONENT NAMES — use exactly these strings in each object's "component" field
 {json.dumps(list(a2ui_catalog.get("components", {}).keys()))}
 
 LAYOUT CONTRACT — the container's NAMED slots, which you fill:
+- left-header: left-column-header, title bound to {{"path": "/session/title"}}
+  THE PROMPT'S OWN BAR, above the sections and NOT inside their scroller: it is the
+  package's title, its version and its id, so it stays put while the sections scroll
+  under it. Emit "left-column-header" (the tag) or "LeftColumnHeader" (the name) —
+  both are in the catalog and both resolve to the same element. Bind "title" and
+  nothing else: the version and the id come from the host, and the tags, author and
+  score are drawn placeholders that take no props.
 - left: prompt-section-editor, sections bound to {{"path": "/session/left_column/sections"}}
 - left-footer: control-bar
   The design puts the "Left-column-ControlBar" at the BOTTOM of the left column
@@ -949,7 +966,8 @@ REQUIREMENTS:
 Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array, no extra keys, no text after the JSON:
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left": "left-column", "left-footer": "control-bar", "right": "right-column"}}}},
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left-header": "left-header", "left": "left-column", "left-footer": "control-bar", "right": "right-column"}}}},
+    {{"id": "left-header", "component": "left-column-header", "title": {{"path": "/session/title"}}, "version": {{"path": "/session/version"}}, "promptId": {{"path": "/session/id"}}}},
     {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
@@ -1206,6 +1224,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             "message_count": message_count,
         }
         llm_prompt = f"""You are Grace, the A2UI surface assembler.
+{render_tools_block()}
 
 User is loading saved session: "{session.get('title') or 'Untitled'}".
 
@@ -1215,6 +1234,9 @@ Data summary:
 Assemble the FULL surface with A2UI v0.9.1.
 
 CATALOG (use these):
+- left-column-header (title: {{"path": "/session/title"}}) — the prompt's own bar, in the
+  container's "left-header" slot, ABOVE the sections and outside their scroller, so the
+  title and version stay put while the sections scroll under them
 - prompt-section-editor (sections: {{"path": "/session/left_column/sections"}})
 - control-bar (no props) — in the container's "left-footer" slot, at the bottom of the left column
 - compiled-output-viewer (content: {{"path": "/session/middle_column/compiled_output"}})
@@ -1239,7 +1261,8 @@ no return salutation — the operator is already in the session they opened.
 Output ONLY this JSON (no markdown):
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left": "left-col", "left-footer": "control-bar", "right": "right-col"}}}},
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left-header": "left-hdr", "left": "left-col", "left-footer": "control-bar", "right": "right-col"}}}},
+    {{"id": "left-hdr", "component": "left-column-header", "title": {{"path": "/session/title"}}, "version": {{"path": "/session/version"}}, "promptId": {{"path": "/session/id"}}}},
     {{"id": "left-col", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
@@ -1335,6 +1358,11 @@ Output ONLY this JSON (no markdown):
                         "session": {
                             "id": str(session_id),
                             "title": session.get("title"),
+                            # THE VERSION, SO THE BAR CAN STATE IT. The row carries
+                            # current_version and nothing was putting it on the data model,
+                            # so the prompt's bar had nothing to bind and drew its empty
+                            # label. One value, one path, the same as the title.
+                            "version": session.get("current_version") or 1,
                             "is_unsaved": False,
                             "left_column": {
                                 "sections": sections,
@@ -1897,6 +1925,71 @@ Compiled Prompt:
             status_code=500,
             detail=f"Failed to save surface: {str(e)}"
         )
+
+
+def _tool_refusal(message: str, path: str = "/name") -> HTTPException:
+    """The answer to a tool request that cannot be met.
+
+    The same four-field shape the catalog uses for a component that is not in
+    it. A tool that does not exist is not an empty result — it is a refusal
+    that names what was asked for.
+    """
+    return HTTPException(status_code=503, detail={
+        "error": {
+            "code": "VALIDATION_FAILED",
+            "surfaceId": "main",
+            "path": path,
+            "message": message,
+        }
+    })
+
+
+@router.get("/api/ai/tools")
+async def ai_tools(section: Optional[str] = Query(None)):
+    """The tools on offer, optionally narrowed to one section of a prompt.
+
+    Names, one line each, and the category. No bodies — a body is fetched only
+    when something asks for that tool by name.
+
+    `section` is one of the prompt's seats. A tool can belong to more than one
+    and appears in each, which is what makes a tool show up where the person is
+    working rather than in one fixed list.
+    """
+    try:
+        return {"tools": list_tools(section), "section": section}
+    except ToolError as e:
+        raise _tool_refusal(str(e), path="/section")
+
+
+@router.get("/api/ai/tool-categories")
+async def ai_tool_categories():
+    """The categories and how many tools each holds.
+
+    This is what the first list shows when someone presses Tools: the shape of
+    what is available, not every tool at once.
+    """
+    try:
+        return {"categories": categories()}
+    except ToolError as e:
+        raise _tool_refusal(str(e), path="/categories")
+
+
+@router.post("/api/ai/read-tool")
+async def ai_read_tool(request_body: dict):
+    """Read one tool's full text.
+
+    A tool is not in the prompt until something asks for it by name, which is
+    why one can be long and still cost nothing on the calls that do not use it.
+
+    An unknown name is a refusal that lists what exists, not an empty answer.
+    """
+    name = (request_body or {}).get("name", "")
+    if not name:
+        raise _tool_refusal("read-tool needs a 'name'.")
+    try:
+        return get_tool(name)
+    except ToolError as e:
+        raise _tool_refusal(str(e))
 
 
 @router.get("/api/ai/role-capabilities")

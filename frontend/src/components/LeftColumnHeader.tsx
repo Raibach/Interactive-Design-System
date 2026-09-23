@@ -41,22 +41,14 @@ interface LeftColumnHeaderProps {
   logo?: React.ReactNode;
   navTabs?: React.ReactNode;
 
-  // === ROW 2 PROPS ===
-  promptTitle?: string;
-  version?: string;
-  /** Live current_version of the session, so the version list can refresh. */
-  currentVersion?: number;
-  tags?: string;
-  promptId?: string;
-  author?: string;
-  score?: string;
+  /*
+   * ROW 2'S PROPS ARE GONE WITH ROW 2. `promptTitle`, `version`, `currentVersion`,
+   * `tags`, `promptId`, `author`, `score`, `onTitleChange`, `flipped` and `onToggleFlip`
+   * were the prompt management bar's, and that bar is <left-column-header> in the surface
+   * now. Leaving them here would have been a second, ignored way to set the same values.
+   */
 
-  // === LAYOUT CONTROLS ===
-  flipped?: boolean;
-  onToggleFlip?: () => void;
-
-  // === TITLE EDITING ===
-  onTitleChange?: (newTitle: string) => void;
+  // === NAVIGATION ===
   activeTab?: string | null;
   onTabChange?: (tabId: string | null) => void;
 }
@@ -64,60 +56,19 @@ interface LeftColumnHeaderProps {
 export default function LeftColumnHeader({
   logo,
   navTabs,
-  promptTitle,
-  version,
-  currentVersion,
-  tags,
-  promptId,
-  author,
-  score,
-  flipped,
-  onToggleFlip,
-  onTitleChange,
   activeTab: externalActiveTab,
   onTabChange,
 }: LeftColumnHeaderProps) {
   const [internalActiveTab, setInternalActiveTab] = useState<string | null>("composer");
   const activeTab = externalActiveTab ?? internalActiveTab;
   const setActiveTab = onTabChange ?? setInternalActiveTab;
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(promptTitle || "");
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const justSavedRef = useRef(false); // Prevents sync from overwriting during save
 
-  // Sync when prop changes externally (but not right after we save)
-  useEffect(() => {
-    if (!isEditingTitle && !justSavedRef.current) {
-      setEditedTitle(promptTitle || "");
-    }
-    justSavedRef.current = false;
-  }, [promptTitle, isEditingTitle]);
-
-  // Focus input when editing starts
-  useEffect(() => {
-    if (isEditingTitle && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
-    }
-  }, [isEditingTitle]);
-
-  const handleTitleSave = useCallback(() => {
-    setIsEditingTitle(false);
-    const trimmed = editedTitle.trim();
-    if (trimmed && trimmed !== promptTitle && onTitleChange) {
-      justSavedRef.current = true; // Block the next sync — our saved value is already in editedTitle
-      onTitleChange(trimmed);
-    }
-  }, [editedTitle, promptTitle, onTitleChange]);
-
-  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      handleTitleSave();
-    } else if (e.key === "Escape") {
-      setIsEditingTitle(false);
-      setEditedTitle(promptTitle || "");
-    }
-  }, [handleTitleSave, promptTitle]);
+  /*
+   * THE TITLE'S STATE IS GONE, with the bar that held it. `isEditingTitle`, `editedTitle`,
+   * the input ref, the save-on-blur and the sync effect were all this file's, and all of
+   * them live in <left-column-header> now — one owner each, and the one that owns it is
+   * the one that draws it.
+   */
 
   /*
    * EVALUATION IS DISABLED, on the owner's instruction (2026-09-18). Drawn and inert: the tab
@@ -301,134 +252,23 @@ export default function LeftColumnHeader({
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════════════
-          ROW 2: Prompt Management Bar (white background)
-          Only visible when NOT on Console tab
-          ════════════════════════════════════════════════════════════ */}
-      {activeTab !== "console" && (
-      <div
-        data-ui-id="prompt-management-bar"
-        data-ui-type="layout"
-        data-ui-description="Prompt controls: title, version, tags, ID, author, score, column flip"
-        className="flex items-center justify-between px-4 gap-4"
-        style={{
-          backgroundColor: "#ffffff",
-          minHeight: "44px",
-          borderTop: "1px solid rgba(0,0,0,0.08)",
-        }}
-      >
-        {/* PROMPT_TITLE_PLACEHOLDER — editable on click */}
-        <div
-          id="PROMPT_TITLE_PLACEHOLDER"
-          data-ui-id="prompt-title"
-          data-ui-type="content-area"
-          data-ui-description="Active prompt title — click to edit"
-          className="flex-1 min-w-0"
-        >
-          {isEditingTitle ? (
-            <input
-              ref={titleInputRef}
-              type="text"
-              value={editedTitle}
-              onChange={(e) => setEditedTitle(e.target.value)}
-              onKeyDown={handleTitleKeyDown}
-              onBlur={handleTitleSave}
-              placeholder="Enter prompt title..."
-              className="w-full text-sm font-semibold text-gray-900 bg-white border-2 border-[#4e68d2] rounded px-2 py-1 outline-none"
-              style={{ boxShadow: "0 0 0 2px rgba(78, 104, 210, 0.15)" }}
-            />
-          ) : (
-            <button
-              onClick={() => setIsEditingTitle(true)}
-              className="w-full text-left text-sm font-semibold text-gray-900 truncate bg-transparent border border-transparent hover:border-gray-300 rounded px-2 py-1 cursor-pointer transition-colors"
-              title="Click to edit title"
-            >
-              {promptTitle || (
-                <span className="text-gray-500 italic">
-                  prompt_title: Placeholder title text goes here...
-                </span>
-              )}
-            </button>
-          )}
-        </div>
+      {/*
+        ROW 2 — THE PROMPT MANAGEMENT BAR — IS GONE FROM HERE, and it is not coming back.
 
-        {/* RIGHT CONTROLS — version, tags, ID, author, score, COLUMN FLIP */}
-        <div
-          data-ui-id="prompt-controls"
-          data-ui-type="layout"
-          data-ui-description="Prompt metadata badges + layout controls"
-          className="flex items-center gap-3 flex-shrink-0"
-        >
-          {/* VERSION */}
-          <div
-            className="relative"
-            
-            
-            
-            
-          >
-            <VersionManager sessionId={promptId} currentVersion={currentVersion} />
-          </div>
+        It was the title, the version, the tags, the id, the author, the score and the
+        column flip. It now lives INSIDE the surface as <left-column-header> (row 2 of
+        this file moved wholesale, including its values), and the reason is the title:
+        while this file owned it, the title was React state behind a callback, so the AI
+        had no path to read it and no way to set it. In the surface it binds to
+        /session/title like every other value, which is what lets Grace name a package.
 
-          {/* TAGS */}
-          <div
-            id="TAGS_PLACEHOLDER"
-            data-ui-id="prompt-tags"
-            data-ui-type="button"
-            data-ui-description="Prompt tags — click to add/edit tags"
-            className="flex items-center gap-1 text-xs text-amber-600 font-medium cursor-pointer"
-          >
-            <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5">
-              <path d="M8 3L14 13H2L8 3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-              <path d="M8 7v3M8 11.5v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            {tags ?? "No tags +"}
-          </div>
-
-          {/* ID */}
-          <div
-            id="ID_PLACEHOLDER"
-            data-ui-id="prompt-id"
-            data-ui-type="content-area"
-            data-ui-description="Unique prompt identifier"
-            className="text-xs text-gray-600 font-medium"
-          >
-            ID: {promptId ?? "PR-0000"}
-          </div>
-
-          {/* AUTHOR */}
-          <div
-            id="AUTHOR_PLACEHOLDER"
-            data-ui-id="prompt-author"
-            data-ui-type="button"
-            data-ui-description="Prompt author — click to change"
-            className="text-xs text-gray-600 cursor-pointer"
-          >
-            Author: {author ?? "—"}
-          </div>
-
-          {/* SCORE */}
-          <button
-            id="SCORE_PLACEHOLDER"
-            data-ui-id="prompt-score"
-            data-ui-type="button"
-            data-ui-description="Computed prompt score — click to expand"
-            className="flex items-center gap-1 px-3 py-0.5 rounded border text-xs font-medium text-gray-700 border-gray-400 bg-white hover:bg-gray-50 transition-colors"
-          >
-            {score ?? "Score N/A"}
-            <svg viewBox="0 0 12 12" fill="none" className="w-3 h-3 opacity-60">
-              <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          {/* COLUMN FLIP — layout control at far right of Row 2 */}
-          {onToggleFlip && (
-            <ColumnFlipToggle flipped={flipped ?? false} onToggle={onToggleFlip} />
-          )}
-        </div>
-      </div>
-      )}
-
+        What stays here is ROW 1 — the brand, the Console/Composer/Evaluation/Variables/
+        Metadata tabs and the identity chip. That is SHELL NAVIGATION, not the prompt's
+        own furniture: it switches which surface is on screen, and it belongs to the shell
+        that decides that. The owner, 2026-09-28: "the buttons above it with the console,
+        composer, evaluation, metadata, variables — that is a part of the react shell and
+        that would stay outside of the surface."
+      */}
     </div>
   );
 }

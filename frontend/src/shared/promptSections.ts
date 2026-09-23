@@ -71,6 +71,11 @@ export const SCHEMA_SECTION_TYPES = [
   'tool-call',
   'few-shot',
   'constraints',
+  // Added when Context became a seat the menu offers. It was fillable through
+  // <update_context> but was not in this enum, so it was a seat the schema would
+  // not admit to — the row below it in SECTION_TYPES has said inSchema: false
+  // since it was written, and that stopped being true when it gained a tile.
+  'context',
 ] as const;
 
 export type SchemaSectionType = (typeof SCHEMA_SECTION_TYPES)[number];
@@ -80,6 +85,16 @@ export interface SectionTypeDef {
   id: string;
   /** What a person reads on the row. Renameable presentation. */
   label: string;
+  /**
+   * WHAT THIS SEAT IS FOR, in plain words, for someone who has never been taught
+   * the vocabulary. It is shown when a person hovers a tile in the seat menu and
+   * again in the chat when they pick one, so it has to make sense to somebody who
+   * does not know what a prompt is.
+   *
+   * It says what the seat is for and why it matters. It does not describe the
+   * field or the mechanics — a definition of the word is not a reason to use it.
+   */
+  description: string;
   /** Present in the enforced schema enum? */
   inSchema: boolean;
   /** Offered by the left column's role menu (SECTION_MENU_TYPES)? */
@@ -106,41 +121,83 @@ export const SECTION_TYPES: SectionTypeDef[] = [
   {
     id: 'system-role', label: 'System Role', inSchema: true, inMenu: false,
     sticky: true, core: true, legacyNames: ['System'],
+    description:
+      'The standing instruction. Who the assistant is and how it should behave, ' +
+      'said once and read on every request. This is the first thing it is told and ' +
+      'it applies to everything that follows — which is why it sits at the top and ' +
+      'cannot be moved or removed.',
     source: 'sticky, no menu (prompt-input-section.ts:29); default row (prompt-section-editor.ts:155)',
   },
   {
     id: 'user-role', label: 'User Role', inSchema: true, inMenu: true,
     core: true, legacyNames: ['User'],
+    description:
+      'What the person asks for, or the material they bring. Write it the way it ' +
+      'would arrive in real use — the question, the record, the pasted data — so the ' +
+      'assistant is prepared for the actual input rather than an ideal version of it.',
     source: 'SECTION_MENU_TYPES; repair writes name "User" (WritingAreaIndex:1350)',
   },
   {
     id: 'agent-role', label: 'Agent Role', inSchema: true, inMenu: true,
     core: true, legacyNames: ['Agent'],
+    description:
+      'What the assistant does with the request: the work, the order it happens in, ' +
+      'and what it hands back. Most prompts put their real instruction here. If the ' +
+      'System Role says who it is, this is what it is being asked to do.',
     source: 'SECTION_MENU_TYPES. Added to the schema enum — it had no seat, though it is the most-used role in the product',
   },
   {
     id: 'tool-call', label: 'Tool Call', inSchema: true, inMenu: true,
     core: true,
+    description:
+      'Where the work reaches outside itself — a lookup, a service, a file. A tool ' +
+      'inserted here writes its own words into this seat, so you can read what will ' +
+      'be sent and change it before anything runs.',
     source: 'SECTION_MENU_TYPES; the only seat that was ALWAYS shared, and the only one originally spelled canonically',
   },
   {
-    id: 'custom-data', label: 'Custom Data', inSchema: false, inMenu: true,
+    id: 'custom-data', label: 'Custom Skill', inSchema: false, inMenu: true,
     core: false,
+    description:
+      'A procedure of your own. Where a person writes down how something should be ' +
+      'done — the steps, the rules, the order — and keeps it as a skill the system ' +
+      'can follow later, rather than typing it again each time.',
+    // THE LABEL MOVED; THE ID DID NOT. The id is the identity and does not
+    // change — anything already stored as `custom-data` still resolves here.
+    // What changed is what a person reads: the seat is where someone writes a
+    // procedure of their own, and "Custom Data" said the opposite of that.
     source: 'SECTION_MENU_TYPES — the schema enum has NO custom-data seat',
   },
   {
-    id: 'few-shot', label: 'Few Shot', inSchema: true, inMenu: false,
+    id: 'few-shot', label: 'Few Shot', inSchema: true, inMenu: true,
     core: true,
-    source: 'schema only: declared, never given a tile',
+    description:
+      'Worked examples. Show two or three pairs of a question and the answer it ' +
+      'should have produced, and the assistant copies their shape instead of ' +
+      'guessing at it. Showing an answer teaches a format far better than ' +
+      'describing one.',
+    // OFFERED NOW, AND IT ALWAYS COULD BE FILLED. The chat's write tags have
+    // carried <update_few_shot> all along (grace_gui.py), so the model could put
+    // words here while a person had no way to make the seat. A seat the model can
+    // fill and a person cannot is half a feature.
+    source: 'SECTION_MENU_TYPES. Was schema-only: declared, never given a tile',
   },
   {
-    id: 'constraints', label: 'Constraints', inSchema: true, inMenu: false,
+    id: 'constraints', label: 'Constraints', inSchema: true, inMenu: true,
     core: true,
-    source: 'schema only: declared, never given a tile',
+    description:
+      'The rules that must not be broken — what it must never say, never assume, ' +
+      'never leave out. Kept apart from the instruction on purpose, so a limit can ' +
+      'be tightened without rewriting the brief that explains the work.',
+    source: 'SECTION_MENU_TYPES. Was schema-only: declared, never given a tile',
   },
   {
-    id: 'context', label: 'Context', inSchema: false, inMenu: false,
+    id: 'context', label: 'Context', inSchema: true, inMenu: true,
     core: true,
+    description:
+      'The facts it needs and does not have. Design rules, a specification, ' +
+      'anything retrieved and pasted in — the material the work depends on, kept ' +
+      'separate from the instruction so it can be swapped without touching it.',
     source: 'TYPE_LABELS:50; the 145px RAG row (prompt-section-editor.ts:371)',
   },
 ];
@@ -155,6 +212,10 @@ export const LEGACY_TYPE_ALIASES: Record<string, string> = {
   'few shot': 'few-shot',
   tool_call: 'tool-call',
   custom_data: 'custom-data',
+  // The seat's LABEL was renamed from "Custom Data" to "Custom Skill" and the id
+  // was not, so a section already on disk under the old display name must still
+  // find its home. This is the alias that keeps that true.
+  'custom data': 'custom-data',
 };
 
 /**
@@ -271,10 +332,11 @@ export const SECTION_TYPE_LABELS: Record<string, string> = (() => {
 })();
 
 /** The role tiles the menu offers: shipped and not sticky. System has no menu. */
-export const SECTION_MENU_TYPES: Array<{ type: string; label: string }> =
+export const SECTION_MENU_TYPES: Array<{ type: string; label: string; description: string }> =
   SECTION_TYPES.filter((t) => t.inMenu && !t.sticky).map((t) => ({
     type: t.id,
     label: t.label,
+    description: t.description,
   }));
 
 /**

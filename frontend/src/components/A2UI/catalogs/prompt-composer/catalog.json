@@ -1985,6 +1985,45 @@
           "size": "Arial Rounded MT Bold 9px / 12px #3D515B right-bottom"
         }
       ]
+    },
+    "left-column-header": {
+      "type": "object",
+      "description": "The prompt's own bar: title, version label and package id, above the sections in the left column. Moved out of the React shell so the title is a surface value the AI can read and write. Also reachable as LeftColumnHeader, which the renderer resolves to this element (COMPOSITE_MAP in a2ui-renderer.ts). Tags, author and score are drawn placeholders; flip is drawn and inactive.",
+      "properties": {
+        "component": {
+          "const": "left-column-header"
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "$ref": "#/$defs/DynamicString"
+        },
+        "version": {
+          "type": "number"
+        },
+        "promptId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "LeftColumnHeader": {
+      "type": "object",
+      "description": "The same component as left-column-header, under its component name. Both are listed on purpose: the renderer maps the name to the element while the allowlist and the catalog audit name the tag.",
+      "properties": {
+        "component": {
+          "const": "LeftColumnHeader"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
     }
   },
   "$defs": {
@@ -2177,6 +2216,12 @@
         },
         {
           "$ref": "#/components/output-footer-area"
+        },
+        {
+          "$ref": "#/components/left-column-header"
+        },
+        {
+          "$ref": "#/components/LeftColumnHeader"
         }
       ],
       "discriminator": {

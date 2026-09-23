@@ -40,6 +40,7 @@ import { useAiOrchestrator, extractCommands } from "@/shared/ai-orchestrator";
 import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
+import { markArrival } from "@/shared/arrival";
 import { CORE_ROLE_LABELS } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
 import { aiOrchestrator } from "@/utils/aiOrchestrator";
@@ -386,8 +387,24 @@ export default function Index({
       const session = prev.dataModel.session ?? {};
       const left = session.left_column ?? {};
       const have = Array.isArray(left.sections) ? left.sections : [];
+      /*
+       * TYPE AND NAME ARE COMPARED, NOT ONLY CONTENT.
+       *
+       * This guard asked whether the text had changed, and a seat's TYPE is not its
+       * text: changing User Role to Constraints leaves the content string exactly as
+       * it was, so `same` came out true, the write was dropped, and the model never
+       * learned about the new seat. Nothing failed — the element showed the new seat
+       * immediately and the next model-driven render handed the OLD one back.
+       * Measured: a seat changed to `constraints` reverted to `agent-role` 22 seconds
+       * later, and the button that had been offered for it then had no seat to write
+       * into.
+       *
+       * A guard that decides whether to write has to compare everything the write
+       * carries. This one compared one of the three fields.
+       */
+      const shape = (s: any) => `${s?.type ?? ''}\u0000${s?.name ?? ''}\u0000${s?.content ?? ''}`;
       const same = have.length === sections.length
-        && have.every((s: any, i: number) => (s?.content || '') === (sections[i]?.content || ''));
+        && have.every((s: any, i: number) => shape(s) === shape(sections[i]));
       if (same) return prev;
       return {
         ...prev,
@@ -539,6 +556,10 @@ export default function Index({
     el.components = workspaceTree.components;
     el.dataModel = workspaceTree.dataModel;
   }, [workspaceTree]);
+  /*
+   * THE BAR'S ID AND VERSION ARE SET, NOT BOUND — see the effect below the session state,
+   * where both `currentPromptSession` and its ref exist to be read.
+   */
 
   // ── THE TRACE FEED'S DATA PATH ──────────────────────────────────────────────
   // <trace-feed> renders `{path: "/trace/entries"}` and nothing else; something has
@@ -713,6 +734,30 @@ export default function Index({
   // Same reason: listeners registered once must be able to read the LIVE session
   // object (the effect that wires them does not re-run on session change).
   const currentPromptSessionObjRef = useRef<any>(null);
+
+  /**
+   * THE BAR'S ID AND VERSION ARE SET HERE, NOT BOUND — and this effect sits below the
+   * session state because it reads it. An effect declared above a `const` evaluates it
+   * before it exists; this file has the note twice already.
+   *
+   * THE TITLE IS BOUND; THESE ARE STATED, and the difference is who owns them. The title
+   * belongs to the SURFACE — that is what lets Grace name a package, and the reason the
+   * bar moved out of React at all. The id and the version are facts the SHELL holds about
+   * which package is open: nothing in the prompt can write them and nothing should.
+   *
+   * Binding them left them to the model's goodwill, and it is not reliable. Measured twice
+   * on the SAME package, minutes apart: the first assembly emitted the bindings and the
+   * bar read "ID: 2fd1c…", the next omitted them and the bar read nothing. A value that
+   * appears when the model remembers to emit it is not a value — so the shell states it,
+   * the way it already states the middle column's contents on Run.
+   */
+  useEffect(() => {
+    const header = deepFind<HTMLElement & { promptId?: string; version?: number }>('left-column-header');
+    if (!header) return;
+    header.promptId = currentPromptSession?.id || '';
+    header.version = currentPromptSession?.currentVersion || 0;
+  }, [workspaceTree, currentPromptSession?.id, currentPromptSession?.currentVersion]);
+
   // Ref for handleSavePrompt — always points to latest function, used by event listeners
   // Accepts optional compiledOutput + optional sections (from Lit editor) so Save after Run persists full state.
   // `opts.title` names a package this call is CREATING (Repair does this at launch) and
@@ -1501,6 +1546,16 @@ export default function Index({
       // It is ignored for an UPDATE, like every other rename path: an existing
       // package is not renamed by a repair that merely passes through it.
       const title = (opts?.title && !isValidSessionId ? opts.title : null)
+        /*
+         * THE SURFACE'S OWN TITLE, BEFORE THE REACT COPY.
+         *
+         * The bar lives in the surface now, so a name given to a draft lives there too —
+         * and it is the NEWEST name, where `currentPromptSession.title` is whatever the
+         * last save returned. Read in this order, a prompt named and then saved keeps the
+         * name the person gave it; read the other way round it would be saved under the
+         * previous name, or under the timestamp fallback for a package being created.
+         */
+        || surfaceTitle()
         || currentPromptSession?.title
         || (repairTitleRef.current && !isValidSessionId ? repairTitleRef.current : null)
         || `Prompt - ${new Date().toLocaleString()}`;
@@ -1838,36 +1893,70 @@ export default function Index({
     console.log('[AI Orchestrator] Last command:', lastCommand.tag, lastCommand.props);
   }, [lastCommand]);
 
+  /**
+   * WRITE THE PACKAGE'S NAME INTO THE SURFACE, WHERE THE BAR READS IT.
+   *
+   * `<left-column-header>` binds its title to /session/title, so a rename that only
+   * reached React state would persist, would update the console card, and would leave the
+   * bar showing the old name — which is exactly what happened: the handler ran, the row
+   * was written, and the title on screen did not move.
+   *
+   * BOTH BRANCHES OF A RENAME CALL THIS. A fresh composer has no package id yet, so the
+   * title goes down the CREATE path; an existing one goes down the UPDATE path. The bar
+   * does not care which — it reads one path — so the write belongs in both rather than in
+   * the one that was easy to reach.
+   */
+  const writeTitleToSurface = useCallback((next: string) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      if ((session.title ?? null) === next) return prev;
+      return {
+        ...prev,
+        dataModel: { ...prev.dataModel, session: { ...session, title: next } },
+      };
+    });
+  }, []);
+
+  /**
+   * THE TITLE, AS THE SURFACE HOLDS IT — the read half of the pair above.
+   *
+   * The bar is in the surface now, so the surface is where its value lives; this is how
+   * everything OUTSIDE the surface asks for it. `currentPromptSession.title` is a copy
+   * that follows a save, and reading it for a draft that has been named but never saved
+   * would give the previous name — or the fallback timestamp.
+   */
+  const surfaceTitle = useCallback((): string => {
+    const s = (surfaceDataModelRef.current as { session?: { title?: unknown } })?.session;
+    return typeof s?.title === 'string' ? s.title : '';
+  }, []);
+
   const handlePromptTitleChange = async (newTitle: string) => {
     // Serialization guard: share mutex with handleSavePrompt to prevent double-record race
     if (isSavingRef.current) {
       console.log('⏸️ [CRUD] Title change skipped — save already in flight');
       return;
     }
+    /*
+     * A NAME IS NOT A PACKAGE, AND NAMING ONE MUST NOT CREATE ONE.
+     *
+     * This branch used to create a row from the title alone, through
+     * promptService.savePromptTemplate — a call that passes NO description, because the
+     * description is written by the save pipeline (`/api/ai/save-surface` has the model
+     * summarise the prompt) and this path does not go near it. Measured: every package
+     * created this way had an EMPTY description, so the console drew cards with nothing
+     * under them. Four of them, from one afternoon of naming drafts.
+     *
+     * So a title given to a draft is written to the SURFACE and stops there. The row is
+     * created by the first SAVE, which generates a description like every other save — and
+     * the save reads the title from the surface (see the title chain in handleSavePrompt),
+     * so the name the person gave it is the name it is stored under.
+     *
+     * An EXISTING package is still renamed by PUT, which is what a rename is: no
+     * description is involved and none should be.
+     */
     if (!currentPromptSession?.id) {
-      // No session with a valid ID — create one via the AI save pipeline
-      // (sections come from the surface's data model, same as save-template)
-      const sections = surfaceSections();
-      try {
-        const result = await promptService.savePromptTemplate(
-          newTitle,
-          sections.map((s: any) => ({ id: s.id || s.name, type: s.name || s.role, content: s.content || '' })),
-          {
-            title: newTitle,
-            // No description. This call used to stamp
-            // `Prompt with ${sections.length} sections` into the row, which reads
-            // like a summary of the package but describes only how many sections
-            // it happens to have. The backend keeps the model's description or
-            // nothing; it does not invent one.
-          }
-        );
-        if (result.session) {
-          setCurrentPromptSession(result.session);
-          console.log('✅ [CRUD] Created session from title:', result.session?.id);
-        }
-      } catch (error) {
-        console.error('❌ [CRUD] Failed to create prompt from title:', error);
-      }
+      writeTitleToSurface(newTitle);
+      console.log('📝 [CRUD] Named draft — persisted on first save');
       return;
     }
     try {
@@ -1884,6 +1973,13 @@ export default function Index({
       });
       // Merge new title into existing session — don't replace entire object
       setCurrentPromptSession(prev => prev ? { ...prev, title: newTitle, updatedAt: new Date().toISOString() } : prev);
+      /*
+       * AND THE PROMPT'S OWN BAR READS THE SURFACE (see writeTitleToSurface). This used
+       * to be an inline write here — right in the UPDATE branch only, which is why the
+       * bar stayed on its old value on a fresh composer: that title goes down the CREATE
+       * path below.
+       */
+      writeTitleToSurface(newTitle);
       // The card on screen is drawn from the surface's data model, so that is where
       // a rename has to land to be visible at all. This used to patch a React copy
       // of the card list instead — so the title on screen kept the old value while
@@ -2437,6 +2533,16 @@ export default function Index({
     // is released with it, and a Run of this package settles nothing.
     repairSectionsRef.current = null;
     repairFindingRef.current = null;
+    /*
+     * AN EXISTING PACKAGE IS BEING OPENED — say so, here, where it is unambiguous.
+     *
+     * Announced before the assembly rather than inferred from it: this function IS the
+     * moment a package opens, and the seat can then be answering by the time the
+     * surface settles. The record carries it if the seat does not exist yet (see
+     * shared/arrival); the event carries it if one is already up.
+     */
+    markArrival('resume');
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume' } }));
     await assembleSurfaceThenRepairs(`render-session:${sessionId}`);
 
     // Force full re-render to dispatch sections to textareas
@@ -2844,6 +2950,36 @@ export default function Index({
           );
         }
         setHeaderTab('composer');
+        /*
+         * A SURFACE HAS OPENED — the seat may greet.
+         *
+         * WHICH SURFACE MATTERS. A composer with no package behind it is a blank
+         * page: she introduces herself. An EXISTING package is a place the work was
+         * left: she greets from where it stopped, which is useful whether or not
+         * the thread has turns — the turns are what she is greeting about. The
+         * package's id is what tells them apart; a composer being drafted has none.
+         *
+         * SAID TWICE, ON PURPOSE, because the seat may not exist yet. This host
+         * cannot tell the seat apart from the console's — the only property that
+         * differs arrives as an empty array here rather than as absent — and the
+         * seat is created by the commit this handler is part of, so an event alone
+         * is fired before there is anything to hear it. Measured: announced here,
+         * nothing happened; the same event a moment later produced the greeting
+         * immediately. So the fact is RECORDED as well as sent (shared/arrival),
+         * and whichever reaches the seat first is the one that works.
+         */
+        const arrivalKind = session.id ? 'resume' : 'blank';
+        // Only a BLANK composer is announced from here. A package opening is
+        // announced by handleOpenPromptFromConsole, where "a package is being
+        // opened" is a fact rather than something inferred from an id being
+        // present — and this branch also runs when a session surface is re-applied
+        // without anybody opening anything.
+        if (arrivalKind === 'blank') {
+          markArrival('blank');
+          window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
+            detail: { kind: 'blank' },
+          }));
+        }
 
         // ── HER GREETING, WHEN IT IS ANSWERING SOMETHING ───────────────────────
         // Every other assembly's ai_message is deliberately NOT posted (see the note
@@ -3841,16 +3977,30 @@ export default function Index({
   useEffect(() => {
     const stored = currentPromptSession?.workspace;
     if (!stored) return;
-    // THE DRAWING COMES BACK WHENEVER THE PACKAGE LEFT ONE. `middle` is the marker a save
-    // writes now; a package saved before that marker existed still carries the graph the
-    // canvas showed, and a graph with nodes IS the canvas having been open — so both
-    // reopen the same way: the graph written into the model, the column swapped to the
-    // canvas, and the seat + view applied once the canvas mounts. A package whose save
-    // says 'output' (the canvas was closed) has no graph and opens as it always did.
+    // THE GRAPH COMES BACK; THE DRAWING DOES NOT — NOT UNTIL A RUN SHOWS IT.
+    //
+    // The owner, 2026-09-22: "the canvas is not supposed to appear until you click run."
+    //
+    // This used to swap the middle column to the canvas on open whenever the stored
+    // workspace carried a graph — and a package saved before the `middle` marker existed
+    // carries one whenever the canvas had ever been open. So a saved package reopened with
+    // the drawing already up, and the drawing brings its own control cluster, which then sat
+    // over her column before the operator had asked for anything.
+    //
+    // `middle` is still honoured as far as the DATA goes: the graph is written into the
+    // model, so a Run draws it immediately and nothing about the package is lost. What is no
+    // longer done here is SHOWING it. A package whose save says 'output' has no graph and is
+    // untouched either way.
+    //
+    // CONSEQUENCE, deliberate: the stored VIEW (seat width, zoom, pan) is applied by
+    // applyWorkspaceState below, which needs the canvas mounted to receive it. With no canvas
+    // on open that call finds nothing and the retry loop gives up quietly — which is what it
+    // was written to do ("an element that never appears is a view that is not open, not an
+    // error"). A reopened package therefore draws at the default view, and the arrangement
+    // is re-established by the operator's own Run.
     const graph = stored.graph;
     if (stored.middle !== 'output' && graph && graph.nodes?.length) {
       writeFlowToSurface(graph);
-      setOutputColumn('flow');
     }
     let frames = 0;
     let applied = false;
@@ -4459,6 +4609,24 @@ export default function Index({
     window.addEventListener("run-requested", handleRunRequested);
     window.addEventListener("clear-output", handleClearOutput);
 
+    /*
+     * THE PROMPT'S TITLE, FROM WHICHEVER END WROTE IT.
+     *
+     * Two things can set it and they must land in the same place: the person typing in
+     * <left-column-header> (`title-change`, composed out of the surface) and Grace
+     * writing <set_title> in the chat (`set-prompt-title`, dispatched by the panel when
+     * it strips the tag). Both go through the ONE rename path that already existed,
+     * `handlePromptTitleChange`, so the database, the React copy and the console card are
+     * updated by the same code whichever end started it. A second writer would have been
+     * a second truth about what this package is called.
+     */
+    const handleTitleSet = (e: Event) => {
+      const next = String(((e as CustomEvent).detail || {}).title ?? '').trim();
+      if (next) void handlePromptTitleChange(next);
+    };
+    window.addEventListener("title-change", handleTitleSet);
+    window.addEventListener("set-prompt-title", handleTitleSet);
+
     // Wire the bottom control bar (control-bar from Figma node 40000761:261) to the *existing* CRUD paths only.
     // No new save/run/version logic — re-uses handleSavePromptRef + run-requested dispatch exactly as the Lit editor does.
     // Control-bar save: sections from the surface's data model (same as save-template).
@@ -4527,6 +4695,8 @@ export default function Index({
       window.removeEventListener("save-template", handleSaveTemplateEvent);
       window.removeEventListener("run-requested", handleRunRequested);
       window.removeEventListener("clear-output", handleClearOutput);
+      window.removeEventListener("title-change", handleTitleSet);
+      window.removeEventListener("set-prompt-title", handleTitleSet);
       window.removeEventListener('save-click', handleControlBarSave as EventListener);
       window.removeEventListener('run-click', handleControlBarRun as EventListener);
       window.removeEventListener('undo-click', handleControlBarUndo as EventListener);
@@ -4627,17 +4797,13 @@ export default function Index({
       <div
         className="flex flex-col flex-1 min-w-0 overflow-hidden"
       >
-        {/* ── HEADER FRAME — spans full width above all columns ── */}
+        {/* ── HEADER FRAME — spans full width above all columns ──
+            ROW 1 ONLY. It used to carry a second row — the prompt's title, version, tags,
+            id, author, score and flip — and that row now lives INSIDE the surface as
+            <left-column-header>, in the left column it describes. The title is why: as
+            React state behind a callback it had no path, so the AI could not read it or
+            set it. What stays is navigation, which is the shell's own job. */}
         <LeftColumnHeader
-          flipped={flipped}
-          onToggleFlip={toggleFlip}
-          promptTitle={currentPromptSession?.title}
-          version={currentPromptSession ? `Saved v${currentPromptSession.currentVersion || 1}` : undefined}
-          currentVersion={currentPromptSession?.currentVersion}
-          tags={currentPromptSession?.metadata?.tags?.join(', ') || undefined}
-          promptId={currentPromptSession?.id}
-          author={currentPromptSession?.metadata?.author || undefined}
-          onTitleChange={handlePromptTitleChange}
           activeTab={headerTab}
           onTabChange={handleTabChangeWithGate}
         />

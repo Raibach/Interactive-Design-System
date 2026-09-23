@@ -70,3 +70,42 @@ export function parseFillFieldAction(
   if (!section || !field || value === undefined) return null;
   return { section, field, value };
 }
+
+/** The action of a `write-seat` button: put `value` in `section`, making it if absent. */
+export const WRITE_SEAT = 'write-seat';
+
+export function writeSeatAction(section: string, value: string): string {
+  return `${WRITE_SEAT}:${[section, value].map(encodeActionArg).join(ACTION_ARG_SEP)}`;
+}
+
+/**
+ * Read a `write-seat` action back.
+ *
+ * DIFFERENT FROM `fill-field` IN THE ONE WAY THAT MATTERS HERE: the seat does not
+ * have to exist. A step she offers is often "add this seat and put this in it" —
+ * the person has not made the seat yet, which is why they are being offered the
+ * step at all. `fill-field` finds the section by name and REFUSES when there is
+ * none, so a button built on it would do nothing on exactly the prompt it is most
+ * useful for.
+ */
+export function parseWriteSeatAction(action: string): { section: string; value: string } | null {
+  const head = `${WRITE_SEAT}:`;
+  if (!String(action ?? '').startsWith(head)) return null;
+  const parts = String(action).slice(head.length).split(ACTION_ARG_SEP).map(decodeActionArg);
+  const [section, value] = parts;
+  if (!section || value === undefined || value === '') return null;
+  return { section, value };
+}
+
+/**
+ * `no-advice` — the way out of what she just offered.
+ *
+ * She ends an advisory turn with suggestions, and a suggestion you do not want is a
+ * suggestion you have to get past. This is the button that gets past it: pressed, the
+ * offer is withdrawn and NOTHING is sent. It is handled by the app for the same reason
+ * `write-seat` is — sending it to her would spend a model call to be told "understood",
+ * and a dismissal is the one thing that should cost nothing.
+ *
+ * It takes no arguments. There is nothing to say.
+ */
+export const NO_ADVICE = 'no-advice';

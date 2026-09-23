@@ -17,6 +17,14 @@ import "@/components/lit/prompt-section-editor";
 import "@/components/lit/prompt-input/role-dropdown";
 import "@/components/lit/compiled-output-viewer";
 import "@/components/lit/workspace-layout";
+// The prompt's own bar — title, version label and package id, above the sections in the
+// left column. It used to be row 2 of the React `LeftColumnHeader`, which meant the TITLE
+// had no data path at all: it could only be changed through a callback the shell handed
+// down, so nothing the AI could reach could read it or set it. Imported here for the same
+// reason as every element below — a tag nothing defines draws an empty box and says
+// nothing. (Row 1 of that file, the Console/Composer/Evaluation/Variables/Metadata tabs,
+// is SHELL NAVIGATION and stays in the shell.)
+import "@/components/lit/left-column-header";
 // The right column's seat. Registration is a side effect of this import, and no
 // other element imports it transitively — without it <chat-panel> is an
 // unregistered tag and the right column renders as an empty box.

@@ -282,7 +282,7 @@ export class ChatMessages extends LitElement {
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
           ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : html`<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? html`<button class="action" data-action=${seg.action} @click=${(e: Event) => this._onActionSend(e, String(seg.action))}>${seg.label}</button>` : seg.text))}</span>`}</div>`)
-          : html`<div class="empty" role="status">Hi — how can I help you today?</div>`}
+          : nothing}
         ${this.sending
           ? html`<div class="thinking"><span class="spinner" aria-hidden="true"></span> Thinking…</div>`
           : ''}

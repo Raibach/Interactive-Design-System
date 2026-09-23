@@ -244,6 +244,7 @@ const COMPOSITE_MAP: Record<string, string> = {
   AgentCanvas: 'agent-canvas',      // the plug-in: that canvas and her seat, as one unit
   OutputControls: 'output-controls',  // the middle column's header row, drawn in every view of it
   CanvasFooter: 'canvas-footer',      // the canvas column's foot: the host's controls and the tone switch
+  LeftColumnHeader: 'left-column-header', // the prompt's own bar — title, version, and what is known about it
 };
 
 /**

@@ -388,7 +388,16 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata) VALUES (%s, %s, %s, %s, %s)",
-                    (uid, "teacher_query", "conversation", conv_id, json.dumps({
+                    # `conv_id or None` — NOT `conv_id`. A query is asked before a
+                    # conversation exists on the composer's first turn, and on any
+                    # turn the seat asks for on the person's behalf, and on those the
+                    # id is the empty string. resource_id is a uuid column, so "" is a
+                    # cast error and the whole audit row was lost — leaving a warning
+                    # in the thread where the record should have been silent, and
+                    # nothing anywhere recording that the call happened. The column
+                    # accepts NULL and the audit is about the QUERY, so the row is
+                    # still worth writing; it just has no conversation to point at yet.
+                    (uid, "teacher_query", "conversation", conv_id or None, json.dumps({
                         "model": "glm-4.7",
                         "temperature": request.temperature,
                         "mode": mode,
