@@ -7,6 +7,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./index.css";
+// The composer's ground and the drawing's, preloaded below — before React renders, which is
+// the point (see THE TWO GROUNDS).
+import composerBackground from "@/assets/composer-image-bg.jpg";
+import canvasArt from "@/assets/agent-canvas-art.jpg";
 
 /** A2UI v0.9.1 Lit workspace components (model-driven composer) */
 import "@/components/lit/prompt-section-editor";
@@ -84,6 +88,32 @@ if (import.meta.env.PROD && !isSentryReady()) {
   );
   // Set a global flag so ErrorBoundary can show a subtle indicator
   (window as any).__SENTRY_DEGRADED__ = true;
+}
+
+/*
+ * ── THE TWO GROUNDS, FETCHED BEFORE ANYTHING IS DRAWN ──────────────────────────
+ *
+ * The composer stands on an image and the drawing has its own; both are large (413 KB and
+ * 591 KB) and both are what a person sees the moment a section of the app that has never
+ * been open becomes visible — Console to composer on the first card, or the first Run.
+ *
+ * FETCHED AT MODULE SCOPE, ON PURPOSE, and that is the whole of the fix. This used to run in
+ * an effect inside WritingAreaIndex, which is after React has mounted and painted — measured
+ * against the deployed site, 2026-09-23, where a person opening a card for the first time saw
+ * the composer's fallback colour for as long as the image took to arrive, and called it "a very
+ * ugly purple paint". On localhost the same image is a disk read and the flash never happens,
+ * which is why it looked like a deployment difference and was really a network one. Here it
+ * starts as soon as this bundle is parsed: before the app renders, in parallel with everything
+ * else the first load does.
+ *
+ * `decode()` is what makes it ready rather than merely fetched, and it is deliberately not
+ * awaited: a decode that fails is not a reason to hold up the app, and the worth of this is in
+ * the fetch having started, not in a promise nobody is waiting on.
+ */
+for (const src of [composerBackground, canvasArt]) {
+  const img = new Image();
+  img.src = src;
+  if (img.decode) img.decode().catch(() => {});
 }
 
 createRoot(document.getElementById("root")!).render(

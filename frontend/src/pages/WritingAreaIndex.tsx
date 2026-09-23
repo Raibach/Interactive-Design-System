@@ -635,11 +635,13 @@ export default function Index({
   // <ai-surface-sandbox> mounts it (preload="auto") the moment it has the src — so it
   // is buffered and already playing long before the console is ever shown. That is
   // also why the video is a single element the sandbox owns rather than one per slot.
-  useEffect(() => {
-    const img = new Image();
-    img.src = composerBackground;
-    if (img.decode) img.decode().catch(() => {});
-  }, []);
+  /*
+   * THE COMPOSER'S GROUND IS ALREADY BEING FETCHED — see main.tsx, THE TWO GROUNDS. This
+   * effect used to do it, and it was too late by the width of a React mount and a paint:
+   * the same image, started after the app was on screen, is the difference between a card
+   * opening onto its own background and a card opening onto the fallback colour first.
+   * One fetcher, at the earliest place that can start one.
+   */
 
   useEffect(() => {
     const el = consoleRendererRef.current;
