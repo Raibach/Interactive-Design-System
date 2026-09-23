@@ -227,8 +227,9 @@ export const REVIEW_PROMPT_REQUEST = [
   'The person has pressed Review. Read the prompt as it stands, in the workspace above.',
   'Name something only if it is actually wrong with THIS prompt, and name EVERYTHING that is',
   'wrong in this same reply — one sentence each, with a button for each fix the person can press.',
-  'Do not recite the requirements and do not congratulate. If nothing is wrong, say that in one',
-  'sentence and offer to run it.',
+  'Do not recite the requirements. If nothing is wrong, congratulate them in one short sentence',
+  'starting with a bottle — 🍾 — and offer to run it: a person who has just worked a list of',
+  'fixes should be told they finished, not left to infer it.',
 ].join(' ');
 
 /** A request-token, turned into the words she should receive. Null when it is not one of them. */
