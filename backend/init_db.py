@@ -1278,7 +1278,14 @@ def init_database():
             'training_data', 'usage_metrics', 'user_grace_settings',
             'user_memory_log', 'user_subscriptions',
             # the governance rows — the register, the corrections, the findings, the reports
-            'governance_items'
+            'governance_items',
+            # THE TOOLS THE SYSTEM CAN USE, and the reason it was missing: the DDL was written
+            # and this list was not, so `CREATE TABLE IF NOT EXISTS tools` never ran on any
+            # database this file created. A fresh install came up with no register at all — no
+            # tool list in the prompts, nothing for a seat to offer, and the seed failing with
+            # "relation tools does not exist", which is exactly how it was found (applying these
+            # migrations to production, 2026-09-23). It is last because nothing references it.
+            'tools'
         ]
 
         for table_name in table_order:

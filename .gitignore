@@ -138,3 +138,8 @@ DESIGNER-PROFILE.md
 /python/
 /RELEASING.md
 /SECURITY.md
+
+# A dump of a live database taken before it is changed. It is insurance, it is kept on
+# disk, and it holds other people's rows — emails, prompt text, password hashes. Never
+# in the history.
+.prod-backup-*.json
