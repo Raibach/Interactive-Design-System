@@ -1908,6 +1908,50 @@ export class ChatPanel extends LitElement {
     if (kind === 'resume' && !this._packageHasSomething()) return;
 
     this._greeted = true;
+    /*
+     * THE CONSOLE GETS ITS OWN HELLO, AND NEVER A PACKAGE'S.
+     *
+     * The console is the library: cards, a search, and no prompt of its own. She used to greet it
+     * exactly as she greets a package — reading whatever work was to hand and reporting on it —
+     * so a person landing on their library was told about one of their own prompts, unasked. The
+     * owner, 2026-09-23: "we have got to get this off of the homepage console chat … every time
+     * the console loads she checks the Weaver prompt. She just needs to say the same thing she
+     * says on consul or composer, except for console she needs to talk about 'let me help you sort
+     * your prompts, is there anything you'd like to search for' — give her a message explaining
+     * what the console is and let her decide what to say."
+     *
+     * So the console is told what it is, and decides its own words. No buttons, because a library
+     * is not a form to fill: the ask is an offer to help, and a person can type.
+     */
+    /*
+     * AND IT IS DECIDED BY THE ONE FACT THAT CANNOT BE MISREAD. `consoleCards` is an EMPTY ARRAY
+     * on a package, not undefined — and an empty array is truthy, so a first version of this
+     * condition would have handed the console's hello to every blank composer. The seat's scope
+     * is read from the server (`_readSeatScope`, the same answer the trailing button uses), and
+     * until it has been read the greeting simply waits: an unanswered question is not a no.
+     */
+    /*
+     * AND IT WAITS FOR THE ANSWER WHEN THERE IS ONE COMING. A panel with a session may be the
+     * console's or a package's, and that is a server fact (`_readSeatScope`); greeting before it
+     * arrives is greeting on a guess. A panel with NO session cannot be the console — a console
+     * seat always carries one — so the blank composer's hello does not wait for anything.
+     */
+    if (this._seatIsConsole === null && this.sessionId) return;
+    if (this._seatIsConsole === true) {
+      void this._send(
+        'A person has just landed on the console — the index of every package they have built. '
+        + 'This screen is an index and nothing more: a card per package, with its name and its one '
+        + 'line, and nothing open. YOUR WORK HERE IS ORGANISATION — finding, filtering and sorting '
+        + 'their prompts — and NOT writing into one. The seats, the tools and the writes all belong '
+        + 'to a package, in that package\'s own chat; there is no prompt open here to write into. '
+        + 'Introduce yourself in a sentence or two, say what this screen is and that you can help '
+        + 'them find, filter or sort what is in it, and ask what they are looking for. Do NOT '
+        + 'describe, quote or comment on any particular package — naming one is reading over their '
+        + 'shoulder. Offer no buttons.',
+        { silent: true },
+      );
+      return;
+    }
     if (kind === 'blank') {
       void this._send(
         'A person has just opened a blank composer and has not said anything yet. '
@@ -2290,6 +2334,16 @@ for THIS prompt, not the next row in a list.
 When the user answers with [not-now], they are declining that one thing. Do not do it,
 do not ask again, and do not offer it a different way. Ask what they would rather do,
 or move to something else that is genuinely next — whichever the prompt calls for.
+
+WHERE YOU ARE, AND WHAT YOU MAY DO THERE — this is the first thing to know:
+  ON THE CONSOLE (the library) you are an INDEX. Nothing is open, there are no seats to write
+  into, and your work is organisation: finding, filtering and sorting the packages they have
+  built. What you have there is the library's own controls, and nothing else:
+      <reassemble-console sort="recent|name|version" filter="words to match"/>
+  It redraws the list sorted and filtered to what the person asked for — use it whenever they
+  say "show me", "just the ones about", "newest first". Open a package by naming it when they
+  ask for it; do not read one out loud on your own.
+  IN A PACKAGE you are the builder: the seats, the tools, the description, the repairs below.
 
 # CONTROL SURFACE (XML COMMAND TAGS)
 WRITE TO STEPS:
@@ -3092,6 +3146,8 @@ ${workspaceContext}`;
     const scope = await this._seatScope(userId);
     if (scope !== 'unknown' && this._seatIsConsole !== (scope === 'console')) {
       this._seatIsConsole = scope === 'console';
+      // The console's hello waits on this answer; tell the greeting it has arrived.
+      this._greetIfArriving();
       this.requestUpdate();
     }
     return scope;

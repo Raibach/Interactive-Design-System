@@ -887,6 +887,77 @@ describe("<chat-panel> — a Run held on her verdict", () => {
   });
 });
 
+describe('<chat-panel> — the console says hello as the console', () => {
+  /**
+   * THE CONSOLE IS AN INDEX, AND SHE USED TO GREET IT LIKE A PACKAGE.
+   *
+   * The owner, 2026-09-23: "we have got to get this off of the homepage console chat — every time
+   * the console loads she checks the Weaver prompt … She just needs to say the same thing she says
+   * on console or composer, except for console she needs to talk about 'let me help you sort your
+   * prompts, is there anything you'd like to search for' … and it's an index, so she would be
+   * filtering and searching for prompts for people."
+   *
+   * Three properties: the console gets its own hello, it is about finding and sorting rather than
+   * writing, and a PACKAGE never gets it. The last one is the one that was nearly wrong —
+   * `consoleCards` is an empty array on a package, and an empty array is truthy.
+   */
+  const greet = async (props: Record<string, unknown>) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({ content: 'Hello.' }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      // THE SEAT'S SCOPE, as the server really answers it: the package row's own
+      // `session_type`. 'unknown' is a read that FAILS, which is a different thing from a read
+      // that says 'not the console' — see _seatScope.
+      if (props.__scope === 'unknown') {
+        return { ok: false, status: 500, json: async () => ({}) } as Response;
+      }
+      const session_type = props.__scope === 'console' ? 'console' : 'prompt';
+      return {
+        ok: true, status: 200,
+        json: async () => ({ session: { metadata: { session_type } }, messages: [] }),
+      } as Response;
+    }));
+    const el = await mount({ conversationId: '' });
+    await settle(el);
+    // THE SESSION ARRIVES AFTER THE ELEMENT DOES, which is what makes the seat-scope read run at
+    // all: it is started by a CHANGE of sessionId, and the surface binds this one when it lands.
+    // Setting it at mount would be a value, not a change, and no read would happen.
+    if (props.sessionId) {
+      el.sessionId = String(props.sessionId);
+      await settle(el);
+    }
+    // The host announces the landing, which is what asks her to say hello at all.
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'blank' } }));
+    for (let i = 0; i < 8; i++) { await Promise.resolve(); await el.updateComplete; }
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const asked = calls.find((c) => String(c[0]).includes('/api/teacher/query'));
+    return String(((asked?.[1] as RequestInit | undefined)?.body as string) ?? '');
+  };
+
+  it('tells her the console is an index, and that her work there is organisation', async () => {
+    const asked = await greet({ __scope: 'console', sessionId: 'console-session', consoleCards: [] });
+    expect(asked).toContain('index');
+    expect(asked).toContain('ORGANISATION');
+    // And says plainly what is NOT there to do: the seats and the writes belong to a package.
+    expect(asked).toContain('the writes all belong');
+    expect(asked).toContain('no prompt open here');
+  });
+
+  it("does NOT give a package the console hello", async () => {
+    // A package carries `consoleCards: []`, which is truthy — the near-miss this pins.
+    const asked = await greet({ __scope: 'package', sessionId: 'sess-1', consoleCards: [] });
+    expect(asked).not.toContain('ORGANISATION');
+  });
+
+  it('does not guess when the scope has not been read', async () => {
+    // 'unknown' is a third answer: an unanswered question is not a no, and it is not a yes.
+    const asked = await greet({ __scope: 'unknown', sessionId: 'console-session', consoleCards: [] });
+    expect(asked).toBe('');
+  });
+});
+
 describe('<chat-panel> — a button that asks for something the app cannot do', () => {
   /**
    * THE WIRE FORMAT LEAKING INTO THE CONVERSATION.
