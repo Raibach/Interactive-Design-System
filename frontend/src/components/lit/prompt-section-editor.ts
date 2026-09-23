@@ -358,6 +358,31 @@ class PromptSectionEditor extends LitElement {
      * place that can make the change.
      */
     window.addEventListener('a2ui:write-seat', this._onWriteSeat as EventListener);
+    /*
+     * A TOOL, INSERTED BY ANYONE — the chat's `write-tool` button, and her tag.
+     *
+     * The seat's Functions / Tools menu has always been able to put a tool in, and it was the
+     * ONLY way: the insertion lived inside `section-menu-select`'s own branch, so nothing but a
+     * click on that menu could reach `_insertTool`. Measured 2026-09-23, on the assistant saying
+     * a prompt had no tool and offering to add one: she had no path to it at all, so the offer
+     * could not be kept — the prompt kept saying "search the news" with nothing named to do it.
+     *
+     * The name goes to the register and the seat gets the register's own text, which is the same
+     * thing the menu writes. A name no row answers is reported, and nothing is written.
+     */
+    window.addEventListener('insert-tool', this._onInsertTool as EventListener);
+    /*
+     * TWO ROWS FOR ONE STEP, PUT BACK TOGETHER — the repair for the mistake a person makes by
+     * typing. The assistant offers it; this performs it.
+     *
+     * THE WORDS ARE NOT RETYPED. She could clear a duplicate herself with a write and a removal,
+     * and that route goes through a model: a 400-character identity comes back as 380 characters
+     * of almost the same sentence. The person's text is theirs, so the move happens here, on the
+     * strings, and both halves arrive exactly as they were typed.
+     */
+    window.addEventListener('merge-seat', this._onMergeSeat as EventListener);
+    // A TOOL, MOVED TO THE STEP IT BELONGS IN — the repair she offers and could not perform.
+    window.addEventListener('move-tool', this._onMoveTool as EventListener);
   }
 
   disconnectedCallback() {
@@ -368,6 +393,9 @@ class PromptSectionEditor extends LitElement {
     window.removeEventListener('remove-prompt-role', this._onRemoveRole as EventListener);
     window.removeEventListener('a2ui:usage', this._onUsage as EventListener);
     window.removeEventListener('a2ui:write-seat', this._onWriteSeat as EventListener);
+    window.removeEventListener('insert-tool', this._onInsertTool as EventListener);
+    window.removeEventListener('merge-seat', this._onMergeSeat as EventListener);
+    window.removeEventListener('move-tool', this._onMoveTool as EventListener);
     super.disconnectedCallback();
   }
 
@@ -473,14 +501,45 @@ class PromptSectionEditor extends LitElement {
     }));
   }
 
+  /**
+   * THE SEAT A NAME REFERS TO — MADE, IF THIS PROMPT DOES NOT HAVE IT YET.
+   *
+   * A write used to land only in a seat that already existed on screen. Everything else was
+   * refused, and the refusal was invisible (see `_writeFailed`), so the assistant could answer
+   * "Done — I've added that constraint" over a prompt with no Constraints row, the tag gone
+   * from her prose and nothing anywhere to show for it. The owner, 2026-09-23: "she should be
+   * able to insert a section right into the prompt."
+   *
+   * AND THIS IS THE PERSON'S OWN PATH, not a second one invented for her. Making a row by hand
+   * means choosing Custom in the seat menu — which writes a row with type 'custom' and a
+   * generic name — and then renaming it to what you wanted. That is what this makes, with the
+   * name already right: the same kind of row, findable by that name on the next write because
+   * `_indexOfNamed` matches on names.
+   *
+   * A NAME THAT IS ONE OF THE DECLARED SEATS GETS THAT SEAT. "Add this to Constraints" makes a
+   * Constraints row — label and type from the declaration, not from her spelling of it — so the
+   * row reads exactly like one the menu makes and the diagram can name it.
+   */
+  private _seatFor(name: string, initialContent: string): number {
+    const idx = this._indexOfNamed(name);
+    if (idx >= 0) return idx;
+
+    const seat = SECTION_TYPES.find((s) => s.id === normalizeSectionType(name));
+    const created: PromptSection = seat
+      ? { name: seat.label, type: seat.id, content: initialContent, position: this._sections.length }
+      : { name: name.trim(), type: 'custom', content: initialContent, position: this._sections.length };
+    this._sections.push(created);
+    this.dispatchEvent(new CustomEvent('section-add', {
+      bubbles: true, composed: true, detail: { section: created },
+    }));
+    this.requestUpdate();
+    return this._sections.length - 1;
+  }
+
   private _onSetText = (e: Event) => {
     const { content, target } = (e as CustomEvent).detail || {};
     if (!target || content === undefined) return;
-    const idx = this._indexOfNamed(String(target));
-    if (idx < 0) {
-      this._writeFailed(String(target), 'no section by that name');
-      return;
-    }
+    const idx = this._seatFor(String(target), String(content));
     this._sections[idx] = { ...this._sections[idx], content };
     this._emitUpdate(idx);
     this.requestUpdate();
@@ -489,11 +548,7 @@ class PromptSectionEditor extends LitElement {
   private _onForceSet = (e: Event) => {
     const { sectionName, content } = (e as CustomEvent).detail || {};
     if (!sectionName || content === undefined) return;
-    const idx = this._indexOfNamed(String(sectionName));
-    if (idx < 0) {
-      this._writeFailed(String(sectionName), 'no section by that name');
-      return;
-    }
+    const idx = this._seatFor(String(sectionName), String(content));
     this._sections[idx] = { ...this._sections[idx], content };
     this._emitUpdate(idx);
     this.requestUpdate();
@@ -503,6 +558,11 @@ class PromptSectionEditor extends LitElement {
    * One value, under one field's label, in one named section — the write a chat button
    * makes. `writeFieldValue` returns null when the text holds no such field, and that is
    * reported rather than swallowed: a button that says "written" must not be able to lie.
+   *
+   * A SEAT THAT IS NOT THERE IS NOT MADE HERE, and that is not the same rule as `_seatFor`.
+   * A field is a LABEL INSIDE a row's text, so filling one into a row that has no such line is
+   * not a write at all — there is nothing to put the value under. It is reported, and the
+   * report now has somewhere to land (see the chat's `section-write-failed`).
    */
   private _onFillField = (e: Event) => {
     const { section, field, value } = (e as CustomEvent).detail || {};
@@ -667,48 +727,149 @@ class PromptSectionEditor extends LitElement {
     };
     if (!section || !value) return;
 
-    const wanted = normalizeSectionType(section);
-    const seat = SECTION_TYPES.find((s) => s.id === wanted);
-    let idx = this._sections.findIndex(
-      (s) => normalizeSectionType(s.type || s.name) === wanted,
-    );
+    /*
+     * THE SEAT, MADE IF THIS PROMPT HAS NONE — see `_seatFor`. What used to be here was a
+     * refusal for any name that was not one of the declared seats, on the reasoning that a row
+     * the diagram cannot name should not be invented. The owner settled that question the other
+     * way on 2026-09-23 — she may insert a section into the prompt, exactly as the person may by
+     * choosing Custom and typing a name — so a name that is not a declared seat becomes a custom
+     * row carrying that name.
+     */
+    const idx = this._seatFor(String(section), String(value));
 
-    if (idx < 0) {
-      // A seat the prompt does not have yet. Named from the declaration rather
-      // than from her spelling of it, so the row reads the same as one the menu
-      // makes. `isUndecidedType` guards the guess: a name with no decided seat is
-      // refused, because inventing one would put a row in the prompt that the
-      // diagram cannot name.
-      if (isUndecidedType(section) || !seat) {
-        this._writeFailed(String(section), 'no seat by that name');
-        return;
-      }
-      const created: PromptSection = {
-        name: seat.label,
-        type: seat.id,
-        content: value,
-        position: this._sections.length,
-      };
-      this._sections.push(created);
-      this.dispatchEvent(new CustomEvent('section-add', {
-        bubbles: true, composed: true, detail: { section: created },
-      }));
-      this.requestUpdate();
-      return;
-    }
-
+    // A ROW THAT WAS JUST MADE ALREADY HOLDS THE WORDS. Appending them again would print the
+    // same sentence twice in the row the person is about to read.
     const prev = String(this._sections[idx].content || '');
+    if (prev === value) return;
+
     const next = prev.trim() ? `${prev.trimEnd()}\n\n${value}` : value;
     this._sections[idx] = { ...this._sections[idx], content: next };
     this._emitUpdate(idx);
     this.requestUpdate();
   };
 
+  /**
+   * A TOOL PUT IN FROM OUTSIDE — a chat button carrying `write-tool`, or her own tag.
+   *
+   * The seat comes from the caller when it names one, and from `_seatFor` otherwise, so a
+   * prompt with no Tool Call row gets one rather than the write landing nowhere. What is
+   * written is the register's own text, read by `_insertTool` — the same two things the
+   * seat menu writes: the tool's name in a line of its own, and the words it stands for.
+   */
+  private _onInsertTool = (e: Event) => {
+    const { name, section } = ((e as CustomEvent).detail || {}) as {
+      name?: string; section?: string;
+    };
+    const wanted = String(name ?? '').trim();
+    if (!wanted) return;
+    const idx = this._seatFor(section ? String(section) : 'Tool Call', '');
+    void this._insertTool(idx, `{{tool:${wanted}}}`);
+  };
+
+  /**
+   * A TOOL MOVED FROM ONE STEP TO ANOTHER — the words travel, exactly as written.
+   *
+   * WHAT MOVES IS THE TOOL'S OWN BLOCK: the line naming it, and the lines under it. That is the
+   * shape the seat's Tools menu writes (`{{tool:name}}` then the tool's text), so the block is the
+   * token line through to the next token or the end — which is the same reading the run makes of
+   * a seat when it decides what a prompt names.
+   *
+   * The person may move a tool anywhere it is wanted. A tool beside the agent that uses it is not
+   * a mistake, so nothing here judges the destination; it only refuses to move one into the seat
+   * it already sits in, and says so.
+   */
+  private _onMoveTool = (e: Event) => {
+    const { name, into } = ((e as CustomEvent).detail || {}) as { name?: string; into?: string };
+    const tool = String(name ?? '').trim();
+    if (!tool) return;
+    const token = `{{tool:${tool}}}`;
+    const fromIdx = this._sections.findIndex((s) => String(s.content || '').includes(token));
+    if (fromIdx < 0) {
+      this._writeFailed(tool, 'no row in this prompt names that tool');
+      return;
+    }
+    const targetIdx = this._seatFor(String(into || 'Tool Call'), '');
+    if (fromIdx === targetIdx) {
+      this._writeFailed(tool, 'it is already in that step');
+      return;
+    }
+
+    const source = String(this._sections[fromIdx].content || '');
+    const lines = source.split('\n');
+    const at = lines.findIndex((l) => l.includes(token));
+    let end = at + 1;
+    while (end < lines.length && !lines[end].includes('{{tool:')) end++;
+    const block = lines.slice(at, end).join('\n').trim();
+
+    // OUT OF THE SOURCE FIRST — and if the block was all it held, the row keeps its place and
+    // goes quiet rather than disappearing: removing a row is a separate act, and one the person
+    // may not want.
+    const left = [...lines.slice(0, at), ...lines.slice(end)].join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+    this._sections[fromIdx] = { ...this._sections[fromIdx], content: left };
+    this._emitUpdate(fromIdx);
+
+    const target = String(this._sections[targetIdx].content || '');
+    this._sections[targetIdx] = {
+      ...this._sections[targetIdx],
+      content: target.trim() ? `${target.trimEnd()}\n\n${block}` : block,
+    };
+    this._emitUpdate(targetIdx);
+    this.requestUpdate();
+  };
+
+  /**
+   * A MERGE: the from-row's words go into the to-row, and the from-row goes.
+   *
+   * Both rows are found by the one matcher, so `agent_role`, `Agent Role` and `agent` all name
+   * the same seat — which matters here more than anywhere: the duplicate this exists to repair is
+   * USUALLY one row whose name is a different spelling of another row's.
+   *
+   * THE TARGET IS WRITTEN BEFORE THE SOURCE IS REMOVED, and that order is the whole reason this
+   * is one method rather than two events: a removal first would leave the words nowhere to go if
+   * the write then failed.
+   */
+  private _onMergeSeat = (e: Event) => {
+    const { from, into } = ((e as CustomEvent).detail || {}) as { from?: string; into?: string };
+    if (!from || !into) return;
+    const fromIdx = this._indexOfNamed(String(from));
+    const intoIdx = this._indexOfNamed(String(into));
+    if (fromIdx < 0) {
+      this._writeFailed(String(from), 'no row by that name');
+      return;
+    }
+    if (intoIdx < 0) {
+      this._writeFailed(String(into), 'no row by that name');
+      return;
+    }
+    if (fromIdx === intoIdx) {
+      // The two spellings name one row, so there is nothing to merge — and saying so beats
+      // "done" over a prompt that did not change.
+      this._writeFailed(String(from), 'that is the same row as the one it would merge into');
+      return;
+    }
+
+    const body = String(this._sections[fromIdx].content || '').trim();
+    const target = String(this._sections[intoIdx].content || '').trim();
+    const merged = target && body ? `${target}\n\n${body}` : (target || body);
+    this._sections[intoIdx] = { ...this._sections[intoIdx], content: merged };
+    this._emitUpdate(intoIdx);
+    this._removeSection(fromIdx);
+    this.requestUpdate();
+  };
+
   private _onRemoveRole = (e: Event) => {
     const { roleName } = (e as CustomEvent).detail || {};
     if (!roleName) return;
-    const idx = this._sections.findIndex(s => s.name === roleName);
+    /*
+     * BY NAME, THROUGH THE ONE MATCHER. This compared `s.name === roleName` exactly, and a row's
+     * name is whatever it was made with — a stray row called `agent_role` would not answer to
+     * "Agent Role", so the assistant's own `<remove_role name="Agent Role"/>` matched nothing and
+     * the row she was trying to clear stayed exactly where it was. Same spellings as every other
+     * write: the label, the id, the legacy short names, and any of the three separators.
+     */
+    const idx = this._indexOfNamed(String(roleName));
     if (idx >= 0) this._removeSection(idx);
+    else this._writeFailed(String(roleName), 'no row by that name');
   };
 
   /**

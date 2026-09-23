@@ -226,7 +226,27 @@ export function buildRepairFlow(input: RepairFlowInput): FlowGraph {
   // tool_calls (WritingAreaIndex.tsx:3285). One source, so the drawing cannot name a
   // call the run would not make. An explicit null means "there is no tool" — a
   // caller who has looked and found none, which is not the same as not having looked.
-  const tool = input.tool !== undefined ? input.tool : toolFromSections(sections);
+  /*
+   * THE TOOLS, AND THE SEAT EACH ONE BELONGS TO.
+   *
+   * `input.tool` is the caller's own answer (the repair path knows the address it wrote); with no
+   * answer, the prompt is read — every seat, not only the Tool Call one, because a tool the agent
+   * uses may be written beside the agent. Each entry remembers WHERE, so the node is drawn on
+   * that seat's row and the edge leaves that seat: the relationship is the point.
+   */
+  const tools: FlowTool[] =
+    input.tool !== undefined
+      ? input.tool
+        ? [{
+            name: input.tool.name,
+            seatIndex: sections.findIndex((s) => {
+              const raw = s.type || s.name;
+              return !isUndecidedType(raw) && normalizeSectionType(raw) === 'tool-call';
+            }),
+            nodeId: input.tool.nodeId,
+          }]
+        : []
+      : toolsFromSections(sections);
   const nodes: FlowNode[] = [];
   const edges: FlowEdge[] = [];
   const unresolved: string[] = [];
@@ -307,25 +327,36 @@ export function buildRepairFlow(input: RepairFlowInput): FlowGraph {
   const stepNodes: FlowNode[] = [];
   let stepX = STEP_X;
 
-  const toolNode: FlowNode | null = tool
-    ? {
-        id: 'step:tool',
-        family: 'step',
-        kind: 'tool-call',
-        title: tool.name,
-        subtitle: tool.nodeId ? `figma node ${tool.nodeId}` : '',
-        state: stepState({
-          failed: Boolean(run.toolWarning),
-          done: answered && !run.toolWarning,
-          active: running && !run.toolWarning,
-        }),
-        x: stepX,
-        y: toolRow,
-      }
-    : null;
-  if (toolNode) {
-    stepNodes.push(toolNode);
-    stepX += STEP_GAP;
+  /*
+   * ONE NODE PER TOOL, ON THE ROW OF THE SEAT THAT NAMES IT.
+   *
+   * The row is the whole of the relationship here: a tool beside the Agent Role sits level with
+   * that seat, and the edge to it leaves that seat. A tool in the Tool Call seat keeps the row
+   * this drawing has always given it. A tool whose seat cannot be found (the caller named one by
+   * hand) falls back to the Tool Call row rather than being dropped — a named tool with no row
+   * of its own belongs SOMEWHERE, and the row it would have had is the honest guess.
+   */
+  const toolNodes: FlowNode[] = tools.map((t, i) => {
+    const row = t.seatIndex >= 0 && seatNodes[t.seatIndex] ? seatNodes[t.seatIndex].y : toolRow;
+    return {
+      // The single-tool id is unchanged, so a drawing saved against it still finds its node.
+      id: tools.length > 1 ? `step:tool:${t.name}` : 'step:tool',
+      family: 'step',
+      kind: 'tool-call',
+      title: t.name,
+      subtitle: t.nodeId ? `figma node ${t.nodeId}` : '',
+      state: stepState({
+        failed: Boolean(run.toolWarning),
+        done: answered && !run.toolWarning,
+        active: running && !run.toolWarning,
+      }),
+      x: STEP_X + i * STEP_GAP,
+      y: row,
+    };
+  });
+  if (toolNodes.length) {
+    stepNodes.push(...toolNodes);
+    stepX += STEP_GAP * toolNodes.length;
   } else {
     absent.push({
       step: 'tool-call',
@@ -410,11 +441,14 @@ export function buildRepairFlow(input: RepairFlowInput): FlowGraph {
     for (let i = 1; i < seatNodes.length; i++) {
       edges.push({ from: seatNodes[i - 1].id, to: seatNodes[i].id });
     }
-    // The address seat opens the tool; everything after the seats flows from the last one.
-    if (toolNode) {
-      const address = seatNodes.find((n) => n.kind === 'tool-call');
-      if (address) edges.push({ from: address.id, to: toolNode.id });
-    }
+    // EACH TOOL HANGS OFF THE SEAT THAT NAMED IT — the relationship, drawn. A tool in the Agent
+    // Role comes off the Agent Role; one in the Tool Call seat comes off Tool Call. (The old edge
+    // looked for a Tool Call seat and gave up otherwise, so a tool written anywhere else was a
+    // node with nothing leading to it.)
+    tools.forEach((t, i) => {
+      const source = t.seatIndex >= 0 ? seatNodes[t.seatIndex] : seatNodes.find((n) => n.kind === 'tool-call');
+      if (source) edges.push({ from: source.id, to: toolNodes[i].id });
+    });
     edges.push({ from: seatNodes[seatNodes.length - 1].id, to: answerNode.id });
   } else if (trigger) {
     // No seats: the note is all there is, and the run still answers.
@@ -460,7 +494,8 @@ export const CREATABLE_KINDS: Array<{ kind: string; label: string; description: 
     description: t.description,
   }));
 
-/** The address a repair prompt names, read from the Tool Call seat's own words. */export function toolFromSections(sections: FlowSeatInput[]): { name: string; nodeId?: string | null } | null {
+/** The address a repair prompt names, read from the Tool Call seat's own words. */
+export function toolFromSections(sections: FlowSeatInput[]): { name: string; nodeId?: string | null } | null {
   const seat = sections.find((s) => {
     const raw = s.type || s.name;
     return !isUndecidedType(raw) && normalizeSectionType(raw) === 'tool-call';
@@ -470,4 +505,48 @@ export const CREATABLE_KINDS: Array<{ kind: string; label: string; description: 
   if (!name) return null;
   const nodeId = /^\s*figma node\s+(\d+:\d+)\s*$/m.exec(seat.content)?.[1] ?? null;
   return { name, nodeId };
+}
+
+/** A tool a prompt names, and the seat that names it. */
+export interface FlowTool {
+  name: string;
+  /** Which of `sections` carries it — the node's row, and the edge's source. */
+  seatIndex: number;
+  nodeId?: string | null;
+}
+
+/** The token a tool is named by — what the seat's own Tools menu writes. */
+const TOOL_TOKEN = /\{\{tool:([A-Za-z0-9._-]+)\}\}/g;
+
+/**
+ * EVERY TOOL THE PROMPT NAMES, AND WHERE IT SAID SO.
+ *
+ * THE TOOL CALL SEAT WAS THE ONLY PLACE THIS LOOKED, and it was looking for the wrong thing
+ * even there: the pattern is a repair prompt's `tool figma node 40000746:94` line, so a register
+ * tool written as `{{tool:search-the-internet}}` — what the seat menu writes and what the
+ * assistant writes when a person picks one — was invisible. Measured 2026-09-23 on a real
+ * package: a tool named in the prompt, and the drawing reporting "the prompt names no tool".
+ *
+ * AND A TOOL MAY LEGITIMATELY SIT IN ANOTHER STEP. The owner: "you can put the tool in the agent
+ * role if the agent is the one using the tool … it has to be represented in that diagram after
+ * we run. That's the relationship that the prompt has to make." So this reports the SEAT too: the
+ * node is drawn on that seat's row and the edge leaves that seat, which is the relationship drawn
+ * rather than asserted.
+ */
+export function toolsFromSections(sections: FlowSeatInput[]): FlowTool[] {
+  const found: FlowTool[] = [];
+  (sections ?? []).forEach((seat, seatIndex) => {
+    const content = String(seat?.content ?? '');
+    const tokens = [...content.matchAll(TOOL_TOKEN)];
+    if (tokens.length) {
+      for (const m of tokens) found.push({ name: m[1], seatIndex });
+      return;
+    }
+    // The repair prompt's own address line, kept for the one caller that still writes it: the
+    // Tool Call seat holding "tool figma node …". Read per seat, so it reports the seat it is in
+    // like every other tool.
+    const legacy = toolFromSections([seat]);
+    if (legacy) found.push({ name: legacy.name, seatIndex, nodeId: legacy.nodeId });
+  });
+  return found;
 }

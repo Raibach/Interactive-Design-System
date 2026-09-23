@@ -97,6 +97,45 @@ def _with_tool_results(context: str, blocks: List[str], warnings: List[str]) -> 
     return json.dumps(payload)
 
 
+def _tool_seat_text(context: str) -> str:
+    """Every seat's own words, out of the run's structured config.
+
+    THE PROMPT IS THE DECLARATION, AND THE WHOLE PROMPT IS WHAT DECLARES. The token a tool is
+    named by — `{{tool:name}}`, which the seat's own menu writes and the assistant writes when a
+    person picks one — WAS read from the Tool Call seat alone, on the reasoning that the seat is
+    where a tool belongs. Measured 2026-09-23 on a real package: the token was written into the
+    AGENT ROLE seat (the assistant put the tool with the identity that uses it), so the reader
+    found nothing, the run fired no call, and the drawing said "the prompt names no tool" over a
+    prompt that named one. A token anywhere in the prompt is a tool the prompt names.
+
+    The seat a tool SHOULD live in is still Tool Call, and her instructions say so — but a reader
+    that reports "no tool" about a prompt holding one is worse than a reader that looks
+    everywhere. What is executed is what the person can read.
+
+    A config that cannot be parsed returns empty rather than raising: this is a read for the sake
+    of a convenience, and a run whose tools cannot be found should still run with its own words
+    intact. The failure that matters — a named tool that returned nothing — is reported by the
+    caller as a warning.
+    """
+    try:
+        payload = json.loads(context) if context and context.strip() else {}
+        if not isinstance(payload, dict):
+            return ""
+    except Exception:
+        return ""
+
+    parts: List[str] = []
+    core = payload.get("core_roles")
+    if isinstance(core, dict):
+        parts.extend(str(v or "") for v in core.values())
+    custom = payload.get("custom_roles")
+    if isinstance(custom, list):
+        for row in custom:
+            if isinstance(row, dict):
+                parts.append(str(row.get("content") or ""))
+    return "\n".join(p for p in parts if p).strip()
+
+
 @router.post("/api/teacher/query")
 async def api_teacher_query(request: TeacherQueryRequest):
     """Main AI query endpoint — context-aware with conversation persistence"""
@@ -290,8 +329,41 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # (so the model names what is missing instead of inventing it) AND returned
         # as `tool_warnings` (so the person sees it). A design-blind answer that
         # reads as authoritative is the exact outcome this prevents.
+        #
+        # TWO KINDS OF TOOL ARRIVE HERE, executed by different things:
+        #
+        #   the design tools   declared by the HOST in `request.tool_calls`. The repair
+        #                      path builds them from the finding; figma_mcp answers.
+        #   the register       named by the PROMPT ITSELF, as {{tool:name}} tokens in
+        #                      its Tool Call seat. That seat IS the declaration — it is
+        #                      what the person read before pressing Run — so nothing
+        #                      else has to be kept in step with it.
+        #
+        # A REGISTER TOOL WITH NOTHING BEHIND IT IS A WARNING, NOT A FAILURE. The run
+        # still executes and the model is told, in as many words, that the step it was
+        # asked for did not happen. The alternative — an answer that reads as though
+        # the notes had been captured, or the internet searched — is the lie this
+        # warning exists to prevent. The review before a Run is what stops such a
+        # prompt from being run at all; this is the second line, not the first.
         tool_blocks: List[str] = []
         tool_warnings: List[str] = []
+        if mode == "prompt_output":
+            try:
+                from tool_run import named_tools, run_named_tools
+
+                declared = named_tools(_tool_seat_text(full_context))
+                if declared:
+                    reg_blocks, reg_warnings = await asyncio.to_thread(run_named_tools, declared)
+                    tool_blocks.extend(reg_blocks)
+                    tool_warnings.extend(reg_warnings)
+                    print(
+                        f"🧰 [tool_run] the prompt names {len(declared)} tool(s) "
+                        f"→ {len(reg_blocks)} answer(s), {len(reg_warnings)} warning(s)"
+                    )
+            except Exception as e:  # noqa: BLE001 — reported, not raised
+                tool_warnings.append(f"Tool execution failed: {type(e).__name__}: {e}")
+                print(f"⚠️  [tool_run] could not execute the prompt's tools: {e}")
+
         if request.tool_calls:
             try:
                 from figma_mcp import run_tool_calls
@@ -300,13 +372,15 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 # handler is `async def`: calling it inline froze the ENTIRE server
                 # for as long as Figma took to answer — every other request queued
                 # behind it, so the app looked hung rather than busy.
-                tool_blocks, tool_warnings = await asyncio.to_thread(
+                design_blocks, design_warnings = await asyncio.to_thread(
                     run_tool_calls, request.tool_calls
                 )
-                if tool_warnings:
-                    print(f"⚠️  [tool_calls] {len(tool_warnings)} warning(s) — carried into the prompt")
+                tool_blocks.extend(design_blocks)
+                tool_warnings.extend(design_warnings)
+                if design_warnings:
+                    print(f"⚠️  [tool_calls] {len(design_warnings)} warning(s) — carried into the prompt")
             except Exception as e:  # noqa: BLE001 — reported, not raised
-                tool_warnings = [f"Tool execution failed: {type(e).__name__}: {e}"]
+                tool_warnings.append(f"Tool execution failed: {type(e).__name__}: {e}")
                 print(f"⚠️  [tool_calls] execution failed: {e}")
 
         # ── Deliver the tool results WITHOUT breaking the prompt config ─────

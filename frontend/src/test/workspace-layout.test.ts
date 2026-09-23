@@ -125,13 +125,13 @@ describe('<workspace-layout> left column: a Run docks the prompt, the grip bring
 
   /**
  * A RUN, QUEUED. The dock waits for the host that is about to swap its middle column (see
- * the element): a run-click arms it, and `flow-view-ready` lands it. Dispatching both is what
+ * the WINDOW): a run-click arms it, and `flow-view-ready` lands it. Dispatching both is what
  * a host with a canvas does; the fallback path has its own test below.
  */
 const runAndSwap = async (el: LayoutEl) => {
   el.dispatchEvent(new CustomEvent('run-click', { detail: {} }));
   await el.updateComplete;
-  el.dispatchEvent(new CustomEvent('flow-view-ready', {}));
+  window.dispatchEvent(new CustomEvent('flow-view-ready'));
   await el.updateComplete;
 };
 
@@ -228,6 +228,85 @@ const gripDown = (el: LayoutEl) => {
     expect(isDimmed()).toBe(true);
   });
 
+  it('docks for a run the PERSON did not press — the sign is on the window', async () => {
+    /*
+     * EVERY RUN DOCKS, NOT ONLY THE ONE THE BUTTON STARTED.
+     *
+     * The dock waited on two things: a `run-click` timer, and the host's `flow-view-ready`. The
+     * second was listened for ON THIS ELEMENT while the host dispatches it on WINDOW, so the two
+     * never met — and the dock therefore happened only for a Run the person pressed. A run
+     * RELEASED after her review, or one she started herself, moved nothing and the prompt stayed
+     * open over the drawing. The owner, 2026-09-23: "on run in all instances … they should
+     * collapse."
+     *
+     * This test never dispatches a run-click: the signal alone has to be enough.
+     */
+    const el = await mountWithMiddle();
+    expect(el.leftCollapsed).toBe(false);
+
+    window.dispatchEvent(new CustomEvent('flow-view-ready'));
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(true);
+  });
+
+  it('a collapsed prompt is drawn at its FLOOR, whoever collapsed it', async () => {
+    /*
+     * THE FLAG AND THE WIDTH ARE TWO FACTS, and only the dock moved them together. Every other
+     * writer — the payload restoring a saved arrangement, the rail — moved the flag alone, so a
+     * package saved with `leftCollapsed: true` reopened with the seats hidden and the pane still
+     * holding its share of the row: measured 2026-09-23 at 417px of EMPTY COLUMN beside her,
+     * which the owner reported as "the prompt text areas are not loading" and found filled in
+     * the moment a drag gave the pane width again.
+     *
+     * The floor is a fact about the collapsed column (the file's header says the 60px rail is a
+     * COLLAPSED width), so it is decided in the render from the flag and cannot drift from it.
+     */
+    const el = await mountWithMiddle();
+    // A payload assignment, the way a saved arrangement arrives.
+    el.leftCollapsed = true;
+    await el.updateComplete;
+
+    const left = el.shadowRoot!.querySelector('.pane.left') as HTMLElement;
+    const style = left.getAttribute('style') ?? '';
+    expect(style).toContain('flex: 0 0 60px');
+
+    // ...and reopening gives it a share of the row again, not the floor.
+    el.leftCollapsed = false;
+    await el.updateComplete;
+    expect(left.getAttribute('style') ?? '').not.toContain('flex: 0 0 60px');
+  });
+
+  it('openPrompt brings the prompt back AND hands the pane back to the payload', async () => {
+    /*
+     * THE SECOND CAUSE OF THE SAME COMPLAINT. This element is REUSED across packages, and the
+     * dock marks the pane operator-owned — so after one Run in a session, the public setter
+     * refused every later write and each package opened with its prompt folded. `openPrompt`
+     * is what the host calls when a package opens: it opens the column and gives the ownership
+     * back, so the next package starts from its own defaults rather than the last run's.
+     */
+    const el = await mountWithMiddle();
+    // A Run docks it, which is what marks the pane operator-owned.
+    el.dispatchEvent(new CustomEvent('run-click', { detail: {} }));
+    window.dispatchEvent(new CustomEvent('flow-view-ready'));
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(true);
+
+    // A payload write is refused now — this is the state the next package would open in.
+    el.leftCollapsed = false;
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(true);
+
+    // The host says a package is open.
+    el.openPrompt();
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(false);
+
+    // ...and the payload is heard again, which is the half that was missing.
+    el.leftCollapsed = true;
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(true);
+  });
+
   it('does NOT dock between the Run and the canvas: the queue is the fix', async () => {
     // The bug this file now pins (owner, 2026-09-18): "it's closing the left side correctly
     // but in doing so it pulls the chat all the way over… and then when I load the canvas, I
@@ -240,6 +319,31 @@ const gripDown = (el: LayoutEl) => {
 
     // ...and the fallback still docks a host that never signals, so no surface is stuck.
     await new Promise((r) => setTimeout(r, 500));
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(true);
+  });
+
+  it('a Run the host HELD does not dock — not even on the fallback', async () => {
+    // Measured 2026-09-23: the host holds a Run and asks the assistant to review the prompt
+    // first, and no canvas is coming. The button still arms the dock, so the prompt went to its
+    // rail and the width went to an empty middle column — the whole workspace collapsing around
+    // a background. A run that never started may not rearrange the screen.
+    const el = await mountWithMiddle();
+    el.dispatchEvent(new CustomEvent('run-click', { detail: {} }));
+    await el.updateComplete;
+    window.dispatchEvent(new CustomEvent('a2ui:run-held'));
+    await el.updateComplete;
+
+    // Past the fallback, so this pins the cancellation and not just the queueing.
+    await new Promise((r) => setTimeout(r, 500));
+    await el.updateComplete;
+    expect(el.leftCollapsed).toBe(false);
+
+    // ...and a run that IS released docks as it always did: the held state stops this run,
+    // it does not leave the column undockable.
+    el.dispatchEvent(new CustomEvent('run-click', { detail: {} }));
+    await el.updateComplete;
+    window.dispatchEvent(new CustomEvent('flow-view-ready'));
     await el.updateComplete;
     expect(el.leftCollapsed).toBe(true);
   });
@@ -348,7 +452,7 @@ describe('<workspace-layout> Reset puts the arrangement back', () => {
 
     // A Run docks the prompt …
     el.dispatchEvent(new CustomEvent('run-click', { detail: {} }));
-    el.dispatchEvent(new CustomEvent('flow-view-ready', {}));
+    window.dispatchEvent(new CustomEvent('flow-view-ready'));
     await el.updateComplete;
     expect(el.leftCollapsed).toBe(true);
 

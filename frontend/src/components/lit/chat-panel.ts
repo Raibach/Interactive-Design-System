@@ -58,10 +58,21 @@ import logoAsset from './assets/chat-logo-bce2fe.png';
 // the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
 // owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).
 import { logger } from '@/lib/logger';
+import { stepsDone } from '@/shared/buttonState';
 // Grace's surface commands. A reply that carries XML tags drives the surface the
 // same way the React seat did — through window CustomEvents and the event bus.
 import { eventBus } from '@/shared/event-bus';
-import { parseWriteSeatAction, NO_ADVICE } from '@/shared/actionLink';
+import {
+  parseWriteSeatAction,
+  parseWriteToolAction,
+  parseDescriptionAction,
+  parseMergeSeatAction,
+  parseMoveToolAction,
+  parseSetSeatAction,
+  parseRemoveSeatAction,
+  HER_ANSWERS,
+  NO_ADVICE,
+} from '@/shared/actionLink';
 import { consumeArrival } from '@/shared/arrival';
 import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
 
@@ -73,6 +84,8 @@ interface SeatMessage {
   nodeId?: string;
   /** The turn's small note (what part of the flow it is). */
   label?: string;
+  /** An alert rather than a remark — a held Run that will not go. See <chat-messages>. */
+  alert?: boolean;
 }
 
 /**
@@ -102,6 +115,17 @@ export class ChatPanel extends LitElement {
     conversationId: { type: String, attribute: 'conversation-id' },
     messages: { type: Array },
     sessionId: { type: String, attribute: 'session-id' },
+    /**
+     * THE PACKAGE'S OWN NAME AND DESCRIPTION, bound by the host from the surface.
+     *
+     * Both are requirements she is asked to judge before a Run, so both must be readable here.
+     * Measured 2026-09-23: the description HAD been written and she went on saying the package
+     * had none — she had no source for the claim, so she guessed, and her guess came from a
+     * review request that had said "(none)" minutes earlier. A fact she is asked about has to
+     * be a fact she is given.
+     */
+    packageTitle: { type: String, attribute: 'package-title' },
+    packageDescription: { type: String, attribute: 'package-description' },
     /** The "Analyzing: Session 222 | …" status line, host-fed. Empty hides the bar. */
     statusText: { type: String, attribute: 'status-text' },
     /** The header's four status slots, relayed to <chat-header>. */
@@ -263,6 +287,9 @@ export class ChatPanel extends LitElement {
   private _outputRO: ResizeObserver | null = null;
   /** The prompt package. Bound by the host from the surface's session id. */
   declare sessionId?: string;
+  /** The package's name and its one-line description — see the properties block. */
+  declare packageTitle?: string;
+  declare packageDescription?: string;
   /** The "Analyzing: Session 222 | …" line. Empty hides the status bar. */
   declare statusText: string;
   /** The header's four status slots. */
@@ -352,7 +379,7 @@ export class ChatPanel extends LitElement {
    * fetch answers; empty means the table is empty, which is a different thing and is
    * said rather than shown as "none".
    */
-  private _tools: Array<{ name: string; summary: string }> | undefined = undefined;
+  private _tools: Array<{ name: string; summary: string; canRun: boolean }> | undefined = undefined;
   /**
    * WHETHER SHE VOLUNTEERS. Read from shared/autoAdvice rather than held here,
    * because the seat is created once per package and this has to survive one — see
@@ -435,7 +462,7 @@ export class ChatPanel extends LitElement {
   // on the user's behalf is not a turn in their conversation. Removed.
   private _onHostSay = (e: Event) => {
     const detail = ((e as CustomEvent).detail || {}) as {
-      role?: string; content?: string; nodeId?: string; label?: string;
+      role?: string; content?: string; nodeId?: string; label?: string; alert?: boolean;
     };
     if (!detail.content) return;  // an empty bubble reads as having said nothing on purpose
     this._local = [
@@ -447,6 +474,39 @@ export class ChatPanel extends LitElement {
         // host's business, and the element that draws turns only needs to know it.
         nodeId: detail.nodeId,
         label: detail.label,
+        alert: detail.alert === true,
+      },
+    ];
+    this.requestUpdate();
+  };
+
+  /**
+   * A WRITE INTO THE PROMPT THAT LANDED NOWHERE, SAID OUT LOUD.
+   *
+   * `<prompt-section-editor>` dispatches this when it cannot place a write, carrying the seats
+   * the prompt does have so the failure can name them. Its own note says the chat listens —
+   * and nothing did, anywhere in the app: the event had a sender, a detail shape and a comment
+   * promising it was reported, and no listener at all. Measured 2026-09-23: the assistant
+   * offered a constraint, the person pressed Confirm, the write was refused, and the screen
+   * showed NOTHING — no row, no error, and her sentence saying it was done.
+   *
+   * It is drawn as an ALERT, because that is what it is: the person asked for a change to
+   * their prompt and the prompt did not change.
+   */
+  private _onWriteFailed = (e: Event) => {
+    const detail = ((e as CustomEvent).detail || {}) as {
+      target?: string; why?: string; names?: string[];
+    };
+    const target = String(detail.target ?? 'that');
+    const why = String(detail.why ?? 'the write could not be placed');
+    const names = (detail.names ?? []).filter(Boolean);
+    const held = names.length ? ` The prompt has: ${names.join(', ')}.` : '';
+    this._local = [
+      ...this._local,
+      {
+        role: 'assistant',
+        content: `⚠️ Nothing was written to "${target}" — ${why}.${held} The prompt is unchanged.`,
+        alert: true,
       },
     ];
     this.requestUpdate();
@@ -466,15 +526,85 @@ export class ChatPanel extends LitElement {
    * said.
    */
   private _onHostAsk = (e: Event) => {
-    const request = String(((e as CustomEvent).detail || {}).request ?? '');
+    const detail = ((e as CustomEvent).detail || {}) as { request?: unknown; review?: unknown };
+    const request = String(detail.request ?? '');
     if (!request) return;
     /*
      * THIS TURN OFFERS, IT DOES NOT WRITE. The flag outlives the send and is read
      * by _processReply when the answer lands — see the note there.
      */
     this._offerOnly = true;
+    /*
+     * AND THIS TURN CAN STOP SOMETHING: a request that carries `review: 'run'` is a Run
+     * the host is holding until she says it is ready. A verdict is owed for it either
+     * way — `<run_ok/>` releases it, and anything else has to SAY SO, because the host
+     * is showing the run as busy and a host that is never told would spin forever. See
+     * where the verdict is read, after the reply lands.
+     */
+    this._reviewingRun = detail.review === 'run';
     void this._send(request, { silent: true });
   };
+
+  /**
+   * THE BUTTONS ALREADY PRESSED, by their action. A row of buttons is a list of things to do,
+   * and this is what lets one of them read as done while the rest stay live. Cleared when the
+   * seat moves to another package: an action belongs to the thread it was offered in.
+   */
+  private _spent = new Set<string>();
+  /** The turn whose buttons those were — see the press handler and ChatMessages.spentTurn. */
+  private _spentTurn = '';
+
+  /** Is a Run being held on her answer right now? */
+  private _reviewingRun = false;
+
+  /**
+   * A RUN THIS REPLY ASKED FOR, WAITING FOR HER WORDS TO BE ON SCREEN.
+   *
+   * 'asked' is `<run_prompt/>` — she starts one herself. 'approved' is `<run_ok/>` — she clears a
+   * run the host was holding. Both are the one effect that rearranges the screen, and both used
+   * to fire from inside `_processReply`, before a single character of the reply had been drawn:
+   * the middle column swapped, the prompt folded, the button started spinning, and the sentence
+   * explaining any of it arrived after. Watched at the screen on 2026-09-23 — "we got to visually
+   * connect the run feature … give grace enough time to give her back at her output."
+   *
+   * THE DELAY IS A READING BEAT, NOT A RACE BEING WON. Two animation frames guarantee her turn is
+   * PAINTED before the screen changes; the pause after them is there because a person reads a
+   * sentence before they look at what it did, and a canvas that appears in the same frame as the
+   * words is a canvas nobody has read the reason for. It is small and it is stated, so it can be
+   * judged rather than discovered.
+   */
+  private _pendingRun: 'asked' | 'approved' | null = null;
+
+  /** How long her sentence sits alone before the run it announces takes the screen. */
+  private static readonly READ_THE_REPLY_MS = 450;
+
+  /**
+   * Let the queued run go — after her turn has landed, been painted, and been read.
+   *
+   * Called once, at the end of a turn. A turn that asked for nothing dispatches nothing, so this
+   * is safe on every reply, including the failures.
+   */
+  private _releaseQueuedRun(): void {
+    const kind = this._pendingRun;
+    this._pendingRun = null;
+    if (!kind) return;
+    const fire = () => {
+      window.dispatchEvent(
+        new CustomEvent(kind === 'approved' ? 'a2ui:run-approved' : 'ai-run-prompt'),
+      );
+    };
+    // The paint first, then the beat. `requestAnimationFrame` inside a callback that has already
+    // run is the double-frame the host uses for the same reason: one frame is the paint that was
+    // already scheduled, the next is the one after it.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.setTimeout(fire, ChatPanel.READ_THE_REPLY_MS);
+      });
+    });
+  }
+
+  /** Her last verdict on a held Run: 'ok', 'blocked', or '' if she did not give one. */
+  private _runVerdict: 'ok' | 'blocked' | '' = '';
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -490,6 +620,10 @@ export class ChatPanel extends LitElement {
     if (arrived) this._wantsGreeting = arrived;
     void this._loadTools();
     window.addEventListener('a2ui:system-message', this._onHostSay);
+    // A write that landed nowhere is reported where the person is already reading. The editor
+    // is inside this same surface and has been dispatching this all along with nothing on the
+    // other end — see _onWriteFailed.
+    window.addEventListener('section-write-failed', this._onWriteFailed as EventListener);
     window.addEventListener('a2ui:ask-grace', this._onHostAsk as EventListener);
     window.addEventListener('a2ui:composer-opened', this._onComposerOpened as EventListener);
     // A chat button's answer arrives here from <chat-messages> and goes down the one send
@@ -501,6 +635,7 @@ export class ChatPanel extends LitElement {
 
   disconnectedCallback(): void {
     window.removeEventListener('a2ui:system-message', this._onHostSay);
+    window.removeEventListener('section-write-failed', this._onWriteFailed as EventListener);
     window.removeEventListener('a2ui:ask-grace', this._onHostAsk as EventListener);
     window.removeEventListener('a2ui:composer-opened', this._onComposerOpened as EventListener);
     this.removeEventListener('chat-action-send', this._onActionSend);
@@ -640,6 +775,24 @@ export class ChatPanel extends LitElement {
      */
     const action = text.startsWith('[') && text.endsWith(']') ? text.slice(1, -1) : text;
     /*
+     * A PRESSED BUTTON IS SPENT, WHATEVER IT WAS — recorded before anything else can fail,
+     * because the press has happened either way and the row is a list the person is working
+     * down. The owner, 2026-09-23: "when I click Fill User Role that button should change
+     * state ... by deactivating one when it's done that lets the user know it's a list."
+     *
+     * AND THE MARK BELONGS TO ONE TURN. `turn` comes from <chat-messages>, which knows which
+     * turn the button sat in; without it a mark kept by action alone would draw the SECOND
+     * Confirm this conversation ever offered as already pressed, because every proposing reply
+     * ends with the same confirm link. See ChatMessages.spentTurn.
+     *
+     * Kept on the SEAT, not on the turn: the thread is re-rendered from the surface's messages
+     * on every assembly, and a mark carried in the message would go with it. The seat outlives
+     * its own re-renders.
+     */
+    this._spentTurn = String(((e as CustomEvent).detail?.turn as string) ?? '');
+    this._spent.add(action);
+    this.requestUpdate();
+    /*
      * THE WAY OUT IS HANDLED HERE, NOT SENT. "Skip the advice" is not a question and a
      * dismissal should not cost a model call and three seconds to be acknowledged. The
      * offer is withdrawn and nothing goes to her.
@@ -651,6 +804,101 @@ export class ChatPanel extends LitElement {
     const edit = parseWriteSeatAction(action);
     if (edit) {
       window.dispatchEvent(new CustomEvent('a2ui:write-seat', { detail: edit }));
+      return;
+    }
+    /*
+     * A TOOL IS AN EDIT TOO, AND A DIFFERENT ONE. `write-seat` carries words for a seat;
+     * this carries the NAME of a tool, and the words come from the register — a tool inserted
+     * from here has to be byte-for-byte what the seat's own Tools menu inserts, or the prompt
+     * would say one thing when a person put it in and another when she did. See the editor's
+     * `_onInsertTool`.
+     */
+    const tool = parseWriteToolAction(action);
+    if (tool) {
+      window.dispatchEvent(new CustomEvent('insert-tool', { detail: tool }));
+      return;
+    }
+    /*
+     * THE PACKAGE'S DESCRIPTION, OFFERED AS A BUTTON.
+     *
+     * She writes this one herself, and she reaches for `set-description|<the words>` — not the
+     * two-part form every other action uses. Measured 2026-09-23, in the stored conversation:
+     * `[Add description](action:set-description|Add a short description for the package)` was
+     * pressed, did not parse, and went back to the model as a message — so the person watched a
+     * button turn into a sentence and a model call, and the work it promised happened only
+     * because she happened to write the tag in her reply.
+     *
+     * THE SPELLING IS TAKEN AS SHE WRITES IT: the name, then a separator that may be either
+     * `:` or `|`, then the words. One reader, so the two forms cannot drift.
+     */
+    const described = parseDescriptionAction(action);
+    if (described) {
+      window.dispatchEvent(new CustomEvent('set-package-description', { detail: described }));
+      return;
+    }
+    /*
+     * TWO ROWS FOR ONE STEP, MERGED — an edit like the others, performed by the app so the words
+     * are moved rather than retyped. See the editor's `_onMergeSeat` and actionLink's note on why
+     * a write followed by a removal is not the same thing.
+     */
+    const merge = parseMergeSeatAction(action);
+    if (merge) {
+      window.dispatchEvent(new CustomEvent('merge-seat', { detail: merge }));
+      return;
+    }
+    /*
+     * A TOOL MOVED TO ANOTHER STEP, AND A ROW'S TEXT REPLACED. Both are repairs she was already
+     * offering — as `move-tool:search-the-internet` and `clean-agent-role` — and both came back
+     * to the person as "this app does not know how to do that". The intent was right and the
+     * names were hers; the capability was missing. See actionLink.
+     */
+    const move = parseMoveToolAction(action);
+    if (move) {
+      window.dispatchEvent(new CustomEvent('move-tool', { detail: move }));
+      return;
+    }
+    const replaced = parseSetSeatAction(action);
+    if (replaced) {
+      window.dispatchEvent(new CustomEvent('set-left-column-text', {
+        detail: { target: replaced.seat, content: replaced.text },
+      }));
+      return;
+    }
+    // The one destructive repair, as a button: the same act as `<remove_role name="X"/>`.
+    const removed = parseRemoveSeatAction(action);
+    if (removed) {
+      window.dispatchEvent(new CustomEvent('remove-prompt-role', { detail: { roleName: removed.seat } }));
+      return;
+    }
+    /*
+     * A COMMAND NOBODY HANDLES IS SAID SO, NOT SENT.
+     *
+     * A button is either an edit this app knows how to make or a question for her — and when it
+     * is neither, sending it to the model is the worst available answer: she replies to the
+     * wire format as though it were a request and says she has done the thing (measured
+     * 2026-09-23 — "I'll add a short description for the package" over a button that had
+     * already failed to parse), so the person is told the work is done by the one path that
+     * cannot fail loudly.
+     *
+     * WHICH IS WHICH IS NOT DECIDED BY THE SHAPE. "confirm" and "set-description" are both one
+     * token, and one of them is her own answer that must reach her. So her two words are named
+     * (HER_ANSWERS, the vocabulary her instructions fix) and everything else that reads like a
+     * command — one token, or carrying a `:` or a `|` — is reported here instead.
+     *
+     * A sentence with spaces in it is a question, and goes to her as one, exactly as before.
+     */
+    if (!HER_ANSWERS.includes(action) && (/^[^\s]+$/.test(action) || /[:|]/.test(action))) {
+      this._local = [
+        ...this._local,
+        {
+          role: 'assistant',
+          content:
+            `⚠️ That button asks for something this app does not know how to do (${action.slice(0, 80)}), ` +
+            'so nothing was changed. Tell me which step you want and I will do it here.',
+          alert: true,
+        },
+      ];
+      this.requestUpdate();
       return;
     }
     // A button carries words she wrote, so the shape is known and there is nothing to
@@ -1497,6 +1745,8 @@ export class ChatPanel extends LitElement {
 
     this.messages = [];
     this._local = [];
+    this._spent.clear();
+    this._spentTurn = '';
     this._historyError = '';
 
     // PENDING TURNS BELONG TO THE PACKAGE THEY WERE SPOKEN IN. Spoken before any package
@@ -1761,8 +2011,57 @@ export class ChatPanel extends LitElement {
    * yet carry. The left column is read from the persisted JSON; live unsaved edits arrive with
    * the host wiring.
    */
+  /**
+   * WHICH OF HER BUTTONS THE PROMPT ALREADY SAYS ARE DONE.
+   *
+   * Read from the seats the panel is given — `leftColumnContent` and the package's description —
+   * so a reopened package draws the review with the steps that were finished already spent. The
+   * work those buttons asked for IS the prompt, so the prompt is what remembers it: no second
+   * record to save, and none to disagree with the seats. See shared/buttonState.
+   *
+   * Every action on screen is asked about, because the rules differ per action and the asker
+   * should not have to know them. Cheap: one pass over the seats per render, on strings the
+   * element already holds.
+   */
+  private _stepsDone(): string[] {
+    const actions: string[] = [];
+    for (const turn of this._thread ?? []) {
+      const raw = String((turn as { content?: unknown }).content ?? '');
+      for (const part of raw.split(/(\[.*?\]\(action:[^)]+\))/g)) {
+        const m = part.match(/^\[(.*?)\]\(action:([^)]+)\)$/);
+        if (m) actions.push(m[2]);
+      }
+    }
+    if (!actions.length) return [];
+    let sections: any[] = [];
+    try {
+      const src = this.leftColumnContent;
+      if (Array.isArray(src)) sections = src;
+      else if (src) sections = JSON.parse(src)?.sections ?? [];
+    } catch {
+      sections = [];
+    }
+    return [...stepsDone(actions, sections, String(this.packageDescription ?? ''))];
+  }
+
   private _buildWorkspaceContext(): string {
     const parts: string[] = [];
+
+    /*
+     * THE PACKAGE ITSELF, FIRST — its name and its description.
+     *
+     * These are the two things she is asked to check before a Run, and until now she was given
+     * neither: her context carried the prompt's seats and the output, and nothing about the
+     * package they belong to. So she spoke about them from memory, and memory here is the
+     * review request she read minutes ago — measured 2026-09-23: "The package still has no
+     * description" over a package whose description was already saved.
+     *
+     * STATED EVEN WHEN EMPTY, and that is the point of the line rather than an oversight: "(none)"
+     * is a fact, a missing key is a question, and a model asked a question answers it.
+     */
+    parts.push('=== THIS PACKAGE ===');
+    parts.push(`name: ${String(this.packageTitle ?? '').trim() || '(none)'}`);
+    parts.push(`description: ${String(this.packageDescription ?? '').trim() || '(none)'}`);
 
     let sections: any[] = [];
     try {
@@ -1817,9 +2116,17 @@ export class ChatPanel extends LitElement {
      */
     if (this._tools?.length) {
       parts.push('');
+      const runnable = this._tools.filter((t) => t.canRun);
       parts.push(`=== TOOLS AVAILABLE (${this._tools.length} — these are the only ones that exist) ===`);
+      parts.push(
+        runnable.length
+          ? `These ${runnable.length} actually run: ${runnable.map((t) => t.name).join(', ')}.`
+          : 'None of them run yet — nothing answers any of these names.',
+      );
+      parts.push('A tool marked (cannot run yet) can be written into a prompt, and pressing Run');
+      parts.push('will not make it do anything. Offer one only when the person asks for it by name.');
       for (const tool of this._tools) {
-        parts.push(`  ${tool.name} — ${tool.summary}`);
+        parts.push(`  ${tool.name}${tool.canRun ? '' : ' (cannot run yet)'} — ${tool.summary}`);
       }
     }
 
@@ -1860,9 +2167,14 @@ export class ChatPanel extends LitElement {
       if (!res.ok) return;
       const body = await res.json();
       const rows = Array.isArray(body?.tools) ? body.tools : [];
-      this._tools = rows.map((t: { name: string; summary?: string }) => ({
+      this._tools = rows.map((t: { name: string; summary?: string; can_run?: boolean }) => ({
         name: String(t.name ?? ''),
         summary: String(t.summary ?? ''),
+        // WHETHER ANYTHING ANSWERS IT. She has to know, because she is the one who
+        // OFFERS a tool: offering one that cannot run is how a person ends up pressing
+        // a button that does nothing. The register is the authority — see
+        // backend/tool_run.py — and this carries its answer rather than inferring one.
+        canRun: t?.can_run === true,
       }));
     } catch {
       // Left undefined: saying nothing about tools is honest, saying "none exist" is not.
@@ -1893,6 +2205,29 @@ the list of what exists is at the bottom of this message under TOOLS AVAILABLE. 
 name from that list and no other. If nothing in it fits what the user asked for, say so
 in one sentence and offer the closest thing — do not make a name up, because a prompt
 naming a tool that does not exist is a flow that cannot run.
+
+HOW A TOOL GOES IN. Not as prose, and not as <update_tool> — a tool has to go in the way
+the seat's own Tools menu puts it in, which is its name on a line and then the tool's own
+words under it. One tag does that, and the words come from the register:
+
+<insert_tool>the-tools-name</insert_tool>
+
+A button does the same thing, which is what to use when you are offering a choice:
+
+[one or two words](action:write-tool:the-tools-name)
+
+AND A TOOL LIVES IN THE TOOL CALL STEP, NEVER INSIDE ANOTHER STEP. Not appended to the
+Agent Role, not written into the User Role, not pasted into whoever uses it: the Tool Call
+step is the one place the flow reads a tool from and the one place it is drawn at. Measured
+2026-09-23, on a prompt whose tool had been written into the Agent Role seat beside the
+identity that uses it — the run fired no call and the drawing reported "the prompt names no
+tool" over a prompt that named one, because the step that owns tools was empty.
+
+WHEN A PROMPT NEEDS A TOOL AND NONE IS NAMED, ASK — DO NOT PICK. This is the step a person
+has to choose, because a tool is what the flow is allowed to reach for. Offer the names
+that fit as buttons, one per tool, and let them press one. Offering to "add a search tool"
+and then not naming one is the answer that leaves them stuck: the button is the ask, so the
+button has to carry the name.
 5. Few Shot — <update_few_shot> — examples of the input and the output wanted.
 6. Context — <update_context> — background, domain knowledge, reference material.
 7. Constraints — <update_constraints> — hard rules the agent must never violate.
@@ -1954,10 +2289,49 @@ WRITE TO STEPS:
 <update_few_shot>text</update_few_shot>
 <update_context>text</update_context>
 <update_constraints>text</update_constraints>
+A TOOL, BY NAME — inserts the tool the way the Tools menu does, name and words:
+<insert_tool>the-tools-name</insert_tool>
+TAKING A ROW OUT OF THE PROMPT — name it exactly as it is written in the prompt:
+<remove_role name="The row's name"/>
+
+THE ROWS ARE THE SCHEMATIC. Every row you write becomes a node in the drawing, and the order
+they sit in is the order they run in. So the shape of the picture is not something you
+describe to the person — it is what your writes make.
+
+TWO ROWS FOR ONE STEP IS THE MISTAKE THIS IS FOR. A prompt with an "Agent Role" row and
+another row called "agent_role" draws two agent nodes and sends two agent roles to the model,
+and it happens because a person typed one and the menu made the other. THE MISTAKE IS THEIRS
+TO MAKE — never refuse it, never say a person may not have two, and never tell them what they
+typed is wrong. Say what you see in one sentence, and offer the repair as a button:
+
+THESE ARE THE REPAIRS, AND THEIR EXACT NAMES. A button whose action is not on this list is a
+button that does nothing — the app says so to the person, and the fix you offered does not
+happen. Do not invent an action name; if the repair you want is not here, offer the closest
+one that is, or ask the person to make the change themselves.
+
+  [Combine the two Agent Roles](action:merge-seat:agent_role|Agent Role)
+      one row's words into the other, and the emptied row goes. Moved, not retyped.
+  [Move tool to Tool Call step](action:move-tool:search-the-internet|Tool Call)
+      the tool's own block travels, wherever it sits now to wherever it is wanted.
+  [Replace the Agent Role text](action:set-seat:Agent Role|the replacement words)
+      THE ROW BECOMES these words. Use this to clear placeholder text or stray lines —
+      it replaces, where write-seat adds. The words you write are the words that stay.
+  [Remove the stray row](action:remove-seat:agent_role)
+      takes the row out of the prompt. ASK FIRST — a person may want two roles.
+
+And the same repairs as tags: <merge_role from="X" into="Y"/>, <move_tool name="X" into="Y"/>,
+<set_seat name="X">the replacement words</set_seat>, <remove_role name="X"/>.
+
+ASK BEFORE YOU REMOVE ANYTHING, and if they say they wanted two roles, leave both alone and
+carry on: helping them see it is the whole job, not tidying them up.
 THE PACKAGE'S NAME:
 <set_title>text</set_title> — name this package. The title is the package's own name, shown
 in the bar above the prompt; ask the user for it rather than inventing one, and write it
 once they have said it.
+THE PACKAGE'S DESCRIPTION:
+<set_description>text</set_description> — one line saying what this package is for, shown on
+its card in the library. A name and a description are both required before a Run is allowed,
+so when a package has none, offer to add one.
 MEMORY COMMANDS:
 <save/>
 <get_versions/>
@@ -2035,10 +2409,55 @@ ${workspaceContext}`;
       window.dispatchEvent(new CustomEvent('clear-left-column'));
       content = content.replace(/<clear_all\s*\/>/g, '');
     }
+    /*
+     * SHE ASKS FOR THE RUN — and the ask is RECORDED here rather than carried out here.
+     *
+     * THIS IS THE ONE EFFECT THAT CHANGES THE WHOLE SCREEN. Every other tag in this function
+     * writes into something the person is already looking at — a seat, a title, the thread —
+     * and their eyes are there. A run takes the middle column, folds the prompt and starts a
+     * spinner on the button, and doing that from INSIDE this function happens while her
+     * sentence is still a string in this element: nothing of the reply has been drawn yet, so
+     * the screen rearranges first and the words that explain it arrive after. Measured
+     * 2026-09-23, watched at the screen: "we got to visually connect the run feature … give
+     * grace enough time to give her back at her output."
+     *
+     * So it is queued (see `_pendingRun`), and `_send` releases it once her reply has been
+     * appended and painted. Nothing about the run changes — the same event, the same spinner,
+     * the same canvas — only the order of two things the person sees.
+     */
     if (/<run_prompt\s*\/>/.test(content)) {
-      window.dispatchEvent(new CustomEvent('ai-run-prompt'));
+      this._pendingRun = 'asked';
       content = content.replace(/<run_prompt\s*\/>/g, '');
     }
+    /*
+     * HER VERDICT ON A PROMPT SHE WAS ASKED TO REVIEW — the answer to a Run that was held.
+     *
+     * A RUN THAT HAS BEEN STOPPED STAYS STOPPED UNLESS SHE CLEARS IT. The host asks her to
+     * review before a run and holds it; `<run-ok/>` is her saying it is ready, and only
+     * that releases it. Anything else — a `<run-blocked>` tag, or no tag at all — leaves
+     * the run held, and her prose says what is wrong.
+     *
+     * SILENCE IS NOT CONSENT, deliberately. If she forgets the tag, or her reply is
+     * interrupted, the run does not proceed on a default. The failure that prevents is a
+     * prompt with a problem she named going through anyway because the machinery assumed
+     * a missing answer meant yes.
+     *
+     * BOTH FORMS OF THE BLOCKED TAG COME OFF, because she writes both. She is asked for the
+     * self-closing shape, and she answered with a bare `<run_blocked>` — measured 2026-09-23,
+     * a held Run whose reply drew the tag as text under her sentence. The paired form keeps
+     * its body stripped with it; a lone tag is simply removed.
+     */
+    if (/<run_ok\s*\/>/.test(content)) {
+      this._runVerdict = 'ok';
+      // QUEUED, NOT DISPATCHED — the same reason as `<run_prompt/>` above: the run takes the
+      // screen, and her sentence saying it is ready has to be on screen before it does.
+      this._pendingRun = 'approved';
+      content = content.replace(/<run_ok\s*\/>/g, '');
+    }
+    if (/<run_blocked\s*\/?>/.test(content)) this._runVerdict = 'blocked';
+    content = content
+      .replace(/<run_blocked>[\s\S]*?<\/run_blocked>/g, '')
+      .replace(/<\/?run_blocked\s*\/?>/g, '');
     if (/<save\s*\/>/.test(content)) {
       eventBus.emit({ command: 'save-button' } as never);
       content = content.replace(/<save\s*\/>/g, '');
@@ -2062,6 +2481,74 @@ ${workspaceContext}`;
       if (title) window.dispatchEvent(new CustomEvent('set-prompt-title', { detail: { title } }));
     }
     content = content.replace(titleRegex, '');
+    /*
+     * THE PACKAGE'S DESCRIPTION, WHICH HAD NO WRITER AT ALL.
+     *
+     * The description is the line under the name on the console card — and the review before a
+     * Run asks for it by name. She tried to write it, and the tag she reached for was invented,
+     * because the app had given her none: measured 2026-09-23, `<set_description>…</set_description>`
+     * in a reply, drawn as nothing, with the description left empty and her sentence saying it was
+     * added.
+     *
+     * Same shape as the title on purpose: one tag, one write, one place the value lives. The
+     * handler is the shell's, next to the title's, because the description is a property of the
+     * package rather than of anything inside the surface.
+     */
+    const descRegex = /<set_description>([\s\S]*?)<\/set_description>/g;
+    let descMatch: RegExpExecArray | null;
+    while ((descMatch = descRegex.exec(content)) !== null) {
+      const description = descMatch[1].trim();
+      if (description) {
+        window.dispatchEvent(new CustomEvent('set-package-description', { detail: { description } }));
+      }
+    }
+    content = content.replace(descRegex, '');
+    /*
+     * A TOOL, NAMED — inserted into the seat it belongs in, the same way the seat's own
+     * Functions / Tools menu inserts it. The name must be one the register answers to: an
+     * invented tool is a step that cannot happen, and the editor reports it rather than
+     * writing a token nothing can resolve.
+     */
+    /*
+     * TWO ROWS MERGED, FROM HER OWN TAG — `<merge_role from="agent_role" into="Agent Role"/>`.
+     * The attribute form is the one that reads clearly for a pair, and it is what she reaches
+     * for: names are what the tag is about, and a bare "a b" would be a guess about which is
+     * which.
+     */
+    const mergeRegex = /<merge_role\s+from="([^"]+)"\s+into="([^"]+)"\s*\/>/g;
+    let mergeMatch: RegExpExecArray | null;
+    while ((mergeMatch = mergeRegex.exec(content)) !== null) {
+      window.dispatchEvent(new CustomEvent('merge-seat', {
+        detail: { from: mergeMatch[1].trim(), into: mergeMatch[2].trim() },
+      }));
+    }
+    content = content.replace(mergeRegex, '');
+
+    const moveRegex = /<move_tool\s+name="([^"]+)"\s+into="([^"]+)"\s*\/>/g;
+    let moveMatch: RegExpExecArray | null;
+    while ((moveMatch = moveRegex.exec(content)) !== null) {
+      window.dispatchEvent(new CustomEvent('move-tool', {
+        detail: { name: moveMatch[1].trim(), into: moveMatch[2].trim() },
+      }));
+    }
+    content = content.replace(moveRegex, '');
+
+    const setSeatRegex = /<set_seat\s+name="([^"]+)"\s*>([\s\S]*?)<\/set_seat>/g;
+    let seatMatch: RegExpExecArray | null;
+    while ((seatMatch = setSeatRegex.exec(content)) !== null) {
+      window.dispatchEvent(new CustomEvent('set-left-column-text', {
+        detail: { target: seatMatch[1].trim(), content: seatMatch[2].trim() },
+      }));
+    }
+    content = content.replace(setSeatRegex, '');
+
+    const toolRegex = /<insert_tool>([\s\S]*?)<\/insert_tool>/g;
+    let toolMatch: RegExpExecArray | null;
+    while ((toolMatch = toolRegex.exec(content)) !== null) {
+      const name = toolMatch[1].trim();
+      if (name) window.dispatchEvent(new CustomEvent('insert-tool', { detail: { name } }));
+    }
+    content = content.replace(toolRegex, '');
     if (/<eval_grounding\s*\/>/.test(content)) {
       window.dispatchEvent(new CustomEvent('ai-eval-grounding'));
       content = content.replace(/<eval_grounding\s*\/>/g, '');
@@ -2272,10 +2759,20 @@ ${workspaceContext}`;
         const raw = String(data?.content ?? '(no answer)');
         const reply = this._processReply(raw);
         if (reply) {
-          this._local = [...this._local, { role: 'assistant', content: reply }];
+          this._local = [
+            ...this._local,
+            // HER VERDICT IS DRAWN AS WHAT IT IS. A reply that stopped a Run is an ALERT — the
+            // person pressed a button and is owed a stop sign, not another remark in the
+            // conversation. See ChatMessage.alert and the turn's own outline rule.
+            { role: 'assistant', content: reply, alert: this._reviewingRun && this._runVerdict === 'blocked' },
+          ];
         }
         answered = true;
       }
+      /*
+       * THE HELD RUN IS SETTLED IN THE finally BELOW, for every outcome — a reply, a refusal,
+       * a connection error, or the person stopping the turn. See there.
+       */
       // A TURN THAT DID NOT PERSIST IS SAID IN THE THREAD. The server answered it but could
       // not write it down (routes/teacher.py `persistence_error`: a failed lookup, a failed
       // create, a failed message write); without this the person reads a reply that is gone
@@ -2312,8 +2809,34 @@ ${workspaceContext}`;
         this._local = [...this._local, { role: 'assistant', content: `Connection error: ${why}` }];
       }
     } finally {
+      /*
+       * THE HELD RUN IS SETTLED HERE, ONCE, WHATEVER HAPPENED.
+       *
+       * `<run_ok/>` released it inside _processReply. This is the other half: a run she did NOT
+       * clear has to be told so, because the host is showing it as busy and silence would leave
+       * the button spinning with nothing coming. "Silence is not consent" cuts both ways — no
+       * verdict is not a yes, and it is not a wait either.
+       *
+       * IN THE finally AND NOT THE try, because the outcomes that most need it are the ones that
+       * never reach the end of the try: a connection error, or the person stopping the turn.
+       * Either way the person is looking at a spinner they must be able to get out of.
+       *
+       * A turn that is not a run review owes nothing and dispatches nothing.
+       */
+      if (this._reviewingRun) {
+        this._reviewingRun = false;
+        if (this._runVerdict !== 'ok') {
+          window.dispatchEvent(new CustomEvent('a2ui:run-blocked'));
+        }
+      }
+      this._runVerdict = '';
       // Her reply (or the failure) just landed — the column follows it down.
       this._scrollThreadToBottom();
+      /*
+       * AND ONLY NOW MAY THE SCREEN CHANGE. Everything above this line is her turn arriving; the
+       * run is the one effect that rearranges the page, so it goes last — see `_pendingRun`.
+       */
+      this._releaseQueuedRun();
       // A turn that was ANSWERED while this seat had no conversation lives only here:
       // the backend refused to write it (no row to bind it to yet), so it is held and
       // handed over by flushPendingTurns when the first Save creates the package's
@@ -3189,6 +3712,9 @@ ${workspaceContext}`;
                       <chat-messages
                         .messages=${this._thread}
                         .sending=${this._sending}
+                        .spentActions=${[...this._spent]}
+                        .spentTurn=${this._spentTurn}
+                        .doneActions=${this._stepsDone()}
                       ></chat-messages>`
                     : this.activeTab === 'trace'
                       ? html`<div class="fold-wrap">

@@ -736,6 +736,518 @@ describe('<chat-panel> draws its seat', () => {
   });
 });
 
+describe("<chat-panel> — a Run held on her verdict", () => {
+  /**
+   * THE RUN GATE'S TWO ENDS, AND THE WEIGHT OF WHAT SHE SAYS.
+   *
+   * The host presses Run, holds it, and asks her to check the prompt (`a2ui:ask-grace` carrying
+   * `review: 'run'`). She answers with `<run_ok/>` to release it, or with a problem to stop it.
+   * Three facts have to hold, and each was a measured failure:
+   *
+   *   1. A RUN SHE DID NOT CLEAR IS STILL SETTLED. The host shows the Run as busy while it waits,
+   *      so a verdict that never arrives leaves the button spinning with nothing coming. Silence
+   *      is not consent — and it is not a wait either.
+   *   2. HER VERDICT IS DRAWN AS AN ALERT. The owner, 2026-09-23: "it should be outlined in red
+   *      just like you would handle a regular error… you can't serve alert messages with the same
+   *      visual weight as every other message."
+   *   3. THE TAG ITSELF IS NOT DRAWN. She writes the bare `<run_blocked>` as readily as the
+   *      self-closing form, and only one of them used to come off the prose.
+   */
+  const hear = (names: string[], heard: string[]) => {
+    const fns = names.map((name) => {
+      const fn = () => heard.push(name);
+      window.addEventListener(name, fn);
+      return [name, fn] as const;
+    });
+    return () => fns.forEach(([name, fn]) => window.removeEventListener(name, fn));
+  };
+
+  /**
+   * AND THE THREAD IS A CHILD, SO ITS OWN UPDATE IS WAITED FOR TOO.
+   *
+   * `<chat-messages>` renders asynchronously from the `.messages` property this panel hands it,
+   * so awaiting only the panel's update leaves the child's shadow root EMPTY — measured here as
+   * a turn that was correctly in the thread, correctly marked, and simply not drawn yet. (The
+   * text assertions would have passed anyway, because the panel's own shadow text is not empty:
+   * only the class check needs the child to have painted.)
+   */
+  const settleThread = async (el: SeatEl) => {
+    await settle(el);
+    const child = el.shadowRoot!.querySelector('chat-messages') as
+      | (HTMLElement & { updateComplete: Promise<unknown> })
+      | null;
+    if (child) {
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+        await child.updateComplete;
+      }
+    }
+  };
+
+  const answerWith = async (content: string, ask: Record<string, unknown> = { review: 'run' }) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({ content }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+    const el = await mount({ conversationId: 'conv-1730' });
+    const heard: string[] = [];
+    const stop = hear(['a2ui:run-approved', 'a2ui:run-blocked'], heard);
+    window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+      detail: { ...ask, request: 'A person has pressed Run and the prompt is held.' },
+    }));
+    await settleThread(el);
+    // THE RUN IS QUEUED BEHIND HER SENTENCE — two frames and a reading beat (see the seat's
+    // `_pendingRun`). The events a test hears arrive AFTER that, so the wait is part of the
+    // contract now and not a slow test.
+    await new Promise((r) => setTimeout(r, 700));
+    stop();
+    return { el, heard };
+  };
+
+  it('her sentence lands BEFORE the run it asks for', async () => {
+    /*
+     * THE ORDER THE OWNER WATCHED GO WRONG, 2026-09-23: "we got to visually connect the run
+     * feature … give grace enough time to give her back at her output." The run used to be
+     * dispatched from inside the reply processing, so the middle column swapped and the button
+     * span BEFORE a character of the reply had been drawn.
+     */
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({
+          content: 'Everything checks out, so I am running it now. <run_ok/>',
+        }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+    const el = await mount({ conversationId: 'conv-1730' });
+    let sawTheReply = false;
+    let spokeFirst = false;
+    const onApproved = () => { if (!sawTheReply) spokeFirst = true; };
+    window.addEventListener('a2ui:run-approved', onApproved);
+
+    window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+      detail: { review: 'run', request: 'held' },
+    }));
+    await settle(el);
+    // Settled, and the run has NOT been released yet.
+    sawTheReply = shadowText(el).includes('I am running it now');
+    expect(sawTheReply).toBe(true);
+    expect(spokeFirst).toBe(false);
+
+    await new Promise((r) => setTimeout(r, 700));
+    window.removeEventListener('a2ui:run-approved', onApproved);
+    expect(spokeFirst).toBe(false);
+  });
+
+  it('releases the held Run on <run_ok/>, and says nothing else', async () => {
+    const { el, heard } = await answerWith('Everything it needs is here. <run_ok/>');
+
+    expect(heard).toEqual(['a2ui:run-approved']);
+    expect(shadowText(el)).not.toContain('run_ok');
+    // Nothing was wrong, so nothing wears the alarm outline.
+    const child = el.shadowRoot!.querySelector('chat-messages')!.shadowRoot!;
+    expect(child.querySelectorAll('.turn.alert').length).toBe(0);
+  });
+
+  it('stops a Run she did not clear, outlines the turn that says so, and strips the tag', async () => {
+    const { el, heard } = await answerWith(
+      'The User Role is empty, so there is no task for the flow to run. <run_blocked>',
+    );
+
+    // 1 — the host is told, so the button comes out of its spin
+    expect(heard).toEqual(['a2ui:run-blocked']);
+    // 3 — the tag is gone from the prose, in the bare form she actually writes
+    expect(shadowText(el)).toContain('The User Role is empty');
+    expect(shadowText(el)).not.toContain('run_blocked');
+    // 2 — and the turn she left behind carries the alarm. Read INSIDE <chat-messages>: the
+    // turns are drawn in that element's own shadow root, not in the panel's.
+    const turns = el.shadowRoot!.querySelector('chat-messages')!.shadowRoot!.querySelectorAll('.turn');
+    const alerts = [...turns].filter((t) => t.classList.contains('alert'));
+    expect(alerts.length).toBe(1);
+    expect(alerts[0].textContent).toContain('The User Role is empty');
+  });
+
+  it('settles the held Run when she says nothing about it at all', async () => {
+    // No tag, no verdict. The run must not go, and the spinner must not hang.
+    const { heard } = await answerWith('That looks like a solid prompt to me.');
+
+    expect(heard).toEqual(['a2ui:run-blocked']);
+  });
+
+  it('owes nothing on a turn that is not a run review', async () => {
+    // The same reply on an ordinary turn dispatches nothing: no host is holding a Run, and an
+    // event out of nowhere would release one nobody asked her about.
+    const { heard } = await answerWith('Fine. <run_blocked>', {});
+
+    expect(heard).toEqual([]);
+  });
+});
+
+describe('<chat-panel> — a button that asks for something the app cannot do', () => {
+  /**
+   * THE WIRE FORMAT LEAKING INTO THE CONVERSATION.
+   *
+   * From the stored conversation of 2026-09-23: she offered
+   * `[Add description](action:set-description|Add a short description for the package)`, the
+   * person pressed it, it did not parse, and it went to the model AS A MESSAGE — so the press
+   * produced a sentence ("I'll add a short description for the package") and a model call, and
+   * whether the work happened came down to whether she also wrote the tag in her reply.
+   *
+   * Three properties, and the third is the one that keeps her answers working: her OWN words
+   * back to her (`confirm`, `not-now`) must still reach her, and they are the same shape as the
+   * commands — one token.
+   */
+  const press = async (action: string) => {
+    const calls = stubFetch();
+    const el = await mount({ conversationId: 'conv-1730' });
+    await settle(el);
+    const heard: any[] = [];
+    const onDesc = (e: Event) => heard.push((e as CustomEvent).detail);
+    window.addEventListener('set-package-description', onDesc as EventListener);
+
+    el.dispatchEvent(new CustomEvent('chat-action-send', {
+      bubbles: true, composed: true, detail: { text: `[${action}]`, turn: 'a turn' },
+    }));
+    await settle(el);
+    window.removeEventListener('set-package-description', onDesc as EventListener);
+    return { el, calls, heard };
+  };
+
+  it('does the description write for HER spelling of the action', async () => {
+    // `set-description|the words` — the form she wrote. One separator, no argument name.
+    const { heard, calls } = await press('set-description|Add a short description for the package');
+    expect(heard).toEqual([{ description: 'Add a short description for the package' }]);
+    // And it did NOT become a turn of its own.
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(false);
+  });
+
+  it('reads the two-part spelling too, so the two forms cannot drift', async () => {
+    const { heard } = await press('set-description:Scouts insurance news.');
+    expect(heard).toEqual([{ description: 'Scouts insurance news.' }]);
+    const { heard: underscored } = await press('set_description:Scouts insurance news.');
+    expect(underscored).toEqual([{ description: 'Scouts insurance news.' }]);
+  });
+
+  it('says a command it cannot do out loud, instead of asking her about it', async () => {
+    const { el, calls } = await press('do-something-odd');
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(false);
+    expect(shadowText(el)).toContain('this app does not know how to do');
+  });
+
+  it('performs the repairs she was offering as invented names', async () => {
+    /*
+     * From the thread of 2026-09-23, four alerts in a row: `move-tool:search-the-internet` and
+     * `clean-agent-role` were pressed and answered with "this app does not know how to do that",
+     * twice each. The intents were right — move the tool to the step it belongs in, replace a
+     * row's text — and the capability was missing, so the person was left with a prompt nobody
+     * could repair from the chat.
+     */
+    const heard: any[] = [];
+    const onMove = (e: Event) => heard.push(['move', (e as CustomEvent).detail]);
+    const onSet = (e: Event) => heard.push(['set', (e as CustomEvent).detail]);
+    const onRemove = (e: Event) => heard.push(['remove', (e as CustomEvent).detail]);
+    window.addEventListener('move-tool', onMove as EventListener);
+    window.addEventListener('set-left-column-text', onSet as EventListener);
+    window.addEventListener('remove-prompt-role', onRemove as EventListener);
+
+    await press('move-tool:search-the-internet|Tool Call');
+    await press('set-seat:Agent Role|You are the news scout.');
+    await press('remove-seat:agent_role');
+
+    window.removeEventListener('move-tool', onMove as EventListener);
+    window.removeEventListener('set-left-column-text', onSet as EventListener);
+    window.removeEventListener('remove-prompt-role', onRemove as EventListener);
+
+    expect(heard).toEqual([
+      ['move', { name: 'search-the-internet', into: 'Tool Call' }],
+      ['set', { target: 'Agent Role', content: 'You are the news scout.' }],
+      ['remove', { roleName: 'agent_role' }],
+    ]);
+  });
+
+  it('does not send an unrecognised command to her, whichever shape it has', async () => {
+    // `move-tool` used to be one of these. Every repair she offers has to name a real action, or
+    // the person presses a button that does nothing and is told so.
+    for (const action of ['clean-agent-role', 'tidy-up', 'fix:the thing']) {
+      const { el, calls } = await press(action);
+      expect(calls.some((c) => c.url.includes('/api/teacher/query')), action).toBe(false);
+      expect(shadowText(el), action).toContain('this app does not know how to do');
+    }
+  });
+
+  it('still sends her own two words to her, which are the same shape', async () => {
+    const { calls } = await press('confirm');
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(true);
+  });
+
+  it('still sends a button that is a plain request', async () => {
+    const { calls } = await press('Review the whole prompt and tell me what is weak');
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(true);
+  });
+
+  it('tells her the package it is asking about, so she stops guessing', async () => {
+    // The description was WRITTEN and she went on saying the package had none: her context
+    // carried the seats and the output and nothing about the package itself. A fact she is
+    // asked to judge has to be a fact she is given.
+    const calls = stubFetch();
+    const el = await mount({
+      conversationId: 'conv-1730',
+      packageTitle: 'Insurance News Scout',
+      packageDescription: 'Scouts insurance industry news.',
+    });
+    await settle(el);
+    el.shadowRoot!.querySelector('chat-input')!.dispatchEvent(new CustomEvent('message-sent', {
+      bubbles: true, composed: true, detail: { text: 'is this package ready' },
+    }));
+    await settle(el);
+
+    const sent = calls.find((c) => c.url.includes('/api/teacher/query'));
+    const body = String((sent?.init?.body as string) ?? '');
+    expect(body).toContain('Insurance News Scout');
+    expect(body).toContain('Scouts insurance industry news.');
+    // And an empty one is STATED, not omitted — "(none)" is a fact, a missing key is a question.
+    const bare = await mount({ conversationId: 'conv-2' });
+    await settle(bare);
+  });
+});
+
+describe('<chat-panel> — a row of buttons is a list, not a choice', () => {
+  /**
+   * THE FEEDBACK A PRESSED BUTTON OWES BACK.
+   *
+   * The owner, 2026-09-23, after pressing "Fill User Role" on a message that also offered "Fill
+   * Agent Role" and "Add description": "when I click Fill User Role that button should change
+   * state ... the user is not necessarily clear that they're having to do each one of those, it
+   * seems like it's an either or, so maybe by deactivating one when it's done that lets the user
+   * know it's a list."
+   *
+   * Three things have to hold, and each is silent when it is wrong: the pressed button reads
+   * spent, it stops answering, and its NEIGHBOURS ARE UNTOUCHED — a rule that greyed the whole
+   * turn would say "that offer is finished" and leave the person with no way to do the rest.
+   */
+  const OFFER = [
+    'The User Role and Agent Role are both empty.',
+    '',
+    '[Fill User Role](action:write-seat:User Role|Write the task)',
+    '[Fill Agent Role](action:write-seat:Agent Role|Write the identity)',
+    '[Add description](action:write-seat:description|One line about this package)',
+  ].join('\n');
+
+  const offered = async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({ content: OFFER }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+    const el = await mount({ conversationId: 'conv-1730' });
+    el.shadowRoot!.querySelector('chat-input')!.dispatchEvent(new CustomEvent('message-sent', {
+      bubbles: true, composed: true, detail: { text: 'what is missing' },
+    }));
+    await settle(el);
+    const child = el.shadowRoot!.querySelector('chat-messages') as unknown as
+      HTMLElement & { updateComplete: Promise<unknown> };
+    for (let i = 0; i < 5; i++) { await Promise.resolve(); await child.updateComplete; }
+    return { el, child };
+  };
+
+  const buttons = (child: HTMLElement) =>
+    [...child.shadowRoot!.querySelectorAll('.action')] as HTMLButtonElement[];
+
+  it('marks the pressed button spent and leaves the rest pressable', async () => {
+    const { el, child } = await offered();
+    expect(buttons(child).length).toBe(3);
+
+    buttons(child)[0].click();
+    await settle(el);
+    for (let i = 0; i < 5; i++) { await Promise.resolve(); await child.updateComplete; }
+
+    const after = buttons(child);
+    expect(after[0].classList.contains('spent')).toBe(true);
+    expect(after[0].disabled).toBe(true);
+    // The rest are the point: this is a list, and they are still waiting.
+    expect(after[1].classList.contains('spent')).toBe(false);
+    expect(after[1].disabled).toBe(false);
+    expect(after[2].classList.contains('spent')).toBe(false);
+  });
+
+  it('presses each one once, and the row reads done at the end', async () => {
+    const { el, child } = await offered();
+    for (const button of buttons(child)) {
+      // Re-read each time: the thread re-renders between presses.
+      const live = buttons(child).find((b) => !b.disabled);
+      expect(live, 'a live button to press').toBeTruthy();
+      live!.click();
+      await settle(el);
+      for (let i = 0; i < 5; i++) { await Promise.resolve(); await child.updateComplete; }
+    }
+    const after = buttons(child);
+    expect(after.every((b) => b.classList.contains('spent'))).toBe(true);
+    expect(after.every((b) => b.disabled)).toBe(true);
+  });
+
+  it('does not carry the marks into another package', async () => {
+    // An action belongs to the thread it was offered in: the next package's thread is a new
+    // one, so a button that shares an action string with the last package's is not spent.
+    const { el, child } = await offered();
+    buttons(child)[0].click();
+    await settle(el);
+    el.sessionId = 'another-package';
+    await settle(el);
+    for (let i = 0; i < 5; i++) { await Promise.resolve(); await child.updateComplete; }
+    expect(buttons(child).every((b) => !b.classList.contains('spent'))).toBe(true);
+  });
+
+  it('does not mark the SAME action in a LATER turn, which is what confirm would hit', async () => {
+    /*
+     * THE REASON THE MARK IS SCOPED TO ONE TURN. Every proposing reply she writes ends with the
+     * same line — `[Confirm](action:confirm) [Not now](action:not-now)` — so a set of actions
+     * alone would draw the SECOND Confirm this conversation ever offered as already pressed, and
+     * the person would watch an answer they never gave appear answered.
+     */
+    const calls = stubFetch();
+    const el = await mount({ conversationId: 'conv-1730' });
+    await settle(el);
+    const child = el.shadowRoot!.querySelector('chat-messages') as unknown as
+      HTMLElement & { updateComplete: Promise<unknown> };
+
+    // Two turns, each ending with the same confirm line, both in the thread.
+    el.messages = [
+      { role: 'assistant', content: 'Add the tool?\n\n[Confirm](action:confirm) [Not now](action:not-now)' },
+      { role: 'assistant', content: 'Name the package?\n\n[Confirm](action:confirm) [Not now](action:not-now)' },
+    ];
+    await settle(el);
+    for (let i = 0; i < 5; i++) { await Promise.resolve(); await child.updateComplete; }
+
+    // Press the FIRST turn's Confirm.
+    buttons(child)[0].click();
+    await settle(el);
+    for (let i = 0; i < 5; i++) { await Promise.resolve(); await child.updateComplete; }
+
+    const after = buttons(child);
+    expect(after[0].classList.contains('spent')).toBe(true);
+    // The second turn's Confirm is a different question and is still waiting.
+    expect(after[2].classList.contains('spent')).toBe(false);
+    expect(after[2].disabled).toBe(false);
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(true);
+  });
+});
+
+describe('<chat-panel> — a tool, and the package description', () => {
+  /**
+   * TWO WRITERS THAT DID NOT EXIST, AND THE INVENTED SYNTAX THEY CAUSED.
+   *
+   * The transcript of 2026-09-23 is the evidence: asked to put a tool in a prompt that named
+   * none, she offered a button that said "Add search tool" and never named one; asked for a
+   * description, she wrote `<set_description>…</set_description>`, which the app had never
+   * heard of, so the description stayed empty while her sentence said it was added.
+   *
+   * The rule these pin is the one the whole file keeps: a sentence and a change are two
+   * different things, and the change is a fact the app can check.
+   */
+  const answerWith = async (content: string) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({ content }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+    const el = await mount({ conversationId: 'conv-1730' });
+    el.shadowRoot!.querySelector('chat-input')!.dispatchEvent(new CustomEvent('message-sent', {
+      bubbles: true, composed: true, detail: { text: 'add the search tool' },
+    }));
+    await settle(el);
+    return el;
+  };
+
+  const heard = (name: string, el: SeatEl) => {
+    const seen: any[] = [];
+    const fn = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener(name, fn as EventListener);
+    return { seen, stop: () => window.removeEventListener(name, fn as EventListener), el };
+  };
+
+  it('turns <insert_tool> into an insertion, by the register\'s own name', async () => {
+    const el = await mount({ conversationId: 'conv-1730' });
+    const seen: any[] = [];
+    const fn = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener('insert-tool', fn as EventListener);
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({
+          content: 'I will put the search tool in. <insert_tool>search-the-internet</insert_tool>',
+        }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+
+    el.shadowRoot!.querySelector('chat-input')!.dispatchEvent(new CustomEvent('message-sent', {
+      bubbles: true, composed: true, detail: { text: 'add the search tool' },
+    }));
+    await settle(el);
+    window.removeEventListener('insert-tool', fn as EventListener);
+
+    expect(seen).toEqual([{ name: 'search-the-internet' }]);
+    // And the tag is not left in the prose for the person to read.
+    expect(shadowText(el)).not.toContain('insert_tool');
+  });
+
+  it('turns <set_description> into a description write, and strips it', async () => {
+    const el = await mount({ conversationId: 'conv-1730' });
+    const seen: any[] = [];
+    const fn = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener('set-package-description', fn as EventListener);
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) {
+        return { ok: true, status: 200, json: async () => ({
+          content: 'Added it. <set_description>Scouts insurance news.</set_description>',
+        }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+
+    el.shadowRoot!.querySelector('chat-input')!.dispatchEvent(new CustomEvent('message-sent', {
+      bubbles: true, composed: true, detail: { text: 'add a description' },
+    }));
+    await settle(el);
+    window.removeEventListener('set-package-description', fn as EventListener);
+
+    expect(seen).toEqual([{ description: 'Scouts insurance news.' }]);
+    expect(shadowText(el)).not.toContain('set_description');
+  });
+
+  it('a write-tool button inserts rather than sending the words to her', async () => {
+    // The button is an EDIT, like write-seat: sending it to her would produce a sentence about
+    // the tool instead of the tool.
+    const calls = stubFetch();
+    const el = await mount({ conversationId: 'conv-1730' });
+    await settle(el);
+    const seen: any[] = [];
+    const fn = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener('insert-tool', fn as EventListener);
+
+    el.dispatchEvent(new CustomEvent('chat-action-send', {
+      // The wire <chat-messages> sends: the ACTION, in brackets — see its _onActionSend.
+      bubbles: true, composed: true, detail: { text: '[write-tool:search-the-internet]' },
+    }));
+    await settle(el);
+    window.removeEventListener('insert-tool', fn as EventListener);
+
+    expect(seen).toEqual([
+      { name: 'search-the-internet' },
+    ]);
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(false);
+  });
+});
+
 describe('<chat-panel> hosts the seat it is given', () => {
   it('draws the slotted seat instead of its own, so a host is never shown two', async () => {
     const seat = document.createElement('div');
