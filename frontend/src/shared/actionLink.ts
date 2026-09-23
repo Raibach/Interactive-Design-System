@@ -209,6 +209,36 @@ export function parseMoveToolAction(action: string): { name: string; into: strin
 }
 
 /**
+ * A BUTTON THAT ASKS HER TO DO THE THING SHE OFFERS: "Review the whole prompt".
+ *
+ * It is not an edit and not one of her answers — it is a REQUEST, and a request has to reach her
+ * as a SENTENCE. She has offered this button since her first message of the session, and pressing
+ * it used to hand her the literal token `review-prompt`; when the app learned to refuse tokens it
+ * did not recognise, the person was told "this app does not know how to do that" instead. Neither
+ * is a review.
+ *
+ * So a small number of tokens are TRANSLATED, and the translation is what she receives. The list
+ * is deliberately short: every entry is a button she was already writing, not a new vocabulary.
+ */
+export const REVIEW_PROMPT = 'review-prompt';
+
+/** What she is asked when that button is pressed — the same review, asked in words. */
+export const REVIEW_PROMPT_REQUEST = [
+  'The person has pressed Review. Read the prompt as it stands, in the workspace above.',
+  'Name something only if it is actually wrong with THIS prompt, and name EVERYTHING that is',
+  'wrong in this same reply — one sentence each, with a button for each fix the person can press.',
+  'Do not recite the requirements and do not congratulate. If nothing is wrong, say that in one',
+  'sentence and offer to run it.',
+].join(' ');
+
+/** A request-token, turned into the words she should receive. Null when it is not one of them. */
+export function requestForAction(action: string): string | null {
+  const name = String(action ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  if (name === REVIEW_PROMPT) return REVIEW_PROMPT_REQUEST;
+  return null;
+}
+
+/**
  * THE TWO WORDS SHE READS BACK — her own answers to her own offer.
  *
  * Her instructions fix them: "The words are fixed: Confirm and Not now." They are not commands

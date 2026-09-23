@@ -70,6 +70,7 @@ import {
   parseMoveToolAction,
   parseSetSeatAction,
   parseRemoveSeatAction,
+  requestForAction,
   HER_ANSWERS,
   NO_ADVICE,
 } from '@/shared/actionLink';
@@ -862,6 +863,16 @@ export class ChatPanel extends LitElement {
       window.dispatchEvent(new CustomEvent('set-left-column-text', {
         detail: { target: replaced.seat, content: replaced.text },
       }));
+      return;
+    }
+    /*
+     * A REQUEST SHE ALREADY OFFERS AS A BUTTON — translated, never handed over as a token.
+     * `review-prompt` has been on her first message of every session since the beginning; see
+     * actionLink's note for why it is a sentence she receives and not a word she reads back.
+     */
+    const asked = requestForAction(action);
+    if (asked) {
+      void this._send(asked);
       return;
     }
     // The one destructive repair, as a button: the same act as `<remove_role name="X"/>`.

@@ -13,6 +13,7 @@
  */
 import { LitElement, html, css, nothing } from 'lit';
 import { asPlainText, stripControlTags } from '@/shared/plainText';
+import { HER_ANSWERS } from '@/shared/actionLink';
 // The user's turn is the design's own row, not a styled div — v.4b draws it as
 // "user-response-bubble" #40001119:6352 and this element draws that element.
 import './user-response-bubble';
@@ -367,12 +368,30 @@ export class ChatMessages extends LitElement {
    */
   private _actionButton(label: unknown, action: unknown, turn: string) {
     const a = String(action);
-    // TWO WAYS A BUTTON IS DONE, and either is enough: the prompt says the work exists, or the
-    // person pressed it in this session. The first survives a reload because the prompt does;
-    // the second covers what the prompt cannot show — an answer to a question. See buttonState.
+    /*
+     * TWO WAYS A BUTTON IS DONE, AND THEY COVER TWO DIFFERENT KINDS OF BUTTON.
+     *
+     * THE PROMPT SAYS SO, for anything that changes it: a seat that was filled, a tool that was
+     * inserted, a description that was written. That survives a reload because the prompt does,
+     * and it is derived rather than remembered — see shared/buttonState.
+     *
+     * THE PERSON PRESSED IT, for the ones the prompt cannot prove: "Check the Figma node" changes
+     * nothing a reader can see, so no amount of reading the prompt will ever mark it. The press
+     * is the only evidence there is.
+     *
+     * AND A PRESS LASTS FOR THE PACKAGE, NOT FOR THE TURN — which is the whole of this fix. The
+     * mark was turn-scoped, so she could re-offer the same item in her next reply and it came
+     * back LIVE, over and over: the owner, 2026-09-23, "she's still not fixing things and then
+     * making that fixed item inactive … it seems to keep it." Her two answer words are the
+     * exception, because `[Confirm]` in a later turn is a different question and must not arrive
+     * already answered — those are named (HER_ANSWERS) and stay turn-scoped.
+     */
+    const answered = HER_ANSWERS.includes(a);
     const spent =
       this.doneActions.includes(a) ||
-      (turn !== '' && this.spentTurn === turn && this.spentActions.includes(a));
+      (answered
+        ? turn !== '' && this.spentTurn === turn && this.spentActions.includes(a)
+        : this.spentActions.includes(a));
     return html`<button
       class="action ${spent ? 'spent' : ''}"
       data-action=${action}
