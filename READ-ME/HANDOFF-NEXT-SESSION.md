@@ -72,9 +72,13 @@ auto-deploys on push.
   judged by Qwen against what the prompt asked; repair runs record the catalog check's verdict
   instead. The Evals view paints NO ground (transparent, per the owner) — `chat-panel.ts`
   scopes it to `.panel.tab-eval`.
-- **Model**: one model serves every mode — Qwen3.5-9B in LM Studio locally, reached by
-  production through an ngrok tunnel. `LOCAL_ASSEMBLY_URL` is set in the Northflank runtime
-  environment to `https://astragalar-santa-unbelligerently.ngrok-free.dev/v1`.
+- **Model**: one model serves every mode — DeepSeek's hosted API (`deepseek-chat`),
+  switched 2026-09-24 because the local Qwen (LM Studio via ngrok) took 17–30s per
+  surface assembly. Provider config: `MODEL_PROVIDERS` in `backend/grace_gui.py`
+  (`DEEPSEEK_API_KEY` in the Northflank runtime env). Measured live: package surface
+  assembly 2.0s, chat replies ~1s. Northflank GPU hosting was ruled out — the account's
+  plan list has no GPU plans and the AI-models API 500s; the owner may chase that with
+  Northflank later. The ngrok tunnel is no longer used by production.
 - **Tunnel caveats (owner knows)**: free-tier URL rotates if ngrok restarts — claim the free
   static domain in the ngrok dashboard and add `--domain=...` to the tunnel command. The Mac
   must stay awake. The tunnel command used: `nohup ngrok http 1234 --log=stdout > /tmp/ngrok-model.log 2>&1 &`.
