@@ -83,9 +83,12 @@ export const getStoredUserId = (): string => {
 /**
  * Store user ID
  */
-export const storeUserId = (userId: string): void => {
+export const storeUserId = (_userId: string): void => {
   try {
-    localStorage.setItem(USER_ID_STORAGE_KEY, userId);
+    // The identity is a constant — see getStoredUserId(). A credential-row id must never
+    // land under this key: the old chat panel read it first and posted it as X-User-ID,
+    // which is how the owner's own conversations started answering "not writable by user".
+    localStorage.setItem(USER_ID_STORAGE_KEY, DEFAULT_USER_ID);
   } catch (error) {
     console.error("Failed to store user ID:", error);
   }

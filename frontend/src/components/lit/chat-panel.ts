@@ -80,6 +80,7 @@ import {
 } from '@/shared/actionLink';
 import { arrivalIsFor, consumeArrival, type Arrival, type ArrivalKind } from '@/shared/arrival';
 import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
+import { getStoredUserId } from '@/services/authService';
 
 interface SeatMessage {
   role?: string;
@@ -2275,17 +2276,12 @@ export class ChatPanel extends LitElement {
   }
 
   private _userId(): string {
-    try {
-      // `grace_user_id` is the key this app WRITES (services/authService.ts). The key this
-      // read first — 'raibach_user_id' — had no writer anywhere in the repository, so every
-      // read and write from this element was silently the development default: an identity
-      // fallback that named a user nobody had chosen.
-      return localStorage.getItem('grace_user_id')
-        || localStorage.getItem('raibach_user_id')
-        || '00000000-0000-0000-0000-000000000001';
-    } catch {
-      return '00000000-0000-0000-0000-000000000001';
-    }
+    // ONE reader of identity, and it is authService's. This element used to read
+    // `grace_user_id` from localStorage first — the key a past login wrote — and a stale
+    // credential-row id went out as X-User-ID, so the backend answered the owner's own
+    // conversation with "not found or not writable by user". getStoredUserId() returns the
+    // one identity the app has: the default owner.
+    return getStoredUserId();
   }
 
   // THERE IS NO WRITER HERE, AND THAT IS THE FIX.
