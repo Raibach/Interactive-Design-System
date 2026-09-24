@@ -158,6 +158,69 @@ class PromptSessionsAPI:
             conn.commit()
             return str(conversation_id)
 
+    def open_console_conversation(self, user_id: str) -> Optional[str]:
+        """A conversation for the console — created when the console has NONE, and never per landing.
+
+        THE CONSOLE PACKAGE IS THE PERSON'S OWN HOME. Their history, settings and preferences live
+        there — and the owner, 2026-09-23, on what is coming: "that chat belongs to it because each
+        user will have a history and settings and preferences for that console and that chat
+        manages those; it also is a global location for their approvals, their conversations with
+        other teammates, but we haven't built that yet." That is why the console's chat reads and
+        writes only this session's conversations.
+
+        WHAT IT IS NOT, ANY MORE: a thread per visit. It used to be called on every landing ("a
+        LANDING STARTS A NEW THREAD … the person arriving at the library gets a fresh conversation
+        whose first words are the console's hello"). The owner, 2026-09-23, having watched the
+        console's list fill up: "there's 23 conversations saved. I can't remove any of them. There
+        should not be any conversation saved unless the user saves it just on the console. Just
+        stop the conversations on the console." Measured in the database that evening: 23 chat rows
+        under the console session, 18 of them with ZERO messages — one per visit, each a place the
+        person's history was not, and a list nobody could use.
+
+        SO A LANDING CONTINUES THE THREAD (see the render-console branch in routes/ai.py, which
+        reads the session row's pointer and calls this only when there is nothing to continue),
+        exactly as `get_or_create_console_tab_conversation` does for Approvals — that one continues
+        a PROCESS, and the chat is now a process too rather than a visit.
+
+        The session row's `conversation_id` pointer is moved to the thread this created, so a
+        reader that uses that column lands on the conversation the chat is actually writing into.
+        """
+        session = self.get_or_create_console_session(user_id)
+        if not session:
+            return None
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO conversations (session_id, user_id, created_by, title, message_count, metadata, tab)
+                VALUES (%s, %s, %s, %s, 0, %s::jsonb, %s)
+                RETURNING id
+                """,
+                (
+                    session["id"],
+                    user_id,
+                    user_id,
+                    "Console — Chat",
+                    json.dumps(
+                        {
+                            "session_type": "console",
+                            "has_prompt_session": False,
+                            "tab": "chat",
+                            # str(): psycopg2 hands back a UUID object, and json.dumps refuses it.
+                            "prompt_session_id": str(session["id"]),
+                        }
+                    ),
+                    "chat",
+                ),
+            )
+            conversation_id = cursor.fetchone()["id"]
+            cursor.execute(
+                "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                (conversation_id, session["id"]),
+            )
+            conn.commit()
+            return str(conversation_id)
+
     def get_or_create_console_session(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         The user's CONSOLE session — the owner of the console chat's conversations.
@@ -207,9 +270,24 @@ class PromptSessionsAPI:
 
                 cursor.execute(
                     """
-                    SELECT id, user_id, title, conversation_id, metadata, created_at
-                    FROM prompt_sessions
-                    WHERE user_id = %s AND metadata->>'session_type' = 'console'
+                    SELECT ps.id, ps.user_id, ps.title,
+                           c.id AS conversation_id, ps.metadata, ps.created_at
+                    FROM prompt_sessions ps
+                    -- THE POINTER IS CHECKED, EXACTLY AS `get_session` CHECKS IT.
+                    --
+                    -- `conversation_id` is a legacy pointer column and it may name a conversation
+                    -- belonging to ANOTHER package. `get_session` grew this guard on 2026-09-18
+                    -- (`AND c.session_id = ps.id`) after that was measured; the console's own read
+                    -- never got it, and the console is the seat where it matters most — its chat
+                    -- binds whatever this returns. Without the guard a stale or foreign pointer
+                    -- has the console loading a PACKAGE's conversation as its own, which is the
+                    -- owner's "the chats are not global, they're specific for the package, and
+                    -- console has its own package" broken in the database.
+                    --
+                    -- A pointer that is not this row's own conversation now reads as NO
+                    -- conversation, and the branch below opens the console's own instead.
+                    LEFT JOIN conversations c ON ps.conversation_id = c.id AND c.session_id = ps.id
+                    WHERE ps.user_id = %s AND ps.metadata->>'session_type' = 'console'
                     """,
                     (user_id,),
                 )

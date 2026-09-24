@@ -129,8 +129,67 @@ export class WorkspaceLayout extends LitElement {
     this._openOwnedByOperator = true;
     if (this._isThirdOpen === next) return;
     const previous = this._isThirdOpen;
+    /*
+     * THE WIDTH SHE IS CLOSING FROM IS MEASURED IN THIS FRAME, because a frame later it does not
+     * exist: the pane is then mid-slide and its current width is whatever the curve is passing
+     * through. It is the number her PANEL is held at while she is away — see `_slab` — so it has
+     * to be taken while it is still true.
+     *
+     * On opening it is cleared instead: the slab is over the moment she is a column again, and
+     * the panel must follow the pane's width (a drag, a saved width, the equal shares) from the
+     * first frame of that move.
+     */
+    if (next) this._slabWidthPx = null;
+    else this._measureSlabWidth();
     this._isThirdOpen = next;
     this.requestUpdate('isThirdOpen', previous);
+  }
+
+  /**
+   * THE WIDTH HER PANEL KEEPS WHILE HER COLUMN IS SHUT — the whole of the rail collapse.
+   *
+   * MEASURED 2026-09-23 on the console, sampling `.pane.right` and the panel inside it every
+   * 40ms through a rail collapse, and it is why this exists:
+   *
+   *   t=+0     pane 907  panel 803   panel x 1100
+   *   t=+80    pane 691  panel 587   panel x 1324
+   *   t=+160   pane 461  panel 357   panel x 1560
+   *   t=+240   pane 295  panel 191   panel x 1730
+   *   ...
+   *   t=+800   pane 104  panel   0   panel x 1924
+   *
+   * The pane and the panel animate on the same curve — but the panel's BOX is the width its
+   * content lives in, so every frame of that slide was a RE-LAYOUT of the thread and the input
+   * bar: 803 → 587 → 357 → 0, the whole of the chat crunching to nothing in about 200ms while
+   * the column's edge took 760ms to travel. The owner: "the actual contents of that container
+   * disappear instantly, and so you're left with an empty container and an edge … it should
+   * slide shut as a complete component, not in pieces."
+   *
+   * SO THE PANEL IS A SLAB. While she is shut, this element holds the panel at the width it had
+   * open; the pane narrows to its rail as it always did, and the panel simply OVERFLOWS it —
+   * nothing is squeezed and nothing inside it re-lays-out, so the column reads as one object
+   * sliding out of the room, the rail arriving at the edge as its leading face. The pane does
+   * not clip (it must not: the rail's shadow is cast beyond it), and the part of the slab that
+   * travels past the shell's right edge is clipped by the shell, which is what a door
+   * disappearing into a wall looks like.
+   *
+   * NOT SET BY A DRAG: a hand on the divider is sizing her, and while it moves she is open
+   * (`_onGripDown` opens her), so the slab is not written and the panel follows the pointer
+   * exactly as it always has.
+   */
+  private _slabWidthPx: number | null = null;
+
+  private _measureSlabWidth(): void {
+    const pane = this.renderRoot.querySelector('.pane.right') as HTMLElement | null;
+    const width = Math.round(pane?.getBoundingClientRect().width ?? 0);
+    /*
+     * A COLUMN ALREADY ON ITS RAIL IS NOT A WIDTH TO SLIDE FROM. A drag released at the floor
+     * closes her AFTER the hand has narrowed her, so the number read here is the rail — and
+     * holding the panel at that would squeeze the contents, which is the fault this removes. The
+     * last width she was really open at stands; if she has not been open in this shell at all,
+     * there is no slab and the pane's own behaviour is unchanged.
+     */
+    if (width > WorkspaceLayout.MIN_RIGHT_PX + WorkspaceLayout.SNAP_PX) this._slabWidthPx = width;
   }
 
   /**
@@ -171,6 +230,13 @@ export class WorkspaceLayout extends LitElement {
    * opens her again (the owner's number, 2026-09-18).
    */
   private static readonly OPEN_CHAT_PX = 650;
+  /**
+   * HER SHARE OF THE ROOM WHEN SHE IS A LAYER OVER A DRAWING — the drawing takes the other
+   * two thirds. See the note at `rightStyle`: what she covers is the thing being worked, and
+   * at half the pair the drawing composed into a box it had to share, putting the brain on
+   * the seam. A percentage rather than a number because a layer has no flex to share.
+   */
+  private static readonly OVER_DRAWING_SHARE = 33.333;
 
   /**
    * THE NARROWEST THE PROMPT MAY BE BEFORE IT STOPS BEING A PROMPT.
@@ -363,7 +429,7 @@ export class WorkspaceLayout extends LitElement {
      * stayed open over the drawing. The owner, 2026-09-23: "on run in all instances … they should
      * collapse."
      */
-    window.addEventListener('flow-view-ready', this._dockNow as EventListener);
+    window.addEventListener('flow-view-ready', this._onFlowViewReady);
     /*
      * AND A RUN CAN BE STOPPED BEFORE IT STARTS. The host holds a Run and asks the person's
      * assistant to check the prompt first; when it is held, no canvas is coming and the dock
@@ -378,8 +444,19 @@ export class WorkspaceLayout extends LitElement {
      * when there is something for it to reveal.
      */
     window.addEventListener('a2ui:run-held', this._onRunHeld);
-    // The host that swaps its middle column on a Run says when the new one is up.
-    this.addEventListener('flow-select', this._onFlowSelect as EventListener);
+    /*
+     * AND `flow-select` IS NOT LISTENED FOR HERE ANY MORE.
+     *
+     * It was, to bring her column back when a person picked a node — at her width, taking the
+     * room out from under the drawing they were looking at. The owner, 2026-09-23: "every time
+     * you click a node the chat opens and I don't want that. Instead, I want the chat icon to
+     * flash slowly when there is a message that Grace has, and then the user can choose to open
+     * it and read it or ignore it."
+     *
+     * The pick still has something to say: the host writes what the node is into the seat's
+     * status line, and the seat raises the rail's slow pulse while it is folded away. The
+     * layout's interest in a pick is nothing, deliberately.
+     */
   }
 
   disconnectedCallback(): void {
@@ -397,8 +474,7 @@ export class WorkspaceLayout extends LitElement {
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);
     window.removeEventListener('a2ui:run-held', this._onRunHeld);
-    window.removeEventListener('flow-view-ready', this._dockNow as EventListener);
-    this.removeEventListener('flow-select', this._onFlowSelect as EventListener);
+    window.removeEventListener('flow-view-ready', this._onFlowViewReady);
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
     /*
      * A DRAG CANNOT OUTLIVE THE ELEMENT. Re-rendering the surface replaces this
@@ -448,9 +524,21 @@ export class WorkspaceLayout extends LitElement {
   private _rightPanel: HTMLElement | null = null;
 
   private _syncRightPanel(): void {
-    const el = this._rightPanel as unknown as { collapsed?: boolean } | null;
+    const el = this._rightPanel as (HTMLElement & { collapsed?: boolean }) | null;
     if (!el) return;
     el.collapsed = !this.isThirdOpen;
+    /*
+     * AND THE SLAB — the panel keeps the size it had open, so the collapse slides it out of the
+     * room instead of crushing it. See `_slabWidthPx` for the measurement this comes from.
+     *
+     * An INLINE WIDTH on the element, because that is the fact and there is nowhere else to put
+     * it: the pane's width is a flex share that this element already animates, and the panel
+     * inside it is a plain block child — its width IS the pane's, which is exactly what has to
+     * stop being true while the column is shut. Written here, cleared when she opens, and
+     * cleared for a shell that never had her open (no measurement, no slab).
+     */
+    if (this.isThirdOpen || !this._slabWidthPx) el.style.removeProperty('width');
+    else el.style.width = `${this._slabWidthPx}px`;
   }
 
   /**
@@ -588,14 +676,6 @@ export class WorkspaceLayout extends LitElement {
    * are the conversation's business (AGENTIC_EDITOR/06 is the open question), and this element
    * owns exactly one fact — whether she is there, and how wide.
    */
-  private _onFlowSelect = (e: Event): void => {
-    if (!this._hasRight) return;
-    const nodeId = (e as CustomEvent).detail?.nodeId;
-    if (!nodeId) return;
-    // A pick brings her back when she is away — at her width — and leaves a column that is
-    // already on screen exactly as wide as the operator made it.
-    if (!this.isThirdOpen) this._openThird();
-  };
 
   /**
    * The spacer's gesture, with the pointer's position in the detail. START takes hold
@@ -685,6 +765,10 @@ export class WorkspaceLayout extends LitElement {
       this._dockTimer = null;
     }
     this._leftOwnedByOperator = this._leftOwnedBeforeRun;
+    // AND NOTHING IS IN FLIGHT, so the room must not say it is waiting for a drawing that is not
+    // coming: a held Run drew no canvas and took no room (the dock was cancelled with the timer).
+    this._runInFlight = false;
+    this.requestUpdate();
   };
 
   /** The dock, once — from the host's signal or from the fallback, whichever arrives first. */
@@ -694,6 +778,55 @@ export class WorkspaceLayout extends LitElement {
       this._dockTimer = null;
     }
     this._dockLeft();
+    /*
+     * BOTH SIDES GO TO THEIR EDGES AND THE DRAWING TAKES THE ROOM.
+     *
+     * The owner, 2026-09-23, watching a Run: "we're just gonna have to collapse Grace … at the
+     * same time we click run and just expose the whole canvas … I want both the left and the
+     * right side to collapse to the edges of the browser." The prompt already docked here; her
+     * column did not, so the canvas was composed around a pane it shared and its own brain
+     * landed on the seam between them.
+     *
+     * THIS DOES NOT CLAIM HER AS THE OPERATOR'S (`_openOwnedByOperator` stays as it was). A Run
+     * is the HOST's act, not a hand's — a drag is what claims a column — so the payload may
+     * still open her, and `openPrompt` hands the next package an open column (see there).
+     */
+    this._setThirdOpen(false);
+    this._syncRightPanel();
+    /*
+     * AND THE ROOM SAYS IT IS WORKING FROM THE MOMENT IT IS EMPTY.
+     *
+     * The column that will fill this room is ASSEMBLED — the model composes it, which is seconds —
+     * so between the doors opening and the canvas arriving there was nothing here at all. The
+     * owner, 2026-09-23, watching exactly that: "it opens up the doors, slides the panel back on
+     * the left and the right … and there's nothing but my background. There's no spinner. There's
+     * no assembly. There's nothing, it's just blank, and then all of a sudden the assembly starts.
+     * There's got to be some kind of delay."
+     *
+     * There was no delay — there was nothing SAID. So the room speaks for itself while it waits,
+     * and it stops the moment it has content to show (the canvas, which then says the same thing
+     * itself until the drawing lands). See `.pane.middle.working` in render().
+     */
+    this._runInFlight = true;
+    this.requestUpdate();
+  };
+
+  /**
+   * IS A RUN'S ROOM OPEN WITH NOTHING IN IT YET? The layout's own two facts: it performed the dock
+   * (`_runInFlight`, set above and cleared on the host's ready signal or a held Run) and its middle
+   * slot has no content (`_hasMiddle`, read from the slot). Nothing here is about the canvas — the
+   * canvas does not exist yet in the window this covers.
+   */
+  private _runInFlight = false;
+
+  /**
+   * THE DRAWING IS ON SCREEN, so the room is done waiting: the wait state ends here and the list's
+   * own dock (which this signal also carries) still lands. One handler, because both are statements
+   * about the same moment.
+   */
+  private _onFlowViewReady = (): void => {
+    this._runInFlight = false;
+    this._dockNow();
   };
 
   /**
@@ -746,8 +879,43 @@ export class WorkspaceLayout extends LitElement {
       window.clearTimeout(this._dockTimer);
       this._dockTimer = null;
     }
+    /*
+     * THE ROOM IS OPEN AND NOTHING IS IN IT YET — said HERE, because this is the path the host
+     * actually uses. `_runInFlight` was first set in `_dockNow`, which is the FALLBACK dock (the
+     * run-click timer and the ready signal); `dockPrompt()` is the host's own call and it never
+     * passed through it, so the room's waiting state never appeared on a real Run — measured by the
+     * owner staring at it: "when I click run the panels slide back, I'm staring at a blank
+     * background with nothing on it, and then about two or three seconds later finally the canvas
+     * starts assembling."
+     *
+     * Both docks set it now. It is one fact — a room was opened for a Run and has no column in it
+     * yet — and it ends when the room has content or the Run is called off.
+     */
+    this._runInFlight = true;
     this._dockLeft();
-  }
+    /*
+     * HER COLUMN IS ALREADY CLOSED IN THIS SAME FRAME — `_setThirdOpen(false)` four lines below
+     * does it, and that is the ORDER the owner asked for. IT DOES NOT REACH HER, and that is the
+     * open defect (READ-ME/CONTINUE-HERE.md §00b, "the assembly cannot be stacked"):
+     *
+     * The composer surface tree carries `"isThirdOpen": true` on its workspace-layout
+     * (backend/routes/ai.py:994 — the console's carries false at :629). Every published update
+     * writes that into this element, so the dock is re-asserted AWAY a frame after it lands, and
+     * her column does not move until the CANVAS's own update arrives — which is why the two sides
+     * fall 800ms apart and why her side then changes unit mid-flight (flex pane -> absolute layer)
+     * and teleports 183px. One fact — is her column open — with two writers, and the payload wins.
+     *
+     * The fix is the owner's own: assemble in order and do not stack. The payload stops asserting
+     * her state for the duration of a Run (one writer: the layout), both sides seat, the middle
+     * holds a spinner on the background while it waits, and only then is the drawing published —
+     * into a layout that has already settled, which is how the prompt's own fold was cured.
+     */
+    this._setThirdOpen(false);
+    this._syncRightPanel();
+    // AND THE RENDER THAT SHOWS IT. `_setThirdOpen` only requests one when the flag MOVED, so a
+    // dock from an already-closed column (a second Run) would leave the waiting state unrendered.
+    this.requestUpdate();
+  };
 
   /** Collapse the left pane to its floor. */
   private _dockLeft(): void {
@@ -983,6 +1151,24 @@ export class WorkspaceLayout extends LitElement {
     this._leftOwnedByOperator = false;
     this._setLeftCollapsed(false);
     this._left = 1;
+    /*
+     * AND HER COLUMN'S OWNERSHIP IS HANDED BACK, WHICH IS NOT THE SAME AS OPENING IT.
+     *
+     * A RUN COLLAPSES BOTH SIDES TO THEIR EDGES (see _dockNow — the owner, 2026-09-23: "I want
+     * both the left and the right side to collapse to the edges of the browser"). This element
+     * is REUSED across packages, so after a Run the next package must be free to open her
+     * again — and the thing that decides that is the PAYLOAD, not this method: the composer's
+     * tree says `isThirdOpen: true` and the console's says false, and the setter refuses a
+     * payload write only while `_openOwnedByOperator` holds (a hand's drag, which still wins).
+     *
+     * THIS USED TO OPEN HER HERE, and that was a bug with a visible symptom: `openPrompt` runs
+     * on EVERY load — the host calls it before its own "is there a package?" guard, on purpose,
+     * so a package with no saved workspace still opens with its prompt visible — so the console
+     * opened with her column thrown open as well, which nobody asked for ("the chat box is
+     * opening on load on the console, no one asked for that", owner, 2026-09-23). The cure is
+     * the one this comment states: hand the fact back to the payload instead of deciding it.
+     */
+    this._openOwnedByOperator = false;
     // AND THE SPLIT STARTS OVER: the next pass gives the two columns equal room again, unless a
     // saved width arrives in the same breath (`setColumnWidths`, which the host calls after this).
     // Without this, one package's adjustment would be the next package's starting layout.
@@ -1068,9 +1254,18 @@ export class WorkspaceLayout extends LitElement {
          One curve, one duration, for every pane move in the shell.
          Ease accelerates and stops — it lands like a slap. This curve
          leaves fast and decelerates hard into the stop, so a pane arrives
-         rather than halts. Slow enough to read as movement, not as a jump. */
+         rather than halts. Slow enough to read as movement, not as a jump.
+
+         760ms, NOT 520: the owner, 2026-09-23, watching the two sides part on a Run —
+         "just give me a little animation ease on those boxes sliding back to the right and
+         left. They're kind of fast. I want them to ease back, smooth and contemplative."
+         The curve was already the settle; the duration was what made it read as a snap.
+         RUN_DOCK_MS in WritingAreaIndex is the SAME NUMBER and must move with this one:
+         it is how long the run waits for the prompt to fold before the drawing is
+         published, so a longer fold with a shorter wait would put the canvas on screen
+         mid-slide. */
       --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
-      --dur-pane: 520ms;
+      --dur-pane: 760ms;
     }
 
     .pane {
@@ -1139,6 +1334,34 @@ export class WorkspaceLayout extends LitElement {
     .pane.right {
       overflow: visible;
     }
+    /*
+     * HER LAYER OVER THE DRAWING, KEPT — and the jerk it used to cause is fixed by ORDER, not by
+     * taking the layer away.
+     *
+     * She is position:absolute with a width whenever an <agent-canvas> stands in the middle, so
+     * the drawing runs UNDER her: the file's own rule, "the canvas does not respond to anything on
+     * the right-hand side. It always covers it", and the z-index below is what keeps the drawing's
+     * controls behind her. The overlay is the design — a panel that slides back and still hangs
+     * over the room is the Japanese-house effect this whole layout is built on.
+     *
+     * WHAT WENT WRONG was not this rule but WHEN it engaged. A pane cannot be transitioned from
+     * flex-grow to width, so at the moment the canvas mounted her unit changed mechanism and she
+     * TELEPORTED — measured, sampling .pane.right every 40ms through a Run, 2026-09-23:
+     *
+     *   t=3449…3921   x 643 -> 670   width 637 -> 610   static    transition: flex-grow   smooth
+     *   t=3921->4529  x 670 -> 853   width 610 -> 427   absolute  transition: width       THE JERK
+     *   t=4529…5162   x 853 -> 1176  width 427 -> 104   absolute  transition: width       smooth
+     *
+     * and the owner, three times: "they shouldn't jerk like that", "replicate the left side on the
+     * right, point for point", "it should slide like a door being slid back."
+     *
+     * THE CURE IS THE ONE THE LEFT ALREADY GOT: order. The left used to jump for the same reason
+     * and was fixed by folding it BEFORE the drawing is published, so the canvas mounts into a box
+     * that is already settled (see the FLIP note above). She needs the same thing and now has it —
+     * docks her in the same frame it docks the prompt, so by the time this rule engages she is already ON her rail: the mechanism changes, and both mechanisms compute the
+     * same number, so nothing moves. Her open width is never switched mid-flight, because a Run
+     * never leaves her open.
+     */
     .pane.right.over {
       position: absolute;
       top: 0;
@@ -1181,6 +1404,60 @@ export class WorkspaceLayout extends LitElement {
        No backticks in this comment, deliberately: this is a Lit css literal. */
     .pane.middle.collapsed {
       overflow: hidden;
+    }
+    /* THE ROOM'S OWN WAITING STATE — see the waiting flag in render(). No fill of its own: what stands
+       behind it is the person's ground, which must stay visible while the column is assembled
+       (the owner, 2026-09-23: "It should be transparent. I should be able to see the background
+       while it's assembling the canvas"). Centred, because this is the whole of what the pane
+       says while it waits. The spinner and the sentence are the canvas's own, deliberately —
+       the pane hands the story to the column that arrives without changing a word of it. */
+    .pane.middle.working {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .waiting {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      pointer-events: none;
+      /* IN THE DOM ALWAYS, MOVED BY CSS, so the two cross instead of swapping: the canvas fades up
+         on its own mount (agent-canvas, canvas-arrives) and this fades out underneath it over the
+         same 760ms. Removed from the DOM instead, it would vanish in the frame the canvas mounted
+         and leave the room empty for the length of that fade. Visibility is delayed on the way out
+         for the same reason it is in the chat panel's collapse: the fade must be SEEN. */
+      opacity: 0;
+      visibility: hidden;
+      transition:
+        opacity var(--dur-pane) var(--ease-settle),
+        visibility 0s linear var(--dur-pane);
+    }
+    .pane.middle.working .waiting {
+      opacity: 1;
+      visibility: visible;
+      transition:
+        opacity var(--dur-pane) var(--ease-settle),
+        visibility 0s linear 0s;
+    }
+    .waiting p {
+      margin: 0;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.72);
+    }
+    .spinner {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.22);
+      border-top-color: rgba(255, 255, 255, 0.85);
+      animation: waiting-spin 900ms linear infinite;
+    }
+    @keyframes waiting-spin {
+      to { transform: rotate(360deg); }
     }
 
     /* When the left column is docked to its rail, collapse the slotted content
@@ -1269,7 +1546,42 @@ export class WorkspaceLayout extends LitElement {
   }
 
   render() {
-    const middleGrow = this._hasMiddle ? this._middle : 0;
+    /*
+     * WHEN THE PROMPT DOCKS, THE ROOM IT GIVES UP IS THE MIDDLE'S — NOT HERS.
+     *
+     * `_dockLeft` zeroes the prompt's share and says the leftover "goes to whoever grows: the
+     * canvas when there is one, and her column when there is not". The second half is what the
+     * owner watched on every Run, 2026-09-23: "the agent prompt on the left side, when it
+     * collapses, pulls the chat all the way over … and then the chat slides all the way back."
+     *
+     * The canvas does not exist yet at that moment — the dock runs first and the drawing is
+     * published RUN_CANVAS_AFTER_DOCK_MS later — so `_hasMiddle` is false, the middle has no grow
+     * to absorb with, and her pane takes all 1220 of the freed pixels: she slides from her half to
+     * the prompt's edge and back again when the canvas lands. The dock is supposed to look like
+     * ONE movement (two sides parting, the middle opening between them), and it looked like her
+     * column being dragged across the screen and thrown back.
+     *
+     * So while the prompt is docked the MIDDLE holds the space, whether or not the canvas has
+     * arrived in it yet — the column is already the canvas's place, and an empty stretch of it for
+     * one beat reads as the picture coming, which is what it is. She keeps her own width and her
+     * own edge, and the dock is the only thing that moves.
+     */
+    const middleGrow = this._hasMiddle ? this._middle : (this._leftCollapsed ? 1 : 0);
+    /*
+     * AND WHILE THE ROOM IS EMPTY, THE ROOM SPEAKS — the one thing on screen that can.
+     *
+     * A RUN'S COLUMN IS ASSEMBLED, so the room it takes is empty for the seconds the model spends
+     * composing it; before this, that stretch showed the person their own background and nothing
+     * else — no spinner, no sentence, no sign the application had heard the click ("and then all of
+     * a sudden the assembly starts"). The canvas cannot say it: it does not exist yet. This element
+     * can, because it is the thing that OPENED the room (`_runInFlight`, set by its own dock).
+     *
+     * IT ENDS WHEN THE ROOM HAS CONTENT — the canvas arrives, `_hasMiddle` turns true, and the
+     * canvas's own held state says the same sentence until the drawing lands. Nothing is torn down
+     * mid-sentence: the sentence is the same, from the pane that was there and then from the column
+     * that arrived.
+     */
+    const waiting = this._runInFlight && !this._hasMiddle;
     /*
      * HER COLUMN'S WIDTH IS A NUMBER, and it is a WIDTH — not a share of the flex line. See
      * _rightPx, and see the .pane.right rule: she is a LAYER over the drawing, so this width
@@ -1288,11 +1600,18 @@ export class WorkspaceLayout extends LitElement {
      */
     const rightOver = this._rightOverDrawing;
     /*
-     * AS A PANE SHE GROWS ONLY WHEN NOTHING ELSE CAN ABSORB THE REMAINDER: with the prompt
-     * docked and no canvas beside her — the beat before a Run's middle column arrives — the
-     * leftover has to land somewhere, and hers is the only pane left that can take it.
+     * SHE NO LONGER ABSORBS THE DOCK'S LEFTOVER, AND THIS VARIABLE IS WHY IT IS GONE.
+     *
+     * It read `!rightOver && isThirdOpen && _leftCollapsed` — as a pane she grew whenever the
+     * prompt was docked and no drawing stood beside her, because "the leftover has to land
+     * somewhere, and hers is the only pane left that can take it". That was true while the middle
+     * had no grow without a canvas in it. It is not true any more: the middle holds the space the
+     * dock frees (see middleGrow above), which is the column the canvas is about to fill — so the
+     * leftover has somewhere better to land, and her column keeps its width and its edge.
+     *
+     * The behaviour it was written for is the one the owner objected to: her pane growing to the
+     * prompt's edge for the beat between the dock and the drawing, then being thrown back.
      */
-    const rightAbsorbs = !rightOver && this.isThirdOpen && this._leftCollapsed;
     /*
      * HER BOX, SIZED TWO WAYS, and it has to be written HERE because an inline style beats every
      * selector — the measured case was an empty right pane at 526px with the class applied and
@@ -1313,19 +1632,41 @@ export class WorkspaceLayout extends LitElement {
      * resize when you resize the browser, she stays open, which forces the prompt side to crush
      * and collapse — so it should be an equal flex for both on browser resize."
      *
-     * A share on the flex line for a pane, and half the room for a layer (an absolutely
-     * positioned box has no flex to share, and 50% needs no JavaScript to follow a resize).
-     * `_rightPx` is only consulted once somebody has chosen it — a drag, or a saved package.
+     * A share on the flex line for a pane, and a share of the room for a layer (an absolutely
+     * positioned box has no flex to share, and a percentage needs no JavaScript to follow a
+     * resize). `_rightPx` is only consulted once somebody has chosen it — a drag, or a saved
+     * package.
+     *
+     * OVER A DRAWING SHE TAKES A THIRD, NOT HALF — the owner, 2026-09-23, watching a Run:
+     * "It should be pushing the agent prompt slider to the left and reducing the size of the
+     * chat on the right." What she is over is the thing being worked: the drawing is the
+     * primary surface of a Run and the conversation is what a node has to say when a person
+     * touches one (agent-canvas's own note). At half, the canvas was composed into a box it
+     * shared with her and the brain landed on the seam between them — measured: a 1535px box
+     * with 768px visible. A third leaves the drawing two thirds, and the drawing now fits
+     * itself to exactly this share (agent-flow's viewportInset, which the host measures).
+     * Her own number, once she has one (a drag, or a saved package), still wins.
      */
     // AND ONLY WHEN SHE IS OPEN. A closed column is its floor — the rail plus the spacer — and
     // that is not a share of anything. (Caught by the layer test: without the open check, a
-    // closed column kept `width: 50%` and drew itself as half the drawing with the rail inside it.)
+    // closed column kept a share and drew itself as most of the drawing with the rail inside it.)
     const equal = !this._rightIsOperatorSet && this.isThirdOpen;
+    /*
+     * HER TWO FORMS, AND WHY THEY NO LONGER TELEPORT INTO EACH OTHER.
+     *
+     * As a PANE she is a share of the flex line (or her own number, once somebody has chosen
+     * one); over a DRAWING she is a LAYER with a width. Different mechanisms — a pane cannot be
+     * transitioned from flex-grow to width — so switching between them mid-flight moved her
+     * 183px in one frame. What makes the switch safe is that it never happens while she is
+     * MOVING: `dockPrompt` closes her in the same frame it closes the prompt, so by the time the
+     * drawing is published and this branch turns on, she is already on her rail and both
+     * mechanisms compute the same number. Same cure the prompt's fold got — order, not a trick.
+     */
     const rightStyle = rightOver
-      ? (equal ? 'width: 50%;' : `width: ${this._hasRight ? rightWidth : 0}px;`)
+      ? (equal ? `width: ${WorkspaceLayout.OVER_DRAWING_SHARE}%;` : `width: ${this._hasRight ? rightWidth : 0}px;`)
       : (equal
           ? `flex: 1 1 0%; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`
-          : `flex: ${rightAbsorbs ? 1 : 0} 1 ${rightWidth}px; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`);
+          : `flex: 0 1 ${rightWidth}px; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`);
     const minLeft = WorkspaceLayout.MIN_LEFT_PX;
     /*
      * THE 60px FLOOR IS THE COLLAPSED WIDTH, so it holds in BOTH states.
@@ -1352,7 +1693,7 @@ export class WorkspaceLayout extends LitElement {
      * Normalising changes no proportion — 0.68 : 1.32 is the same split as
      * 0.34 : 0.66 — it only guarantees the open panes sum to the whole.
      */
-    const growTotal = this._left + middleGrow + (rightAbsorbs ? 1 : 0);
+    const growTotal = this._left + middleGrow;
     const share = (g: number) => (growTotal > 0 ? g / growTotal : 0);
     /*
      * A COLLAPSED PROMPT IS ITS RAIL, WHATEVER SET THE FLAG.
@@ -1409,7 +1750,20 @@ export class WorkspaceLayout extends LitElement {
       ${this._hasMiddle
         ? html`<div class="gripper" @mousedown=${(e: MouseEvent) => this._onGripDown('left', e)}></div>`
         : nothing}
-      <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'}" style="flex: ${share(middleGrow)} 1 0%;"><slot name="middle" @slotchange=${this._onMiddleSlotChange}></slot></div>
+      <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'} ${waiting ? 'working' : ''}" style="flex: ${share(middleGrow)} 1 0%;">
+        <slot name="middle" @slotchange=${this._onMiddleSlotChange}></slot>
+        <!-- THE ROOM SAYS IT IS WORKING WHILE IT WAITS FOR ITS COLUMN — see the waiting flag.
+             The wait is the MODEL composing the column (seconds), then the drawing (see the host's
+             sequence), so this is the window in which the panes have just slid back and there is
+             nothing here yet. Nothing is painted behind it: the person's own ground shows through,
+             which is the rule for this view. -->
+        ${waiting
+          ? html`<div class="waiting" role="status">
+              <div class="spinner" aria-hidden="true"></div>
+              <p>Assembling the drawing…</p>
+            </div>`
+          : nothing}
+      </div>
       <!-- THE RIGHT COLUMN IS THE DESIGN'S CONTAINER, and this spacer is its FIRST
            CHILD — a sibling of the panel, not a neighbour of the column.
 

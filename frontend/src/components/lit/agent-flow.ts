@@ -43,10 +43,16 @@
  */
 import { LitElement, html, css, nothing, svg } from 'lit';
 import { designTokens } from '@/shared/design-tokens';
-import { CREATABLE_KINDS, NODE_TILE, type FlowGraph, type FlowNode } from '@/shared/agentFlow';
+import { CREATABLE_KINDS, NODE_FOOTPRINT, NODE_TILE, positionKey, type FlowGraph, type FlowNode } from '@/shared/agentFlow';
 import canvasArt from '@/assets/agent-canvas-art.jpg';
 
-const LABEL_BLOCK = 54;
+/*
+ * THE LABEL BLOCK USED TO BE 54, HERE. It is NODE_FOOTPRINT's other half now, in
+ * shared/agentFlow.ts — because the module that PLACES a node needs it (a ring has to clear a
+ * node, not a tile) and this file was the only one that knew it. One fact, one reader: everything
+ * in this element that asks how tall a node is reads NODE_FOOTPRINT, which is what the model
+ * spaces by, so the two can no longer disagree.
+ */
 /** How far the connection curve leaves a port before it bends. */
 const CURVE = 48;
 /** Room past the last node for the layer's box: a curve's overshoot and a node in motion. */
@@ -99,6 +105,18 @@ export class AgentFlow extends LitElement {
     mode: { type: String, attribute: 'mode', reflect: true },
     /** True while the hand is holding the canvas — the grabbing cursor. */
     panning: { type: Boolean, state: true },
+    /**
+     * HOW MUCH OF THIS ELEMENT'S BOX IS COVERED — her column is a LAYER over the drawing
+     * whenever a Run is on screen (workspace-layout's `.pane.right.over`), so this element's
+     * box is wider than the pane a person can see. THE HOST MEASURES IT from the two boxes
+     * and writes it here; nothing about either column's width is assumed or guessed.
+     *
+     * WHY IT MATTERS, measured 2026-09-23: a 1535px box with 768px visible put the brain at
+     * x≈789 and the whole right half of the ring behind her column — so the hub sat on the
+     * seam and could not be grabbed, which reads as "the nodes are fixed". The view composes
+     * into what can be seen; the drawing still owns every pixel of the element.
+     */
+    viewportInset: { type: Number, attribute: false },
     /** Protected: selection is the operator's, never the payload's. */
     selectedId: { type: String, attribute: false },
     zoom: { type: Number, attribute: false },
@@ -110,15 +128,25 @@ export class AgentFlow extends LitElement {
   declare theme: string;
   declare mode: string;
   declare panning: boolean;
+  /** Pixels of this element's right-hand side covered by her column (see the property note). */
+  declare viewportInset: number;
   declare selectedId: string | null;
   declare zoom: number;
   declare panX: number;
   declare panY: number;
 
-  /** Drag-positions, by node id. The only state this element owns. */
+  /**
+   * Drag-positions, filed by POSITION KEY and not by node id. The only state this element owns.
+   *
+   * A seat's id carries the SLOT it sits in (`seat:<i>:<kind>`), so a row that moves up the stack
+   * is handed back under a different id — and an id-keyed map would move whatever row took the
+   * slot instead of the one the person dragged. positionKey is the same key the model files a
+   * carried place by (shared/agentFlow.ts), so a drag here and a saved place from the package are
+   * one fact with one name.
+   */
   private _pos = new Map<string, { x: number; y: number }>();
 
-  private _drag: { id: string; startClientX: number; startClientY: number; x0: number; y0: number; moved: boolean } | null = null;
+  private _drag: { id: string; key: string; startClientX: number; startClientY: number; x0: number; y0: number; moved: boolean } | null = null;
   private _pan: { startClientX: number; startClientY: number; x0: number; y0: number; moved: boolean } | null = null;
   /**
    * A connection being drawn. `from`/`side` is the port the line leaves; `editKey` is
@@ -150,6 +178,7 @@ export class AgentFlow extends LitElement {
     this.theme = '';
     this.mode = '';
     this.panning = false;
+    this.viewportInset = 0;
     this.selectedId = null;
     this.zoom = 1;
     this.panX = 48;
@@ -182,7 +211,10 @@ export class AgentFlow extends LitElement {
     this._select(n.id);
     this._viewTouched = true;
     const p = this._nodePos(n);
-    this._drag = { id: n.id, startClientX: e.clientX, startClientY: e.clientY, x0: p.x, y0: p.y, moved: false };
+    this._drag = {
+      id: n.id, key: positionKey(n),
+      startClientX: e.clientX, startClientY: e.clientY, x0: p.x, y0: p.y, moved: false,
+    };
     window.addEventListener('pointermove', this._onMove);
     window.addEventListener('pointerup', this._onUp);
     window.addEventListener('pointercancel', this._onUp);
@@ -217,7 +249,14 @@ export class AgentFlow extends LitElement {
       const dx = (e.clientX - this._drag.startClientX) / this.zoom;
       const dy = (e.clientY - this._drag.startClientY) / this.zoom;
       if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) this._drag.moved = true;
-      this._pos.set(this._drag.id, { x: Math.max(0, this._drag.x0 + dx), y: Math.max(0, this._drag.y0 + dy) });
+      // NO CLAMP AT THE ORIGIN. This was `Math.max(0, …)` on both axes, and it was there for one
+      // reason: the edge layer's box only covered 0..max, so a node in negative space would have
+      // had no frame to be drawn in. That reason is gone (the layer covers the drawing's real
+      // bounds), and the clamp was not a boundary anyone chose — it was the drawing refusing to
+      // go where a person put it. The owner, 2026-09-23: "there's still clamps on it. I can't
+      // move the notes freely onto the grid." A grid has no origin wall; the node goes where the
+      // hand takes it, and Save writes the number it landed on.
+      this._pos.set(this._drag.key, { x: this._drag.x0 + dx, y: this._drag.y0 + dy });
       this.requestUpdate();
       return;
     }
@@ -259,8 +298,8 @@ export class AgentFlow extends LitElement {
   private _onUp = (): void => {
     this._detach();
     if (this._drag) {
-      const { id, moved } = this._drag;
-      const p = this._pos.get(id);
+      const { id, key, moved } = this._drag;
+      const p = this._pos.get(key);
       const node = this._node(id);
       // ONCE, on release, and only when it moved: a click is a selection, not a move.
       if (moved && p && node) {
@@ -391,8 +430,13 @@ export class AgentFlow extends LitElement {
     const picker = this._picker;
     if (!picker) return;
     const id = 'draft:' + (++this._draftSeq);
-    const x = Math.max(0, Math.round(picker.x - NODE_TILE / 2));
-    const y = Math.max(0, Math.round(picker.y - NODE_TILE / 2));
+    // NO CLAMP AT THE ORIGIN HERE EITHER — the last one of its kind, and it was the same
+    // mistake in a third place: `Math.max(0, …)` on both axes, which put a node added near the
+    // top-left corner of the grid somewhere other than where the person dropped it. The reason
+    // the clamp existed (an edge layer whose box only covered the positive quadrant) went with
+    // the box; this line stayed behind and kept the drawing from using half its own grid.
+    const x = Math.round(picker.x - NODE_TILE / 2);
+    const y = Math.round(picker.y - NODE_TILE / 2);
     const node: FlowNode = {
       id,
       family: 'seat',
@@ -405,7 +449,10 @@ export class AgentFlow extends LitElement {
       y,
     };
     this._draftNodes.push(node);
-    this._pos.set(id, { x, y });
+    // A DRAFT IS ITS OWN NODE, so its place is filed under its own id and not under the kind it
+    // was picked from: two drafts of the same kind are two nodes, and one of them moving must not
+    // move the other (positionKey keeps an id that carries no slot).
+    this._pos.set(positionKey(node), { x, y });
     const enterSide = OPPOSITE[picker.side];
     if (picker.editKey) this._rewired.set(picker.editKey, { to: id, toSide: enterSide });
     else this._draftEdges.push({ from: picker.from, to: id, fromSide: picker.side, toSide: enterSide });
@@ -485,8 +532,47 @@ export class AgentFlow extends LitElement {
    */
   private _announcedLabel: string | null = null;
 
-  protected updated(): void {
+  /**
+   * A DRAFT THE GRAPH HAS CAUGHT UP WITH IS NO LONGER A DRAFT.
+   *
+   * A node the person drops is drawn by this element, which holds it locally and badges it
+   * 'unsaved'. Once the row it names is in the prompt, the host rebuilds the graph from the
+   * rows and that row arrives as a seat node — and two nodes for one row, one of them still
+   * claiming to be unsaved, is exactly the lie the drawing must not tell. So a graph that
+   * carries a seat of the same KIND releases the draft: what is on screen is then the prompt's
+   * own row, and the badge goes with the copy.
+   *
+   * KIND, NOT ID, and that is the whole of the matching: a draft's id is local ('draft:3') and
+   * the rebuilt node's names the row ('seat:2:constraints'), while the canonical seat id is what
+   * both of them are about.
+   *
+   * The edges the draft was wired by go with it: they pointed at a node that is now the row's,
+   * and the row's own edges are derived from the prompt by the builder.
+   */
+  private _releaseAdoptedDrafts(flow: FlowGraph | null | undefined): void {
+    if (!this._draftNodes.length) return;
+    const carried = new Set(
+      (flow?.nodes ?? []).filter((n) => n.family === 'seat').map((n) => n.kind),
+    );
+    if (!this._draftNodes.some((n) => carried.has(n.kind))) return;
+    const gone = new Set(this._draftNodes.filter((n) => carried.has(n.kind)).map((n) => n.id));
+    this._draftNodes = this._draftNodes.filter((n) => !gone.has(n.id));
+    this._draftEdges = this._draftEdges.filter((e) => !gone.has(e.from) && !gone.has(e.to));
+    this.requestUpdate();
+  }
+
+  protected updated(changed: Map<PropertyKey, unknown>): void {
     const flow = this.flow;
+    this._releaseAdoptedDrafts(flow);
+    /*
+     * HER COLUMN NARROWING OVER A DRAWING IS A CHANGE THIS ELEMENT CANNOT SEE. She is an
+     * absolutely positioned layer, so the drawing's own box does not move when she does and
+     * the ResizeObserver above never fires. The host measures the cover and writes it here
+     * (viewportInset) — and while the view is still ours, the drawing recomposes into
+     * whatever can now be seen. Once a person has taken the view, this does nothing: their
+     * picture is theirs.
+     */
+    if (changed.has('viewportInset') && !this._viewTouched) this.startView();
     if (!flow) return;
     const label = flow.label ?? '';
     if (label === this._announcedLabel) return;
@@ -523,24 +609,55 @@ export class AgentFlow extends LitElement {
     // wanted ("so that people realize there's a pan feature"). A constant zoom could not
     // promise it, because the column's width is the host's business: the peek has to be
     // computed from the box, not assumed.
-    const nodes = this._allNodes();
-    let maxX = 0;
-    for (const n of nodes) maxX = Math.max(maxX, this._nodePos(n).x + NODE_TILE);
-    const span = Math.max(1, maxX);
-    const fit = (rect.width + START_OVERHANG - START_PAD_X) / span;
-    // READING SIZE, AND NEVER MAGNIFIED: 1:1 is the ceiling. The drawing is the size the
-    // owner drew it — a tile is 88px, labels and all — so the canvas looks the same on
-    // every screen and in every column, and a person's muscle memory for a node is worth
-    // something. It SHRINKS only when a long flow would not fit.
+    // A RING IS NOT A LINE, SO THE ARRIVAL VIEW CENTRES ON THE BRAIN and fits the whole ring to
+    // the pane when it can.
     //
-    // What falls outside the column is the peek: the drawing's own width decides it, not
-    // a number chosen here. A column narrower than the flow cuts it (and the bottom row
-    // is always cut — four rows of a staircase are taller than most panes), which is the
-    // cue that says the canvas moves. A column wider than the flow has room to spare and
-    // nothing to discover, which is the truth of that case.
-    this.zoom = Math.min(1, Math.max(MIN_ZOOM, fit));
-    this.panX = START_PAD_X;
-    this.panY = START_PAD_Y;
+    // The old rule anchored the top-left and deliberately ran the last node off the edge — a peek
+    // that taught people the canvas moves, which was right for a flow that travels rightward.
+    // Around a hub the drawing goes in every direction, so anchoring a corner would put the brain
+    // in that corner and half the rows off-screen. The peek is not lost, it is now COMPUTED: the
+    // radius grows with the number of nodes, so a busy flow still runs past the pane and the hand
+    // and the wheel are still the discovery they were.
+    const nodes = this._allNodes();
+    // THE DRAWING'S OWN BOUNDS, whatever shape it is. A ring and a line are both just nodes in
+    // space, and the view's job is to show the thing that exists rather than the shape it hoped
+    // for — so this measures both axes and centres what it measures.
+    //
+    // A NODE IS ITS FOOTPRINT, NOT ITS TILE. This line measured `p.y + NODE_TILE` while `fit()`
+    // twenty lines below measured the tile plus the label block — two readers of one fact, and
+    // this was the one that decided the arrival view. So the fit believed the drawing was 54
+    // shorter than it is, per row, and a ring arrived with its labels running past the bottom of
+    // the pane it was told it fitted in. Both read NODE_FOOTPRINT now.
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      const p = this._nodePos(n);
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x + NODE_TILE);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y + NODE_FOOTPRINT);
+    }
+    if (!Number.isFinite(minX)) return;
+    const drawW = Math.max(1, maxX - minX);
+    const drawH = Math.max(1, maxY - minY);
+    // THE VISIBLE BOX, NOT THE ELEMENT'S BOX. Her column is a layer over the drawing when a
+    // Run is on screen, so the room a person can look at is the box less what she covers
+    // (see viewportInset). Composing into the full box is how the brain came to sit on the
+    // seam under her column.
+    const visibleW = Math.max(1, rect.width - this.viewportInset);
+    const roomW = Math.max(1, visibleW - 2 * START_PAD_X);
+    const roomH = Math.max(1, rect.height - 2 * START_PAD_Y);
+    // READING SIZE, AND NEVER MAGNIFIED: 1:1 is the ceiling, for the same reason as before —
+    // the tile a person learned is the size it was drawn at. It shrinks only when the drawing
+    // would not fit, and a busy ring shrinks rather than being cut, because the ring IS the
+    // picture: the peek at the edges is the pane's business to force by being narrow.
+    this.zoom = Math.min(1, Math.max(MIN_ZOOM, Math.min(roomW / drawW, roomH / drawH)));
+    // The drawing's middle, at the VISIBLE part's middle. A hub sits at the origin, so this
+    // puts the brain where a person looks first, and a line still lands whole.
+    this.panX = visibleW / 2 - ((minX + maxX) / 2) * this.zoom;
+    this.panY = rect.height / 2 - ((minY + maxY) / 2) * this.zoom;
     this.requestUpdate();
   }
 
@@ -627,7 +744,7 @@ export class AgentFlow extends LitElement {
     this._glideTimer = window.setTimeout(() => this._stopGlide(), GLIDE_MS + 60);
     this.zoom = target;
     this.panX = rect.width / 2 - (p.x + NODE_TILE / 2) * target;
-    this.panY = rect.height / 2 - (p.y + (NODE_TILE + LABEL_BLOCK) / 2) * target;
+    this.panY = rect.height / 2 - (p.y + NODE_FOOTPRINT / 2) * target;
     // The view now belongs to the conversation, not to the next resize: a re-fit
     // would take the node straight back off screen while she is talking about it.
     this._viewTouched = true;
@@ -687,9 +804,12 @@ export class AgentFlow extends LitElement {
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x + NODE_TILE);
-      maxY = Math.max(maxY, p.y + NODE_TILE + LABEL_BLOCK);
+      maxY = Math.max(maxY, p.y + NODE_FOOTPRINT);
     }
-    const w = rect.width;
+    // FIT OBEYS THE SAME RULE AS THE ARRIVAL VIEW: fit what can be seen, not the element's
+    // whole box — otherwise the one control a person presses to "show me everything" hides
+    // the right half of it under her column.
+    const w = Math.max(1, rect.width - this.viewportInset);
     const h = rect.height;
     const pad = 48;
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min((w - pad * 2) / (maxX - minX), (h - pad * 2) / (maxY - minY))));
@@ -775,8 +895,12 @@ export class AgentFlow extends LitElement {
     const m = move[e.key];
     if (m) {
       e.preventDefault();
-      this._pos.set(node.id, { x: Math.max(0, p.x + m.dx), y: Math.max(0, p.y + m.dy) });
-      const np = this._pos.get(node.id)!;
+      const key = positionKey(node);
+      // The arrow keys move a node the same way the hand does, so they stop at the same place:
+      // nowhere. The origin clamp came out with the drag's (see _onMove) — a key that walks a node
+      // up and then refuses to keep walking is the same wall, one keypress at a time.
+      this._pos.set(key, { x: p.x + m.dx, y: p.y + m.dy });
+      const np = this._pos.get(key)!;
       this.dispatchEvent(new CustomEvent('flow-node-moved', {
         bubbles: true, composed: true, detail: { nodeId: node.id, x: Math.round(np.x), y: Math.round(np.y) },
       }));
@@ -790,9 +914,15 @@ export class AgentFlow extends LitElement {
     return this._allNodes().find((n) => n.id === id);
   }
 
-  /** A node's drawn position: what the person dragged it to, else what the model said. */
+  /**
+   * A node's drawn position: what the person dragged it to, else what the model said.
+   *
+   * THE MODEL'S ANSWER IS ALREADY THE PERSON'S when the package carried places into it (a saved
+   * layout is handed to the builder, see agentFlow's FlowPosition) — so the two sources agree by
+   * construction, and this is only the LIVE drag sitting on top of a rebuilt graph.
+   */
   private _nodePos(n: FlowNode): { x: number; y: number } {
-    return this._pos.get(n.id) ?? { x: n.x, y: n.y };
+    return this._pos.get(positionKey(n)) ?? { x: n.x, y: n.y };
   }
 
   /** Where an edge leaves a node, and where it lands. Ports sit on the tile's midline. */
@@ -859,15 +989,29 @@ export class AgentFlow extends LitElement {
   }
 
   /**
-   * WHAT IS ON THE CANVAS NOW — the session's graph PLUS the person's own edits.
+   * WHAT IS ON THE CANVAS NOW — the session's graph PLUS the person's own edits, EACH NODE AT
+   * THE PLACE IT IS DRAWN AT.
    *
    * A host reads here rather than reaching into private state: to list what is drawn, or
    * to save it once writing back exists (AGENTIC_EDITOR/10-TODO.md W1). Reading writes
    * nothing; the drawing stays this element's until a host decides otherwise.
+   *
+   * WHERE THEY ARE, NOT WHERE THE MODEL PUT THEM — and this is the difference between a drag
+   * that survives a save and one that does not. The positions a person drags live in `_pos` (the
+   * one state this element owns), and this getter is what the SAVE reads: reporting the model's
+   * x/y here wrote every dragged node back to the place the ring had given it, so the package
+   * remembered a layout nobody had ever chosen. Unpositioned nodes are handed over as they came,
+   * because there is nothing to say about them.
    */
   get drawn(): { nodes: FlowNode[]; edges: Array<{ from: string; to: string }> } {
     return {
-      nodes: this._allNodes(),
+      nodes: this._allNodes().map((n) => {
+        const p = this._nodePos(n);
+        if (p.x === n.x && p.y === n.y) return n;
+        // Rounded the way a move is ANNOUNCED (see _onUp): a saved place is a pixel, not a
+        // fraction, and the two halves of this fact must not disagree about it.
+        return { ...n, x: Math.round(p.x), y: Math.round(p.y) };
+      }),
       edges: this._resolvedEdges().map((e) => ({ from: e.from, to: e.to })),
     };
   }
@@ -1006,21 +1150,35 @@ export class AgentFlow extends LitElement {
     const nodes = this._allNodes();
     const byId = new Map(nodes.map((n) => [n.id, n]));
 
-    // THE EDGE LAYER'S BOX, FROM THE DRAWING'S OWN BOUNDS.
+    // THE EDGE LAYER'S BOX, FROM THE DRAWING'S OWN BOUNDS — IN BOTH HALVES.
     //
     // Measured in the app on 2026-09-18: with the layer at 1px and overflow
     // visible, eight paths with correct geometry and correct stroke drew nothing.
     // The bounds below are facts, not a guess — every node's position is known —
     // so the layer is given the viewport its content actually occupies, and the
     // overshoot room is the curve's own leave-distance plus a margin for a node
-    // in flight. Positions are clamped at the origin (see _onMove), so the box
-    // needs no negative half.
-    let extentX = 1;
-    let extentY = 1;
+    // in flight.
+    //
+    // AND IT IS NOT JUST THE POSITIVE QUADRANT, which is what it used to be. That box ran
+    // 0..max because node positions were clamped at the origin (see _onMove), so the drawing
+    // could never leave the first quadrant. THE RING BROKE THAT ASSUMPTION THE DAY IT LANDED: a
+    // hub puts its rows at negative x and y, and an edge to one of them fell outside a box that
+    // starts at 0 — correct geometry, correct stroke, and nothing drawn, which is the owner's
+    // report of 2026-09-23: "the lines are gone. The connectors are broken now."
+    //
+    // SO THE BOX COVERS WHAT THE DRAWING OCCUPIES, and the clamp is gone with the reason for it.
+    // The layer is positioned at the box's own corner, so a model coordinate still maps to the
+    // same pixel it always did — only the frame around it changed.
+    let minX = 0;
+    let minY = 0;
+    let maxX = 1;
+    let maxY = 1;
     for (const n of nodes) {
       const p = this._nodePos(n);
-      extentX = Math.max(extentX, p.x + NODE_TILE + EDGE_PAD);
-      extentY = Math.max(extentY, p.y + NODE_TILE + LABEL_BLOCK + EDGE_PAD);
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + NODE_TILE);
+      maxY = Math.max(maxY, p.y + NODE_FOOTPRINT);
     }
 
     // The connection being drawn: from the source port to wherever the pointer is.
@@ -1035,10 +1193,20 @@ export class AgentFlow extends LitElement {
         livePath = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + bend) + ' ' + y1 + ', '
           + (this._connect.x - bend) + ' ' + this._connect.y + ', '
           + this._connect.x + ' ' + this._connect.y;
-        extentX = Math.max(extentX, this._connect.x + EDGE_PAD);
-        extentY = Math.max(extentY, this._connect.y + EDGE_PAD);
+        minX = Math.min(minX, this._connect.x - CURVE);
+        minY = Math.min(minY, this._connect.y - CURVE);
+        maxX = Math.max(maxX, this._connect.x + CURVE);
+        maxY = Math.max(maxY, this._connect.y + CURVE);
       }
     }
+
+    // THE LAYER'S FRAME, once both halves are known. The box is the bounds plus the overshoot
+    // room, and the layer sits at the box's own corner — so a model coordinate maps to the same
+    // pixel whichever corner the drawing happens to be in.
+    const boxX = minX - EDGE_PAD;
+    const boxY = minY - EDGE_PAD;
+    const boxW = Math.max(1, maxX - minX + EDGE_PAD * 2);
+    const boxH = Math.max(1, maxY - minY + EDGE_PAD * 2);
 
     return html`
       <div
@@ -1075,8 +1243,8 @@ export class AgentFlow extends LitElement {
           <svg
             class="edges"
             aria-hidden="true"
-            viewBox="0 0 ${extentX} ${extentY}"
-            style="width: ${extentX}px; height: ${extentY}px;"
+            viewBox="${boxX} ${boxY} ${boxW} ${boxH}"
+            style="left: ${boxX}px; top: ${boxY}px; width: ${boxW}px; height: ${boxH}px;"
           >
             ${this._resolvedEdges().map((e) => {
               const a = byId.get(e.from);

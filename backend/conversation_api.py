@@ -403,19 +403,83 @@ class ConversationAPI:
             conn.close()
 
     def delete_conversation(self, conversation_id: str, user_id: str) -> bool:
-        """Delete a conversation (cascade deletes messages)"""
+        """Delete a conversation (cascade deletes messages) — and leave nothing pointing at it.
+
+        WHAT A DANGLING POINTER COSTS, measured 2026-09-23. `prompt_sessions.conversation_id` is a
+        copy of "the conversation this place is in", and it is one of the two ids a seat binds (the
+        other is `/session/right_column/conversation_id`, written from the same column). Deleting a
+        row and leaving the pointer on it is a place that opens onto nothing: the seat reads a
+        conversation that is not there, and the next landing binds a dead id. That is exactly why
+        the rail's trash REFUSED to remove the conversation a person was in — "That is the
+        conversation you are in — start a new one, then remove it." The refusal was a guard for a
+        gap that belongs here, and it deadlocked the two controls: the console's "new conversation"
+        refuses inside a package, so the one row a package has could not be removed and no second
+        row could be started to move off it. The owner, 2026-09-23: "I'm not able to delete
+        conversations from the packages. It's just basic CRUD process I thought."
+
+        SO THE POINTER MOVES WITH THE DELETE: every session that pointed at this conversation comes
+        out of it pointing at the newest conversation that session still owns, or at nothing at all
+        when it owns none (`conversation_id` is nullable). Then the seat may delete the thread it is
+        reading, rebind, and keep working — the row and the reference to it go together.
+        """
         conn = self.get_db()
         cursor = conn.cursor()
         self.set_user_context(cursor, user_id)
 
         try:
+            # WHO IS POINTING HERE, AND WHAT KIND OF THREAD THIS IS — read before the row goes,
+            # because after it there is nothing to ask. The TAB matters: a chat seat pointed at the
+            # approvals thread is the same class of wrong as a dangling id, and it is exactly what
+            # a "newest remaining" fallback produced the first time this ran (proved in a
+            # rolled-back transaction: deleting the console's last chat row moved the pointer to
+            # "Console — Approvals"). A failure to read is not fatal — the delete is the person's
+            # request and it still happens; the pointer is repaired if it can be.
+            #
+            # BY NAME, NOT BY POSITION: this pool hands out RealDictCursor rows
+            # (database_pool.py: cursor_factory). Indexing one with [0] raises KeyError: 0, which is
+            # what this did on its first run through the API — a 500 whose whole message was "0".
+            cursor.execute(
+                "SELECT id FROM prompt_sessions WHERE conversation_id = %s",
+                (conversation_id,),
+            )
+            holders = [str(row["id"]) for row in cursor.fetchall()]
+            cursor.execute("SELECT tab FROM conversations WHERE id = %s", (conversation_id,))
+            gone = cursor.fetchone()
+            gone_tab = gone["tab"] if gone else None
+
             cursor.execute("""
                 DELETE FROM conversations
                 WHERE id = %s AND user_id = %s
             """, (conversation_id, user_id))
+            deleted = cursor.rowcount > 0
+
+            if deleted and holders:
+                for session_id in holders:
+                    # THE SAME KIND OF THREAD, OR NOTHING AT ALL. `IS NOT DISTINCT FROM` so a row
+                    # with no tab (the oldest threads) matches another with no tab.
+                    cursor.execute(
+                        """
+                        SELECT id FROM conversations
+                        WHERE session_id = %s AND tab IS NOT DISTINCT FROM %s
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                        """,
+                        (session_id, gone_tab),
+                    )
+                    successor = cursor.fetchone()
+                    next_id = str(successor["id"]) if successor else None
+                    cursor.execute(
+                        "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                        (next_id, session_id),
+                    )
+                    print(
+                        f"[conversations] {str(conversation_id)[:8]}… (tab={gone_tab or 'none'}) "
+                        f"removed; session {session_id[:8]}… now points at "
+                        f"{next_id[:8] + '…' if next_id else 'no conversation of that kind'}"
+                    )
 
             conn.commit()
-            return cursor.rowcount > 0
+            return deleted
         except Exception as e:
             conn.rollback()
             raise e

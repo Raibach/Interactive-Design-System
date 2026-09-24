@@ -92,8 +92,15 @@ export class CanvasFooter extends LitElement {
        "canvas-play" #canvas-play — the primary treatment, the master's own.
          Data:     the run this place would make
          On click: canvas-play {source: 'canvas-footer'}
-         State:    idle | busy (the host's run state, passed down as `running`)
-         A11y:     disabled while running, so a second press cannot start a second run
+         State:    idle | busy (the host's run state, passed down as `running`) — and busy
+                   is now DRAWN, not only disabled: a spinner and "Running…", the same shape
+                   the Save control beside it has. The owner, 2026-09-23: "there's no spinner
+                   … you need to put a spinner on the stop button or on the run button so
+                   that a user knows there's activity." The disabled attribute alone said
+                   nothing a person could see — and the button it was saying it on was the
+                   one that had just folded away with the prompt.
+         A11y:     disabled while running, so a second press cannot start a second run; the
+                   label is the state, and it is announced (aria-live) as it changes
 
        "canvas-reset" #canvas-reset — the secondary treatment.
          Data:     the view this column is showing
@@ -119,8 +126,11 @@ export class CanvasFooter extends LitElement {
           class="primary"
           type="button"
           ?disabled=${this.running}
+          aria-live="polite"
           @click=${() => this._emit('canvas-play', { source: 'canvas-footer' })}
-        >▶ Play the run</button>
+        >${this.running
+            ? html`<span class="spin" aria-hidden="true"></span>Running…`
+            : html`▶ Play the run`}</button>
         <button
           id="canvas-reset"
           class="secondary"
@@ -202,6 +212,13 @@ export class CanvasFooter extends LitElement {
       animation: canvas-footer-turn 700ms linear infinite;
     }
     @keyframes canvas-footer-turn { to { transform: rotate(360deg); } }
+    /* THE PLAY CONTROL'S SPINNER WEARS THE BUTTON'S OWN INK. The grey above is for the Save
+       control on white; the primary is the yellow master whose label is black, and a grey
+       spinner on it reads as a smudge rather than as work. */
+    .bar button.primary .spin {
+      border-color: rgba(0, 0, 0, 0.25);
+      border-top-color: #000000;
+    }
     @media (prefers-reduced-motion: reduce) {
       .spin { animation: none; }
     }

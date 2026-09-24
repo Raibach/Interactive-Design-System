@@ -102,7 +102,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-51 trusted components — 17 A2UI Basic Catalog primitives + 34 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number and the list below are held against `catalogs/prompt-composer/catalog.json` by `catalog-check.mjs` (`doc-claim-drift`, blocking) on every run, and the live count is printed at backend startup (`✅ A2UI Catalog loaded — 51 trusted components`). A stale number here fails the build; it does not wait to be remembered. Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+55 trusted components — 17 A2UI Basic Catalog primitives + 38 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and exits non-zero when a count drifts (`doc-claim-drift`, blocking). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 55 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup

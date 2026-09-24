@@ -20,7 +20,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import '@/components/lit/agent-flow';
 import type { AgentFlow } from '@/components/lit/agent-flow';
-import { buildRepairFlow, type FlowGraph } from '@/shared/agentFlow';
+import { buildRepairFlow, NODE_FOOTPRINT, NODE_TILE, type FlowGraph } from '@/shared/agentFlow';
 
 type El = AgentFlow & { updateComplete: Promise<unknown> };
 
@@ -195,10 +195,14 @@ describe('<agent-flow> — drawing', () => {
     expect(el.zoom).toBeGreaterThan(0);
   });
 
-  it('opens blown up at the beginning — Fit is what shows the whole flow', async () => {
-    // The canvas must NOT arrive fitted to everything: a long run would land as a
-    // postage stamp. It opens at reading size on the first nodes and the person pans
-    // through it; Fit (⛶ / 0) is the "zoom to the edges" control.
+  it('opens centred on the drawing, never magnified — Fit is what shows the whole flow', async () => {
+    // THE CONTRACT, AND WHAT CHANGED. The canvas must NOT arrive shrunk to a postage stamp, and
+    // it is never magnified: 1:1 is the ceiling because the tile a person learned is the size it
+    // was drawn at. What used to anchor the top-left and run the last node past the edge was
+    // written for a flow that travels rightward — and the drawing is a ring around the brain now,
+    // so a corner anchor would put the brain in that corner and half the rows off-screen. The
+    // view measures the drawing and centres what it measures; the peek at the edges is the pane's
+    // business, which a busy ring forces simply by being wider than the box.
     const el = await mount();
     const box = (w: number, h: number) =>
       ({ width: w, height: h, top: 0, left: 0, right: w, bottom: h, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
@@ -206,24 +210,36 @@ describe('<agent-flow> — drawing', () => {
 
     el.flow = graph(); // a new document arrives
     await el.updateComplete;
-    // THE PEEK IS THE FLOW'S OWN, at reading size. The drawing is never magnified, so
-    // what falls outside the column is decided by how wide the flow is and how wide the
-    // column is — not by a number chosen here. In an 800px box this fixture (768 + the
-    // corner padding) is cut, which is the cue; in a wider one it is not, which is the
-    // truth of that case and not a thing to fake by zooming.
-    const span = 680 + 88; // the fixture's furthest node, plus its tile
-    expect(el.zoom).toBe(1);
-    expect(el.zoom * span + el.panX).toBeGreaterThan(800); // it runs past the edge
 
-    // 1:1 IS THE CEILING, and that is the contract — the drawing is never magnified to
-    // fill a box, because the tile a person learned is the size it was drawn at. In a
-    // column wider than the flow there is room to spare and nothing to discover; the
-    // canvas does not pretend otherwise by zooming in.
-    (el as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () => box(1600, 600);
+    // Reading size or smaller, and never magnified.
+    expect(el.zoom).toBeLessThanOrEqual(1);
+    expect(el.zoom).toBeGreaterThan(0);
+
+    // AND CENTRED: the pane's middle is the drawing's middle, on both axes. The brain sits at the
+    // origin, so this is what puts it where a person looks first.
+    type Node = { x: number; y: number };
+    const nodes = (el as unknown as { _allNodes: () => Node[] })._allNodes();
+    const xs = nodes.map((n) => n.x);
+    const ys = nodes.map((n) => n.y);
+    // WHAT A NODE IS, as the view measures it: a tile wide and a FOOTPRINT tall — the tile plus
+    // the label block it draws underneath itself. This assertion used a hard-coded 88 on BOTH
+    // axes, which is the same reading error the element had: it fitted a drawing 54 units shorter
+    // per row than the one on screen, so a ring arrived with its labels running past the bottom of
+    // the pane it was told it fitted in. The app's own numbers now, so the two cannot drift.
+    const midX = (Math.min(...xs) + Math.max(...xs) + NODE_TILE) / 2;
+    const midY = (Math.min(...ys) + Math.max(...ys) + NODE_FOOTPRINT) / 2;
+
+    expect(el.panX + midX * el.zoom).toBeCloseTo(400, 0);
+    expect(el.panY + midY * el.zoom).toBeCloseTo(300, 0);
+
+    // 1:1 IS THE CEILING, and that is the contract — in a box with room to spare the canvas does
+    // not pretend otherwise by zooming in. THE BOX HAS TO HAVE THE ROOM: a ring measured with its
+    // labels is taller than a 600px box, so the fit shrinks it there and there is no ceiling to
+    // observe. This is the same drawing in a box that holds it.
+    (el as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () => box(1600, 1200);
     el.startView();
     await el.updateComplete;
     expect(el.zoom).toBe(1);
-    expect(el.zoom * span + el.panX).toBeLessThan(1600); // it fits, and says so
 
     // In a box too small for the whole drawing, Fit is what makes it all visible.
     (el as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () => box(300, 200);
@@ -674,6 +690,100 @@ describe('<agent-flow> — the glide', () => {
     await el.updateComplete;
     expect(viewOf(el).classList.contains('glide')).toBe(false);
     window.dispatchEvent(pe('pointerup', { clientX: 140, clientY: 130 }));
+  });
+});
+
+describe('the arrival view composes into what a person can SEE', () => {
+  /**
+   * ON A RUN HER COLUMN IS A LAYER OVER THE DRAWING (workspace-layout's `.pane.right.over`),
+   * so this element's box is wider than the pane a person can look at. Composed into the full
+   * box, the brain of a 1535px drawing landed at x≈789 with her column at 768 — on the seam,
+   * half under the chat — and the nodes a person wanted to drag could not be grabbed. The
+   * owner, 2026-09-23: "I can no longer slide the nodes around … system role seems fixed."
+   *
+   * The host measures the cover from the two boxes and writes it here; these pin what the
+   * view does with it.
+   */
+  const sized = (el: El, width = 1200, height = 800) => {
+    (el as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({ width, height, left: 0, top: 0, right: width, bottom: height, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  };
+  /** Where the furthest node of `graph()` (x 680, one tile wide) lands on screen. */
+  const farEdge = (el: El): number => el.panX + (680 + 88) * el.zoom;
+
+  it('fits and centres the drawing in the visible part, not the element box', async () => {
+    const el = await mount(graph());
+    sized(el);
+    el.viewportInset = 0;
+    el.startView();
+    const withFullBox = farEdge(el);
+
+    el.viewportInset = 600; // she covers half of this box
+    await el.updateComplete; // the inset re-fits, while the view is still ours
+    // NOTHING THE DRAWING DRAWS IS BEHIND HER: the far end of the flow is inside the visible
+    // 600px, and it moved left to get there.
+    expect(farEdge(el)).toBeLessThanOrEqual(600 + 1);
+    expect(farEdge(el)).toBeLessThan(withFullBox);
+  });
+
+  it('leaves a view the person took alone when she narrows', async () => {
+    const el = await mount(graph());
+    sized(el);
+    // The hand takes the canvas — a pan is a view the person owns, and the rule this element
+    // has always kept for a resize holds for her column moving too.
+    el.shadowRoot!.querySelector('.grid')!.dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
+    window.dispatchEvent(pe('pointermove', { clientX: 160, clientY: 120 }));
+    window.dispatchEvent(pe('pointerup', { clientX: 160, clientY: 120 }));
+    await el.updateComplete;
+    const theirs = { panX: el.panX, panY: el.panY, zoom: el.zoom };
+
+    el.viewportInset = 600;
+    await el.updateComplete;
+    expect({ panX: el.panX, panY: el.panY, zoom: el.zoom }).toEqual(theirs);
+  });
+});
+
+describe('a place on the canvas belongs to the drawing, and the save reads where the nodes ARE', () => {
+  it('`drawn` reports the position a node was DRAGGED to, not the place the model gave it', async () => {
+    // The save writes `drawn.nodes` into workspace.graph.nodes[] (WritingAreaIndex), and that
+    // getter used to report the model's x/y — so every drag was written back to the place the
+    // ring had given it, and a package remembered a layout nobody had chosen.
+    const el = await mount(graph());
+    expect({ x: el.drawn.nodes.find((n) => n.id === 'note:1')!.x, y: el.drawn.nodes.find((n) => n.id === 'note:1')!.y })
+      .toEqual({ x: 0, y: 0 });
+
+    node(el, 'note:1').dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
+    window.dispatchEvent(pe('pointermove', { clientX: 180, clientY: 140 }));
+    window.dispatchEvent(pe('pointerup', { clientX: 180, clientY: 140 }));
+    await el.updateComplete;
+
+    const dragged = el.drawn.nodes.find((n) => n.id === 'note:1')!;
+    expect({ x: dragged.x, y: dragged.y }).toEqual({ x: 80, y: 40 });
+    // A GETTER REPORTS: the graph the element was handed is not rewritten in place.
+    expect(el.flow!.nodes.find((n) => n.id === 'note:1')!.x).toBe(0);
+    // And the nodes nobody moved are handed over exactly as they came.
+    expect(el.drawn.nodes.find((n) => n.id === 'step:agent')).toBe(el.flow!.nodes.find((n) => n.id === 'step:agent'));
+  });
+
+  it('a drag follows the ROW when the graph hands it back under another slot', async () => {
+    /*
+     * A seat's id carries its ordinal (`seat:<i>:<kind>`), so a rebuild after a row is added or
+     * reordered returns the same row as a different id. Keyed by id, the drag would land on
+     * whichever row took the slot it used to hold — the failure this pins.
+     */
+    const el = await mount(graph());
+    node(el, 'seat:0:system-role').dispatchEvent(pe('pointerdown', { clientX: 0, clientY: 0 }));
+    window.dispatchEvent(pe('pointermove', { clientX: 300, clientY: 200 }));
+    window.dispatchEvent(pe('pointerup', { clientX: 300, clientY: 200 }));
+    await el.updateComplete;
+
+    // The same row, one slot further down the stack — the graph() row sits at x 340, y 0.
+    const moved = { ...graph(), nodes: graph().nodes.map((n) => (n.id === 'seat:0:system-role' ? { ...n, id: 'seat:2:system-role' } : n)) };
+    el.flow = moved;
+    await el.updateComplete;
+
+    const row = el.drawn.nodes.find((n) => n.kind === 'system-role')!;
+    expect({ x: row.x, y: row.y }).toEqual({ x: 640, y: 200 });
   });
 });
 

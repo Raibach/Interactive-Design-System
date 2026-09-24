@@ -368,11 +368,21 @@ export class ChatNavigationBar extends LitElement {
     allowedTabs: { type: String, attribute: 'allowed-tabs' },
     healthCount: { type: Number, attribute: 'health-count' },
     healthState: { type: String, attribute: 'health-state' },
+    unread: { type: Boolean, attribute: 'unread' },
   };
 
   // ── Defaults ─────────────────────────────────────────────────────────────
   declare activeTab: TabId;
   declare collapsed: boolean;
+  /**
+   * SHE HAS SOMETHING TO SAY AND HER COLUMN IS FOLDED AWAY — the slow pulse on the chat icon.
+   *
+   * The owner, 2026-09-23: "the chat icon on the vertical chat navigation menu … needs to pulse
+   * slowly so that the user knows that there's a chat message waiting." The seat raises it (a
+   * new turn of hers, or a node picked while she is away) and clears it when the column opens:
+   * the person looks, or does not. Nothing opens her column by itself.
+   */
+  declare unread: boolean;
   /**
    * Open catalog findings. When above zero the chat tab's ICON pulses red, so
    * the condition is visible on arrival. Set by InteractiveChatInterface from
@@ -401,6 +411,7 @@ export class ChatNavigationBar extends LitElement {
     this.activeTab = 'chat';
     this.collapsed = false;
     this.allowedTabs = '';
+    this.unread = false;
     this.healthCount = 0;
     this.healthState = 'loading';
   }
@@ -768,6 +779,28 @@ export class ChatNavigationBar extends LitElement {
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
     }
+    /* AND A SLOWER, GENTLER STATE FOR "SHE HAS ANSWERED" — the owner, 2026-09-23: "I want the
+       chat icon to flash slowly when there is a message that Grace has and then the user can
+       choose to open it and read it or ignore it."
+       IT IS NOT THE ALERT: that one fades to blank in 400ms because an open finding is urgent;
+       a waiting message is not, so this breathes — 2.6s, and only to 0.35, so the icon never
+       leaves. Three pulse speeds now, and their meanings are distinct: 400ms to blank (findings
+       open), 1.1s partial on the glyph (the check could not run), 2.6s partial on the button
+       (a message is waiting). */
+    .nb.nb-news {
+      animation: chat-news-pulse 2600ms ease-in-out infinite;
+    }
+    @keyframes chat-news-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      /* The signal, kept when the motion cannot be: the glyph takes the tone the alert uses,
+         so "there is something here" is still visible and still distinct from silence. */
+      .nb.nb-news { animation: none; }
+      .nb.nb-news .nsv path,
+      .nb.nb-news .nci { filter: drop-shadow(0 0 3px #4ECFD5); }
+    }
     /* "The check could not run" is a DIFFERENT claim from "one problem", and the
        design has no state for it. It keeps the older, slower, partial fade and
        rides the GLYPH alone, so the two can never be read as each other. */
@@ -938,6 +971,16 @@ export class ChatNavigationBar extends LitElement {
     return '';
   }
 
+  /**
+   * AND THE SAME FOR A WAITING MESSAGE. The pulse is a signal, so it is also SPOKEN — a person
+   * who cannot see the icon breathe still has to be told there is something to read, or the
+   * choice the owner asked for ("open it and read it or ignore it") is not theirs to make.
+   */
+  private _newsStatus() {
+    if (!this.unread || !this.collapsed) return '';
+    return html`<span class="hb-sr" role="status">Grace has a message waiting</span>`;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Render
   // ═══════════════════════════════════════════════════════════════════════════
@@ -997,13 +1040,13 @@ export class ChatNavigationBar extends LitElement {
             <button
               type="button"
               data-node-id=${tab.nodeId ?? nothing}
-              class="nb ${tab.iconSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''}"
+              class="nb ${tab.iconSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''} ${tab.id === 'chat' && this.unread && this.collapsed ? 'nb-news' : ''}"
               style=${this._tabStyle(tab)}
               @click=${() => this._handleTabClick(tab.id)}
               title="${tab.tooltip}"
               aria-label=${tab.label ? nothing : tab.tooltip}
             >
-              ${tab.id === 'chat' ? this._healthStatus() : ''}
+              ${tab.id === 'chat' ? this._healthStatus() : ''}${tab.id === 'chat' ? this._newsStatus() : ''}
               <div class="ni ${currentTab === tab.id ? 'ns' : ''}">
                 <div class="iw">
                   <div class="ic">

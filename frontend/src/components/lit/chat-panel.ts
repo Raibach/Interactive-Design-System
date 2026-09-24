@@ -70,11 +70,15 @@ import {
   parseMoveToolAction,
   parseSetSeatAction,
   parseRemoveSeatAction,
+  parseRunAction,
+  parseSaveAction,
+  parseSetTitleAction,
   requestForAction,
   HER_ANSWERS,
   NO_ADVICE,
+  FIX_ALL,
 } from '@/shared/actionLink';
-import { consumeArrival } from '@/shared/arrival';
+import { arrivalIsFor, consumeArrival, type Arrival, type ArrivalKind } from '@/shared/arrival';
 import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
 
 interface SeatMessage {
@@ -279,6 +283,70 @@ export class ChatPanel extends LitElement {
    */
   private _seatIsConsole: boolean | null = null;
   /** The row whose trash is armed (first click); a second click removes it. */
+  /**
+   * SHE HAS SOMETHING TO SAY AND HER COLUMN IS FOLDED AWAY — the rail's slow pulse.
+   *
+   * The owner, 2026-09-23: "I want the chat icon to flash slowly when there is a message that
+   * Grace has and then the user can choose to open it and read it or ignore it." Nothing opens
+   * her to say so: not a turn of hers, and not a node picked on the drawing (which used to
+   * bring the column back at her width and take the room out from under the canvas).
+   *
+   * TWO THINGS COUNT, and both are changes to what this column would show if it were open:
+   * a new turn in the thread, and a new status line — which is what the host writes when a
+   * person picks a node, so the pick is answered by the pulse rather than by the column.
+   * Looking at her clears it.
+   */
+  private _unread = false;
+  /** The thread length and status line last SEEN, so "new" is a change and not a state. */
+  private _seenTurns = -1;
+  private _seenStatus: string | null = null;
+
+  private _noticeWhileAway(): void {
+    const turns = (this.messages?.length ?? 0) + this._local.length;
+    const status = this.statusText ?? '';
+    const seen = this._seenTurns >= 0;
+    const grew = seen && turns > this._seenTurns;
+    const said = seen && Boolean(status) && status !== this._seenStatus;
+    this._seenTurns = turns;
+    this._seenStatus = status;
+    if (this.collapsed && (grew || said)) {
+      if (!this._unread) {
+        this._unread = true;
+        this.requestUpdate();
+      }
+      return;
+    }
+    // OPENED IS READ: the column on screen is the message delivered.
+    if (!this.collapsed && this._unread) {
+      this._unread = false;
+      this.requestUpdate();
+    }
+  }
+
+  /**
+   * A COMMAND TO THE APP, IN THE SHAPE THE GATEKEEPER ACTUALLY VALIDATES.
+   *
+   * `eventBus.emit` runs `validateTag` first, and that reads `command.tag` — so a shorthand like
+   * `{ command: 'save-button' }` is BLOCKED as "Unknown tag: undefined" and the handler never
+   * runs. Both of this panel's save paths sent exactly that shorthand, which is why a person could
+   * press Save — on her own control or on the button she offered — and nothing was written
+   * (measured 2026-09-23).
+   *
+   * AND THE PROPS ARE THE REGISTRY'S, not empty: a prop with a `default` is still REQUIRED by this
+   * gate (it checks presence, not fallbacks), so `save-button` must carry `state` and `label` or
+   * the command is refused for missing them. Sending the declared defaults is the honest form —
+   * they are what the command means at dispatch.
+   */
+  private _emitCommand(tag: string, props: Record<string, unknown> = {}): void {
+    eventBus.emit({
+      tag,
+      sessionId: String(this.sessionId ?? ''),
+      command: tag,
+      timestamp: new Date().toISOString(),
+      props,
+    } as never);
+  }
+
   private _armedDelete: string | null = null;
   /** Auto-disarm, so an armed trash never stays armed behind a person's back. */
   private _deleteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -386,7 +454,7 @@ export class ChatPanel extends LitElement {
    * because the seat is created once per package and this has to survive one — see
    * that module for why. "No thanks" is what turns it off.
    */  /** A surface opened, for a seat that may have been created by that same commit. */
-  private _wantsGreeting: 'blank' | 'resume' | '' = '';
+  private _wantsGreeting: ArrivalKind | '' = '';
   /** Turns spoken since this element mounted; the surface supplies everything before that. */
   private _local: SeatMessage[] = [];
   /**
@@ -617,8 +685,10 @@ export class ChatPanel extends LitElement {
      * half of that: the record is consumed on arrival, and the greeting waits for
      * the history attempt either way.
      */
-    const arrived = consumeArrival();
-    if (arrived) this._wantsGreeting = arrived;
+    // FOR THIS SEAT ONLY. A record left by another seat's arrival stays where it is — see
+    // shared/arrival: eating it here is how the seat it was addressed to never hears it.
+    const arrived = consumeArrival(this.sessionId ?? null);
+    if (arrived) this._wantsGreeting = arrived.kind;
     void this._loadTools();
     window.addEventListener('a2ui:system-message', this._onHostSay);
     // A write that landed nowhere is reported where the person is already reading. The editor
@@ -873,6 +943,63 @@ export class ChatPanel extends LitElement {
     const asked = requestForAction(action);
     if (asked) {
       void this._send(asked);
+      return;
+    }
+    /*
+     * APPLY ALL — the whole list, worked in one press.
+     *
+     * The seat applies nothing itself: the repairs are writes into the prompt, and the writers
+     * live in the host (`merge-seat`, `move-tool`). So this hands the request over and the host
+     * applies what the checklist marks as the app's own, then re-derives the list and either runs
+     * the held Run or asks her about what is left. See actionLink's note on FIX_ALL.
+     */
+    if (String(action).trim().toLowerCase() === FIX_ALL) {
+      window.dispatchEvent(new CustomEvent('a2ui:fix-all'));
+      return;
+    }
+    /*
+     * RUN IT — HER OWN BUTTON, AND THE NAME WAS HERS.
+     *
+     * The review instruction has ended with "offer to run it" since the beginning, and she did:
+     * a champagne message and a button reading [Run it](action:run). The app knew no action
+     * called `run`, so a person told their prompt was ready pressed it and got "this app does
+     * not know how to do that (run)" — measured 2026-09-23. See actionLink's note on RUN.
+     *
+     * IT RELEASES THE HELD RUN, it does not start a fresh one: she has just read this prompt and
+     * cleared it, so the press is the same approval `<run_ok/>` is. With nothing held the host
+     * ignores it (handleRunApproved says why) — nothing runs unreviewed.
+     */
+    if (parseRunAction(action)) {
+      window.dispatchEvent(new CustomEvent('a2ui:run-approved'));
+      return;
+    }
+    /*
+     * SAVE THE PACKAGE — the blocker list's first item, and a name she reached for.
+     *
+     * IT IS THE APP'S OWN SAVE, not a second one written for her: `save-button` is the command
+     * `<save-button/>` emits and the one the host answers by reading the sections off the surface.
+     *
+     * THERE ARE SEVERAL DOORS TO THIS WRITE, AND THAT IS THE DESIGN — the control bar's Save, the
+     * keyboard, her `<save/>` tag, and now the button she offers in the thread — because a person
+     * saves from wherever their hand happens to be, and redundancy is a usability feature rather
+     * than a cost to trim (CANVAS-AND-PROMPT §1: "Redundancy is the feature here. Two ways to do
+     * one thing is the cost; a person who can start at either end is the return"). ONE command
+     * stands behind all of them: the doors are the usability, the command is what keeps a save a
+     * save. See actionLink's note on SAVE — with this name unknown, every repair below it in her
+     * list was moot, because a draft has no record yet.
+     */
+    if (parseSaveAction(action)) {
+      // The same command the `<save/>` tag sends — one command, many doors: a tag in her reply, a
+      // press on the button she offered, the bar, or the keyboard. See _emitCommand for why the
+      // SHAPE matters (the shorthand both save paths used to send was blocked by the gatekeeper).
+      this._emitCommand('save-button', { state: 'idle', label: 'Save' });
+      return;
+    }
+    /* NAME THE PACKAGE — the writer already existed (`set-prompt-title`, also dispatched when she
+     * writes `<set_title>`); only the button's name was missing. See actionLink's note. */
+    const titled = parseSetTitleAction(action);
+    if (titled) {
+      window.dispatchEvent(new CustomEvent('set-prompt-title', { detail: { title: titled.title } }));
       return;
     }
     // The one destructive repair, as a button: the same act as `<remove_role name="X"/>`.
@@ -1260,8 +1387,33 @@ export class ChatPanel extends LitElement {
       padding: 10px 20px;
       background: #CBE6E3;
     }
-    /* Collapsed to the rail — chat-button state=Selected, clicked again. */
-    .panel.collapsed { display: none; }
+    /* Collapsed to the rail — chat-button state=Selected, clicked again.
+       THE MOVEMENT IS THE COLUMN'S, NOT THIS ELEMENT'S, and that is the whole of this rule.
+       It used to fade: first display:none (contents gone in one frame, "all of the chat contents
+       pop away … and then the bar slides back", owner 2026-09-23), then an opacity fade over
+       --dur-pane, which was written and never driven and is now measured — sampled on the console
+       with the panes every 40ms, the CONTENT was still being squeezed to nothing (width 803 → 587
+       → 357 → 191 → 0) while it faded, so what a person saw was the chat crunching and then an
+       empty container sliding shut. The owner: "it should slide shut as a complete component, not
+       in pieces … do you have clamps, do you have workarounds, do you have trickery in there to
+       give the illusion of it sliding instead of just building it properly."
+       SO THERE IS NO TRICK HERE ANY MORE. The element that owns the width — <workspace-layout> —
+       holds this whole panel at the size it had open while the column is shut, and lets it
+       overflow the narrowing pane (see its _slabWidthPx). Nothing about this element resizes, so
+       nothing inside it re-lays-out: the column slides out of the room as one object and the rail
+       arrives at the edge as its leading face.
+       WHAT IS LEFT IS ONLY WHAT A HIDDEN PANEL MUST STILL DO: stop taking presses, and stop being
+       reachable by the keyboard. Both are visibility's, DELAYED on the way out so the slide is
+       seen to the end, and immediate on the way in so the panel is live again the instant it
+       opens. (No backticks in this comment: this is a Lit css literal and one would end it.) */
+    .panel {
+      transition: visibility 0s linear 0s;
+    }
+    .panel.collapsed {
+      visibility: hidden;
+      pointer-events: none;
+      transition: visibility 0s linear var(--dur-pane, 760ms);
+    }
     /* The Conversations dropdown's rows, from "small-dropdown" state=open
        #40001085:2414: a column of white tiles, gap 5, radius 4, height 30,
        label #4E68D2 Semi Bold 600 / 14. */
@@ -1698,6 +1850,7 @@ export class ChatPanel extends LitElement {
     // the scroll is a no-op, so the first open used to land at the top of the thread
     // (measured 2026-09-19: "it's not quite at the bottom").
     if (changed.has('collapsed') && !this.collapsed) this._scrollThreadToBottom();
+    this._noticeWhileAway();
     // NO THUMB SYNC HERE, and that is deliberate. `updated()` runs on EVERY render, and a
     // drag of the input's divider renders on every mousemove — so syncing from here read
     // `scrollHeight`/`clientHeight` per frame, which is the synchronous-layout pattern this
@@ -1866,8 +2019,17 @@ export class ChatPanel extends LitElement {
    * rule this seat was given when the greeting was first considered.
    */
   private _onComposerOpened = (e: Event): void => {
-    const kind = String(((e as CustomEvent).detail || {}).kind ?? 'blank');
-    this._wantsGreeting = kind === 'resume' ? 'resume' : 'blank';
+    const d = ((e as CustomEvent).detail || {}) as { kind?: string; sessionId?: string | null };
+    const kind: ArrivalKind = d.kind === 'resume' ? 'resume' : d.kind === 'console' ? 'console' : 'blank';
+    /*
+     * THE ADDRESS IS THE WHOLE POINT. This announcement is broadcast on `window` and every mounted
+     * panel hears it, so a seat that is NOT named must not answer it. Measured 2026-09-23: the
+     * console's panel answered a package's arrival and wrote that package's greeting into the
+     * console's own conversation — 31 messages about another package's prompt, in the thread of the
+     * seat whose job is organising cards. Nothing here greets for a seat it is not.
+     */
+    if (!arrivalIsFor({ kind, sessionId: d.sessionId ?? null }, this.sessionId ?? null)) return;
+    this._wantsGreeting = kind;
     this._greetIfArriving();
   };
 
@@ -1938,6 +2100,26 @@ export class ChatPanel extends LitElement {
      */
     if (this._seatIsConsole === null && this.sessionId) return;
     if (this._seatIsConsole === true) {
+      /*
+       * SHE SAYS HELLO WHEN THERE IS NOTHING TO READ — and the test is the THREAD, not whether a
+       * conversation row exists.
+       *
+       * A conversation begins with a person, not with a load (the owner, 2026-09-23: "there's no
+       * reason to add a new greeting if the user has not engaged with the console chat … the AI is
+       * not the conversation. It's a human being that initiates the conversation"). The first
+       * version of this rule read `if (this.conversationId) return` — "she greets only a console
+       * with no conversation" — and it silenced her on a console that HAS an empty one: measured
+       * 2026-09-23, a conversation existed with 0 messages, so no greeting, and the owner's report
+       * was exactly what that looks like from the seat: "This is gone again. The model has
+       * disappeared from console again."
+       *
+       * THE EMPTINESS IS THE FACT, and it is the same test the blank composer uses (`empty`, above):
+       * nothing from the surface's history and nothing spoken locally. An empty conversation reads
+       * as empty, a conversation with words in it reads as words, and the greeting therefore happens
+       * once per thread: she says hello, her reply is written into that conversation, and every load
+       * after it reads her own words back instead of saying them again.
+       */
+      if (!empty) return;
       void this._send(
         'A person has just landed on the console — the index of every package they have built. '
         + 'This screen is an index and nothing more: a card per package, with its name and its one '
@@ -1952,6 +2134,13 @@ export class ChatPanel extends LitElement {
       );
       return;
     }
+    /*
+     * AND A CONSOLE ARRIVAL IS NOT A PACKAGE'S TO ANSWER. Reaching here with it means this seat is
+     * known NOT to be the console (the branch above took the console's own case, and a panel whose
+     * scope has not been read returned earlier still), so greeting here would be a package
+     * answering the library's arrival — the mirror of the bug this addressing exists to fix.
+     */
+    if (kind === 'console') return;
     if (kind === 'blank') {
       void this._send(
         'A person has just opened a blank composer and has not said anything yet. '
@@ -1996,9 +2185,27 @@ export class ChatPanel extends LitElement {
     if (typeof raw === 'string') {
       try { parsed = JSON.parse(raw); } catch { return false; }
     }
-    const sections = (parsed as { sections?: Array<{ content?: string }> })?.sections;
-    if (!Array.isArray(sections)) return false;
-    return sections.some((s) => String(s?.content ?? '').trim().length > 0);
+    /*
+     * THE ROWS, AS THE SURFACE BINDS THEM — one shape, and it is the array.
+     *
+     * Both assemblies bind `leftColumnContent` to `/session/left_column/sections` (backend/routes/
+     * ai.py, the `right-col` component: `"leftColumnContent": {"path": "/session/left_column/
+     * sections"}`), which is the LIST. This read demanded `{sections: […]}` — so `parsed.sections`
+     * was `undefined` on every package, this answered FALSE, and the branch that uses it ("an opened
+     * package that is empty gives her nothing to read, so she says nothing instead") silenced her on
+     * packages full of the person's words. The owner, 2026-09-23: "She's gone from the package.
+     * Restore the model to the package."
+     *
+     * AN EARLIER REVISION OF THIS FIX ALSO ACCEPTED THE `{sections: […]}` OBJECT "for a caller that
+     * still sends it" — and no caller does. That is a fallback wearing an acceptance letter, and it
+     * is exactly what this application does not do: a reader reads the shape the surface sends, and
+     * a shape nothing sends is not read at all. The owner, on the spot: "You mean you create a
+     * fallback in my application? … This application has no room for bullshit."
+     *
+     * A row counts as something only when it has words in it — the rule this was written for.
+     */
+    if (!Array.isArray(parsed)) return false;
+    return parsed.some((s) => String((s as { content?: string })?.content ?? '').trim().length > 0);
   }
 
   /**
@@ -2169,7 +2376,24 @@ export class ChatPanel extends LitElement {
      * carries, so all three say one thing. The bodies are not here — they arrive when a
      * tool is actually inserted.
      */
-    if (this._tools?.length) {
+    /*
+     * THE CONSOLE IS NOT TOLD ABOUT TOOLS, and that is the whole of the tools rule.
+     *
+     * The owner, 2026-09-23: the console "is a search filter organizational chat interface. You're
+     * not going to be doing prompt engineering or prompt adjustments on Grace on the console,
+     * because she's tied to the package console in the database" — and its row declares no tools,
+     * so it has none. Handing it the register was an invitation to offer a tool into a prompt that
+     * is not open, which is exactly the cross-package drift the console must not have. Its own
+     * controls are named in her instructions instead (`<reassemble-console …>`).
+     *
+     * A PACKAGE KEEPS THE REGISTER, deliberately: it is the catalogue of what EXISTS, and it is
+     * what stops her inventing a tool name into an empty Tool Call step (see the note above). The
+     * gate is `!== true` rather than `=== false` so a failed scope read does not silently strip a
+     * package of the catalogue it needs — only a seat KNOWN to be the console goes without.
+     *
+     * See READ-ME/CHAT-CONVERSATION.md §11 for the decision and what it costs.
+     */
+    if (this._tools?.length && this._seatIsConsole !== true) {
       parts.push('');
       const runnable = this._tools.filter((t) => t.canRun);
       parts.push(`=== TOOLS AVAILABLE (${this._tools.length} — these are the only ones that exist) ===`);
@@ -2397,6 +2621,20 @@ THE PACKAGE'S DESCRIPTION:
 <set_description>text</set_description> — one line saying what this package is for, shown on
 its card in the library. A name and a description are both required before a Run is allowed,
 so when a package has none, offer to add one.
+AND THE PACKAGE HAS TO BE SAVED BEFORE IT CAN RUN — and a description is written AT SAVE, so a
+package that has never been saved cannot be described yet. That is the order things happen in:
+save first, then the description has somewhere to live. When somebody has built something and
+not saved it, SAY SO AND ASK — this is on the requirements list as a blocker for a Run, and you
+are the one who tells them. They can play on without saving, and that is allowed: nothing
+refuses them, and you should not nag. Say the true thing once — that a Run is what needs it
+saved — and let them decide. NEVER save without being asked; a save makes a package that did
+not exist, in a library they have to look at later.
+AND IF YOU OFFER THAT DESCRIPTION AS A BUTTON, THE BUTTON CARRIES REAL WORDS. The value after the
+separator IS the description that gets written: [Add description](action:set-description|one line
+saying what this package is for) writes that sentence, word for word, onto their card. So either
+draft one line you would stand behind and put THAT in the button — or ask them what the package is
+for and write what they say. A button carrying an instruction to itself ("Add a short description")
+describes their package as an instruction, and the person has no way to see it happened.
 MEMORY COMMANDS:
 <save/>
 <get_versions/>
@@ -2524,7 +2762,7 @@ ${workspaceContext}`;
       .replace(/<run_blocked>[\s\S]*?<\/run_blocked>/g, '')
       .replace(/<\/?run_blocked\s*\/?>/g, '');
     if (/<save\s*\/>/.test(content)) {
-      eventBus.emit({ command: 'save-button' } as never);
+      this._emitCommand('save-button', { state: 'idle', label: 'Save' });
       content = content.replace(/<save\s*\/>/g, '');
     }
     /*
@@ -2765,6 +3003,18 @@ ${workspaceContext}`;
           reasoning: wantsReasoning,
           reasoning_style: 'chain_of_thought',
           include_memory: true,
+          /*
+           * WHO SPOKE — FALSE WHEN THE PANEL IS THE ONE ASKING.
+           *
+           * A silent send is the app asking Grace to open a conversation: the `question` is
+           * an INSTRUCTION she is given ("A person has just landed on the console — the index
+           * of every package they have built…"), and nobody typed it. The server records her
+           * reply either way, and records the question only when a person said it — without
+           * this, the instruction came back as the person's own turn the next time the thread
+           * was read. The owner, 2026-09-23: "now it says a person has landed on the console —
+           * the index of every package they have built …"
+           */
+          person_turn: !opts.silent,
           // No temperature here. It used to send 0.45 while the request model defaulted
           // to 0.45 and the backend passed it straight through — three homes for one
           // number, and three numbers waiting to disagree. `chat` has ONE: CHAT_TEMPERATURE
@@ -2996,15 +3246,39 @@ ${workspaceContext}`;
    * so both are cleared and the new one's history loads through `updated` →
    * `_loadHistory`. The host is told so the package record keeps the same id.
    */
+  /**
+   * MOVE THE SEAT INTO A CONVERSATION — one writer for the facts that move together.
+   *
+   * Four things move the seat: picking a row from the list, the console's new conversation, a
+   * package's new conversation, and removing the conversation the seat is in. They used to write
+   * the same fields by hand, which is how one of them ends up not clearing the thread — or clearing
+   * two of the three lists a thread is drawn from. The tab is the CALLER's, because only the list
+   * knows which process a row belongs to (`conversations.tab`); a conversation being created has no
+   * row yet, so it keeps whatever is showing.
+   */
+  private _moveSeatTo(id: string, opts: { tab?: string } = {}): void {
+    this.messages = [];
+    this._local = [];
+    this._inspectionReports = [];
+    this.conversationId = id;
+    this._historyError = '';
+    if (opts.tab) this.activeTab = opts.tab === 'approvals' ? 'approvals' : 'chat';
+    this.dispatchEvent(
+      new CustomEvent('conversation-change', {
+        bubbles: true,
+        composed: true,
+        detail: { conversationId: id },
+      }),
+    );
+    this.requestUpdate();
+  }
+
   private _onConversationSelect(e: Event) {
     const detail = (e as CustomEvent).detail || {};
     const id = typeof detail.conversationId === 'string' && detail.conversationId
       ? detail.conversationId
       : null;
     if (!id || id === this.conversationId) return;
-    this.messages = [];
-    this._local = [];
-    this.conversationId = id;
     /*
      * AND THE COLUMN MOVES TO THE CONVERSATION'S OWN TAB. A conversation carries the tab it
      * belongs to (conversations.tab, on the dropdown's rows); picking one is a request to
@@ -3015,14 +3289,7 @@ ${workspaceContext}`;
      * together — one writer, so the two cannot disagree about which tab is showing.
      */
     const picked = (this.conversations ?? []).find((c) => String(c.id) === id);
-    this.activeTab = String(picked?.tab || 'chat') === 'approvals' ? 'approvals' : 'chat';
-    this.dispatchEvent(
-      new CustomEvent('conversation-change', {
-        bubbles: true,
-        composed: true,
-        detail: { conversationId: id },
-      }),
-    );
+    this._moveSeatTo(id, { tab: String(picked?.tab || 'chat') });
   }
 
   /**
@@ -3069,13 +3336,62 @@ ${workspaceContext}`;
     const scope = this._seatIsConsole === null
       ? await this._readSeatScope(userId)
       : (this._seatIsConsole ? 'console' : 'package');
-    if (scope === 'package') return;
     if (scope === 'unknown') {
       // The gate could not be read, so nothing is attempted — and the reason is said rather
       // than shown as a button that quietly does nothing.
       this._historyError =
         'Whether this chat is the console’s could not be read, so nothing was changed — no conversation was archived.';
       this.requestUpdate();
+      return;
+    }
+    /*
+     * A PACKAGE STARTS ITS OWN CONVERSATION TOO — this was one half of a deadlock.
+     *
+     * It returned here and did nothing at all: no request, no note, no message (measured
+     * 2026-09-23 — zero fetches). And the seat's other control, the trash, refused to remove the
+     * conversation you were in ("start a new one, then remove it"). So a package's one row could
+     * not be removed, and no second row could be started to move off it — a person cleaning up had
+     * no move at all. The owner: "I'm not able to delete conversations from the packages. It's just
+     * basic CRUD process I thought."
+     *
+     * WHAT IT DOES IS THE PLAIN THING: create a conversation for THIS package and move the seat
+     * into it, leaving the one just left in the list, where it can be returned to or deleted. The
+     * console's flow ARCHIVES its predecessor instead — that is the console's own act and it stays
+     * there (the owner, 2026-09-19: "this is the only place that this global chat is associated …
+     * don't just apply it to both areas"). A package's list is the person's to keep or clear, which
+     * is what CRUD means here.
+     *
+     * THE SESSION IS REPOINTED, the same hop the console's flow makes: the seat's conversation id
+     * comes from this session's own column, so moving the column is what makes a reload land in the
+     * new thread instead of resurrecting the old one.
+     */
+    if (scope === 'package') {
+      this._historyError = '';
+      try {
+        const created = await this._conversationWrite(
+          '/api/conversations',
+          'POST',
+          { session_id: this.sessionId ?? undefined, title: this._successorTitle() ?? 'New Chat' },
+          userId,
+        );
+        const next = typeof created?.id === 'string' ? created.id : '';
+        if (!next) throw new Error('the new conversation came back without an id');
+        if (this.sessionId) {
+          await this._conversationWrite(
+            `/api/prompt-sessions/${this.sessionId}`,
+            'PUT',
+            { conversation_id: next },
+            userId,
+          );
+        }
+        this._moveSeatTo(next);
+        void this._readPackageConversations(userId);
+        this.requestUpdate();
+      } catch (err) {
+        this._historyError =
+          `A new conversation could not be started: ${String((err as Error)?.message ?? err)}`;
+        this.requestUpdate();
+      }
       return;
     }
     const leaving = this.conversationId;
@@ -3268,9 +3584,17 @@ ${workspaceContext}`;
    * first click arms, second removes. A conversation is not deleted by one stray click, and
    * the arming disarms itself so a row cannot be left loaded.
    *
-   * THE ONE YOU ARE IN IS REFUSED, and the refusal is said under the list. Deleting it would
-   * leave the seat reading a conversation that is not there, and the package's own pointer on
-   * a dead row — so a person switches (or starts a new one) and removes it after.
+   * THE ONE YOU ARE IN IS REMOVED TOO, AND THE SEAT MOVES OFF IT. That was a refusal, and the
+   * refusal deadlocked the two controls: the console's "new conversation" does nothing inside a
+   * package, so the one row a package had could not be removed and no second row could be started
+   * to move off it. The owner, 2026-09-23: "I'm not able to delete conversations from the packages.
+   * It's just basic CRUD process I thought."
+   *
+   * The guard was there for a real reason — a seat reading a conversation that is not there, and a
+   * session pointer on a dead row — and that reason now lives where the delete happens instead
+   * (`conversation_api.delete_conversation` moves every pointing session to the newest conversation
+   * of the same kind, or to none). So the deletion is safe to make, and what is left for the seat
+   * is to follow it: see `_removeConversation`.
    */
   private _onConversationRemove = (e: Event): void => {
     e.stopPropagation();
@@ -3294,16 +3618,22 @@ ${workspaceContext}`;
       this._deleteTimer = null;
     }
     this._armedDelete = null;
-    if (String(id) === String(this.conversationId ?? '')) {
-      this._listNote = 'That is the conversation you are in — start a new one, then remove it.';
-      this.requestUpdate();
-      return;
-    }
     void this._removeConversation(id, this._userId());
   }
 
-  /** Remove one conversation from the data, then re-read the list and the count. */
+  /**
+   * REMOVE ONE CONVERSATION, AND IF IT WAS THE ONE ON SCREEN, LEAVE NOTHING BEHIND.
+   *
+   * The removal itself is one call; the rest is what the seat owes the person afterwards. Reading
+   * a conversation that is gone would draw an empty thread and a read error where their words were
+   * (the seat's own note: "a refusal is not an empty thread"), so the seat moves off it — to the
+   * newest live conversation of the same kind this package still owns, or to NO conversation at
+   * all. Nothing said yet is a true state to be in: the next thing the person says is what starts
+   * a conversation (the server creates it on a person's turn), which is the same rule the console
+   * now follows.
+   */
   private async _removeConversation(id: string, userId: string): Promise<void> {
+    const wasTheOneOnScreen = String(id) === String(this.conversationId ?? '');
     try {
       const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
         method: 'DELETE',
@@ -3316,6 +3646,32 @@ ${workspaceContext}`;
       }
       this._listNote = '';
       await this._readPackageConversations(userId);
+      if (!wasTheOneOnScreen) {
+        // The live thread is untouched, so it is NOT re-drawn: only the list above it changed.
+        this._listNote = 'Removed.';
+        this.requestUpdate();
+        return;
+      }
+      const live = (this._conversationRows ?? [])
+        .filter((r) => !r.archived && String(r.id) !== String(id));
+      const next = live.length ? String(live[0].id) : '';
+      if (next) {
+        this._moveSeatTo(next);
+        this._listNote = 'Removed. This chat moved to your other conversation.';
+      } else {
+        // NO CONVERSATION IS NOT A BROKEN STATE. The thread is emptied of what was read from the
+        // row that is gone; what the person says next will not reach either (the local turns are
+        // kept — they are what the seat is showing).
+        //
+        // AND THE SURFACE IS TOLD, with an EMPTY id. That is the fact the model needs, because the
+        // model is what a Save reads: leaving the deleted id in it made every save write a dead
+        // foreign key and fail with a 500 (measured 2026-09-23 — "AI save failed: 500"). An empty
+        // id is not "nothing to say"; it is "this place has no conversation", which is true and
+        // writable into a nullable column.
+        this._moveSeatTo('');
+        this._listNote = 'Removed. Nothing has been said here yet.';
+      }
+      this.requestUpdate();
     } catch (err) {
       this._listNote = `That conversation could not be removed: ${String((err as Error)?.message ?? err)}`;
       this.requestUpdate();
@@ -3585,6 +3941,7 @@ ${workspaceContext}`;
               active-tab=${this.collapsed ? '' : this.activeTab}
               allowed-tabs=${this.allowedTabs}
               ?collapsed=${this.collapsed}
+              ?unread=${this._unread}
               @tab-change=${this._onTabChange}
               @collapse-toggle=${this._onCollapseToggle}
             >

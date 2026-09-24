@@ -1326,7 +1326,7 @@ export const TAG_REGISTRY = {
       'a view, not a source: the whole graph arrives as one data-model binding',
       'takes the middle column on Run; the compiled output is reached again through the column\'s own selector and Clear',
       'the node body is one function — the Figma node replaces it without touching the canvas',
-      'HOST-COMPOSED, RECORDED (2026-09-18): the chain this view is part of is written by WritingAreaIndex.setOutputColumn on Run (AgentCanvas + AgentFlow + OutputControls + CanvasFooter). The assembly does not emit these names; this is the sanctioned exception, not an oversight.',
+      'ASSEMBLED ON RUN (2026-09-23): the chain this view is part of is emitted by the model against this catalog — /api/ai/assemble-surface, intent render-run, assembled when a person presses RUN. It used to be written by WritingAreaIndex.setOutputColumn by hand, which is the protocol violation READ-ME/CONTINUE-HERE.md §00c records.',
     ],
   },
   'agent-canvas': {
@@ -1345,7 +1345,7 @@ export const TAG_REGISTRY = {
       'filled by name from the envelope: "header", "flow" (the drawing) and "footer" — NOT "seat": the element renders no seat slot, because she is never moved into the canvas ("there\'s no difference between the canvas Grace and the new-package Grace", owner 2026-09-18)',
       'one Grace — a surface mounts this OR a bare chat-panel, never both',
       'her bindings belong to the envelope, not to this element',
-      'HOST-COMPOSED, RECORDED (2026-09-18): the chain it heads is written by WritingAreaIndex.setOutputColumn on Run. The assembly does not emit these names; this is the sanctioned exception, not an oversight.',
+      'ASSEMBLED ON RUN (2026-09-23): the model emits this component and its three slots (render-run in backend/routes/ai.py), applied to the live tree by id. It used to be written by WritingAreaIndex.setOutputColumn by hand.',
     ],
   },
   'canvas-footer': {
@@ -1362,7 +1362,7 @@ export const TAG_REGISTRY = {
       'the master\'s numbers, not re-invented: 70px, #B5CCCE, radius 0 0 10px 0, padding 13px 38px',
       'controls sit at the LEFT: the strip spans the column and her seat can lie over its right end',
       'it emits theme-change; the host writes the tone, never this element',
-      'HOST-COMPOSED, RECORDED (2026-09-18): the canvas chain\'s foot is written by WritingAreaIndex.setOutputColumn on Run. The assembly does not emit it; this is the sanctioned exception, not an oversight.',
+      'ASSEMBLED ON RUN (2026-09-23): the model emits the foot as one of the canvas\'s three slots (render-run), and it survives what a Run replaces because it is the COLUMN\'s, not the body\'s. It used to be written by WritingAreaIndex.setOutputColumn by hand.',
     ],
   },
   'left-column-header': {
@@ -1399,7 +1399,7 @@ export const TAG_REGISTRY = {
       'the column\'s header, not the body\'s: it is drawn in every view of the middle column',
       'the tile is inert until the menu is designed — absent behaviour, not invented behaviour',
       'RECORDED NESTING (2026-09-18): the model control is the published <model-selector-button>, instantiated from this element\'s own template, never restyled — the one place this protocol\'s flat-adjacency rule is knowingly excepted, and it is recorded rather than hidden',
-      'HOST-COMPOSED, RECORDED (2026-09-18): written by WritingAreaIndex.setOutputColumn on Run; the assembly does not emit this name.',
+      'ASSEMBLED ON RUN (2026-09-23): the model emits this as the canvas\'s \"header\" slot (render-run), which is the point of it being its own element. It used to be written by WritingAreaIndex.setOutputColumn by hand.',
     ],
   },
   'workspace-layout': {

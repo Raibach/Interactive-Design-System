@@ -40,7 +40,7 @@
  * node with no known state stays 'idle', which is this app's rule for unset data
  * everywhere else (unset is not empty).
  */
-import { SECTION_TYPES, normalizeSectionType, isUndecidedType } from './promptSections';
+import { SECTION_TYPES, normalizeSectionType, seatIdOf, declaredName } from './promptSections';
 
 // ── the shapes ──────────────────────────────────────────────────────────────
 
@@ -134,6 +134,13 @@ export interface RepairFlowInput {
   tool?: { name: string; nodeId?: string | null } | null;
   /** The run's facts, as far as they have arrived. */
   run?: RepairRunFacts;
+  /**
+   * WHERE THE PERSON PUT THE NODES, when the package remembers — the saved graph's own nodes
+   * (WorkspaceState.graph.nodes), read on open. The arrangement below is the DEFAULT picture;
+   * a node with a carried place keeps it (see FlowPosition). Absent means nobody has moved
+   * anything, and the ring decides every place, exactly as before.
+   */
+  carried?: FlowPosition[];
 }
 
 export interface FlowGraph {
@@ -144,6 +151,51 @@ export interface FlowGraph {
   unresolved: string[];
   /** Steps deliberately not drawn, each with the reason. Absence is reported. */
   absent: Array<{ step: string; why: string }>;
+}
+
+/**
+ * WHERE A NODE SITS, AS THE PACKAGE SAVED IT.
+ *
+ * POSITION IS THE ONE FACT THAT IS THE DRAWING'S, and this is the shape it travels in. The brief
+ * (READ-ME/CANVAS-AND-PROMPT.md §2): "Every node action has a prompt meaning, or it does not
+ * exist… The one genuine exception is position… It already has a home: the graph the package
+ * saves carries workspace.graph.nodes[].x/y, written on Save." This is the read half of that
+ * home — the saved nodes handed back to the builder, so a Run after a reopen arranges the picture
+ * around the person's own layout instead of overruling it.
+ *
+ * A FEW FIELDS, NOT THE WHOLE NODE: a place needs to know WHICH node it is for, and nothing else
+ * about it. The graph the save writes carries full nodes, which satisfy this shape.
+ */
+export interface FlowPosition {
+  id: string;
+  family: FlowFamily;
+  kind: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * WHICH NODE A PLACE BELONGS TO — and the answer is NOT always the id.
+ *
+ * A seat's id carries its SLOT: `seat:<index>:<kind>` (see the builder). A slot is not an
+ * identity. Move a row up the stack, or delete the row above it, and the same row is handed back
+ * as `seat:0` where the person dragged `seat:1` — keyed by id, their place stays behind and lands
+ * on whichever row took the slot. Keyed by the DECLARED KIND, the place follows the row, which is
+ * what a person means when they say they put the Tool Call over there.
+ *
+ * TWO THINGS KEEP THEIR ID, both for the same reason — their id is already the only name they
+ * have: a row the builder could NOT name (every one of those is `seat:<i>:unresolved`, so a key of
+ * `seat:unresolved` would give several rows one place), and everything that is not a slotted seat
+ * (a note, a step, a draft the element made — none of their ids carry an ordinal).
+ */
+const SLOTTED_SEAT = /^seat:\d+:/;
+/** The `kind` the builder gives a row it could not name. Here because positionKey reads it. */
+const UNRESOLVED_SEAT = 'unresolved';
+
+export function positionKey(n: { id: string; family: FlowFamily; kind: string }): string {
+  if (n.family !== 'seat' || !SLOTTED_SEAT.test(n.id)) return n.id;
+  if (n.kind === UNRESOLVED_SEAT) return n.id;
+  return 'seat:' + n.kind;
 }
 
 // ── the layout ──────────────────────────────────────────────────────────────
@@ -170,16 +222,209 @@ export const NODE_GAP = 72;
 const STEP = NODE_TILE + NODE_GAP;
 
 /**
- * THE STAIRCASE. Read down the left, out to the right, down again — the configuration
- * the owner drew and asked for (2026-09-18): "these notes in this exact configuration".
+ * HOW TALL A NODE ACTUALLY DRAWS — the tile, plus the label block it hangs underneath itself.
  *
- * The rule that makes it work, and that the first layout got wrong: A STEP SITS BESIDE
- * ITS SOURCE, on the SAME ROW. The tool call is level with the Tool Call seat that names
- * it; the answer and everything after it are level with the Agent Role seat that asked
- * for them. Every step on the top row — which is what this did — drew a long S-curve up
- * the canvas from the seat that caused it, and the owner's word for that was "bizarre".
- * Short edges are not an aesthetic preference here; they are what the arrangement means.
+ * THE MODEL HAS TO KNOW THIS, AND IT DID NOT. Everything that places a node was measured in
+ * tiles: a ring's radius was floored at NODE_TILE, so the hub stood 88 units from its first row
+ * while a node draws 135 tall. Measured live on a 7-node run 2026-09-23: the brain and the row
+ * above it overlapped by 47px, and every ring-to-ring step did the same — the owner: "all of the
+ * nodes are like sitting on top of each other."
+ *
+ * THE NUMBER IS THE ELEMENT'S OWN, moved here rather than copied. `agent-flow.ts` has used 54 as
+ * its label block in the fit and in the drag extent all along, and did NOT use it in its arrival
+ * view — so one fact had four readers and one of them was reading a different fact. It lives in
+ * THIS module because this is the module that decides where a node goes; the element imports it.
  */
+const NODE_LABEL_BLOCK = 54;
+
+/** What a node occupies: the tile, and the label block it draws below it. */
+export const NODE_FOOTPRINT = NODE_TILE + NODE_LABEL_BLOCK;
+
+/**
+ * THE HUB — one brain, and what comes off it. Read this before the row constants below.
+ *
+ * The arrangement is a hub with rings around it: the SYSTEM ROLE at the centre, every other row
+ * on the first ring, and the run's steps on the ring beyond. The owner, 2026-09-23: "There's a
+ * central brain that runs the prompt that represents Grace… and then the nodes come off of that —
+ * in this case the system role is the main driver, the brain of the agent." The row ARE the
+ * drawing, so this is not decoration: the hub is the one row the editor makes sticky (slot 0, and
+ * `_removeSection`/`_moveSection` refuse to remove or displace it), which is the same fact the
+ * picture is now drawn from.
+ *
+ * WHAT THE OLD ARRANGEMENT WAS, and why it changed: a staircase — notes down the left, the rows
+ * chained to each other in stacked order, the steps out to the right. It read as one line of
+ * thought, and a line has no brain in it: the second row was as much a driver as the first. A hub
+ * says what is true, and it SCALES — the reason it is built as rings rather than a row is that a
+ * node added anywhere (another row, another tool, and one day another agent) takes the next place
+ * on a ring instead of making the line longer. The owner asked for that directly: "these canvases
+ * can get really complicated with lots of agent activity going on coming out of that system role…
+ * it might be something to think about where it's going to go and how it's going to scale while
+ * you're building it now."
+ *
+ * THE RING GROWS WITH ITS COUNT, so two nodes never touch however many arrive: each node needs an
+ * arc of its own around the circumference, and the radius is whatever holds them. Deterministic,
+ * because the module's rule is that the same facts draw the same picture — for the person looking
+ * twice and for the test asserting it.
+ */
+
+/**
+ * ONE RING STEP — how far apart two nodes have to stand to be clear of each other, plus air.
+ *
+ * THE NUMBER IS A BOX PROBLEM, NOT A TILE PROBLEM. Two axis-aligned boxes 88 wide and 142 tall
+ * cannot overlap once their centres are √(88² + 142²) ≈ 167 apart — AT ANY ANGLE, which is what a
+ * ring needs: neighbours travel around the circumference so their separation sweeps every
+ * direction, and the hub's spokes point every way too. Below that distance there is always some
+ * angle where both axes come up short at once. Measured on a nine-node ring before this: two rows
+ * stood 81 apart in x and 141 in y against a box of 88×142 — one pixel of overlap in each
+ * direction, which is enough to read as a pile.
+ *
+ * It is BOTH the radial floor — the hub to a row, and one ring to the next — and the arc one node
+ * needs around the circumference, because it answers one question: how much room a node takes.
+ * The old floor was NODE_TILE (88) and the old arc NODE_TILE + 24 (112); both were the tile, so
+ * the brain stood 88 from its first row while the two drew 142 tall and sat through each other —
+ * the owner: "all of the nodes are like sitting on top of each other."
+ *
+ * The tests in agentFlow.test.ts assert this at every ring size, so a future tightening fails
+ * there rather than on somebody's screen.
+ */
+const RING_STEP = Math.ceil(Math.hypot(NODE_TILE, NODE_FOOTPRINT)) + 24;
+
+/** The radius that holds `n` nodes clear of each other. */
+function ringRadius(n: number): number {
+  if (n <= 1) return RING_STEP;
+  return Math.max(RING_STEP, (n * RING_STEP) / (2 * Math.PI));
+}
+
+/** Evenly spaced from the top, clockwise — so the first spoke is where a person looks first. */
+function ringPlace(i: number, n: number, radius: number): { x: number; y: number } {
+  const angle = -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, n);
+  return { x: Math.round(radius * Math.cos(angle)), y: Math.round(radius * Math.sin(angle)) };
+}
+
+/**
+ * ARRANGE THE BUILT NODES AS A HUB, and join the rows to the brain.
+ *
+ * A pass over what the builder produced rather than a rewrite of it: every node keeps the id,
+ * family, kind and state it was given (which is what the edges, the selection and the tests are
+ * about), and only where it SITS and what leads to it come from here.
+ *
+ * WHAT IT DOES TO THE EDGES, and this is the part that makes the picture say "brain": the chain
+ * between one row and the next is REMOVED — that chain was the staircase's claim that each row
+ * follows the last — and every row is joined FROM the hub instead. A note still leads IN to the
+ * hub, because a finding is what the prompt is being drawn about. The steps keep the edges the
+ * builder derived (each tool from the row that names it, the answer after the rows), because
+ * those are the relationships the requirements document already fixes.
+ */
+function arrangeAsHub(
+  nodes: FlowNode[],
+  edges: FlowEdge[],
+  carried?: FlowPosition[],
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const hub = nodes.find((n) => n.family === 'seat' && n.kind === 'system-role')
+    ?? nodes.find((n) => n.family === 'seat');
+  if (!hub) return { nodes, edges };
+
+  /*
+   * THE PERSON'S OWN PLACES, read first so they can win.
+   *
+   * A place is the drawing's fact (FlowPosition), and a rebuild is not a reason to take it away:
+   * the ring is what the picture looks like when nobody has said otherwise. A place that is not a
+   * pair of numbers is not a place — it is a corrupt field in a stored package, and the ring is
+   * the honest answer to that rather than a node drawn at NaN.
+   */
+  const held = new Map<string, { x: number; y: number }>();
+  for (const p of carried ?? []) {
+    if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+      held.set(positionKey(p), { x: p.x, y: p.y });
+    }
+  }
+
+  const notes = nodes.filter((n) => n.family === 'note');
+  const spokes = nodes.filter((n) => n.family === 'seat' && n.id !== hub.id);
+  const steps = nodes.filter((n) => n.family === 'step');
+
+  const at = new Map<string, { x: number; y: number }>();
+  at.set(hub.id, { x: 0, y: 0 });
+  /*
+   * ONE BAND, NOT TWO — and the second ring was the whole of the problem.
+   *
+   * The steps used to sit on a ring BEYOND the rows ("the eye goes brain → rows → what happens").
+   * That reads well with twelve nodes and badly with seven, because a ring's spacing is the
+   * CIRCUMFERENCE divided by the count: three steps on their own ring stand 120° apart at
+   * r = inner + step, so ANY two of them are 2·r·sin(60°) apart whatever else is true. Measured on
+   * the package the owner was looking at, 2026-09-23: the answer sat at the top, the evaluation at
+   * the lower right, and the edge between them was **665 units long — a third of the whole
+   * picture**, with the tool's own edge 508 across the middle. His words: "the evaluation is way
+   * at the bottom with a long line up to the top of the pyramid … they're stretched out across the
+   * screen. They should be nicely stacked together with just a small connector line."
+   *
+   * On ONE band every edge is one of two things: a SPOKE from the brain (the radius), or an ARC
+   * between neighbours (the chord, ~= the radius). For this package that is 214 and 186 units —
+   * every connector short, and the whole drawing 516 × 570 instead of 754 × 718, so the arrival
+   * view opens at 0.80 instead of 0.64 and the labels can be read.
+   *
+   * THE ORDER IS THE CHAIN'S. The rows keep their prompt order, and each step is inserted
+   * immediately after the node it hangs off — so a tool stands beside the row that declares it,
+   * and the answer and the evaluation follow on from there instead of being flung to the far side
+   * of a bigger circle. Deterministic: same facts, same picture.
+   */
+  const band: FlowNode[] = [...notes, ...spokes];
+  /*
+   * AND A STEP PARKS BEHIND THE SIBLINGS ALREADY AT ITS PARENT.
+   *
+   * Inserting each step directly after its parent is not enough on its own, and the package the
+   * owner was looking at is why: in it the LAST row is Tool Call, so the tool AND the answer both
+   * come off the same seat. The tool was inserted at the parent's shoulder, then the answer was
+   * inserted at the same index and pushed the tool one place on, then the evaluation pushed it
+   * again — three places on a six-place band, which is the far side of the circle. Measured live
+   * 2026-09-23: `seat:3:tool-call 30° r=192` and `step:tool 210° r=192`, an edge of **384 units —
+   * the diameter**, and the owner's report: "you've got search-the-internet, which is a tool or a
+   * skill, it's on the left-hand side. It should just be coming out of the right, where it
+   * belongs."
+   *
+   * So a parent remembers how many steps are parked after it, and the next one goes behind those.
+   * Every step now sits one place from its parent, which on this band is 192 units.
+   */
+  const parked = new Map<string, number>();
+  for (const s of steps) {
+    const parent = edges.find((e) => e.to === s.id)?.from ?? '';
+    const base = band.findIndex((n) => n.id === parent);
+    if (base < 0) {
+      band.push(s);
+      continue;
+    }
+    const behind = parked.get(parent) ?? 0;
+    band.splice(base + 1 + behind, 0, s);
+    parked.set(parent, behind + 1);
+  }
+  const bandR = ringRadius(band.length);
+  band.forEach((n, i) => at.set(n.id, ringPlace(i, band.length, bandR)));
+
+  const arranged = nodes.map((n) => {
+    const p = held.get(positionKey(n)) ?? at.get(n.id);
+    return p ? { ...n, x: p.x, y: p.y } : n;
+  });
+
+  const spokeIds = new Set(spokes.map((n) => n.id));
+  const noteIds = new Set(notes.map((n) => n.id));
+  // The chain between rows goes; the head edge the builder drew (a note into the first row)
+  // goes with it, because the hub is where a note leads now.
+  const kept = edges.filter((e) =>
+    !(spokeIds.has(e.from) && spokeIds.has(e.to)) && !(noteIds.has(e.from) && spokeIds.has(e.to)));
+  const toHub: FlowEdge[] = [
+    ...notes.map((n) => ({ from: n.id, to: hub.id })),
+    ...spokes.map((n) => ({ from: hub.id, to: n.id })),
+  ];
+  // One edge per pair: the builder may already have drawn a note into the hub.
+  const seen = new Set<string>();
+  const joined = [...kept, ...toHub].filter((e) => {
+    const key = `${e.from}\u0000${e.to}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return { nodes: arranged, edges: joined };
+}
 const NOTE_X = 0;
 const NOTE_Y0 = 40;
 const NOTE_GAP = STEP;
@@ -239,10 +484,7 @@ export function buildRepairFlow(input: RepairFlowInput): FlowGraph {
       ? input.tool
         ? [{
             name: input.tool.name,
-            seatIndex: sections.findIndex((s) => {
-              const raw = s.type || s.name;
-              return !isUndecidedType(raw) && normalizeSectionType(raw) === 'tool-call';
-            }),
+            seatIndex: sections.findIndex((s) => seatIdOf(s) === 'tool-call'),
             nodeId: input.tool.nodeId,
           }]
         : []
@@ -289,15 +531,18 @@ export function buildRepairFlow(input: RepairFlowInput): FlowGraph {
 
   // ── the seats: the prompt being built, in the order it is stacked ──
   const seatNodes: FlowNode[] = sections.map((s, i) => {
-    const raw = s.type || s.name;
-    const decided = !isUndecidedType(raw);
-    const id = decideSeatId(raw);
-    if (!decided) unresolved.push(s.name || String(raw));
+    // THE NAME, THROUGH THE ONE READER — a saved row carries `{section, role, content}` and no
+    // `type`, so reading `type || name` here drew the System and User rows of every saved package
+    // as `custom` nodes with no seat claimed. See promptSections.declaredName.
+    const seat = seatIdOf(s);
+    const decided = seat !== null;
+    const id = seat ?? UNRESOLVED_SEAT;
+    if (!decided) unresolved.push(declaredName(s) || 'a row with no name');
     return {
       id: `seat:${i}:${id}`,
       family: 'seat' as FlowFamily,
       kind: id,
-      title: decided ? seatLabel(id) : s.name || 'Unresolved row',
+      title: decided ? seatLabel(id) : declaredName(s) || 'Unresolved row',
       subtitle: firstLine(s.content),
       badge: decided ? undefined : 'unresolved',
       // A seat is not a step: it is 'active' while the run is in flight and 'done'
@@ -459,19 +704,52 @@ export function buildRepairFlow(input: RepairFlowInput): FlowGraph {
   // for it to check, and the edge would draw a step that cannot run.
   edges.push({ from: writeNode ? writeNode.id : answerNode.id, to: evaluationNode.id });
 
-  return { label, nodes, edges, unresolved, absent };
+  // WHERE EVERYTHING SITS, AND WHAT LEADS TO THE BRAIN. The last word on both: the row
+  // constants above seed a position and the arrangement then owns it, so there is one place
+  // that decides the picture — EXCEPT for a place the person set and the package saved, which
+  // the arrangement keeps (see FlowPosition and arrangeAsHub).
+  const arranged = arrangeAsHub(nodes, edges, input.carried);
+  return { label, nodes: arranged.nodes, edges: arranged.edges, unresolved, absent };
 }
 
 /**
- * A row's canonical seat id, or 'unresolved' — never a guess.
+ * A NODE ADDED ON THE CANVAS, READ AS THE ROW IT IS.
  *
- * normalizeSectionType is the LENIENT reader: it normalises what it can and
- * preserves what it cannot, including the 'custom' fallback for a row with no type
- * at all. That fallback is exactly one of the UNDECIDED values, so the caller asks
- * isUndecidedType first and this runs only for rows that have a name to give.
+ * THE ONE INVARIANT, at the only place it can be broken: "Every node action has a prompt
+ * meaning, or it does not exist." A node whose row cannot be named is not a node — it is a
+ * picture of one — so this returns the row to add, or the reason there is none, and the
+ * caller writes the row or says the reason. It never guesses.
+ *
+ * THREE ANSWERS, AND TWO OF THEM ARE REFUSALS:
+ *
+ *   the row is added     the declaration's own id and label. The NAME comes from the
+ *                        declaration and never from the drawing's label, because a node
+ *                        whose name the prompt does not use is a second vocabulary.
+ *   'undeclared'         the kind names no seat this app declares. A row invented for it
+ *                        would be drawn with a shape nobody agreed on (see UNDECIDED in
+ *                        promptSections).
+ *   'already'            the prompt already has that row — so the node already exists and
+ *                        there is nothing to add. This is a refusal rather than a write
+ *                        because the only write available would SET the row's content, and
+ *                        a person dropping a node must never erase text they cannot see.
+ *                        (The rule the seat writers already hold: "AN EXISTING SEAT IS
+ *                        APPENDED TO, NOT REPLACED.")
+ *
+ * A name is matched by MEANING, not spelling: `agent_role`, `agent role` and `agent-role`
+ * are one row, and they are one node.
  */
-function decideSeatId(raw: unknown): string {
-  return isUndecidedType(raw) ? 'unresolved' : normalizeSectionType(raw);
+export function rowForAddedNode(
+  kind: string,
+  rows: FlowSeatInput[],
+): { section?: string; label?: string; why?: 'undeclared' | 'already' } {
+  const wanted = normalizeSectionType(kind);
+  const seat = SECTION_TYPES.find((t) => t.id === wanted);
+  if (!seat) return { why: 'undeclared' };
+  const present = (rows ?? []).some((r) => seatIdOf(r) === seat.id);
+  // The label rides the refusal too: the refusal is something Grace says out loud, and she
+  // has to be able to name the row that is already there.
+  if (present) return { why: 'already', section: seat.id, label: seat.label };
+  return { section: seat.id, label: seat.label };
 }
 
 /**
@@ -496,10 +774,7 @@ export const CREATABLE_KINDS: Array<{ kind: string; label: string; description: 
 
 /** The address a repair prompt names, read from the Tool Call seat's own words. */
 export function toolFromSections(sections: FlowSeatInput[]): { name: string; nodeId?: string | null } | null {
-  const seat = sections.find((s) => {
-    const raw = s.type || s.name;
-    return !isUndecidedType(raw) && normalizeSectionType(raw) === 'tool-call';
-  });
+  const seat = sections.find((s) => seatIdOf(s) === 'tool-call');
   if (!seat) return null;
   const name = /^\s*tool\s+(.+)$/m.exec(seat.content)?.[1]?.trim();
   if (!name) return null;

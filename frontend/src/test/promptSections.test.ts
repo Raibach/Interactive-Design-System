@@ -40,6 +40,8 @@ import {
   isUndecidedType,
   strictSectionType,
   resolveSectionName,
+  declaredName,
+  seatIdOf,
 } from '@/shared/promptSections';
 import { PromptSectionSchema, TAG_REGISTRY } from '@/shared/tag-registry';
 
@@ -510,5 +512,70 @@ describe('a write finds its seat by any of the names that seat answers to', () =
         expect(resolveSectionName(name, [def.label]), `${def.id} via ${name}`).toBe(0);
       }
     }
+  });
+});
+
+describe('what a row is called — one reader, because four fields is four chances to be wrong', () => {
+  /**
+   * THE SHAPE THAT BROKE THE GATE. This is not a hypothetical fixture: it is the four rows the
+   * pre-Run review was handed on the live Insurance News Scout package, 2026-09-23, copied out of
+   * the browser. Two of them carry `{section, role, content}` and no `type` — the shape a SAVED row
+   * has — and the review read `type || name`, answered `''`, and turned both into `custom`.
+   *
+   * The consequences were two blocking requirements nobody could clear:
+   *   S2  "There is no User Role"     — over a User Role with words in it
+   *   T6  a row "stands twice"        — over System and User, which are different rows
+   * and both repairs are `via: 'words'`, so no button on screen could clear them. No Run passed.
+   */
+  const savedPackage = [
+    { content: 'You are a precise, professional assistant.', position: 0, role: 'System', section: 'System', visible: true },
+    { content: 'Find the latest news about insurance.', position: 1, role: 'User', section: 'User', visible: true },
+    { content: 'You are the scout.', name: 'Agent', position: 2, role: 'Agent', section: 'Agent', type: 'agent-role', visible: true },
+    { content: '{{tool:search-the-internet}}', name: 'Tool Call', position: 4, type: 'tool-call' },
+  ];
+
+  it('reads a saved row\u2019s seat out of `section`, not out of a `type` it does not have', () => {
+    expect(seatIdOf(savedPackage[0])).toBe('system-role');
+    expect(seatIdOf(savedPackage[1])).toBe('user-role');
+    expect(seatIdOf(savedPackage[2])).toBe('agent-role');
+    expect(seatIdOf(savedPackage[3])).toBe('tool-call');
+  });
+
+  it('and names it by the row\u2019s own words when there is no declaration to read', () => {
+    expect(declaredName(savedPackage[1])).toBe('User');
+    expect(declaredName({ section: 'Hero Specs', content: 'x' })).toBe('Hero Specs');
+    expect(declaredName({ type: 'custom', name: 'My own row' })).toBe('My own row');
+  });
+
+  it('answers null for a row with no name at all — never `custom`, which is a seat it is not', () => {
+    // THE TRAP THIS CLOSES: `''` resolves to its own `empty` kind, so `isUndecidedType('')` is
+    // false and the lenient reader falls through to its documented `custom` default. A row with no
+    // name is not a Custom row, and two of them are not two occurrences of one seat.
+    expect(declaredName({ content: 'words but no name' })).toBe('');
+    expect(seatIdOf({ content: 'words but no name' })).toBeNull();
+    expect(seatIdOf({})).toBeNull();
+    expect(seatIdOf(null)).toBeNull();
+    // The fallback itself has not moved — this only stops callers reaching it with nothing.
+    expect(normalizeSectionType('')).toBe('custom');
+    expect(isUndecidedType('')).toBe(false);
+  });
+
+  it('answers null for a row whose name has no seat yet, which is a different answer', () => {
+    // A free-form row IS named — by the person — and it is still not a seat. Both answers are
+    // `null` because every caller does the same thing about them: reports the row, claims no seat.
+    expect(declaredName({ name: 'Hero Specs' })).toBe('Hero Specs');
+    expect(seatIdOf({ name: 'Hero Specs' })).toBeNull();
+    expect(declaredName({ type: 'custom' })).toBe('custom');
+    expect(seatIdOf({ type: 'custom' })).toBeNull();
+  });
+
+  it('knows every spelling of the seats it does have, separators included', () => {
+    for (const spelling of ['agent_role', 'agent role', 'agent-role', 'Agent Role', 'Agent']) {
+      expect(seatIdOf({ name: spelling }), spelling).toBe('agent-role');
+    }
+    // A different WORD is a different seat and stays that way — the aliases that remain in the
+    // table are the genuinely different words, and they resolve.
+    expect(seatIdOf({ name: 'assistant' })).toBe('agent-role');
+    expect(seatIdOf({ name: 'Nothing Like This' })).toBeNull();
   });
 });

@@ -31,10 +31,44 @@ MODEL_PROVIDERS = [
     },
 ]
 
-LLM_TIMEOUT = 10  # HARD 10s cap. A2UI surfaces must render in <=10s or 503.
+LLM_TIMEOUT = 10  # The old surface cap. Kept named because the record matters — see below.
 
-# Which modes are SURFACES. A surface is a canvas that has to appear now, and the
-# 10s cap is its contract. Everything NOT in this set asks the model to WRITE, and
+# ── WHY THE ASSEMBLY HAS ITS OWN BUDGET ────────────────────────────────────────────
+#
+# THE 10s WAS SIZED FOR A MODEL THIS FILE NO LONGER USES. The provider config above says
+# it outright: "deepseek-flash times out under the surface budget — deepseek-v4-pro is
+# the only model used." So the tight cap killed the fast model and then sat in front of a
+# REASONING one, which spends completion tokens thinking before it writes a word (18
+# reasoning tokens to answer "Say OK", measured) and has to compose a twelve-component
+# JSON document inside that socket.
+#
+# WHAT IT COST, measured in production and then locally on 2026-09-23: opening a package
+# answered
+#     A2UI FAILURE: DeepSeek API request failed: Request timed out.
+#     (waited 10s; this is a SURFACE and 10s is its contract)
+# — a person could not open their own package because the socket was smaller than the
+# work its assembler had been handed. It was not a fault in the model's answer and not a
+# fault in the surface.
+#
+# SO THIS IS A CORRECTED CONSTANT, NOT A SUPPRESSED ERROR. The call still makes ONE
+# attempt, it still fails loud, and a failure still returns HTTP 503 with diagnostics —
+# there is no fallback tree, no cache and no substitute of any kind (see
+# READ-ME/THE_METHOD.md, "Fail loud"). What changed is the number, and it is stated where
+# an operator can see it: the surface is assembled by the model, the person is shown
+# "AI is building the interface…" while it works, and this is how long that may take
+# before the app says it failed.
+#
+# SIZED FROM THE MEASUREMENTS, not from taste: successful assemblies on this provider ran
+# 3–8s and the failures happened AT 10s — the ceiling, never the work. 45s leaves the
+# ordinary case untouched and the reasoning case room to finish, while staying well under
+# the writing budget (a person waiting on a canvas should not wait two minutes). The ENV
+# VAR keeps the same shape as the writing budget's, for the same reason: this is the
+# number an operator tunes when their provider is slower than this one.
+ASSEMBLY_TIMEOUT_ENV = "LLM_TIMEOUT_ASSEMBLY"
+LLM_TIMEOUT_ASSEMBLY = int(os.getenv(ASSEMBLY_TIMEOUT_ENV, "45"))
+
+# Which modes are SURFACES. A surface is assembled by the model on the way in, so its
+# call gets the assembly budget. Everything NOT in this set asks the model to WRITE, and
 # writing gets room.
 #
 # Written as a set rather than as `mode == "prompt_output"` because that test WAS
@@ -315,7 +349,7 @@ def query_llm(
     # a 20s success or a 20s failure, so the contract the surface is held to was
     # never the contract that ran, and a slow answer looked like a fast one.
     #
-    # Neither is allowed. A canvas appears inside LLM_TIMEOUT or it does not appear,
+    # Neither is allowed. A canvas appears inside its budget or it does not appear,
     # and a second attempt is not a way of making the first one have worked.
     #
     # The first provider carrying a key IS the provider. If it fails, its failure is
@@ -328,9 +362,10 @@ def query_llm(
 
     api_key = os.getenv(provider["api_key_env"])
     model_name = model or provider["model"]
-    # Surfaces keep the tight cap; anything that writes gets room. See SURFACE_MODES.
-    # `chat` is a writing mode — a person is waiting on an answer, not on a canvas.
-    client_timeout = LLM_TIMEOUT if mode in SURFACE_MODES else LLM_TIMEOUT_WRITING
+    # Surfaces get the assembly budget — the old 10s was sized for a model this file no
+    # longer uses (see ASSEMBLY_TIMEOUT_ENV); anything that writes gets room. `chat` is a
+    # writing mode — a person is waiting on an answer, not on a canvas.
+    client_timeout = LLM_TIMEOUT_ASSEMBLY if mode in SURFACE_MODES else LLM_TIMEOUT_WRITING
     # THE MODE AND THE REASONING SETTING ARE IN THE LINE, not just the ceiling.
     # "one attempt, 120s" says how long a call MAY take; it does not say what it is,
     # and `chat` and `prompt_output` share that number. The two things that explain a
@@ -420,8 +455,9 @@ def query_llm(
             # constant in this file.
             if mode in SURFACE_MODES:
                 why = (
-                    f"this is a SURFACE and {LLM_TIMEOUT}s is its contract: "
-                    "the canvas has to appear now"
+                    f"this is a SURFACE: it is assembled by the model on the way in, and "
+                    f"{client_timeout}s is the whole budget for that call — raise "
+                    f"{ASSEMBLY_TIMEOUT_ENV} if this provider is slower than that"
                 )
             else:
                 why = (
@@ -505,8 +541,25 @@ def _assemble_prompt_output(context: str, question: str) -> tuple:
         )
         return system, user_role
 
-    except Exception:
-        return context, "Execute the prompt configuration."
+    except Exception as _config_error:
+        # NO SUBSTITUTE. This used to `return context, "Execute the prompt configuration."` —
+        # a fabricated prompt, run silently, over whatever text arrived. It is how a Run
+        # whose config could not be parsed answered a question nobody asked: the person
+        # pressed RUN on four filled rows and got an answer to the words "Execute the prompt
+        # configuration." against a blob of raw JSON, and the response said nothing. The tool
+        # results were moved out of the context prefix for the same reason (routes/teacher.py);
+        # the conversation history was not, and was the last live way in.
+        #
+        # THE PROMPT IS THE PRODUCT HERE. If it cannot be assembled there is no run to make —
+        # so this refuses, with the reason, and routes/teacher.py returns it as a 500 carrying
+        # this sentence. A prompt that silently becomes a different prompt is worse than a run
+        # that does not happen.
+        raise ValueError(
+            "this run's prompt could not be assembled, so it was NOT run and nothing was "
+            f"substituted for it. The context is not the JSON config a Run sends "
+            f"({type(_config_error).__name__}: {_config_error}). The first characters were: "
+            f"{context[:120]!r}"
+        ) from _config_error
 
 
 def _build_chat_system(context: str, memory_context: str) -> str:
