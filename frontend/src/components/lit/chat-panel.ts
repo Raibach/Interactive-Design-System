@@ -3085,6 +3085,11 @@ ${workspaceContext}`;
             detail: { conversationId: returned },
           }),
         );
+        // The header's list is re-read too: the server just created this thread (a first
+        // turn in a package with none), and the count should say so now rather than wait
+        // for the next assembly. Without this the row was in the database but not in the
+        // list until a reload — measured live 2026-09-24.
+        void this._readPackageConversations(this._userId());
       }
       // The measured cost of this call, attributed to the conversation it
       // served. The host's accumulator only accepts calls whose
