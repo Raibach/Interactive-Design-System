@@ -1575,6 +1575,11 @@ export class ChatPanel extends LitElement {
     .view-slot.tab-eval ::slotted(eval-feed) { display: block; }
     .view-slot.tab-approvals ::slotted(chat-repair-actions) { display: block; }
     .view-slot.tab-repair ::slotted(chat-repair-actions) { display: block; }
+    /* THE EVALS VIEW PAINTS NO GROUND — the owner asked for it transparent (2026-09-24), so
+       the drawing's ground reads through the column. Scoped to the eval tab: the chat and the
+       other views keep the design's own sheet. */
+    .panel.tab-eval { background: transparent; }
+    .view-slot.tab-eval { background: transparent; }
     /* The trace fold holds the same slot; only the feed it names may draw there. */
     .fold-wrap ::slotted(eval-feed) { display: none; }
     .fold-wrap ::slotted(chat-repair-actions) { display: none; }
@@ -3981,7 +3986,7 @@ ${workspaceContext}`;
             >
               <img slot="logo" src=${logoAsset} width="66" height="62" alt="Copilot" />
             </chat-navigation-bar>
-            <div class="panel ${this.collapsed ? 'collapsed' : ''}">
+            <div class="panel tab-${this.activeTab || 'none'} ${this.collapsed ? 'collapsed' : ''}">
               <!-- The listener sits on the WRAPPER so it hears conversation-select
                    from the Conversations dropdown below and from the thread. -->
               <div class="chat-output-wrapper" @conversation-select=${this._onConversationSelect}

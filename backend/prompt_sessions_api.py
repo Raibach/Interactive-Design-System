@@ -538,6 +538,7 @@ class PromptSessionsAPI:
                     (session_id, verdict, sentence, trigger_kind),
                 )
                 row = dict(cursor.fetchone())
+                conn.commit()
                 row["id"] = str(row["id"])
                 row["runAt"] = str(row.pop("run_at"))
                 row["trigger"] = row.pop("trigger_kind")
@@ -560,6 +561,7 @@ class PromptSessionsAPI:
                     (evaluation_id, session_id),
                 )
                 row = cursor.fetchone()
+                conn.commit()
                 return row is not None
             except Exception as e:
                 raise e
