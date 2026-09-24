@@ -79,11 +79,9 @@ async def startup_event():
     import services
     services.init_services(database_url)
 
-    # Qwen9B startup verification — the ONE model query_llm() runs, for every mode.
-    # This also pays for a JIT load: LM Studio unloads an idle model after its TTL, and
-    # the first real call after that would otherwise spend the assembly budget loading it.
+    # Model startup verification — the ONE model query_llm() runs, for every mode.
     from model_server_manager import ensure_grace_server
-    ensure_grace_server("qwen")
+    ensure_grace_server("deepseek")
 
     # ── THE DAILY INSPECTION (governance, 2026-09-18) ─────────────────────────
     # One bounded local-model call a day, reported into the console's own conversation and

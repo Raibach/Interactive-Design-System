@@ -110,7 +110,7 @@ async def api_health():
     llm_error = None
     try:
         from model_server_manager import test_model_connection
-        result = test_model_connection("qwen")
+        result = test_model_connection("deepseek")
         llm_ok = result.get("status") == "success"
         if not llm_ok:
             llm_error = result.get("message", "unknown error")

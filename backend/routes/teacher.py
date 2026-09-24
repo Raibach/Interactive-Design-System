@@ -209,8 +209,8 @@ async def api_teacher_query(request: TeacherQueryRequest):
         sentry_sdk.set_user({"id": uid})
         if conv_id:
             sentry_sdk.set_tag("gen_ai.conversation.id", conv_id)
-        sentry_sdk.set_tag("ai.model", "glm-4.7")
-        sentry_sdk.set_tag("ai.provider", "zai")
+        sentry_sdk.set_tag("ai.model", "deepseek-chat")
+        sentry_sdk.set_tag("ai.provider", "deepseek")
         sentry_sdk.set_tag("ai.mode", request.mode)
         sentry_sdk.set_tag("ai.temperature", str(request.temperature))
         if request.project_id:
@@ -525,7 +525,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
                     # accepts NULL and the audit is about the QUERY, so the row is
                     # still worth writing; it just has no conversation to point at yet.
                     (uid, "teacher_query", "conversation", conv_id or None, json.dumps({
-                        "model": "glm-4.7",
+                        "model": "deepseek-chat",
                         "temperature": request.temperature,
                         "mode": mode,
                         "latency_ms": latency_ms,
@@ -604,8 +604,8 @@ async def api_ensure_model(request: EnsureModelRequest):
         success = False
         mt = request.model_type.lower()
         if mt in ("grace", "zai", "glm", "karen", "lm_studio"):
-            success = ensure_grace_server("zai")
-            model_name = "GLM-4.7 (Z.ai)"
+            success = ensure_grace_server("deepseek")
+            model_name = "DeepSeek (hosted API)"
         else:
             raise HTTPException(
                 status_code=400, detail=f"Unknown model type: {request.model_type}"

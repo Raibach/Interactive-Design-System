@@ -2,14 +2,15 @@
 Grace — LLM query layer for the prompt-composer backend.
 
 Single entry point: query_llm().
-ONE MODEL SERVES EVERY MODE: Qwen3.5-9B on LM Studio, or the same endpoint behind a
-tunnel in production. What changes per mode is the SETTINGS, not the model — an A2UI
-surface is a transcription whose answer space the catalog closes, so it runs at
-temperature 0.0 with reasoning off; a conversation is written into an empty page, so it
-runs at CHAT_TEMPERATURE. There is no fallback and no second model, deliberately: the
-owner needs to know which model is running, and a failure that quietly changed author
-would make that unknowable. Every mode hard-fails if the model cannot answer. No fake
-surfaces: there is no cache and no substitute of any kind.
+ONE MODEL SERVES EVERY MODE: DeepSeek's hosted API (deepseek-chat), chosen 2026-09-24
+for speed — the local Qwen on LM Studio took 17–30s to assemble a surface, and the
+Northflank account has no GPU plans to host it on. What changes per mode is the
+SETTINGS, not the model — an A2UI surface is a transcription whose answer space the
+catalog closes, so it runs at temperature 0.0 with reasoning off; a conversation is
+written into an empty page, so it runs at CHAT_TEMPERATURE. There is no fallback and no
+second model, deliberately: the owner needs to know which model is running, and a failure
+that quietly changed author would make that unknowable. Every mode hard-fails if the
+model cannot answer. No fake surfaces: there is no cache and no substitute of any kind.
 """
 
 import itertools
@@ -25,17 +26,12 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 # ═══════════════════════════════════════════════════════════════════════════════
 # Provider config — ONE model, for every mode.
 #
-# QWEN3.5-9B ON LM STUDIO SERVES THE WHOLE APPLICATION: the A2UI surfaces AND the
-# conversation. It is the only entry in this list, so it is the only model any mode can
-# reach. The owner, 2026-09-24: "the 9B model should be running the chat interface as
-# well", and, on why nothing else may appear in its place: "I need to know which model is
-# running. I cannot have it failing and then all of a sudden DeepSeek picks up."
-#
-# DEEPSEEK WAS HERE AND IS GONE. It was the fallback for a while during this change and
-# was removed on that instruction: an assembly that silently changes author is a surface
-# nobody can account for, and the same is true of a reply. To bring a second model back,
-# add an entry below — but know that _provider_for_mode() takes the FIRST enabled one and
-# never tries another, so a second entry is a way to change the answer, not a safety net.
+# QWEN9B LEFT AND DEEPSEEK TOOK THE SEAT — deliberately, not as a fallback. The owner
+# watched the local model take 17–30s per composer surface (2026-09-24) and asked for a
+# hosted one. DeepSeek is the ONE entry in this list, so it is the only model any mode
+# can reach, and it was chosen, not picked up: the earlier instruction ("I cannot have it
+# failing and then all of a sudden DeepSeek picks up") was about a silent second model,
+# and there is none here — if DeepSeek cannot answer, every mode hard-fails.
 #
 # THE SETTINGS FOLLOW THE MODE, NOT THE LIST, and they are the reason one model can do
 # both jobs. Assembly is a transcription: the catalog fixes the components, the schema
@@ -47,34 +43,19 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 # ═══════════════════════════════════════════════════════════════════════════════
 MODEL_PROVIDERS = [
     {
-        # Qwen3.5-9B on LM Studio, served over the OpenAI-compatible API at 127.0.0.1:1234
-        # — a laptop's own GPU, and in production the same endpoint behind a tunnel. Routed
-        # by env var, not edited here, because a tunnel's hostname changes every time it is
-        # re-opened and a base_url in a source file is a redeploy per tunnel.
-        #
-        # Verified live against this server, 2026-09-24 (LM Studio, qwen3_5, MLX 4-bit):
-        #   · console assembly — real prompt, 3,347 prompt tokens, 8.6s, valid JSON, 4/4
-        #     components, 0 reasoning tokens.
-        #   · composer surface — real prompt from routes/ai.py, 3 runs, 12.4–14.9s, 7/7
-        #     components each time, validate_a2ui_components() PASS.
-        # Both are well inside the 45s assembly budget, and the budget is unchanged.
-        "name": "Qwen9B local (LM Studio / tunnel)",
-        "base_url": os.getenv("LOCAL_ASSEMBLY_URL", "http://127.0.0.1:1234/v1"),
-        "model": os.getenv("LOCAL_ASSEMBLY_MODEL", "qwen/qwen3.5-9b"),
-        "api_key_env": "LOCAL_ASSEMBLY_API_KEY",
-        # A LOCAL SERVER HAS NO KEY. LM Studio ignores the one it ships, and requiring a
-        # real key for a server that does not read it is how "the local model is serving"
-        # quietly becomes "nothing is serving".
-        "api_key_required": False,
-        # LM STUDIO DOES NOT TAKE json_object. Measured 2026-09-24: the assembly payload
-        # this file has always sent — response_format {"type": "json_object"} — is answered
-        # with HTTP 400, `'response_format.type' must be 'json_schema' or 'text'`. Every
-        # console load would have failed, on a fault that looks like the model refusing to
-        # work. The strict system prompt alone carries the contract, and the caller already
-        # strips fences, so the constraint is simply not sent.
-        # (`json_schema` is NOT the alternative: tried strict, it returned 200 with EMPTY
-        # content — a silent nothing, where a 400 at least names itself.)
-        "json_mode": None,
+        # DeepSeek's hosted OpenAI-compatible API. Chosen by the owner 2026-09-24 after
+        # the local Qwen9B was measured too slow for surface assembly and Northflank
+        # turned out to offer the account no GPU plans to host the model on. The key
+        # already existed in the production environment; the switch is this entry.
+        "name": "DeepSeek (hosted API)",
+        "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "api_key_required": True,
+        # DeepSeek accepts json_object — the constraint the local server refused (LM
+        # Studio answered it with HTTP 400, and strict json_schema with empty content).
+        # An assembly that is guaranteed valid JSON is a transcription done once.
+        "json_mode": {"type": "json_object"},
     },
 ]
 
@@ -108,11 +89,10 @@ def _provider_for_mode(mode: str) -> Optional[Dict[str, Any]]:
 def _provider_hint(mode: str) -> str:
     """What to tell an operator when the model is not configured."""
     return (
-        "No model is configured. Every mode runs on the local Qwen9B: set LOCAL_ASSEMBLY_URL "
-        f"({os.getenv('LOCAL_ASSEMBLY_URL', 'http://127.0.0.1:1234/v1')}) and "
-        f"LOCAL_ASSEMBLY_MODEL ({os.getenv('LOCAL_ASSEMBLY_MODEL', 'qwen/qwen3.5-9b')}), and "
-        "have LM Studio (or the tunnel to it) serving. There is no second model: nothing is "
-        "assembled or written by anything else."
+        "No model is configured. Every mode runs on DeepSeek's hosted API: set "
+        f"DEEPSEEK_API_KEY (and optionally DEEPSEEK_BASE_URL / DEEPSEEK_MODEL, "
+        f"currently {os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')}). There is no second "
+        "model: nothing is assembled or written by anything else."
     )
 
 
