@@ -44,7 +44,7 @@ import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { markArrival } from "@/shared/arrival";
-import { CORE_ROLE_LABELS } from "@/shared/promptSections";
+import { CORE_ROLE_LABELS, seatIdOf } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
 import { aiOrchestrator } from "@/utils/aiOrchestrator";
 // The frontend half of the fail-loud boundary. Every failure the shell can observe gets
@@ -62,6 +62,9 @@ import { readA2UIEnvelope, envelopeRefusalError, applyComponentUpdate } from "@/
 // See lib/trace-source.ts for why the element does not fetch its own.
 import { subscribeTrace, traceSnapshot, type TraceSnapshot } from "@/lib/trace-source";
 import { buildRepairSections } from "@/shared/repairSections";
+// The trigger rule lives once, in shared/triggers.ts, so a trigger chosen on the canvas and one
+// chosen in the row's menu are the same edit — see the `trigger` branch of onFlowAction.
+import { withTrigger } from "@/shared/triggers";
 import { repairAsk, repairBrief } from "@/shared/repairMaterial";
 // The flow — the same process the prompt is, drawn. The builder is pure (it makes
 // the graph from facts this file already holds); everything below the import is the
@@ -420,6 +423,23 @@ export default function Index({
     // was on screen, find no sections, and give up in silence.
     const s = (surfaceDataModelRef.current as any)?.session?.left_column?.sections;
     return Array.isArray(s) ? s : [];
+  }, []);
+
+  /**
+   * WHAT THIS RUN WAS ASKED TO DO — the judge's other input.
+   *
+   * The User Role is the person's ask; the Agent Role is the job the prompt describes. Either
+   * can name what "right" means, and a judge handed only the answer is being asked to mark
+   * homework with no question in front of it. Joined on one blank line, capped so a long
+   * prompt cannot outgrow the judge's context.
+   */
+  const askOf = useCallback((sections: any[]): string => {
+    const pick = (type: string): string => {
+      const row = sections.find((s) => s?.type === type);
+      return typeof row?.content === 'string' ? row.content.trim() : '';
+    };
+    const ask = [pick('user'), pick('agent')].filter(Boolean).join('\n\n');
+    return ask.slice(0, 6000);
   }, []);
 
   /**
@@ -1145,6 +1165,40 @@ export default function Index({
   }, []);
 
   /**
+   * THE JUDGED RUNS, WRITTEN WHERE THE EVALS VIEW READS THEM — the same one-way write as the
+   * flow above: the shell owns the fact (the backend's /evaluations rows) and publishes it to
+   * /session/middle_column/evaluations, which the assembly binds to the EvalFeed. Unset stays
+   * unset until the first write; an empty list is the claim "ran and nothing judged yet".
+   */
+  const writeEvaluationsToSurface = useCallback((list: unknown) => {
+    setWorkspaceTree((prev) => {
+      const session = prev.dataModel.session ?? {};
+      const middle = session.middle_column ?? {};
+      if (middle.evaluations === list) return prev;
+      return {
+        ...prev,
+        dataModel: {
+          ...prev.dataModel,
+          session: { ...session, middle_column: { ...middle, evaluations: list } },
+        },
+      };
+    });
+  }, []);
+
+  /** Fetch this package's judged runs and publish them. The element never fetches. */
+  const refreshEvaluations = useCallback(async () => {
+    const sessionId = currentPromptSessionObjRef.current?.id ?? currentPromptSessionRef.current;
+    if (!sessionId) return;
+    const res = await fetch(`${API_BASE}/prompt-sessions/${sessionId}/evaluations`);
+    if (!res.ok) {
+      logger.error('the evaluations list could not be fetched', { sessionId, status: res.status });
+      return; // the list stays whatever it was; the view's empty state says the rest
+    }
+    const data = await res.json();
+    writeEvaluationsToSurface(Array.isArray(data.evaluations) ? data.evaluations : []);
+  }, [writeEvaluationsToSurface]);
+
+  /**
    * THE THIRD COLUMN IS ASSEMBLED, NOT INSERTED — the RUN's one model call.
    *
    * WHAT THIS REPLACES, measured 2026-09-23 (READ-ME/CONTINUE-HERE.md §00c): this file wrote
@@ -1295,10 +1349,24 @@ export default function Index({
    * the middle column, so a row added while the output is showing publishes no graph and says
    * nothing — a graph built here would swap the compiled output for a picture nobody asked for.
    */
-  const publishFlowFromRows = useCallback((added?: unknown) => {
+  const publishFlowFromRows = useCallback((added?: unknown, rowsNow?: FlowSeatInput[]) => {
     const input = flowInputRef.current;
     if (!input) return;
-    const rows = surfaceSections() as FlowSeatInput[];
+    /*
+     * THE ROWS CAN BE HANDED IN, AND SOMETIMES THEY MUST BE.
+     *
+     * `surfaceSections()` reads the model through a ref, and React commits a state update after
+     * the line that made it — so a caller that has just WRITTEN a row and asks this to rebuild
+     * immediately gets the rows as they were before its own write. Measured live 2026-09-24: a
+     * trigger chosen on the canvas landed in the row (badge "On a schedule", rail marked) and the
+     * NODE went on showing the plain prose, because the graph had been rebuilt from the rows that
+     * predated it.
+     *
+     * A writer already knows what it wrote. `rowsNow` is that, passed in, so the drawing follows
+     * the write rather than racing it — and the ref stays the reader for every caller that has
+     * nothing to hand over.
+     */
+    const rows = rowsNow ?? (surfaceSections() as FlowSeatInput[]);
     // The row that was just made may not be in the model's copy yet: `section-add` fires
     // before React has committed it. Same-name-and-type is the identity a row has here.
     const identity = (s: { type?: unknown; name?: unknown } | null | undefined): string =>
@@ -2826,6 +2894,32 @@ export default function Index({
       };
       publishFlowRef.current();
     }
+
+    // AND THE EVALS TAB GETS THE CHECK'S VERDICT — for a repair, the check IS the judge:
+    // no model is asked to second-guess it. The row carries the same sentence the canvas
+    // node draws, so the two views of one fact cannot drift.
+    {
+      const sessionId = currentPromptSessionRef.current;
+      if (sessionId) {
+        try {
+          const res = await fetch(`${API_BASE}/prompt-sessions/${sessionId}/evaluations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              verdict: stillThere ? 'failed' : 'cleared',
+              sentence: stillThere ? 'the fresh check still finds it' : 'the fresh check no longer finds it',
+              trigger: 'Repair',
+            }),
+          });
+          if (!res.ok) {
+            logger.error('the check verdict could not be recorded', { sessionId, status: res.status });
+          }
+        } catch (e) {
+          logger.error('the check verdict never reached the backend', { sessionId, error: String(e) });
+        }
+      }
+      void refreshEvaluations();
+    }
   };
 
   /**
@@ -3134,6 +3228,9 @@ export default function Index({
     // that made this necessary.
     window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume', sessionId } }));
     await assembleSurfaceThenRepairs(`render-session:${sessionId}`);
+
+    // The judged runs this package already has, on screen with the rest of its surface.
+    void refreshEvaluations();
 
     // Force full re-render to dispatch sections to textareas
     setPromptLoadKey(k => k + 1);
@@ -3801,6 +3898,21 @@ export default function Index({
    */
   const assembleSurfaceThenRepairs = useCallback(
     async (intent: string, context?: Parameters<typeof assembleSurfaceWithAI>[1]) => {
+      /*
+       * EVERY SURFACE THAT CAN RUN WARMS THE CANVAS — the one place all of them pass through.
+       * The ground (591 KB) and the two elements are the only Run assets not already fetched, and
+       * the console cannot run anything, so this is the earliest moment a Run is possible.
+       * NOTHING IS AWAITED: the surface assembles and paints while the ground arrives behind it,
+       * the Run's own loadCanvasElements() shares this promise, and the Run still fails loudly if
+       * it cannot load them.
+       */
+      if (intent !== 'render-console') {
+        void loadCanvasElements().catch((err: unknown) => {
+          logger.warn('the canvas was not warmed for this surface — the Run will fetch it again', {
+            error: String((err as Error)?.message ?? err),
+          });
+        });
+      }
       await assembleSurfaceWithAI(intent, context);
       await loadCatalogFindings();
     },
@@ -4353,26 +4465,124 @@ export default function Index({
         const nodes = deepFind<HTMLElement & { flow?: { nodes?: FlowNodeShape[] } }>('agent-flow')?.flow?.nodes ?? [];
         const node = nodes.find((n) => n.id === nodeId);
         if (!node) return;
-        const row = surfaceSections().find((s: any) =>
-          String(s?.name || '').trim().toLowerCase() === String(node.title || '').trim().toLowerCase());
-        const words = row ? String(row.content || '').trim().length : 0;
+        // Matched on the canonical id first — see the note in the `trigger` branch: a node wears the
+        // seat's LABEL and a row answers to its own name, so a name comparison misses.
+        const rows = surfaceSections();
+        const row = rows.find((s: any) => String(seatIdOf(s) || '') === String(node.kind || ''))
+          ?? rows.find((s: any) =>
+            String(s?.name || '').trim().toLowerCase() === String(node.title || '').trim().toLowerCase());
         const isRow = node.family === 'seat' && Boolean(row);
-        window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
-          detail: {
-            request: isRow
-              ? `A person pressed Delete on the node called "${node.title}" on the canvas. That node IS a `
-                + `row of the prompt — the ${node.title} row — so removing it removes the row. `
-                + (words
-                  ? `IT IS NOT EMPTY: it holds ${words} characters the person wrote, so say what would be lost. `
-                  : 'The row is empty, so nothing written would be lost and you can say so plainly. ')
-                + `ASK FIRST, as a button: [Remove ${node.title}](action:remove-seat:${row?.name ?? node.title}). `
-                + 'Do not remove it yourself and do not ask a second question — one sentence, one button.'
-              : `A person pressed Delete on the node called "${node.title}" on the canvas. That node is not a `
+        /*
+         * THE TRASH REMOVES, AND SAYS SO. This used to ask instead: it handed her the facts and
+         * waited for a button, so pressing Delete did NOTHING visible — the owner, 2026-09-24:
+         * "I can't delete anything… there is no functionality here."
+         *
+         * He is the authority on that rule and he has just replaced it. The reasoning it was built
+         * on still holds — a destructive act should not be silent — so the act is now LOUD in the
+         * other direction: the row goes (the same `remove-prompt-role` write the rest of the app
+         * uses, so the drawing rebuilds from the rows and the node goes with it), and she is TOLD,
+         * in her own voice, as a record rather than a question. The node in front of the person is
+         * the confirmation; a second one is a quiz.
+         *
+         * A STEP is still refused, and that has not changed: a step is what a Run did, so there is
+         * nothing here to remove, and she says so rather than a control that quietly does nothing.
+         */
+        if (!isRow) {
+          window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+            detail: {
+              request: `A person pressed Delete on the node called "${node.title}" on the canvas. That node is not a `
                 + 'row of the prompt — it is part of what a Run does (the answer, the write, the check), so '
                 + 'there is nothing to remove and no button to offer. Say that in one sentence: what it is, '
                 + 'and that it goes when the prompt that produced it changes.',
+            },
+          }));
+          return;
+        }
+        const rowName = String((row as { name?: string }).name ?? node.title);
+        const words = String((row as { content?: string }).content || '').trim().length;
+        window.dispatchEvent(new CustomEvent('remove-prompt-role', { detail: { roleName: rowName } }));
+        // AND THE DRAWING FOLLOWS THE ROW OUT — handed the rows as this writer knows them, so the
+        // node goes in the same breath as the row. The element's own `section-remove` still updates
+        // the model; this is the picture keeping step with it rather than waiting for a commit.
+        const at = rows.indexOf(row);
+        if (at >= 0) {
+          publishFlowFromRows(undefined, rows.filter((_: any, i: number) => i !== at) as FlowSeatInput[]);
+        }
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: {
+            role: 'assistant',
+            content: `Removed the ${node.title} row — the node and the row are the same fact, so it went from both.`
+              + (words ? ` ${words} characters were in it, and they are gone with it.` : ''),
           },
         }));
+      }
+      /*
+       * A TRIGGER CHOSEN ON THE DRAWING IS WRITTEN INTO ITS ROW — the other half of the symmetry
+       * the owner asked for: "edits on the canvas should be reflected in the prompt, edits on the
+       * prompt should be reflected in the canvas; it's a learning tool."
+       *
+       * The canvas emitted the choice and nothing else, because it holds no copy of the row's text
+       * and must not invent one. The row is found the way the delete branch finds it — by the name
+       * the node wears, which is the row's own name — and the new text is computed by the ONE
+       * function that knows what a re-pick means (`withTrigger`, shared by both views), then
+       * written through the one writer the editor already listens to. So the row changes, the
+       * graph rebuilds from the rows, and the node comes back wearing the same trigger the menu
+       * now ticks: one fact, one writer, two views.
+       */
+      if (action === 'trigger') {
+        const nodeId = String(detail.nodeId || '');
+        const token = String(detail.token || '');
+        if (!nodeId || !token) return;
+        type FlowNodeShape = { id: string; family: string; kind: string; title: string };
+        const nodes = deepFind<HTMLElement & { flow?: { nodes?: FlowNodeShape[] } }>('agent-flow')?.flow?.nodes ?? [];
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node || node.family !== 'seat') {
+          // A step is what a run does; nothing starts it but the run it belongs to. Reported rather
+          // than silently dropped, because a control that does nothing reads as a broken control.
+          logger.warn('a trigger was chosen on a node that is not a row', { nodeId });
+          return;
+        }
+        const rows = surfaceSections();
+        /*
+         * BY PATH FIRST, THEN BY CANONICAL ID, THEN BY NAME — in that order, and the order is the
+         * point. The node carries `rowIndex`, which IS the address of its row in the model
+         * (`/session/left_column/sections`), so the common case is an index lookup with nothing to
+         * misspell — A2UI's own rule for an action's context (Data-Binding.md: a data reference is
+         * resolved "by path in the data model or by value"). The id and name fallbacks stay for a
+         * caller that has no index: an older payload, or a node the builder did not place.
+         */
+        const byIndex = typeof detail.rowIndex === 'number' && detail.rowIndex >= 0
+          ? rows[detail.rowIndex as number]
+          : undefined;
+        const row = byIndex
+          ?? rows.find((s: any) => String(seatIdOf(s) || '') === String(node.kind || ''))
+          ?? rows.find((s: any) =>
+            String(s?.name || '').trim().toLowerCase() === String(node.title || '').trim().toLowerCase());
+        if (!row) {
+          logger.warn('a trigger was chosen on a node with no row to write it into', { nodeId, title: node.title });
+          return;
+        }
+        // THE WRITE IS AN UPDATE AT A PATH, WHICH IS A2UI'S OWN SHAPE. Data-Binding.md: a data
+        // reference "is resolvable either by path in the data model or by value". Handling-User-
+        // Actions.md: an action carries `context`, "a hand-picked VIEW of that state", and the
+        // renderer resolves its paths before dispatch. So the node's `rowIndex` IS the address of
+        // its row, and the edit lands at `/session/left_column/sections/<index>` through the host's
+        // one writer for that path. The binding then re-assigns the rows to the editor element, and
+        // the drawing is rebuilt from them — the same direction of travel as every model update in
+        // this application, with no window event and no name to re-match.
+        const index = typeof detail.rowIndex === 'number' && (detail.rowIndex as number) >= 0 && (detail.rowIndex as number) < rows.length
+          ? (detail.rowIndex as number)
+          : rows.indexOf(row);
+        if (index < 0) {
+          logger.warn('a trigger was chosen with no addressable row to write it into', { nodeId: detail.nodeId });
+          return;
+        }
+        const nextContent = withTrigger(String((row as { content?: string }).content || ''), token);
+        patchSectionAt(index, { ...row, content: nextContent });
+        // AND THE DRAWING FOLLOWS THE WRITE, NOT THE MODEL'S NEXT COMMIT — the rows are handed to
+        // the rebuild because this caller is the one that just changed them. See publishFlowFromRows.
+        const nextRows = rows.map((r: any, i: number) => (i === index ? { ...r, content: nextContent } : r)) as FlowSeatInput[];
+        publishFlowFromRows(undefined, nextRows);
       }
       logger.info(`flow action: ${action}`, detail);
     };
@@ -5629,6 +5839,29 @@ export default function Index({
           toolWarning: toolWarnings[0],
         };
         publishRepairFlow();
+      }
+
+      // EVERY RUN IS JUDGED, and the Evals tab is where the verdicts collect — one row per
+      // run, newest first, the same one-for-one list n8n's Evaluations view draws. The
+      // backend asks Qwen to judge the answer (a repair's later check-verdict supersedes it,
+      // written by settleRepair); this end only records and republishes what came back.
+      if (!data?.error && (output || '').trim() && !repairingFinding) {
+        const sessionId = currentPromptSessionRef.current;
+        if (sessionId) {
+          try {
+            const res = await fetch(`${API_BASE}/prompt-sessions/${sessionId}/evaluations`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ output, ask: askOf(surfaceSections()), trigger: 'Run' }),
+            });
+            if (!res.ok) {
+              logger.error('the run could not be recorded for evaluation', { sessionId, status: res.status });
+            }
+          } catch (e) {
+            logger.error('the evaluation request never reached the backend', { sessionId, error: String(e) });
+          }
+        }
+        void refreshEvaluations();
       }
 
       // ── THE RUN'S ANSWER IS NOT WRITTEN DOWN HERE ANY MORE ─────────────────

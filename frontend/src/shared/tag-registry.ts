@@ -894,6 +894,21 @@ export const TAG_REGISTRY = {
       'belongs in chat-panel\'s "view" slot, and a surface that emits chat-panel fills it',
     ],
   },
+  'eval-feed': {
+    tag: 'eval-feed',
+    surface: 'both',
+    column: 'right',
+    description:
+      'The judged runs of one package, drawn in the chat panel\'s "view" slot when the rail\'s Evals button is selected — the same one generic hole the trace view is injected into. A VIEW: it fetches nothing and judges nothing. The backend\'s /evaluations endpoint stores one row per run (verdict cleared/failed/running/error, the judge\'s sentence, run-at, trigger) and the shell binds the list from /session/middle_column/evaluations. Unset is its waiting state — an empty list is the claim that this package has run and nothing has been judged, which is a different thing.',
+    props: {
+      evaluations: { type: 'array', optional: true },
+    },
+    events: [],
+    constraints: [
+      'a view, not a source: every row arrives already judged, as a data-model binding',
+      'belongs in chat-panel\'s "view" slot beside the trace view — the panel draws the slot, the surface fills it',
+    ],
+  },
   'chat-repair-actions': {
     tag: 'chat-repair-actions',
     surface: 'both',
@@ -1321,7 +1336,7 @@ export const TAG_REGISTRY = {
     props: {
       flow: { type: 'object', optional: true },
     },
-    events: ['flow-opened', 'flow-node-added', 'flow-node-moved', 'flow-connect', 'flow-select', 'flow-action'],
+    events: ['flow-opened', 'flow-node-added', 'flow-node-moved', 'flow-connect', 'flow-select', 'flow-action', 'flow-drawn'],
     constraints: [
       'a view, not a source: the whole graph arrives as one data-model binding',
       'takes the middle column on Run; the compiled output is reached again through the column\'s own selector and Clear',

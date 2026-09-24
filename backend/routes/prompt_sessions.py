@@ -639,6 +639,118 @@ async def restore_prompt_version(
         )
 
 
+class RecordEvaluationRequest(BaseModel):
+    verdict: Optional[str] = None
+    sentence: Optional[str] = None
+    trigger: str = "run"
+    output: Optional[str] = None
+    ask: Optional[str] = None
+
+
+@router.get("/api/prompt-sessions/{session_id}/evaluations")
+async def list_evaluations(session_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")):
+    """The judged runs of one package, oldest first — the rail's Evals view reads this."""
+    if not state.prompt_sessions_api:
+        raise HTTPException(status_code=503, detail="Database not available.")
+
+    try:
+        rows = state.prompt_sessions_api.list_evaluations(session_id)
+        return {"evaluations": rows, "error": None}
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        import traceback
+
+        print(f"❌ List evaluations error: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error listing evaluations: {str(e)}")
+
+
+@router.post("/api/prompt-sessions/{session_id}/evaluations")
+async def record_evaluation(
+    session_id: str,
+    request: RecordEvaluationRequest,
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+):
+    """
+    Judge one run and store it.
+
+    A caller that already HAS a verdict (the repair path's catalog check) sends it and the
+    row is stored as-is — the check IS the judge. A caller with only the run's output asks
+    Qwen to judge it: the model reads what the prompt asked and what the run answered, and
+    returns cleared or failed with one sentence. A judge that cannot be asked stores
+    verdict 'error' with the model's raw answer as the sentence — a record of what
+    happened, never a silent gap.
+    """
+    if not state.prompt_sessions_api:
+        raise HTTPException(status_code=503, detail="Database not available.")
+
+    try:
+        if request.verdict in ("cleared", "failed") and request.sentence:
+            row = state.prompt_sessions_api.record_evaluation(
+                session_id, request.verdict, request.sentence, request.trigger
+            )
+            return {"evaluation": row, "error": None}
+
+        if not (request.output or "").strip():
+            raise HTTPException(status_code=400, detail="No verdict and no output to judge.")
+
+        try:
+            judged = _judge_run_output(request.ask or "", request.output or "")
+        except Exception as e:
+            judged = {"verdict": "error", "sentence": f"The judge could not be asked: {str(e)}"}
+        row = state.prompt_sessions_api.record_evaluation(
+            session_id, judged["verdict"], judged.get("sentence"), request.trigger
+        )
+        return {"evaluation": row, "error": None}
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        import traceback
+
+        print(f"❌ Record evaluation error: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error recording evaluation: {str(e)}")
+
+
+def _judge_run_output(ask: str, output: str) -> Dict[str, Any]:
+    """
+    Ask Qwen to judge a run's answer against what it was asked to do. The verdict is two
+    words the app already speaks — cleared, failed — and one sentence of plain English. No
+    JSON: a prose answer is parsed for the word the judge chose, and an answer that says
+    neither is a failed judgment, recorded rather than invented.
+
+    THE ASK IS THE QUESTION SHEET — without it the judge marks an answer it cannot compare
+    to anything, which is how a good briefing came back 'failed' for not being a two-line
+    evaluation (measured live, 2026-09-24). With the ask, 'cleared' means the answer did
+    what the prompt said to do.
+    """
+    question = (
+        f"What the prompt asked for:\n\n{ask}\n\n"
+        f"The run's answer:\n\n{output[:6000]}"
+        if ask.strip()
+        else f"The run's answer:\n\n{output[:6000]}"
+    )
+    answer = query_llm(
+        context=(
+            "You are the evaluator of a prompt package. Judge whether the run's answer did "
+            "what the prompt asked it to do. Reply with exactly two lines: the first line is "
+            "one word, cleared or failed. The second line is one sentence saying why."
+        ),
+        question=question,
+        reasoning=False,
+        mode="writer",
+        prompt_id="evaluation-judge",
+    ).strip()
+    lines = [l.strip() for l in answer.splitlines() if l.strip()]
+    verdict_word = (lines[0] if lines else answer).lower()
+    verdict = "cleared" if "cleared" in verdict_word else ("failed" if "failed" in verdict_word else "error")
+    sentence = lines[1] if len(lines) > 1 else (answer or "The judge returned no sentence.")
+    return {"verdict": verdict, "sentence": sentence}
+
+
 @router.get("/api/prompt-sessions/{session_id}/context-for-ai")
 async def get_prompt_context_for_ai(
     session_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")

@@ -96,22 +96,24 @@ async def api_health():
     if not milvus_ok:
         critical_failures.append("milvus")
 
-    # ── Assembly AI check (DeepSeek — the provider query_llm actually uses) ──
-    # 2026-09-09: replaced the Z.ai GLM-4.7 check. grace_gui.MODEL_PROVIDERS is
-    # DeepSeek-only, so Z.ai status said nothing about real assembly health and
-    # degraded the whole surface report for an unused provider.
+    # ── Assembly AI check (Qwen9B — the ONE model query_llm uses, for every mode) ──
+    # 2026-09-09: replaced the Z.ai GLM-4.7 check. 2026-09-24: replaced the DeepSeek
+    # check — the runtime's provider is now the local Qwen9B on LM Studio, so a DeepSeek
+    # status would say nothing about real assembly health and would degrade the whole
+    # surface report for a model the app no longer reaches.
+    #
+    # THE GATE IS GONE WITH IT. It used to skip the ping when DEEPSEEK_API_KEY was unset,
+    # because a keyless provider could not answer. The local model is keyless by nature, so
+    # that gate would have reported "DISCONNECTED" for a perfectly healthy server — and this
+    # check is now the only signal that the model behind the tunnel is up.
     llm_ok = False
     llm_error = None
     try:
-        import os
         from model_server_manager import test_model_connection
-        if os.getenv("DEEPSEEK_API_KEY"):
-            result = test_model_connection("deepseek")
-            llm_ok = result.get("status") == "success"
-            if not llm_ok:
-                llm_error = result.get("message", "unknown error")
-        else:
-            llm_error = "DEEPSEEK_API_KEY not set"
+        result = test_model_connection("qwen")
+        llm_ok = result.get("status") == "success"
+        if not llm_ok:
+            llm_error = result.get("message", "unknown error")
     except Exception as e:
         llm_error = str(e)[:80]
     health_data["checks"]["assembly_llm"] = "connected" if llm_ok else "DISCONNECTED"

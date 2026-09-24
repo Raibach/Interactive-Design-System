@@ -185,12 +185,15 @@ const LEDGER: Record<string, Omit<FailureReport, 'detail'>> = {
     code: 'PROVIDER-OVERLOADED',
     headline: 'The AI service is temporarily at capacity.',
     cause:
-      'DeepSeek answered "Service is too busy" — its capacity is saturated, not this app. '
-      + 'The request never reached the model.',
+      'The model server answered "too busy" / "service unavailable" — its capacity is saturated, '
+      + 'not this app. The request never reached the model.',
+    // THE MODEL IS NAMED, AND IT IS NO LONGER DEEPSEEK (2026-09-24). Assembly and chat both run
+    // on the local Qwen9B behind the tunnel, so a message pointing at DeepSeek would send an
+    // operator to a service this app no longer calls.
     fix:
-      'Wait a moment and retry. This is on DeepSeek\'s side and clears on its own; nothing '
-      + 'here needs fixing.',
-    arrow: '⤴ DeepSeek — the upstream model provider.',
+      'Wait a moment and retry. If it repeats, the model server itself is saturated — check that '
+      + 'LM Studio is still serving and that the tunnel has not started throttling.',
+    arrow: '⤴ the model server — Qwen9B on LM Studio (or the tunnel to it).',
     retryable: true,
   },
   'ASSEMBLY-TIMEOUT': {
@@ -199,9 +202,13 @@ const LEDGER: Record<string, Omit<FailureReport, 'detail'>> = {
     cause:
       'The client-side cap elapsed (ASSEMBLY_TIMEOUT_MS). Typical causes: a cold model call slower '
       + 'than the cap, the backend down, or the network dropping the request.',
+    // A COLD LOCAL CALL IS THE LIKELIER CAUSE NOW, and it is a real one: LM Studio unloads an
+    // idle model after its TTL, so the first assembly after an idle hour pays for a JIT load
+    // before it assembles anything. A retry lands warm.
     fix:
-      'Retry. A cold DeepSeek call has been measured near the cap — a second attempt usually lands '
-      + 'warm. If it repeats, look for the matching request in the backend log.',
+      'Retry — a cold model call has been measured near the cap, and the retry usually lands warm '
+      + 'because the model is then loaded. If it repeats, check the tunnel and raise '
+      + 'LLM_TIMEOUT_ASSEMBLY (backend) / ASSEMBLY_TIMEOUT_MS (this client) together.',
     arrow: '↳ the backend — it may still be working on the request that just timed out.',
     retryable: true,
   },

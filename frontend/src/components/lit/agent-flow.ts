@@ -26,8 +26,7 @@
  * it can sit in a column beside Grace while she talks: the same events that a host
  * logs today are what HER SEAT will render — the list of what the canvas is doing,
  * loaded into one of the chat panel's simple slots, so she can speak about the run
- * while the person keeps working the drawing. See AGENTIC_EDITOR/08 for the contract
- * and /canvas.html for the working example of that loop.
+ * while the person keeps working the drawing. See AGENTIC_EDITOR/08 for the contract.
  *
  * A CONTROL THAT CANNOT DO ITS JOB IS NOT DRAWN AS IF IT COULD. The two right-edge
  * actions whose meaning is still undecided (find, save — see
@@ -41,9 +40,21 @@
  * the REFERENCE's geometry (n8n's canvas, see AGENTIC_EDITOR/reference/), not a
  * Figma node: no node of this drawing exists yet, so nothing here claims a node id.
  */
-import { LitElement, html, css, nothing, svg } from 'lit';
+import { LitElement, html, css, nothing, svg, unsafeCSS } from 'lit';
+import { ref } from 'lit/directives/ref.js';
 import { designTokens } from '@/shared/design-tokens';
-import { CREATABLE_KINDS, NODE_FOOTPRINT, NODE_TILE, positionKey, type FlowGraph, type FlowNode } from '@/shared/agentFlow';
+import { CREATABLE_KINDS, HUB_TILE, NODE_FOOTPRINT, NODE_TILE, positionKey, type FlowGraph, type FlowNode } from '@/shared/agentFlow';
+import { TRIGGERS } from '@/shared/triggers';
+// THE DRAWING IS THEIRS. Vue Flow renders the module tiles and the dot grid; this element stays
+// the contract (one tag, one binding, the same events) and owns every gesture. See the module's
+// own note for the division of labour.
+import { mountVueFlowCanvas, type VueFlowCanvas } from './canvas/vueFlowCanvas';
+// The library's own stylesheet, INLINED INTO THE SHADOW ROOT. Vue Flow mounts inside this
+// element's shadow DOM, and a stylesheet imported into the document does not reach across that
+// boundary — the pane, the transformation pane and the node wrapper would all come up unpositioned,
+// which is how the drawing "worked in the page but not in the element". One stylesheet, adopted
+// where the drawing lives.
+import vfStyle from '@vue-flow/core/dist/style.css?inline';
 import canvasArt from '@/assets/agent-canvas-art.jpg';
 
 /*
@@ -72,8 +83,6 @@ const GLIDE_MS = 520;
 
 const START_PAD_X = 58;
 const START_PAD_Y = 44;
-/** The grid's spacing at zoom 1. */
-const GRID = 24;
 
 /**
  * A port's side. Four per node — see _nodeView — because a flow that only runs
@@ -170,6 +179,29 @@ export class AgentFlow extends LitElement {
   private _rewired = new Map<string, { to: string; toSide?: Side }>();
   /** The kind picker, open at a drop point — what kind of node goes here? */
   private _picker: { x: number; y: number; from: string; side: Side; editKey?: string } | null = null;
+  /**
+   * WHICH NODE'S TRIGGER MENU IS OPEN — the same question the prompt row asks, asked on the
+   * drawing. The owner, 2026-09-24: "you can do module selection simply by selecting a node on the
+   * canvas, and it would offer you those same options to make an edit on the canvas the same way we
+   * would make the edit on the linear prompt."
+   *
+   * The list is the SAME catalogue the row's menu draws (shared/triggers.ts) — one source, so the
+   * two views cannot offer different answers to one question. The choice is not written here: the
+   * canvas does not know the row's text and must not guess it, so it emits and the host writes,
+   * exactly as every other canvas gesture does.
+   */
+  private _triggerMenuFor: string | null = null;
+
+  /**
+   * THE VUE FLOW DRAWING, mounted into this element's own shadow root.
+   *
+   * Null until the first graph arrives. Its lifetime is this element's: created when a flow is
+   * first drawn, updated in place on every later one, unmounted when the element leaves the page —
+   * the same discipline as every listener here, so a framework cannot outlive the thing that
+   * mounted it.
+   */
+  private _vue: VueFlowCanvas | null = null;
+  private _vueHost: HTMLElement | null = null;
   private _draftSeq = 0;
 
   constructor() {
@@ -187,12 +219,67 @@ export class AgentFlow extends LitElement {
 
   // ── the pointer: one gesture at a time, and it never outlives the element ──
   //
-  // Listeners go on window for the duration of a gesture, because a pointer that
-  // leaves this element's box mid-drag must keep dragging. They are removed by the
-  // release, and again by disconnectedCallback: a surface re-render replaces this
-  // element mid-gesture, and a drag whose flag outlived its element kept resizing a
-  // pane on every move with no way to let go (workspace-layout.ts, measured
-  // 2026-09-17). The same failure is not repeated here.
+  // THE MODULES ARE VUE-RENDERED NOW, so the per-node template bindings are gone and the surface
+  // routes input by delegation: the canvas surface receives every press, hit-tests the target for
+  // the module's own vocabulary (data-node-id, data-port, tb-btn) and runs the same gesture state
+  // machines this element has always owned. One implementation of each gesture, whatever draws the
+  // chrome. Listeners go on window for the duration of a gesture, because a pointer that leaves
+  // this element's box mid-drag must keep dragging; they are removed by the release, and again by
+  // disconnectedCallback.
+  private _nodeFromTarget(target: EventTarget | null): FlowNode | undefined {
+    const el = target instanceof Element ? target.closest('[data-node-id]') : null;
+    if (!el) return undefined;
+    return this._node(el.getAttribute('data-node-id') ?? '');
+  }
+
+  private _onSurfaceDown = (e: PointerEvent): void => {
+    const target = e.target;
+    // A port is inside its node: check the smaller surface first.
+    const port = target instanceof Element ? target.closest('[data-port]') : null;
+    if (port) {
+      const n = this._nodeFromTarget(target);
+      if (n) {
+        this._onPortDown(e, n, port.getAttribute('data-port') as Side);
+        return;
+      }
+    }
+    const n = this._nodeFromTarget(target);
+    if (n) {
+      this._onNodeDown(e, n);
+      return;
+    }
+    this._onCanvasDown(e);
+  };
+
+  private _onSurfaceUp = (e: PointerEvent): void => {
+    const port = e.target instanceof Element ? e.target.closest('[data-port]') : null;
+    if (!port) return;
+    const n = this._nodeFromTarget(e.target);
+    if (n) this._onPortUp(e, n, port.getAttribute('data-port') as Side);
+  };
+
+  /**
+   * THE MODULE TOOLBAR'S CLICKS, ROUTED BY data-action. Two of the seven controls are not actions
+   * (the lightning opens the trigger menu, the crosshair moves the view), and they emit no
+   * flow-action — the same contract the toolbar has always had, now read off the Vue module's DOM.
+   */
+  private _onSurfaceClick = (e: MouseEvent): void => {
+    const btn = e.target instanceof Element ? (e.target.closest('.tb-btn') as HTMLButtonElement | null) : null;
+    if (!btn || btn.disabled) return;
+    const n = this._nodeFromTarget(e.target);
+    if (!n) return;
+    switch (btn.getAttribute('data-action')) {
+      case 'run': this._action('run', { nodeId: n.id }); break;
+      case 'toggle': this._action('toggle', { nodeId: n.id }); break;
+      case 'trigger-menu': this._toggleTriggerMenu(n.id); break;
+      case 'delete':
+        this._action('delete', { nodeId: n.id, ...(typeof n.rowIndex === 'number' ? { rowIndex: n.rowIndex } : {}) });
+        break;
+      case 'focus': this.focusNode(n.id); break;
+      case 'ask': this._action('ask', { nodeId: n.id }); break;
+      case 'more': this._action('more', { nodeId: n.id }); break;
+    }
+  };
 
   private _onNodeDown = (e: PointerEvent, n: FlowNode): void => {
     if (e.button !== 0) return;
@@ -362,6 +449,11 @@ export class AgentFlow extends LitElement {
   }
 
   disconnectedCallback(): void {
+    // The framework goes with the element that mounted it. A Vue app left running against a
+    // detached box is the same leak as a listener that outlives its element — the failure this
+    // file has been refusing since it was written.
+    this._vue?.unmount();
+    this._vue = null;
     this._detach();
     this._drag = null;
     this._pan = null;
@@ -457,6 +549,17 @@ export class AgentFlow extends LitElement {
     if (picker.editKey) this._rewired.set(picker.editKey, { to: id, toSide: enterSide });
     else this._draftEdges.push({ from: picker.from, to: id, fromSide: picker.side, toSide: enterSide });
     this._picker = null;
+    /*
+     * A MODULE ARRIVES THE WAY THEIRS DOES: selected, and brought into view.
+     *
+     * Their `addNodes` hands the first inserted node the viewport so the canvas scrolls it in,
+     * and a node added from a handle arrives selected and open. Ours put the node in and left
+     * the drawing where it was — so a module added at the edge of the view appeared to do
+     * nothing at all, which is the failure mode this repository names everywhere. Select first,
+     * then focus, so the person sees the thing they just made.
+     */
+    this._select(id);
+    this.focusNode(id);
     this.dispatchEvent(new CustomEvent('flow-node-added', {
       bubbles: true, composed: true,
       detail: { nodeId: id, kind, x, y, from: picker.from, fromSide: picker.side, rewired: Boolean(picker.editKey) },
@@ -562,6 +665,38 @@ export class AgentFlow extends LitElement {
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
+    /*
+     * THE LIBRARY IS FED HERE, NOT IN THE TEMPLATE — and it is fed the drawing AS THE ELEMENT SEES
+     * IT, on every update: every module at the position it is drawn at (a drag is a `_pos` entry,
+     * so the model's x/y is not the drawing's), the selection, the viewport. Vue Flow is a
+     * projection of this element's state and nothing else — the element decides, the library
+     * draws. There is exactly one drawing; the hand-rolled node layer is GONE, not hidden.
+     */
+    if (this.flow && this._vueHost) {
+      if (!this._vue) {
+        this._vue = mountVueFlowCanvas(this._vueHost, { theme: this.theme });
+      } else if (changed.has('theme')) {
+        this._vue.setTheme(this.theme);
+      }
+      const nodes = this._allNodes().map((n) => {
+        const p = this._nodePos(n);
+        return { ...n, x: p.x, y: p.y, selected: this.selectedId === n.id };
+      });
+      this._vue.update(nodes);
+      this._vue.setViewport(
+        { x: this.panX, y: this.panY, zoom: this.zoom },
+        this._glide ? { duration: GLIDE_MS } : undefined,
+      );
+      /*
+       * AND IT SAYS SO. `holding` belongs to the CONTAINER — the column says "Assembling the
+       * drawing…" while it waits for a picture, and on a Run the host ends that wait when it
+       * publishes. But on a page with no host nothing ever did, so the spinner sat over a finished
+       * drawing. The element that HAS the picture is the one that can say the wait is over, and it
+       * says it as an event rather than reaching for its container: the container owns its own
+       * flag, and this is a report, not a write.
+       */
+      this.dispatchEvent(new CustomEvent('flow-drawn', { bubbles: true, composed: true }));
+    }
     const flow = this.flow;
     this._releaseAdoptedDrafts(flow);
     /*
@@ -635,9 +770,9 @@ export class AgentFlow extends LitElement {
     for (const n of nodes) {
       const p = this._nodePos(n);
       minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x + NODE_TILE);
+      maxX = Math.max(maxX, p.x + this._tileSize(n));
       minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y + NODE_FOOTPRINT);
+      maxY = Math.max(maxY, p.y + this._nodeFootprint(n));
     }
     if (!Number.isFinite(minX)) return;
     const drawW = Math.max(1, maxX - minX);
@@ -743,8 +878,11 @@ export class AgentFlow extends LitElement {
     if (this._glideTimer !== null) window.clearTimeout(this._glideTimer);
     this._glideTimer = window.setTimeout(() => this._stopGlide(), GLIDE_MS + 60);
     this.zoom = target;
-    this.panX = rect.width / 2 - (p.x + NODE_TILE / 2) * target;
-    this.panY = rect.height / 2 - (p.y + NODE_FOOTPRINT / 2) * target;
+    // CENTRED ON THE NODE'S OWN BOX, not on an ordinary tile: the trigger is larger, and a view
+    // that centres a 140-square using the 88 every other node draws puts the thing it was asked
+    // to show off-centre by 26 units. One reader, as everywhere else the size is needed.
+    this.panX = rect.width / 2 - (p.x + this._tileSize(node) / 2) * target;
+    this.panY = rect.height / 2 - (p.y + this._nodeFootprint(node) / 2) * target;
     // The view now belongs to the conversation, not to the next resize: a re-fit
     // would take the node straight back off screen while she is talking about it.
     this._viewTouched = true;
@@ -803,8 +941,8 @@ export class AgentFlow extends LitElement {
       const p = this._nodePos(n);
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x + NODE_TILE);
-      maxY = Math.max(maxY, p.y + NODE_FOOTPRINT);
+      maxX = Math.max(maxX, p.x + this._tileSize(n));
+      maxY = Math.max(maxY, p.y + this._nodeFootprint(n));
     }
     // FIT OBEYS THE SAME RULE AS THE ARRIVAL VIEW: fit what can be seen, not the element's
     // whole box — otherwise the one control a person presses to "show me everything" hides
@@ -856,6 +994,29 @@ export class AgentFlow extends LitElement {
     this.dispatchEvent(new CustomEvent('flow-action', {
       bubbles: true, composed: true, detail: { action, ...detail },
     }));
+  }
+
+  /**
+   * THE LIGHTNING ON A SELECTED NODE — the same question the prompt's row menu asks.
+   *
+   * The list it opens is the same catalogue (`shared/triggers.ts`), so the two views cannot offer
+   * different answers to one question. The choice is NOT written here: the canvas holds no copy of
+   * the row's text and must not invent one, so it emits and the host writes — the same division of
+   * labour as every other control on this element.
+   */
+  private _toggleTriggerMenu(nodeId: string): void {
+    this._triggerMenuFor = this._triggerMenuFor === nodeId ? null : nodeId;
+    this.requestUpdate();
+  }
+
+  /** A trigger chosen on the drawing. Out it goes; the host owns the row. */
+  private _pickTrigger(nodeId: string, token: string): void {
+    this._triggerMenuFor = null;
+    // THE ROW'S ADDRESS TRAVELS WITH THE CHOICE when the node knows it — see FlowNode.rowIndex.
+    // The host then updates at a path rather than re-matching a name, which is A2UI's own rule for
+    // an action's context (Data-Binding.md) and removes the class of bug that broke this twice.
+    const rowIndex = this._node(nodeId)?.rowIndex;
+    this._action('trigger', { nodeId, token, ...(typeof rowIndex === 'number' ? { rowIndex } : {}) });
   }
 
   /**
@@ -926,14 +1087,45 @@ export class AgentFlow extends LitElement {
   }
 
   /** Where an edge leaves a node, and where it lands. Ports sit on the tile's midline. */
+  /**
+   * IS THIS THE TRIGGER? The one node drawn larger — see HUB_TILE. It is the System Role: the
+   * row that says what this agent is, and therefore the row the rest hang off.
+   */
+  private _isTrigger(n: FlowNode): boolean {
+    return n.family === 'seat' && n.kind === 'system-role';
+  }
+
+  /**
+   * HOW BIG THIS NODE'S TILE IS. ONE reader, because the size decides three things that must
+   * agree: what the element draws (the CSS class), where the ports sit, and therefore where
+   * every edge lands. A second reader of this number is how a bigger node ends up with its
+   * connectors attached to empty air.
+   */
+  private _tileSize(n: FlowNode): number {
+    return this._isTrigger(n) ? HUB_TILE : NODE_TILE;
+  }
+
+  /**
+   * WHAT A NODE ACTUALLY OCCUPIES — its tile plus the label block beneath it.
+   *
+   * ONE READER, because three things have to agree: what the element draws, where the ports sit,
+   * and the bounds every fit is computed from. The trigger's tile is larger, so a fit that
+   * measures every node at NODE_TILE crops the outermost node whenever that node is the trigger
+   * — the same single-number-for-two-sizes fault as the ring's radius, one layer up.
+   */
+  private _nodeFootprint(n: FlowNode): number {
+    return this._tileSize(n) + (NODE_FOOTPRINT - NODE_TILE);
+  }
+
   /** Where a node's port sits, in canvas units. */
   private _portPoint(n: FlowNode, side: Side): { x: number; y: number } {
     const p = this._nodePos(n);
-    const half = NODE_TILE / 2;
+    const size = this._tileSize(n);
+    const half = size / 2;
     if (side === 'left') return { x: p.x, y: p.y + half };
-    if (side === 'right') return { x: p.x + NODE_TILE, y: p.y + half };
+    if (side === 'right') return { x: p.x + size, y: p.y + half };
     if (side === 'top') return { x: p.x + half, y: p.y };
-    return { x: p.x + half, y: p.y + NODE_TILE };
+    return { x: p.x + half, y: p.y + size };
   }
 
   /**
@@ -947,8 +1139,10 @@ export class AgentFlow extends LitElement {
   private _sidesFor(a: FlowNode, b: FlowNode): { from: Side; to: Side } {
     const pa = this._nodePos(a);
     const pb = this._nodePos(b);
-    const dx = (pb.x + NODE_TILE / 2) - (pa.x + NODE_TILE / 2);
-    const dy = (pb.y + NODE_TILE / 2) - (pa.y + NODE_TILE / 2);
+    const sa = this._tileSize(a) / 2;
+    const sb = this._tileSize(b) / 2;
+    const dx = (pb.x + sb) - (pa.x + sa);
+    const dy = (pb.y + sb) - (pa.y + sa);
     if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? { from: 'right', to: 'left' } : { from: 'left', to: 'right' };
     return dy >= 0 ? { from: 'bottom', to: 'top' } : { from: 'top', to: 'bottom' };
   }
@@ -1007,10 +1201,26 @@ export class AgentFlow extends LitElement {
     return {
       nodes: this._allNodes().map((n) => {
         const p = this._nodePos(n);
-        if (p.x === n.x && p.y === n.y) return n;
-        // Rounded the way a move is ANNOUNCED (see _onUp): a saved place is a pixel, not a
-        // fraction, and the two halves of this fact must not disagree about it.
-        return { ...n, x: Math.round(p.x), y: Math.round(p.y) };
+        /*
+         * AND IT SAYS WHICH PLACES ARE THE PERSON'S.
+         *
+         * `_pos` holds the positions a HAND put things — a drag, or a module dropped from a port.
+         * Everything else on this drawing is where the LAYOUT put it, and the two were written to
+         * the package identically, so a saved package could not tell them apart.
+         *
+         * Measured 2026-09-24, and it is why the owner still saw a circle after the ring was
+         * deleted from the code: `arrangeAsHub` gives a carried place priority over the
+         * arrangement — correctly, so a dragged node stays where it was left — and every package
+         * that had ever run carried the ring's own coordinates as though somebody had chosen
+         * them. The layout could not show through its own saved output.
+         *
+         * So a place now travels with `moved`, and only a place that carries it wins. See
+         * `arrangeAsHub`.
+         */
+        if (this._pos.has(positionKey(n))) {
+          return { ...n, x: Math.round(p.x), y: Math.round(p.y), moved: true };
+        }
+        return n;
       }),
       edges: this._resolvedEdges().map((e) => ({ from: e.from, to: e.to })),
     };
@@ -1027,117 +1237,10 @@ export class AgentFlow extends LitElement {
 
   // ── the parts ──────────────────────────────────────────────────────────────
 
-  /**
-   * The glyph inside a tile.
-   *
-   * Family-level on purpose: the per-kind artwork is the design's, and inventing
-   * eighteen pictures here would be inventing a design. What this must do is make
-   * the three families distinguishable WITHOUT colour — the state mark and the
-   * badge already use the tints, so a glyph that needs hue to be read would leave
-   * the canvas unreadable in greyscale.
-   */
-  private _glyph(n: FlowNode): unknown {
-    if (n.family === 'note') {
-      return html`<svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 3h10l4 4v14H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-        <path d="M8 10h8M8 14h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-      </svg>`;
-    }
-    if (n.family === 'seat') {
-      return html`<svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8" />
-        <path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-      </svg>`;
-    }
-    return html`<svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8" />
-      <path d="M10 8.5l5 3.5-5 3.5z" fill="currentColor" />
-    </svg>`;
-  }
-
-  /** The mark that says what a node's news is. Idle draws NOTHING — see 04. */
-  private _mark(n: FlowNode): unknown {
-    if (n.state === 'active') return html`<span class="mark active" title="in flight" aria-hidden="true"></span>`;
-    if (n.state === 'done') return html`<span class="mark done" title="done" aria-hidden="true">✓</span>`;
-    if (n.state === 'failed') return html`<span class="mark failed" title="failed" aria-hidden="true">⚠</span>`;
-    return nothing;
-  }
-
-  /**
-   * THE NODE BODY — the one function the Figma design replaces.
-   * Everything drawn INSIDE the tile lives here; the frame, the ring, the ports,
-   * the label, the badge and the toolbar are the canvas's and do not move.
-   */
-  private _nodeBody(n: FlowNode): unknown {
-    return html`
-      <span class="glyph">${this._glyph(n)}</span>
-      ${this._mark(n)}
-    `;
-  }
-
-  /** The toolbar the selected node wears. Every control emits; the host answers. */
-  private _toolbar(n: FlowNode): unknown {
-    const runnable = n.family === 'step';
-    return html`
-      <div class="tb" @pointerdown=${(e: PointerEvent) => e.stopPropagation()}>
-        <button
-          class="tb-btn"
-          type="button"
-          ?disabled=${!runnable}
-          aria-label="Run this step"
-          title=${runnable ? 'Run this step' : 'Only a step can be run'}
-          @click=${() => this._action('run', { nodeId: n.id })}
-        >▶</button>
-        <button class="tb-btn" type="button" aria-pressed=${n.state === 'failed' ? 'true' : 'false'}
-          aria-label="Enable or disable this step" title="Enable or disable"
-          @click=${() => this._action('toggle', { nodeId: n.id })}>⏻</button>
-        <button class="tb-btn" type="button" aria-label="Delete this node" title="Delete"
-          @click=${() => this._action('delete', { nodeId: n.id })}>🗑</button>
-        <button class="tb-btn" type="button" aria-label="Ask Grace about this" title="Ask Grace about this"
-          @click=${() => this._action('ask', { nodeId: n.id })}>✨</button>
-        <button class="tb-btn" type="button" aria-haspopup="menu" aria-label="More" title="More"
-          @click=${() => this._action('more', { nodeId: n.id })}>⋯</button>
-      </div>
-    `;
-  }
-
-  private _nodeView(n: FlowNode): unknown {
-    const p = this._nodePos(n);
-    const selected = this.selectedId === n.id;
-    return html`
-      <div
-        class="node f-${n.family} s-${n.state} ${selected ? 'sel' : ''}"
-        style="left: ${p.x}px; top: ${p.y}px;"
-        data-node-id=${n.id}
-        role="button"
-        tabindex="0"
-        aria-label=${n.title + (n.state === 'idle' ? '' : ' (' + n.state + ')')}
-        @pointerdown=${(e: PointerEvent) => this._onNodeDown(e, n)}
-        @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._select(n.id); } }}
-      >
-        <div class="tile">
-          ${this._nodeBody(n)}
-          <!-- FOUR PORTS, and they are quiet until used: a small ring that says where
-               a line may leave or land, at full strength only under the pointer. A
-               press on one starts a line; releasing it on nothing opens the picker. -->
-          ${(['left', 'right', 'top', 'bottom'] as Side[]).map((side) => html`
-            <span
-              class="port port-${side}"
-              data-port=${side}
-              title=${side === 'right' ? 'Drag out to add a step' : 'Connect here'}
-              role="button"
-              aria-label=${'Port, ' + side}
-              @pointerdown=${(e: PointerEvent) => this._onPortDown(e, n, side)}
-              @pointerup=${(e: PointerEvent) => this._onPortUp(e, n, side)}
-            ></span>`)}
-        </div>
-        <div class="label">${n.title}</div>
-        ${n.subtitle ? html`<div class="sub">${n.subtitle}</div>` : ''}
-        ${n.badge ? html`<div class="badge b-${n.badge}">${n.badge}</div>` : ''}
-        ${selected ? this._toolbar(n) : ''}
-      </div>
-    `;
-  }
+  // THE MODULE CHROME — the glyph, the mark, the ports, the toolbar — is drawn by the Vue module
+  // (canvas/vueFlowCanvas.ts) with the same classes this stylesheet styles. Nothing in this element
+  // renders a node any more; what it renders is the ground, the edges, the picker, the menus and
+  // the controls, and what it owns is every decision about them.
 
   render() {
     const flow = this.flow;
@@ -1177,8 +1280,8 @@ export class AgentFlow extends LitElement {
       const p = this._nodePos(n);
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x + NODE_TILE);
-      maxY = Math.max(maxY, p.y + NODE_FOOTPRINT);
+      maxX = Math.max(maxX, p.x + this._tileSize(n));
+      maxY = Math.max(maxY, p.y + this._nodeFootprint(n));
     }
 
     // The connection being drawn: from the source port to wherever the pointer is.
@@ -1186,9 +1289,13 @@ export class AgentFlow extends LitElement {
     if (this._connect) {
       const from = byId.get(this._connect.from);
       if (from) {
-        const p = this._nodePos(from);
-        const x1 = p.x + NODE_TILE;
-        const y1 = p.y + NODE_TILE / 2;
+        // THE LINE LEAVES THE PORT THE GESTURE STARTED AT. This used the right edge and the
+        // vertical middle of an NODE_TILE box, whatever side was actually grabbed and whatever
+        // size the node is — so on the larger trigger the live line began inside the box, from a
+        // corner the pointer had not touched. `_portPoint` is the one reader of both facts.
+        const start = this._portPoint(from, this._connect.side);
+        const x1 = start.x;
+        const y1 = start.y;
         const bend = Math.max(CURVE, Math.abs(this._connect.x - x1) / 2);
         livePath = 'M ' + x1 + ' ' + y1 + ' C ' + (x1 + bend) + ' ' + y1 + ', '
           + (this._connect.x - bend) + ' ' + this._connect.y + ', '
@@ -1214,7 +1321,9 @@ export class AgentFlow extends LitElement {
         tabindex="0"
         role="application"
         aria-label="Agent flow"
-        @pointerdown=${this._onCanvasDown}
+        @pointerdown=${this._onSurfaceDown}
+        @pointerup=${this._onSurfaceUp}
+        @click=${this._onSurfaceClick}
         @wheel=${this._onWheel}
         @keydown=${this._onKeyDown}
       >
@@ -1223,10 +1332,13 @@ export class AgentFlow extends LitElement {
              rejects a string in the stylesheet above. -->
         <div class="art" aria-hidden="true" style="background-image: url(${canvasArt});"></div>
 
+        <!-- THE LIBRARY'S SURFACE, OVER OUR GROUND. Vue Flow draws the modules and the dot grid;
+             the element draws the edges, the handles, the picker, the menus and the controls, and
+             owns every gesture. One drawing; the module chrome is Vue's, everything a hand grabs
+             or a decision reaches is this element's. -->
         <div
-          class="grid"
-          style="background-position: ${this.panX}px ${this.panY}px; background-size: ${GRID * this.zoom}px ${GRID * this.zoom}px;"
-          aria-hidden="true"
+          class="vue-host"
+          ${ref((el) => { this._vueHost = (el as HTMLElement | undefined) ?? null; })}
         ></div>
 
         <div class="view ${this._glide ? 'glide' : ''}" style="transform: translate(${this.panX}px, ${this.panY}px) scale(${this.zoom});">
@@ -1250,7 +1362,31 @@ export class AgentFlow extends LitElement {
               const a = byId.get(e.from);
               const b = byId.get(e.to);
               if (!a || !b) return nothing;
-              return svg`<path class="edge" d=${this._edgePath(a, b, e.fromSide, e.toSide)} data-from=${e.from} data-to=${e.to}></path>`;
+              const d = this._edgePath(a, b, e.fromSide, e.toSide);
+              /*
+               * TWO PATHS PER LINE: the one that is SEEN, and the one that is GRABBED.
+               *
+               * Measured on canvas.html: every edge carried pointer-events: none, so the line
+               * itself was inert — the only hittable thing was the 15px handle at its far end,
+               * invisible until hovered. A connector that cannot be taken hold of is a drawing
+               * of a connector.
+               *
+               * The visible stroke stays inert; a second path over it takes the pointer with a
+               * wide transparent stroke, because SVG hit-tests the stroke geometry and not the
+               * paint. Pressing it runs `_onHandleDown` — the SAME gesture the end handle
+               * starts — so a line can be taken hold of anywhere along its length and dragged
+               * to another port or another node. That is the behaviour the owner asked for:
+               * "when I first built this I was able to grab a connector, move it to a different
+               * node and do all kinds of behaviors."
+               */
+              return svg`
+                <path class="edge" d=${d} data-from=${e.from} data-to=${e.to}></path>
+                <path
+                  class="edge-hit"
+                  d=${d}
+                  data-handle-key=${e.key}
+                  @pointerdown=${(ev: PointerEvent) => this._onHandleDown(ev, e.key, e.from, e.to)}
+                ></path>`;
             })}
             ${livePath ? svg`<path class="edge live" d=${livePath}></path>` : nothing}
           </svg>
@@ -1275,7 +1411,6 @@ export class AgentFlow extends LitElement {
               ></span>`;
             })}
           </div>
-          ${nodes.map((n) => this._nodeView(n))}
         </div>
 
         <!-- THE KIND PICKER. It opens where a line was dropped on empty canvas: the one
@@ -1292,6 +1427,31 @@ export class AgentFlow extends LitElement {
                 <button type="button" class="picker-kind" @click=${() => this._addNodeAt(k.kind, k.label)}>${k.label}</button>`)}
               <button type="button" class="picker-cancel" @click=${() => { this._picker = null; this.requestUpdate(); }}>Cancel</button>
             </div>`
+          : nothing}
+
+        <!-- THE SAME QUESTION, ASKED ON THE DRAWING. A seat's lightning opens the same list the
+             prompt row's Functions | Tools menu offers, from the same catalogue — so a person who
+             is looking at the picture can ask what starts this without leaving it. The choice is
+             emitted, never written here: the canvas has no copy of the row's text. -->
+        ${this._triggerMenuFor
+          ? (() => {
+              const n = this._node(this._triggerMenuFor as string);
+              if (!n) return nothing;
+              const p = this._nodePos(n);
+              return html`<div
+                  class="picker trigger-menu"
+                  role="menu"
+                  style="left: ${p.x * this.zoom + this.panX}px; top: ${(p.y + this._tileSize(n)) * this.zoom + this.panY}px;"
+                  @pointerdown=${(e: PointerEvent) => e.stopPropagation()}
+                >
+                  <div class="picker-head">What starts this?</div>
+                  ${TRIGGERS.map((t) => html`
+                    <button type="button" class="picker-kind" role="menuitem" title=${t.hint}
+                            @click=${() => this._pickTrigger(n.id, t.token)}>${t.name}</button>`)}
+                  <button type="button" class="picker-cancel"
+                          @click=${() => { this._triggerMenuFor = null; this.requestUpdate(); }}>Cancel</button>
+                </div>`;
+            })()
           : nothing}
 
         <!-- THE EDGE THAT GOES UNDER THE CHAT. The drawing continues past this column
@@ -1346,6 +1506,8 @@ export class AgentFlow extends LitElement {
 
   static styles = [
     designTokens,
+    // THE LIBRARY'S OWN POSITIONING, INSIDE THE SHADOW ROOT where the library mounts.
+    unsafeCSS(vfStyle),
     css`
       /* No backticks in this stylesheet: static styles is a tagged template literal
          and ONE raw backtick ends it — tsc will not say so, esbuild will. */
@@ -1488,6 +1650,7 @@ export class AgentFlow extends LitElement {
         position: absolute; top: 0; right: 0; bottom: 0; width: 64px;
         background: linear-gradient(to right, transparent, var(--ds-surface));
         pointer-events: none;
+        z-index: 6;
       }
       .waiting {
         display: flex; align-items: center; justify-content: center;
@@ -1509,18 +1672,15 @@ export class AgentFlow extends LitElement {
         pointer-events: none;
       }
 
-      /* The dot grid is drawn, not transformed, so it never blurs and never has to
-         be a huge element: only its spacing and offset follow the view. */
-      .grid {
-        position: absolute; inset: 0;
-        background-image: radial-gradient(var(--flow-dot) 2.1px, transparent 2.1px);
-        background-repeat: repeat;
-      }
-
+      /* THE VIEW LAYER CARRIES THE EDGES AND THE LINE-END HANDLES ONLY — the modules are the
+         Vue pane's now. It must sit ABOVE the pane for hit-testing (an edge grabbed through a
+         pane is never grabbed) and let everything else pass through: the container and the
+         stroke-layer are inert, the grabbable paths and the handles take the pointer. */
       .view {
         position: absolute; top: 0; left: 0;
         transform-origin: 0 0;
         will-change: transform;
+        pointer-events: none;
       }
       /* THE GLIDE. The panes' own settle curve — the one every pane in this application
          arrives on — because a drawing that jumps 1,500px reads as a teleport and the
@@ -1544,10 +1704,22 @@ export class AgentFlow extends LitElement {
         vector-effect: non-scaling-stroke;
       }
       .edge.live { stroke: var(--ds-teal); stroke-dasharray: 5 4; }
+      /* THE LINE'S OWN HIT AREA — see the note over the edge layer. Invisible, wide enough for a
+         hand rather than for a pixel, and it takes the pointer so the line can be grabbed. The
+         svg around it stays pointer-events: none, so the ground behind the lines still pans. */
+      .edge-hit {
+        fill: none;
+        stroke: transparent;
+        stroke-width: 18;
+        pointer-events: stroke;
+        cursor: grab;
+      }
+      .edge-hit:active { cursor: grabbing; }
 
+      /* THE MODULE BODY — now inside the Vue Flow node wrapper, which carries the position; the
+         module's own inline width/height is what the wrapper measures. */
       .node {
-        position: absolute;
-        width: ${NODE_TILE}px;
+        position: relative;
         user-select: none;
         cursor: grab;
         text-align: center;
@@ -1555,30 +1727,61 @@ export class AgentFlow extends LitElement {
       .node:active { cursor: grabbing; }
       /* The owner, 2026-09-21: selecting a node keeps its drop shadow — the ring and
          the lift are both on this rule, or the second one silently cancels the other. */
-      .node.sel .tile { box-shadow: 0 0 0 3px var(--ds-surface), 0 0 0 6px var(--ds-teal), 0 6px 16px rgba(0, 0, 0, 0.35); }
+      /* THE SELECTION RING IS THEIRS: one 6px ring at white 40% in the dark theme
+         (--canvas--color--selected-transparent, read from their running canvas), instead of the
+         two-ring teal outline this used. A selected node in their canvas reads as LIT, not as
+         outlined, and that is the pattern being copied. */
+      .node.sel .tile { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.4); }
       .node:focus-visible .tile { outline: 2px solid var(--ds-teal); outline-offset: 3px; }
 
+      /*
+       * ── THE MODULE'S SURFACE, IN THEIR PATTERN ────────────────────────────────────────
+       *
+       * The owner, 2026-09-24: "you should use the same design patterns… our modules are not
+       * special, they were filler, placeholders — you can replace the design to match n8n, and
+       * then I'll go back into Figma and re-style them. The only thing I want to keep is the
+       * graphic in the background."
+       *
+       * Every number below was READ FROM THEIR RUNNING CANVAS, not guessed:
+       *   corner        8px              (--radius--lg, resolved)
+       *   border        1.5px of a 10–15% neutral (--canvas-node--border-width + its border colour)
+       *   surface       hsl(0 0% 17%)    (--color--neutral-850, their dark node fill)
+       *   selected      6px ring at white 40% (--canvas--color--selected-transparent, dark theme)
+       *   status        carried by the BORDER, not by the tile (their status-success/error/warning)
+       *   trigger       one lead corner at 36px (--trigger-node--radius)
+       *
+       * Our families survive as a TINT and as the glyph, which is what their canvas does too: one
+       * surface for every node, and the icon says what it is. The ground behind the drawing —
+       * the line art and the dot grid — is untouched, which is the one thing he asked to keep.
+       */
       .tile {
         position: relative;
         width: ${NODE_TILE}px;
         height: ${NODE_TILE}px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 20px;
-        background: var(--ds-grey-tint);
-        border: 2px solid var(--ds-rule);
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+        border-radius: 8px;
+        background: #2b2b2b;
+        border: 1.5px solid rgba(255, 255, 255, 0.16);
         color: var(--ds-text-strong);
         box-sizing: border-box;
-        /* The owner, 2026-09-21: the tiles lift off the artwork behind them. */
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
       }
-      /* The families read apart in GREYSCALE: a note is square-ish and light, a seat
-         is rounder and tinted, a step carries the darker frame. Colour only sharpens
-         what shape already says. */
-      .f-note .tile { background: var(--flow-note-fill); border-color: var(--flow-note-border); }
-      .f-seat .tile { background: var(--flow-seat-fill); border-color: var(--flow-seat-border); border-radius: 30px; }
-      .f-step .tile { background: var(--ds-navy-tint); border-color: var(--flow-step-border); border-radius: 14px; }
-      .s-failed .tile { border-color: var(--ds-red); }
-      .s-done .tile { border-color: var(--flow-done-border); }
+      /* THE FAMILY IS COLOUR AND GLYPH, NOT SHAPE — as theirs. */
+      .f-note .tile { background: #3a2f18; }
+      .f-seat .tile { background: #242a36; }
+      .f-step .tile { background: #22262e; }
+      /* STATUS IS THE BORDER, in their colours: success, error, warning. */
+      .s-failed .tile { border-color: #e0524a; }
+      .s-done .tile { border-color: #3fa76a; }
+      .s-active .tile { border-color: #d7a04a; }
+      /* THE TRIGGER, DRAWN AS THEIRS IS — a larger square, so its shape says it is where the
+         flow starts, and ONE LEAD CORNER at 36px (--trigger-node--radius, read from their
+         running canvas) while every other corner keeps the 8px the rest of the nodes use. That
+         corner is the whole of what makes their trigger recognisable at a glance, and it costs
+         nothing to carry: the size is still HUB_TILE, so the ports and the edges follow it. */
+      .node.hub { width: ${HUB_TILE}px; }
+      .node.hub .tile { width: ${HUB_TILE}px; height: ${HUB_TILE}px; border-radius: 36px 8px 8px 36px; }
+      .node.hub .glyph { width: 64px; height: 64px; }
       .glyph { display: block; width: 40px; height: 40px; }
       .glyph svg { width: 100%; height: 100%; display: block; }
 
@@ -1617,23 +1820,46 @@ export class AgentFlow extends LitElement {
       }
       .node:hover .port, .node.sel .port, .port:focus-visible { opacity: 1; }
       .port:hover { border-color: var(--ds-teal); box-shadow: 0 0 0 3px var(--ds-teal-tint); opacity: 1; }
+      /* THE "+" THAT SAYS WHAT A PORT DOES — theirs carries it on the handle, and it is the
+         difference between a dot nobody dares touch and a control that says a module can go
+         here. Its own element with pointer-events off, so the port's hit area, ring and cursor
+         are exactly what they were. */
+      .port-plus {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--ds-muted);
+        pointer-events: none;
+      }
+      .node:hover .port-plus, .port:hover .port-plus { color: var(--ds-text-strong); }
       .port-left { left: -7px; top: 50%; margin-top: -6.5px; }
       .port-right { right: -7px; top: 50%; margin-top: -6.5px; }
       .port-top { top: -7px; left: 50%; margin-left: -6.5px; }
       .port-bottom { bottom: -7px; left: 50%; margin-left: -6.5px; }
 
       /* THE GRABBABLE END OF A LINE. It sits on the port the line lands at, and it is
-         invisible until the line or the handle is hovered — the drawing should read as
-         lines, not as a field of dots. */
+         invisible until a line is hovered — the drawing should read as lines, not as a field of
+         dots. THE REVEAL IS KEYED TO THE LINE, NOT TO THE DOT: a handle hidden until it is
+         hovered itself is a control a person cannot discover, because they cannot see what they
+         cannot hover. Hovering any edge-hit (the 18px invisible stroke along every line) shows
+         every line's end, so the one grab affordance the owner cares about — moving a connection
+         — is findable from the line itself. The view layer is inert, so the handle takes the
+         pointer itself. */
       .handles { position: absolute; top: 0; left: 0; }
       .handle {
         position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px;
         border-radius: 50%;
         cursor: grab;
+        pointer-events: auto;
         opacity: 0;
         transition: opacity 0.12s;
       }
-      .handles:hover .handle, .handle:hover { opacity: 1; }
+      svg.edges:hover ~ .handles .handle, .handle:hover { opacity: 1; }
       .handle::after {
         content: ''; position: absolute; inset: 3px;
         border-radius: 50%;
@@ -1645,7 +1871,7 @@ export class AgentFlow extends LitElement {
       /* THE KIND PICKER, at the drop point. Small, quiet, and it answers one question:
          what kind of node goes here. The list is the prompt's own seats. */
       .picker {
-        position: absolute; z-index: 6;
+        position: absolute; z-index: 8;
         display: flex; flex-direction: column; gap: 2px;
         min-width: 150px; padding: 6px;
         background: var(--ds-surface);
@@ -1668,10 +1894,15 @@ export class AgentFlow extends LitElement {
       .picker-cancel { color: var(--ds-muted); border-top: 1px solid var(--ds-rule-soft, var(--ds-rule)); }
       .picker-cancel:hover { background: var(--ds-surface-hover); }
 
-      .label {
-        margin-top: 9px;
-        font-size: 13px; font-weight: 600; color: var(--ds-text);
-        line-height: 1.25;
+      /* THE LABEL LIVES INSIDE THE TILE NOW — glyph above, name below, both inside the frame,
+         which is the module shape their canvas uses. The subtitle and badge hang under the tile
+         as they always did. */
+      .tile .label {
+        margin: 0;
+        max-width: 84px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 12px; font-weight: 600; color: var(--ds-text-strong);
+        line-height: 1.2;
       }
       .sub {
         font-size: 13px; color: var(--ds-muted);
@@ -1711,7 +1942,8 @@ export class AgentFlow extends LitElement {
 
       .controls {
         position: absolute; display: flex; gap: 6px;
-        z-index: 2;
+        /* ABOVE THE LIBRARY'S PANE, always — a control under the pane is a dead control. */
+        z-index: 7;
       }
       /* ONE CLUSTER, one corner: the controls that MOVE THE DRAWING. The top-right group
          is gone (see the markup note above), and the host contract it needed went with
@@ -1719,6 +1951,29 @@ export class AgentFlow extends LitElement {
          laid over the canvas, and nothing left on this element reads it. Removing a
          property a host must remember is a deletion worth having. */
       .controls.bl { left: 12px; bottom: 12px; }
+
+      /* THE LIBRARY'S SURFACE. Vue Flow draws the dot grid and the modules; the element draws
+         the ground, the edges, the handles, the picker, the menus and the controls. There is
+         exactly one drawing of each thing — the element's view layer (edges and handles) sits
+         ABOVE the pane so a line can be grabbed, the pane itself never takes the pointer (its
+         gestures are all off), and the controls sit above everything. */
+      .vue-host { position: absolute; inset: 0; z-index: 5; }
+      /* THE LIBRARY SIZES ITSELF TO ITS CONTAINER, SO THE CONTAINER MUST HAVE ONE. Measured
+         2026-09-24: without these two lines the library's own box collapsed to its content, the fit
+         ran against THAT box, and the drawing came up at half scale and below the pane — modules
+         49px on screen where 96 was asked for. Vue Flow's docs say the same: the wrapper needs
+         explicit dimensions.
+         (No backticks in this comment, deliberately: this is a css template literal and one raw
+         backtick ends it — the same trap the top of this stylesheet warns about, walked into.) */
+      .vue-host .vue-flow { width: 100%; height: 100%; background: transparent; }
+      /* THE PANE IS A PICTURE, NOT A CONTROL: every Vue Flow gesture is off (see the mount), so
+         the pane must not sit on top of the edge layer's hit paths. The nodes themselves are
+         interactive through the wrapper's own inline pointer-events. */
+      .vue-host .vue-flow__pane,
+      .vue-host .vue-flow__transformationpane,
+      .vue-host .vue-flow__background { pointer-events: none; }
+      .vue-host .vue-flow__node { font-family: 'Inter', system-ui, sans-serif; }
+      .view { z-index: 6; }
       .ctl {
         width: 32px; height: 32px; padding: 0;
         display: flex; align-items: center; justify-content: center;
@@ -1738,6 +1993,7 @@ export class AgentFlow extends LitElement {
         display: flex; align-items: center; justify-content: center;
         color: var(--ds-muted); font-size: var(--ds-fs-md);
         pointer-events: none;
+        z-index: 7;
       }
 
       /* ── RESPONSIVE ──────────────────────────────────────────────────────────

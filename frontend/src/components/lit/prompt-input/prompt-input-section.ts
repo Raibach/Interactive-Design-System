@@ -74,6 +74,13 @@ export const PRELABELED_TOOLS: Array<{ name: string; token: string }> = [
 ];
 
 /**
+ * THE TRIGGERS LIVE ONCE, in `shared/triggers.ts` — because a node's menu on the canvas asks the
+ * same question and must offer the same answers. Two lists would drift, and the drift would look
+ * like the canvas and the prompt disagreeing about the same prompt.
+ */
+import { TRIGGERS, triggerIn, toolsIn } from '@/shared/triggers';
+
+/**
  * A TOOL MARKED THIS BELONGS TO EVERY SECTION.
  *
  * Most tools belong to one or two seats — the composer's rules belong with the
@@ -101,8 +108,17 @@ export class PromptInputSection extends LitElement {
   declare content: string;
   declare sticky: boolean;
   declare minHeight: number;
-  declare menuOpen: '' | 'types' | 'functions';
-  declare placeholder: string;
+  declare menuOpen: '' | 'types' | 'functions' | 'triggers';
+
+  /**
+   * THE MENU'S SECOND LEVEL — which list is showing, and nothing else.
+   *
+   * `''` is the first step of the capability menu ("a trigger or a tool?"); `'trigger'` and
+   * `'tool'` are the two lists. It is deliberately not part of `menuOpen`: that property is the
+   * published contract with the editor and the surface (`menu-open` is an attribute), and where a
+   * person is INSIDE a menu is not something anything outside this element needs to know.
+   */
+  private _pick: '' | 'trigger' | 'tool' = '';  declare placeholder: string;
   declare tools: Array<{ name: string; token: string; sections?: string[]; summary?: string }> | undefined;
 
   /**
@@ -337,6 +353,18 @@ export class PromptInputSection extends LitElement {
     .menu-item:hover { background: #f7f7f7; }
     .menu-item.selected { color: #4e68d2; }
     .menu-item.danger { color: #c50000; }
+    /* WHAT THIS ROW ALREADY HOLDS. The tick and the colour are the same fact the badge and the
+       rail read — the row's own text — so the three cannot disagree about what is attached. */
+    .menu-item.chosen { color: #4e68d2; font-weight: 600; }
+    /* THE WAY BACK, and the way out. The menu is two levels deep and stays open while several
+       things are chosen, so it needs both: a step back to the question, and a Done to leave. */
+    .menu-item.back { color: #8b8b8b; font-size: 14px; }
+    .menu-item.done {
+      border-top: 1px solid #ececf0;
+      margin-top: 4px;
+      color: #4e68d2;
+      font-weight: 600;
+    }
     /* role-dropdown-tile.dropdown-bottom (node 40001003:25282) — a full-width
        tile, same card/shadow/radius, label in #8B8B8B (fill_fa023af3).
        Built verbatim from the design; it is not hoverable. */
@@ -423,6 +451,22 @@ export class PromptInputSection extends LitElement {
        at 500: Medium is the floor weight of this app (owner, 2026-09-18). */
     .functions-label-text .functions-sep {
       font-weight: 500;
+    }
+
+    /* THE TRIGGER'S OWN MARK, beside the control that chose it. Quiet by design: it is a state,
+       not a call to action — the prompt already says what starts it, and this is that fact
+       repeated where a person looks when they are reading the header rather than the menu. */
+    .triggers-badge {
+      margin-left: 8px;
+      padding: 2px 8px;
+      border: 1px solid #d8d8dd;
+      border-radius: 999px;
+      background: #f4f4f6;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      color: #5a5a63;
+      white-space: nowrap;
     }
     .prompt-imput {
       display: flex;
@@ -569,15 +613,72 @@ export class PromptInputSection extends LitElement {
       : this.tools.filter(
           (tool) => tool.sections?.includes(this.type) || tool.sections?.includes(ALL_SECTIONS),
         );
+    /**
+     * WHICH TRIGGER THIS ROW HOLDS — DERIVED FROM ITS OWN TEXT, like the flag below it.
+     *
+     * Nothing is stored and nothing can drift: the row either contains the token or it does not,
+     * so the badge beside the control, the menu's own entries and the rail's mark all read the
+     * same fact. A stored copy is how a row edited by hand keeps claiming a trigger it no longer
+     * carries — the shape this repository measures everywhere it keeps two copies of one thing.
+     */
+    const chosenTrigger = triggerIn(String(this.content || ''));
+
+    /**
+     * THE TOOLS THIS ROW ALREADY HOLDS — read from its own text, the same way, for the same
+     * reason. This is what makes the menu a multi-select that shows its state rather than a list
+     * that forgets: a person choosing a second tool can see the first one already ticked.
+     */
+    const heldTools = toolsIn(String(this.content || ''));
+
+    /*
+     * TWO LEVELS, ONE CONTROL — the owner's shape, 2026-09-24: "it would drop down and then they
+     * would pick: do I want to add a trigger, or do I want to add a tool — and then that would
+     * launch that grouping of selections."
+     *
+     * WHY TWO STEPS, AND NOT ONE LIST OF BOTH. A trigger and a tool are the same kind of thing to
+     * CHOOSE (both are capabilities, both write a token into this row) but not the same thing to
+     * HAVE: a trigger says WHEN this module starts, a tool says WHAT it may reach for. One flat
+     * list would put two different questions in a single column and let a person answer the wrong
+     * one without noticing. So the first step asks which question they are answering — in those
+     * words, with no jargon — and the second lists only that answer.
+     */
     const functionsMenu = menuOpen === 'functions' ? html`
       <div class="selection-menu" role="menu" @mouseleave=${() => { this._showTip(''); }}>
-        ${offeredTools.length === 0
-          ? html`<div class="menu-item placeholder" role="presentation">No tools for this seat</div>`
-          : offeredTools.map((tool) => html`
-          <button class="menu-item" role="menuitem" data-action="tool" data-value="${tool.token}"
-                  @mouseenter=${() => { this._showToolTip(tool.name); }}
-                  @focus=${() => { this._showToolTip(tool.name); }}
-                  @click=${(e: Event) => this._onMenuSelect(e)}>${tool.name}</button>`)}
+        ${this._pick === ''
+          ? html`
+            <button class="menu-item" role="menuitem" data-step="trigger"
+                    @mouseenter=${() => { this._showTip('A trigger decides when this module starts.'); }}
+                    @focus=${() => { this._showTip('A trigger decides when this module starts.'); }}
+                    @click=${(e: Event) => this._pickKind(e, 'trigger')}>Add a trigger — what starts it</button>
+            <button class="menu-item" role="menuitem" data-step="tool"
+                    @mouseenter=${() => { this._showTip('A tool is what this module may reach for.'); }}
+                    @focus=${() => { this._showTip('A tool is what this module may reach for.'); }}
+                    @click=${(e: Event) => this._pickKind(e, 'tool')}>Add a tool — what it uses</button>`
+          : this._pick === 'trigger'
+            ? html`
+              <button class="menu-item back" role="menuitem" data-step="back"
+                      @click=${(e: Event) => this._pickKind(e, '')}>← what starts this prompt?</button>
+              ${TRIGGERS.map((t) => html`
+                <button class="menu-item${chosenTrigger && chosenTrigger.token === t.token ? ' chosen' : ''}"
+                        role="menuitem" data-action="trigger" data-value="${t.token}"
+                        @mouseenter=${() => { this._showToolTip(t.hint); }}
+                        @focus=${() => { this._showToolTip(t.hint); }}
+                        @click=${(e: Event) => this._onMenuSelect(e)}>${chosenTrigger && chosenTrigger.token === t.token ? '✓ ' : ''}${t.name}</button>`)}
+              <button class="menu-item done" role="menuitem" data-step="done"
+                      @click=${(e: Event) => this._done(e)}>Done</button>`
+            : html`
+              <button class="menu-item back" role="menuitem" data-step="back"
+                      @click=${(e: Event) => this._pickKind(e, '')}>← what it may reach for</button>
+              ${offeredTools.length === 0
+                ? html`<div class="menu-item placeholder" role="presentation">No tools for this seat</div>`
+                : offeredTools.map((tool) => html`
+                <button class="menu-item${heldTools.has(tool.token) ? ' chosen' : ''}"
+                        role="menuitem" data-action="tool" data-value="${tool.token}"
+                        @mouseenter=${() => { this._showToolTip(tool.name); }}
+                        @focus=${() => { this._showToolTip(tool.name); }}
+                        @click=${(e: Event) => this._onMenuSelect(e)}>${heldTools.has(tool.token) ? '✓ ' : ''}${tool.name}</button>`)}
+              <button class="menu-item done" role="menuitem" data-step="done"
+                      @click=${(e: Event) => this._done(e)}>Done</button>`}
       </div>` : '';
 
     // Activity rail — a SINGLE lightning. The Figma rail (40000746-94) carries a
@@ -596,7 +697,43 @@ export class PromptInputSection extends LitElement {
     // sends — so it cannot drift from the fields below it.
     const flag = repairPromptFlag(String(this.content || ''));
     const blocked = flag.kind === 'needs-you' || flag.kind === 'no-values';
-    const railIcons: string[] = blocked ? ['lightning', 'alert'] : ['lightning'];
+    /*
+     * ── THE RAIL IS THE ACTIVITY MAP, NOT A DECORATION ─────────────────────────────────
+     *
+     * The owner, 2026-09-24: "It's a visual indicator of what they're doing and what they've
+     * selected. It's like a visual map of the activity on that left rail. It's very high-level.
+     * It's not detailed — it's just a quick icon, and they'll begin to associate the trigger with
+     * the icon."
+     *
+     * So the rail is built from what this row actually HOLDS, read from its own text like the
+     * badge and the menu ticks are — one fact, three readers, none of them able to disagree:
+     *
+     *   the base bolt   the row exists and is a place work happens (always)
+     *   the second bolt one per attached capability, so a row with a tool and a trigger wears two
+     *   the alert       the row is waiting on a person, which OUTRANKS the rest and goes first
+     *
+     * IT IS CAPPED, because a map is not a list: past a handful of icons the rail stops being
+     * readable at a glance, which is the whole point of putting it there. The cap is a constant
+     * so it can be argued with rather than discovered.
+     *
+     * The names are the icon kinds `status-bar-prompt-input` knows. When the owner's own icon for
+     * a trigger arrives, it becomes one more entry in `prompt-icons.ts` and one more name here —
+     * that is the whole of the change, and this comment is where to find out that is all it is.
+     */
+    const RAIL_MAX = 5;
+    // THE DESIGN'S OWN FIRST CELL STAYS: this row is a place work happens, whether or not anything
+    // is attached to it yet. The MAP grows from there — a trigger adds its icon, each tool adds
+    // one, and the alert (a status, not an activity) still goes last, where the design has always
+    // put it. Removing the base cell was the first thing I tried; the rail's own tests caught it,
+    // and they were right: an empty rail says "nothing here", when the truth is "nothing attached
+    // to this row yet".
+    const railIcons: string[] = ['lightning'];
+    if (chosenTrigger) railIcons.push('trigger');
+    for (const _tool of heldTools) {
+      if (railIcons.length >= RAIL_MAX) break;
+      railIcons.push('tool');
+    }
+    if (blocked) railIcons.push('alert');
     const promptFlag = flag.kind === 'none' ? '' : html`
       <div class="prompt-flag${blocked ? ' prompt-flag--blocked' : ''}" role="status" data-flag="${flag.kind}">
         <span class="prompt-flag-mark" aria-hidden="true">${blocked ? '!' : '✓'}</span>
@@ -627,6 +764,13 @@ export class PromptInputSection extends LitElement {
                       @click=${(e: Event) => this._toggleMenu(e, 'functions')}>Functions<span class="functions-sep"> | </span>Tools</button>
               ${functionsMenu}
             </div>
+            <!-- THE INDICATOR, ON THE ROW'S OWN HEADER. The chosen trigger's name sits beside the
+                 control that chose it, so the row says what starts it without the menu being
+                 opened — and it is the same fact the rail marks, read from the same text. -->
+            ${chosenTrigger
+              ? html`<span class="triggers-badge" data-trigger=${chosenTrigger.token}
+                       title=${`Starts when: ${chosenTrigger.name}`}>${chosenTrigger.name}</span>`
+              : nothing}
           </div>
         </div>
         ${promptFlag}
@@ -645,14 +789,41 @@ export class PromptInputSection extends LitElement {
     `;
   }
 
-  private _toggleMenu(e: Event, kind: 'types' | 'functions') {
+  private _toggleMenu(e: Event, kind: 'types' | 'functions' | 'triggers') {
     e.stopPropagation();
     this.menuOpen = this.menuOpen === kind ? '' : kind;
+    // Opening or closing always starts at the first level — the question "a trigger or a tool?",
+    // not wherever the last visit ended. A menu that reopened on the previous branch would show
+    // a list without its heading, and the person would not know which question they are in.
+    this._pick = '';
     // Closing the menu closes its description too — the card describes a choice
     // CLOSING THE MENU CLOSES ITS CARD, and opening one starts with no tile under
     // the pointer. Either way nothing is being hovered, so neither menu's card
     // applies — this used to check for 'types' specifically, which was true when
     // only the seat menu had one.
+    this._showTip('');
+    this.requestUpdate();
+  }
+
+  /**
+   * THE FIRST STEP OF THE CAPABILITY MENU: which question is being answered.
+   *
+   * It does NOT close the menu and it does NOT write anything — it swaps the list. That is the
+   * whole of the second level, and it is why the two questions can share one control without
+   * sharing one list.
+   */
+  private _pickKind(e: Event, kind: '' | 'trigger' | 'tool') {
+    e.stopPropagation();
+    this._pick = kind;
+    this._showTip('');
+    this.requestUpdate();
+  }
+
+  /** Done — the person says the choosing is over. See the note in _onMenuSelect. */
+  private _done(e: Event) {
+    e.stopPropagation();
+    this._pick = '';
+    this.menuOpen = '';
     this._showTip('');
     this.requestUpdate();
   }
@@ -696,7 +867,16 @@ export class PromptInputSection extends LitElement {
     const btn = e.currentTarget as HTMLElement;
     const action = btn.getAttribute('data-action');
     const value = btn.getAttribute('data-value') || undefined;
-    this.menuOpen = '';
+    /*
+     * A MULTI-SELECT DOES NOT CLOSE ON A PICK. The owner, 2026-09-24: "this is a complex
+     * drop-down multi-select drop-down… we're keeping them tied to that role or that node."
+     *
+     * A menu that closes on every choice makes three tools three visits, and leaves a person
+     * unable to see what the row already holds while they are choosing the next one. So the list
+     * stays, and it marks what is already on the row (see the `chosen` class) — the same fact the
+     * badge and the rail read, so all three cannot disagree. The menu closes when the person says
+     * so: `Done`, or the control again.
+     */
     /*
      * THE CARD GOES WITH THE MENU. It is drawn outside the menu's block — it has
      * to be, to escape the column — so closing the menu does not remove it, and a

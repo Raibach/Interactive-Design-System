@@ -240,6 +240,7 @@ const COMPOSITE_MAP: Record<string, string> = {
   SectionEditor: 'prompt-section-editor',
   CompiledOutput: 'compiled-output-viewer',
   TraceFeed: 'trace-feed',          // the rail's Trace view, injected into the panel's view slot
+  EvalFeed: 'eval-feed',            // the rail's Evals view — judged runs, one row per run
   AgentFlow: 'agent-flow',          // the output column's flow canvas, swapped in on Run
   AgentCanvas: 'agent-canvas',      // the plug-in: that canvas and her seat, as one unit
   OutputControls: 'output-controls',  // the middle column's header row, drawn in every view of it

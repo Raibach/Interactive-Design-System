@@ -1013,8 +1013,9 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
     {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
-    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": ["trace-view", "eval-view"]}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
+    {{"id": "eval-view", "component": "EvalFeed", "evaluations": {{"path": "/session/middle_column/evaluations"}}}}
   ],
   "initial_sections": [
     {{"name": "System", "type": "system", "content": "You are a precise, professional assistant."}},
@@ -1034,7 +1035,8 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             mode="surface_assembly",
             temperature=0.0,
             prompt_id="surface-assembly-composer"
-            # model intentionally omitted — use the enabled provider's default (deepseek-v4-pro)
+            # model intentionally omitted — use the single configured model's id
+            # (LOCAL_ASSEMBLY_MODEL, Qwen3.5-9B), so the URL and the id stay one source
         )
         ms_b = (time.perf_counter() - t_b_start) * 1000
 
@@ -1312,8 +1314,9 @@ Output ONLY this JSON (no markdown):
     {{"id": "left-col", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
-    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": "trace-view"}}}},
+    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": ["trace-view", "eval-view"]}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
+    {{"id": "eval-view", "component": "EvalFeed", "evaluations": {{"path": "/session/middle_column/evaluations"}}}}
   ],
   "ai_message": "Session open — your three panes are loaded."
 }}

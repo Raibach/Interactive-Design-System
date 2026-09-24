@@ -1562,6 +1562,22 @@ export class ChatPanel extends LitElement {
     .view-slot ::slotted(chat-repair-actions) {
       flex: 0 0 auto;
     }
+    /* ONE SLOT, ONE VIEW AT A TIME. The slot can hold several views at once (the trace feed
+       AND the eval feed are both slotted), and each rail tab shows only its own: everything is
+       hidden by default, and the tab's class turns its view on. The trace tab renders its own
+       fold branch above, so the trace feed is hidden here everywhere; the eval feed exists only
+       under Evals; the repair rows belong to Approvals and their chat-top branch, nowhere else.
+       A view shown under the wrong tab is the bug this fixes: Evals used to draw the trace feed
+       because the slot had no idea which tab was looking. */
+    .view-slot ::slotted(trace-feed) { display: none; }
+    .view-slot ::slotted(eval-feed) { display: none; }
+    .view-slot ::slotted(chat-repair-actions) { display: none; }
+    .view-slot.tab-eval ::slotted(eval-feed) { display: block; }
+    .view-slot.tab-approvals ::slotted(chat-repair-actions) { display: block; }
+    .view-slot.tab-repair ::slotted(chat-repair-actions) { display: block; }
+    /* The trace fold holds the same slot; only the feed it names may draw there. */
+    .fold-wrap ::slotted(eval-feed) { display: none; }
+    .fold-wrap ::slotted(chat-repair-actions) { display: none; }
     /* THE CHAT TAB CARRIES THE FINDINGS TOO — AND ONLY THE FINDINGS.
        The console must not open on a blank chat (owner, 2026-09-18: "I'm building a demo and
        I don't want blank chat to open up, so add it to the chat as well… just make sure it's
@@ -1728,7 +1744,7 @@ export class ChatPanel extends LitElement {
       versions: 'No versions yet. A version is written when this package is saved.',
       tools: 'No tools yet. A Tool Call seat in the prompt is what names one.',
       executions: 'No runs yet. Press ▶ Play the run and this flow\'s run lands here.',
-      eval: 'Nothing has been judged yet. The catalog check runs after a repair is applied.',
+      eval: 'Nothing has been judged yet. Press Run and each run\'s verdict lands here, one row per run.',
       trace: 'Nothing traced yet. The canvas\'s own events appear here as they happen.',
       states: 'Sample drawings only. Run the flow to draw the real one.',
       repair: 'Nothing to repair. The catalog checker found no open findings.',
@@ -1761,8 +1777,10 @@ export class ChatPanel extends LitElement {
   }
 
   private _viewSlotted(): boolean {
+    const wanted = this._wantedViewTag();
+    if (!wanted) return false;
     const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
-    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE)) return true;
+    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName.toLowerCase() === wanted)) return true;
     // The light DOM covers what slotting does not report: jsdom's slotting is thin,
     // and the surface's child may be appended after this element's first render.
     // A SLOT ELEMENT IS NOT A VIEW. When a host sits between this panel and the
@@ -1771,8 +1789,24 @@ export class ChatPanel extends LitElement {
     // being it. Counting them claimed a view was slotted when the host had none, and
     // the waiting line was suppressed for a view that was never coming.
     return Array.from(this.children).some(
-      (el) => el.getAttribute('slot') === 'view' && el.tagName !== 'SLOT',
+      (el) => el.getAttribute('slot') === 'view' && el.tagName.toLowerCase() === wanted,
     );
+  }
+
+  /**
+   * WHICH SLOTTED ELEMENT THIS TAB'S VIEW IS — each rail tab draws one view, and the
+   * slot can hold several at once. A tab without a view element yet (tools, versions,
+   * runs, states) has none, so its waiting line shows; the views that exist answer to
+   * their own tag, so the trace feed never stands in for Evals and vice versa.
+   */
+  private _wantedViewTag(): string | null {
+    switch (this.activeTab) {
+      case 'trace': return 'trace-feed';
+      case 'eval': return 'eval-feed';
+      case 'repair':
+      case 'approvals': return 'chat-repair-actions';
+      default: return null;
+    }
   }
 
   /**
@@ -4155,7 +4189,7 @@ ${workspaceContext}`;
                                 </div>`}
                           </chat-fold>
                         </div>`
-                      : html`<div class="view-slot">
+                      : html`<div class="view-slot tab-${this.activeTab || 'none'}">
                           <slot name="view" @slotchange=${this._onSlotChange}></slot>
                           ${this._viewSlotted()
                             ? nothing
