@@ -2,7 +2,13 @@
 
 Written 2026-09-24, end of session. Everything below is current as of this moment.
 
-## The one open thread: conversations cannot be saved
+## The one open thread: conversations cannot be saved — CLOSED 2026-09-24
+
+**This thread is resolved.** The next chat applied the fix, backfilled the orphan rows, wiped
+conversations clean at the owner's request, and verified every conversation lifecycle rule
+live in production. The full outcome is in `READ-ME/CONVERSATIONS-FIX.md`
+("What happened next (2026-09-24)"). What follows is the diagnosis as it stood when this file
+was written.
 
 The owner's words, verbatim: "She has an automatic prompt that's supposed to generate when the
 person opens up the card, it's tied to the conversations. The conversations are broken. We need
