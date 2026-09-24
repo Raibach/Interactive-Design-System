@@ -28,23 +28,13 @@ PROVIDERS = {
     # module's job is to REPORT on the same model the runtime uses, and the id in both
     # places has to be the one actually being served.
     #
-    # `api_key_required: False` matches the runtime: LM Studio ships a placeholder key and
-    # ignores it, so demanding a real one here would report a healthy local server as
-    # unconfigured. In production this base URL is the tunnel's.
-    "qwen": {
-        "name": "Qwen9B local (LM Studio / tunnel)",
-        "base_url": os.getenv("LOCAL_ASSEMBLY_URL", "http://127.0.0.1:1234/v1"),
-        "model": os.getenv("LOCAL_ASSEMBLY_MODEL", "qwen/qwen3.5-9b"),
-        "api_key_env": "LOCAL_ASSEMBLY_API_KEY",
-        "api_key_required": False,
-    },
-    # NOT USED BY query_llm(). Kept because /api/teacher/ensure-model still names it, and
-    # that endpoint is about a different pipeline with its own provider.
-    "zai": {
-        "name": "Z.ai API",
-        "base_url": "https://api.z.ai/api/paas/v4",
-        "model": "glm-4.7",
-        "api_key_env": "ZAI_API_KEY",
+    # DeepSeek took the seat 2026-09-24 (the owner chose a hosted model after the local
+    # Qwen measured 17–30s per surface assembly). One entry, one model — nothing else.
+    "deepseek": {
+        "name": "DeepSeek (hosted API)",
+        "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "api_key_env": "DEEPSEEK_API_KEY",
         "api_key_required": True,
     },
 }
@@ -78,7 +68,7 @@ def load_api_key(provider: str = "deepseek") -> str:
     return key
 
 
-def check_api_connection(provider: str = "qwen") -> bool:
+def check_api_connection(provider: str = "deepseek") -> bool:
     """Ping the provider with a minimal chat completion. Returns True on success.
 
     Uses _api_key(), not load_api_key(): the local model is keyless by nature, and a
@@ -116,7 +106,7 @@ def check_api_connection(provider: str = "qwen") -> bool:
         return False
 
 
-def test_model_connection(provider: str = "qwen") -> dict:
+def test_model_connection(provider: str = "deepseek") -> dict:
     """Return a status dict for a provider — used by /api/health."""
     cfg = PROVIDERS.get(provider)
     if not cfg:
@@ -152,11 +142,11 @@ def test_model_connection(provider: str = "qwen") -> dict:
 
 
 # Backwards-compatible aliases used by main.py startup and teacher route
-def ensure_grace_server(provider: str = "qwen") -> bool:
+def ensure_grace_server(provider: str = "deepseek") -> bool:
     return check_api_connection(provider)
 
 
 if __name__ == "__main__":
-    result = test_model_connection("qwen")
+    result = test_model_connection("deepseek")
     print(f"Status: {result['status']}")
     print(f"Message: {result['message']}")
