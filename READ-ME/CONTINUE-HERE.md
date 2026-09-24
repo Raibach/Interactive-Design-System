@@ -14,124 +14,6 @@ below is measured, not remembered. Where something is unverified it says so.
 
 ---
 
-## §00d — THE NEXT SESSION, SAME EVENING: the Run assembles its column, and the console stops minting threads
-
-**Read this before §00c — it does what §00c prescribes.** Written 2026-09-23, after the owner watched
-a Run and then reported that the console had lost Grace. `tsc` clean, **499 tests pass** (33 files,
-up from 491), `npm run build` clean, `py_compile` clean, backend restarted. Nothing committed.
-
-**1 · §00c IS DONE: THE THIRD COLUMN IS ASSEMBLED BY THE MODEL, NOT INSERTED BY THE HOST.**
-`setOutputColumn('flow')` — the hand-patch §00c indicted — is **deleted**. A Run now calls
-`POST /api/ai/assemble-surface` with `intent: render-run` (new branch in `backend/routes/ai.py`), and
-the model composes the column against the catalog: `AgentCanvas` (theme dark) with its three slots
-filled — `OutputControls` as `header`, `AgentFlow` (bound to `/session/middle_column/flow`) as `flow`,
-`CanvasFooter` as `footer` — plus the layout root, whose other slots must come back byte for byte
-(the server 503s if the assembly rewrites them). The shell applies the result as an UPDATE, not a
-replacement: `applyComponentUpdate` in `shared/a2ui-envelope.ts` is `updateComponents` semantics
-(by id: update, add, leave everything else), and `readA2UIEnvelope(raw, base)` now applies the model
-operations onto the surface's LIVE model — because a Run must not revert the person's rows. Verified
-against the live endpoint: 3.6s, the exact five components, 503 with a named reason when `context.run`
-is missing.
-
-**2 · THE SPINNER AND THE HOLD — the owner's own sequence.** "We need that spinner to force a delay
-maybe 2000 ms to get the app time and the AI time to do it as assembly … the model is running all of
-this — when you click run, it starts the agent, it starts to process, so it needs time to boot up."
-So: **dock** (both sides, one frame, the layout's own act) → **assemble** (the model call, in
-parallel with the run) → **mount the column holding** (`RUN_DRAWING_HELD_MS = 2000`, a spinner on the
-canvas's own ground — `agent-canvas`'s new `holding`, a host-set flag the payload cannot clobber) →
-**publish the drawing**. Measured live, sampling every 40ms through a Run: left 950→60 and right
-950→104 together on the 760ms curve with her pane turning `absolute` **without moving a pixel** (the
-jerk is gone — the ordering cure, not a transform); the canvas mounts at ~4s with `holding` and NO
-nodes (`nodes=null`), and the drawing lands exactly 2s later (`nodes=7`), the spinner fading out over
-420ms.
-
-**3 · THE CONSOLE'S RAIL NOW SLIDES AS ONE PIECE — measured, the owner's "not in pieces".**
-His report: "the actual contents of that container disappear instantly … you're left with an empty
-container and an edge … it should slide shut as a complete component, not in pieces." Sampled on the
-console before: the pane 907→104 while the PANEL's box was squeezed 803→587→357→191→0 in ~200ms —
-every frame a re-layout of the thread. Now `workspace-layout` measures the width she was open at in
-the frame the close is decided (`_slabWidthPx`) and holds the panel at it while she is shut, letting
-it overflow the narrowing pane (which must not clip — the rail's shadow escapes it). Measured after:
-**panel 846 all the way, its x travelling 1054→1900**; the fade was deleted (`chat-panel`'s
-`.panel.collapsed` keeps only the delayed `visibility`, so a hidden panel takes no presses).
-
-**4 · THE CONSOLE STOPPED MINTING A THREAD PER VISIT.** The owner: "there's 23 conversations saved. I
-can't remove any of them. There should not be any conversation saved unless the user saves it just on
-the console." He was right and the count was in the database: 24 chat rows under the console session,
-18 with **zero** messages — `render-console` called `open_console_conversation` on every landing
-("a landing STARTS A VISIT"). It no longer does: the landing binds the conversation the console
-already owns (`prompt_sessions.conversation_id`) and creates one only when the console has none.
-Verified: two landings, still one chat row, pointer unchanged. The 24 rows and 10 messages were
-deleted (backup `~/Documents/console-conversations-backup-2026-09-23.json`).
-**NOT YET THE OWNER'S LAST WORD ON THIS:** his sentence reads "nothing saved unless the user saves
-it", which would mean a conversation created by the person's first turn rather than on the visit.
-That is a product decision and it is one change away.
-
-**5 · GRACE "DISAPPEARING" FROM THE CONSOLE WAS MY RESTART, NOT THE CONSOLE'S CODE — and this is the
-trap to carry forward.** Two facts, both measured tonight: her greeting IS drawn (the thread's
-`chat-messages` carried 1 turn, 784×487, the words on screen), and a page loaded WHILE the backend is
-restarting ends up permanently ungreeted — its seat reads the console scope from
-`GET /api/prompt-sessions/{id}`, and on that page the read never answered, so `_seatIsConsole` stayed
-`null` and the greeting waited forever. **A backend restart orphans the tab that is open on it.
-Reload the tab after a restart, and check it — do not leave the owner looking at a stale page.**
-
-**6 · TWO MORE, FOUND BY THE OWNER READING HIS OWN SCREEN.** Both are the same shape — the app
-speaking in the person's place.
- · **The greeting's instruction was being saved as the person's turn.** `POST /api/teacher/query`
-   now carries `person_turn` (false for a turn the application asks for), and only a person's turn
-   is written as one; her reply is recorded either way. Visible because the console's thread now
-   persists: reloading showed "A person has just landed on the console — the index of every package
-   they have built…" above her greeting, as if he had typed it. `chat-panel._send` sends
-   `person_turn: !opts.silent`.
- · **A LOAD IS AN ARRIVAL.** The initial mount was the one path that announced nothing, so a freshly
-   loaded console never greeted — only pressing the Console tab did. It now does the same thing the
-   tab does (`markArrival('console')` + `a2ui:composer-opened`), for the console only: a package's
-   arrival is announced where it is opened. Verified on a reload: 12 cards, 2 conversations, ONE
-   turn — her greeting, no instruction above it.
-
-**7 · THE CONVERSATION CONTROLS ARE CRUD NOW, AND A STALE ID CANNOT BREAK A SAVE.** The owner: "I'm
-not able to delete conversations from the packages. It's just basic CRUD process I thought." Two
-controls were deadlocked: a package's "new conversation" returned without a request, and the trash
-refused the thread you were in ("start a new one, then remove it"). Now: a package CREATES one for
-itself and moves into it (`_startNewConversation`, leaving the old row deletable rather than
-archived — the console's archive flow stays the console's), and the trash removes the thread you are
-IN, moving the seat to the package's newest live conversation or to none. The safety that the
-refusal was standing in for now lives where the delete happens:
-`conversation_api.delete_conversation` moves every session pointing at the row onto the newest
-conversation OF THE SAME TAB (or to none — `IS NOT DISTINCT FROM`), proved in a rolled-back
-transaction. **A stale id is not a reason to refuse a save**: `routes/ai.py` now checks the id a page
-sent and writes NULL with a reason in `warnings` when the row is gone, because the surface's
-`/session/right_column/conversation_id` outlives a delete and the foreign key made every save a 500
-("AI save failed: 500"). The seat also reports the move as `conversation-change` with an EMPTY id —
-a fact, not a missing one — so the model learns it. Verified end to end: delete the thread you are
-in → 200, pointer moves; create → 200; the save that 500'd → 200 with the reason.
-
-**8 · AND TWO MISTAKES OF MINE, RECORDED SO THEY ARE NOT REPEATED.** (a) I ran a SAVE against the
-Scout package from a script to reproduce the 500, and my test payload carried one row — then a Save
-pressed in the browser wrote the page's *then-empty* rows, so **the package's prompt was emptied**.
-It was restored verbatim from the run-review brief the app itself composed (the four seats, in the
-owner's words, which he pasted into the session); the row holds its four rows again and the API hands
-them to the seat. The lesson: never POST a save-shaped payload at a real package to test a failure
-path — test it on a row you made for the purpose. (b) A stray coordinate click exercised the new
-trash and deleted the Scout package's conversation (36 messages: mostly her "ready to run" replies;
-the briefs are in `~/Documents/app-briefs-written-as-user-turns-2026-09-23.json`). The delete control
-worked — that was the point — but it was not mine to spend.
-
-**9 · WHAT THE OWNER ASKED AND THE DATABASE ANSWERED.** "You're maintaining console package
-exclusivity of these chat conversations? … each conversation belongs to the package and the Console
-has a package just like the prompts have packages." Measured after all of tonight's changes:
-**0 conversations with no owning session**; one console package (`metadata->>'session_type' =
-'console'`) owning 2 conversations (tab `chat` + tab `approvals`); every prompt package owning its
-own (Insurance News Scout 1 conversation / 116 messages, and so on). The seat still refuses to read
-or write a conversation that is not in its own package's list (`_conversationBelongsToPackage`), and
-the create path passes `session_id` — nothing global was introduced.
-
-**Still open, unchanged:** the element-held positions on the answer/evaluation; the arrival anchor;
-the catalog check's 13 open findings (the owner's instruction, 2026-09-23: "ignore the audit — we
-don't use it right now"); and the FUSUMA plan (not started, not approved).
-
----
-
 ## §00 — THE LATEST SESSION: the ring is spaced, the clamp is gone, the panels part
 
 **Read this before §1.** Written at the owner's stopping point, 2026-09-23 late evening.
@@ -304,7 +186,7 @@ console's carries `false` at `:629`), and every published update writes it into 
 One fact — *is her column open* — with two writers, and the payload wins. The same disease the file
 names everywhere else: **one fact, one writer.**
 
-**WHAT TO DO, IN THE OWNER'S TERMS (DONE — see §00d above, which was written after this):**
+**WHAT TO DO, IN THE OWNER'S TERMS (next session, deliberately — it cannot be rushed either):**
 
 1. **Assemble the third column on Run, through the same effect the cards use** — the model against
    the catalog, as a surface — instead of patching the components array in the host.
@@ -318,7 +200,7 @@ names everywhere else: **one fact, one writer.**
 4. Then the drawing mounts into a layout that has already settled, which is exactly how the
    prompt's own fold was cured when it used to jump (see the FLIP note in workspace-layout).
 
-**A SPIKE WAS WANTED, AND §00d IS IT.** The owner: *"I think we're gonna have to maybe do some research,
+**A SPIKE IS WANTED, NOT A PATCH.** The owner: *"I think we're gonna have to maybe do some research,
 maybe a spike on how to get these nice flows. It may be necessary for us to restructure the code. I
 think probably load order has something to do with it."* Agreed — and worth writing down before the
 hour is too late: the load order IS the defect (a hand-patched tree racing a layout that has its own
