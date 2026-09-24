@@ -667,6 +667,32 @@ async def list_evaluations(session_id: str, x_user_id: Optional[str] = Header(No
         raise HTTPException(status_code=500, detail=f"Error listing evaluations: {str(e)}")
 
 
+@router.delete("/api/prompt-sessions/{session_id}/evaluations/{evaluation_id}")
+async def delete_evaluation(
+    session_id: str,
+    evaluation_id: str,
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+):
+    """Remove one judged run. 404 when there is no such row for this package."""
+    if not state.prompt_sessions_api:
+        raise HTTPException(status_code=503, detail="Database not available.")
+
+    try:
+        deleted = state.prompt_sessions_api.delete_evaluation(session_id, evaluation_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Evaluation not found")
+        return {"success": True, "error": None}
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        import traceback
+
+        print(f"❌ Delete evaluation error: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error deleting evaluation: {str(e)}")
+
+
 @router.post("/api/prompt-sessions/{session_id}/evaluations")
 async def record_evaluation(
     session_id: str,
