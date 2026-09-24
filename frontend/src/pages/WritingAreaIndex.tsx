@@ -3531,7 +3531,28 @@ export default function Index({
       if (surface === 'console') {
         setConsoleTree({ components: assembledComponents, dataModel });
       } else {
-        setWorkspaceTree({ components: assembledComponents, dataModel });
+        // THE MIDDLE PANE IS A RUN'S PANE — the canvas takes it, and until then a
+        // package opens as two columns: the prompt, and Grace. The model's assembly
+        // sometimes returns a middle child (the compiled-output viewer); rendering
+        // it puts an extra panel on screen at open, holding old run output, when the
+        // results already live in Grace's chat. Strip the middle slot on arrival;
+        // a Run assembles its own column and takes the pane then, and the viewer
+        // component stays in the list so "back to output" can find it by role.
+        setWorkspaceTree({
+          components: assembledComponents.map((c: any) => {
+            if (
+              c?.component === 'workspace-layout' &&
+              c.children &&
+              typeof c.children === 'object' &&
+              !Array.isArray(c.children)
+            ) {
+              const { middle: _middle, ...rest } = c.children as Record<string, unknown>;
+              return { ...c, children: rest };
+            }
+            return c;
+          }),
+          dataModel,
+        });
       }
 
       const assemblyTime = dataModel.assembly_time_ms || 0;
