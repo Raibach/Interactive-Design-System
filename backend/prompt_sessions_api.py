@@ -546,6 +546,24 @@ class PromptSessionsAPI:
             except Exception as e:
                 raise e
 
+    def delete_evaluation(self, session_id: str, evaluation_id: str) -> bool:
+        """Remove one judged run. Returns True when a row was deleted."""
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    DELETE FROM run_evaluations
+                    WHERE id = %s AND session_id = %s
+                    RETURNING id
+                    """,
+                    (evaluation_id, session_id),
+                )
+                row = cursor.fetchone()
+                return row is not None
+            except Exception as e:
+                raise e
+
     def _log_prompt_modification_to_milvus(
         self, suggestion: Dict[str, Any], user_id: str, inserted_position: str = None
     ) -> bool:
