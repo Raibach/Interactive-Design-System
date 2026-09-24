@@ -80,7 +80,9 @@ export class EvalFeed extends LitElement {
         font-weight: var(--ds-weight);
         font-size: var(--ds-fs-sm);
         color: var(--chat-text, var(--ds-text));
-        background: var(--chat-bg, var(--ds-surface));
+        /* NO GROUND OF ITS OWN — the panel's view slot owns the ground, and the owner asked
+           for the Evals view to be transparent so the drawing's ground reads through it. */
+        background: transparent;
       }
       .head {
         position: sticky;
@@ -90,7 +92,7 @@ export class EvalFeed extends LitElement {
         align-items: center;
         gap: 8px;
         padding: 10px 14px;
-        background: var(--chat-bg, var(--ds-surface));
+        background: transparent;
         border-bottom: 1px solid var(--chat-rule, var(--ds-rule));
         font-size: var(--ds-fs-label);
         font-weight: 600;
@@ -123,7 +125,9 @@ export class EvalFeed extends LitElement {
         padding: 10px 12px;
         border: 1px solid var(--chat-rule, var(--ds-rule));
         border-radius: var(--ds-radius);
-        background: rgba(0, 0, 0, 0.02);
+        /* A TINT, NOT A GROUND — the row reads as a card without painting over the
+           drawing's ground the way the old white feed did. */
+        background: rgba(0, 0, 0, 0.12);
       }
       .idx {
         min-width: 34px;
