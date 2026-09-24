@@ -46,6 +46,7 @@ import './prompt-input/prompt-input-section';
 import { TYPE_LABELS, SECTION_MENU_TYPES } from './prompt-input/prompt-input-section';
 import { normalizeSectionType, resolveSectionName, SECTION_TYPES, isUndecidedType } from '@/shared/promptSections';
 import { writeFieldValue } from '@/shared/repairMaterial';
+import { withTrigger } from '@/shared/triggers';
 import { API_BASE } from '@/shared/apiHelper';
 
 export interface PromptSection {
@@ -337,6 +338,8 @@ class PromptSectionEditor extends LitElement {
         this._removeSection(idx);
       } else if (action === 'tool' && value) {
         void this._insertTool(idx, String(value));
+      } else if (action === 'trigger' && value) {
+        this._setTrigger(idx, String(value));
       }
     });
 
@@ -609,6 +612,32 @@ class PromptSectionEditor extends LitElement {
    * it. It goes to the error channel, which has had a listener in
    * WritingAreaIndex and no sender until now.
    */
+  /**
+   * A TRIGGER IS WRITTEN INTO THE ROW IT STARTS — ONE per row, and the row keeps its text.
+   *
+   * Ported from the reference canvas's first step, where the question is "what triggers this
+   * workflow?" and the answer is one of a list. Ours writes the answer as a token in the row, the
+   * same shape a tool writes, so a row holds one kind of thing and the server reads one shape —
+   * and so the row shows its own trigger without anything having to remember it separately.
+   *
+   * ONE, NOT MANY, AND REPLACED RATHER THAN ACCUMULATED. Two triggers on one module is a state
+   * the interface should make impossible — "every morning" and "when a form arrives" are two
+   * different prompts wearing one row — so choosing a trigger replaces the one already there, and
+   * choosing the one that is already there clears it. Clearing is a real answer: it leaves the row
+   * starting however the application starts it, which is how every prompt run by hand works.
+   */
+  private _setTrigger(idx: number, token: string): void {
+    const row = this._sections[idx];
+    if (!row) return;
+    // The rule — one per row, replaced rather than accumulated, and a re-pick clears it — lives in
+    // shared/triggers.ts, so the canvas's own menu gets the same behaviour by calling the same
+    // function rather than by re-implementing it.
+    this._sections[idx] = { ...row, content: withTrigger(String(row.content || ''), token) };
+    // No re-render: the row's own element derives its badge, its rail mark and its menu ticks
+    // from this text, and it already received the new value with the update below.
+    this._emitUpdate(idx);
+  }
+
   private async _insertTool(idx: number, token: string): Promise<void> {
     const name = token.replace(/^\{\{tool:/, '').replace(/\}\}$/, '').trim();
     if (!name) return;

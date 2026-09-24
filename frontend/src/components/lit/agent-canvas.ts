@@ -235,6 +235,11 @@ export class AgentCanvas extends LitElement {
 
   // ── the rail ──────────────────────────────────────────────────────────────
 
+  /** The drawing has a graph on screen — the wait the column was in is over. */
+  private _onDrawn = (): void => {
+    if (this.holding) this.holding = false;
+  };
+
   /** The rail asked for a state. It is the same fact as the width, so it lands here. */
   private _onCollapseToggle = (e: Event): void => {
     this.collapsed = Boolean((e as CustomEvent).detail?.collapsed);
@@ -278,6 +283,17 @@ export class AgentCanvas extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    /*
+     * THE DRAWING SAYS IT DREW, AND THE COLUMN STOPS WAITING.
+     *
+     * The column opens holding — "Assembling the drawing…" — because a Run's column arrives before
+     * its picture does, and the host ends that wait when it publishes. Until the drawing said so,
+     * nothing else did, and the spinner sat over a finished drawing; measured in a screenshot,
+     * 2026-09-24. The drawing reports `flow-drawn` when it has a graph on screen, and this element
+     * — the one that owns the flag — is what stops holding on hearing it. A report, and a write by
+     * the only owner of the fact.
+     */
+    this.addEventListener('flow-drawn', this._onDrawn as EventListener);
     // THE GESTURE ENDS ON EVERY CHANNEL, not only on the panel's own end event: a pointer
     // released outside the window, a cancelled pointer, a window that loses focus — any
     // of them means the hand is off the gripper. Measured in the page this grew out of:
@@ -304,6 +320,7 @@ export class AgentCanvas extends LitElement {
     window.removeEventListener('mouseup', this._endGrip);
     window.removeEventListener('pointercancel', this._endGrip);
     window.removeEventListener('blur', this._endGrip);
+    this.removeEventListener('flow-drawn', this._onDrawn as EventListener);
     this.removeEventListener('input-resize-start', this._onGripStart as EventListener);
     this.removeEventListener('input-resize-move', this._onGripMove as EventListener);
     this.removeEventListener('input-resize-end', this._endGrip as EventListener);

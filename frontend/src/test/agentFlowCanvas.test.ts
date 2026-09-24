@@ -20,7 +20,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import '@/components/lit/agent-flow';
 import type { AgentFlow } from '@/components/lit/agent-flow';
-import { buildRepairFlow, NODE_FOOTPRINT, NODE_TILE, type FlowGraph } from '@/shared/agentFlow';
+import { buildRepairFlow, HUB_FOOTPRINT, HUB_TILE, NODE_FOOTPRINT, NODE_TILE, type FlowGraph } from '@/shared/agentFlow';
+import { TRIGGERS } from '@/shared/triggers';
 
 type El = AgentFlow & { updateComplete: Promise<unknown> };
 
@@ -217,17 +218,22 @@ describe('<agent-flow> — drawing', () => {
 
     // AND CENTRED: the pane's middle is the drawing's middle, on both axes. The brain sits at the
     // origin, so this is what puts it where a person looks first.
-    type Node = { x: number; y: number };
+    type Node = { x: number; y: number; family?: string; kind?: string };
     const nodes = (el as unknown as { _allNodes: () => Node[] })._allNodes();
-    const xs = nodes.map((n) => n.x);
-    const ys = nodes.map((n) => n.y);
-    // WHAT A NODE IS, as the view measures it: a tile wide and a FOOTPRINT tall — the tile plus
-    // the label block it draws underneath itself. This assertion used a hard-coded 88 on BOTH
-    // axes, which is the same reading error the element had: it fitted a drawing 54 units shorter
-    // per row than the one on screen, so a ring arrived with its labels running past the bottom of
-    // the pane it was told it fitted in. The app's own numbers now, so the two cannot drift.
-    const midX = (Math.min(...xs) + Math.max(...xs) + NODE_TILE) / 2;
-    const midY = (Math.min(...ys) + Math.max(...ys) + NODE_FOOTPRINT) / 2;
+    /**
+     * WHAT A NODE IS, AS THE VIEW MEASURES IT — and PER NODE, because one of them is the trigger
+     * and it is drawn larger (HUB_TILE, 140 square). This used a flat NODE_TILE on both axes and
+     * a flat NODE_FOOTPRINT, which is exactly the reading error the comment below records: the
+     * view fitted a drawing whose trigger it had measured as an ordinary tile, so the assertion
+     * and the element disagreed about where the middle was. The element asks each node its own
+     * size (`_tileSize` / `_nodeFootprint`); the assertion asks the same question the same way,
+     * from the numbers the model exports, so the two cannot drift again.
+     */
+    const isTrigger = (n: Node) => n.family === 'seat' && n.kind === 'system-role';
+    const width = (n: Node) => (isTrigger(n) ? HUB_TILE : NODE_TILE);
+    const height = (n: Node) => (isTrigger(n) ? HUB_FOOTPRINT : NODE_FOOTPRINT);
+    const midX = (Math.min(...nodes.map((n) => n.x)) + Math.max(...nodes.map((n) => n.x + width(n)))) / 2;
+    const midY = (Math.min(...nodes.map((n) => n.y)) + Math.max(...nodes.map((n) => n.y + height(n)))) / 2;
 
     expect(el.panX + midX * el.zoom).toBeCloseTo(400, 0);
     expect(el.panY + midY * el.zoom).toBeCloseTo(300, 0);
@@ -257,11 +263,10 @@ describe('<agent-flow> — drawing', () => {
 
     // SELECT, on the background: the grab carries the canvas. No tool switch first —
     // there are no scrollbars, so this is the only way the view travels.
-    // DISPATCHED AT THE GRID, not at the canvas: that is the element a real press on
-    // empty canvas targets, and identity-checking the target against the canvas was
-    // what made the app's canvas undraggable while these tests stayed green.
-    const grid = el.shadowRoot!.querySelector('.grid') as HTMLElement;
-    grid.dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
+    // DISPATCHED AT THE PANE, not at the canvas: the hand-rolled grid div is gone (Vue Flow
+    // draws the dots), and the pane is the surface a real press on empty canvas lands on.
+    const pane = el.shadowRoot!.querySelector('.vue-flow__pane') as HTMLElement;
+    pane.dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
     window.dispatchEvent(pe('pointermove', { clientX: 160, clientY: 100 }));
     window.dispatchEvent(pe('pointerup', { clientX: 160, clientY: 100 }));
     await el.updateComplete;
@@ -476,7 +481,7 @@ describe('<agent-flow> — the operator gestures', () => {
 });
 
 describe('<agent-flow> — the controls the host answers', () => {
-  it('the node toolbar emits run, toggle, delete, ask and more, each with its node', async () => {
+  it('the node toolbar emits run, toggle, trigger, delete, ask and more, each with its node', async () => {
     const el = await mount(graph());
     node(el, 'step:agent').dispatchEvent(pe('pointerdown', { clientX: 5, clientY: 5 }));
     window.dispatchEvent(pe('pointerup', { clientX: 5, clientY: 5 }));
@@ -485,11 +490,38 @@ describe('<agent-flow> — the controls the host answers', () => {
     const actions: string[] = [];
     el.addEventListener('flow-action', (e) => actions.push((e as CustomEvent).detail.action));
     const buttons = [...node(el, 'step:agent').querySelectorAll('.tb-btn')] as HTMLElement[];
-    expect(buttons.length).toBe(5);
+    // SEVEN, and two of them are not actions: the lightning opens the same trigger list the
+    // prompt's row menu offers (shared/triggers.ts), and the crosshair — theirs — brings the
+    // module into view by moving the VIEW, which changes nothing about the prompt. Added
+    // 2026-09-24. The count is exact rather than "at least", so a control that disappears is
+    // still caught.
+    expect(buttons.length).toBe(7);
     for (const b of buttons) b.click();
     await el.updateComplete;
 
+    // FIVE ACTIONS, NOT SEVEN: the menu-opener and the view control emit nothing, and that is
+    // asserted rather than assumed — a control that fires an action nobody answers is a control
+    // that looks wired and is not.
     expect(actions).toEqual(['run', 'toggle', 'delete', 'ask', 'more']);
+  });
+
+  it('the lightning opens the trigger list — the same catalogue the prompt row draws', async () => {
+    const el = await mount(graph());
+    node(el, 'seat:0:system-role').dispatchEvent(pe('pointerdown', { clientX: 5, clientY: 5 }));
+    window.dispatchEvent(pe('pointerup', { clientX: 5, clientY: 5 }));
+    await el.updateComplete;
+
+    // The seat's third control is the lightning; a step's is disabled (nothing starts a step).
+    const tb = node(el, 'seat:0:system-role');
+    const lightning = [...tb.querySelectorAll('.tb-btn')][2] as HTMLButtonElement;
+    expect(lightning.disabled).toBe(false);
+    lightning.click();
+    await el.updateComplete;
+
+    const offered = [...(el.shadowRoot as ShadowRoot).querySelectorAll('.trigger-menu .picker-kind')]
+      .map((b) => b.textContent?.trim());
+    expect(offered.length).toBe(TRIGGERS.length);
+    expect(offered[0]).toBe(TRIGGERS[0].name);
   });
 
   it('run is refused where there is nothing to run — the note and the seat', async () => {
@@ -685,7 +717,7 @@ describe('<agent-flow> — the glide', () => {
     expect(viewOf(el).classList.contains('glide')).toBe(true);
 
     // A press on the background and a move of the pointer — the hand, not the element.
-    el.shadowRoot!.querySelector('.grid')!.dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
+    el.shadowRoot!.querySelector('.vue-flow__pane')!.dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
     window.dispatchEvent(pe('pointermove', { clientX: 140, clientY: 130 }));
     await el.updateComplete;
     expect(viewOf(el).classList.contains('glide')).toBe(false);
@@ -731,7 +763,7 @@ describe('the arrival view composes into what a person can SEE', () => {
     sized(el);
     // The hand takes the canvas — a pan is a view the person owns, and the rule this element
     // has always kept for a resize holds for her column moving too.
-    el.shadowRoot!.querySelector('.grid')!.dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
+    el.shadowRoot!.querySelector('.vue-flow__pane')!.dispatchEvent(pe('pointerdown', { clientX: 100, clientY: 100 }));
     window.dispatchEvent(pe('pointermove', { clientX: 160, clientY: 120 }));
     window.dispatchEvent(pe('pointerup', { clientX: 160, clientY: 120 }));
     await el.updateComplete;

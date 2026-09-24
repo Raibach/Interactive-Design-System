@@ -37,6 +37,21 @@ export class StatusBarPromptInput extends LitElement {
     database: '40000746:98',
     lightning: '40000746:99',
     lightning1: '40000746:99',
+    /*
+     * THE RAIL'S ACTIVITY MAP — one cell per thing the row actually holds.
+     *
+     * The owner, 2026-09-24: "It's like a visual map of the activity on that left rail. It's very
+     * high-level… just a quick icon, and they'll begin to associate the trigger with the icon."
+     *
+     * `trigger` and `tool` are the two attachments a row can carry (see shared/triggers.ts and the
+     * seat's Functions | Tools menu). Both draw the same Figma node's artwork for now — 40000746:99,
+     * the lightning this rail has always used — with the trigger taking the outlined variant so the
+     * two read apart at a glance. THE TRIGGER'S OWN ICON IS THE OWNER'S TO DRAW: when it arrives it
+     * is one more entry in prompt-icons.ts and, if it is a new Figma node, one id added here.
+     * Nothing else in this element or in the row changes to carry it.
+     */
+    trigger: '40000746:99',
+    tool: '40000746:99',
   };
 
   constructor() {
@@ -71,6 +86,19 @@ export class StatusBarPromptInput extends LitElement {
       justify-content: center;
       background: #ffffff;
     }
+    /*
+     * THE TRIGGER'S PLACEHOLDER MARK — the same lightning, in the one colour this rail does not
+     * otherwise use: the gradient bolt's own #7E72E3 (Figma 40000922-4822). The owner, 2026-09-24:
+     * "you can use a fake, made up — reuse the lightning and just change the colour… I understand
+     * these are fillers or placeholders."
+     *
+     * So a row that starts itself carries a violet bolt and a row that merely calls a tool carries
+     * the dark one, which is enough to read apart at a glance until his own icon arrives. A CSS
+     * rule, not a second SVG: the artwork is already in the file and only its stroke changes —
+     * and a CSS declaration beats the presentation attribute the outlined bolt carries, so no
+     * important flag is needed.
+     */
+    :host [data-icon-kind='trigger'] svg path { stroke: #7e72e3; }
   `;
 
   render() {
@@ -79,13 +107,27 @@ export class StatusBarPromptInput extends LitElement {
       // (`needs your input`) because, unlike the other cells, there is no node id
       // to look it up by. The kinds' glyphs are picked here rather than in a map
       // so an unknown kind renders an empty cell instead of throwing.
-      const title = kind === 'alert' ? 'needs your input' : `${kind} activity`;
+      /*
+       * THE TITLE SAYS WHAT THE ICON MEANS, because the map is learned by association — a person
+       * who hovers the second cell should be told "what starts this row", not "trigger activity".
+       * The two attachments read as sentences; the design's own `database` and `lightning` keep
+       * their old wording, and `alert` keeps the one it had.
+       */
+      const title =
+        kind === 'alert' ? 'needs your input'
+          : kind === 'trigger' ? 'what starts this row'
+            : kind === 'tool' ? 'a tool this row may use'
+              : `${kind} activity`;
       const glyph =
         kind === 'alert' ? alertCircleSvg
           : kind === 'database' ? databaseFillSvg
-            : kind === 'lightning1' ? lightningAltFillLight1Svg
-              : kind === 'lightning' ? lightningAltFillLightSvg
-                : '';
+            // The trigger takes the OUTLINED bolt and a tool the solid one, so a row that starts
+            // itself does not look like a row that merely calls something.
+            : kind === 'trigger' ? lightningAltFillLight1Svg
+              : kind === 'tool' ? lightningAltFillLightSvg
+                : kind === 'lightning1' ? lightningAltFillLight1Svg
+                  : kind === 'lightning' ? lightningAltFillLightSvg
+                    : '';
       return html`
         <span class="icon-cell" title=${title} data-icon-kind=${kind}
               data-node-id=${StatusBarPromptInput.NODE_OF_ICON[kind] ?? nothing}>

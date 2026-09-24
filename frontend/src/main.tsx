@@ -39,6 +39,10 @@ import "@/components/lit/chat-panel";
 // the one that guarantees the tag exists whether or not the thread ever draws one.
 import "@/components/lit/user-response-bubble";
 import "@/components/lit/trace-feed";
+// The judged runs of one package, for the rail's Evals view. Same registration rule as
+// the two above: an element that is never imported is never defined, and the surface
+// would emit the name into an empty slot, silently.
+import "@/components/lit/eval-feed";
 // The repair list the console's chat panel draws in its "view" slot. It used to be
 // registered as a side effect of chat-panel's own import; the panel no longer draws it,
 // and an element that is never imported is never defined — the surface would emit the

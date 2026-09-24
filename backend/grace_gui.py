@@ -2,8 +2,14 @@
 Grace — LLM query layer for the prompt-composer backend.
 
 Single entry point: query_llm().
-Providers are tried in priority order; DeepSeek drives all A2UI paths.
-Assembly/chat hard-fail if ALL providers are down — no fake surfaces.
+ONE MODEL SERVES EVERY MODE: Qwen3.5-9B on LM Studio, or the same endpoint behind a
+tunnel in production. What changes per mode is the SETTINGS, not the model — an A2UI
+surface is a transcription whose answer space the catalog closes, so it runs at
+temperature 0.0 with reasoning off; a conversation is written into an empty page, so it
+runs at CHAT_TEMPERATURE. There is no fallback and no second model, deliberately: the
+owner needs to know which model is running, and a failure that quietly changed author
+would make that unknowable. Every mode hard-fails if the model cannot answer. No fake
+surfaces: there is no cache and no substitute of any kind.
 """
 
 import itertools
@@ -17,19 +23,98 @@ from openai import OpenAI
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Provider config — tried in priority order on every query_llm() call
+# Provider config — ONE model, for every mode.
+#
+# QWEN3.5-9B ON LM STUDIO SERVES THE WHOLE APPLICATION: the A2UI surfaces AND the
+# conversation. It is the only entry in this list, so it is the only model any mode can
+# reach. The owner, 2026-09-24: "the 9B model should be running the chat interface as
+# well", and, on why nothing else may appear in its place: "I need to know which model is
+# running. I cannot have it failing and then all of a sudden DeepSeek picks up."
+#
+# DEEPSEEK WAS HERE AND IS GONE. It was the fallback for a while during this change and
+# was removed on that instruction: an assembly that silently changes author is a surface
+# nobody can account for, and the same is true of a reply. To bring a second model back,
+# add an entry below — but know that _provider_for_mode() takes the FIRST enabled one and
+# never tries another, so a second entry is a way to change the answer, not a safety net.
+#
+# THE SETTINGS FOLLOW THE MODE, NOT THE LIST, and they are the reason one model can do
+# both jobs. Assembly is a transcription: the catalog fixes the components, the schema
+# names the slots, and every value is bound by path — so it runs at temperature 0.0 with
+# reasoning off, where the only thing that could vary is the thing that must not. A
+# conversation is written into an empty page, so it runs at CHAT_TEMPERATURE (0.5) with
+# the chat's own ceiling. Those are decided in query_llm() below, per mode; nothing here
+# has to know about them.
 # ═══════════════════════════════════════════════════════════════════════════════
 MODEL_PROVIDERS = [
     {
-        "name": "DeepSeek API",
-        "base_url": "https://api.deepseek.com",
-        # Verified against GET /models with the current key (2026-09-14):
-        # available = ["deepseek-flash", "deepseek-v4-pro"].
-        # deepseek-flash times out under the surface budget — deepseek-v4-pro is the only model used.
-        "model": "deepseek-v4-pro",
-        "api_key_env": "DEEPSEEK_API_KEY",
+        # Qwen3.5-9B on LM Studio, served over the OpenAI-compatible API at 127.0.0.1:1234
+        # — a laptop's own GPU, and in production the same endpoint behind a tunnel. Routed
+        # by env var, not edited here, because a tunnel's hostname changes every time it is
+        # re-opened and a base_url in a source file is a redeploy per tunnel.
+        #
+        # Verified live against this server, 2026-09-24 (LM Studio, qwen3_5, MLX 4-bit):
+        #   · console assembly — real prompt, 3,347 prompt tokens, 8.6s, valid JSON, 4/4
+        #     components, 0 reasoning tokens.
+        #   · composer surface — real prompt from routes/ai.py, 3 runs, 12.4–14.9s, 7/7
+        #     components each time, validate_a2ui_components() PASS.
+        # Both are well inside the 45s assembly budget, and the budget is unchanged.
+        "name": "Qwen9B local (LM Studio / tunnel)",
+        "base_url": os.getenv("LOCAL_ASSEMBLY_URL", "http://127.0.0.1:1234/v1"),
+        "model": os.getenv("LOCAL_ASSEMBLY_MODEL", "qwen/qwen3.5-9b"),
+        "api_key_env": "LOCAL_ASSEMBLY_API_KEY",
+        # A LOCAL SERVER HAS NO KEY. LM Studio ignores the one it ships, and requiring a
+        # real key for a server that does not read it is how "the local model is serving"
+        # quietly becomes "nothing is serving".
+        "api_key_required": False,
+        # LM STUDIO DOES NOT TAKE json_object. Measured 2026-09-24: the assembly payload
+        # this file has always sent — response_format {"type": "json_object"} — is answered
+        # with HTTP 400, `'response_format.type' must be 'json_schema' or 'text'`. Every
+        # console load would have failed, on a fault that looks like the model refusing to
+        # work. The strict system prompt alone carries the contract, and the caller already
+        # strips fences, so the constraint is simply not sent.
+        # (`json_schema` is NOT the alternative: tried strict, it returned 200 with EMPTY
+        # content — a silent nothing, where a 400 at least names itself.)
+        "json_mode": None,
     },
 ]
+
+
+def _provider_for_mode(mode: str) -> Optional[Dict[str, Any]]:
+    """THE model this mode runs on — the only one that will ever be called.
+
+    There is one entry in MODEL_PROVIDERS, so this returns it for every mode, and the name
+    is on every call line and in LAST_USAGE. "I need to know which model is running" is the
+    requirement the single entry is there to satisfy: with nothing else in the list there is
+    no other model for a failure to become, in any mode.
+
+    ONE PROVIDER, ONE ATTEMPT — the rule this file already held, kept exactly. No fallback,
+    no retry, and now no second model either. A fallback was written during this change and
+    removed on the instruction quoted above: an assembly that silently changes author is a
+    surface nobody can account for. An outage that says so is survivable; an outage that
+    looks like a success is not.
+
+    `mode` is taken and unused, and stays in the signature on purpose: per-mode settings are
+    real and decided in query_llm() (assembly at temperature 0.0 with reasoning off, chat at
+    CHAT_TEMPERATURE), and a second model for one job would be selected here rather than
+    threaded through every caller.
+    """
+    for provider in MODEL_PROVIDERS:
+        if not provider.get("api_key_required", True) or os.getenv(provider.get("api_key_env", "")):
+            return provider
+        return None  # this model needs a key it does not have — nothing takes its place
+    return None
+
+
+def _provider_hint(mode: str) -> str:
+    """What to tell an operator when the model is not configured."""
+    return (
+        "No model is configured. Every mode runs on the local Qwen9B: set LOCAL_ASSEMBLY_URL "
+        f"({os.getenv('LOCAL_ASSEMBLY_URL', 'http://127.0.0.1:1234/v1')}) and "
+        f"LOCAL_ASSEMBLY_MODEL ({os.getenv('LOCAL_ASSEMBLY_MODEL', 'qwen/qwen3.5-9b')}), and "
+        "have LM Studio (or the tunnel to it) serving. There is no second model: nothing is "
+        "assembled or written by anything else."
+    )
+
 
 LLM_TIMEOUT = 10  # The old surface cap. Kept named because the record matters — see below.
 
@@ -258,18 +343,19 @@ def query_llm(
     messages.append({"role": "user", "content": question})
 
     # ── Token budget ─────────────────────────────────────────────────
-    # deepseek-v4-pro is a REASONING model: it spends completion tokens thinking
-    # BEFORE it writes anything (verified live — 18 reasoning tokens to answer
-    # "Say OK"). Budgets must therefore cover reasoning + the actual output, or
-    # `content` comes back empty with finish_reason="length".
+    # THESE CEILINGS WERE SIZED FOR A REASONING MODEL AND ARE KEPT FOR ONE. The provider
+    # that shaped them spent completion tokens thinking BEFORE it wrote anything (verified
+    # live — 18 reasoning tokens to answer "Say OK"), so the budget had to cover reasoning
+    # plus the output or `content` came back empty with finish_reason="length" — measured:
+    # a chat turn whose answer ran 917 chars came back EMPTY, and the seat drew an error
+    # where her reply should have been. A ceiling that costs nothing when it is not reached
+    # bounds a turn; a turn that reasons briefly still spends only what it reasons.
     #
-    # `chat` IS THE ONE MODE THAT REASONS (see the note below), and it was the one
-    # mode missing from this table — so it fell to the 4000 default and reasoned
-    # its way through most of it. Measured: a chat turn whose answer ran 917 chars
-    # came back EMPTY with finish_reason=length, and the seat drew "Error: DeepSeek
-    # API request failed: Empty response" where her reply should have been. The
-    # larger ceiling costs nothing when it is not reached: max_tokens bounds the
-    # turn, and a turn that reasons briefly still spends only what it reasons.
+    # THE CURRENT MODEL DOES NOT REASON — every mode sends reasoning_effort "none" and gets
+    # 0 reasoning tokens back (measured on Qwen3.5-9B, 2026-09-24) — so these numbers are now
+    # headroom rather than a requirement. They are left as they were: a ceiling is not a
+    # target, the surfaces are what the callers and the frontend timeout are matched to, and
+    # lowering them to the measured spend would make a larger assembly fail for no gain.
     token_budgets = {
         "console_assembly": 4000,
         "surface_assembly": 8000,
@@ -307,8 +393,10 @@ def query_llm(
         "stream": False,
     }
 
-    if mode in ("console_assembly", "surface_assembly"):
-        payload["response_format"] = {"type": "json_object"}
+    # response_format IS THE PROVIDER'S TO CHOOSE, NOT THIS MODE'S, and it is added per
+    # attempt below. It used to be set here for both surface modes, which is correct for
+    # DeepSeek and a hard 400 on LM Studio — the payload has to be built once per provider
+    # or the constraint follows the mode to a server that rejects it.
 
     # ── NO REASONING IN THIS APPLICATION, IN ANY MODE ────────────────
     # Off for every mode, and the note below about a conversation being the one place
@@ -352,26 +440,39 @@ def query_llm(
     # Neither is allowed. A canvas appears inside its budget or it does not appear,
     # and a second attempt is not a way of making the first one have worked.
     #
-    # The first provider carrying a key IS the provider. If it fails, its failure is
-    # the answer — there is no next one.
-    provider = next(
-        (p for p in MODEL_PROVIDERS if os.getenv(p.get("api_key_env", ""))), None
-    )
+    # The provider this mode needs IS the provider. If it fails, its failure is the
+    # answer — there is no next one, and there is no other model to be next.
+    provider = _provider_for_mode(mode)
     if provider is None:
-        return "Error: no provider is configured with an API key."
+        return f"Error: {_provider_hint(mode)}"
 
-    api_key = os.getenv(provider["api_key_env"])
+    # A LOCAL SERVER HAS NO KEY, and the SDK refuses a None one before it ever dials.
+    # The placeholder is only reachable for a provider that declared api_key_required
+    # = False; a keyed provider is never returned by _provider_for_mode() without one.
+    api_key = os.getenv(provider["api_key_env"]) or "not-needed"
     model_name = model or provider["model"]
     # Surfaces get the assembly budget — the old 10s was sized for a model this file no
     # longer uses (see ASSEMBLY_TIMEOUT_ENV); anything that writes gets room. `chat` is a
     # writing mode — a person is waiting on an answer, not on a canvas.
     client_timeout = LLM_TIMEOUT_ASSEMBLY if mode in SURFACE_MODES else LLM_TIMEOUT_WRITING
+    # response_format IS THE PROVIDER'S TO CHOOSE, NOT THE MODE'S. It travels with the entry
+    # in MODEL_PROVIDERS because it is a fact about the server, not about the job: LM Studio
+    # answers json_object with HTTP 400 (see "json_mode" on the entry), so sending it is the
+    # difference between an assembly and an error that reads like the model refused the work.
+    # The strict system prompt carries the contract on its own, and the caller already strips
+    # fences, so a provider with json_mode None simply is not told.
+    if mode in ("console_assembly", "surface_assembly") and provider.get("json_mode"):
+        payload["response_format"] = provider["json_mode"]
     # THE MODE AND THE REASONING SETTING ARE IN THE LINE, not just the ceiling.
     # "one attempt, 120s" says how long a call MAY take; it does not say what it is,
     # and `chat` and `prompt_output` share that number. The two things that explain a
     # slow call are which mode it was and whether it was told to think — the second
     # being worth roughly ten times the first. Measured on this provider: the same
     # question answered in 2.4s with reasoning off and 19.0s at medium.
+    # THE MODEL AND THE SETTINGS ARE NAMED HERE BECAUSE THEY ARE THE QUESTION THE OWNER ASKS.
+    # One model now serves every mode, so "which one answered that?" is answered by this line
+    # and by LAST_USAGE — and the settings that differ between an assembly and a reply are
+    # visible in the same place rather than inferred from the output.
     print(
         f"[{provider['name']}] {model_name} — mode={mode} "
         f"reasoning={payload.get('reasoning_effort', 'default')} one attempt, {client_timeout}s"
@@ -448,6 +549,10 @@ def query_llm(
 
     except Exception as exc:
         print(f"[{provider['name']}] Failed: {exc}")
+        # THE FAILURE IS THE ANSWER. No next provider, no second attempt, and no second
+        # model — a fault here is the one model saying it cannot do this job, and the
+        # person is told that rather than handed a surface or a reply by a model they did
+        # not choose.
         if "timed out" in str(exc).lower():
             # Say WHICH budget expired, and whether it is the one meant to be
             # tight. "Request timed out." alone sends a reader to the provider,

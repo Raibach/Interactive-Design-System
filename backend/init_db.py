@@ -695,6 +695,17 @@ TABLE_DEFINITIONS = {
             updated_at TIMESTAMP DEFAULT now()
         )
     """,
+    'run_evaluations': """
+        CREATE TABLE IF NOT EXISTS run_evaluations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id UUID NOT NULL REFERENCES prompt_sessions(id) ON DELETE CASCADE,
+            verdict VARCHAR(16) NOT NULL,
+            sentence TEXT,
+            run_at TIMESTAMP DEFAULT now(),
+            trigger_kind VARCHAR(32) DEFAULT 'run',
+            created_at TIMESTAMP DEFAULT now()
+        )
+    """,
 }
 
 # Safe column migrations - adds column if missing, never drops
@@ -1279,6 +1290,8 @@ def init_database():
             'user_memory_log', 'user_subscriptions',
             # the governance rows — the register, the corrections, the findings, the reports
             'governance_items',
+            # the judged runs, one row per Run — the rail's Evals view reads this
+            'run_evaluations',
             # THE TOOLS THE SYSTEM CAN USE, and the reason it was missing: the DDL was written
             # and this list was not, so `CREATE TABLE IF NOT EXISTS tools` never ran on any
             # database this file created. A fresh install came up with no register at all — no

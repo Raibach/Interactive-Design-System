@@ -39,6 +39,28 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
   const { initialTab } = options || {};
   // A2UI: onNavigate removed - AI controls surfaces, not URL routing
   const [headerTab, setHeaderTabState] = useState<string | null>(() => {
+    /*
+     * THE FRONT PAGE IS THE CONSOLE, FROM THE FIRST FRAME — not from the effect that corrects it.
+     *
+     * The caller computes the intent from the URL (`WritingAreaIndex`:
+     * `initialTab: routeSessionId ? "composer" : "console"`), and this preferred the PERSISTED tab
+     * over it. So on "/" the person's last tab won: whoever works in the composer had
+     * `activeHeaderTab === "composer"`, React's first commit handed
+     * `<ai-surface-sandbox header-tab="composer">`, and the sandbox painted the composer's ground —
+     * its base #582846 (the plum) plus the composer's own image — and projected the composer's
+     * slot, for the frames between that commit and the mount effect that flips the tab back to the
+     * console. The owner, 2026-09-24, in a browser where the in-app one could not show it: "it
+     * flashes purple, which is something wrong with the code."
+     *
+     * AND THE RULE WAS ALREADY WRITTEN DOWN, over that effect: "The persisted tab (localStorage
+     * 'activeHeaderTab') must NOT dictate what the front page assembles." It was applied a frame
+     * too late. Here it is applied at the only moment that can matter — the first render.
+     *
+     * EVERYTHING ELSE IS UNCHANGED: a package in the URL still opens on the tab the person last
+     * had, which is what the persisted value is for, and `setHeaderTab` below still writes it on
+     * every change.
+     */
+    if (initialTab === "console") return "console";
     const saved = localStorage.getItem("activeHeaderTab");
     return saved || initialTab || "console";
   });

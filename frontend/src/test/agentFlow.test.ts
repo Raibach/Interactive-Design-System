@@ -24,6 +24,9 @@ import {
   positionKey,
   rowForAddedNode,
   toolFromSections,
+  COLUMN_STEP,
+  GRID_SIZE,
+  START_ON_GRID,
   NODE_FOOTPRINT,
   NODE_TILE,
   type FlowGraph,
@@ -77,25 +80,27 @@ describe('buildRepairFlow — the picture is the prompt and the run, keyed on id
       'step:evaluation',
     ]);
 
-    // EVERY ROW COMES OFF THE BRAIN, and no row follows another row. That chain is what the hub
-    // replaced, so a chain reappearing here is the staircase coming back.
-    const hub = 'seat:0:system-role';
-    expect(g.edges).toContainEqual({ from: hub, to: 'seat:1:user-role' });
-    expect(g.edges).toContainEqual({ from: hub, to: 'seat:2:tool-call' });
-    expect(g.edges).toContainEqual({ from: hub, to: 'seat:3:agent-role' });
-    expect(g.edges.some((e) => e.from === 'seat:1:user-role' && e.to === 'seat:2:tool-call')).toBe(false);
-    expect(g.edges.some((e) => e.from === 'seat:2:tool-call' && e.to === 'seat:3:agent-role')).toBe(false);
-    // The finding leads IN to the brain — it is what the prompt is being drawn about — and the
-    // steps keep the relationships the builder derived.
+    // JOINED HEAD TO TAIL, which is what this test has always been named — and what the drawing
+    // actually does now. The assertion below used to require the opposite (every row off the
+    // brain, and the chain between rows asserted ABSENT), because the picture was a hub with a
+    // ring. With the layout theirs, the fan crossed the whole drawing — the owner: "I see lines
+    // on top of nodes running underneath nodes… it's a mess" — so the edges are the builder's own
+    // chain, left to right, one node to the next.
     expect(g.edges).toContainEqual({
       from: 'note:annotation-missing:prompt-container:40000954:23865',
-      to: hub,
+      to: 'seat:0:system-role',
     });
+    expect(g.edges).toContainEqual({ from: 'seat:0:system-role', to: 'seat:1:user-role' });
+    expect(g.edges).toContainEqual({ from: 'seat:1:user-role', to: 'seat:2:tool-call' });
+    expect(g.edges).toContainEqual({ from: 'seat:2:tool-call', to: 'seat:3:agent-role' });
+    // The steps keep the relationships the builder derived.
     expect(g.edges).toContainEqual({ from: 'seat:2:tool-call', to: 'step:tool' });
     expect(g.edges).toContainEqual({ from: 'seat:3:agent-role', to: 'step:agent' });
     expect(g.edges).toContainEqual({ from: 'step:agent', to: 'step:data' });
     expect(g.edges).toContainEqual({ from: 'step:data', to: 'step:evaluation' });
-    // One edge per pair: the note leads to the hub once, not twice.
+    // NO SPOKES: nothing in the drawing is joined to the brain from across the picture.
+    expect(g.edges.some((e) => e.from === 'seat:0:system-role' && e.to === 'seat:3:agent-role')).toBe(false);
+    // One edge per pair.
     const pairs = g.edges.map((e) => `${e.from}\u0000${e.to}`);
     expect(new Set(pairs).size).toBe(pairs.length);
   });
@@ -109,48 +114,42 @@ describe('buildRepairFlow — the picture is the prompt and the run, keyed on id
     expect(agent.subtitle).toBe('prompt-container: Add the annotation.');
   });
 
-  it('draws a HUB: the brain at the centre, the rows on a ring, the steps beyond them', () => {
+  it('lays the flow out the way THEIRS does: the seats in one column, the steps a column on, all on the grid', () => {
     /**
-     * THE OWNER'S OWN PICTURE, 2026-09-23: "There's a central brain that runs the prompt that
-     * represents Grace… and then the nodes come off of that — in this case the system role is the
-     * main driver, the brain of the agent." The hub is the one row the editor keeps sticky at
-     * slot 0, so the drawing says what the data already enforces.
+     * THE LAYOUT IS THE REFERENCE'S, 2026-09-24.
      *
-     * A RING AND NOT A ROW is also the scaling answer: another node takes the next place around
-     * the circle instead of making a line longer, and the radius grows with the count so two
-     * tiles never touch however many arrive.
+     * This test asserted a ring: "the brain at the centre, the rows on a ring, the steps beyond
+     * them". The ring was this module's own invention, and the owner's verdict on it is final —
+     * "I hate the ring. I was just doing that because I couldn't get you to figure out any other
+     * way… the ring is a failure." He asked three times for a horizontal arrangement and then, at
+     * the end, for an exact replication of the reference canvas's layout.
+     *
+     * So what is asserted now is THEIR grammar, read from `useCanvasLayout` and
+     * `app/utils/nodeViewUtils.ts`: every position a multiple of GRID_SIZE (their own test asserts
+     * this), the seats stacked in one column, each step one column to the right, a note one column
+     * to the LEFT of the seats, and no two nodes sharing a place.
      */
     const g = buildRepairFlow(input());
     const at = (id: string) => g.nodes.find((n) => n.id === id)!;
-    const hub = 'seat:0:system-role';
-    const dist = (id: string) => Math.hypot(at(id).x - at(hub).x, at(id).y - at(hub).y);
 
-    // THE BRAIN IS THE SYSTEM ROLE, and it holds the centre.
-    expect(at(hub).x).toBe(0);
-    expect(at(hub).y).toBe(0);
-
-    // THE ROWS SIT ON ONE RING — the same distance from the brain, and never on top of it.
-    const rows = ['seat:1:user-role', 'seat:2:tool-call', 'seat:3:agent-role'];
-    for (const id of rows) expect(dist(id)).toBeGreaterThan(0);
-    // Within two pixels: `ringPlace` rounds a place to whole pixels, so two rows at different
-    // angles land a fraction of a unit apart. The invariant is "one ring", not "the same float".
-    const sameRing = (a: string, b: string) => expect(Math.abs(dist(a) - dist(b))).toBeLessThan(2);
-    sameRing('seat:2:tool-call', 'seat:1:user-role');
-    sameRing('seat:3:agent-role', 'seat:1:user-role');
-    // A note is on that ring too: a finding is what the prompt is being drawn about.
-    sameRing('note:annotation-missing:prompt-container:40000954:23865', 'seat:1:user-role');
-
-    // EVERYTHING BUT THE BRAIN SHARES THAT ONE BAND, steps included. The steps had a ring of
-    // their own beyond the rows, and that is the shape the owner rejected: a ring's spacing is its
-    // circumference over its count, so three steps stood 120° apart at the larger radius — 665
-    // units between any two of them, a third of the picture. One band, and each step is inserted
-    // beside the node it comes off, so a connector is a spoke or a single arc at most.
-    const band = dist('seat:1:user-role');
+    // ON THEIR GRID, all of it: a placement off the grid is one a person cannot line up by eye.
     for (const n of g.nodes) {
-      if (n.id === hub) continue;
-      expect(dist(n.id)).toBeGreaterThan(band - 1.5);
-      expect(dist(n.id)).toBeLessThan(band + 1.5);
+      // `Math.abs` because `-48 % 16` is `-0` in JavaScript, and `-0` fails `toBe(0)` — the
+      // assertion's own arithmetic, not the layout's. The layout is on the grid either way.
+      expect(Math.abs(n.x % GRID_SIZE)).toBe(0);
+      expect(Math.abs(n.y % GRID_SIZE)).toBe(0);
     }
+
+    // THE SEATS SHARE ONE COLUMN, stacked in the order the prompt has them.
+    const seats = g.nodes.filter((n) => n.family === 'seat');
+    const column = seats[0].x;
+    for (const s of seats) expect(s.x).toBe(column);
+    const ys = seats.map((s) => s.y);
+    expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+
+    // A STEP IS A COLUMN TO THE RIGHT OF THE SEATS, and a note a column to the left.
+    for (const s of g.nodes.filter((n) => n.family === 'step')) expect(s.x).toBeGreaterThan(column);
+    for (const n of g.nodes.filter((n) => n.family === 'note')) expect(n.x).toBeLessThan(column);
 
     // And no two nodes share a place.
     expect(new Set(g.nodes.map((n) => `${n.x},${n.y}`)).size).toBe(g.nodes.length);
@@ -176,7 +175,9 @@ describe('buildRepairFlow — the picture is the prompt and the run, keyed on id
 
     it('keeps the moved node where it was left, and the ring untouched for everything else', () => {
       const first = buildRepairFlow(input());
-      const moved = first.nodes.map((n) => (n.id === 'seat:2:tool-call' ? { ...n, x: -640, y: 275 } : n));
+      // `moved: true` — the flag a place carries when a HAND put it there (see FlowPosition). Without
+      // it a place is the layout's own output read back, and the arrangement wins.
+      const moved = first.nodes.map((n) => (n.id === 'seat:2:tool-call' ? { ...n, x: -640, y: 275, moved: true } : n));
       const again = buildRepairFlow(input({ carried: moved }));
 
       expect(at(again, 'seat:2:tool-call')).toEqual({ x: -640, y: 275 });
@@ -188,6 +189,25 @@ describe('buildRepairFlow — the picture is the prompt and the run, keyed on id
       }
     });
 
+    it('IGNORES a place nobody chose — the layout wins over its own saved output', () => {
+      /*
+       * THE BUG THAT KEPT THE RING ALIVE AFTER THE RING WAS DELETED, 2026-09-24.
+       *
+       * A saved package carried the LAYOUT's coordinates in its workspace graph, written back to it
+       * by the save as though a person had put them there — so `arrangeAsHub` gave them priority
+       * over the arrangement, the arrangement could never draw, and the owner saw a circle on a
+       * canvas whose ring had been removed from the code. Measured, not guessed: the getter that
+       * feeds the save reported the model's x/y for every node it had not moved, and the ring's
+       * coordinates came straight back.
+       *
+       * So: a place says whether a person made it. One that does not is the layout's own output,
+       * and the arrangement is what draws.
+       */
+      const plain = buildRepairFlow(input());
+      const layoutOutput = plain.nodes.map((n) => ({ ...n, x: -640, y: 275 }));
+      expect(buildRepairFlow(input({ carried: layoutOutput }))).toEqual(plain);
+    });
+
     it('follows the ROW when its slot changes — the kind is the identity, the slot is not', () => {
       /*
        * A seat's id carries the row's ORDINAL (`seat:<i>:<kind>`), and the ordinal is not an
@@ -196,7 +216,7 @@ describe('buildRepairFlow — the picture is the prompt and the run, keyed on id
        * moved into that slot — which is a picture that lies about what they did.
        */
       const before = buildRepairFlow(input());
-      const dragged = before.nodes.map((n) => (n.id === 'seat:1:user-role' ? { ...n, x: 900, y: 90 } : n));
+      const dragged = before.nodes.map((n) => (n.id === 'seat:1:user-role' ? { ...n, x: 900, y: 90, moved: true } : n));
       // The same four rows with the User Role at the top: the row that was moved comes back as
       // seat:0, and the brain takes slot 1.
       const after = buildRepairFlow(input({
@@ -207,9 +227,11 @@ describe('buildRepairFlow — the picture is the prompt and the run, keyed on id
       const user = after.nodes.find((n) => n.kind === 'user-role')!;
       expect(user.id).toBe('seat:0:user-role');
       expect({ x: user.x, y: user.y }).toEqual({ x: 900, y: 90 });
-      // And the brain did NOT inherit it: the place moved with the row, not with the number.
+      // And the brain did NOT inherit it: the place moved with the row, not with the number. It
+      // is back where the layout puts it — their default start position, not the origin the ring
+      // used to centre on.
       const brain = after.nodes.find((n) => n.kind === 'system-role')!;
-      expect({ x: brain.x, y: brain.y }).toEqual({ x: 0, y: 0 });
+      expect({ x: brain.x, y: brain.y }).toEqual({ x: START_ON_GRID.x, y: START_ON_GRID.y });
     });
 
     it('ignores a place for a node that is not on the canvas, and one that is not a place', () => {
@@ -435,20 +457,19 @@ describe('a tool is drawn where it was named, and joined to that seat', () => {
     const hub = g.nodes.find((n) => n.kind === 'system-role')!;
     expect(tool).toBeTruthy();
     expect(tool!.title).toBe('search-the-internet');
-    // THE RELATIONSHIP IS THE EDGE (asserted next), AND THE PLACE IS THE BAND. A tool used to sit
-    // on a ring BEYOND the rows — "so the eye reads the prompt first and what it calls second" —
-    // and that second ring is what stretched the drawing out: three steps 120° apart at a larger
-    // radius are 665 units from each other whatever else is true (measured 2026-09-23, the
-    // owner's "they're stretched out across the screen"). Now everything but the brain shares one
-    // band and a step is inserted next to its parent, so the connector is an arc, not a crossing.
-    const dist = (n: { x: number; y: number }) => Math.hypot(n.x - hub.x, n.y - hub.y);
-    expect(Math.abs(dist(tool!) - dist(agentSeat!))).toBeLessThan(2);
-    // And it is beside its seat, not across the picture: no further from it than two places on
-    // the band (the band's own neighbour gap is the chord between adjacent places).
-    const bandNodes = g.nodes.filter((n) => n.id !== hub.id);
-    const neighbour = 2 * dist(agentSeat!) * Math.sin(Math.PI / bandNodes.length);
-    const gap = Math.hypot(tool!.x - agentSeat!.x, tool!.y - agentSeat!.y);
-    expect(gap).toBeLessThanOrEqual(2 * neighbour + 2);
+    // THE RELATIONSHIP IS THE EDGE (asserted next), AND THE PLACE IS ONE COLUMN ON. The tool used
+    // to sit on a ring beyond the rows, and then on the rows' own band; the layout is the
+    // reference's now, so a step takes the column to the RIGHT of the seats and every tool shares
+    // that column with the other steps. What matters is unchanged and is asserted here: it is on
+    // the grid, it is a column to the right of its seat, and it is not across the picture.
+    expect(Math.abs(tool!.x % GRID_SIZE)).toBe(0);
+    expect(Math.abs(tool!.y % GRID_SIZE)).toBe(0);
+    expect(tool!.x).toBeGreaterThan(agentSeat!.x);
+    // One column, not several: no further than a single column step from its parent.
+    expect(Math.abs(tool!.x - agentSeat!.x)).toBeLessThanOrEqual(COLUMN_STEP + 1);
+    // And it shares the steps' row rather than drifting: every step sits on one line.
+    const stepYs = new Set(g.nodes.filter((n) => n.family === 'step').map((n) => n.y));
+    expect(stepYs.size).toBe(1);
   });
 
   it('joins it to that seat, not to a Tool Call seat it does not use', async () => {

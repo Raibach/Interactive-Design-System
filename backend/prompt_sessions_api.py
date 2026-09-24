@@ -489,6 +489,63 @@ class PromptSessionsAPI:
             except Exception as e:
                 raise e
 
+    def list_evaluations(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        One judged run per row, oldest first, numbered 1..N — the same shape n8n's
+        evaluations table draws. `verdict` is cleared / failed / running / error;
+        `sentence` is the judge's own line, absent for running/error rows.
+        """
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT id, verdict, sentence, run_at, trigger_kind, created_at
+                    FROM run_evaluations
+                    WHERE session_id = %s
+                    ORDER BY created_at ASC, run_at ASC
+                    """,
+                    (session_id,),
+                )
+                rows = [dict(row) for row in cursor.fetchall()]
+                for i, row in enumerate(rows, start=1):
+                    row["id"] = str(row["id"])
+                    row["index"] = i
+                    row["runAt"] = str(row.pop("run_at")).replace(" ", "T")
+                    row["trigger"] = row.pop("trigger_kind")
+                    row.pop("created_at", None)
+                return rows
+            except Exception as e:
+                raise e
+
+    def record_evaluation(
+        self,
+        session_id: str,
+        verdict: str,
+        sentence: Optional[str] = None,
+        trigger_kind: str = "run",
+    ) -> Dict[str, Any]:
+        """Store one judged run and return the row the caller just wrote."""
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO run_evaluations (session_id, verdict, sentence, trigger_kind)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id, verdict, sentence, run_at, trigger_kind, created_at
+                    """,
+                    (session_id, verdict, sentence, trigger_kind),
+                )
+                row = dict(cursor.fetchone())
+                row["id"] = str(row["id"])
+                row["runAt"] = str(row.pop("run_at"))
+                row["trigger"] = row.pop("trigger_kind")
+                row.pop("created_at", None)
+                return row
+            except Exception as e:
+                raise e
+
     def _log_prompt_modification_to_milvus(
         self, suggestion: Dict[str, Any], user_id: str, inserted_position: str = None
     ) -> bool:

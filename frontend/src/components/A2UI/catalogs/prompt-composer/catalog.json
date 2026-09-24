@@ -71,6 +71,48 @@
         "component"
       ]
     },
+    "EvalFeed": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The judged runs of one package, for the rail's Evals view. Implemented by <eval-feed> in src/components/lit/eval-feed.ts. It is a VIEW and fetches nothing: the backend's /evaluations endpoint stores one row per run, and the shell binds the list into the data model. Every value it draws arrives through the binding below.",
+          "properties": {
+            "component": {
+              "const": "EvalFeed"
+            },
+            "evaluations": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "description": "Data-bound list of judged runs, newest first. Object form: {\"path\": \"/session/middle_column/evaluations\"}. Unset is NOT empty: the feed draws its waiting state until the path has been written, because an empty list is a claim that the package has run and nothing has been judged."
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
+    "eval-feed": {
+      "type": "object",
+      "description": "The same component as EvalFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps EvalFeed to <eval-feed>), while the allowlist and the catalog audit name the TAG \u2014 so a payload or a client validating by tag has to find it here as well. The binding is described on the EvalFeed entry.",
+      "properties": {
+        "component": {
+          "const": "eval-feed"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
     "trace-feed": {
       "type": "object",
       "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG \u2014 so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",

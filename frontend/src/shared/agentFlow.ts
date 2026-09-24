@@ -41,6 +41,9 @@
  * everywhere else (unset is not empty).
  */
 import { SECTION_TYPES, normalizeSectionType, seatIdOf, declaredName } from './promptSections';
+// A row's trigger is read from its own text, the same reader the row's element and the host use —
+// so a seat's subtitle can say how it starts without a second copy of the fact anywhere.
+import { triggerIn } from './triggers';
 
 // ── the shapes ──────────────────────────────────────────────────────────────
 
@@ -66,6 +69,20 @@ export interface FlowNode {
   state: FlowState;
   /** A short mark: a finding's level ('blocking' | 'advisory'), or 'unresolved'. */
   badge?: string;
+  /**
+   * WHICH ROW OF THE PROMPT THIS NODE IS — its index in the rows the builder was given.
+   *
+   * A2UI's own rule, from Data-Binding.md: an action's `context` is a hand-picked VIEW of the data
+   * model, and "a data reference is resolvable either by path in the data model or by value". The
+   * host's write path is `/session/left_column/sections`, so a node that carries its index carries
+   * the address of the row it stands for — and the host's edit becomes an update AT A PATH instead
+   * of a name to be re-matched.
+   *
+   * THIS EXISTS BECAUSE MATCHING BY NAME FAILED TWICE IN ONE SESSION: a seat node wears the seat's
+   * LABEL ("System Role") while the row's name is "System", so a title comparison matched nothing
+   * and the canvas looked like a control that does nothing. A path cannot be misspelled.
+   */
+  rowIndex?: number;
   /** Top-left of the node box, in canvas units. Deterministic (see the layout below). */
   x: number;
   y: number;
@@ -172,6 +189,15 @@ export interface FlowPosition {
   kind: string;
   x: number;
   y: number;
+  /**
+   * TRUE WHEN A PERSON PUT IT THERE — a drag, or a module dropped from a port.
+   *
+   * The flag exists because a drawing and a choice looked identical in a saved package, and the
+   * layout could not tell its own output from somebody's decision. Only a place that carries this
+   * wins over the arrangement (see `arrangeAsHub`). A package saved before the flag existed has it
+   * on nothing, so its places are treated as what they were: the layout's, read back.
+   */
+  moved?: boolean;
 }
 
 /**
@@ -217,9 +243,52 @@ export function positionKey(n: { id: string; family: FlowFamily; kind: string })
 //
 // The element imports both, so a change here moves the drawing and the edges that
 // join it in the same step.
-export const NODE_TILE = 88;
+export const NODE_TILE = 96;
 export const NODE_GAP = 72;
 const STEP = NODE_TILE + NODE_GAP;
+
+/**
+ * THE GRID, AND EVERY NUMBER THEY USE ON IT — read from their canvas, not chosen here.
+ *
+ * `app/utils/nodeViewUtils.ts` in the reference: `GRID_SIZE = 16`, and everything else is a
+ * multiple of it — `DEFAULT_NODE_SIZE = [16*6, 16*6]` (96), `NODE_X_SPACING = 16*8` (128),
+ * `DEFAULT_START_POSITION = [16*11, 16*15]`. `useCanvasLayout` spaces stacked rows by
+ * `GRID_SIZE * 6` and subgraphs by `GRID_SIZE * 8`, and its own tests assert that every node it
+ * places sits at a multiple of the grid.
+ *
+ * The owner, 2026-09-24: "please replicate their grid layout… the way the canvas lays out, the way
+ * the nodes land by default — every single thing. I'm trying to do an exact replication of what
+ * they've got."
+ *
+ * So this is the unit OUR canvas measures in from here: a node is six cells, a column is fourteen
+ * (six for the node, eight for the gap), and a placed node lands ON the grid rather than wherever
+ * a division happened to come out.
+ */
+export const GRID_SIZE = 16;
+/** Their node: `GRID_SIZE * 6`. Ours was 88, which is not on their grid at all. */
+const NODE_ON_GRID = GRID_SIZE * 6;
+/** Their column step: the node plus `NODE_X_SPACING` (GRID_SIZE * 8). */
+const COL_ON_GRID = NODE_ON_GRID + GRID_SIZE * 8;
+/**
+ * Their row step is `GRID_SIZE * 6` (96) — because in their node the LABEL IS INSIDE the 96px box.
+ * Ours draws its label BELOW the tile (footprint 150 tall), so their exact number would overlap
+ * ours by 54px on every row. Until our node wears its label inside the box as theirs does, the row
+ * step is our own footprint snapped to their grid — on the grid, and honest about what we draw.
+ */
+const ROW_ON_GRID = GRID_SIZE * 10;
+/** Their default start position, in cells: `[GRID_SIZE * 11, GRID_SIZE * 15]`. */
+export const START_ON_GRID = { x: GRID_SIZE * 11, y: GRID_SIZE * 15 };
+
+/** The column step, exported so a test can assert a step is ONE column from its seat. */
+export const COLUMN_STEP = COL_ON_GRID;
+
+/** A number snapped to their grid. Every position this module hands out goes through it. */
+export function onGrid(value: number): number {
+  // `+ 0` NORMALISES NEGATIVE ZERO: `Math.round(-0.4 / 16) * 16` is `-0`, and `-0` is not strictly
+  // equal to `0` — a position that is arithmetically zero and fails an equality against zero. The
+  // kind of fact that shows up in a test rather than on a screen, and worth not carrying at all.
+  return Math.round(value / GRID_SIZE) * GRID_SIZE + 0;
+}
 
 /**
  * HOW TALL A NODE ACTUALLY DRAWS — the tile, plus the label block it hangs underneath itself.
@@ -239,6 +308,26 @@ const NODE_LABEL_BLOCK = 54;
 
 /** What a node occupies: the tile, and the label block it draws below it. */
 export const NODE_FOOTPRINT = NODE_TILE + NODE_LABEL_BLOCK;
+
+/**
+ * THE TRIGGER'S TILE — LARGER, AND A SQUARE, because theirs is.
+ *
+ * The owner, 2026-09-24, holding their canvas beside ours: "if their system role is a large
+ * square, then make our system role a large square — by changing the shape you give the user
+ * identity of what it is." Their canvas draws the node a workflow starts from bigger than the
+ * rest, so its shape carries its job; ours were all one size, and the row everything hangs off
+ * looked like every other row.
+ *
+ * IT LIVES HERE, WITH THE OTHER SIZES, and not in the element. Everything that PLACES a node
+ * reads these numbers, so the trigger's size is a fact the placement has to know: with the
+ * trigger 140 wide, a spoke 192 units away on a ring can overlap it by about 11px at 45 degrees
+ * — the same pair of boxes on top of each other that the label block above was moved here to
+ * end. `RING_STEP` is derived from both footprints for that reason.
+ */
+export const HUB_TILE = 140;
+
+/** The trigger's own footprint: its larger tile plus the label block every node carries. */
+export const HUB_FOOTPRINT = HUB_TILE + NODE_LABEL_BLOCK;
 
 /**
  * THE HUB — one brain, and what comes off it. Read this before the row constants below.
@@ -286,8 +375,21 @@ export const NODE_FOOTPRINT = NODE_TILE + NODE_LABEL_BLOCK;
  *
  * The tests in agentFlow.test.ts assert this at every ring size, so a future tightening fails
  * there rather than on somebody's screen.
+ *
+ * AND IT NOW KNOWS ABOUT THE TRIGGER, which is the larger node: the distance that clears two
+ * ordinary nodes does not clear an ordinary node and a trigger, because the trigger's half is
+ * wider. Two half-boxes are clear at ANY angle once their centres are hypot(halfW, halfH) apart,
+ * so the step is the larger of the two pairs — trigger-with-ordinary, and ordinary-with-ordinary.
+ * Measured before this change: a 140-wide trigger and an 88-wide spoke 192 apart overlapped by
+ * 11px on the diagonal, which is exactly the failure this constant exists to prevent.
  */
-const RING_STEP = Math.ceil(Math.hypot(NODE_TILE, NODE_FOOTPRINT)) + 24;
+const RING_STEP =
+  Math.ceil(
+    Math.max(
+      Math.hypot(NODE_TILE, NODE_FOOTPRINT), // two ordinary nodes
+      Math.hypot((HUB_TILE + NODE_TILE) / 2, (HUB_FOOTPRINT + NODE_FOOTPRINT) / 2), // a trigger and one
+    ),
+  ) + 24;
 
 /** The radius that holds `n` nodes clear of each other. */
 function ringRadius(n: number): number {
@@ -334,7 +436,18 @@ function arrangeAsHub(
    */
   const held = new Map<string, { x: number; y: number }>();
   for (const p of carried ?? []) {
-    if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+    /*
+     * ONLY A PLACE A PERSON MADE WINS — see `drawn` in agent-flow.ts for the measurement. A saved
+     * package used to carry the LAYOUT's coordinates as though they were choices, so the ring
+     * survived its own deletion: every package that had ever run handed back the circle and the
+     * arrangement never got to draw. A place that does not say it was moved is the layout's own
+     * output being read back to it, and the layout wins.
+     *
+     * The flag is additive: a package saved before it existed has no `moved` on any node, so those
+     * places are ignored and the drawing is the arrangement — which is the honest answer for a
+     * package whose positions nobody chose.
+     */
+    if (p && p.moved === true && Number.isFinite(p.x) && Number.isFinite(p.y)) {
       held.set(positionKey(p), { x: p.x, y: p.y });
     }
   }
@@ -368,56 +481,55 @@ function arrangeAsHub(
    * and the answer and the evaluation follow on from there instead of being flung to the far side
    * of a bigger circle. Deterministic: same facts, same picture.
    */
-  const band: FlowNode[] = [...notes, ...spokes];
   /*
-   * AND A STEP PARKS BEHIND THE SIBLINGS ALREADY AT ITS PARENT.
+   * ── THE LAYOUT IS THEIRS ──────────────────────────────────────────────────────────────
    *
-   * Inserting each step directly after its parent is not enough on its own, and the package the
-   * owner was looking at is why: in it the LAST row is Tool Call, so the tool AND the answer both
-   * come off the same seat. The tool was inserted at the parent's shoulder, then the answer was
-   * inserted at the same index and pushed the tool one place on, then the evaluation pushed it
-   * again — three places on a six-place band, which is the far side of the circle. Measured live
-   * 2026-09-23: `seat:3:tool-call 30° r=192` and `step:tool 210° r=192`, an edge of **384 units —
-   * the diameter**, and the owner's report: "you've got search-the-internet, which is a tool or a
-   * skill, it's on the left-hand side. It should just be coming out of the right, where it
-   * belongs."
+   * The owner, 2026-09-24: "please replicate their grid layout — the way the canvas lays out, the
+   * way the nodes land by default, all of it. Every single thing. I'm trying to do an exact
+   * replication of what they've got." And before that, three times in three words: not a circle,
+   * a horizontal rectangle, a horizontal triangular structure.
    *
-   * So a parent remembers how many steps are parked after it, and the next one goes behind those.
-   * Every step now sits one place from its parent, which on this band is 192 units.
+   * Their canvas (`useCanvasLayout`) places a node's dependants one COLUMN to the right and
+   * stacks siblings one ROW apart, with every position a multiple of GRID_SIZE — its own tests
+   * assert that. So:
+   *
+   *   the seats   stand in the first column, stacked, the brain at their head;
+   *   the steps   take one column each to the right, in the order the run performs them;
+   *   a note      sits one column LEFT of the seats, at the head of the flow, which is what it is;
+   *   everything  lands ON the grid (GRID_SIZE), because a placement off the grid is a placement
+   *               a person cannot line up by eye.
+   *
+   * The ring is gone with this. It was this module's own invention — a hub with spokes — and it is
+   * the thing the owner kept having to correct.
    */
-  const parked = new Map<string, number>();
-  for (const s of steps) {
-    const parent = edges.find((e) => e.to === s.id)?.from ?? '';
-    const base = band.findIndex((n) => n.id === parent);
-    if (base < 0) {
-      band.push(s);
-      continue;
-    }
-    const behind = parked.get(parent) ?? 0;
-    band.splice(base + 1 + behind, 0, s);
-    parked.set(parent, behind + 1);
-  }
-  const bandR = ringRadius(band.length);
-  band.forEach((n, i) => at.set(n.id, ringPlace(i, band.length, bandR)));
+  const seats = [hub, ...spokes];
+  const midY = ((seats.length - 1) * ROW_ON_GRID) / 2;
+  seats.forEach((n, i) => at.set(n.id, { x: onGrid(START_ON_GRID.x), y: onGrid(START_ON_GRID.y + i * ROW_ON_GRID) }));
+  steps.forEach((s, i) => at.set(s.id, { x: onGrid(START_ON_GRID.x + (i + 1) * COL_ON_GRID), y: onGrid(START_ON_GRID.y + midY) }));
+  notes.forEach((n, i) => at.set(n.id, { x: onGrid(START_ON_GRID.x - COL_ON_GRID), y: onGrid(START_ON_GRID.y + midY + i * ROW_ON_GRID) }));
 
   const arranged = nodes.map((n) => {
     const p = held.get(positionKey(n)) ?? at.get(n.id);
     return p ? { ...n, x: p.x, y: p.y } : n;
   });
 
-  const spokeIds = new Set(spokes.map((n) => n.id));
-  const noteIds = new Set(notes.map((n) => n.id));
-  // The chain between rows goes; the head edge the builder drew (a note into the first row)
-  // goes with it, because the hub is where a note leads now.
-  const kept = edges.filter((e) =>
-    !(spokeIds.has(e.from) && spokeIds.has(e.to)) && !(noteIds.has(e.from) && spokeIds.has(e.to)));
-  const toHub: FlowEdge[] = [
-    ...notes.map((n) => ({ from: n.id, to: hub.id })),
-    ...spokes.map((n) => ({ from: hub.id, to: n.id })),
-  ];
-  // One edge per pair: the builder may already have drawn a note into the hub.
+  /*
+   * THE EDGES ARE THE BUILDER'S OWN — THE FAN IS GONE WITH THE RING.
+   *
+   * This replaced the chain between rows with spokes from the hub: every row joined FROM the
+   * System Role, because the picture was a brain with a ring around it and the spokes were what
+   * said "brain". With the layout now theirs — the rows stacked in a column, the steps a column
+   * to the right — those spokes became a fan crossing the whole drawing: lines over nodes and
+   * under nodes, which is what the owner saw and called a mess.
+   *
+   * The reference's canvas is a CHAIN, and its edges are the workflow's own connections: each
+   * node joins what follows it, so the lines run left to right and never cross the picture. That
+   * is what the builder already derives (the rows in order, each tool from the row that names it,
+   * the answer and the check after them), so nothing is added here and nothing is removed: the
+   * edges are handed back as they came, deduplicated.
+   */
   const seen = new Set<string>();
-  const joined = [...kept, ...toHub].filter((e) => {
+  const joined = edges.filter((e) => {
     const key = `${e.from}\u0000${e.to}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -438,8 +550,19 @@ const STEP_X = SEAT_X + STEP;
 const STEP_GAP = STEP;
 
 /** One line of a seat's content, for the subtitle. Empty stays empty. */
+/**
+ * The row's first line of prose, with the CAPABILITY TOKENS taken out.
+ *
+ * A node's subtitle is what a person reads under the tile, and a row's text may now begin with a
+ * trigger token — `{{trigger:on-a-schedule}}\nFind the newest…`. That token is a fact the row
+ * holds, not prose, so drawing it as the subtitle would put machine text where the sentence goes.
+ * A tool token is left alone deliberately: the Tool Call seat's own subtitle has always shown
+ * `{{tool:search-the-internet}}` (it is the row's point), and stripping it would hide the one line
+ * that says what the seat calls.
+ */
 function firstLine(content: string): string {
-  const line = (content || '').split('\n').find((l) => l.trim()) ?? '';
+  const prose = String(content || '').replace(/\{\{trigger:[A-Za-z0-9_-]+\}\}[ \t]*\n?/g, '');
+  const line = prose.split('\n').find((l) => l.trim()) ?? '';
   return line.trim().length > 64 ? line.trim().slice(0, 61) + '…' : line.trim();
 }
 
@@ -542,8 +665,22 @@ export function buildRepairFlow(input: RepairFlowInput): FlowGraph {
       id: `seat:${i}:${id}`,
       family: 'seat' as FlowFamily,
       kind: id,
+      // THE ADDRESS OF THE ROW THIS NODE IS — see the note on FlowNode.rowIndex. `i` is the index
+      // in the rows this builder was handed, and every caller hands it the model's own list in
+      // order, so this is the index in `/session/left_column/sections` as well.
+      rowIndex: i,
       title: decided ? seatLabel(id) : declaredName(s) || 'Unresolved row',
-      subtitle: firstLine(s.content),
+      /*
+       * WHAT THE ROW SAYS, AND HOW IT STARTS — the trigger first when the row has one.
+       *
+       * A trigger is a fact about the whole row rather than a line of its prose, and the node has
+       * one subtitle to spend: leading with the trigger means the drawing answers "what starts
+       * this?" at a glance, which is the question the reference canvas asks first. The prose
+       * follows it, so nothing the person wrote disappears.
+       */
+      subtitle: triggerIn(s.content)
+        ? `${triggerIn(s.content)!.name}${firstLine(s.content) ? ' · ' + firstLine(s.content) : ''}`
+        : firstLine(s.content),
       badge: decided ? undefined : 'unresolved',
       // A seat is not a step: it is 'active' while the run is in flight and 'done'
       // once an answer exists, because that is the whole of what the app knows —
