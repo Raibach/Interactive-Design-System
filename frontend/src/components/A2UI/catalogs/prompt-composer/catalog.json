@@ -106,6 +106,10 @@
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
               "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` \u2014 the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note \u2014 never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
             },
+            "theme": {
+              "type": "string",
+              "description": "The drawing\u2019s tone, sent by the assembly that puts the canvas in the middle column on a Run: \"dark\" is the reference\u2019s near-black surface, which is the tone a Run is shown in, and unset draws the mid-tone this design was drawn in (the tone switch in <canvas-footer> writes it afterwards). Declared 2026-09-23 because the element has always taken this property and the catalog did not say so, while the Run\u2019s assembly sends it every time \u2014 the catalog-check reported it as an under-described property, which is the declaration drifting from the surface rather than the surface from the declaration."
+            },
             "id": {
               "type": "string"
             }

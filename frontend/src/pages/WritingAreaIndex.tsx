@@ -25,6 +25,9 @@ import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
 import consoleVideo from "@/assets/No-Copyright-waves.mp4";
 import composerBackground from "@/assets/composer-image-bg.jpg";
+// The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
+// texture is started by loadCanvasElements (below) when a Run asks for the canvas.
+import canvasArt from "@/assets/agent-canvas-art.jpg";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 // InteractiveChatInterface is RETIRED — archived, not deleted, at
 // retired-files/console-seat-20260917/InteractiveChatInterface.tsx. The console's
@@ -41,7 +44,6 @@ import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { markArrival } from "@/shared/arrival";
-import { autoAdviceOn } from "@/shared/autoAdvice";
 import { CORE_ROLE_LABELS } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
 import { aiOrchestrator } from "@/utils/aiOrchestrator";
@@ -53,7 +55,7 @@ import { classifyFailure, parseValidationEnvelope, type FailureReport } from "@/
 // read instead of assumed. See shared/a2ui-envelope.ts: a version this shell does
 // not implement, or a response describing more than one surface, is refused here
 // rather than parsed as v0.9.1-and-one-surface.
-import { readA2UIEnvelope, envelopeRefusalError } from "@/shared/a2ui-envelope";
+import { readA2UIEnvelope, envelopeRefusalError, applyComponentUpdate } from "@/shared/a2ui-envelope";
 // The trace view's data path. The reads (the app logger, Sentry's global scope)
 // live behind this module, and this shell is what WRITES what they hold into the
 // surface's model — the same shape writeSectionsToSurface uses for /session.
@@ -66,10 +68,23 @@ import { repairAsk, repairBrief } from "@/shared/repairMaterial";
 // writing, the swapping and the listening.
 import {
   buildRepairFlow,
+  rowForAddedNode,
   type FlowNote,
+  type FlowPosition,
   type FlowSeatInput,
   type RepairRunFacts,
 } from "@/shared/agentFlow";
+// THE BLOCKERS, COMPUTED — the whole pre-Run list, so she explains it instead of deriving it.
+// See the module's head: the list is arithmetic, and a list a model remembers arrives a piece
+// at a time.
+import { reviewFlow, holdsRun, runHoldingRepairs } from "@/shared/flowReview";
+// THE PACKAGE'S FACTS, READ BY THE READER THE SEAT READS THEM WITH — the name and the
+// description, surface first. Two readers of one fact is what held every Run on a package whose
+// description was on screen; see the module's head.
+import { packageTitle, packageDescription } from "@/shared/packageFacts";
+// What a row is called — one reader for the four fields a name arrives in. A saved row carries
+// no `name` and no `type`, so anything that picks fields by hand drops the name it needs.
+import { declaredName } from "@/shared/promptSections";
 // The app's own logger. The flow's events land here, which is what puts them in the
 // operator's Trace view instead of inventing a place for them (see the listeners).
 import { logger } from "@/lib/logger";
@@ -95,6 +110,47 @@ import {
 interface WritingAreaIndexProps {
   onLogout?: () => void;
   isAuthenticated?: boolean | null;
+}
+
+/**
+ * THE CANVAS IS FETCHED WHEN A RUN ASKS FOR IT — and never before.
+ *
+ * `main.tsx` used to import the two canvas elements with the rest of the components, so every
+ * person who opened a package paid for the drawing's code and its 591KB ground whether or not
+ * they ever ran anything. The owner, 2026-09-23: "When the user opens a package, prompt
+ * package or clicks composer, we don't need to load all of the code for the canvas at that
+ * same time. We only load that once the run is clicked."
+ *
+ * TWO THINGS HAPPEN HERE, AND THE ORDER MATTERS:
+ *   1. the ground starts fetching — it is the one part of the canvas that cannot arrive after
+ *      the pane is on screen without a flash of the fallback colour (measured against the
+ *      deployed site, 2026-09-23: "a very ugly purple paint"), and a Run gives it the whole
+ *      dock to arrive in;
+ *   2. the elements are imported, and the caller swaps the column only once they are defined,
+ *      because the surface names AgentCanvas and a tag nothing defines draws an empty box with
+ *      no error anywhere.
+ *
+ * ONE PROMISE PER SESSION, held at module scope so a re-render cannot start a second fetch.
+ * A failure clears it: the next Run tries again, and the run that failed leaves the output
+ * column where it was (the caller says why — see the Run's own catch).
+ */
+let canvasElements: Promise<void> | null = null;
+
+function loadCanvasElements(): Promise<void> {
+  if (canvasElements) return canvasElements;
+  const ground = new Image();
+  ground.src = canvasArt;
+  if (ground.decode) ground.decode().catch(() => {});
+  canvasElements = Promise.all([
+    import('@/components/lit/agent-flow'),
+    import('@/components/lit/agent-canvas'),
+  ])
+    .then(() => undefined)
+    .catch((err: unknown) => {
+      canvasElements = null;
+      throw err;
+    });
+  return canvasElements;
 }
 
 /**
@@ -134,38 +190,18 @@ function deepFind<T extends Element>(selector: string): T | null {
 const FIGMA_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
 
 /**
- * HOW LONG A RUN'S CONTROLS STAY BUSY, at the very least.
- *
- * The owner, 2026-09-18: "you need to add a spinner and a delay to the run — three seconds, five
- * seconds, ten seconds, I don't know, however long it takes to assemble all of this stuff in the
- * background. I don't wanna see the chat with a big gap on the side and all of a sudden it
- * corrects itself and slides… this thing should already be in place and then you're just
- * presenting them, right — you're creating an effective opening like a cassette tape."
- *
- * So the spinner is not a progress bar and not a lie about the work: it is the beat that lets the
- * canvas be PRESENTED instead of watched. Below this floor a run's own controls blink, which is
- * the glitch he is describing; above it, the motion belongs to the row of controls he is looking
- * at, which is the point. The canvas's ready signal still ends it — a wait is a floor, not a
- * delay added to the work.
- */
-const MIN_RUN_BUSY_MS = 3200;
-
-/**
  * HOW LONG THE PROMPT TAKES TO FOLD — the pane's own `--dur-pane`, restated here because the
  * shell has to WAIT for it before it shows what the fold was making room for. Two places, one
  * number: if the stylesheet's curve changes, this changes with it (workspace-layout's
  * stylesheet is where it is declared).
+ *
+ * MOVED 520 → 760 WITH THE STYLESHEET, 2026-09-23, when the owner asked for the panes to "ease
+ * back, smooth and contemplative". A longer fold with the old wait would have published the
+ * canvas while the panes were still sliding — the delay is what makes the fold read as one event
+ * and the picture as the next (see the beat below).
  */
-const RUN_DOCK_MS = 520;
+const RUN_DOCK_MS = 760;
 
-/**
- * THE BEAT BETWEEN THE FOLD AND THE DRAWING — the deliberate pause that lets a person see the
- * prompt close as one event and the picture arrive as the next. The owner, 2026-09-23: "add an
- * intentional 300 ms spinner delay on the canvas, loaded after the agent prompt panel has had a
- * chance to close … we're creating intentional delays so that the user can track what's
- * happening."
- */
-const RUN_CANVAS_AFTER_DOCK_MS = 300;
 
 export default function Index({
   onLogout: _onLogout,
@@ -305,6 +341,19 @@ export default function Index({
     { components: [], dataModel: {} },
   );
 
+  /**
+   * THE LIVE TREE, READABLE FROM A LISTENER REGISTERED IN AN EARLIER RENDER.
+   *
+   * `handleRunRequested` is registered once on the window and closes over the render it was
+   * registered in, so state read inside it is the state of that render. The Run's assembly
+   * needs the tree as it is AT THE CLICK — which ids the layout has, what the middle column is
+   * called, and the rows the editor is holding — and `surfaceDataModelRef` below is the same
+   * pattern for the same measured reason (see its note: the save's listener read the console's
+   * model while the composer was on screen).
+   */
+  const workspaceTreeRef = useRef(workspaceTree);
+  workspaceTreeRef.current = workspaceTree;
+
   // Which slot <ai-surface-sandbox> projects. Its rule is
   // `headerTab === 'console' ? 'console' : 'workspace'`, and an unset tab is the
   // console — this has to read the same way, or the values below would describe a
@@ -391,12 +440,24 @@ export default function Index({
    * register that cannot be read does not block a run: the review happens either way, and the
    * tool list normally reaches her with the workspace context besides.
    */
-  const toolsThatCannotRun = useCallback(async (held: any[]): Promise<string[]> => {
+  const readToolRegister = useCallback(async (): Promise<any[]> => {
     try {
       const resp = await fetch(`${API_BASE}/ai/tools`);
       if (!resp.ok) return [];
       const data = await resp.json().catch(() => null);
-      const list: any[] = Array.isArray(data) ? data : Array.isArray(data?.tools) ? data.tools : [];
+      return Array.isArray(data) ? data : Array.isArray(data?.tools) ? data.tools : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  /**
+   * THE REACH-OUT TOOLS THIS PROMPT NAMES THAT NOTHING ANSWERS — and the register is handed IN
+   * when the caller has already read it, so a review reads the table once.
+   */
+  const toolsThatCannotRun = useCallback(async (held: any[], register?: any[]): Promise<string[]> => {
+    try {
+      const list: any[] = register ?? (await readToolRegister());
       const reachOut = list
         .filter((t) => t?.kind === 'call' && !t?.runner && t?.name)
         .map((t) => String(t.name));
@@ -408,7 +469,7 @@ export default function Index({
     } catch {
       return [];
     }
-  }, []);
+  }, [readToolRegister]);
 
   /**
    * ONE ROW, APPLIED TO THE MODEL — replaced where it already sits, and ADDED where it does not.
@@ -571,23 +632,19 @@ export default function Index({
   // for the canvas — so the flag is written into a tree whose control bar has already been
   // replaced. The spinner arrives, if at all, after the thing it was meant to cover.
   //
-  // So the controls are written DIRECTLY for the duration of the assembly, and released on the
-  // canvas's own ready signal — which is the one moment that means "the canvas is up".
-  const setRunControlsBusy = useCallback((busy: boolean) => {
-    for (const tag of ['control-bar', 'canvas-footer']) {
-      // THE SHADOW-PIERCING READ, NOT document.querySelectorAll — these elements are drawn
-      // by the renderer inside its shadow root, so a document-level query finds nothing and
-      // the spinner silently never appeared (the silence `deepFind` exists to end; see its
-      // note above). An absent tag is a view that is not on screen yet, which is why the Run
-      // re-asserts this flag once the canvas has mounted (see the flow-view-ready frame).
-      const node = deepFind<HTMLElement & { isRunning?: boolean; running?: boolean }>(tag);
-      if (!node) continue;
-      node.isRunning = busy;
-      node.running = busy;
-    }
-  }, []);
-  /** When the current run was asked for — the floor the spinner is held for. */
-  const runBusyFromRef = useRef(0);
+  // THE REPAIR IS THE FLAG'S LIFETIME, NOT A SECOND WRITER — and it took two attempts to see that.
+  // The first attempt wrote `isRunning` DIRECTLY onto the elements (deepFind, past the shadow
+  // roots) for the duration of the assembly. That works until the model moves: the renderer
+  // re-assigns every prop on every data-model change, so the write was undone by the next publish —
+  // and the two writers disagreed exactly where the owner could see it. Measured 2026-09-23, what
+  // he reported: "it's spinning for just a few minutes and then turning off and so everything's
+  // sitting there, it looks broken, and then all of a sudden the console opens."
+  //
+  // The flag is ONE fact — is a Run's opening still in flight — and it is written in ONE place
+  // (`writeBusyToSurface`, from `isComposerRunning`, which the tree binds). What was wrong was WHEN
+  // it went false: the run's own answer landing cleared it, while the column was still being
+  // composed. It is cleared where the opening actually ends now: the drawing's ready signal, a
+  // failed assembly, or a Run she blocked.
 
   const writeBusyToSurface = useCallback((saving: boolean, running: boolean) => {
     setWorkspaceTree((prev) => {
@@ -918,6 +975,45 @@ export default function Index({
   const [repairStages, setRepairStages] = useState<RepairStages>({});
 
   /**
+   * THE ROWS A DECISION IS MADE FROM — ONE READER, because there were two and they disagreed.
+   *
+   * `handleRunRequested` reviewed whatever the Run button's event happened to carry and
+   * `onFixAll` reviewed `surfaceSections()`: two readers of one fact, agreeing only by the luck
+   * of who called them and whether React had committed. The standing rule is one fact, one
+   * reader — the copy that drifts is always the one nobody re-derives, and this copy decides
+   * both whether a Run is held and what that Run will send.
+   *
+   * THE ORDER IS THE APP'S OWN, not a preference. In turn:
+   *
+   *   1. THE EDITOR — the rows as they stand in the column. It is the only copy already true
+   *      when a write has just been DISPATCHED and React has not committed yet; reading the
+   *      surface at that moment answers with the prompt as it was BEFORE the write. It is also
+   *      the list the person is looking at, which is the list a review is supposed to be about.
+   *   2. THE SURFACE — what the renderer BOUND into the column (see surfaceSections above for
+   *      why the DOM query could not be used for this).
+   *   3. THE REPAIR PROMPT the column was holding.
+   *   4. THE PACKAGE'S OWN LEFT COLUMN — what the column was built from.
+   *
+   * 2 to 4 exist for one window, and it is the swap: a Run arriving while the column is being
+   * replaced reads back an empty editor, and the honest next question is what the column held a
+   * moment ago rather than whether to run nothing at all.
+   */
+  const rowsForDecision = useCallback((): any[] => {
+    const editor = deepFind<HTMLElement & { sections?: unknown[] }>('prompt-section-editor');
+    if (Array.isArray(editor?.sections) && editor.sections.length) return editor.sections as any[];
+    const fromSurface = surfaceSections();
+    if (fromSurface.length) return fromSurface;
+    const fromRepair = repairSectionsRef.current || [];
+    if (fromRepair.length) return fromRepair;
+    try {
+      const raw = currentPromptSessionObjRef.current?.leftColumnContent;
+      return raw ? (JSON.parse(raw).sections || []) : [];
+    } catch {
+      return [];
+    }
+  }, [surfaceSections]);
+
+  /**
    * THE ROW'S STATE, PUBLISHED TO THE MODEL — the last wire between the repair path and the
    * repair list.
    *
@@ -1008,6 +1104,19 @@ export default function Index({
    * a second time.
    */
   const flowInputRef = useRef<{ finding: FlowNote | null; sections: FlowSeatInput[]; label: string } | null>(null);
+  /**
+   * WHERE THE PERSON PUT THE NODES, as the package they opened saved them.
+   *
+   * POSITION IS THE ONE FACT THE DRAWING OWNS (READ-ME/CANVAS-AND-PROMPT.md §2) and its home is
+   * the graph the package carries — `workspace.graph.nodes[].x/y`, written by the save from the
+   * element's own `drawn` (see the place read in handleSave). This is the READ half: held from
+   * the moment the package opens, and handed to the builder at every rebuild, so a Run after a
+   * reopen draws the layout the person left instead of the default ring on top of it.
+   *
+   * A REF, NOT STATE, for the same reason the run's own inputs are: the rebuild happens inside
+   * await callbacks that must see the current value without being re-created for it.
+   */
+  const carriedPositionsRef = useRef<FlowPosition[]>([]);
   /** What the app knows about the run so far. Rebuilt FROM, never edited in place. */
   const flowFactsRef = useRef<RepairRunFacts>({});
   /** The delete handler, reachable from the card's own event listener (see onCardDelete). */
@@ -1036,6 +1145,119 @@ export default function Index({
   }, []);
 
   /**
+   * THE THIRD COLUMN IS ASSEMBLED, NOT INSERTED — the RUN's one model call.
+   *
+   * WHAT THIS REPLACES, measured 2026-09-23 (READ-ME/CONTINUE-HERE.md §00c): this file wrote
+   * the components itself. `setOutputColumn('flow')` built `AgentCanvas` with its three slots
+   * and pushed `AgentFlow`, `OutputControls` and `CanvasFooter` straight into the live
+   * component list, in TypeScript, on every Run — so the one surface a person watches most
+   * closely was the one the protocol did not build, while the console's own cards, the same
+   * class of thing, arrived from the model against the catalog. The owner's charge: "if those
+   * nodes are not being called from the A2UI library by a model, then you've not only violated
+   * the protocol, you've created this jarring effect."
+   *
+   * AN UPDATE, NOT A REPLACEMENT, and the ids are what make it one. `render-session` assembles
+   * a whole surface because opening a package IS the whole surface; a Run moves ONE COLUMN of a
+   * surface that is already on screen and already carries facts this file owns — the rows as
+   * the editor holds them, the conversation in her column, the places the person dragged nodes
+   * to. So the request states the ids the assembly must land on (the layout's root, its other
+   * slots, and the component standing in the middle today), the model returns the components
+   * for that column, and they are applied BY ID with `applyComponentUpdate` — the spec's own
+   * updateComponents semantics. The server checks the other slots came back untouched and
+   * refuses with a reason if they did not, because an assembly that rewrote them would take
+   * the prompt or Grace off the screen mid-Run.
+   *
+   * THE ROWS ARE NOT SENT AND CANNOT BE. They are the person's, the editor is their writer,
+   * and a model that echoed them back into the model would be a second author of the same fact.
+   * The drawing is bound to `/session/middle_column/flow` — a path this file writes from the
+   * rows it already holds (see publishRepairFlow).
+   */
+  const assembleThirdColumn = useCallback(async (): Promise<{
+    components: unknown[];
+    dataModel: Record<string, any>;
+  }> => {
+    const tree = workspaceTreeRef.current;
+    const components = Array.isArray(tree.components) ? tree.components : [];
+    const root = components.find((c: any) => c?.component === 'workspace-layout') ?? null;
+    const slots: Record<string, unknown> = { ...((root?.children as Record<string, unknown>) ?? {}) };
+    /*
+     * THE MIDDLE IS FOUND BY ROLE, NEVER BY ID — the same rule showOutputColumn states and for
+     * the same measured reason: every assembly names its own components (the composer's middle
+     * is `middle-column`, a loaded session's is `middle-col`), so a run that looked for one
+     * name would land on nothing in the other and draw no canvas at all.
+     *
+     * A package that has never run has the component already — the composer emits the output
+     * viewer and simply does not point the layout at it, because until a Run the middle column
+     * is not drawn. When it is absent entirely the model is told so and gives the column an id
+     * of its own; the update adds it and the layout's pointer is the model's.
+     */
+    const middleId = (slots.middle as string | undefined)
+      ?? components.find((c: any) => c?.component === 'compiled-output-viewer' || c?.component === 'AgentCanvas')?.id
+      ?? '';
+    delete slots.middle; // it is the column being assembled; the model returns it filled
+
+    const session = tree.dataModel?.session ?? {};
+    const rows = Array.isArray(session.left_column?.sections) ? session.left_column.sections : [];
+    const run = {
+      layoutId: root?.id ?? 'root',
+      middleId,
+      slots,
+      package: {
+        id: currentPromptSessionObjRef.current?.id ?? null,
+        title: session.title || currentPromptSessionObjRef.current?.title || 'Untitled Prompt',
+        rows: rows.length,
+        seats: rows.map((r: any) => declaredName(r)).filter(Boolean),
+      },
+    };
+
+    const response = await fetch(`${API_BASE}/ai/assemble-surface?limit=500`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
+      body: JSON.stringify({ intent: 'render-run', context: { session_id: session.id ?? null, run } }),
+    });
+    if (!response.ok) {
+      // The server's own reason, verbatim — it names what it refused and why. Never a bare
+      // status: the two failures this path can have (the model drifted, the provider died)
+      // are told apart by that sentence and by nothing else.
+      const raw = await response.text();
+      throw new Error(raw.trim() || `${response.status} ${response.statusText}`);
+    }
+
+    const reading = readA2UIEnvelope(await response.json(), tree.dataModel);
+    // `=== false`, not `!ok`: this project compiles with strictNullChecks off, where truthiness
+    // does not narrow a union — only equality against the literal does (see the other call site).
+    if (reading.ok === false) throw envelopeRefusalError(reading.refusal);
+    for (const note of reading.reading.notes) console.warn(`🤖 [A2UI] run: ${note}`);
+    console.log(
+      `🤖 [A2UI] Run — the model assembled the third column:`,
+      reading.reading.components.map((c: any) => `${c?.id} <${c?.component}>`).join(', '),
+    );
+    return { components: reading.reading.components, dataModel: reading.reading.dataModel };
+  }, []);
+
+  /**
+   * AND IT IS PUT ON SCREEN BY AN UPDATE, NOT BY AN AUTHOR.
+   *
+   * `applyComponentUpdate` is the spec's own updateComponents semantics: components whose ids
+   * are already in the surface are updated, new ids are added, and every component the update
+   * does not mention — the prompt column, her seat, the trace view — is left exactly as it is.
+   * Nothing here names a component, a slot or a binding: the model's update carries all three,
+   * including the layout root that points its middle slot at the canvas.
+   *
+   * SEPARATE FROM THE FETCH ON PURPOSE. The model call can start the instant the Run does, but
+   * the picture may not be put on screen until the panes it will live between have finished
+   * moving — see the sequence in handleRunRequested. That ordering is the whole cure for the
+   * jump: a canvas that mounts mid-fold takes its width while the pane beside it is still
+   * moving, and is seen sliding in.
+   */
+  const applyThirdColumn = useCallback((update: { components: unknown[]; dataModel: Record<string, any> }) => {
+    setWorkspaceTree((prev) => ({
+      components: applyComponentUpdate(prev.components, update.components),
+      dataModel: update.dataModel,
+    }));
+  }, []);
+
+  /**
    * Rebuild the whole graph from the facts that exist, and write it.
    *
    * A REBUILD, not an edit: the graph is a function of its inputs, so the drawing
@@ -1051,8 +1273,131 @@ export default function Index({
       finding: input.finding,
       sections: input.sections,
       run: flowFactsRef.current,
+      carried: carriedPositionsRef.current,
     }));
   }, [writeFlowToSurface]);
+
+  /**
+   * THE DRAWING IS A FUNCTION OF THE ROWS — so a row that changed rebuilds it.
+   *
+   * THIS IS THE OTHER DIRECTION, and the one that makes the two views one thing rather than
+   * two that have to be kept in step. A row written in the prompt (a keystroke, a chat
+   * button, a section the seat menu made) is a node on the canvas the next time the drawing
+   * is built; a node added on the canvas is a row (see onFlowNodeAdded, which writes through
+   * this same path). Neither view holds a fact the other does not.
+   *
+   * A REBUILD, NOT AN EDIT, and from the ROWS AS THEY STAND rather than from the run's own
+   * snapshot: the snapshot is what the run sent, and this is what the prompt is now. Where a
+   * person has moved a node, position is the one fact the drawing owns and it is carried on
+   * the node itself (workspace.graph.nodes[].x/y), never re-derived here.
+   *
+   * NOTHING ON SCREEN MEANS NOTHING TO REBUILD. Without a run's input there is no drawing in
+   * the middle column, so a row added while the output is showing publishes no graph and says
+   * nothing — a graph built here would swap the compiled output for a picture nobody asked for.
+   */
+  const publishFlowFromRows = useCallback((added?: unknown) => {
+    const input = flowInputRef.current;
+    if (!input) return;
+    const rows = surfaceSections() as FlowSeatInput[];
+    // The row that was just made may not be in the model's copy yet: `section-add` fires
+    // before React has committed it. Same-name-and-type is the identity a row has here.
+    const identity = (s: { type?: unknown; name?: unknown } | null | undefined): string =>
+      `${s?.type ?? ''}\u0000${s?.name ?? ''}`;
+    const sections = added && !rows.some((s) => identity(s) === identity(added as { type?: unknown; name?: unknown }))
+      ? [...rows, added as FlowSeatInput]
+      : rows;
+    writeFlowToSurface(buildRepairFlow({
+      label: input.label,
+      finding: input.finding,
+      sections,
+      run: flowFactsRef.current,
+      carried: carriedPositionsRef.current,
+    }));
+  }, [surfaceSections, writeFlowToSurface]);
+
+  /**
+   * HOW MUCH OF THE DRAWING HER COLUMN COVERS — measured, never assumed.
+   *
+   * ON A RUN HER COLUMN IS A LAYER OVER THE DRAWING (workspace-layout: `.pane.right.over` is
+   * absolutely positioned), so the drawing's box is wider than the pane a person can see, and
+   * the drawing cannot see her: she is not its child and its own box never moves when she
+   * narrows. So the number is measured HERE, where both boxes are in reach, and written onto
+   * the element that composes the view (agent-flow's `viewportInset`). It is a measurement,
+   * not a guess at the columns' widths: the two rects are read as they are on screen.
+   *
+   * WHY IT EXISTS: with the drawing composed into its full box, the brain of a 1535px drawing
+   * landed at x≈789 with her column at 768 — the hub sat on the seam, half of it under the
+   * chat, and the nodes a person wanted to drag could not be grabbed (owner, 2026-09-23: "I
+   * can no longer slide the nodes around … system role seems fixed").
+   *
+   * The observer follows the element on screen rather than the one that was there when the
+   * canvas arrived: an assembly replaces her panel, so a stale observer would stop reporting.
+   */
+  const canvasInsetRef = useRef<{ ro: ResizeObserver | null; chat: Element | null }>({ ro: null, chat: null });
+
+  const syncCanvasInset = useCallback((): void => {
+    const flow = deepFind<HTMLElement & { viewportInset?: number }>('agent-flow');
+    const chat = deepFind<HTMLElement>('chat-panel');
+    const held = canvasInsetRef.current;
+    if (chat && chat !== held.chat) {
+      held.ro?.disconnect();
+      held.ro = typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => syncCanvasInset())
+        : null;
+      held.ro?.observe(chat);
+      held.chat = chat;
+    }
+    if (!flow) return;
+    const f = flow.getBoundingClientRect();
+    if (f.width < 2) return;
+    const c = chat?.getBoundingClientRect() ?? null;
+    // She covers it only where the two boxes actually overlap: beside the drawing she takes
+    // width out of the flex line and covers nothing, and on the console she is not over it.
+    const covered = c && c.left > f.left + 1 && c.left < f.right
+      ? Math.max(0, Math.round(f.right - c.left))
+      : 0;
+    if (flow.viewportInset !== covered) flow.viewportInset = covered;
+  }, []);
+
+  // Her column resizes on the Run (the layer's share), on a window resize, and whenever a hand
+  // takes the gripper — all of them measured through the same reader.
+  useEffect(() => {
+    syncCanvasInset();
+    window.addEventListener('resize', syncCanvasInset);
+    return () => {
+      window.removeEventListener('resize', syncCanvasInset);
+      canvasInsetRef.current.ro?.disconnect();
+      canvasInsetRef.current = { ro: null, chat: null };
+    };
+  }, [syncCanvasInset]);
+
+  /**
+   * THE COLUMN'S OWN WAIT — the spinner it shows while the drawing is held back.
+   *
+   * The fact belongs to the Run's sequence (this file decides when the drawing is published),
+   * so this file is what tells the column — the same shape as `syncCanvasInset` above: a
+   * property written onto the element that has it, not a value re-derived from the model.
+   *
+   * IT WAITS FOR THE ELEMENT, AND GIVES UP QUIETLY. `applyThirdColumn` writes React state, so
+   * the canvas is not in the DOM on the next line — it is committed a frame later, and on the
+   * frame after that the renderer has built it. An element that never appears is a column that
+   * was not put there (a failed assembly keeps the output), which is not an error here.
+   */
+  const setCanvasHolding = useCallback((holding: boolean): void => {
+    let frames = 0;
+    const write = (): void => {
+      const canvas = deepFind<HTMLElement & { holding?: boolean }>('agent-canvas');
+      if (canvas) {
+        // Lit's own property, so the attribute and the style follow it. Written every time,
+        // including the `false` that ends the hold: the element may have been built while the
+        // run was in flight, and its constructor default is `holding`.
+        if (canvas.holding !== holding) canvas.holding = holding;
+        return;
+      }
+      if (++frames < 40) requestAnimationFrame(write);
+    };
+    requestAnimationFrame(write);
+  }, []);
 
   useEffect(() => {
     publishFlowRef.current = publishRepairFlow;
@@ -1079,7 +1424,29 @@ export default function Index({
    * today's composer assembly hands it an empty literal instead, which is why this
    * binds it on the way back rather than trusting the assembly to.
    */
-  const setOutputColumn = useCallback((which: 'flow' | 'output') => {
+  /**
+   * THE MIDDLE COLUMN GOES BACK TO THE OUTPUT — the canvas footer's own control.
+   *
+   * THIS IS THE OTHER DIRECTION AND IT IS NOT AN ASSEMBLY. What it restores is a component the
+   * surface already emitted: the composer's tree hands the middle column a
+   * `compiled-output-viewer` bound to `/session/middle_column/compiled_output` at open time, and
+   * a Run is what replaces it with the canvas. Going back is putting that column's original
+   * component in place again and taking the canvas's own subtree out with it — the drawing, the
+   * column's controls and its foot are the canvas's children, and they leave when it does.
+   *
+   * THE RUN'S DIRECTION IS THE OPPOSITE OF THIS ONE and lives somewhere else: a Run does NOT
+   * write components, it ASSEMBLES them (`assembleThirdColumn` → the model, against the
+   * catalog). That asymmetry is deliberate and is the owner's charge — "if those nodes are not
+   * being called from the A2UI library by a model, then you've not only violated the protocol,
+   * you've created this jarring effect." This function exists because going BACK is a control on
+   * the column that says so, and there is no assembly in it to make.
+   *
+   * The compiled output is NOT lost by the swap: this binds the viewer's content to the path it
+   * was documented to read (/session/middle_column/compiled_output) — today's composer assembly
+   * hands it an empty literal instead, which is why this binds it on the way back rather than
+   * trusting the assembly to.
+   */
+  const showOutputColumn = useCallback(() => {
     setWorkspaceTree((prev) => {
       const comps = Array.isArray(prev.components) ? prev.components : [];
       const next = comps.slice();
@@ -1098,8 +1465,6 @@ export default function Index({
       const r = next.findIndex((c: any) => c?.component === 'workspace-layout');
       const root = r >= 0 ? next[r] : null;
       const childMap: Record<string, unknown> = { ...((root?.children as Record<string, unknown>) ?? {}) };
-      const byComponent = (name: string): number =>
-        next.findIndex((c: any) => c?.component === name);
       // The middle: whatever the layout points at, or the viewer the assembly emitted
       // without pointing at it (a Run is what makes it a column).
       const middleId =
@@ -1108,106 +1473,40 @@ export default function Index({
       const i = middleId ? next.findIndex((c: any) => c?.id === middleId) : -1;
       if (i < 0) return prev;
       const have = next[i];
-      if (which === 'flow' && have?.component === 'AgentCanvas') return prev;
-      if (which === 'output' && have?.component === 'compiled-output-viewer' && have?.content?.path) return prev;
+      if (have?.component === 'compiled-output-viewer' && have?.content?.path) return prev;
 
-
-      if (which === 'flow') {
-        // THE UNIT IS COMPOSED BY THE ENVELOPE, not by an element. `agent-canvas` is a
-        // CONTAINER: it declares two slots and this surface fills them — the drawing in
-        // "flow", her seat in "seat" — exactly as workspace-layout is filled by name.
-        // An element that renders another element is nesting, and this protocol does not
-        // allow it (AGENTS-instructions/Core-Concept.md: children come from the envelope,
-        // never from a component's own template; "surfaces cannot nest").
-        //
-        // HER SEAT IS THE SAME COMPONENT, NOT A COPY. "right-column" already exists in
-        // this tree with every binding she needs — the conversation, the conversations,
-        // the session, the prompt text, the compiled output, and her own view child. The
-        // adjacency list lets one component change parents, so nothing about her contract
-        // is restated here and there is exactly one chat-panel to keep true.
-        // A RUN DOES NOT TOUCH HER. The canvas is the DRAWING — header, flow, foot — and her
-        // seat is not a child of it. This used to move her in (the plug-in had a "seat" slot),
-        // which is what replaced her container and lost the thread on every Run. The owner,
-        // 2026-09-18: "there's no difference between the canvas Grace and the new-package Grace
-        // — they're the same Grace, so there's no reason to replace anything. That was my
-        // mistake." And: "when we click run, all we have to do is expose the third column,
-        // which is actually the canvas." So the middle column swaps what it shows; she stays
-        // where she is, with her conversation, and nothing re-creates her.
-        next[i] = {
-          id: middleId,
-          component: 'AgentCanvas',
-          // THE CANVAS IS BORN DARK (owner, 2026-09-18). The drawing's own default is the
-          // mid-tone this design was drawn in, but a Run produces a picture meant to be
-          // looked at, and dark is the tone it is shown in — the tone control in the foot
-          // takes it back.
-          // AND NO `collapsed` IS SENT, because there is no column here to state: the plug-in
-          // is the drawing, and her column belongs to the layout that lays it out. The open
-          // state a Run shows her at is the state the operator left.
-          theme: 'dark',
-          children: {
-            header: 'output-controls-view',
-            flow: 'flow-view',
-            // THE FOOT IS THE COLUMN'S TOO — the ControlBar master's bar, where the tone
-            // switch lives. A Run replaces what is under the header, and the place's own
-            // foot has to survive that.
-            footer: 'canvas-footer-view',
-          },
-        };
-        if (!next.some((c: any) => c?.id === 'flow-view')) {
-          next.push({
-            id: 'flow-view',
-            component: 'AgentFlow',
-            flow: { path: '/session/middle_column/flow' },
-            theme: 'dark',
-          });
+      /*
+       * WHAT THE CANVAS BROUGHT, READ OFF THE CANVAS ITSELF. The subtree that leaves with it is
+       * the one ITS `children` names — the column's controls, the drawing, the foot — and the
+       * ids are the assembly's, not a list kept here. A hardcoded list of names is how the other
+       * side of this file drifted from the catalog in the first place.
+       */
+      const doomed = new Set<string>();
+      const collect = (id: string): void => {
+        if (doomed.has(id)) return;
+        doomed.add(id);
+        const comp = next.find((c: any) => c?.id === id);
+        for (const childId of Object.values((comp?.children as Record<string, unknown>) ?? {})) {
+          if (typeof childId === 'string' && childId !== middleId) collect(childId);
         }
-        // THE COLUMN'S HEADER, PRESENT AND UNWIRED — the owner's instruction (2026-09-18):
-        // "just add the element to the canvas and that way it'll be there when we get ready
-        // to wire it up." It is the design's own row (output-vontrols 40001034:1186): the
-        // view selector and the model selector. The selector opens nothing yet, because no
-        // menu contents exist in the Figma pull and its entries are the owner's
-        // specification — so it is drawn with its tag and role and does nothing, rather
-        // than doing something invented.
-        if (!next.some((c: any) => c?.id === 'output-controls-view')) {
-          next.push({
-            id: 'output-controls-view',
-            component: 'OutputControls',
-            outputType: 'Agent Flow',
-          });
-        }
-        if (!next.some((c: any) => c?.id === 'canvas-footer-view')) {
-          next.push({ id: 'canvas-footer-view', component: 'CanvasFooter', theme: 'dark' });
-        }
-        // THE MIDDLE COLUMN ARRIVES WITH THE RUN. Before one there is nothing to draw
-        // there — a prompt that has not been run is two columns, the prompt and Grace —
-        // so the assembly emits the component without pointing the layout at it. The Run
-        // is what makes it a column, which is also why the flow view lives in it.
-        childMap.middle = middleId;
-        // AND HER OWN COLUMN IS NOT EVEN NAMED HERE. It used to stand down, because she was
-        // drawn inside the canvas — one Grace on screen meant one of the two columns had to go.
-        // She is not inside it any more (see the note above), and then it was left standing but
-        // still TOLD to close (`isThirdOpen: false`): the same fact written from a second place,
-        // which is what slammed a column the operator had just sized by hand. Her column has ONE
-        // writer — the layout that lays it out — and a Run is not it. Whatever the operator set
-        // with the rail or the grip is the state she keeps; the owner, 2026-09-18: "all we have to
-        // do is expose the third column, which is actually the canvas."
-        if (root) next[r] = { ...root, children: childMap };
-      } else {
-        next[i] = {
-          id: middleId,
-          component: 'compiled-output-viewer',
-          content: { path: '/session/middle_column/compiled_output' },
-        };
-        // The middle column goes away again — it is a Run's column — and the drawing and the
-        // header leave with the view that used them. Her column is not "restored" either: it was
-        // never taken and never written, so there is nothing here to put back.
-        delete childMap.middle;
-        for (const gone of ['flow-view', 'output-controls-view', 'canvas-footer-view']) {
-          const idx = next.findIndex((c: any) => c?.id === gone);
-          if (idx >= 0) next.splice(idx, 1);
-        }
-        if (root) next[r] = { ...root, children: childMap };
+      };
+      for (const childId of Object.values((have?.children as Record<string, unknown>) ?? {})) {
+        if (typeof childId === 'string') collect(childId);
       }
+
+      next[i] = {
+        id: middleId,
+        component: 'compiled-output-viewer',
+        content: { path: '/session/middle_column/compiled_output' },
+      };
+      // The middle column goes away again — it is a Run's column — and the drawing and the
+      // header leave with the view that used them. Her column is not "restored" either: it was
+      // never taken and never written, so there is nothing here to put back.
+      delete childMap.middle;
+      for (let idx = next.length - 1; idx >= 0; idx -= 1) {
+        if (doomed.has(next[idx]?.id)) next.splice(idx, 1);
+      }
+      if (root) next[r] = { ...root, children: childMap };
       return { ...prev, components: next };
     });
   }, []);
@@ -2038,17 +2337,32 @@ export default function Index({
   }, []);
 
   /**
-   * THE TITLE, AS THE SURFACE HOLDS IT — the read half of the pair above.
+   * THE PACKAGE'S OWN FACTS, AS THE SURFACE HOLDS THEM — the read half of the pairs above.
    *
-   * The bar is in the surface now, so the surface is where its value lives; this is how
-   * everything OUTSIDE the surface asks for it. `currentPromptSession.title` is a copy
-   * that follows a save, and reading it for a draft that has been named but never saved
-   * would give the previous name — or the fallback timestamp.
+   * The bar and the card are in the surface now, so the surface is where their values live; this is
+   * how everything OUTSIDE the surface asks for them. `currentPromptSession.title` and
+   * `.description` are copies that follow a save, and reading them for a draft that has been named
+   * but never saved would give the previous value — or nothing.
+   *
+   * ONE READER, AND IT IS THIS ONE. The seat beside the Run draws its buttons from the surface
+   * (`packageDescription`), so a review that read a different copy would hold the Run on a
+   * requirement the seat can see is already met — and disable the very button that would clear it.
+   * That is exactly what happened: measured 2026-09-23 on the Insurance News Scout package, the
+   * seat read a description the review was told was `(none)`. The order the two copies are read in
+   * is decided in shared/packageFacts, once, and this hands it the surface's own session.
    */
-  const surfaceTitle = useCallback((): string => {
-    const s = (surfaceDataModelRef.current as { session?: { title?: unknown } })?.session;
-    return typeof s?.title === 'string' ? s.title : '';
+  const surfaceSession = useCallback((): { title?: unknown; description?: unknown } => {
+    return (surfaceDataModelRef.current as { session?: { title?: unknown; description?: unknown } })?.session ?? {};
   }, []);
+
+  const surfaceTitle = useCallback((): string => {
+    return packageTitle(surfaceSession(), currentPromptSessionObjRef.current?.title);
+  }, [surfaceSession]);
+
+  /** The description, read the way the seat that judges it reads it. See shared/packageFacts. */
+  const surfaceDescription = useCallback((): string => {
+    return packageDescription(surfaceSession(), currentPromptSessionObjRef.current?.description);
+  }, [surfaceSession]);
 
   /**
    * THE DESCRIPTION INTO THE SURFACE, WHERE THE SEAT THAT JUDGES IT READS IT.
@@ -2339,6 +2653,11 @@ export default function Index({
       if (!section) return;
       patchSectionAt(null, section);
       hasUnsavedChangesRef.current = true;
+      // A ROW IS A NODE. Rebuild the drawing the moment a row appears, so a seat made in the
+      // prompt is on the canvas — and a node dropped on the canvas, which writes its row
+      // through this same event, stops being a draft. Whoever made it (the seat menu, an
+      // add-role, a chat button, the canvas), the row is the fact and the picture follows it.
+      publishFlowFromRows(section);
     };
     window.addEventListener('section-add', onSectionAdd);
 
@@ -2406,7 +2725,7 @@ export default function Index({
     // The writers are re-created when the model changes, so the listener is re-registered
     // with them: a handler holding the first render's copy would write from the model as
     // it was when the page loaded.
-  }, [surfaceSections, writeSectionsToSurface, patchSectionAt]);
+  }, [surfaceSections, writeSectionsToSurface, patchSectionAt, publishFlowFromRows]);
 
   // ── Keep a repair prompt in the column ────────────────────────────────────
   // No dependency array, on purpose: this re-asserts AFTER EVERY COMMIT.
@@ -2809,8 +3128,11 @@ export default function Index({
      * surface settles. The record carries it if the seat does not exist yet (see
      * shared/arrival); the event carries it if one is already up.
      */
-    markArrival('resume');
-    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume' } }));
+    markArrival('resume', sessionId);
+    // ADDRESSED TO THE PACKAGE BEING OPENED. The announcement is broadcast, so the seat it names
+    // is what keeps another seat's panel from answering it — see shared/arrival for the measurement
+    // that made this necessary.
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume', sessionId } }));
     await assembleSurfaceThenRepairs(`render-session:${sessionId}`);
 
     // Force full re-render to dispatch sections to textareas
@@ -3183,6 +3505,15 @@ export default function Index({
           id: session.id || null,
           userId: 'default-user',
           title: session.title || dataModel.suggested_title || 'New Prompt Agent',
+          /*
+           * THE DESCRIPTION RIDES THE SAME HOP AS THE WORKSPACE BELOW, and for the same reason:
+           * the surface holds it (`/session/description`) and this object did not carry it, so the
+           * row's copy was undefined for every package opened — and the pre-Run review, which read
+           * this copy, told the person their description was missing while the seat beside the Run
+           * read it off the surface and disabled the button that would have added it. One fact and
+           * one reader now (shared/packageFacts), and this is the copy that reader falls back to.
+           */
+          description: session.description || '',
           leftColumnContent,
           compiledOutput: session.middle_column?.compiled_output || '',
           conversationId: session.right_column?.conversation_id || null,
@@ -3562,6 +3893,18 @@ export default function Index({
       // instantly for the indicator; the spinner covers the surface during assembly.
       setIsAIAssembling(true);
       handleHeaderTabChange('console');
+      /*
+       * THE CONSOLE'S OWN ARRIVAL — it used to announce nothing at all.
+       *
+       * Its panel therefore greeted on whatever record happened to be left pending, and the last
+       * thing to leave one is a package open: that is how a PACKAGE's greeting was written into the
+       * console's own conversation (measured 2026-09-23: 31 of that thread's 69 messages were about
+       * another package's prompt). A landing now says so itself. The kind carries no session id
+       * because the console's session is a server fact that arrives WITH the assembly — the panel
+       * answers this one from its own scope read, which is the same fact its greeting waits on.
+       */
+      markArrival('console');
+      window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'console' } }));
       // Console is read-only — unsaved changes in the composer do not block navigation.
       console.log('🤖 [A2UI] Console clicked → intent: render-console (direct, no gate)');
       await assembleSurfaceThenRepairs('render-console', {
@@ -3644,6 +3987,28 @@ export default function Index({
     }
 
     console.log(`🤖 [A2UI] Initial mount → intent: ${initialIntent}`);
+
+    /*
+     * A LOAD IS AN ARRIVAL, AND IT SAYS SO — exactly as pressing the Console tab does.
+     *
+     * This was the one path that never announced anything, so a person who opened the console
+     * (or reloaded it) got a silent seat: her greeting is what answers an arrival, and with no
+     * arrival announced there was nothing for her to answer. Measured 2026-09-23 — the owner,
+     * after a reload: "Grace is gone, she doesn't talk anymore", while the same console greeted
+     * correctly the moment the Console tab was pressed.
+     *
+     * The kind is 'console' and carries no session id: the console's session is a server fact
+     * that arrives WITH the assembly, and the seat answers this one from its own scope read —
+     * the same fact its greeting waits on (see `_seatIsConsole` in chat-panel).
+     *
+     * NOT ANNOUNCED FOR A PACKAGE. A session in the URL means this load is a package, and a
+     * package's arrival is announced where it is opened (`markArrival('resume', sessionId)`),
+     * because opening one is an act with its own address.
+     */
+    if (!routeSessionId) {
+      markArrival('console');
+      window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'console' } }));
+    }
 
     // THE ORDER: the surface first, alone; the checker's findings after it lands.
     //
@@ -3819,16 +4184,16 @@ export default function Index({
       return;
     }
 
-    if (currentPromptSession && conversationId && currentPromptSession.conversationId !== conversationId) {
+    if (currentPromptSession && (conversationId === null || currentPromptSession.conversationId !== conversationId)) {
       // Update local state only. Conversations are package-owned: the conversation
       // row already carries session_id — prompt_sessions.conversation_id was dropped.
-      setCurrentPromptSession(prev => prev ? { ...prev, conversationId } : null);
+      setCurrentPromptSession(prev => prev ? { ...prev, conversationId: conversationId ?? null } : null);
       // The ref must move in the SAME tick: the seat dispatches the first
       // call's a2ui:usage right after conversation-change, and the usage
       // accumulator reads this ref synchronously. An effect-run update would
       // still hold the old conversation and drop the first call's numbers.
       if (currentPromptSessionObjRef.current) {
-        currentPromptSessionObjRef.current = { ...currentPromptSessionObjRef.current, conversationId };
+        currentPromptSessionObjRef.current = { ...currentPromptSessionObjRef.current, conversationId: conversationId ?? null };
       }
 
       // ── AND THE MODEL HAS TO LEARN IT, OR THE SEAT FORGETS EVERY TURN ──────
@@ -3871,7 +4236,18 @@ export default function Index({
     };
     const onConversationChange = (event: Event) => {
       const detail = ((event as CustomEvent).detail || {}) as { conversationId?: string };
-      if (!detail.conversationId) return;
+      /*
+       * AN EMPTY ID IS A FACT, NOT A MISSING ONE — and dropping it cost a save.
+       *
+       * This returned on any falsy id, so the one case that needed the model to hear it was the
+       * one thrown away: the seat moving OFF a conversation (the person removed the thread they
+       * were in — see _removeConversation). The model kept the deleted id, Save wrote it into
+       * `prompt_sessions.conversation_id`, and the foreign key refused it — "AI save failed: 500",
+       * the owner, 2026-09-23: "if we fix the conversation ID and it works, then suddenly saving a
+       * prompt doesn't work anymore." `undefined` is still nothing to report; an EMPTY STRING is
+       * "this place has no conversation", and it is written like any other value.
+       */
+      if (detail.conversationId === undefined) return;
       // Which tree raised it decides which path is written. Both seats dispatch this same
       // event, and each reads its conversation from its own path — the composer's seat from
       // /session/right_column/conversation_id, the console's from /console/conversation_id —
@@ -3881,7 +4257,9 @@ export default function Index({
         ? (event as Event & { composedPath: () => EventTarget[] }).composedPath()
         : [];
       const consoleSpeaking = !!consoleRendererRef.current && path.includes(consoleRendererRef.current);
-      handleConversationChange(detail.conversationId, consoleSpeaking ? 'console' : 'composer');
+      // An empty id travels as NULL — the one value that means "no conversation here", and the one
+      // the save can write into a nullable foreign key.
+      handleConversationChange(detail.conversationId || null, consoleSpeaking ? 'console' : 'composer');
     };
     /**
      * THE CANVAS'S OWN FOUR EVENTS.
@@ -3953,6 +4331,49 @@ export default function Index({
       // The view's own gestures are not news: one line per wheel notch would bury
       // the operator's feed under the canvas's zoom.
       if (action === 'zoom' || action === 'fit') return;
+      /*
+       * DELETING A NODE IS DELETING ITS ROW — AND SHE IS THE ONE WHO ASKS.
+       *
+       * The brief's last increment: "Removing a node removes its row — through `remove-seat`, and
+       * with her asking first, exactly as a row removal does today" (READ-ME/CANVAS-AND-PROMPT.md
+       * §4.5). So this does NOT delete anything. It tells her what was pressed and hands her the
+       * facts, and the removal happens the way every other removal in this app happens: as a
+       * button she offers and the person presses (`remove-seat:<name>`, the one destructive repair
+       * that already exists — see actionLink).
+       *
+       * WHAT SHE IS GIVEN, so her sentence is about THIS node: whether it is a row at all, which
+       * row, and whether that row holds words — because "remove it" costs nothing on an empty row
+       * and costs work on a written one, and only one of those deserves a warning. A STEP node is
+       * not a row (it is what a Run does — the answer, the write, the check), so it cannot be
+       * removed here, and she says so rather than offering a button that would remove nothing.
+       */
+      if (action === 'delete') {
+        const nodeId = String(detail.nodeId || '');
+        type FlowNodeShape = { id: string; family: string; kind: string; title: string; subtitle?: string };
+        const nodes = deepFind<HTMLElement & { flow?: { nodes?: FlowNodeShape[] } }>('agent-flow')?.flow?.nodes ?? [];
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const row = surfaceSections().find((s: any) =>
+          String(s?.name || '').trim().toLowerCase() === String(node.title || '').trim().toLowerCase());
+        const words = row ? String(row.content || '').trim().length : 0;
+        const isRow = node.family === 'seat' && Boolean(row);
+        window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+          detail: {
+            request: isRow
+              ? `A person pressed Delete on the node called "${node.title}" on the canvas. That node IS a `
+                + `row of the prompt — the ${node.title} row — so removing it removes the row. `
+                + (words
+                  ? `IT IS NOT EMPTY: it holds ${words} characters the person wrote, so say what would be lost. `
+                  : 'The row is empty, so nothing written would be lost and you can say so plainly. ')
+                + `ASK FIRST, as a button: [Remove ${node.title}](action:remove-seat:${row?.name ?? node.title}). `
+                + 'Do not remove it yourself and do not ask a second question — one sentence, one button.'
+              : `A person pressed Delete on the node called "${node.title}" on the canvas. That node is not a `
+                + 'row of the prompt — it is part of what a Run does (the answer, the write, the check), so '
+                + 'there is nothing to remove and no button to offer. Say that in one sentence: what it is, '
+                + 'and that it goes when the prompt that produced it changes.',
+          },
+        }));
+      }
       logger.info(`flow action: ${action}`, detail);
     };
     /**
@@ -4079,22 +4500,56 @@ export default function Index({
       }));
     };
     /**
-     * A NODE THE PERSON PULLED OUT OF THE CANVAS — a draft, and it says so.
+     * A NODE THE PERSON PULLED OUT OF THE CANVAS IS A ROW IN THE PROMPT.
      *
-     * The canvas keeps its own edits locally and writes nothing back yet (the reasons
-     * are recorded in AGENTIC_EDITOR/10-TODO.md W1/W2): the node is drawn, carries an
-     * `unsaved` badge, and the session knows nothing about it. Saying that out loud is
-     * the difference between a working area and a surface that looks like it saved.
+     * THIS USED TO SAY THE OPPOSITE, and it was honest then: the node was a draft, the drawing
+     * had it and the package did not, and nothing was saved. That is the thing this replaces.
+     * The brief's one invariant is that every node action has a prompt meaning or it does not
+     * exist, because a node that lives in the drawing and nowhere else is a lie told by the
+     * picture — and the picture is what a person trusts most (READ-ME/CANVAS-AND-PROMPT.md §2).
+     *
+     * SO THE ADD IS A WRITE, through the person's own path rather than a second one. `_seatFor`
+     * in <prompt-section-editor> already makes a row that is not there — named from the
+     * declaration, label and type together, never a spelling the drawing invented — and it is
+     * reached by the same `set-left-column-text` a chat button uses. The row starts EMPTY: the
+     * words are the person's own, and they are one set of words whether typed in the row or read
+     * off the node. The drawing is rebuilt from the rows the moment it lands (publishFlowFromRows
+     * through the `section-add` listener), which is also what retires the element's draft.
+     *
+     * AND WHEN IT CANNOT BE DONE, GRACE SAYS SO — she is on the right, watching, and this is
+     * her half of it. Two refusals, both hers to deliver:
+     *   · a kind no seat is declared for — a row invented for it would be drawn with a shape
+     *     nobody agreed on (promptSections' UNDECIDED rule);
+     *   · a row the prompt already has — where the only write available would SET that row's
+     *     content and erase words the person cannot see.
+     * Making a mistake on the canvas is ALLOWED, and the node may sit there red. What is not
+     * allowed is silence about it: this is a training tool as much as it is a flow, and the
+     * person learns by being told, in her words, that it does not work here.
      */
     const onFlowNodeAdded = (event: Event) => {
       const d = ((event as CustomEvent).detail || {}) as { nodeId?: string; kind?: string };
-      logger.info('flow node added (draft)', d as Record<string, unknown>);
-      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-        detail: {
-          role: 'assistant',
-          content: `Added a ${d.kind || 'node'} on the canvas. It is a draft — this drawing has it and the package does not, so nothing is saved yet.`,
-        },
+      logger.info('flow node added', d as Record<string, unknown>);
+      const said = (content: string) => {
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: { role: 'assistant', content },
+        }));
+      };
+      const answer = rowForAddedNode(String(d.kind ?? ''), surfaceSections() as FlowSeatInput[]);
+      if (answer.why === 'undeclared') {
+        said(`That node is not a row this prompt can hold, so it was not added. `
+          + `Its kind — "${d.kind || 'unnamed'}" — is not one of the seats a prompt has.`);
+        return;
+      }
+      if (answer.why === 'already') {
+        said(`This prompt already has a ${answer.label} row, and the node is that row — `
+          + `so nothing was added, and nothing in it was touched.`);
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('set-left-column-text', {
+        detail: { target: answer.section, content: '' },
       }));
+      said(`Added a ${answer.label} row to the prompt. Write in either place — `
+        + `the row and the node are the same thing.`);
     };
     window.addEventListener('flow-node-moved', onFlowNodeMoved);
     window.addEventListener('flow-node-added', onFlowNodeAdded);
@@ -4115,12 +4570,21 @@ export default function Index({
       const theme = String((event as CustomEvent).detail?.theme ?? '');
       setWorkspaceTree((prev) => {
         const comps = Array.isArray(prev.components) ? prev.components : [];
-        const next = comps.map((c: any) => {
-          if (c?.id === 'canvas-footer-view' || c?.component === 'AgentCanvas' || c?.id === 'flow-view') {
-            return { ...c, theme };
-          }
-          return c;
-        });
+        /*
+         * BY ROLE, NOT BY ID — the tone reaches the three components that take it: the CONTAINER
+         * (whose ground her column stands on), the DRAWING (which owns the ink and the grid) and
+         * the column's FOOT (its own tone switch). This listed the ids the host used to invent
+         * (`canvas-footer-view`, `flow-view`) and the model names its components now, so two of the
+         * three silently stopped taking the tone: the switch moved the canvas and left the foot and
+         * the drawing behind. The component NAMES are the contract — they are what the catalog
+         * validates and what the assembly emits. The owner, on the class of fault: "one fact, one
+         * reader" (READ-ME/CONTINUE-HERE.md §4).
+         */
+        const takesTheme = (c: any) =>
+          c?.component === 'AgentCanvas'
+          || c?.component === 'AgentFlow'
+          || c?.component === 'CanvasFooter';
+        const next = comps.map((c: any) => (takesTheme(c) ? { ...c, theme } : c));
         return { ...prev, components: next };
       });
     };
@@ -4132,7 +4596,7 @@ export default function Index({
      *   canvas-play   the same run the control bar's RUN makes: this dispatches the request
      *                 the editor's own button dispatches, so there is one run path, not two
      *   canvas-reset  the way back that the column's own selector was supposed to give: the
-     *                 middle column returns to the last output (setOutputColumn('output'))
+     *                 middle column returns to the last output (showOutputColumn)
      *   canvas-save   the same save as Save Template, which is also what a Run does before
      *                 it runs — the owner's "save options… when they run and when they exit"
      *
@@ -4141,7 +4605,7 @@ export default function Index({
      */
     const onCanvasPlay = () => window.dispatchEvent(new CustomEvent('run-requested'));
     const onCanvasReset = () => {
-      setOutputColumn('output');
+      showOutputColumn();
       /*
        * AND THE REST OF THE PLACE GOES BACK WITH IT. The swap above takes the canvas out of the
        * middle column; the ARRANGEMENT — the prompt out of its rail, her column open at her
@@ -4161,7 +4625,17 @@ export default function Index({
     const setFooterSaving = (saving: boolean) => {
       setWorkspaceTree((prev) => {
         const comps = Array.isArray(prev.components) ? prev.components : [];
-        const next = comps.map((c: any) => (c?.id === 'canvas-footer-view' ? { ...c, saving } : c));
+        /*
+         * BY ROLE, NOT BY ID, and this one was invisible until the owner looked at the button:
+         * "same spinner was on the save button but now it's gone." It matched `canvas-footer-view`
+         * — an id the HOST handed the footer when it wrote the canvas itself — so once the model
+         * began assembling the column (read-run; the footer is `<middle id>-footer` now) this map
+         * matched nothing, and the canvas's Save spun only in the version of the app that no
+         * longer exists. A miss here is silent by construction, which is why the id had to go.
+         */
+        const isFooter = (c: any) =>
+          c?.component === 'CanvasFooter' || c?.component === 'canvas-footer';
+        const next = comps.map((c: any) => (isFooter(c) ? { ...c, saving } : c));
         return { ...prev, components: next };
       });
     };
@@ -4246,6 +4720,15 @@ export default function Index({
     const stored = currentPromptSession?.workspace;
     storedWidthsRef.current = currentPromptSession?.columnWidths ?? null;
     /*
+     * THE PLACES THIS PACKAGE WAS LEFT WITH — read here, where its own save is in hand, and
+     * replaced on every open: a package with no graph clears them, so a layout the previous
+     * package carried can never be drawn under this one's rows. The places are NOT applied to a
+     * drawing here (there is none until a Run — see below); they are held for the builder, which
+     * is what draws a Run, and the element's own `drawn` is what writes them back on Save.
+     */
+    const savedNodes = stored?.graph?.nodes;
+    carriedPositionsRef.current = Array.isArray(savedNodes) ? savedNodes : [];
+    /*
      * THE PROMPT IS ON SCREEN WHEN A PACKAGE OPENS, AND THAT DOES NOT DEPEND ON A SAVE.
      *
      * Above the `stored` guard on purpose: an unsaved package, or one whose workspace was never
@@ -4306,6 +4789,12 @@ export default function Index({
     // was written to do ("an element that never appears is a view that is not open, not an
     // error"). A reopened package therefore draws at the default view, and the arrangement
     // is re-established by the operator's own Run.
+    //
+    // AND THE PLACES COME BACK WITH IT. Position is the drawing's one own fact, so the nodes
+    // this graph carries are held (carriedPositionsRef, above) rather than shown: the Run that
+    // builds the next graph is handed them, and it draws the person's own layout instead of the
+    // default ring on top of it. Nothing is applied to an element here, so the rule above holds
+    // — the canvas appears when it is asked for, and it appears where it was left.
     const graph = stored.graph;
     if (stored.middle !== 'output' && graph && graph.nodes?.length) {
       writeFlowToSurface(graph);
@@ -4509,28 +4998,17 @@ export default function Index({
   // Clear-output collapses the middle column. Save persists both left content + compiled output.
   const handleRunRequested = async (e: Event) => {
     const detail = ((e as CustomEvent).detail || {}) as { sections?: any[] };
-    const fromEditor = detail.sections || [];
-    // The editor is the source of truth for what a person can see and edit — but it
-    // is a MOMENT, not a state. The column is swapped while a surface lands, and a
-    // Run that arrives inside that window reads back an empty editor. Two things
-    // this app already knows are read in turn rather than running nothing (and
-    // rather than blaming a save for a payload that was never sent):
-    //   1. the repair prompt it put in the column (held until this Run answers it),
-    //   2. the package's own left column, which is what the column was built from.
-    const fromRepair = repairSectionsRef.current || [];
-    const fromSession = (() => {
-      try {
-        const raw = currentPromptSessionObjRef.current?.leftColumnContent;
-        return raw ? (JSON.parse(raw).sections || []) : [];
-      } catch {
-        return [];
-      }
-    })();
-    const sections = fromEditor.length ? fromEditor : (fromRepair.length ? fromRepair : fromSession);
+    // THE ONE READER (rowsForDecision above). It prefers the editor — and reads the ELEMENT
+    // rather than trusting what this event carried, so the list reviewed is the list in the
+    // column whether or not the payload travelled well. Its fallbacks are the repair prompt and
+    // the package's own left column, for the swap window: a Run that arrives while the column
+    // is being replaced reads back an empty editor, and running what the column held a moment
+    // ago beats running nothing (and beats blaming a save for a payload that was never sent).
+    const sections = rowsForDecision();
     console.log(
       '[WritingAreaIndex] run-requested from <prompt-section-editor>',
-      `${fromEditor.length} section(s) from the editor`,
-      fromEditor.length ? '' : `— editor empty, running the ${sections.length} the column holds`,
+      `${sections.length} section(s) from the column`,
+      detail.sections?.length === 0 ? '— the event carried none' : '',
     );
 
     // ── HER REVIEW, BEFORE THE RUN ───────────────────────────────────────────
@@ -4545,15 +5023,25 @@ export default function Index({
     // Defaulting to "go" on a missing answer is how a prompt with a named problem goes
     // through because the machinery assumed yes.
     //
-    // AND IT IS HERS TO SWITCH OFF. `autoAdvice` is the same flag that stops her greeting
-    // packages and offering next steps — one preference, one switch, because "I do not
-    // want to be advised" is one preference. A run that reaches this point with it off
-    // proceeds as it always did.
+    // AND THAT SWITCH IS NOT THIS GATE — IT WAS, AND IT SILENTLY TOOK THE REVIEW AWAY.
+    //
+    // `autoAdvice` is the "stop offering me suggestions" preference: pressing "No thanks" on one
+    // of her offers sets it, and it is measured per page (shared/autoAdvice). The review was
+    // gated on that same flag, so a person who had waved away ONE suggestion ran every later
+    // prompt unreviewed — no hold, no blockers, no reply — and the requirement this branch exists
+    // for ("if there's an unsaved prompt and somebody tries to run it, Grace is supposed to stop
+    // them", READ-ME/FLOW-REQUIREMENTS.md) was gone while every test still passed. The owner,
+    // 2026-09-23, after pressing "No thanks" once: "When I click on a card and then I click on
+    // run, nothing happens. Grace doesn't talk anymore. Nothing happens. … All of the blockers
+    // checking is gone."
+    //
+    // SO THE REVIEW IS NOT OPTIONAL. It is the app's own gate, asked once per Run, and only her
+    // answer releases it. The advice preference governs what she VOLUNTEERS (a greeting, a
+    // suggestion about where to go next) — not whether a Run is checked before it runs.
     //
     // `runApprovedRef` is set by the approval event and read here: the released run
     // arrives as the same `run-requested` and must pass the gate it was just cleared by.
-    const gateOn = autoAdviceOn();
-    if (gateOn && !runApprovedRef.current) {
+    if (!runApprovedRef.current) {
       // Held, and the held payload is what her approval will release.
       heldRunRef.current = detail;
       /*
@@ -4566,11 +5054,16 @@ export default function Index({
        * whole of it, and she takes it down again — with her verdict (run-approved re-enters
        * this handler and runs, run-blocked stops it) — never on a timer of the shell's.
        */
-      runBusyFromRef.current = Date.now();
-      setRunControlsBusy(true);
+      setIsComposerRunning(true);
       const heldSections = sections;
-      const title = surfaceTitle() || currentPromptSessionObjRef.current?.title || '';
-      const description = String(currentPromptSessionObjRef.current?.description || '').trim();
+      /*
+       * BOTH FACTS FROM THE ONE READER THE SEAT USES. The title already read the surface; the
+       * description read the session row, and the assembly never filled that row's copy — so a
+       * package whose description was on screen was reviewed as `(none)`, I2 held the Run, and the
+       * "Add description" button was disabled because the SEAT could see it. See shared/packageFacts.
+       */
+      const title = surfaceTitle();
+      const description = surfaceDescription();
       // SHE REVIEWS THE WORDS, NOT A SUMMARY OF THEM. "Agent Role: has content" tells her
       // nothing she can act on — a seat can be non-empty and still be a bad instruction,
       // which is the thing this gate exists to catch. Each seat goes in whole, cut only
@@ -4601,7 +5094,28 @@ export default function Index({
        * and the list of tools is a fact she is usually given anyway (the workspace context
        * carries it). An empty answer here says "nothing found", not "nothing exists".
        */
-      const cannotRun = await toolsThatCannotRun(heldSections);
+      const register = await readToolRegister();
+      const cannotRun = await toolsThatCannotRun(heldSections, register);
+      /*
+       * THE BLOCKERS, COMPUTED HERE — THE WHOLE LIST, ONCE.
+       *
+       * She used to be handed the requirements as prose and left to work out which were unmet,
+       * inside a reply capped at 2000 tokens. What the person got was a slightly different
+       * subset each turn, with "Add description" arriving after the description had been
+       * written. The list is arithmetic — READ-ME/FLOW-REQUIREMENTS.md §8 asks the question
+       * itself ("a review that asks a model to count empty seats is paying for arithmetic") —
+       * so the shell does the arithmetic and she does the talking. The owner, 2026-09-23:
+       * "she only replies to the things that are needed… give the user the ability to apply
+       * all. Previously she was handing those over one at a time, which we don't want."
+       */
+      const unmet = reviewFlow({
+        title,
+        description,
+        // An id is what "saved" means here: no id, no row, no place for a description to live.
+        saved: Boolean(currentPromptSessionObjRef.current?.id),
+        sections: heldSections,
+        register,
+      });
       window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
         detail: {
           // THIS TURN CAN STOP SOMETHING, so the seat is told which kind of turn it is. It owes
@@ -4625,17 +5139,46 @@ export default function Index({
                   '',
                 ]
               : []),
-            'Review it against the requirements list before Run:',
-            'the package needs a name and a description; the Agent Role and the User Role need',
-            'content; no seat may be present and empty; any tool it names must exist in the',
-            'register; no two seats may stand for the same step; and the instruction has to say',
-            'one job completely enough that a person who did not write it could still do it.',
+            'THE BLOCKERS ARE ALREADY FOUND. This is the WHOLE list — every unmet requirement,',
+            'computed from the prompt itself. Reply only to what is needed: say these, in this',
+            'one reply. Do NOT add to the list, do NOT re-derive it, and do NOT look for more —',
+            'the person can work everything here in one pass, and a list that arrives a piece at',
+            'a time hides how much is left.',
+            ...(unmet.length
+              ? unmet.map((u) => `  · ${u.id}${u.level === 'advisory' ? ' (advisory — worth saying, does not hold the Run)' : ''} — ${u.why}`)
+              : ['  · nothing — every requirement is met.']),
             'THE SEATS ARE THE DRAWING. What is listed above is exactly what the canvas will',
             'draw as nodes, so two rows for one step is two nodes for one step, and it is a',
             'reason to hold this Run. It is not a reason to tell anybody off: the person may',
             'have made the second row without meaning to, or may want two — say what you see in',
             'one sentence and offer to combine them as a button the person can press. The merge',
             'moves their words as they wrote them; it does not retype them.',
+            /*
+             * THE VOCABULARY, NAMED. She was told to offer "a button for each fix" and never told
+             * what a button may SAY, so the blockers came back as `[Save the package](action:save)`
+             * and `[Name the package](action:set-title|…)` — correct intent, names the app did not
+             * answer to, and a person pressing them was told so (measured 2026-09-23). The app now
+             * answers those two as well as the ones below it (actionLink), and this list is the
+             * other half of the same rule: name the action so she is not left to invent one.
+             *
+             * EVERY FORM HERE IS PARSED BY actionLink.ts. Adding a line to this list without a
+             * matcher on the other end is how this list becomes a lie.
+             */
+            'IF YOU OFFER A BUTTON, IT MUST SPELL AN ACTION THE APP KNOWS. These are the ones,',
+            'exactly as written (the words in <angle brackets> are yours to choose):',
+            '  · [Save the package](action:save) — the package has no record yet; nothing else can',
+            '    be written into it until it is saved.',
+            '  · [Name the package](action:set-title|<the name>) — the title a person will see.',
+            '  · [Add a description](action:set-description|<one line>) — what its card will say.',
+            '  · [Fill the <seat>](action:write-seat:<seat>|<the text>) — writes or appends to that',
+            '    row (System Role, User Role, Agent Role, Tool Call…).',
+            '  · [Remove <row>](action:remove-seat:<row>) — the one destructive repair.',
+            '  · [Move the tool](action:move-tool:<tool>|<the seat it belongs in>).',
+            '  · [Apply all](action:fix-all) — the repairs the app can make for itself, in one press.',
+            '  · [Run it](action:run) — ONLY after <run_ok/>, to release the Run you just cleared.',
+            'A button with any other action is a button that does nothing, and the person is told',
+            'the app cannot do it — so if a fix you want to offer is not in this list, say what',
+            'needs doing in words instead of inventing a name.',
             'NAME EVERYTHING THAT IS WRONG, IN THIS ONE REPLY, AND NEVER ONE AT A TIME. Every',
             'unmet requirement goes in this single answer, each with its own button, so the person',
             'can work the whole list in one pass. A reply that names one thing and waits costs',
@@ -4657,6 +5200,41 @@ export default function Index({
           ].join('\n'),
         },
       }));
+      /*
+       * APPLY ALL, PUT ON SCREEN — because until now it was not.
+       *
+       * The whole mechanism existed and nothing could reach it: `onFixAll` listens for
+       * `a2ui:fix-all`, <chat-panel> dispatches it, and `actionLink` names the action — and NO
+       * SURFACE EVER DREW A BUTTON WITH IT, and nothing ever told her to offer one. So the one
+       * control that clears the repairs the app can make for itself, and then runs the prompt by
+       * the button's own path, was unreachable on every screen. What the person got was the
+       * owner's report exactly: a list of blockers, and no way to work them.
+       *
+       * THE APP SAYS IT, NOT HER, and that is the choice rather than the shortfall: this is a
+       * statement about what the APP can do, the same kind of fact as "⚠️ Run did nothing" and the
+       * blank seats it already speaks. She explains the requirements; the app offers its own
+       * capability. The line is written to stand on its own, because her review arrives after it.
+       *
+       * OFFERED EXACTLY WHEN A PRESS WOULD DO SOMETHING, from the SAME predicate the apply uses
+       * (`runHoldingRepairs`) — so the button and the act cannot come apart. The names come from
+       * the repairs actually on this list, so the sentence is about THIS prompt and not a menu.
+       */
+      const applyable = runHoldingRepairs(unmet);
+      if (applyable.length) {
+        const kinds = new Set(applyable.map((u) => u.repair.kind));
+        const named: string[] = [];
+        if (kinds.has('merge-seat')) named.push('a row that stands twice');
+        if (kinds.has('move-tool')) named.push('a tool sitting in the wrong step');
+        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+          detail: {
+            role: 'assistant',
+            content: `Some of what is wrong with this prompt the app can fix by itself — `
+              + `${named.join(' and ')}. [Apply all](action:fix-all) makes those repairs; `
+              + `whatever needs your own words is still yours to write.`,
+            label: 'Apply all',
+          },
+        }));
+      }
       /*
        * AND THE ROOM STAYS WHERE IT IS. The Run button docks the prompt and gives the width to
        * the canvas — the layout's own act, armed the moment the button is clicked (see
@@ -4720,9 +5298,6 @@ export default function Index({
       prev ? { ...prev, leftColumnContent, compiledOutput: '' } : prev
     );
     setIsComposerRunning(true);
-    // THE SPINNER GOES ON NOW, not when the tree catches up. See setRunControlsBusy.
-    runBusyFromRef.current = Date.now();
-    setRunControlsBusy(true);
 
     // ── THE PROMPT DOCKS, AND THE CANVAS TAKES THE WIDTH ────────────────────
     //
@@ -4753,7 +5328,24 @@ export default function Index({
             level: repairFinding.level,
           }
         : null,
-      sections: (sections || []).map((s: any) => ({ name: s.name, type: s.type, content: s.content })),
+      /*
+       * THE ROWS GO OVER WHOLE — and they have to, because this used to pick three fields out of
+       * four and the fourth was the name. A SAVED row is `{section, role, content}`: it has no
+       * `name` and no `type`, so `{name: s.name, type: s.type}` handed the drawing two rows per
+       * package that could not be named at all. The canvas said so out loud, honestly and wrongly —
+       * "One row I cannot name yet — a row with no name, a row with no name" — and drew the System
+       * and User seats as unresolved nodes while the prompt beside it was perfectly named.
+       *
+       * `declaredName` is the one reader of that name (promptSections), so this asks it rather than
+       * choosing fields. The rest of the row rides along untouched: the builder decides what it
+       * needs, and a mapping here that chose for it is how the name went missing in the first place.
+       */
+      sections: (sections || []).map((s: any) => ({
+        ...s,
+        name: declaredName(s),
+        type: s.type,
+        content: s.content,
+      })),
       label: repairTitleRef.current
         || (repairFinding
           ? `Repair — ${repairFinding.check}${repairFinding.component ? ` on ${repairFinding.component}` : ''}`
@@ -4761,45 +5353,138 @@ export default function Index({
     };
     flowFactsRef.current = { running: true };
     /*
-     * THE PROMPT CLOSES FIRST. THE PICTURE ARRIVES AFTER IT.
+     * THE RUN'S OPENING MOVE, IN THE ORDER A PERSON CAN TRACK — and the order is the owner's, from
+     * watching it happen the wrong way round.
      *
-     * These are two movements, and they used to be one: the canvas was published immediately and
-     * the prompt folded around it, so the drawing took its width while the pane beside it was
-     * still moving — and the drawing's own contents were stretched across the gap that opened
-     * between them. Watched at the screen, 2026-09-23: "the left panel slams to the left real
-     * fast and then there's some trailing pieces of component that follows … it's actually
-     * pulling over the canvas controls with it. They should not be sliding in, they should load
-     * behind."
+     * THE CLICK ANSWERS FIRST, AND IT KEEPS ANSWERING. The controls are told at the click (see
+     * `writeBusyToSurface` above), so the RUN button spins under the person's finger while the rest
+     * of this happens — and the button is still there, because nothing has folded yet.
      *
-     * SO THE TWO ARE SEPARATED BY A BEAT THE PERSON CAN SEE. The prompt closes at its own pace
-     * (the pane's 520ms curve, from the layout's own stylesheet), and only then is the drawing
-     * mounted — into a pane that is already the size it will be, so nothing about it slides,
-     * stretches or follows anything in. What the person tracks is: the button spins, the prompt
-     * folds, the picture is there.
+     * THEN THE COLUMN IS ASSEMBLED, WITH THE PANELS WHERE THEY ARE. The model composes the third
+     * column against the catalog (`assembleThirdColumn`) while the canvas's code is fetched and
+     * while the run itself is already going out — one wait, three jobs, on screen as a spinner.
      *
-     * THE DELAYS ARE THE FEATURE. They are what makes an event legible as an event rather than
-     * as a glitch, and they are named here so they can be tuned as one thing rather than hunted
-     * for across three files.
+     * THEN THE DOORS SLIDE — `dockPrompt()`, once the column is in hand. This is the piece the
+     * owner asked for twice and it is load-bearing: "the assembly should start in the background and
+     * then the slide panels should slide back. That's just after you click run." Docking at the
+     * CLICK folded the prompt to its rail before the model had answered, and the rail is where the
+     * control bar — and the spinning RUN button — lives. So the wait began by taking away the only
+     * thing that said the click had been heard.
+     *
+     * AND THE CANVAS MOUNTS INTO A SETTLED LAYOUT: the dock is one movement (the prompt and her
+     * column to their rails on the same 760ms curve — measured: 950 → 60 and 950 → 104 together,
+     * and her pane turns into a layer over the drawing without moving a pixel), the pane has its
+     * own waiting state while the room is empty, and the canvas goes in when the slide is over.
+     * That ordering is the cure for the jump the drawing used to arrive with: a canvas that mounts
+     * while the pane beside it is moving takes its width mid-flight and is seen sliding in (see the
+     * layout's own note, and the prompt's fold, which was cured the same way).
+     *
+     * NOTHING HERE IS TIMED EXCEPT THE SLIDE. There is no beat to hold, no floor to wait out: the
+     * model's own time is the wait, and `RUN_DOCK_MS` is the pane's transition — the one moment the
+     * canvas must not mount into.
      */
     const layoutEl = deepFind<HTMLElement & { dockPrompt?: () => void }>('workspace-layout');
-    layoutEl?.dockPrompt?.();
-    window.setTimeout(() => {
-      setOutputColumn('flow');
+    /*
+     * AND THE COLUMN IS TOLD IT IS WORKING FROM THE CLICK — not from the moment its own assembly
+     * lands. On a SECOND Run the canvas is already on screen with the previous drawing in it, and
+     * the wait for the model is the longest part of the wait: a picture sitting there unchanged
+     * for four seconds is the silence this whole sequence exists to remove. The same call covers
+     * both cases (it is idempotent, and it waits for an element that does not exist yet on a
+     * first Run) — see setCanvasHolding.
+     */
+    setCanvasHolding(true);
+
+    void (async () => {
+      // BOTH ARRIVE BEFORE EITHER IS USED: the canvas's own code (fetched on the way in, never
+      // with the bundle — a package opened and never run pays for neither the drawing nor its
+      // 591KB ground) and the model's composition of the column.
+      const [, assembled] = await Promise.all([loadCanvasElements(), assembleThirdColumn()]);
+
+      /*
+       * THE DOORS OPEN WHEN THE COLUMN IS READY — NOT BEFORE, AND THAT IS THE ORDER THAT KEEPS THE
+       * RUN BUTTON ON SCREEN.
+       *
+       * The dock was called at the CLICK, and the dock is what folds the prompt to its rail — and
+       * the prompt's rail is where the control bar lives, with the RUN button on it. So the one
+       * control the person had just pressed was taken off the screen at the exact moment the wait
+       * began, and there was nothing anywhere that said the click had been heard. The owner,
+       * 2026-09-23: "the user cannot click something and nothing happened, that is not allowed …
+       * there is an animation on that run button and it should run until the panels expand."
+       *
+       * He had said the order a session earlier and it is the same order: "the assembly should start
+       * in the background and then the slide panels should slide back. That's just after you click
+       * run." Both halves are now true:
+       *
+       *   the click        the button spins (the controls are told at the click, see above)
+       *   the assembly     the MODEL composes the column — the wait a person actually has, filled
+       *                    by that spinner, on a button still under their finger
+       *   the colum is ready
+       *                    the doors slide: `dockPrompt()` closes the prompt and her column in one
+       *                    frame, the room opens, and the pane has its own waiting state (see
+       *                    workspace-layout's `_runInFlight`) so it is never an empty rectangle
+       *   RUN_DOCK_MS later  the canvas mounts — into a layout that has already settled, which is
+       *                    the cure for the drawing being seen sliding in — and the drawing follows
+       *                    in the same tick.
+       *
+       * NO FLOOR IS ADDED TO ANY OF IT: the model's own time is the wait, and the only timed thing
+       * here is the pane's own 760ms slide, which is the moment the canvas must not mount into.
+       */
+      layoutEl?.dockPrompt?.();
+      await new Promise((r) => window.setTimeout(r, RUN_DOCK_MS));
+      applyThirdColumn(assembled);
+      setCanvasHolding(true);
+
+      // THE DRAWING, in the same breath: the graph is a function of the rows and the run's own
+      // facts, and it is built here — the one writer of `/session/middle_column/flow`.
       publishRepairFlow();
+      setCanvasHolding(false);
+      // THE DRAWING IS TOLD WHAT IT CAN SEE, the moment both boxes exist: her column is a layer
+      // over the canvas, and a view composed into the full box puts the brain on the seam
+      // between them. (The observer above keeps it true as she narrows.)
+      syncCanvasInset();
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        // THE BAR THAT ARRIVES IS TOLD, NOT ASSUMED. The swap replaced the middle column, so
-        // the element that took the flag at the click is gone and the one now on screen was
-        // created while the run was already in flight. One re-assert here is what puts the
-        // spinner on the controls the person is actually looking at.
-        setRunControlsBusy(true);
+        syncCanvasInset();
+        // THE BAR THAT ARRIVES IS TOLD, NOT ASSUMED — and it is told to STOP. The column that took
+        // the busy flag at the click is gone, and the one now on screen was created while the run
+        // was already in flight; without this it keeps a spinner that belongs to a control the
+        // person is no longer looking at. (This used to RE-ASSERT the spinner here, and a separate
+        // 3200ms floor — MIN_RUN_BUSY_MS — was what turned it off. That floor is gone with the other
+        // artificial waits: the drawing is on screen, so the work being waited for is presented.)
+        setIsComposerRunning(false);
         window.dispatchEvent(new CustomEvent('flow-view-ready'));
       }));
-    }, RUN_DOCK_MS + RUN_CANVAS_AFTER_DOCK_MS);
-    // …AND THE SPINNER IS HELD FOR A FLOOR OF ITS OWN, so the canvas is PRESENTED rather than
-    // watched arriving: the assembly is as fast as it is, and a control that stops spinning
-    // half a second in reads as a glitch, not as work. Released on the canvas's ready signal,
-    // never earlier than MIN_RUN_BUSY_MS after the click.
-    window.setTimeout(() => setRunControlsBusy(false), Math.max(0, MIN_RUN_BUSY_MS - (Date.now() - runBusyFromRef.current)));
+    })().catch((err: unknown) => {
+      /*
+       * FAIL LOUD. The column could not be assembled or the canvas's code could not be fetched,
+       * so there is no drawing — and the one thing that must not happen is the output column
+       * sitting there as if the Run had worked. This was a logger line only, which is the silent
+       * fallback READ-ME/THE_METHOD.md names as the enemy: the person sees nothing and only the
+       * trace holds the reason. So the failure goes through the app's own channel — the banner
+       * the assembly uses, whose Retry re-runs the Run — and NOTHING is substituted for the
+       * canvas: the column keeps the output it had, and the person is told why there is no
+       * picture.
+       */
+      const report = classifyFailure(err, { intent: 'render-run' });
+      setAiAssemblyReport(report);
+      setAiAssemblyMessage(report.headline);
+      setIsFailureAcknowledged(false);
+      setAiAssemblyFailed(true);
+      // AND THE SPINNER STOPS, because the thing it was standing for is over. NOT a fallback and
+      // nothing is substituted: the failure is a banner with a name and a reason, the column keeps
+      // the output it had, and a control that went on spinning would be the one lie left — a Run
+      // that is not running, shown as running.
+      setIsComposerRunning(false);
+      logger.error('the third column could not be assembled, so there is no drawing to show', {
+        error: String((err as Error)?.message ?? err),
+      });
+    });
+    // THE SPINNER RUNS FOR THE RUN, AND STOPS WHEN THE RUN'S OWN WORK IS PRESENTED. Nothing is held
+    // for a floor: the frame above stops it the moment the drawing is on screen, and a Run that
+    // ends some other way (a failure, a stop) clears it in its own handler. The 3200ms floor that
+    // used to be here — "so the canvas is PRESENTED rather than watched arriving" — was written
+    // against a canvas that appeared in a moment; with the model composing the column the wait is
+    // seconds already, and the floor only ever extended a spinner past the thing it was waiting for.
+    // (There is nothing to release here: the busy flag is set above and cleared by the signals.)
 
     // ── The Run URL is RELATIVE, like every other call in this app ────────────
     //
@@ -5115,10 +5800,124 @@ export default function Index({
      */
     const handleRunBlocked = () => {
       if (!heldRunRef.current) return;
-      setRunControlsBusy(false);
+      setIsComposerRunning(false);
+      /*
+       * AND THE HELD RUN IS RELEASED — NOT KEPT. It used to stay in the ref, so the NEXT
+       * `<run_ok/>` in ANY later reply — a `review-prompt` turn, an unrelated question —
+       * released a Run she had already blocked, with a payload the person had since edited.
+       * A block means this Run is over; pressing Run again is what starts the next review.
+       */
+      heldRunRef.current = null;
+      runApprovedRef.current = false;
       console.log('[WritingAreaIndex] Run stays held — she blocked it');
     };
     window.addEventListener('a2ui:run-blocked', handleRunBlocked);
+
+    /*
+     * APPLY ALL — THE WHOLE LIST WORKED IN ONE PRESS, AND THEN THE RUN GOES.
+     *
+     * The owner, 2026-09-23: "she should automatically run it… we should just give a user the
+     * ability to apply all. Previously she was handing those over one at a time, which we don't
+     * want," and "expose the canvas layer as the third column, just like if she had to click the
+     * button."
+     *
+     * WHAT THE APP MAY APPLY IS THE CHECKLIST'S OWN LINE (`repair.via`): `action` is the app's
+     * business (move a tool into the Tool Call step, merge a row that stands twice), `ask` is
+     * offered and never done uninvited (a save makes a package that did not exist), `words` is
+     * the person's (a name, a description, a row's content) — never invented into somebody's
+     * prompt by a button. So Fix all clears what holds the Run and STOPS, telling her the rest.
+     *
+     * AND IT RUNS BY THE BUTTON'S OWN PATH — `a2ui:run-approved` is what a person's Run press
+     * ends in (see handleRunApproved), which re-enters `handleRunRequested` with the held payload
+     * and this flag set. Not a shortcut around the gate: the gate has been passed, on the list
+     * this shell computed, and the canvas arrives as the third column exactly as it would have.
+     *
+     * WHAT IS LEFT IS THE LIST MINUS WHAT WAS JUST APPLIED — computed here rather than re-read,
+     * because the writes are still being committed by React and a second read would answer with
+     * the prompt as it was a moment ago.
+     */
+    const onFixAll = async (): Promise<void> => {
+      const unmet = reviewFlow({
+        title: surfaceTitle(),
+        description: surfaceDescription(),
+        saved: Boolean(currentPromptSessionObjRef.current?.id),
+        // THE ONE READER, the same one handleRunRequested reviews and the same one the run below
+        // sends. It was `surfaceSections()` here and the event's payload there: the same list
+        // twice, and only by the luck of who called it.
+        sections: rowsForDecision() as FlowSeatInput[],
+        register: await readToolRegister(),
+      });
+      // THE SAME PREDICATE THE OFFER USED — see runHoldingRepairs. One definition, so the button
+      // that was drawn and the repairs this press makes cannot come apart.
+      const applyable = runHoldingRepairs(unmet);
+      const left = unmet.filter((u) => !applyable.includes(u));
+      for (const u of applyable) {
+        if (u.repair.kind === 'move-tool') {
+          window.dispatchEvent(new CustomEvent('move-tool', {
+            detail: { name: u.repair.tool, into: u.repair.into },
+          }));
+        } else if (u.repair.kind === 'merge-seat') {
+          window.dispatchEvent(new CustomEvent('merge-seat', {
+            detail: { from: u.repair.from, into: u.repair.into },
+          }));
+        }
+      }
+      /*
+       * NOTHING HOLDS IT ANY MORE — SO IT RUNS, AND IT RUNS WHETHER OR NOT A RUN IS STILL HELD.
+       *
+       * The held Run used to be the only way this could go, and that is where the owner's flow
+       * stopped: "when those blockers are satisfied, she should automatically run the prompt and
+       * expose the canvas layer." A held Run is released through `a2ui:run-approved` — but Grace
+       * BLOCKING a Run ENDS it (`handleRunBlocked` clears the held payload, deliberately: a block
+       * means that Run is over). So by the time the person has worked the list and pressed Apply
+       * all, there is usually nothing left to release, and the press cleared the blockers and then
+       * asked her a question that could not run anything. Watched on the live package, 2026-09-23:
+       * the list came back "nothing — every requirement is met" and no canvas appeared.
+       *
+       * SO THIS STARTS THE RUN ITSELF when nothing is held. It is not a shortcut around the gate:
+       * the gate is this list, the shell has just computed it, and it is EMPTY — there is nothing
+       * for her to hold it on. `runApprovedRef` is set for the same reason she sets it in
+       * `handleAiRun`, so the released run passes the gate it has already cleared.
+       *
+       * THE ROWS COME FROM THE EDITOR, NOT THE SURFACE, and that is the whole of getting the run
+       * right. The repairs above were DISPATCHED, not awaited: the editor applies them to its own
+       * list synchronously, while the surface's copy is committed by React on the next render. Read
+       * the surface here and the run would send the prompt as it was BEFORE the repairs — the
+       * canvas would draw the old picture over a repaired prompt. The editor IS the source of truth
+       * for the rows and it answers now.
+       */
+      if (!holdsRun(left)) {
+        if (heldRunRef.current) {
+          window.dispatchEvent(new CustomEvent('a2ui:run-approved'));
+          return;
+        }
+        // THE ROWS COME FROM THE ONE READER, through the listener rather than by hand: the
+        // repairs above were DISPATCHED, not awaited, and rowsForDecision reads the editor
+        // first — so the run sends the prompt WITH the repairs, not the one from a moment ago.
+        runApprovedRef.current = true;
+        console.log('[WritingAreaIndex] Apply all cleared the list — starting the run');
+        window.dispatchEvent(new CustomEvent('run-requested', { detail: { sections: rowsForDecision() } }));
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+        detail: {
+          review: 'run',
+          request: [
+            'A person pressed Apply all. The app has made every repair it can make on its own —',
+            'the moves and the merges — and it may not do the rest: a save is theirs to agree to,',
+            'and the words in a prompt are theirs to write.',
+            left.length
+              ? 'THIS IS THE WHOLE LIST OF WHAT IS STILL UNMET. Reply only to what is needed: say'
+              : 'NOTHING IS UNMET any more. Reply only to what is needed: say',
+            ...left.map((u) => `  · ${u.id}${u.level === 'advisory' ? ' (advisory — worth saying, does not hold the Run)' : ''} — ${u.why}`),
+            left.length
+              ? 'Offer each repair as a button the person can press and end with <run_blocked/>.'
+              : 'Congratulate them in one short sentence starting with 🍾 and end with <run_ok/>.',
+          ].join('\n'),
+        },
+      }));
+    };
+    window.addEventListener('a2ui:fix-all', onFixAll as EventListener);
 
     /*
      * SHE ASKS FOR THE RUN HERSELF — `<run_prompt/>` in a reply.
@@ -5145,7 +5944,7 @@ export default function Index({
       heldRunRef.current = null;
       runApprovedRef.current = true;
       console.log('[WritingAreaIndex] Run asked for by Grace');
-      if (!held) setRunControlsBusy(true);
+      if (!held) setIsComposerRunning(true);
       window.dispatchEvent(new CustomEvent('run-requested', { detail: held ?? { sections: surfaceSections() } }));
     };
     window.addEventListener('ai-run-prompt', handleAiRun);
@@ -5257,6 +6056,7 @@ export default function Index({
       window.removeEventListener("run-requested", handleRunRequested);
       window.removeEventListener('a2ui:run-approved', handleRunApproved);
       window.removeEventListener('a2ui:run-blocked', handleRunBlocked);
+      window.removeEventListener('a2ui:fix-all', onFixAll as EventListener);
       window.removeEventListener('ai-run-prompt', handleAiRun);
       window.removeEventListener("clear-output", handleClearOutput);
       window.removeEventListener("title-change", handleTitleSet);

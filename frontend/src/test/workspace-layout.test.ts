@@ -564,8 +564,15 @@ describe('<workspace-layout> her column is a layer, not a pane', () => {
     const el = await withDrawing();
     const drawing = styleOf(el, '.pane.middle');
     const herOpen = styleOf(el, '.pane.right');
-    // Over a drawing she is a LAYER, and with no width chosen she covers half of it.
-    expect(herOpen).toContain('width: 50%');
+    /*
+     * Over a drawing she is a LAYER, and with no width chosen she covers a THIRD of it — the
+     * owner, 2026-09-23, watching a Run: "It should be pushing the agent prompt slider to the
+     * left and reducing the size of the chat on the right." It was half, and at half the
+     * drawing composed into a box it shared with her: the brain of a 1535px drawing landed on
+     * the seam under her column and could not be grabbed. She still takes nothing out of the
+     * flex line (the next test), and her own chosen width still wins over this share.
+     */
+    expect(herOpen).toContain('width: 33.333%');
 
     el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: true } }));
     await el.updateComplete;
@@ -581,5 +588,80 @@ describe('<workspace-layout> her column is a layer, not a pane', () => {
     // Her box is sized by WIDTH; the drawing and the prompt divide the line between them only.
     expect(styleOf(el, '.pane.right')).not.toContain('flex');
     expect(styleOf(el, '.pane.middle')).toContain('flex');
+  });
+});
+
+/**
+ * THE RUN'S DOCK, AND THE SLAB — the two things a Run does to her column.
+ *
+ * Both were measured on the live app before either was written down, and both are pinned here
+ * for the same reason: a fact with two writers looks correct in every unit test of the writer
+ * you are reading.
+ *
+ *   THE DOCK MUST SURVIVE THE PAYLOAD. A Run closes both columns from INSIDE the layout, and
+ *   the composer's surface carries `isThirdOpen: true` on its root and re-asserts it on every
+ *   published update — measured 2026-09-23, her column did not move until the canvas landed
+ *   ~800ms later, which is why the two sides fell apart instead of together (§00b/§00c in
+ *   READ-ME/CONTINUE-HERE.md). The layout's own act claims the flag; a payload re-assert loses.
+ *
+ *   THE SLAB IS WHY THE CONTENTS DO NOT CRUNCH. With her panel sized by the pane, every frame of
+ *   the collapse re-laid-out the chat: measured on the console, panel width 803 → 587 → 357 →
+ *   191 → 0 within 200ms of a click while the edge took 760ms. So while she is shut the panel
+ *   keeps the width she had open and overflows the narrowing pane.
+ */
+describe('<workspace-layout> the Run: the dock holds, and the panel slides as one piece', () => {
+  /** A layout with a right pane whose panel has a real box (jsdom has no layout, so it is faked). */
+  const withPanelBox = async (openWidth: number) => {
+    const el = await mountWithPanel();
+    const panel = el.querySelector('[slot="right"]') as HTMLElement;
+    // The pane's width IS the measurement the slab is taken from, so the fake is the pane's own
+    // getBoundingClientRect — the same read the element performs.
+    const pane = el.shadowRoot!.querySelector('.pane.right') as HTMLElement;
+    pane.getBoundingClientRect = () => ({ width: openWidth, height: 700, top: 56, left: 0, right: openWidth, bottom: 756, x: 0, y: 56, toJSON: () => ({}) } as DOMRect);
+    return { el, panel };
+  };
+
+  it('the dock closes her, and a payload re-assert does not reopen her', async () => {
+    const { el } = await withPanelBox(950);
+    el.isThirdOpen = true; // the composer's payload
+    await el.updateComplete;
+    expect(el.isThirdOpen).toBe(true);
+
+    el.dockPrompt();
+    await el.updateComplete;
+    expect(el.isThirdOpen).toBe(false);
+
+    // The next published update writes the same payload value again. It loses: the dock is the
+    // layout's own act, and the layout owns the fact from that moment on.
+    el.isThirdOpen = true;
+    await el.updateComplete;
+    expect(el.isThirdOpen).toBe(false);
+  });
+
+  it('holds her panel at the width she had open, so the collapse slides it out', async () => {
+    const { el, panel } = await withPanelBox(950);
+    el.isThirdOpen = true;
+    await el.updateComplete;
+    expect(panel.style.width).toBe(''); // open: the pane's width is the panel's width
+
+    el.dockPrompt();
+    await el.updateComplete;
+    // MEASURED WHILE SHE WAS STILL OPEN — the number is taken in the frame the close is decided,
+    // because one frame later the pane is mid-slide.
+    expect(panel.style.width).toBe('950px');
+  });
+
+  it('opens with no slab again, so a drag and a saved width size her as they always did', async () => {
+    const { el, panel } = await withPanelBox(950);
+    el.isThirdOpen = false;
+    // A payload may only close her before the operator has touched her; this is the console's
+    // own load (`isThirdOpen: false`), not a dock, so there is no slab to write.
+    await el.updateComplete;
+    expect(panel.style.width).toBe('');
+
+    el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: false } }));
+    await el.updateComplete;
+    expect(el.isThirdOpen).toBe(true);
+    expect(panel.style.width).toBe('');
   });
 });

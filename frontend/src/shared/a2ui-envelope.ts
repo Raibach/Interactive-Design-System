@@ -129,8 +129,19 @@ function writeAtPath(
  * channels. Returns a refusal — never a partial reading — when the envelope is
  * written for a version this shell does not implement, or describes more than
  * one surface.
+ *
+ * `base` IS THE SURFACE'S CURRENT MODEL, and it is why this takes an argument at
+ * all. An envelope is a list of OPERATIONS against a model that already exists —
+ * `updateDataModel` says "write this value at this path", and a path write means
+ * nothing against an empty model. The four assemblies that build a whole surface
+ * (console, composer, session, run) write `/` and there is nothing to write over,
+ * so the old no-argument call produced the right answer for them by accident.
+ * Measured 2026-09-23: the RUN's assembly writes only `/run` — it updates a
+ * surface that is already carrying the person's rows, their conversation and the
+ * nodes they dragged — so reading it against `{}` would have handed the renderer
+ * a model holding one key and taken the rest of the screen's data away.
  */
-export function readA2UIEnvelope(raw: unknown): EnvelopeRead {
+export function readA2UIEnvelope(raw: unknown, base?: Record<string, unknown>): EnvelopeRead {
   const operations = (Array.isArray(raw) ? raw : [raw]).filter(isObject);
   const notes: string[] = [];
 
@@ -210,7 +221,10 @@ export function readA2UIEnvelope(raw: unknown): EnvelopeRead {
     OPERATIONS.some((key) => isObject(op[key]) && op[key].surfaceId === surfaceId);
 
   let components: unknown[] = [];
-  let dataModel: Record<string, unknown> = {};
+  // The one model every operation in this envelope is applied to, in order. A
+  // caller with a surface on screen hands its model in; a caller assembling a
+  // fresh one leaves it empty and the root write replaces it (see `writeAtPath`).
+  let dataModel: Record<string, unknown> = base ? { ...base } : {};
 
   for (const op of operations) {
     if (!belongs(op)) continue;
@@ -263,4 +277,53 @@ export function envelopeRefusalError(refusal: EnvelopeRefusal): Error {
   error.name = 'EnvelopeRefusalError';
   (error as Error & { refusal?: EnvelopeRefusal }).refusal = refusal;
   return error;
+}
+
+/**
+ * APPLY AN `updateComponents` TO A SURFACE THAT IS ALREADY DRAWN.
+ *
+ * The spec's own semantics, and the half this shell never had: a component whose
+ * id is already in the surface is UPDATED; one whose id is new is ADDED; every
+ * component the update does not mention is left exactly as it is. That is what
+ * makes `updateComponents` an update rather than a replacement, and it is what a
+ * RUN needs — the third column moves while the other two stay put.
+ *
+ * WHY IT IS NOT THE HOST DECIDING WHAT THE COLUMN IS. The run's update arrives
+ * from `/api/ai/assemble-surface` with the model's own composition in it: which
+ * component stands in the middle, which slots it fills, what each child is bound
+ * to, and — through the layout root the model also returns — the pointer that
+ * puts it in the middle slot. This function moves those components into the list
+ * by id. It names no component, holds no shape and knows no slot, which is the
+ * whole difference between applying an assembly and being one.
+ *
+ * A COMPONENT THE ROOT NO LONGER REACHES IS LEFT WHERE IT IS. It is inert — the
+ * renderer walks from the root and draws what it finds, so an unreferenced entry
+ * is simply not drawn — and dropping it here would be this module guessing at
+ * reachability. Measured 2026-09-23 on a Run: the viewer that stood in the middle
+ * before the canvas is exactly that case, and the panel's "go back to the output"
+ * control still names it by id.
+ */
+export function applyComponentUpdate(
+  base: unknown[],
+  update: unknown[],
+): unknown[] {
+  const out = Array.isArray(base) ? [...base] : [];
+  const at = new Map<string, number>();
+  out.forEach((c, i) => {
+    const id = (c as { id?: unknown } | null)?.id;
+    if (typeof id === 'string') at.set(id, i);
+  });
+
+  for (const comp of update) {
+    const id = (comp as { id?: unknown } | null)?.id;
+    if (typeof id !== 'string') continue; // the renderer reports a malformed entry; it cannot be merged by id
+    const index = at.get(id);
+    if (index === undefined) {
+      at.set(id, out.length);
+      out.push(comp);
+    } else {
+      out[index] = comp;
+    }
+  }
+  return out;
 }

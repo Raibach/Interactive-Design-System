@@ -34,6 +34,8 @@ import '@/components/lit/chat-repair-actions';
 // Without this the tag is inert: present in the tree, `customElements.get` false, no shadow
 // root, and every read of its content comes back null.
 import type { ChatPanel } from '@/components/lit/chat-panel';
+import { parseRunAction, parseSaveAction, parseSetTitleAction } from '@/shared/actionLink';
+import { eventBus } from '@/shared/event-bus';
 
 type SeatEl = ChatPanel & { updateComplete: Promise<unknown> };
 
@@ -427,9 +429,20 @@ describe('<chat-panel> draws its seat', () => {
     expect(el.conversationId).toBe('conv-new');
   });
 
-  it('leaves a package seat alone: the console is the only one whose chat is global', async () => {
-    // "Each package has its own set of conversations, so don't just apply it to both areas."
-    // The gate is the session row's own metadata — a package row has no session_type: console.
+  it('starts a package its own conversation — the plain create that was missing', async () => {
+    /*
+     * THIS TEST USED TO ASSERT THE OPPOSITE, and the opposite was a deadlock: the control did
+     * nothing at all for a package (no request, no note), while the seat's trash refused to remove
+     * the conversation the seat was in ("start a new one, then remove it"). So a package's one row
+     * could not be removed and no second could be started to move off it. The owner, 2026-09-23:
+     * "I'm not able to delete conversations from the packages. It's just basic CRUD process I
+     * thought."
+     *
+     * The console's rule still holds — "each package has its own set of conversations, so don't
+     * just apply it to both areas" — and it is why this is NOT the console's flow: a package
+     * CREATES and moves, and does not archive what it left (the console's archive is the console's
+     * own act). The gate is still the session row's metadata, read before anything happens.
+     */
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
     vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
@@ -439,6 +452,7 @@ describe('<chat-panel> draws its seat', () => {
         return json({ session: { id: 'sess-package', metadata: { has_prompt_session: true } } });
       }
       if (u.includes('/messages')) return json({ messages: [] });
+      if (u === '/api/conversations' && init?.method === 'POST') return json({ id: 'conv-new' });
       return json({ success: true });
     }));
 
@@ -455,9 +469,18 @@ describe('<chat-panel> draws its seat', () => {
       );
     for (let i = 0; i < 12; i++) { await Promise.resolve(); await el.updateComplete; }
 
-    // Nothing was written, nothing was archived, and the seat stayed where it was.
-    expect(calls.filter((c) => c.init?.method === 'PUT' || c.init?.method === 'POST')).toEqual([]);
-    expect(el.conversationId).toBe('conv-package');
+    const created = calls.find((c) => c.url === '/api/conversations' && c.init?.method === 'POST');
+    const pointed = calls.find((c) => c.url === '/api/prompt-sessions/sess-package' && c.init?.method === 'PUT');
+    const archived = calls.find((c) => c.url.includes('/archive'));
+
+    // Filed under THIS package, and nothing of the console's flow (no archive) leaks in.
+    expect(JSON.parse(String(created?.init?.body))).toEqual({ session_id: 'sess-package', title: 'New Chat' });
+    expect(archived).toBeUndefined();
+    // The session points at it, so a reload lands in the new thread rather than the old one.
+    expect(JSON.parse(String(pointed?.init?.body))).toEqual({ conversation_id: 'conv-new' });
+    // And the seat moved: a blank thread, and the id the next turn will be written to.
+    expect(el.conversationId).toBe('conv-new');
+    expect(el.messages).toEqual([]);
   });
 
   it('and the three marks without an event still emit nothing', async () => {
@@ -539,21 +562,31 @@ describe('<chat-panel> draws its seat', () => {
     const removed = () => calls.filter((c) => c.init?.method === 'DELETE');
     expect(el.shadowRoot!.querySelectorAll('.conversation-list li').length).toBe(2);
 
-    // A row you are IN is refused — and the refusal is said under the list.
+    /*
+     * THE ROW YOU ARE IN IS REMOVED TOO, AND THE SEAT MOVES OFF IT. This used to refuse — "that is
+     * the conversation you are in" — which deadlocked the two controls: the console's new-
+     * conversation does nothing inside a package, so the one row a package had could not be removed
+     * and no second row could be started. The owner, 2026-09-23: "I'm not able to delete
+     * conversations from the packages. It's just basic CRUD process I thought." What makes it safe
+     * is the server's half (`conversation_api.delete_conversation` moves every session pointing at
+     * the row onto the newest conversation of the same kind, or onto none), so the seat only has to
+     * follow: here, onto the package's other live conversation.
+     */
     trash('conv-a').click();
     await settle(el);
     trash('conv-a').click();
     await settle(el);
-    expect(removed()).toHaveLength(0);
-    expect(el.shadowRoot!.textContent).toContain('the conversation you are in');
+    expect(removed().map((c) => c.url)).toEqual(['/api/conversations/conv-a']);
+    expect(el.conversationId).toBe('conv-b');
+    expect(el.shadowRoot!.textContent).toContain('moved to your other conversation');
 
     // Any other row: the first click only arms it, the second removes it from the data.
     trash('conv-b').click();
     await settle(el);
-    expect(removed()).toHaveLength(0);
+    expect(removed()).toHaveLength(1);
     trash('conv-b').click();
     await settle(el);
-    expect(removed().map((c) => c.url)).toEqual(['/api/conversations/conv-b']);
+    expect(removed().map((c) => c.url)).toEqual(['/api/conversations/conv-a', '/api/conversations/conv-b']);
   });
 
   it('points the trailing button at the surface you are NOT on, and acts on that', async () => {
@@ -928,8 +961,12 @@ describe('<chat-panel> — the console says hello as the console', () => {
       el.sessionId = String(props.sessionId);
       await settle(el);
     }
-    // The host announces the landing, which is what asks her to say hello at all.
-    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'blank' } }));
+    // The host announces the landing, which is what asks her to say hello at all. AND IT IS A
+    // `console` ARRIVAL, because a blank one belongs to the seat with NO package (see
+    // shared/arrival) and the console has a package — its own row. This is also why the landing
+    // could not simply be announced as a package's: that mis-addressing is the defect this kind
+    // exists to fix, and it is what put a package's greeting in the console's own thread.
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'console' } }));
     for (let i = 0; i < 8; i++) { await Promise.resolve(); await el.updateComplete; }
     const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
     const asked = calls.find((c) => String(c[0]).includes('/api/teacher/query'));
@@ -1038,6 +1075,97 @@ describe('<chat-panel> — a button that asks for something the app cannot do', 
       ['set', { target: 'Agent Role', content: 'You are the news scout.' }],
       ['remove', { roleName: 'agent_role' }],
     ]);
+  });
+
+  it('releases the held Run for the button her cleared review offers', async () => {
+    /*
+     * Measured in the app 2026-09-23, and the whole reason this test exists: her champagne
+     * sentence ended with [Run it](action:run), and pressing it answered "⚠️ That button asks for
+     * something this app does not know how to do (run), so nothing was changed." The review
+     * instruction has told her to "offer to run it" since the beginning — so the name was hers,
+     * and it was the third of that class (move-tool, clean-agent-role, run).
+     */
+    const heard: string[] = [];
+    const onApproved = () => heard.push('approved');
+    window.addEventListener('a2ui:run-approved', onApproved as EventListener);
+    const { el, calls } = await press('run');
+    window.removeEventListener('a2ui:run-approved', onApproved as EventListener);
+
+    // IT IS THE APPROVAL HER REVIEW WAS WAITING FOR — the same path <run_ok/> takes.
+    expect(heard).toEqual(['approved']);
+    // And it is not a turn of its own: the press ACTS, it does not ask her again.
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(false);
+    expect(shadowText(el)).not.toContain('does not know how to do');
+  });
+
+  it('saves the package for the button her blocker list offers', async () => {
+    /*
+     * Measured in the app 2026-09-23: the review's first blocker was correct — "The package has
+     * never been saved, so there is nothing to run yet" — and its button, `[Save the package]
+     * (action:save)`, was answered "this app does not know how to do that (save)". Every other
+     * repair in the list was moot behind it: a draft has no record to write a title into.
+     */
+    const heard: string[] = [];
+    const blocked: unknown[] = [];
+    const off = eventBus.on('save-button', () => { heard.push('save'); return { allowed: true } as never; });
+    window.addEventListener('ai-command-blocked', (e) => blocked.push((e as CustomEvent).detail));
+    const { el, calls } = await press('save');
+    off();
+    expect({ heard, blocked }).toEqual({ heard: ['save'], blocked: [] });
+    // AND NOTHING WAS BLOCKED — this is the assertion that would have caught the shorthand the
+    // panel used to send: the gatekeeper refused it as "Unknown tag: undefined", in silence.
+    expect(shadowText(el)).not.toContain('does not know how to do');
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(false);
+  });
+
+  it('names the package for the button her blocker list offers', async () => {
+    // `[Name the package](action:set-title|Precise Professional Assistant)` — same class. The
+    // WRITER existed (`set-prompt-title`); only the button's name was missing.
+    const heard: string[] = [];
+    const onTitle = (e: Event) => heard.push((e as CustomEvent).detail.title);
+    window.addEventListener('set-prompt-title', onTitle as EventListener);
+    const { el } = await press('set-title|Precise Professional Assistant');
+    window.removeEventListener('set-prompt-title', onTitle as EventListener);
+    expect(heard).toEqual(['Precise Professional Assistant']);
+    expect(shadowText(el)).not.toContain('does not know how to do');
+  });
+
+  it('asks for the name when the button carried none, instead of refusing it', async () => {
+    /*
+     * Measured in the app 2026-09-23: `[Name it](action:set-title)` — a bare action, because the
+     * name is the person's to choose — was answered "this app does not know how to do that
+     * (set-title)". A request with no words in it is still a request; what was missing was a
+     * question, so it goes to her as words. Nothing is invented and nothing is substituted.
+     */
+    const { el, calls } = await press('set-title');
+    expect(shadowText(el)).not.toContain('does not know how to do');
+    // She is asked, in the thread — the person's answer comes back as the spelled button.
+    expect(calls.some((c) => c.url.includes('/api/teacher/query'))).toBe(true);
+  });
+
+  it('reads the spellings of save and title, and nothing else as either', () => {
+    expect(parseSaveAction('save')).toBe(true);
+    expect(parseSaveAction('Save-Template')).toBe(true);
+    expect(parseSaveAction('save_package')).toBe(true);
+    expect(parseSaveAction('save-as')).toBe(false);
+    expect(parseSetTitleAction('set-title|One')?.title).toBe('One');
+    expect(parseSetTitleAction('set_title: One')?.title).toBe('One');
+    expect(parseSetTitleAction('set-title')).toBeNull();
+    expect(parseSetTitleAction('title|One')).toBeNull();
+    expect(parseRunAction('save')).toBe(false);
+    expect(parseSaveAction('run')).toBe(false);
+  });
+
+  it('reads the long spellings of run as the same intent, and nothing else as run', () => {
+    // Three spellings, one intent. `rerun` is NOT one of them: a substring match is how an
+    // unknown word becomes a wrong action, which is the failure this whole file is about.
+    expect(parseRunAction('run')).toBe(true);
+    expect(parseRunAction('Run')).toBe(true);
+    expect(parseRunAction('run-it')).toBe(true);
+    expect(parseRunAction('run_prompt')).toBe(true);
+    expect(parseRunAction('rerun')).toBe(false);
+    expect(parseRunAction('run-the-whole-thing')).toBe(false);
+    expect(parseRunAction('')).toBe(false);
   });
 
   it('does not send an unrecognised command to her, whichever shape it has', async () => {

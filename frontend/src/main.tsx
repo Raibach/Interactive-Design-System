@@ -7,10 +7,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./index.css";
-// The composer's ground and the drawing's, preloaded below — before React renders, which is
-// the point (see THE TWO GROUNDS).
+// The composer's ground, preloaded below — before React renders, which is the point (see
+// THE TWO GROUNDS). The drawing's ground is NOT preloaded here: it belongs to a column that
+// does not exist until a Run, so it starts loading with the canvas code instead (below).
 import composerBackground from "@/assets/composer-image-bg.jpg";
-import canvasArt from "@/assets/agent-canvas-art.jpg";
 
 /** A2UI v0.9.1 Lit workspace components (model-driven composer) */
 import "@/components/lit/prompt-section-editor";
@@ -44,16 +44,21 @@ import "@/components/lit/trace-feed";
 // and an element that is never imported is never defined — the surface would emit the
 // name and the slot would stay empty, silently.
 import "@/components/lit/chat-repair-actions";
-// The flow canvas the output column swaps in on Run. Registration is a side effect
-// of the import, like every element above: without it the surface's AgentFlow name
-// resolves to a tag nothing defines, and the middle column draws an empty box with
-// no error anywhere.
-import "@/components/lit/agent-flow";
-// THE PLUG-IN: the canvas and her seat as one element. Imported for the same reason —
-// a tag nothing defines draws an empty box and says nothing — and it is what the surface
-// mounts when the drawing and Grace are meant to arrive together. Importing it also
-// defines <agent-flow> and <chat-panel>, which it composes.
-import "@/components/lit/agent-canvas";
+/*
+ * <agent-flow> AND <agent-canvas> ARE NOT IMPORTED HERE, ON PURPOSE — and this is the one
+ * place above that breaks the rule the comments state. They were imported here, and it cost
+ * every page load the drawing's code and its artwork for a column that is not on screen: a
+ * person opening a package sees two columns, the prompt and her, and the third appears when
+ * a Run asks for it. The owner, 2026-09-23: "When the user opens a package, prompt package
+ * or clicks composer, we don't need to load all of the code for the canvas at that same
+ * time. We only load that once the run is clicked."
+ *
+ * The Run path fetches them BEFORE it swaps the column (loadCanvasElements, in
+ * WritingAreaIndex), which is what keeps the rule the deleted comment was about: the surface
+ * names AgentCanvas, and a tag nothing defines draws an empty middle column with no error
+ * anywhere. The drawing's own ground is fetched at the same moment, so the image is
+ * decoded before a person sees the pane (the anti-flash fix, kept — see below).
+ */
 // The middle column's HEADER — the view selector and the model selector. It is its own
 // element because the header belongs to the column, not to whatever body is under it: the
 // flow view takes the column on Run, and the header has to survive the swap.
@@ -91,11 +96,10 @@ if (import.meta.env.PROD && !isSentryReady()) {
 }
 
 /*
- * ── THE TWO GROUNDS, FETCHED BEFORE ANYTHING IS DRAWN ──────────────────────────
+ * ── THE COMPOSER'S GROUND, FETCHED BEFORE ANYTHING IS DRAWN ────────────────────
  *
- * The composer stands on an image and the drawing has its own; both are large (413 KB and
- * 591 KB) and both are what a person sees the moment a section of the app that has never
- * been open becomes visible — Console to composer on the first card, or the first Run.
+ * It is large (413 KB) and it is what a person sees the moment a section of the app that has
+ * never been open becomes visible — Console to composer on the first card.
  *
  * FETCHED AT MODULE SCOPE, ON PURPOSE, and that is the whole of the fix. This used to run in
  * an effect inside WritingAreaIndex, which is after React has mounted and painted — measured
@@ -109,10 +113,16 @@ if (import.meta.env.PROD && !isSentryReady()) {
  * `decode()` is what makes it ready rather than merely fetched, and it is deliberately not
  * awaited: a decode that fails is not a reason to hold up the app, and the worth of this is in
  * the fetch having started, not in a promise nobody is waiting on.
+ *
+ * THE DRAWING'S GROUND IS NOT HERE, and that is the same reasoning applied the other way: it
+ * belongs to a column that does not exist until a Run, so 591 KB of texture would be paid for
+ * by every person who opens a package and never runs one. It is fetched by the Run — see
+ * `loadCanvasElements` in WritingAreaIndex, which starts it beside the code it belongs to and
+ * well before the pane is drawn.
  */
-for (const src of [composerBackground, canvasArt]) {
+{
   const img = new Image();
-  img.src = src;
+  img.src = composerBackground;
   if (img.decode) img.decode().catch(() => {});
 }
 

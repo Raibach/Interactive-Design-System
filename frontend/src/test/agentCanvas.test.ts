@@ -200,3 +200,45 @@ describe('<agent-canvas> — the container', () => {
     window.removeEventListener('tab-change', () => heard.push('tab-change'));
   });
 });
+
+/**
+ * THE HELD STATE — the column before its drawing, and the spinner that says so.
+ *
+ * A Run assembles the third column in front of the person: the model composes it (render-run),
+ * the column arrives, and only then is the drawing's data published — held for a beat the owner
+ * asked for in so many words: "we need that spinner to force a delay maybe 2000 ms to get the app
+ * time and the AI time to do it as assembly." What is pinned here is the MECHANISM, which is the
+ * part that can break silently:
+ *
+ *   - the column opens HOLDING, because the surface that emitted it drew nothing in it yet;
+ *   - the flag is the HOST's, not a payload's — it is not in the catalog, so no assembly can
+ *     write it and no re-assert can clear it while the drawing is still being built;
+ *   - the block is IN THE DOM either way, so the state can be FADED rather than appearing and
+ *     vanishing in a single frame (which is the report it answers: "it's just sitting there").
+ */
+describe('<agent-canvas> — the held state', () => {
+  it('opens holding, and says so on its own ground', async () => {
+    const el = document.createElement('agent-canvas') as El;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    mounted.push(el);
+
+    expect(el.holding).toBe(true);
+    expect(el.hasAttribute('holding')).toBe(true); // what the CSS state is written from
+    const holding = el.shadowRoot!.querySelector('.holding') as HTMLElement;
+    expect(holding).toBeTruthy();
+    expect(holding.textContent).toContain('Assembling the drawing');
+    expect(holding.querySelector('.spinner')).toBeTruthy();
+  });
+
+  it('is cleared by the host that published the drawing — and only by it', async () => {
+    const { el } = await mount();
+    // The surface's payload for this component never names `holding`; the renderer assigns what
+    // the assembly carries and nothing else, so the flag survives every update.
+    el.holding = false;
+    await el.updateComplete;
+    expect(el.hasAttribute('holding')).toBe(false);
+    // The block stays in the DOM (the fade needs something to fade), moved by the attribute.
+    expect(el.shadowRoot!.querySelector('.holding')).toBeTruthy();
+  });
+});

@@ -222,20 +222,147 @@ export function parseMoveToolAction(action: string): { name: string; into: strin
  */
 export const REVIEW_PROMPT = 'review-prompt';
 
+/**
+ * APPLY ALL — the one button that works the whole list of blockers at once.
+ *
+ * The owner, 2026-09-23: "she should automatically run it… we should just give a user the ability
+ * to apply all. Previously she was handing those over one at a time, which we don't want."
+ *
+ * It is a TOKEN and not a sentence, unlike `review-prompt`, because pressing it makes the app DO
+ * something: the repairs the checklist marks as the app's own are applied, the list is re-derived,
+ * and then either the Run goes or she is asked about what is left. So it is translated into an
+ * event the host hears, and the host owns the writers.
+ */
+export const FIX_ALL = 'fix-all';
+
+/**
+ * RUN — her own button, offered at the end of a cleared review, and the name was HERS.
+ *
+ * The review instruction has ended with "offer to run it" since the beginning, and she did: a
+ * champagne sentence and `[Run it](action:run)`. The app knew no action called `run`, so a person
+ * who had just been told their prompt was ready pressed it and was answered *"⚠️ That button asks
+ * for something this app does not know how to do (run)"* — measured in the app, 2026-09-23.
+ *
+ * THE THIRD TIME THIS CLASS HAS COST A PERSON SOMETHING (`move-tool`, then `clean-agent-role`,
+ * both of which were hers too), so the rule this file already states is applied here rather than
+ * restated: implement the name she reached for, AND name the action in her instructions so she
+ * does not have to be lucky. Both halves are required — a matcher alone leaves the next reply to
+ * chance, and an instruction alone breaks every button already sitting in a thread.
+ *
+ * IT IS AN APPROVAL, NOT A FRESH RUN. She has just read this prompt and cleared it, so the press
+ * releases the Run her own review is holding — the same path `<run_ok/>` takes
+ * (`a2ui:run-approved`). Pressed with nothing held, the host ignores it, exactly as it ignores an
+ * approval: nothing may run unreviewed because of a button about some other turn.
+ */
+export const RUN = 'run';
+
+/**
+ * `save` — the blocker list's own first item, and the name she reached for.
+ *
+ * Measured in the app 2026-09-23: a package that had never been saved, and her review correctly
+ * said so first — *"The package has never been saved, so there is nothing to run yet"* — offering
+ * `[Save the package](action:save)`. The app's save is reachable from a tag she may write
+ * (`<save-button/>`, which the panel turns into the `save-button` command) and from the control
+ * bar's button, but not from an ACTION called `save`, so the person was told the app did not know
+ * how to do it — and with it unknown, every other repair in the list was moot: a draft has no
+ * record to write a title or a description into. Same class as `move-tool`, `clean-agent-role` and
+ * `run` (see RUN above): the intent was right and the name was missing.
+ *
+ * THE LONG SPELLINGS ARE THE SAME INTENT. `save-package` and `save-template` are what the two
+ * buttons in this app are called, and a person reading her sentence cannot tell which the app
+ * meant — so all three save.
+ */
+export const SAVE = 'save';
+
+/** The action of a "Save the package" button. Whole word only; `save-as` is not a save here. */
+export function parseSaveAction(action: unknown): boolean {
+  const word = String(action ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return word === SAVE || word === 'save-package' || word === 'save-template';
+}
+
+/**
+ * `set-title|<the name>` — naming the package, the second of the two names she reached for.
+ *
+ * Measured with the first: `[Name the package](action:set-title|Precise Professional Assistant)`
+ * was answered "this app does not know how to do that (set-title…)". The WRITER existed the whole
+ * time — `set-prompt-title`, which the panel already dispatches when she writes `<set_title>` in
+ * her reply — so this is the same shape as `set-description`: a token she writes, translated into
+ * the write the app already owns.
+ *
+ * THE WRITER IS ONE; THE WAYS IN ARE THE POINT. Her tag, her button, and a person typing in the
+ * bar are three doors onto the same write, because naming a package should not depend on which
+ * part of the screen the person happens to be looking at (CANVAS-AND-PROMPT §1: redundancy is
+ * the feature). A second WRITER would be the mistake; a second door is the design.
+ *
+ * The two-part spelling and the raw form are both read, like the description's, because a model
+ * that has just written one of them may write the other next.
+ */
+export const SET_TITLE = 'set-title';
+
+export function parseSetTitleAction(action: unknown): { title: string } | null {
+  const m = String(action ?? '').match(/^set[-_]title\s*[:|]\s*([\s\S]+)$/);
+  if (!m) return null;
+  const raw = m[1].trim();
+  if (!raw) return null;
+  // Encoded when it came from this file's own writer; raw when it came from her. Both are ours.
+  const title = raw.replace(/%28/gi, '(').replace(/%29/gi, ')').trim();
+  return title ? { title } : null;
+}
+
+/**
+ * The action of a "Run it" button. The long spellings are the same intent written out, and the
+ * separators are folded the way `requestForAction` folds them (`run_prompt` and `run-prompt` are
+ * one word) — but the match is on the WHOLE word: `rerun` is not a run, and a substring test is
+ * how an unknown word becomes a wrong action.
+ */
+export function parseRunAction(action: unknown): boolean {
+  const word = String(action ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return word === RUN || word === 'run-it' || word === 'run-prompt';
+}
+
 /** What she is asked when that button is pressed — the same review, asked in words. */
 export const REVIEW_PROMPT_REQUEST = [
   'The person has pressed Review. Read the prompt as it stands, in the workspace above.',
   'Name something only if it is actually wrong with THIS prompt, and name EVERYTHING that is',
   'wrong in this same reply — one sentence each, with a button for each fix the person can press.',
   'Do not recite the requirements. If nothing is wrong, congratulate them in one short sentence',
-  'starting with a bottle — 🍾 — and offer to run it: a person who has just worked a list of',
-  'fixes should be told they finished, not left to infer it.',
+  'starting with a bottle — 🍾 — and offer to run it as a button spelled exactly',
+  '[Run it](action:run): a person who has just worked a list of fixes should be told they',
+  'finished, not left to infer it — and should be able to act on it in one press.',
+].join(' ');
+
+/**
+ * A REQUEST WITH NO WORDS IN IT IS STILL A REQUEST — it is the person's words that are missing.
+ *
+ * Measured 2026-09-23: her blocker list offered `[Name it](action:set-title)` with no name in the
+ * action, because the name is the person's to choose and she does not know it. The app answered
+ * "this app does not know how to do that (set-title)" — which is false, and worse than false: the
+ * app DOES know how to name a package, and what was missing was a question. So a bare `set-title`
+ * or `set-description` is handed back to her as words (the same shape as `review-prompt`), she asks
+ * for the name in one sentence, and the person's answer comes back as the spelled button
+ * (`set-title|<their words>`), which the writers above already handle.
+ *
+ * NOTHING IS INVENTED AND NOTHING IS SUBSTITUTED: the app does not choose a name for the person's
+ * package, and it does not pretend the button worked. It asks.
+ */
+export const SET_TITLE_REQUEST = [
+  'The person pressed "Name it" — they want to name this package themselves, and the name is',
+  'theirs to choose, which is why the button carried none. Ask them, in one short sentence, what',
+  'they would like it called. Do not suggest a name and do not name it yourself.',
+].join(' ');
+
+export const SET_DESCRIPTION_REQUEST = [
+  'The person pressed "Add a description" without words — the description is theirs to write,',
+  'which is why the button carried none. Ask them, in one short sentence, what the package should',
+  'say about itself. Do not write one for them.',
 ].join(' ');
 
 /** A request-token, turned into the words she should receive. Null when it is not one of them. */
 export function requestForAction(action: string): string | null {
   const name = String(action ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
   if (name === REVIEW_PROMPT) return REVIEW_PROMPT_REQUEST;
+  if (name === SET_TITLE) return SET_TITLE_REQUEST;
+  if (name === SET_DESCRIPTION) return SET_DESCRIPTION_REQUEST;
   return null;
 }
 

@@ -67,10 +67,27 @@ export class AgentCanvas extends LitElement {
     /** The seat's width in px while she is here, and whether a hand is on the gripper. */
     _seatPx: { state: true },
     _gripping: { state: true },
+    /**
+     * TRUE WHILE THE COLUMN IS STANDING WITH NO DRAWING IN IT YET — and the HOST is what says
+     * so, because the host is what holds the drawing back.
+     *
+     * The column arrives before the picture does, and that gap is deliberate (the host's
+     * RUN_DRAWING_HELD_MS): the model composes the column, the rows become nodes, the run's own
+     * answers land. An empty pane through all of that says nothing about whether the
+     * application is working — the owner's report of a Run was exactly that silence: "it's just
+     * sitting there." So the column says it itself, on its own ground, for as long as it is true.
+     *
+     * NOT A CATALOG PROP, AND THAT IS WHY. It is not a fact about the drawing and the model
+     * does not assemble it: it is this column's load state, written by the one thing that knows
+     * when the drawing was published. A payload that never names it cannot clobber it, which is
+     * the failure this repository keeps measuring when two writers share one flag.
+     */
+    holding: { type: Boolean, attribute: 'holding', reflect: true },
   };
 
   declare theme: string;
   declare collapsed: boolean;
+  declare holding: boolean;
   declare private _seatPx: number;
   declare private _gripping: boolean;
 
@@ -82,6 +99,9 @@ export class AgentCanvas extends LitElement {
     // layout may also set it, and a column that two things can move needs one place to
     // see it.
     this.collapsed = true;
+    // AND IT OPENS HOLDING: the surface emitted this element, so the column exists, and
+    // nothing has been drawn in it yet. It is cleared by whoever publishes a drawing.
+    this.holding = true;
     this._seatPx = SEAT_OPEN_PX;
     this._gripping = false;
   }
@@ -326,6 +346,14 @@ export class AgentCanvas extends LitElement {
 
       <div class="stage">
         <slot name="flow"></slot>
+        <!-- THE COLUMN SAYS IT IS WORKING, ON ITS OWN GROUND — the whole of what it says while
+             the drawing is held back, and it says it where the picture will be. In the DOM
+             always and moved by CSS, so it FADES in and out (see .holding): a block that appears
+             and is removed in one frame reads as a glitch, which is the report this answers. -->
+        <div class="holding" role="status" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Assembling the drawing…</p>
+        </div>
       </div>
 
       <!-- THE FOOT IS THE COLUMN'S TOO, for the same reason the header is: a Run replaces
@@ -373,6 +401,33 @@ export class AgentCanvas extends LitElement {
       }
       :host([theme='dark']) { --flow-ground: #26242e; }
 
+      /* THE COLUMN ARRIVES — IT DOES NOT SLAP.
+       *
+       * It is assembled while the person waits and then it MOUNTS, and a mount is one frame: the
+       * owner, 2026-09-23, watching a Run — "now the canvas slams into the interface and slaps the
+       * user in the face. Can you please put a slow fade in on the canvas after it's assembled?"
+       *
+       * So the whole column fades up on its first paint — the ground, its header, the drawing and
+       * its foot together, as one object — on the application's own curve and duration
+       * (--dur-pane and --ease-settle in workspace-layout's stylesheet, copied here for the reason
+       * the ground above is copied: that element is in another bundle), and the pane's own waiting
+       * state fades out underneath it over the same time, so the two cross rather than swap.
+       *
+       * ONCE PER MOUNT, which is once per Run: a second Run reuses the element (the assembly
+       * updates it by id) and the drawing changes in place, which is the run's output changing, not
+       * the column arriving. */
+      @keyframes canvas-arrives {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      :host {
+        animation: canvas-arrives 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      /* Motion is a courtesy, never a requirement. */
+      @media (prefers-reduced-motion: reduce) {
+        :host { animation: none; }
+      }
+
       /* THE HEADER BAND. Empty it takes no height, so a surface that fills only the two
          drawing slots lays out exactly as it did before this slot existed.
          THE INSETS ARE THE DESIGN'S, taken from the column the header belongs to:
@@ -389,6 +444,81 @@ export class AgentCanvas extends LitElement {
       .foot { flex: 0 0 auto; }
       .foot ::slotted(*) { display: block; width: 100%; }
       .stage ::slotted(*) { display: block; width: 100%; height: 100%; }
+
+      /* WHILE IT IS BEING ASSEMBLED, THE COLUMN IS THE ROOM'S — NOT A SLAB OF COLOUR.
+         The ground below is what the drawing stands on, and it is opaque on purpose (a picture
+         needs a surface). But before there IS a picture, an opaque panel covers the thing the
+         person is standing in front of: the owner, 2026-09-23, watching a Run assemble — "it's
+         got an assembly that's happening on top of a solid fill. It should be transparent. I
+         should be able to see the background while it's assembling the canvas."
+         So the hold is see-through: his background shows, the spinner and its one line sit on it,
+         and the ground arrives with the picture — which is also the moment the column stops being
+         a waiting room and becomes the canvas. */
+      :host([holding]) { background: transparent; }
+
+      /* THE HELD STATE — the column before its drawing, and the fade is half of it.
+         It stands ON THE GROUND the drawing will stand on (the host's own --flow-ground, which
+         this element paints), so the column does not change colour when the picture arrives:
+         the picture fills the same ground and the spinner leaves over it.
+         IN THE DOM ALWAYS, moved by the host's attribute and by CSS, because a hidden state is
+         what makes a fade possible at all — the same mechanism, and the same reason, as the chat
+         panel's own collapse (opacity and visibility, with the visibility DELAYED on the way
+         out so the fade is seen and the element stops taking clicks only at the end). */
+      .holding {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
+          visibility 0s linear 420ms;
+      }
+      :host([holding]) .holding {
+        opacity: 1;
+        visibility: visible;
+        transition:
+          opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
+          visibility 0s linear 0s;
+      }
+      .holding p {
+        margin: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        /* THE SAME MUTED TONE THE OUTPUT COLUMN SPEAKS IN, so the two columns' waits read as
+           one application rather than two. */
+        color: rgba(255, 255, 255, 0.72);
+      }
+      :host(:not([theme='dark'])) .holding p { color: #3f3a46; }
+      .spinner {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.22);
+        border-top-color: rgba(255, 255, 255, 0.85);
+        animation: holding-spin 900ms linear infinite;
+      }
+      :host(:not([theme='dark'])) .spinner {
+        border-color: rgba(0, 0, 0, 0.14);
+        border-top-color: rgba(0, 0, 0, 0.55);
+      }
+      /* NOTHING TURNS WHILE NOTHING IS BEING SAID — the spinner is only a spinner when the
+         column is holding, so a column with a drawing in it costs no animation frames. */
+      :host(:not([holding])) .spinner { animation: none; }
+      @keyframes holding-spin {
+        to { transform: rotate(360deg); }
+      }
+      /* Motion is a courtesy, never a requirement. The spinner still turns only because a still
+         frame cannot say "working"; the fade is what this drops. */
+      @media (prefers-reduced-motion: reduce) {
+        .holding, :host([holding]) .holding { transition: none; }
+      }
 
       .seat {
         position: absolute; top: 0; right: 0; bottom: 0; z-index: 2;

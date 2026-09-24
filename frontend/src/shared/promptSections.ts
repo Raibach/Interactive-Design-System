@@ -303,6 +303,67 @@ export function isUndecidedType(raw: unknown): boolean {
   return resolveSectionType(raw).kind === 'undecided';
 }
 
+/** The four fields a row's name can arrive in, in the order every reader here tries them. */
+interface NamedRow {
+  name?: unknown;
+  section?: unknown;
+  role?: unknown;
+  type?: unknown;
+}
+
+/**
+ * WHAT A ROW IS CALLED — the ONE reader, because four fields is four chances to be wrong.
+ *
+ * A ROW'S NAME IS WRITTEN FOUR WAYS IN THIS APP, and a reader that knows only two of them does not
+ * fail loudly: it finds nothing, and "nothing" is indistinguishable from an empty row. So it
+ * silently reports the wrong thing about a prompt that is perfectly fine — which is the worst
+ * shape a bug can have here, because the surface that reports it is the one a person believes.
+ *
+ * THE TWO SHAPES, and they are both live at once:
+ *
+ *   what the EDITOR holds      { name, type, content }        — the row being typed in
+ *   what a SAVED row carries   { section, role, content }     — no `name`, and no `type` at all
+ *
+ * The second is not a legacy curiosity to be migrated away: it is what the surface's own data
+ * model hands to everything that reads the prompt, so it is what the pre-Run review and the
+ * drawing's builder are given by default. Read as `type || name` it answers `''` for two rows out
+ * of four, and:
+ *
+ *   · `resolveSectionType('')` is its own `empty` kind, so `isUndecidedType('')` is FALSE and the
+ *     "a row I cannot name" guard lets it through;
+ *   · `normalizeSectionType('')` then takes its documented fallback, `custom`.
+ *
+ * So the System and User rows of every saved package became two rows called `custom`: the review
+ * said "There is no User Role" over a User Role with words in it, and reported the pair as one row
+ * sent twice (T6). Both requirements are BLOCKING and both repairs need the person's own words, so
+ * no button could clear them and no Run could ever pass the gate. Measured on the live package
+ * 2026-09-23, and it is the same fact CANVAS-AND-PROMPT §5 already names: "Read the name as
+ * `name || section || role || type`."
+ *
+ * THE EMPTY ROW IS ITS OWN ANSWER. A row with none of the four is not a Custom row and not an
+ * unnamed one — it has no name to read, and the callers here say so rather than inventing one.
+ */
+export function declaredName(row: unknown): string {
+  const r = (row ?? {}) as NamedRow;
+  const name = r.name ?? r.section ?? r.role ?? r.type;
+  return typeof name === 'string' ? name.trim() : '';
+}
+
+/**
+ * A ROW'S SEAT, or null when it has no nameable one — which is the whole of the question every
+ * caller of this asks. `null` covers both answers that are not a seat: a row with no name at all,
+ * and a row whose name has no canonical seat yet (UNDECIDED, e.g. a free-form `custom` row).
+ *
+ * They are collapsed into one answer on purpose: what a caller does about a row it cannot name is
+ * the same either way — it reports it, draws it without claiming a seat, and never guesses.
+ */
+export function seatIdOf(row: unknown): string | null {
+  const raw = declaredName(row);
+  if (!raw) return null;
+  if (isUndecidedType(raw)) return null;
+  return normalizeSectionType(raw);
+}
+
 /**
  * The STRICT reader — refuses rather than substitutes.
  *

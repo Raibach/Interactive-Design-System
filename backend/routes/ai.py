@@ -110,15 +110,26 @@ def _catalog_component_vocabulary() -> str:
         # Properties live in the `allOf` branches (the component carries one or
         # more $refs), so walk those as well as the top level.
         for part in list(spec.get("allOf") or []) + [spec]:
-            for prop in (part.get("properties") or {}):
+            for prop, prop_spec in (part.get("properties") or {}).items():
                 if prop == "component":
                     continue  # the discriminator, not an argument
+                # A CONTAINER'S SLOTS COME FROM THE CATALOG TOO, and they did not until
+                # 2026-09-23: the list named the `children` PROPERTY and nothing about the
+                # slots inside it, so a prompt could only guess which names a container
+                # fills by. The guess that was made — {flow, seat} for AgentCanvas, whose
+                # element renders {header, flow, footer} and no seat at all — is the drift
+                # the catalog check reported as blocking. The names are in the schema
+                # (`children.properties`), so they are read from it here rather than
+                # restated, and a container's slots can no longer be unknown to a prompt.
+                if prop == "children" and isinstance(prop_spec, dict):
+                    slots = list((prop_spec.get("properties") or {}).keys())
+                    props.append(f"children {{{', '.join(slots)}}}" if slots else prop)
+                    continue
                 if prop not in props:
                     props.append(prop)
         lines.append(f"- {name}: {', '.join(props) if props else 'no properties'}")
 
     return f"COMPONENT CATALOG — all {len(components)} (only these; anything else is a 503):\n" + "\n".join(lines)
-
 
 def _repair_rows(catalog: str = "prompt-composer") -> List[Dict[str, Any]]:
     """
@@ -306,6 +317,12 @@ class AISurfaceContext(BaseModel):
     has_unsaved_changes: Optional[bool] = False
     session_id: Optional[str] = None
     session_title: Optional[str] = None
+    # THE RUN'S OWN IDS — see the render-run branch. A Run does not replace the surface;
+    # it moves the third column, so the assembly has to land on the components that are
+    # on screen: the layout's root and its other slots, and the component the layout
+    # currently points at for the middle. A field the model does not declare is dropped
+    # in silence, which is why this is written here and not only sent by the shell.
+    run: Optional[dict] = None
 
 
 class AISurfaceRequest(BaseModel):
@@ -316,6 +333,7 @@ class AISurfaceRequest(BaseModel):
     - render-console: AI assembles console with cards
     - render-composer: AI assembles blank composer with greeting
     - render-session:{id}: AI assembles existing session
+    - render-run[:{id}]: AI assembles the THIRD COLUMN a Run opens (the canvas)
 
     Context provides document state so AI can decide how to handle:
     - has_unsaved_changes: If true, AI should prompt user to save/discard
@@ -426,18 +444,42 @@ def ai_assemble_surface(
         # complete-looking output with a required piece missing. That is a 503 here,
         # like every other missing precondition in this branch.
         console_session = state.prompt_sessions_api.get_or_create_console_session(user_id=uid)
-        if not console_session or not console_session.get("conversation_id"):
+        if not console_session:
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "A2UI FAILURE: the console session did not resolve"
-                    + (" (no conversation)" if console_session else " (not created)")
-                    + ". The console chat binds that conversation, so the surface "
-                    "cannot be assembled without it."
+                    "A2UI FAILURE: the console session did not resolve (not created). "
+                    "The console chat binds its conversation, so the surface cannot be "
+                    "assembled without it."
                 ),
             )
         console_session_id = str(console_session["id"])
-        console_conversation_id = str(console_session["conversation_id"])
+        # ── THE CONSOLE'S CONVERSATION IS THE ONE IT ALREADY HAS ────────────────
+        #
+        # This used to call `open_console_conversation` on every landing, which INSERTS a row ("a
+        # landing STARTS A VISIT"). The owner, 2026-09-23, having watched the console's list fill up
+        # with threads nobody wrote in: "there's 23 conversations saved. I can't remove any of them.
+        # There should not be any conversation saved unless the user saves it just on the console.
+        # Just stop the conversations on the console." And, on what starts one: "there is no
+        # conversation new until the user engages. The AI is not the conversation — it's a human
+        # being that initiates the conversation."
+        #
+        # The count was in the database: 23 chat rows under the console session, 18 of them with
+        # ZERO messages — one per visit, each one a place his history was not.
+        #
+        # SO A LANDING CREATES NOTHING AT ALL. It binds the conversation the console already owns
+        # (the session row's own pointer — the one the chat writes into), or NOTHING, and nothing is
+        # a true state: the seat's greeting is never written down (a turn the app asks for never
+        # creates a conversation — see `person_turn` in routes/teacher.py), and the first thing the
+        # PERSON says is what creates one. That is why this branch no longer refuses to bind an
+        # empty id: with no conversation there is nothing to read, which is exactly what an
+        # untouched console is.
+        console_conversation_id = str(console_session.get("conversation_id") or "")
+        if not console_conversation_id:
+            print(
+                f"[A2UI Console] {console_session_id[:8]}… has no conversation yet — the surface "
+                f"binds none. One is created when the person speaks, not by looking."
+            )
 
         # ── THE TABS' OWN CONVERSATIONS — one per process, under the same session ──
         #
@@ -1435,10 +1477,225 @@ Output ONLY this JSON (no markdown):
             }
         ]
 
+    # ═══════════════════════════════════════════════════════════════
+    # INTENT: render-run[:{id}] — THE THIRD COLUMN, ASSEMBLED
+    # ═══════════════════════════════════════════════════════════════
+    #
+    # A RUN DOES NOT RESHAPE THE SURFACE BY HAND. The third column is a surface like the
+    # console's cards and a package's three panes, so the model assembles it the same way —
+    # against this catalog, in this endpoint — and the shell applies what it is given.
+    #
+    # WHAT THIS REPLACES, MEASURED 2026-09-23 (READ-ME/CONTINUE-HERE.md §00c): the host wrote
+    # the components itself. `setOutputColumn('flow')` built `AgentCanvas` with its three
+    # slots and pushed `AgentFlow`, `OutputControls` and `CanvasFooter` straight into the
+    # live component list, in TypeScript, on the Run — so the one surface a person watches
+    # most closely was the one the protocol did not build. The owner's charge: "if those
+    # nodes are not being called from the A2UI library by a model, then you've not only
+    # violated the protocol, you've created this jarring effect."
+    #
+    # AN UPDATE, NOT A REPLACEMENT, and that is what makes a Run different from opening a
+    # package. `render-session` returns the whole tree and the whole model because the
+    # package IS the surface. A Run changes ONE COLUMN of a surface that is already on
+    # screen and already carries facts the server does not have — the rows as they stand in
+    # the editor, the conversation on screen, the places nodes were dragged to. So the
+    # caller states the ids the assembly must land on (`context.run`), the model returns the
+    # components to add and update, and the shell applies them as an update. A run that
+    # replaced the tree would revert a person's unsaved rows to the last saved ones, which
+    # is the second-writer disease this repository has spent the week removing.
+    #
+    # THE OTHER SLOTS ARE CHECKED, NOT TRUSTED. The layout's left, left-header, left-footer
+    # and right slots are stated to the model, and the root it returns must carry them back
+    # byte for byte. An assembly that rewrote them would take the prompt or Grace off the
+    # screen, and it would do it while a person was watching a Run — so it is a 503 with the
+    # difference named, never a silent acceptance.
+    elif intent == "render-run" or intent.startswith("render-run:"):
+        run = request.context.run if (request.context and request.context.run) else None
+        layout_id = str((run or {}).get("layoutId") or "").strip()
+        middle_id = str((run or {}).get("middleId") or "").strip()
+        slots = (run or {}).get("slots")
+        if not layout_id or not isinstance(slots, dict) or not slots:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "A2UI FAILURE: a Run must state the surface it is assembling into — the "
+                    "layout's root id, its other slots, and the component in the middle today "
+                    "(context.run). Without them an assembled third column cannot land on the "
+                    "screen that is already there, and the columns beside it would be replaced."
+                ),
+            )
+
+        package = (run or {}).get("package") or {}
+        run_info = {
+            "package_title": package.get("title") or "Untitled",
+            "package_saved": bool(package.get("id")),
+            "rows_about_to_run": package.get("rows") or 0,
+            "seats": package.get("seats") or [],
+            "middle_component_today": middle_id or None,
+        }
+
+        t_b_start = time.perf_counter()
+        llm_response = query_llm(
+            question=f"""You are Grace, the A2UI surface assembler.
+
+A person pressed RUN. The prompt column has folded back to its rail and the THIRD COLUMN —
+the canvas — is opening in the room that appears between the columns. YOU assemble that
+column. The renderer draws the components you return and nothing else, so a part you leave
+out is a part of the screen that will not exist.
+
+{_catalog_component_vocabulary()}
+
+THE SESSION'S FACTS
+{json.dumps(run_info)}
+
+THE SURFACE YOU ARE UPDATING — read this as a fact, not as a suggestion:
+- The layout's root is "{layout_id}" (workspace-layout). Its OTHER slots are already filled
+  and MUST come back exactly as given here:
+{json.dumps(slots, indent=2)}
+- The component standing in the middle column today is "{middle_id or '(none yet)'}". It is
+  where the canvas goes: keep that id, and give it the canvas's three slots.
+
+REQUIREMENTS (a Run's column, drawn against the catalog):
+1. The middle component becomes AgentCanvas with "theme": "dark" — a Run's picture is shown
+   dark — and its "children" filled BY NAME: header, flow, footer. Those three slot names
+   are the whole of it; this element renders no other slot.
+2. header: OutputControls — the column's own controls, with "outputType": "Agent Flow".
+3. flow: AgentFlow — THE DRAWING. Bind its "flow" to {{"path": "/session/middle_column/flow"}}
+   and set "theme": "dark". THE NODES COME FROM THAT PATH: do not invent nodes, do not send a
+   "flow" value, and do not describe the prompt's rows here. The shell derives them from the
+   rows the person is running.
+4. footer: CanvasFooter — the column's own foot, with "theme": "dark".
+5. The first component in your list is the layout root: same id, its other slots EXACTLY as
+   given above, plus "middle" pointing at the component from requirement 1.
+6. Name the three children "{middle_id}-header", "{middle_id}-flow", "{middle_id}-footer" —
+   ids a second Run can land on again.
+7. One short ai_message that says the drawing is being assembled, in the app's own voice.
+   No greeting, no salutation, no question.
+
+Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
+{{
+  "components": [
+    {{"id": "{layout_id}", "component": "workspace-layout", "children": {{...the slots above..., "middle": "{middle_id}"}}}},
+    {{"id": "{middle_id}", "component": "AgentCanvas", "theme": "dark", "children": {{"header": "{middle_id}-header", "flow": "{middle_id}-flow", "footer": "{middle_id}-footer"}}}},
+    {{"id": "{middle_id}-header", "component": "OutputControls", "outputType": "Agent Flow"}},
+    {{"id": "{middle_id}-flow", "component": "AgentFlow", "theme": "dark", "flow": {{"path": "/session/middle_column/flow"}}}},
+    {{"id": "{middle_id}-footer", "component": "CanvasFooter", "theme": "dark"}}
+  ],
+  "ai_message": "Assembling the drawing — the picture appears as it is built."
+}}""",
+            mode="surface_assembly",
+            temperature=0.0,
+            prompt_id="surface-assembly-run"
+            # model intentionally omitted — use the enabled provider's default
+        )
+        ms_b = (time.perf_counter() - t_b_start) * 1000
+
+        if not llm_response or not llm_response.strip():
+            raise HTTPException(
+                status_code=503,
+                detail="A2UI FAILURE: AI did not respond. The AI must be active to render this surface."
+            )
+        if llm_response.strip().startswith("Error:"):
+            raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
+
+        response_text = llm_response.strip()
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            parsed = _extract_json_payload(response_text)
+            components = parsed["components"]
+            if not isinstance(components, list) or not components:
+                raise ValueError("components must be a non-empty array")
+
+            # THE LAYOUT COMES BACK WHOLE, OR NOTHING DOES. See the note above this branch:
+            # the prompt and Grace are in those slots, and a Run may not take them away.
+            root = next((c for c in components if isinstance(c, dict) and c.get("id") == layout_id), None)
+            if root is None:
+                raise ValueError(f"the layout root \"{layout_id}\" is not in the assembly")
+            children = root.get("children")
+            if not isinstance(children, dict):
+                raise ValueError("the layout root came back with no children")
+            beside = {k: v for k, v in children.items() if k != "middle"}
+            if beside != slots:
+                raise ValueError(
+                    "the assembly rewrote the layout's other slots, which a Run may not do — "
+                    f"given {json.dumps(slots)}, got {json.dumps(beside)}"
+                )
+            middle_target = children.get("middle")
+            if not isinstance(middle_target, str) or not middle_target:
+                raise ValueError("the layout root does not point its middle slot at the canvas")
+            if not any(isinstance(c, dict) and c.get("id") == middle_target for c in components):
+                raise ValueError(f"the middle slot points at \"{middle_target}\", which the assembly did not emit")
+
+            # Every name and id is validated against the catalog with the same gate every
+            # other assembly passes. A canvas that is not in the catalog draws an error
+            # block in the middle of the picture, so it fails here instead.
+            validate_a2ui_components(components)
+            ai_message = str(parsed.get("ai_message") or "").strip() or "Assembling the drawing."
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+            print(
+                f"[A2UI Run] AI RESPONSE PARSE FAILED:\n"
+                f"  error_type: {type(e).__name__}\n"
+                f"  error_message: {e}\n"
+                f"  llm_response_length: {len(response_text)}\n"
+                f"  llm_response_first_500: {response_text[:500]}\n"
+                f"  timestamp: {time.strftime('%Y-%m-%dT%H:%M:%S%z')}"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: AI returned invalid JSON for render-run — {type(e).__name__}: {str(e)}. Raw (first 300 chars): {response_text[:300]}"
+            )
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        print(f"\n{'='*60}")
+        print(f"[PERF TRACE] POST /api/ai/assemble-surface | intent=render-run | total={elapsed_ms}ms")
+        print(f"  Milestone B (Network/LLM - query_llm):     {ms_b:8.1f}ms")
+        print(f"{'='*60}\n")
+        print(f"[A2UI Run] assembled the third column: {middle_target} — "
+              f"{[c.get('component') for c in components if isinstance(c, dict)]}")
+
+        return [
+            {
+                "version": "v0.9.1",
+                "createSurface": {
+                    "surfaceId": "main",
+                    "catalogId": A2UI_CATALOG_ID
+                }
+            },
+            {
+                "version": "v0.9.1",
+                "updateComponents": {
+                    "surfaceId": "main",
+                    "components": components  # AI-generated, not hardcoded
+                }
+            },
+            {
+                # A PATH, NOT THE ROOT. A Run updates a surface that is already carrying the
+                # person's rows and their conversation, so the assembly writes only the box
+                # it owns: a root write would replace the whole model with these few facts.
+                "version": "v0.9.1",
+                "updateDataModel": {
+                    "surfaceId": "main",
+                    "path": "/run",
+                    "value": {
+                        "ai_message": ai_message,
+                        "assembly_time_ms": elapsed_ms,
+                        "llm_used": True,
+                        "usage": dict(LAST_USAGE),  # measured, straight from the provider
+                    }
+                }
+            }
+        ]
+
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown intent: {intent}. Valid intents: render-console, render-composer, render-session:{{id}}"
+            detail=(
+                f"Unknown intent: {intent}. Valid intents: render-console, render-composer, "
+                f"render-session:{{id}}, render-run[:{{id}}]"
+            )
         )
 
 
@@ -1584,7 +1841,6 @@ async def ai_save_surface(
 
         compiled_output = request.middle_column.get("compiled_output", "") if request.middle_column else ""
         conversation_id = request.right_column.get("conversation_id") if request.right_column else None
-
         # ══════════════════════════════════════════════════════════════════════
         # A2UI: AI COMPILES THE SURFACE STATE BEFORE SAVING
         # The AI analyzes all sections and generates:

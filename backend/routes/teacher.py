@@ -61,6 +61,21 @@ class TeacherQueryRequest(BaseModel):
     editorial: Optional[Dict[str, Any]] = None
     mode: str = "chat"
     metadata: Optional[Dict[str, Any]] = None
+    # ── WHO SPOKE ─────────────────────────────────────────────────────────────
+    # True when a person typed this turn. False for a turn the APPLICATION asks for on
+    # their behalf: the console's and the composer's own greetings, whose `question` is an
+    # INSTRUCTION TO GRACE ("A person has just landed on the console — the index of every
+    # package they have built…"), not words anyone said.
+    #
+    # A greeting's instruction was being written into the conversation as the person's own
+    # turn — invisible while every landing opened a fresh thread, and visible the moment the
+    # thread is one that persists: reloading the console showed the app's internal prompt
+    # above her reply, as if the person had typed it. The owner, 2026-09-23: "now it says a
+    # person has landed on the console — the index of every package they have built …"
+    #
+    # So the fact travels with the call, and the write below honours it. Her REPLY is still
+    # recorded — she did say that, and the thread is where a person reads it back.
+    person_turn: bool = True
     # Tool calls the PROMPT declares. Not a suggestion to the model: these are
     # executed here, server-side, BEFORE it is called — so the design is IN the
     # prompt rather than something the model is asked to imagine. The browser
@@ -233,6 +248,18 @@ async def api_teacher_query(request: TeacherQueryRequest):
         warnings: List[str] = []
         if request.mode != "chat":
             print(f"ℹ️  mode={request.mode} — not a conversation; no conversation attached or created.")
+        elif not request.person_turn and not conv_id:
+            # A TURN THE APP ASKED FOR NEVER STARTS A CONVERSATION. The greetings are the case
+            # this exists for: they are the application introducing the console, and the owner's
+            # rule for when a conversation begins is a person's — "there is no conversation new
+            # until the user engages. The AI is not the conversation — it's a human being that
+            # initiates the conversation." So a greeting with nothing to speak into answers in the
+            # thread and writes nothing down, and the first thing the PERSON says creates the row.
+            print(
+                "ℹ️  the app asked for this turn (person_turn=false) and this place has no "
+                "conversation yet — it is answered and NOT written down. The person's first turn "
+                "is what will create one."
+            )
         elif state.conversation_api and not conv_id and request.session_id and persistence_error is None:
             existing = []
             lookup_failed = False
@@ -274,19 +301,48 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # which the run writes), and writing them here as well is the duplication the
         # owner sees — the same text in the output column and in the thread beside it.
         # `chat` is the one mode where a turn is a turn.
+        #
+        # AND ONLY A PERSON'S TURN IS THE PERSON'S. A greeting (person_turn=False) asks Grace
+        # to open the conversation; its question is the app talking to her, so it is not
+        # written as something the person said — see the field's own note. Her reply is.
         persist_turn = request.mode == "chat"
-        if state.conversation_api and conv_id and persist_turn:
+        if state.conversation_api and conv_id and persist_turn and request.person_turn:
             try:
                 state.conversation_api.add_message(conv_id, uid, "user", request.question)
             except Exception as e:
                 persistence_error = f"Your message could not be written to this package's conversation: {e}"
                 print(f"❌ Failed to save user message: {e}")
+        elif state.conversation_api and conv_id and persist_turn:
+            print(
+                f"ℹ️  the app asked for this turn (person_turn=false): Grace is opening the "
+                f"conversation. Her reply is written to {str(conv_id)[:8]}…; the instruction "
+                f"that produced it is not, because nobody said it."
+            )
         elif state.conversation_api and conv_id:
             print(f"ℹ️  mode={request.mode} — not a conversation turn; not written to {str(conv_id)[:8]}…")
 
+        # ── Mode detection ──────────────────────────────────────────
+        # FIRST, because what the mode is decides which parts of the context may be
+        # assembled at all — see the history block below, which used to run without asking.
+        source = (request.metadata or {}).get("source", "")
+        prompt_output_sources = {"ResponsivePromptBuilder", "prompt_builder", "PromptBuilder"}
+        mode = "prompt_output" if (request.mode == "prompt_output" or source in prompt_output_sources) else "chat"
+
         # ── Conversation context retrieval ──────────────────────────
+        #
+        # CHAT ONLY, AND THAT GATE IS THE FIX FOR A LOSS NOBODY NAMED. In prompt_output
+        # mode the `context` IS the structured JSON config the seat built, and
+        # grace_gui._assemble_prompt_output runs json.loads() over it. Prepending
+        # "=== CONVERSATION HISTORY ===" to it made that parse throw, and the assembler's
+        # bare `except` substituted a generic "Execute the prompt configuration." — so a
+        # caller that sent a conversation_id with a prompt_output run silently got a
+        # prompt nobody wrote, and nothing anywhere said so. The tool results were moved
+        # out of this prefix for exactly this reason (see the note below the tool calls);
+        # the history was not, and it is the same bug. A Run does not need the history
+        # and never did — a run is stateless on purpose (FINDINGS §4) — so the honest
+        # gate is the mode, not a check that the parse happened to survive.
         conversation_context = ""
-        if state.conversation_api and conv_id:
+        if state.conversation_api and conv_id and mode == "chat":
             try:
                 msgs = state.conversation_api.get_messages(conv_id, uid, limit=20)
                 if msgs:
@@ -300,6 +356,8 @@ async def api_teacher_query(request: TeacherQueryRequest):
                     f"This package's history could not be read ({e}) — this answer was written without it."
                 )
                 print(f"⚠️  Failed to retrieve conversation history: {e}")
+        elif conv_id and mode != "chat":
+            print(f"ℹ️  mode={mode} — a run, not a conversation turn; its history is not read.")
 
         # ── Memory context ──────────────────────────────────────────
         memory_context = ""
@@ -315,11 +373,6 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 + "\n\n=== CURRENT WORKSPACE ===\n"
                 + full_context
             )
-
-        # ── Mode detection ──────────────────────────────────────────
-        source = (request.metadata or {}).get("source", "")
-        prompt_output_sources = {"ResponsivePromptBuilder", "prompt_builder", "PromptBuilder"}
-        mode = "prompt_output" if (request.mode == "prompt_output" or source in prompt_output_sources) else "chat"
 
         # ── Tool calls: run them BEFORE the model ───────────────────
         # A tool call written into a prompt is only real if something executes it.

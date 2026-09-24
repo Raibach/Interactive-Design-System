@@ -193,3 +193,95 @@ make her faster; it makes the wait disappear.
   characters. It looked exactly like a model that would not talk.
 - **The `reasoning` parameter was accepted, documented, passed by every caller, and never
   read.** The payload was decided by mode alone.
+
+---
+
+## §10 — The console's chat is a package's chat
+
+**The owner's model, stated 2026-09-23, and it is the rule this section exists to record:**
+
+> I know Grace's console the console chat — you've got to understand. The chats are not global.
+> They're specific for the package, and console has its own package. It's a search filter
+> organizational chat interface. You're not going to be doing prompt engineering or prompt
+> adjustments on Grace on the console, because she's tied to the package console in the database.
+
+So the console is **a package like any other**, with its own row in `prompt_sessions`
+(`metadata->>'session_type' = 'console'`, enforced one-per-user by
+`idx_prompt_sessions_console_per_user`). Its chat reads and writes **that row's conversations and
+nothing else**, and the work there is organisation — finding, filtering, sorting — never prompt
+engineering, because there is no prompt open on the library.
+
+**What is true today, and what is not.** The console row's own pointer is clean: it names its own
+conversation, and that conversation hangs off the console session. But its CONTENTS are not the
+console's: measured 2026-09-23, that thread held 69 messages, **31 of them about another package's
+prompt**, and its last ten turns were package greetings ("A person has just opened an existing
+piece of work…") alternating with answers about that package's flow. The console chat was doing
+prompt engineering on a package it does not own.
+
+**The mechanism, so it is not re-derived.** Two facts combine:
+
+1. **The console's landing announces no arrival of its own.** Clicking the Console tab calls
+   `assembleSurfaceThenRepairs('render-console')` with no `markArrival` (`WritingAreaIndex.tsx`),
+   so the console's panel greets on whatever record happens to be pending — and the last thing to
+   leave a record is a package open (`markArrival('resume')` in the same file).
+2. **Arrivals are unaddressed.** `a2ui:composer-opened` is broadcast on `window` and every mounted
+   panel listens (`chat-panel.ts`, `_onComposerOpened`), so the console's panel answers a
+   package's arrival — and a package's panel answers the console's landing.
+
+The write then lands legitimately as far as the server can tell: the console's panel sends with
+the console's own session and conversation ids, which are valid for each other, so the package
+check in `backend/routes/teacher.py` — which does correctly drop a *foreign* conversation id —
+passes it. She then talks about the other package because that thread's own 20-turn history is
+what she is handed.
+
+**THE FIX, when it is written:** arrivals are *addressed to a seat* (the announcement carries the
+session it is for, and a panel greets only for its own), and the console's landing gets an arrival
+of its own instead of inheriting one. Note the last write of this kind predates `0b0f4e0`, so the
+console's *words* were corrected there; the *addressing* is what is still open.
+
+---
+
+## §11 — Open decision: what "the console package's tools" means
+
+Recorded so the question is not lost, and deliberately **not decided in code yet**, because no
+mechanism exists to decide it with.
+
+The owner's instruction — "it should only be loading conversations **and tools** from the Console
+package in the database" — cannot be implemented as stated today: **there is no per-package tool
+store anywhere.** `tools` (`backend/init_db.py`) has no owner, session or user column; its only
+dimensions are `sections` (which prompt seat a tool belongs to) and `runner` (whether anything
+answers it). `list_tools()` (`backend/tools.py`) returns the whole register, `render_tools_block()`
+takes no arguments and is interpolated into every assembly including the console's, and
+`prompt_artifacts` — the one table that sounds like it might hold per-package artefacts — is empty.
+
+What a seat is actually told today is the installation-wide register: the console's chat receives
+"=== TOOLS AVAILABLE (14 — these are the only ones that exist) ===" on every turn
+(`chat-panel.ts`, `_buildWorkspaceContext`), and `_loadTools()` caches it for the element's
+lifetime.
+
+**The three candidate mechanisms**, none of them chosen:
+
+1. A per-package grant — a `session_tools` table or a JSONB column on `prompt_sessions` — with the
+   register as the catalogue and each package holding the tools it uses.
+2. The package's own prompt as the declaration: a package's tools are the `{{tool:name}}` tokens
+   its rows name (which `toolsFromSections` already reads, and which `teacher.py` already treats as
+   "the declaration" for execution). The console package declares none, so its chat is told about
+   none.
+3. Leave the register as the catalogue a seat may offer from — which is what makes it possible for
+   her to propose a *real* tool name when a prompt's Tool Call step is empty (see §the note in
+   `chat-panel.ts` about that fix), and scope nothing.
+
+**The tension to settle:** (2) satisfies the owner's rule exactly, but it removes her ability to
+offer a registered tool into an empty Tool Call step — which was itself a fix for her inventing
+tool names. (1) keeps both and costs a schema change. (3) costs nothing and leaves the instruction
+unimplemented.
+
+**CHOSEN 2026-09-23, when the decision was put to the owner and not answered: (3) PLUS A CONSOLE
+EXCEPTION.** The console's chat is told about **no** register tools, because its row declares none
+and its work is organisation; every PACKAGE seat keeps the register as the catalogue it may offer
+from. Implemented in `chat-panel.ts` (`_buildWorkspaceContext`) as `this._seatIsConsole !== true`,
+so a seat KNOWN to be the console goes without and a failed scope read cannot silently strip a
+package of the catalogue it needs. What it costs: the register is still installation-wide for
+packages, so a package is told about tools other packages use — option (1) is the schema change to
+make later if that ever matters.
+
