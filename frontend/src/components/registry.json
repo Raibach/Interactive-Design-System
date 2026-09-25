@@ -806,7 +806,10 @@
     "typography": "verbatim",
     "litComponent": "inferred",
     "behavior": "inferred"
-   }
+   },
+   "gaps": [
+    "THE ROWS CARRY A TIMESTAMP AND THE DRAWING HAS NONE (owner, 2026-09-24: \"can you add timestamps to the conversations when they're saved\"). v.4b draws no conversation selector in this area at all \u2014 the list's look is the older small-dropdown state=open #40001085:2414 \u2014 so there is no drawn time to copy. Each row shows the server's updated_at, the same fact the list is ordered by, in the app's one date format (shared/when.ts, the same the Evals feed shows). The design must catch up, as with the citation pill."
+   ]
   }
  ]
 }

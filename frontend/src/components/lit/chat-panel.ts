@@ -80,6 +80,8 @@ import {
 } from '@/shared/actionLink';
 import { arrivalIsFor, consumeArrival, type Arrival, type ArrivalKind } from '@/shared/arrival';
 import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
+// The app's one "when" — the same format the Evals feed shows for a run. See shared/when.
+import { formatWhen } from '@/shared/when';
 import { getStoredUserId } from '@/services/authService';
 
 interface SeatMessage {
@@ -276,7 +278,7 @@ export class ChatPanel extends LitElement {
    * with archived rows included. Until it is read (or if it cannot be), the bar falls back
    * to the surface's list length, which is real data too, just staler.
    */
-  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean }> | null = null;
+  private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string }> | null = null;
   /**
    * A conversation id the HOST handed this seat, trusted over the seat's own list.
    *
@@ -1476,6 +1478,25 @@ export class ChatPanel extends LitElement {
       text-overflow: ellipsis;
     }
     .conversation-list .conv-open:hover { background: #f7fafc; border-radius: 4px 0 0 4px; }
+    /* WHEN THE THREAD WAS LAST SAVED — the owner's ask, 2026-09-24: "can you add timestamps to
+       the conversations when they're saved."
+       IT IS NOT IN THE DRAWING, AND THAT IS WORTH SAYING PLAINLY. v.4b draws no conversation
+       selector here at all; this list's look is the older "small-dropdown" state=open
+       #40001085:2414 (see registry.json), so there is no drawn time to copy. This is the app's
+       own when — the same format the Evals feed shows (shared/when.ts) — recorded as an
+       addition the design has yet to catch up with, the way the citation pill is.
+       THE COLOUR IS MEASURED, NOT CHOSEN. #3D515B is the card's own line colour — a value the
+       file already carries — and on this tile it reads 7.78:1, past AA. The muted greys the
+       rest of this file uses (#6c757d, #767676) measure 4.39:1 and 4.25:1 here: both fail, and
+       a timestamp is exactly the kind of small text that fails invisibly. */
+    .conversation-list .conv-when {
+      flex: 0 0 auto;
+      padding-right: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #3D515B;
+      white-space: nowrap;
+    }
     /* The trash, at the row's end. The mark is the one the console cards already carry
        (agent-card-element: the same 24-grid stroke path), and so is the gesture: first click
        arms it, second click removes — a conversation is not deleted by one stray click. */
@@ -3648,7 +3669,9 @@ ${workspaceContext}`;
       );
       if (!res.ok) return;
       const body = (await res.json()) as {
-        conversations?: Array<{ id?: unknown; title?: unknown; tab?: unknown; is_archived?: unknown }>;
+        conversations?: Array<{
+          id?: unknown; title?: unknown; tab?: unknown; is_archived?: unknown; updated_at?: unknown;
+        }>;
       };
       if (!Array.isArray(body?.conversations)) return;
       const rows = body.conversations.map((c) => ({
@@ -3656,9 +3679,17 @@ ${workspaceContext}`;
         title: String(c?.title || '(untitled)'),
         tab: String(c?.tab || 'chat'),
         archived: c?.is_archived === true,
+        // WHEN IT WAS LAST SAVED, as the server wrote it. The read already carries it (the
+        // server orders the list by it), so the row's time and the list's order are the same
+        // fact — the newest thread is the top row and the top row is the newest time.
+        savedAt: String(c?.updated_at ?? ''),
       })).filter((r) => r.id);
       if (rows.length === this._conversationRows?.length
-          && rows.every((r, i) => r.id === this._conversationRows?.[i]?.id && r.title === this._conversationRows?.[i]?.title)) {
+          && rows.every((r, i) => r.id === this._conversationRows?.[i]?.id
+            && r.title === this._conversationRows?.[i]?.title
+            // A thread that was just written to is the same row with a NEW time: without this
+            // the early return would keep a stale timestamp on screen after a save.
+            && r.savedAt === this._conversationRows?.[i]?.savedAt)) {
         return;
       }
       this._conversationRows = rows;
@@ -3697,6 +3728,10 @@ ${workspaceContext}`;
         title: String(c?.title || '(untitled)'),
         tab: String(c?.tab || 'chat'),
         archived: false,
+        // The SURFACE's list carries no time — it is the assembly's own array, not this
+        // server read — so a fallback row draws the title and no timestamp. A missing time
+        // is drawn as nothing rather than as a guess.
+        savedAt: '',
       })).filter((r) => r.id);
     if (!rows.length) {
       return html`<p class="conversation-none">No conversations yet for this package.</p>`;
@@ -3706,6 +3741,12 @@ ${workspaceContext}`;
         <button class="conv-open" data-conversation-id=${r.id} @click=${this._pickConversation}>
           ${r.title}${r.archived ? html`<span class="tab-tag">archived</span>` : nothing}
         </button>
+        ${r.savedAt
+          // THE HOVER CARRIES THE EXACT STAMP, the way the Evals feed's row does: the drawn
+          // text is local time and a machine stamp on the row would be unreadable, so each
+          // says what the other cannot.
+          ? html`<span class="conv-when" title=${`Last saved ${r.savedAt}`}>${formatWhen(r.savedAt)}</span>`
+          : nothing}
         <button
           class="conv-remove ${this._armedDelete === r.id ? 'armed' : ''}"
           type="button"
