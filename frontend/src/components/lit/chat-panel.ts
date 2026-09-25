@@ -739,7 +739,7 @@ export class ChatPanel extends LitElement {
     // FOR THIS SEAT ONLY. A record left by another seat's arrival stays where it is — see
     // shared/arrival: eating it here is how the seat it was addressed to never hears it.
     const arrived = consumeArrival(this.sessionId ?? null);
-    if (arrived) this._wantsGreeting = arrived.kind;
+    if (arrived) this._takeArrival(arrived.kind);
     void this._loadTools();
     window.addEventListener('a2ui:system-message', this._onHostSay);
     // A write that landed nowhere is reported where the person is already reading. The editor
@@ -1965,7 +1965,7 @@ export class ChatPanel extends LitElement {
        * cannot steal another seat's.
        */
       const arrived = consumeArrival(this.sessionId ?? null);
-      if (arrived) this._wantsGreeting = arrived.kind;
+      if (arrived) this._takeArrival(arrived.kind);
       void this._readPackageConversations(this._userId());
       void this._readSeatScope(this._userId());
     }
@@ -2182,7 +2182,7 @@ export class ChatPanel extends LitElement {
      * seat whose job is organising cards. Nothing here greets for a seat it is not.
      */
     if (!arrivalIsFor({ kind, sessionId: d.sessionId ?? null }, this.sessionId ?? null)) return;
-    this._wantsGreeting = kind;
+    this._takeArrival(kind);
     this._greetIfArriving();
   };
 
@@ -2221,7 +2221,51 @@ export class ChatPanel extends LitElement {
    * unsaved work in it, and a greeting that edited it would be the worst kind of
    * surprise.
    */
+  /**
+   * A NEW ARRIVAL HAS NOT BEEN ANSWERED — whatever this seat did on the last one.
+   *
+   * THE SEAT IS REUSED. One element serves the console and every package opened after it (the
+   * surface keeps the same component id — see `_enterPackage`), and `_greeted` was never cleared,
+   * so it came to mean "this ELEMENT has spoken" rather than "this ARRIVAL has been answered".
+   * Measured 2026-09-24 through the seat's own harness, walking the host's order — the first
+   * package greeted (`greetedForA: 1`) and every open after it was silent (`greetedForB: 0`),
+   * including reopening the same package. That is the owner's report exactly: "she used to talk
+   * … and now she doesn't", with the arrival recorded and the server answering normally.
+   *
+   * `_conversationEnsured` is cleared with it, and for the same reason: "this package has already
+   * been given its conversation" is a fact about the LAST arrival, and a package whose
+   * conversations were all deleted since then has to be able to get one. The owner, 2026-09-24:
+   * "if there's no conversation and you load the thing, a conversation gets created and Grace
+   * starts talking." A failed create is still not retried every frame — it is retried on the next
+   * ARRIVAL, which is the next time a person actually opened something.
+   */
+  private _takeArrival(kind: ArrivalKind): void {
+    this._wantsGreeting = kind;
+    this._greeted = false;
+    this._conversationEnsured = false;
+  }
+
   private _greetIfArriving(): void {
+    /*
+     * A SEAT THAT CAME UP WITH NOTHING TO READ IS AN ARRIVAL, WHETHER OR NOT ONE WAS ANNOUNCED.
+     *
+     * The seat's own facts are enough to know it: it has a PACKAGE (`sessionId`), it has no
+     * conversation, and there is therefore no thread to read. None of that needs an announcement to
+     * establish — and depending on one is how a dead screen happened. The owner, 2026-09-24: "if
+     * there's no conversation and you load the thing, a conversation gets created and Grace starts
+     * talking." Measured the same evening, from the other end: seven consecutive opens of exactly
+     * such a package, each with the seat demonstrably up and reading its own package (both of its
+     * reads in the backend log), and NOT ONE create and NOT ONE greeting.
+     *
+     * THE HISTORY QUESTION IS ALREADY ANSWERED when there is no conversation — the same fact
+     * `_loadHistory` records when it is handed an empty id — so the greeting must not wait on an
+     * attempt that a missing `conversationId` never starts. That wait is the trap the note below
+     * describes; this is the other side of it.
+     */
+    if (!this._wantsGreeting && this.sessionId && !this.conversationId) {
+      this._historyChecked = true;
+      this._takeArrival('resume');
+    }
     const kind = this._wantsGreeting;
     /*
      * A PACKAGE ALWAYS HAS SOMEWHERE TO TALK, AND OPENING ONE WITH NOTHING MAKES IT.
@@ -2243,17 +2287,30 @@ export class ChatPanel extends LitElement {
      * until a conversation exists. And it fires ONCE per package (`_conversationEnsured`):
      * renders are many, and a create that failed must not be retried every frame — the foot's
      * add mark is the person's own way to ask again.
+     *
+     * AND IT IS KEYED ON THE FACT, NOT ON THE ANNOUNCEMENT. It used to require `kind === 'resume'`,
+     * so a seat that was never handed an arrival — for whatever reason, in whichever order its
+     * host got there — created nothing at all, which is a package that can never be given its
+     * first conversation. `sessionId` is the same fact the arrival was carrying: THIS IS A
+     * PACKAGE'S SEAT, so a package's conversation is what it is owed. A composer with no package
+     * has no `sessionId` and is still left alone.
      */
-    if (kind === 'resume' && !this.conversationId && !this._conversationEnsured) {
+    if (this.sessionId && !this.conversationId && !this._conversationEnsured) {
       this._conversationEnsured = true;
       this._startNewConversation();
     }
     if (!kind || this._greeted || !this._historyChecked) return;
     if (this._historyError || this._sending) return;
-    if (kind === 'resume' && !autoAdviceOn()) return;
-    // A PACKAGE THAT HAS RUN IS NOT OFFERED ANYTHING — see the note above, and
-    // shared/autoAdvice for the rule and the owner's words.
-    if (kind === 'resume' && this._hasResultTurns) return;
+    /*
+     * THE TWO "NO OFFER" RULES ARE APPLIED WHERE THE OFFER IS WRITTEN, NOT HERE.
+     *
+     * They used to `return` from this point — a package that had already been Run, and one where
+     * the person had pressed "No thanks" — and a return here is a SILENT SEAT: the arrival was
+     * spent, nothing was drawn, nothing was said, and the screen looked exactly like a broken
+     * load. The owner, 2026-09-24: "every time you arrive she's supposed to say something … she
+     * only makes recommendations before run; once run, she stops recommending." RECOMMENDATIONS
+     * STOP — SHE DOES NOT. Both rules now choose the words at the end of this function.
+     */
 
     const empty = (this.messages?.length ?? 0) === 0 && this._local.length === 0;
     if (kind === 'blank' && !empty) return;
@@ -2278,7 +2335,25 @@ export class ChatPanel extends LitElement {
      * is what creates the conversation (routes/teacher.py — it reuses the newest conversation
      * the package already owns, or makes one). Nothing here has to invent a thread.
      */
-    const nothingToRead = kind === 'resume' && !this._packageHasSomething();
+    /*
+     * A PACKAGE WITH NOTHING TO READ IS A NEW PROMPT — and NO CONVERSATION is that state,
+     * whatever is written in the prompt's seats.
+     *
+     * The test used to be "has anything been said in it or written in it" (`_packageHasSomething`),
+     * which over a package whose conversations have all been deleted answers YES — the seats still
+     * hold the person's words — so she skipped the hello and offered next steps about a thread that
+     * no longer exists. The owner, 2026-09-24: "if the user removes all conversations and there's
+     * zero and there's nothing to load, you have to engage the model … she needs to create a
+     * default conversation, say hello, because that's considered a PRE-RUN state." A package with
+     * no conversation is that state: the audit trail starts here, so she starts it the way she
+     * starts any new prompt.
+     *
+     * A CONVERSATION WITH TURNS IS STILL READ. This is only true when the seat has no thread to
+     * read (`conversationId` empty — the create above is still in flight on that first frame) or
+     * the package is empty in both senses, which is the case this rule was written for.
+     */
+    const nothingToRead = kind === 'resume'
+      && (!this.conversationId || !this._packageHasSomething());
 
     /*
      * THE CONSOLE GETS ITS OWN HELLO, AND NEVER A PACKAGE'S.
@@ -2384,16 +2459,31 @@ export class ChatPanel extends LitElement {
       return;
     }
 
-    this._offerOnly = true;
+    /*
+     * SHE GREETS WHETHER OR NOT SHE IS OFFERING, and this is the whole of the two rules above.
+     *
+     * An offer is what a Run ends, and what "No thanks" declines — her voice is neither. So the
+     * OFFER half of the brief is dropped and the greeting half always goes: `_offerOnly` follows,
+     * because a turn that renders no buttons is not an offer and must not shape the prompt.
+     */
+    const offering = autoAdviceOn() && !this._hasResultTurns;
+    this._offerOnly = offering;
     void this._send(
-      'A person has just opened an existing piece of work. You can see the conversation '
-      + 'so far and the prompt as it stands. Say briefly where the work is — one or two '
-      + 'sentences, concrete, about THIS prompt — then offer two or three things to do '
-      + 'next as buttons: [short label](action:write-seat:the seat|the words to put in it) '
-      + 'for anything you would write into a seat, or [short label](action:the request) '
-      + 'for anything you would do yourself. Keep labels to a few words and use no '
-      + 'parentheses inside a button. Ask which one they want and wait. '
-      + OFFER_THE_WAY_OUT,
+      offering
+        ? 'A person has just opened an existing piece of work. You can see the conversation '
+          + 'so far and the prompt as it stands. Say briefly where the work is — one or two '
+          + 'sentences, concrete, about THIS prompt — then offer two or three things to do '
+          + 'next as buttons: [short label](action:write-seat:the seat|the words to put in it) '
+          + 'for anything you would write into a seat, or [short label](action:the request) '
+          + 'for anything you would do yourself. Keep labels to a few words and use no '
+          + 'parentheses inside a button. Ask which one they want and wait. '
+          + OFFER_THE_WAY_OUT
+        : 'A person has just opened an existing piece of work that has already been run. You can '
+          + 'see the conversation so far and the prompt as it stands. Say briefly where the work '
+          + 'is — one or two sentences, concrete, about THIS prompt. Offer nothing: no '
+          + 'suggestions, no buttons, no next steps, and do not ask what they want to do next — '
+          + 'they will ask you for an enhancement when they want one. Do not describe the '
+          + 'results back to them.',
       { silent: true },
     );
   }
@@ -4036,6 +4126,21 @@ ${workspaceContext}`;
         // writable into a nullable column.
         this._moveSeatTo('');
         this._listNote = 'Removed. Nothing has been said here yet.';
+        /*
+         * AND A PACKAGE WITH NO CONVERSATION IS A NEW PROMPT, so the removal is treated as an
+         * arrival and the seat starts the package over the same way an open does: a default
+         * conversation is made for it and she says hello (`nothingToRead` in _greetIfArriving).
+         *
+         * The owner, 2026-09-24: "if the user removes all conversations and there's zero and
+         * there's nothing to load you have to engage the model … she needs to create a default
+         * conversation, say hello, because that's considered a PRE-RUN state." Measured the same
+         * evening, before this: deleting the last row left the seat with no conversation, her
+         * greeting was answered by the server and NOT written down ("this place has no
+         * conversation yet — it is answered and NOT written down"), and the person was left on a
+         * card with a thread in it that no row would ever hold — the audit trail the owner wants
+         * had a hole in it where the deletion was.
+         */
+        this._takeArrival('resume');
       }
       this.requestUpdate();
     } catch (err) {
