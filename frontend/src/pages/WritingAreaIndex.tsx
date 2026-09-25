@@ -5797,6 +5797,9 @@ export default function Index({
           // attach/reuse the conversation row (conversations.session_id is NOT
           // NULL), so every chat turn actually persists.
           session_id: currentPromptSessionRef.current || undefined,
+          // The package's title, so the fresh conversation the backend files the
+          // run's results in can be named after it (see routes/teacher.py).
+          run_title: surfaceTitle(),
           // No `model` — let the provider's configured default apply.
         }),
       });
@@ -5828,11 +5831,10 @@ export default function Index({
           detail: {
             role: 'assistant',
             content:
-              '⚠️ **The tool call did not return the design.**\n\n'
+              '⚠️ **The tool call did not return what it was asked for.**\n\n'
               + toolWarnings.map((w) => `- ${w}`).join('\n')
-              + '\n\nThis prompt was answered without it. Treat the result as '
-              + 'unverified against Figma — and if the reason is that Figma Desktop '
-              + 'is closed, open the file and press Run again.',
+              + '\n\nThis prompt was answered without it — treat the result as '
+              + 'unverified, and press Run again once the tool can answer.',
           },
         }));
       }
@@ -5847,6 +5849,73 @@ export default function Index({
             }
           : prev
       );
+
+      /*
+       * THE RUN'S RESULTS LAND IN A FRESH CONVERSATION, WHICH THE SEAT ADOPTS.
+       *
+       * The owner, 2026-09-24: "the other conversation save it, and it automatically
+       * creates a new conversation and loads the results." The backend filed the
+       * findings and the answer in a new conversation and returned its id; the seat
+       * moves to it and loads them, so the chat shows the results — headed "Your
+       * Results", in rich text — while the conversation the person was in stays
+       * saved in the list. The package is also repointed at the new conversation,
+       * the same hop the seat's own "new conversation" makes, so a reload lands on
+       * it rather than resurrecting the old thread.
+       *
+       * WITHOUT A PACKAGE (an unsaved prompt) there is no conversation to file into
+       * — the backend returns none — so the results are said in the thread directly,
+       * carrying the same marks (result turns), and a later Save persists them
+       * through the seat's own pending path.
+       */
+      const runConvId = typeof data?.conversation_id === 'string' && data.conversation_id ? data.conversation_id : '';
+      if (runConvId) {
+        const panel = deepFind<HTMLElement & { adoptConversation?: (id: string) => void }>('chat-panel');
+        panel?.adoptConversation?.(runConvId);
+        if (currentPromptSessionRef.current) {
+          try {
+            const res = await fetch(`${API_BASE}/prompt-sessions/${currentPromptSessionRef.current}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ conversation_id: runConvId }),
+            });
+            if (!res.ok) {
+              logger.error('the run conversation could not be bound to the package', {
+                sessionId: currentPromptSessionRef.current,
+                status: res.status,
+              });
+            }
+          } catch (e) {
+            logger.error('the run conversation binding never reached the backend', {
+              sessionId: currentPromptSessionRef.current,
+              error: String(e),
+            });
+          }
+        }
+      } else if (!data?.error) {
+        const toolResults: string[] = Array.isArray(data?.tool_results) ? data.tool_results : [];
+        if (toolResults.length) {
+          const joined = toolResults.join('\n\n');
+          const shown = joined.length > 4000 ? `${joined.slice(0, 4000)}…` : joined;
+          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+            detail: {
+              role: 'assistant',
+              label: 'Tool answer',
+              content: `**Your Results**\n\n${shown}`,
+              result: true,
+            },
+          }));
+        }
+        if ((output || '').trim()) {
+          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+            detail: {
+              role: 'assistant',
+              label: 'Run result',
+              content: toolResults.length ? output : `**Your Results**\n\n${output}`,
+              result: true,
+            },
+          }));
+        }
+      }
 
       // The answer is a fact the canvas draws: the Answer node's news, and the tool
       // node's warning when the declared call did not return the design. No claim is

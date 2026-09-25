@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import re
 import sentry_sdk
 import sys
 import time
@@ -76,6 +77,16 @@ class TeacherQueryRequest(BaseModel):
     # So the fact travels with the call, and the write below honours it. Her REPLY is still
     # recorded — she did say that, and the thread is where a person reads it back.
     person_turn: bool = True
+    # The prompt package's title, sent by the Run so its fresh conversation can be
+    # named after it (see the run-conversation block below). Absent on chat turns.
+    run_title: Optional[str] = Field(None, validation_alias=AliasChoices("run_title", "runTitle"))
+    # True when this turn is Grace's review of a prompt that is HELD for a Run. The
+    # verdict rides in her reply as a tag (`<run_ok/>` releases it, `<run_blocked/>`
+    # stops it), and a CLEAN verdict is deliberately not written into the
+    # conversation: the owner, 2026-09-24, watched the thread fill with the same
+    # canned congratulations every run — "it seems fake." The review still happens
+    # and the run still waits for it; only the recording of a clean "go" is skipped.
+    run_review: bool = Field(False, validation_alias=AliasChoices("run_review", "runReview"))
     # Tool calls the PROMPT declares. Not a suggestion to the model: these are
     # executed here, server-side, BEFORE it is called — so the design is IN the
     # prompt rather than something the model is asked to imagine. The browser
@@ -507,6 +518,62 @@ async def api_teacher_query(request: TeacherQueryRequest):
             # DeepSeek reject every prompt_output run with HTTP 400.
         )
 
+        # ── A RUN GETS ITS OWN CONVERSATION ──────────────────────────────────
+        #
+        # The owner, 2026-09-24: a Run must not write its results into the
+        # conversation the person was already in — that thread is a record of the
+        # conversation, not of runs. Each Run starts a FRESH conversation for the
+        # package; the one being left is already saved and stays in the list
+        # untouched. The run's findings and its answer are the new thread's first
+        # turns, marked in message metadata so the seat can draw them as results
+        # (rich text, headed "Your Results"). The frontend adopts the id returned
+        # here and loads them.
+        #
+        # A FAILURE TO FILE THEM IS A WARNING, NOT A FAILED RUN. The answer still
+        # reaches the output column either way; the only thing lost is the
+        # conversation record, and that loss is said in the thread.
+        if (
+            mode == "prompt_output"
+            and request.session_id
+            and state.conversation_api
+            and isinstance(result, str)
+            and result.strip()
+        ):
+            try:
+                run_conv = state.conversation_api.create_conversation(
+                    user_id=uid,
+                    session_id=request.session_id,
+                    title=(request.run_title or "").strip() or "Run",
+                )
+                if tool_blocks:
+                    # The findings go in first, headed, because they are the proof of
+                    # work the answer is built on. Capped: a design block can be huge,
+                    # and a conversation message is a note, not a warehouse.
+                    findings = "\n\n".join(tool_blocks)
+                    if len(findings) > 12000:
+                        findings = findings[:12000] + "…"
+                    state.conversation_api.add_message(
+                        run_conv, uid, "assistant",
+                        "**Your Results**\n\n" + findings,
+                        metadata={"kind": "tool-answer"},
+                    )
+                    state.conversation_api.add_message(
+                        run_conv, uid, "assistant",
+                        result,
+                        metadata={"kind": "run-result"},
+                    )
+                else:
+                    state.conversation_api.add_message(
+                        run_conv, uid, "assistant",
+                        "**Your Results**\n\n" + result,
+                        metadata={"kind": "run-result"},
+                    )
+                conv_id = run_conv
+                print(f"📁 [teacher] the run's results were filed in a fresh conversation {run_conv[:8]}…")
+            except Exception as e:
+                warnings.append(f"This run's results could not be written into a new conversation: {e}")
+                print(f"⚠️  Could not create the run's conversation: {e}")
+
         # ── Audit logging (fire-and-forget) ──────────────────────────
         try:
             if state.conversation_api:
@@ -542,7 +609,17 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # ── Save the assistant response — only for a real conversation ────────
         # See the note at the user-message write: a Run's answer is the OUTPUT column's,
         # not a chat turn. Writing both is what put one answer in two places.
-        if state.conversation_api and conv_id and request.mode == "chat":
+        #
+        # A CLEAN REVIEW VERDICT IS NOT WRITTEN EITHER. The review turn itself must
+        # happen — the Run is held until Grace answers — but her "everything is in
+        # place 🍾" reply is the same sentence every time, and recording it filled the
+        # stored thread with copies of one canned line (the owner, 2026-09-24: "it
+        # seems fake"). The verdict is still read and the run still goes; only the
+        # recording of a clean "go" is skipped, so a blocked verdict (which is real
+        # news to the person) keeps its place in the thread. The tag is matched the
+        # same way the seat reads it (chat-panel's own `<run_ok\s*/>`).
+        clean_verdict = request.run_review and bool(re.search(r"<run_ok\s*/>", result or ""))
+        if state.conversation_api and conv_id and request.mode == "chat" and not clean_verdict:
             try:
                 state.conversation_api.add_message(conv_id, uid, "assistant", result)
             except Exception as e:
@@ -577,6 +654,12 @@ async def api_teacher_query(request: TeacherQueryRequest):
             # shows it rather than letting a run look complete when the design was
             # never read.
             "tool_warnings": tool_warnings,
+            # WHAT THE PROMPT'S TOOLS BROUGHT BACK, IN THE WORDS THEY RETURNED. This
+            # is the run's proof of work: the headlines the search read, the page the
+            # wiki returned — each block carries its own heading and source, so the
+            # chat can show the person what the system actually read rather than only
+            # the model's answer built on it. Empty on a run that names no tool.
+            "tool_results": tool_blocks,
             # WHAT DID NOT PERSIST, SAID OUT LOUD. The writes above fail into a server-side
             # `print` and the caller used to get a clean 200 — the turn was drawn in the
             # thread and gone on reload, with nothing anywhere telling the person. The seat

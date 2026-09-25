@@ -92,6 +92,8 @@ interface SeatMessage {
   label?: string;
   /** An alert rather than a remark — a held Run that will not go. See <chat-messages>. */
   alert?: boolean;
+  /** A run's result, drawn as output (rich text, 14px). See <chat-messages>. */
+  result?: boolean;
 }
 
 /**
@@ -275,6 +277,19 @@ export class ChatPanel extends LitElement {
    * to the surface's list length, which is real data too, just staler.
    */
   private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean }> | null = null;
+  /**
+   * A conversation id the HOST handed this seat, trusted over the seat's own list.
+   *
+   * `adoptConversation` is how a Run's results arrive: the backend files them in a
+   * conversation it created THIS turn, so the seat's cached list — read before the run
+   * — cannot contain it yet, and the belongs-check would refuse the very thread it is
+   * being handed (measured 2026-09-24: the run ran, the results were filed, and the
+   * seat never read them — the screen said nothing happened). The host's word is the
+   * authority for the one move; the list is re-read alongside it so every later turn
+   * passes the check against a list that now contains the row. Cleared the moment the
+   * seat moves to any OTHER conversation, so the trust never outlives the handover.
+   */
+  private _adoptedByHost = '';
   /** Whether the leading bar's conversation list is open. */
   private _conversationsOpen = false;
   /**
@@ -532,7 +547,7 @@ export class ChatPanel extends LitElement {
   // on the user's behalf is not a turn in their conversation. Removed.
   private _onHostSay = (e: Event) => {
     const detail = ((e as CustomEvent).detail || {}) as {
-      role?: string; content?: string; nodeId?: string; label?: string; alert?: boolean;
+      role?: string; content?: string; nodeId?: string; label?: string; alert?: boolean; result?: boolean;
     };
     if (!detail.content) return;  // an empty bubble reads as having said nothing on purpose
     this._local = [
@@ -545,6 +560,9 @@ export class ChatPanel extends LitElement {
         nodeId: detail.nodeId,
         label: detail.label,
         alert: detail.alert === true,
+        // A host that says "this is a run's result" is believed: the drawing of it is
+        // chat-messages' business (rich text, 14px), the fact is the host's.
+        result: detail.result === true,
       },
     ];
     this.requestUpdate();
@@ -1286,7 +1304,7 @@ export class ChatPanel extends LitElement {
       min-width: 0;
       /* The console sets --chat-bg on its wrapper (the owner's #2d1831, 2026-09-19);
          the composer sets nothing and keeps the design's white. */
-      background: var(--chat-bg, #ffffff);
+      background: var(--chat-bg, #F7F8F2);
       contain: layout paint;
     }
     /* The split the gripper adjusts: the OUTPUT region flexes and scrolls
@@ -1435,7 +1453,7 @@ export class ChatPanel extends LitElement {
       align-items: center;
       height: 30px;
       border-radius: 4px;
-      background: #ffffff;
+      background: #F7F8F2;
       box-shadow: 2px 2px 6px 0 rgba(0, 0, 0, 0.15), -2px -2px 6px 0 rgba(0, 0, 0, 0.15);
     }
     .conversation-list button {
@@ -1694,6 +1712,16 @@ export class ChatPanel extends LitElement {
     return [...fromSurface, ...local.slice(0, local.length - caughtUp)];
   }
 
+  /**
+   * DOES THE THREAD CARRY A RUN'S RESULTS? The card's results state is this one
+   * fact — read from the same thread the messages element draws, and bound onto
+   * the card (chat-header's has-results), so the slot's colour and the turns'
+   * marks can never disagree (see AGENTS-instructions/OUTPUT-STYLING.md R4).
+   */
+  private get _hasResultTurns(): boolean {
+    return this._thread.some((m) => m.result === true);
+  }
+
   // ── The slot contract. See the header. ───────────────────────────────────────
 
   /**
@@ -1884,7 +1912,12 @@ export class ChatPanel extends LitElement {
      */
     this._greetIfArriving();
     // History arriving lands the column at the newest turn (see _scrollThreadToBottom)...
-    if (changed.has('messages')) this._scrollThreadToBottom();
+    // EXCEPT WHEN THE NEWEST TURN IS A RUN'S RESULT: those open at their HEAD, scrolled by
+    // the child (chat-messages.updated), and bottom-following here would fight it — the
+    // person would be handed the tail of the answer they are about to read (the owner,
+    // 2026-09-24: "the output should be visible at the top and then the user can scroll").
+    const lastTurn = this._thread[this._thread.length - 1];
+    if (changed.has('messages') && !lastTurn?.result) this._scrollThreadToBottom();
     // ...AND SO DOES THE COLUMN COMING BACK. The history usually loads while the column is
     // CLOSED — the console opens with the chat collapsed — where the scroller measures 0 and
     // the scroll is a no-op, so the first open used to land at the top of the thread
@@ -2021,7 +2054,18 @@ export class ChatPanel extends LitElement {
       this._inspectionReports = reports;
       this.messages = rows
         .filter((row) => (row as { metadata?: { kind?: string } }).metadata?.kind !== 'inspection')
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => {
+          const meta = (m as { metadata?: { kind?: string } }).metadata;
+          // A RUN'S RESULTS KEEP THEIR MARK ACROSS A RELOAD: the conversation the run
+          // filed them in carries kind 'tool-answer' / 'run-result' on its messages, and
+          // the thread draws those as results (rich text, 14px) — so a conversation
+          // opened next week still reads as the output it is.
+          return {
+            role: m.role,
+            content: m.content,
+            result: meta?.kind === 'tool-answer' || meta?.kind === 'run-result',
+          };
+        });
     } catch (err) {
       this._historyError = 'This conversation could not be read — the server did not answer.';
       this._historyChecked = true;
@@ -2088,6 +2132,16 @@ export class ChatPanel extends LitElement {
    * rides the request — so she can say where the work stands and OFFER WHERE TO GO NEXT
    * as buttons. That is the same shape as the seat ask, deliberately.
    *
+   * AND A PACKAGE THAT HAS RUN IS NOT OFFERED ANYTHING. Recommendations are the learning
+   * experience — they used to arrive on every open, so a prompt that already ran end to end
+   * was handed three more things to fix every time it was looked at (the owner, 2026-09-24,
+   * closing that: "Recommendations are really only for the first before run … once they
+   * process a run they're gonna have to ask her for enhancements"). The rule and his words
+   * are in shared/autoAdvice; what this seat supplies is the fact. It is read from the
+   * thread — `_hasResultTurns`, the same one the card's results fill wears — so it holds on
+   * a reload rather than only in the tab that watched the run happen, and it is checked
+   * BEFORE the send, because an offer she is not going to make must not cost a model call.
+   *
    * AND ONLY IF THE PACKAGE HAS SOMETHING IN IT. An opened package that is empty — no
    * turns, no prompt — gives her nothing to read, and a suggestion about nothing is
    * invention. She says nothing instead. That is the same rule as the blank composer,
@@ -2103,6 +2157,9 @@ export class ChatPanel extends LitElement {
     if (!kind || this._greeted || !this._historyChecked) return;
     if (this._historyError || this._sending) return;
     if (kind === 'resume' && !autoAdviceOn()) return;
+    // A PACKAGE THAT HAS RUN IS NOT OFFERED ANYTHING — see the note above, and
+    // shared/autoAdvice for the rule and the owner's words.
+    if (kind === 'resume' && this._hasResultTurns) return;
 
     const empty = (this.messages?.length ?? 0) === 0 && this._local.length === 0;
     if (kind === 'blank' && !empty) return;
@@ -2260,6 +2317,7 @@ export class ChatPanel extends LitElement {
    * happened.
    */
   private _conversationBelongsToPackage(id: string): boolean {
+    if (String(this._adoptedByHost) === String(id)) return true;
     const list = this.conversations ?? [];
     // The surface's list carries ACTIVE rows only; this seat's own server read carries the
     // archived ones too, and a conversation archived from here is still this package's and
@@ -3010,6 +3068,15 @@ ${workspaceContext}`;
     this._sending = true;
     this.requestUpdate();
     let answered = false;
+    /*
+     * A CLEAN VERDICT IS SILENT, and this is the flag that keeps the silence in both
+     * places a turn lands — the thread and the pending list. The review still runs and
+     * the Run still waits on it; what is skipped is only the drawing of her "everything
+     * is in place 🍾" reply, which is the same sentence every time and reads as noise
+     * rather than news (the owner, 2026-09-24: "it seems fake"). A blocked verdict —
+     * real news — is shown and held exactly as before.
+     */
+    let silentVerdict = false;
 
     try {
       this._abort = new AbortController();
@@ -3050,6 +3117,14 @@ ${workspaceContext}`;
            * the index of every package they have built …"
            */
           person_turn: !opts.silent,
+          /*
+           * WHICH TURNS ARE REVIEWS, so the server knows which replies are verdicts.
+           * A clean `<run_ok/>` verdict is not recorded (see silentVerdict below and
+           * the server's own note in routes/teacher.py): the thread was filling with
+           * the same canned congratulations every run, and a record of the gate
+           * passing is not what the person needs to read back.
+           */
+          run_review: this._reviewingRun,
           // No temperature here. It used to send 0.45 while the request model defaulted
           // to 0.45 and the backend passed it straight through — three homes for one
           // number, and three numbers waiting to disagree. `chat` has ONE: CHAT_TEMPERATURE
@@ -3113,7 +3188,11 @@ ${workspaceContext}`;
       } else {
         const raw = String(data?.content ?? '(no answer)');
         const reply = this._processReply(raw);
-        if (reply) {
+        // THE VERDICT IS READ BEFORE THE REPLY IS DRAWN, because a clean one is not
+        // drawn at all (see silentVerdict above): `_processReply` set `_runVerdict`
+        // from the tag, and the tag has already been stripped from the prose.
+        silentVerdict = this._reviewingRun && this._runVerdict === 'ok';
+        if (reply && !silentVerdict) {
           this._local = [
             ...this._local,
             // HER VERDICT IS DRAWN AS WHAT IT IS. A reply that stopped a Run is an ALERT — the
@@ -3196,7 +3275,7 @@ ${workspaceContext}`;
       // the backend refused to write it (no row to bind it to yet), so it is held and
       // handed over by flushPendingTurns when the first Save creates the package's
       // conversation. Failed turns are not held — an error is not a thing that was said.
-      if (answered && !this.conversationId) {
+      if (answered && !this.conversationId && !silentVerdict) {
         // The owner is recorded with the FIRST pending turn: spoken before any package
         // existed (owner null) they are owed to whatever Save creates one; spoken INSIDE a
         // package they belong to it and to no other (see flushPendingTurns).
@@ -3297,6 +3376,9 @@ ${workspaceContext}`;
    * row yet, so it keeps whatever is showing.
    */
   private _moveSeatTo(id: string, opts: { tab?: string } = {}): void {
+    // Moving anywhere that is not the adopted id ends the trust: it covered the one
+    // handover, not the rest of the seat's life (see _adoptedByHost).
+    if (id !== this._adoptedByHost) this._adoptedByHost = '';
     this.messages = [];
     this._local = [];
     this._inspectionReports = [];
@@ -3311,6 +3393,27 @@ ${workspaceContext}`;
       }),
     );
     this.requestUpdate();
+  }
+
+  /**
+   * THE HOST TELLS THE SEAT WHERE A RUN'S RESULTS LIVE.
+   *
+   * A Run makes its own conversation server-side (routes/teacher.py files the findings
+   * and the answer in it) and the response carries its id. The host hands that id here,
+   * and the seat moves to it by the same path picking a row from the list makes — the
+   * thread clears, the new history loads, and the conversation-change event lets the
+   * host rebind the package. The conversation being left is already saved and stays in
+   * the list: a Run adds a thread, it never destroys one (the owner, 2026-09-24: "the
+   * other conversation save it, and it automatically creates a new conversation and
+   * loads the results").
+   */
+  adoptConversation(id: string): void {
+    if (!id || id === this.conversationId) return;
+    // THE HOST'S WORD IS THE AUTHORITY FOR THIS ONE MOVE — see _adoptedByHost. The
+    // list is re-read alongside it, so the belongs-check passes for every later turn.
+    this._adoptedByHost = id;
+    void this._readPackageConversations(this._userId());
+    this._moveSeatTo(id);
   }
 
   private _onConversationSelect(e: Event) {
@@ -4130,7 +4233,7 @@ ${workspaceContext}`;
                      the response inside it. The scroller and every view that was in the
                      output area before are inside it, unchanged: the thread, the trace
                      fold, the view slot, the content-header slot. -->
-                <chat-header card>
+                <chat-header card .hasResults=${this._hasResultTurns}>
                   <div class="content-scroll" @scroll=${this._onOutputScroll}>
                     <div class="content-header"><slot name="content-header"></slot></div>
                   ${this._showsThread

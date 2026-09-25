@@ -129,7 +129,7 @@ export class OutputControls extends LitElement {
       max-width: 500px;             /* 40001034:1187 max-w-[500px] */
       min-width: 1px;               /* 40001034:1187 min-w-px */
       padding: 0 10px;              /* 40001034:1187 px-[10px] */
-      background: #fff;             /* 40001034:1187 bg-white */
+      background: #F7F8F2;             /* 40001034:1187 bg-white */
       border: none;
       border-radius: 6px;           /* 40001034:1187 rounded-[6px] */
       /* 40001034:1187 drop-shadow — the applied blur is 5px. The "button drop"

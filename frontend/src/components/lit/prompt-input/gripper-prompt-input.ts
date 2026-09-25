@@ -38,7 +38,7 @@ export class GripperPromptInput extends LitElement {
       flex-shrink: 0;
       cursor: grab;
       user-select: none;
-      background: #ffffff;
+      background: #F7F8F2;
     }
     :host(:active) { cursor: grabbing; }
     /* Figma 40000941-23074: single Meatballs_menu 37×39, rotated -90°. */

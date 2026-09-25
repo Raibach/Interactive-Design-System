@@ -261,12 +261,18 @@ def search_the_internet(query: str) -> str:
     if not items:
         return f'GOOGLE NEWS — nothing found for "{question}".'
 
-    rows: List[Tuple[str, str, str]] = []
+    rows: List[Tuple[str, str, str, str]] = []
     for item in items:
         rows.append((
             _clean(_first(r"<title>(.*?)</title>", item)),
             _clean(_first(r"<pubDate>(.*?)</pubDate>", item)),
             _clean(_first(r"<source[^>]*>(.*?)</source>", item)),
+            # THE ACTUAL LINK — the feed carried it all along and the tool dropped it,
+            # so a result could be read but never opened (the owner, 2026-09-24:
+            # "can you bring back the actual links?"). It is the feed's own address
+            # for the story, so it is what the person opens, not a page this system
+            # guessed at.
+            _clean(_first(r"<link>(.*?)</link>", item)),
         ))
     # NEWEST FIRST, on the date the feed gave. The feed answers in its own relevance
     # order, which for a question about the last day is the wrong order — the person
@@ -277,12 +283,23 @@ def search_the_internet(query: str) -> str:
 
     window = f", published in the last {when.replace('d', ' day(s)')}" if when else ""
     lines = [f'NEWS HEADLINES for "{terms}"{window} — Google News, read now:']
-    for title, date, source in rows[:MAX_ITEMS]:
-        lines.append(f"- {title}" + (f" — {source}" if source else "") + (f" ({date})" if date else ""))
+    sources = []
+    for i, (title, date, source, link) in enumerate(rows[:MAX_ITEMS], start=1):
+        # The headlines are plain text — the owner, 2026-09-24: "I don't want the
+        # blue underlined text all through that. I just want the pill." The links
+        # gather below as numbered citation pills, one per story, in the same
+        # order, so the reader follows 1 → 1.
+        lines.append(f"{i}. {title}" + (f" — {source}" if source else "") + (f" ({date})" if date else ""))
+        if link:
+            sources.append(f"[{i}]({link})")
+    lines.append("")
+    if sources:
+        lines.append("SOURCES — one citation pill per story, numbered as above:")
+        lines.append(" ".join(sources))
     lines.append("")
     lines.append(
-        "These are headlines with their publisher and date, nothing more: the "
-        "articles themselves were not read. Do not describe what an article says."
+        "Each story is cited above. The articles themselves were not read: "
+        "do not describe what an article says."
     )
     return "\n".join(lines)
 

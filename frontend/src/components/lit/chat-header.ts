@@ -9,8 +9,16 @@
  *             stroke rgba(117,142,135,0.5), shadows inset 0 -2px 5px
  *             rgba(0,0,0,0.15) and inset 0 2px 4px rgba(0,0,0,0.25), text #3D515B
  *             Arial Rounded MT Bold 400 / 13px / 20px.
- *   the CARD  "chat-output-header" #40001119:6327: the same shell, padding 10px,
- *             column, gap 10, holding the response itself.
+ *   the SLOT  the container "output-output-results-area-container" #40001130:5059 —
+ *             padding 6px 20px 4px, gap 7, fill #CBE6E3 (the block's own ground), holding
+ *             the card "chat-output-area-results" #40001130:5060 (renamed in Figma
+ *             2026-09-24 from "chat-output-header" #40001119:6327): the same shell as the
+ *             bars, padding 10px, radius 8, column, gap 10, holding the response itself.
+ *             TWO FRAMES, TWO FILLS: the container is green and the card is the light
+ *             one — #F7F8F2 in the file (read live 2026-09-24) and the owner's results
+ *             colour; the owner's solid #ADC7C3 stands in between runs, where the file
+ *             has no state to draw. See registry.json (values.container / values.card)
+ *             and AGENTS-instructions/OUTPUT-STYLING.md R4.
  *
  * Each shape sits in its own "output-header-area" — a #CBE6E3 ground, padding
  * 10px 20px 2px, column, gap 7 (#40001119:6308; the card's block is :6326 with 4px
@@ -57,6 +65,14 @@ export class ChatHeader extends LitElement {
      * bars only; the drawing's card block has none.
      */
     card: { type: Boolean },
+    /**
+     * TRUE WHILE THE THREAD THIS CARD HOLDS CARRIES RUN RESULTS — set by the host
+     * (chat-panel), which reads the same thread the messages element draws. The
+     * card's shell then wears the results colour instead of the default: the
+     * owner's 2026-09-24 rule — default solid #ADC7C3, results #F7F8F2 (see
+     * AGENTS-instructions/OUTPUT-STYLING.md R4).
+     */
+    hasResults: { type: Boolean, attribute: 'has-results', reflect: true },
     /* THE USAGE FIGURES — declared, or the renderer DROPS them. assignProps skips an
        undeclared property with a console warning only, so a bound value would arrive at
        nothing and the readout would show a zero nobody sent (prop-undeclared). */
@@ -109,6 +125,7 @@ export class ChatHeader extends LitElement {
   declare duration: string;
   declare qaScore: string;
   declare card: boolean;
+  declare hasResults: boolean;
 
   constructor() {
     super();
@@ -119,6 +136,7 @@ export class ChatHeader extends LitElement {
     this.duration = '';
     this.qaScore = '';
     this.card = false;
+    this.hasResults = false;
   }
 
   declare tokens: number;
@@ -163,7 +181,12 @@ export class ChatHeader extends LitElement {
       padding-top: 6px;
       background: #CBE6E3;
     }
-    /* The card's block, #40001119:6326 — the same ground with 4px under it. */
+    /* THE CARD'S BLOCK — the container the card sits in, and the drawing names it:
+       "output-output-results-area-container" #40001130:5059 — the block's own ground,
+       padding 6px 20px 4px (the block's 6px 20px 0 plus these 4px under it).
+       IT IS ALWAYS #CBE6E3, IN BOTH STATES. The results state repaints the CARD and
+       nothing else; the container holding it stays the block's green, which is what
+       leaves a light slot standing inside a green container, as the file draws it. */
     .output-area.card-block { padding-bottom: 4px; }
     /* THE CARD FILLS ITS BLOCK, AND THE BLOCK FILLS THE ELEMENT.
        The panel hands this element the region's leftover height (chat-panel's
@@ -186,7 +209,13 @@ export class ChatHeader extends LitElement {
          that the drawing measures at 36, and the whole block grows with it (38 against 36,
          61 against 54, measured in the browser). */
       box-sizing: border-box;
-      background: rgba(117, 142, 135, 0.35);
+      /* THE FILL, 100% OPAQUE — the owner's fix, 2026-09-24: the drawing's shell was
+         rgba(117,142,135,0.35), and 35% over the block's #CBE6E3 composited to a green
+         that drifted with whatever sat behind it. The owner named the solid colour:
+         #ADC7C3 — the very tone the blend rendered — so the shell now paints it
+         directly and nothing bleeds through. One value, one place: here, the registry
+         (values.card.fill) and the file's frame fill must all agree. */
+      background: #ADC7C3;
       /* The drawing strokes all four edges at 1px (#40001119:6318 stroke rgba(117,142,135,0.5)
          w=1); the code drew the bottom edge alone. */
       border: 1px solid rgba(117, 142, 135, 0.5);
@@ -195,6 +224,22 @@ export class ChatHeader extends LitElement {
         inset 0 -2px 5px 0 rgba(0, 0, 0, 0.15),
         inset 0 2px 4px 0 rgba(0, 0, 0, 0.25);
     }
+    /* THE RESULTS STATE IS THE CARD'S, AND ONLY THE CARD'S.
+       When the thread this card holds carries a run's results (the host's has-results
+       flag) the CARD wears the results colour #F7F8F2 instead of the default #ADC7C3
+       (the owner's 2026-09-24 rule; see AGENTS-instructions/OUTPUT-STYLING.md R4).
+
+       THE CONTAINER AROUND IT DOES NOT FOLLOW, and it used to: a second rule painted
+       .output-area.card-block the same light colour "so the whole slot reads as one
+       light surface." That is the defect the owner caught at the screen — "when I go to
+       the chat output the entire container now is a light color. It should've only been
+       the inside." The container and the inside are two frames in the file and they have
+       two fills: "output-output-results-area-container" #40001130:5059 is the block's own
+       #CBE6E3, and "chat-output-area-results" #40001130:5060 — the card this rule paints —
+       is the light one. Painting the outer frame light erases the very edge the drawing
+       is made of. One rule, one region: the shell, never the ground it stands in.
+       No backticks in this comment, deliberately: this is a Lit css literal. */
+    :host([has-results]) .shell { background: #F7F8F2; }
     .status {
       display: flex;
       align-items: center;

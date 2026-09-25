@@ -779,20 +779,21 @@ export class WorkspaceLayout extends LitElement {
     }
     this._dockLeft();
     /*
-     * BOTH SIDES GO TO THEIR EDGES AND THE DRAWING TAKES THE ROOM.
+     * THE PROMPT FOLDS, THE ROOM OPENS, AND HER COLUMN STAYS WHERE IT IS.
      *
-     * The owner, 2026-09-23, watching a Run: "we're just gonna have to collapse Grace … at the
-     * same time we click run and just expose the whole canvas … I want both the left and the
-     * right side to collapse to the edges of the browser." The prompt already docked here; her
-     * column did not, so the canvas was composed around a pane it shared and its own brain
-     * landed on the seam between them.
+     * It used to close her too — the owner, 2026-09-23: "I want both the left and the right side
+     * to collapse to the edges of the browser." The owner reversed that on 2026-09-24, once the
+     * chat became the place a Run is WATCHED: the prompt's contents, what the tools brought back,
+     * and the run's answer all land in her column, so closing it at the click hid the very output
+     * the Run produces. The left prompt folds to its rail, the middle opens for the orchestration
+     * drawing, and she stays open — as a pane while the room waits, and as the layer over the
+     * drawing (see `_rightOverDrawing`) once the canvas mounts, which is the shape the drawing's
+     * own composition already expects.
      *
      * THIS DOES NOT CLAIM HER AS THE OPERATOR'S (`_openOwnedByOperator` stays as it was). A Run
      * is the HOST's act, not a hand's — a drag is what claims a column — so the payload may
-     * still open her, and `openPrompt` hands the next package an open column (see there).
+     * still close her, and `openPrompt` hands the next package an open column (see there).
      */
-    this._setThirdOpen(false);
-    this._syncRightPanel();
     /*
      * AND THE ROOM SAYS IT IS WORKING FROM THE MOMENT IT IS EMPTY.
      *
@@ -894,24 +895,14 @@ export class WorkspaceLayout extends LitElement {
     this._runInFlight = true;
     this._dockLeft();
     /*
-     * HER COLUMN IS ALREADY CLOSED IN THIS SAME FRAME — `_setThirdOpen(false)` four lines below
-     * does it, and that is the ORDER the owner asked for. IT DOES NOT REACH HER, and that is the
-     * open defect (READ-ME/CONTINUE-HERE.md §00b, "the assembly cannot be stacked"):
-     *
-     * The composer surface tree carries `"isThirdOpen": true` on its workspace-layout
-     * (backend/routes/ai.py:994 — the console's carries false at :629). Every published update
-     * writes that into this element, so the dock is re-asserted AWAY a frame after it lands, and
-     * her column does not move until the CANVAS's own update arrives — which is why the two sides
-     * fall 800ms apart and why her side then changes unit mid-flight (flex pane -> absolute layer)
-     * and teleports 183px. One fact — is her column open — with two writers, and the payload wins.
-     *
-     * The fix is the owner's own: assemble in order and do not stack. The payload stops asserting
-     * her state for the duration of a Run (one writer: the layout), both sides seat, the middle
-     * holds a spinner on the background while it waits, and only then is the drawing published —
-     * into a layout that has already settled, which is how the prompt's own fold was cured.
+     * HER COLUMN IS NOT TOUCHED BY THE DOCK, and that is the owner's 2026-09-24 reversal — see
+     * the note in `_dockNow`, which is the other half of the same change. She stays open so the
+     * person can watch the Run's output land in the chat (the prompt that was sent, what the
+     * tools brought back, the answer) while the left prompt folds to its rail and the middle
+     * opens for the orchestration drawing. Nothing here reaches for her, so the pane→layer
+     * switch that the canvas's arrival brings (`_rightOverDrawing`) is the only move she makes,
+     * and it happens while she is sitting still rather than mid-fold.
      */
-    this._setThirdOpen(false);
-    this._syncRightPanel();
     // AND THE RENDER THAT SHOWS IT. `_setThirdOpen` only requests one when the flag MOVED, so a
     // dock from an already-closed column (a second Run) would leave the waiting state unrendered.
     this.requestUpdate();

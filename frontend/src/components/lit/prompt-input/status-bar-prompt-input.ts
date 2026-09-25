@@ -84,7 +84,7 @@ export class StatusBarPromptInput extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #ffffff;
+      background: #F7F8F2;
     }
     /*
      * THE TRIGGER'S PLACEHOLDER MARK — the same lightning, in the one colour this rail does not

@@ -101,7 +101,7 @@ export class ErrorBanner extends LitElement {
       padding: 3px 8px;
       border-radius: 4px;
       border: 1px solid #fca5a5;
-      background: #fff;
+      background: #F7F8F2;
       color: #991b1b;
       cursor: pointer;
     }
