@@ -36,6 +36,9 @@ import '@/components/lit/chat-repair-actions';
 import type { ChatPanel } from '@/components/lit/chat-panel';
 import { parseRunAction, parseSaveAction, parseSetTitleAction } from '@/shared/actionLink';
 import { allowAutoAdvice } from '@/shared/autoAdvice';
+// The arrival RECORD — the host writes it before it dispatches, which is why a seat can read an
+// arrival it was not yet on screen to hear (see the lifecycle describe below).
+import { markArrival } from '@/shared/arrival';
 import { eventBus } from '@/shared/event-bus';
 
 type SeatEl = ChatPanel & { updateComplete: Promise<unknown> };
@@ -1286,6 +1289,110 @@ describe('<chat-panel> — a package whose conversations were all deleted', () =
     // And it is loaded, not merely bound: the thread beside them is that conversation's.
     expect(reads.some((u) => u.includes('/api/conversations/newest/messages'))).toBe(true);
     expect((el.messages ?? []).map((m) => m.content)).toEqual(['The last thread.']);
+  });
+});
+
+describe('<chat-panel> — the conversation lifecycle', () => {
+  /**
+   * WHAT A PACKAGE'S CONVERSATIONS LOOK LIKE OVER TIME, in the owner's words (2026-09-24):
+   *
+   *   "if there's no conversation and you load the thing, a conversation gets created and Grace
+   *    starts talking."
+   *   "then when you run it, it creates a new conversation and archives the one that was there
+   *    when user arrived. So now you have two conversations — you have the original conversation
+   *    on load and then you have the results conversation. It's creating a conversation audit
+   *    trail and their timestamp."
+   *
+   * So: opening a package with nothing creates the first thread; a Run files its results in a new
+   * one and CLOSES the thread it replaced, leaving both rows — each with the time it was last
+   * written to (the timestamps the conversations list draws).
+   */
+  const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+
+  /** A fetch stand-in that records what was asked and answers the app's own endpoints. */
+  const lifecycleStub = (calls: Array<{ method: string; url: string }>, onAsk: (body: string) => void) =>
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      const method = init?.method ?? 'GET';
+      calls.push({ method, url: u });
+      if (u.includes('/api/teacher/query')) {
+        onAsk(String((init?.body as string) ?? ''));
+        return json({ content: 'Answer.' });
+      }
+      if (method === 'POST' && u.endsWith('/api/conversations')) return json({ id: 'conv-fresh', success: true });
+      if (method === 'POST' || method === 'PUT') return json({ success: true });
+      if (u.startsWith('/api/conversations?')) return json({ conversations: [] });
+      if (u.includes('/messages')) return json({ messages: [] });
+      if (u.includes('/api/prompt-sessions/')) return json({ session: { metadata: { session_type: 'prompt' } } });
+      return json({ success: true });
+    }));
+
+  it('gives a package with no conversation one, and greets into it', async () => {
+    allowAutoAdvice();
+    const calls: Array<{ method: string; url: string }> = [];
+    let asked = '';
+    lifecycleStub(calls, (b) => { asked = b; });
+    const el = document.createElement('chat-panel') as SeatEl;
+    Object.assign(el, { sessionId: 'sess-1', conversationId: '', conversations: [], leftColumnContent: [] });
+    document.body.appendChild(el);
+    await settle(el);
+    mounted.push(el);
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume', sessionId: 'sess-1' } }));
+    await settle(el);
+
+    // THE THREAD IS MADE, by the app's own path (the foot's add mark runs the same code)…
+    expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/conversations'))).toBe(true);
+    // …and the package's own column is repointed at it, so a reload lands in it rather than
+    // resurrecting the state that had no conversation at all.
+    expect(calls.some((c) => c.method === 'PUT' && c.url.includes('/api/prompt-sessions/sess-1'))).toBe(true);
+    expect(el.conversationId).toBe('conv-fresh');
+    // And she talks, into a thread that now exists for the person's next sentence to land in.
+    expect(asked).toContain('Introduce yourself');
+  });
+
+  it('reads a recorded arrival when its session id lands, not only at connect', async () => {
+    allowAutoAdvice();
+    const calls: Array<{ method: string; url: string }> = [];
+    let asked = '';
+    lifecycleStub(calls, (b) => { asked = b; });
+    // THE HOST'S OWN ORDER: it records the arrival, then dispatches it, then assembles the
+    // surface. The seat can therefore connect BEFORE its session id has been written to it.
+    markArrival('resume', 'sess-1');
+    const el = document.createElement('chat-panel') as SeatEl;
+    Object.assign(el, { conversations: [], leftColumnContent: [{ type: 'agent_role', content: 'You are the Scout.' }] });
+    document.body.appendChild(el);
+    await settle(el);
+    mounted.push(el);
+    expect(asked).toBe('');           // not yet: it does not know which seat it is
+
+    el.sessionId = 'sess-1';          // the id lands
+    await settle(el);
+
+    // THE RECORD WAS WAITING FOR THIS SEAT BY NAME, and it is read now. The KIND is what proves
+    // it: only a 'resume' arrival asks her to speak about an existing piece of work, so a
+    // greeting composed from anything else could not read like this.
+    expect(asked).toContain('existing piece of work');
+  });
+
+  it("a run's results conversation archives the thread it replaced", async () => {
+    allowAutoAdvice();
+    const calls: Array<{ method: string; url: string }> = [];
+    lifecycleStub(calls, () => {});
+    const el = await mount({
+      sessionId: 'sess-1',
+      conversationId: 'conv-old',
+      conversations: [{ id: 'conv-old', title: 'The thread they were in' }],
+    });
+
+    // What a Run does: the backend files the results in a conversation of its own and the host
+    // hands this seat that id (chat-panel.adoptConversation).
+    el.adoptConversation('conv-new');
+    await settle(el);
+
+    expect(el.conversationId).toBe('conv-new');
+    // THE THREAD IT REPLACED IS CLOSED, NOT DELETED — the audit trail the owner asked for. The
+    // list still asks for archived rows, and each row carries the time it was last written to.
+    expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/api/conversations/conv-old/archive'))).toBe(true);
   });
 });
 

@@ -311,6 +311,17 @@ export class ChatPanel extends LitElement {
    * seat moves to any OTHER conversation, so the trust never outlives the handover.
    */
   private _adoptedByHost = '';
+  /** A conversation is being created for this package right now — see _startNewConversation. */
+  private _creatingConversation = false;
+  /**
+   * THIS SEAT HAS ALREADY GIVEN THIS PACKAGE ITS FIRST CONVERSATION.
+   *
+   * The load-time creation below is triggered by a render, and renders are many; the latch in
+   * _startNewConversation stops two at once, and this stops a FAILED create from being retried on
+   * every frame — one attempt per package, and the foot's add mark is the person's own way to ask
+   * again. Cleared when the seat moves to another package (see _enterPackage).
+   */
+  private _conversationEnsured = false;
   /** Whether the leading bar's conversation list is open. */
   private _conversationsOpen = false;
   /**
@@ -1940,6 +1951,21 @@ export class ChatPanel extends LitElement {
     // open up this package — I only see this package."
     if (changed.has('sessionId')) {
       this._enterPackage(String(this.sessionId ?? ''));
+      /*
+       * THE RECORD IS READ WHEN THE SEAT LEARNS WHICH SEAT IT IS — not only when it connects.
+       *
+       * An arrival is SENT and RECORDED, because the seat is usually created by the very commit
+       * that announces it (see shared/arrival). Connecting is not always enough to catch it: the
+       * element can connect before its `sessionId` has been written, and the record was addressed
+       * TO THAT ID — so `consumeArrival(null)` at connect finds nothing that is his, leaves the
+       * record waiting, and nothing ever reads it again when the id arrives. Measured
+       * 2026-09-24 in the console→package flow: the package opened, the record was waiting for
+       * that seat by name, and she never greeted. The stream is idempotent — `consumeArrival`
+       * refuses an arrival addressed to another seat and leaves it there — so reading it here
+       * cannot steal another seat's.
+       */
+      const arrived = consumeArrival(this.sessionId ?? null);
+      if (arrived) this._wantsGreeting = arrived.kind;
       void this._readPackageConversations(this._userId());
       void this._readSeatScope(this._userId());
     }
@@ -2025,6 +2051,9 @@ export class ChatPanel extends LitElement {
     this._spent.clear();
     this._spentTurn = '';
     this._historyError = '';
+    // A DIFFERENT PACKAGE IS A DIFFERENT QUESTION: whether THIS one has ever been given its
+    // first conversation is not something the last one can answer (see _greetIfArriving).
+    this._conversationEnsured = false;
 
     // PENDING TURNS BELONG TO THE PACKAGE THEY WERE SPOKEN IN. Spoken before any package
     // existed (owner null), they are still owed to whatever package is saved next — that is
@@ -2194,6 +2223,31 @@ export class ChatPanel extends LitElement {
    */
   private _greetIfArriving(): void {
     const kind = this._wantsGreeting;
+    /*
+     * A PACKAGE ALWAYS HAS SOMEWHERE TO TALK, AND OPENING ONE WITH NOTHING MAKES IT.
+     *
+     * The owner, 2026-09-24: "if there's no conversation and you load the thing, a conversation
+     * gets created and Grace starts talking." A package whose conversations have all been
+     * deleted has no thread: the seat binds nothing, there is nothing to load, and — this is
+     * the part that made it a dead screen rather than an empty one — `_loadHistory` is started
+     * by a CHANGE of `conversationId`, so with no id coming there was no attempt, and the
+     * greeting waits on that attempt forever.
+     *
+     * SO THE SEAT MAKES ONE, by the app's one path for it (`_startNewConversation`, the same
+     * code the foot's add mark runs): the conversation is created for this package, the
+     * package's own column is repointed at it, and the seat moves in. The move is what
+     * completes the history attempt, and her greeting then lands in a real thread — with
+     * somewhere for the person's next sentence to be written.
+     *
+     * IT IS ABOVE THE HISTORY GATE ON PURPOSE, because the gate is exactly what cannot open
+     * until a conversation exists. And it fires ONCE per package (`_conversationEnsured`):
+     * renders are many, and a create that failed must not be retried every frame — the foot's
+     * add mark is the person's own way to ask again.
+     */
+    if (kind === 'resume' && !this.conversationId && !this._conversationEnsured) {
+      this._conversationEnsured = true;
+      this._startNewConversation();
+    }
     if (!kind || this._greeted || !this._historyChecked) return;
     if (this._historyError || this._sending) return;
     if (kind === 'resume' && !autoAdviceOn()) return;
@@ -3490,11 +3544,44 @@ ${workspaceContext}`;
    */
   adoptConversation(id: string): void {
     if (!id || id === this.conversationId) return;
+    const leaving = String(this.conversationId ?? '');
     // THE HOST'S WORD IS THE AUTHORITY FOR THIS ONE MOVE — see _adoptedByHost. The
     // list is re-read alongside it, so the belongs-check passes for every later turn.
     this._adoptedByHost = id;
     void this._readPackageConversations(this._userId());
     this._moveSeatTo(id);
+    /*
+     * AND THE RUN ARCHIVES WHAT IT LEFT.
+     *
+     * The owner, 2026-09-24, describing what a Run should do to the package's conversations:
+     * "it creates a new conversation and archives the one that was there when user arrived. So
+     * now you have two conversations — you have the original conversation on load and then you
+     * have the results conversation. It's creating a conversation audit trail."
+     *
+     * The backend makes the results conversation and files them in it (routes/teacher.py, "A RUN
+     * GETS ITS OWN CONVERSATION"); archiving the one being left is this half, so the package's
+     * list reads as the record it is: the thread the person was in, closed and dated, above the
+     * run's own. Archived and never deleted — `_readPackageConversations` asks for the archived
+     * rows too, and the row wears the chip that says so.
+     *
+     * A PERSON STARTING A CONVERSATION STILL ARCHIVES NOTHING (see _createConversation: a
+     * package's list is theirs to keep or clear). This is the Run's act, not the seat's habit.
+     */
+    if (leaving) {
+      void this._conversationWrite(
+        `/api/conversations/${leaving}/archive`,
+        'POST',
+        undefined,
+        this._userId(),
+      ).catch((err) => {
+        // NOT SWALLOWED, and not fatal: the results are on screen either way, and what is lost
+        // is the row's own note that the thread is closed. The Trace tab reads this logger.
+        logger.warn('the run could not archive the conversation it replaced', {
+          conversationId: leaving,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
   }
 
   private _onConversationSelect(e: Event) {
@@ -3552,10 +3639,22 @@ ${workspaceContext}`;
    * inside a package's own set is a different action, and this design has not specified it.
    */
   private _onConversationNew(): void {
-    void this._startNewConversation();
+    this._startNewConversation();
   }
 
-  private async _startNewConversation(): Promise<void> {
+  /**
+   * ONE AT A TIME. The foot's add mark is a click and cannot double-fire, but the same work is
+   * started by a package being opened with no conversation at all (see `_startNewConversation`'s
+   * caller in _greetIfArriving) — and two starts racing would make a package two threads for one
+   * open. The body below is unchanged; this is the latch in front of it.
+   */
+  private _startNewConversation(): void {
+    if (this._creatingConversation) return;
+    this._creatingConversation = true;
+    void this._createConversation().finally(() => { this._creatingConversation = false; });
+  }
+
+  private async _createConversation(): Promise<void> {
     const userId = this._userId();
     const scope = this._seatIsConsole === null
       ? await this._readSeatScope(userId)
