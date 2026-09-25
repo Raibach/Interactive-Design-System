@@ -1168,6 +1168,127 @@ describe('<chat-panel> — a blank composer still gets her, with nothing offered
   });
 });
 
+describe('<chat-panel> — a package whose conversations were all deleted', () => {
+  /**
+   * THE DEAD SCREEN. The owner, 2026-09-24: "if the user deletes all the conversations and there's
+   * no conversation to load … it's just loading a blank screen. If there is a conversation then you
+   * should just load that conversation, the last one, but if it's empty, cause people will delete
+   * them all, then Grace needs to just treat the prompt like it's brand new."
+   *
+   * Three facts, and each one is a way that screen was blank:
+   *
+   *   1. an arrival could be SPENT while the seat's scope was still being read, so the answer that
+   *      should have greeted never came;
+   *   2. a package with nothing in it was answered with silence — no thread to load, no words in
+   *      the prompt, and nothing on the screen at all;
+   *   3. threads the package still owned were left unloaded when the seat came up with none bound.
+   */
+  const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+
+  it('does not spend the arrival while the seat scope is still being read', async () => {
+    allowAutoAdvice();
+    let releaseScope!: () => void;
+    const scopeGate = new Promise<void>((r) => { releaseScope = r; });
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      calls.push(u);
+      if (u.includes('/api/teacher/query')) return json({ content: 'Here is where your work stands.' });
+      if (init?.method === 'POST') return json({ id: 'msg-1', success: true });
+      if (u.startsWith('/api/conversations?')) return json({ conversations: [] });
+      // THE READ THAT RACED THE ARRIVAL, held open until the test says so.
+      if (u.includes('/api/prompt-sessions/')) {
+        await scopeGate;
+        return json({ session: { metadata: { session_type: 'prompt' } } });
+      }
+      return json({ success: true });
+    }));
+    const el = await mount({
+      sessionId: 'sess-1',
+      conversationId: '',
+      conversations: [],
+      leftColumnContent: [{ type: 'agent_role', name: 'Agent Role', content: 'You are the Scout.' }],
+    });
+
+    // The arrival lands FIRST — before the scope read has answered, which is the order the
+    // surface really produces when the seat is created by the commit that opens the package.
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume', sessionId: 'sess-1' } }));
+    await settle(el);
+    // She has not greeted yet, and that is right: an unanswered question is not a no.
+    expect(calls).not.toContain('/api/teacher/query');
+
+    releaseScope();
+    await settle(el);
+    // AND THE ANSWER THAT ARRIVES LATER STILL GREETS. This is the whole point: the arrival was
+    // waiting, not spent, and the retry _readSeatScope makes is what finds it.
+    expect(calls).toContain('/api/teacher/query');
+  });
+
+  it('greets a package with nothing in it as a new prompt, and offers nothing', async () => {
+    allowAutoAdvice();
+    let body = '';
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/api/teacher/query')) {
+        body = String((init?.body as string) ?? '');
+        return json({ content: 'Hello.' });
+      }
+      if (init?.method === 'POST') return json({ id: 'msg-1', success: true });
+      if (u.startsWith('/api/conversations?')) return json({ conversations: [] });
+      if (u.includes('/api/prompt-sessions/')) return json({ session: { metadata: { session_type: 'prompt' } } });
+      return json({ success: true });
+    }));
+    // Nothing in the prompt and nothing in any conversation: the state a person is left in after
+    // deleting every thread of a package they had not filled in yet.
+    const el = await mount({ sessionId: 'sess-1', conversationId: '', conversations: [], leftColumnContent: [] });
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume', sessionId: 'sess-1' } }));
+    await settle(el);
+
+    expect(body).toContain('Introduce yourself');
+    expect(body).toContain('ask what they want to work on');
+    // It is a new prompt, so there is nothing to have an opinion about — and no way out to offer.
+    expect(body).not.toContain('offer two or three things');
+    expect(body).not.toContain('no-advice');
+  });
+
+  it('loads the last conversation when the seat comes up with none bound', async () => {
+    allowAutoAdvice();
+    const reads: string[] = [];
+    const moved: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      reads.push(u);
+      if (init?.method === 'POST') return json({ id: 'msg-1', success: true });
+      if (u.startsWith('/api/conversations?')) {
+        // The server's own order: newest first (ORDER BY updated_at DESC).
+        return json({ conversations: [
+          { id: 'newest', title: 'The newest', tab: 'chat', is_archived: false, updated_at: '2026-09-24T20:00:00Z' },
+          { id: 'older', title: 'The older one', tab: 'chat', is_archived: false, updated_at: '2026-09-20T08:00:00Z' },
+        ] });
+      }
+      if (u.includes('/messages')) return json({ messages: [{ role: 'assistant', content: 'The last thread.' }] });
+      if (u.includes('/api/prompt-sessions/')) return json({ session: { metadata: { session_type: 'prompt' } } });
+      return json({ success: true });
+    }));
+    // THE ELEMENT IS BUILT BY HAND, unlike the other tests here, because the listener has to be
+    // attached BEFORE it is in the document: the move happens as soon as the package's
+    // conversations are read, which is during the first settle.
+    const el = document.createElement('chat-panel') as SeatEl;
+    Object.assign(el, { sessionId: 'sess-1', conversationId: '', conversations: [] });
+    el.addEventListener('conversation-change', (e) => moved.push(String((e as CustomEvent).detail?.conversationId)));
+    document.body.appendChild(el);
+    await settle(el);
+    mounted.push(el);
+
+    // THE LAST ONE, not the first: the list is newest-first, so the newest is what a person means.
+    expect(moved).toEqual(['newest']);
+    expect(el.conversationId).toBe('newest');
+    // And it is loaded, not merely bound: the thread beside them is that conversation's.
+    expect(reads.some((u) => u.includes('/api/conversations/newest/messages'))).toBe(true);
+    expect((el.messages ?? []).map((m) => m.content)).toEqual(['The last thread.']);
+  });
+});
+
 describe('<chat-panel> — a button that asks for something the app cannot do', () => {
   /**
    * THE WIRE FORMAT LEAKING INTO THE CONVERSATION.

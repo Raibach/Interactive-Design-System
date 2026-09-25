@@ -120,6 +120,25 @@ const OFFER_THE_WAY_OUT =
   'Finish with one more button, exactly [No thanks](action:no-advice), so they can '
   + 'dismiss what you offered and carry on without answering you.';
 
+/**
+ * THE NEW-PROMPT HELLO — ONE INSTRUCTION, TWO DOORS.
+ *
+ * A person meets a prompt with nothing in it in two ways: a blank composer, and a package
+ * whose seats are empty and whose conversations have all been deleted. What she should do is
+ * the same for both — introduce herself and ask what they want to work on — so the
+ * instruction is written once here and each door supplies its own first sentence, because the
+ * two situations are not the same situation and a prompt that says "blank composer" over an
+ * open package is the app talking about the wrong room.
+ *
+ * NO OFFER, AND SO NO WAY OUT. A "No thanks" on a turn that offered nothing is a door out of
+ * a room with no walls (the owner, 2026-09-28: "You've got the no thanks at the beginning…
+ * she doesn't make a suggestion on an empty composer").
+ */
+const NEW_PROMPT_HELLO =
+  'Introduce yourself in a sentence or two, and ask what they want to work on. '
+  + 'Do not guess what they are building, do not list what you can do, and offer '
+  + 'no suggestions and no buttons — there is nothing yet to have an opinion about.';
+
 export class ChatPanel extends LitElement {
   static properties = {
     conversationId: { type: String, attribute: 'conversation-id' },
@@ -2184,10 +2203,29 @@ export class ChatPanel extends LitElement {
 
     const empty = (this.messages?.length ?? 0) === 0 && this._local.length === 0;
     if (kind === 'blank' && !empty) return;
-    // Nothing to reference, nothing to suggest.
-    if (kind === 'resume' && !this._packageHasSomething()) return;
+    /*
+     * A PACKAGE WITH NOTHING IN IT IS A NEW PROMPT.
+     *
+     * This used to say nothing at all, and saying nothing is what a dead screen looks like.
+     * The case that found it is a package whose conversations have all been deleted: there is
+     * no thread to load, the person is looking at an empty card beside a prompt with no words
+     * in it either, and she — who should be the one thing on that screen — was absent. The
+     * owner, 2026-09-24: "if the user deletes all the conversations and there's no conversation
+     * to load … it's just loading a blank screen … Grace needs to just treat the prompt like
+     * it's brand new."
+     *
+     * SO SHE DOES. The prompt IS new: nothing has been written in it and nothing has been said
+     * about it. She introduces herself and asks what they want to work on — the same hello a
+     * blank composer gets (NEW_PROMPT_HELLO), because it is the same situation.
+     *
+     * AND IT IS SAFE WITHOUT A CONVERSATION, which is the other half of the owner's rule and
+     * was already true on the server: her greeting is a turn the app asked for (`person_turn`
+     * false), so the backend answers it and does NOT write it down, and the person's first turn
+     * is what creates the conversation (routes/teacher.py — it reuses the newest conversation
+     * the package already owns, or makes one). Nothing here has to invent a thread.
+     */
+    const nothingToRead = kind === 'resume' && !this._packageHasSomething();
 
-    this._greeted = true;
     /*
      * THE CONSOLE GETS ITS OWN HELLO, AND NEVER A PACKAGE'S.
      *
@@ -2217,6 +2255,19 @@ export class ChatPanel extends LitElement {
      * seat always carries one — so the blank composer's hello does not wait for anything.
      */
     if (this._seatIsConsole === null && this.sessionId) return;
+    /*
+     * AND THE ARRIVAL IS NOT SPENT WHILE IT WAITS.
+     *
+     * This flag used to be set near the top of the function, ABOVE the gate that waits for the
+     * seat's scope — so an arrival that landed while that read was still in flight was marked
+     * answered and then returned unanswered, and the read's own retry (see _readSeatScope)
+     * found `_greeted` already true and did nothing. The greeting was lost for the whole life
+     * of that seat, and whether it was lost came down to which of two fetches answered first.
+     * Measured 2026-09-24: the owner opened a package and she never appeared — "even on a new
+     * composer she doesn't even pop up" — and then she did, on another open. A WAIT IS NOT AN
+     * ANSWER, so the arrival is only spent once there is nothing left to wait for.
+     */
+    this._greeted = true;
     if (this._seatIsConsole === true) {
       /*
        * SHE SAYS HELLO WHEN THERE IS NOTHING TO READ — and the test is the THREAD, not whether a
@@ -2262,9 +2313,18 @@ export class ChatPanel extends LitElement {
     if (kind === 'blank') {
       void this._send(
         'A person has just opened a blank composer and has not said anything yet. '
-        + 'Introduce yourself in a sentence or two, and ask what they want to work on. '
-        + 'Do not guess what they are building, do not list what you can do, and offer '
-        + 'no suggestions and no buttons — there is nothing yet to have an opinion about.',
+        + NEW_PROMPT_HELLO,
+        { silent: true },
+      );
+      return;
+    }
+
+    if (nothingToRead) {
+      // The same hello, for the other door into a prompt with nothing in it — see the note
+      // where `nothingToRead` is decided.
+      void this._send(
+        'A person has just opened an existing package that is empty — no seats filled and '
+        + 'nothing said in it — so it is a new prompt that already has a name. ' + NEW_PROMPT_HELLO,
         { silent: true },
       );
       return;
@@ -3684,15 +3744,38 @@ ${workspaceContext}`;
         // fact — the newest thread is the top row and the top row is the newest time.
         savedAt: String(c?.updated_at ?? ''),
       })).filter((r) => r.id);
-      if (rows.length === this._conversationRows?.length
+      const rowsChanged = !(rows.length === this._conversationRows?.length
           && rows.every((r, i) => r.id === this._conversationRows?.[i]?.id
             && r.title === this._conversationRows?.[i]?.title
             // A thread that was just written to is the same row with a NEW time: without this
             // the early return would keep a stale timestamp on screen after a save.
-            && r.savedAt === this._conversationRows?.[i]?.savedAt)) {
+            && r.savedAt === this._conversationRows?.[i]?.savedAt));
+      this._conversationRows = rows;
+
+      /*
+       * IF THERE IS A CONVERSATION, LOAD THE LAST ONE.
+       *
+       * A seat can come up with nothing bound and still have threads behind it: a person
+       * deletes the conversation they were in and what is left of the package is its history,
+       * not a blank screen. The owner, 2026-09-24: "if there is a conversation then you should
+       * just load that conversation, the last one, but if it's empty … Grace needs to just treat
+       * the prompt like it's brand new." (The empty half is `nothingToRead` in _greetIfArriving.)
+       *
+       * THE LIST IS ALREADY IN THAT ORDER. The server answers `ORDER BY updated_at DESC`, so
+       * the first row is the thread last written to — "the last one" as a person means it — and
+       * this is the same choice the server makes for the first turn of a package with nothing
+       * bound (routes/teacher.py reuses `existing[0]`), taken here so the person SEES that
+       * thread on opening instead of an empty card that fills in only once they type.
+       *
+       * `_moveSeatTo` is the app's one way to move this seat: it clears the thread, sets the id,
+       * tells the host (so the package's own pointer follows), and setting the id is what makes
+       * `_loadHistory` read it. Nothing new is invented here.
+       */
+      if (!this.conversationId && rows.length) {
+        this._moveSeatTo(rows[0].id);
         return;
       }
-      this._conversationRows = rows;
+      if (!rowsChanged) return;
       this.requestUpdate();
     } catch {
       // Unreachable server: keep the number that was already true (see the header note).
