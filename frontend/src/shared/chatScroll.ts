@@ -30,6 +30,32 @@
 /** Within this many pixels of the bottom counts as the bottom. */
 export const BOTTOM_SLACK = 30;
 
+/**
+ * ARE A RUN'S RESULTS THE THING TO READ?
+ *
+ * The owner, 2026-09-24: "the results after run have to load at the top of the results. You can't
+ * load it at the bottom of the results." A thread that carries results is a READING, and it is
+ * read from the head of the results — the "Your Results" line first, the answer below it, and any
+ * later turn below that.
+ *
+ * THE FACT IS THE RESULTS EXISTING, NOT THE RESULTS BEING LAST. This was keyed on the newest turn
+ * being a result, and a package's results conversation does not always end there: measured in
+ * Postgres the same evening, the run's results were filed at 21:01:51 and her own turns were
+ * written after them, so the newest turn was hers — the head was never placed, the column followed
+ * to the tail, and the person landed at the bottom of the output they had just produced.
+ *
+ * AND THE PERSON SPEAKING ENDS IT. Once they have said something since the results, the thread is
+ * a conversation again and follows its newest turn like any other — answering the results is
+ * exactly the case where the newest words are the ones to see.
+ */
+export function resultsAreTheReading(
+  thread: Array<{ role?: unknown; result?: unknown }>,
+): boolean {
+  const head = thread.findIndex((m) => m?.result === true);
+  if (head < 0) return false;
+  return !thread.slice(head).some((m) => String(m?.role ?? '') === 'user');
+}
+
 /** The numbers this policy reads off the scroll container. */
 export interface ChatViewport {
   scrollTop: number;

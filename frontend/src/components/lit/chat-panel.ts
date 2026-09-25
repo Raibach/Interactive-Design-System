@@ -82,6 +82,7 @@ import { arrivalIsFor, consumeArrival, type Arrival, type ArrivalKind } from '@/
 import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
 // The app's one "when" — the same format the Evals feed shows for a run. See shared/when.
 import { formatWhen } from '@/shared/when';
+import { resultsAreTheReading } from '@/shared/chatScroll';
 import { getStoredUserId } from '@/services/authService';
 
 interface SeatMessage {
@@ -298,6 +299,17 @@ export class ChatPanel extends LitElement {
    * to the surface's list length, which is real data too, just staler.
    */
   private _conversationRows: Array<{ id: string; title: string; tab: string; archived: boolean; savedAt: string }> | null = null;
+  /**
+   * HAS THIS PACKAGE'S CONVERSATION LIST BEEN READ YET?
+   *
+   * "This package has no conversation" is a claim about the SERVER's list, and an unread list is
+   * not an empty one. Without this the seat drew the conclusion from a null list the moment it
+   * learned which package it was — before the read came back — and greeted a package whose
+   * conversations were sitting right there, results and all. Measured 2026-09-24 while the owner
+   * watched it: the seat fetched the run's history, nobody pressed anything, and a silent turn
+   * still went out into the results conversation.
+   */
+  private _conversationsRead = false;
   /**
    * A conversation id the HOST handed this seat, trusted over the seat's own list.
    *
@@ -654,6 +666,26 @@ export class ChatPanel extends LitElement {
      * by _processReply when the answer lands — see the note there.
      */
     this._offerOnly = true;
+    /*
+     * AND A PACKAGE THAT HAS ALREADY RUN IS NOT REVIEWED AGAIN — she is not put to work, and she
+     * is not made to think.
+     *
+     * A run review is a model call, and a clean verdict is drawn as NOTHING (see `silentVerdict`):
+     * so pressing Run on a package with results already in it produced exactly what the owner
+     * watched — her thinking in the chat, not a word said, and the results pushed out of view.
+     * Measured 2026-09-24: "stop her from thinking after run … I've loaded 1500 times and she
+     * never said a word and now all of a sudden you can't stop her."
+     *
+     * THE REVIEW IS FOR A PROMPT THAT HAS NOT RUN — it is how somebody finds out what the machine
+     * does with what they wrote, and it is the gate that holds a FIRST Run until she answers it.
+     * Once the results exist there is nothing left to judge that they have not already said, so the
+     * Run is released here: no call, no spinner, and the host is told at once.
+     */
+    if (detail.review === 'run' && this._hasResultTurns) {
+      this._pendingRun = 'approved';
+      this._releaseQueuedRun();
+      return;
+    }
     /*
      * AND THIS TURN CAN STOP SOMETHING: a request that carries `review: 'run'` is a Run
      * the host is holding until she says it is ready. A verdict is owed for it either
@@ -1770,7 +1802,30 @@ export class ChatPanel extends LitElement {
    * marks can never disagree (see AGENTS-instructions/OUTPUT-STYLING.md R4).
    */
   private get _hasResultTurns(): boolean {
-    return this._thread.some((m) => m.result === true);
+    if (this._thread.some((m) => m.result === true)) return true;
+    /*
+     * AND A RUN IS ALSO A ROW — the fact that does not depend on what is loaded.
+     *
+     * This read the thread and nothing else, so it answered "no run here" whenever the seat was
+     * between conversations: no history fetched yet, no conversation bound, or the conversation
+     * the package points at not being the one the results went into. Measured 2026-09-24, at the
+     * moment the owner was watching it happen: the seat fetched the run's history, the person
+     * pressed nothing, and a SILENT turn still went out and was written into the results
+     * conversation ("the app asked for this turn (person_turn=false): Grace is opening the
+     * conversation") — with the results sitting in that very thread.
+     *
+     * C6 is the row: a Run files its results in a conversation of its own and ARCHIVES the one it
+     * replaced, so a package carrying an archived conversation is a package that has run. That is
+     * read from the server's own list (`_readPackageConversations`, archived rows included), which
+     * is fetched when the seat learns which package it is — before any history and whatever the
+     * binding says. Erring towards silence is the correct side to err on: the rule is that a
+     * package which has run is not talked at.
+     *
+     * THE CONSOLE IS NOT A PACKAGE and runs nothing, so its own archived rows (approvals, an
+     * earlier welcome) must not silence it — that is why this half is skipped for the console.
+     */
+    if (this._seatIsConsole === true) return false;
+    return (this._conversationRows ?? []).some((r) => r.archived === true);
   }
 
   // ── The slot contract. See the header. ───────────────────────────────────────
@@ -1988,6 +2043,10 @@ export class ChatPanel extends LitElement {
     // CLOSED — the console opens with the chat collapsed — where the scroller measures 0 and
     // the scroll is a no-op, so the first open used to land at the top of the thread
     // (measured 2026-09-19: "it's not quite at the bottom").
+    //
+    // A THREAD OF RESULTS IS LEFT WHERE IT IS (`_scrollThreadToBottom` refuses it), because the
+    // results are the first content of their conversation and the top is already the head. Nothing
+    // is placed, so nothing holds the person there.
     if (changed.has('collapsed') && !this.collapsed) this._scrollThreadToBottom();
     this._noticeWhileAway();
     // NO THUMB SYNC HERE, and that is deliberate. `updated()` runs on EVERY render, and a
@@ -2022,6 +2081,19 @@ export class ChatPanel extends LitElement {
    */
   private _scrollThreadToBottom(): void {
     if (!this._showsThread) return;
+    /*
+     * A RESULTS THREAD IS NEVER FOLLOWED TO ITS TAIL. The results ARE the reading, and they are
+     * read from their head — the "Your Results" line first, the answer below it as a normal scroll.
+     * Following the newest turn would land the person at the END of the output, which is the
+     * opposite of reading it, and it is a move nobody asked for: the owner, 2026-09-24, "the
+     * results after run have to load at the top of the results. You can't load it at the bottom of
+     * the results."
+     *
+     * The head is placed by <chat-messages> (it is the element that knows where the results
+     * start); this is only the refusal to undo it. A conversational turn — the person's own, or
+     * her reply to one — is not a result and still follows down exactly as it always has.
+     */
+    if (resultsAreTheReading(this._thread)) return;
     const once = () => {
       const scroller = this._scrollerEl();
       if (scroller) scroller.scrollTop = scroller.scrollHeight;
@@ -2054,6 +2126,29 @@ export class ChatPanel extends LitElement {
     // A DIFFERENT PACKAGE IS A DIFFERENT QUESTION: whether THIS one has ever been given its
     // first conversation is not something the last one can answer (see _greetIfArriving).
     this._conversationEnsured = false;
+    /*
+     * AND THIS PACKAGE'S THREAD HAS NOT BEEN READ YET EITHER.
+     *
+     * `_historyChecked` was never cleared here, so it still said "checked" from the package
+     * before — and the greeting ran on a thread that had not been loaded, where "has this package
+     * run?" answers NO because there is nothing in `messages` yet. Measured 2026-09-24: opening the
+     * Insurance Technology Scout, whose conversation holds a finished run, made her greet it as
+     * unfinished work — three times, into the results conversation itself (21:04:36, 21:04:59,
+     * 21:07:13). The rule that silences her after a Run is only as good as the thread it reads.
+     *
+     * With no conversation there is nothing to read and the greeting knows it already (see the
+     * synthesis in _greetIfArriving, which records exactly that), so this cannot strand a seat
+     * on a package whose conversations were all deleted.
+     */
+    this._historyChecked = false;
+    /*
+     * AND THIS PACKAGE'S CONVERSATION LIST HAS NOT BEEN READ EITHER. It is the other half of the
+     * same question — "has this package run" is answered by an archived row, and "does it have a
+     * conversation at all" by any row — so a list carried over from the package before would
+     * answer both about the wrong package.
+     */
+    this._conversationsRead = false;
+    this._conversationRows = null;
 
     // PENDING TURNS BELONG TO THE PACKAGE THEY WERE SPOKEN IN. Spoken before any package
     // existed (owner null), they are still owed to whatever package is saved next — that is
@@ -2261,8 +2356,18 @@ export class ChatPanel extends LitElement {
      * `_loadHistory` records when it is handed an empty id — so the greeting must not wait on an
      * attempt that a missing `conversationId` never starts. That wait is the trap the note below
      * describes; this is the other side of it.
+     *
+     * AND ONLY WHEN THE PACKAGE IS KNOWN TO HAVE NOTHING: the list read has to have come back and
+     * have come back EMPTY. An unread list is not an empty one, and treating it as one is how she
+     * greeted a package whose conversations — with a finished run in them — were sitting in the
+     * very list being fetched.
+     *
+     * A FAILED READ IS NOT AN EMPTY ONE EITHER, which is why this asks for a REAL array: the row
+     * list is only ever assigned from a successful read, so `null` means "this seat could not find
+     * out", and "I could not find out" is never a reason to create a conversation.
      */
-    if (!this._wantsGreeting && this.sessionId && !this.conversationId) {
+    if (!this._wantsGreeting && this.sessionId && !this.conversationId
+      && Array.isArray(this._conversationRows) && this._conversationRows.length === 0) {
       this._historyChecked = true;
       this._takeArrival('resume');
     }
@@ -2302,6 +2407,28 @@ export class ChatPanel extends LitElement {
     if (!kind || this._greeted || !this._historyChecked) return;
     if (this._historyError || this._sending) return;
     /*
+     * AND NOTHING IS DECIDED ABOUT THIS PACKAGE UNTIL ITS OWN LIST HAS BEEN READ.
+     *
+     * "HAS THIS PACKAGE RUN?" is answered by the package's own record — an archived conversation
+     * (a Run files its results in a thread of its own and archives the one it replaced), or the
+     * results in its thread. Both halves arrive ASYNCHRONOUSLY, so for the first frames of an open
+     * the answer is not "no", it is NOT KNOWN YET — and a rule that treats "not known" as "no"
+     * sends exactly the turn it was written to prevent.
+     *
+     * Measured 2026-09-24 in Postgres, on the owner's own package (Insurance Technology Scout):
+     * ten greeting turns written into the results conversation between 21:04 and 21:19, not one
+     * person's turn among them, one per open. Each open fetched the list, and the greeting went out
+     * on the frames BEFORE it came back. The owner, watching it: "every time I load and open a card
+     * that has been processed already and run … she loads and spins and it pushes the content out
+     * of view." The spinner is hers, and the content it pushes is the results they opened the card
+     * to read.
+     *
+     * A PACKAGE'S SEAT WAITS; A COMPOSER DOES NOT. `_readPackageConversations` returns at once for
+     * a seat with no `sessionId`, so `_conversationsRead` is only ever awaited where there is
+     * something to read. This is a wait of one fetch, and a wait is not an answer.
+     */
+    if (this.sessionId && !this._conversationsRead) return;
+    /*
      * THE TWO "NO OFFER" RULES ARE APPLIED WHERE THE OFFER IS WRITTEN, NOT HERE.
      *
      * They used to `return` from this point — a package that had already been Run, and one where
@@ -2309,7 +2436,7 @@ export class ChatPanel extends LitElement {
      * spent, nothing was drawn, nothing was said, and the screen looked exactly like a broken
      * load. The owner, 2026-09-24: "every time you arrive she's supposed to say something … she
      * only makes recommendations before run; once run, she stops recommending." RECOMMENDATIONS
-     * STOP — SHE DOES NOT. Both rules now choose the words at the end of this function.
+     * STOP — SHE DOES NOT. Both rules choose the words at the end of this function.
      */
 
     const empty = (this.messages?.length ?? 0) === 0 && this._local.length === 0;
@@ -2460,30 +2587,41 @@ export class ChatPanel extends LitElement {
     }
 
     /*
-     * SHE GREETS WHETHER OR NOT SHE IS OFFERING, and this is the whole of the two rules above.
+     * AND THIS IS WHERE THE OFFER IS MADE — OR IS NOT MADE, WHICH IS THE WHOLE OF THE TWO RULES.
      *
-     * An offer is what a Run ends, and what "No thanks" declines — her voice is neither. So the
-     * OFFER half of the brief is dropped and the greeting half always goes: `_offerOnly` follows,
-     * because a turn that renders no buttons is not an offer and must not shape the prompt.
+     * RECOMMENDATIONS BELONG TO THE FIRST VISIT BEFORE A RUN. They are the learning experience:
+     * they are how somebody finds out what the machine does with what they wrote, so they come
+     * once, before the work has run, and never again. shared/autoAdvice.ts carries the owner's rule
+     * in full — "Recommendations are really only for the first before run … once they process a run
+     * they're gonna have to ask her for enhancements" — and it names this function as the place the
+     * gate is applied. The other rule is the person's own: "No thanks" takes the seat out of
+     * volunteering, so the next package they open is not proposed to either.
+     *
+     * BOTH RULES CHOOSE THE WORDS HERE; NEITHER OF THEM RETURNS EARLIER. A `return` above is a
+     * SILENT SEAT — the arrival spent, nothing drawn, nothing said, and a screen that reads as
+     * broken — which is why the version of this branch that returned was wrong and is reverted
+     * here. What the rules decide is whether a turn is sent AT ALL: an offer she is not going to
+     * make must not be paid for with a model call.
+     *
+     * AND A PACKAGE THAT HAS RUN IS NOT PROPOSED TO. The gate is a fact about the WORK — the
+     * results in its thread, or the archived conversation a Run left in its own list — and it is
+     * read BEFORE this point, once the list has come back (see the wait above). The owner,
+     * 2026-09-24: "whenever the application has run and I reopen the card I should see the results
+     * not the model at the bottom of the screen thinking." Reopening a package that has run is
+     * somebody coming back to READ it; she waits to be asked.
      */
     const offering = autoAdviceOn() && !this._hasResultTurns;
-    this._offerOnly = offering;
+    if (!offering) return;
+    this._offerOnly = true;
     void this._send(
-      offering
-        ? 'A person has just opened an existing piece of work. You can see the conversation '
-          + 'so far and the prompt as it stands. Say briefly where the work is — one or two '
-          + 'sentences, concrete, about THIS prompt — then offer two or three things to do '
-          + 'next as buttons: [short label](action:write-seat:the seat|the words to put in it) '
-          + 'for anything you would write into a seat, or [short label](action:the request) '
-          + 'for anything you would do yourself. Keep labels to a few words and use no '
-          + 'parentheses inside a button. Ask which one they want and wait. '
-          + OFFER_THE_WAY_OUT
-        : 'A person has just opened an existing piece of work that has already been run. You can '
-          + 'see the conversation so far and the prompt as it stands. Say briefly where the work '
-          + 'is — one or two sentences, concrete, about THIS prompt. Offer nothing: no '
-          + 'suggestions, no buttons, no next steps, and do not ask what they want to do next — '
-          + 'they will ask you for an enhancement when they want one. Do not describe the '
-          + 'results back to them.',
+      'A person has just opened an existing piece of work. You can see the conversation '
+      + 'so far and the prompt as it stands. Say briefly where the work is — one or two '
+      + 'sentences, concrete, about THIS prompt — then offer two or three things to do '
+      + 'next as buttons: [short label](action:write-seat:the seat|the words to put in it) '
+      + 'for anything you would write into a seat, or [short label](action:the request) '
+      + 'for anything you would do yourself. Keep labels to a few words and use no '
+      + 'parentheses inside a button. Ask which one they want and wait. '
+      + OFFER_THE_WAY_OUT,
       { silent: true },
     );
   }
@@ -3263,6 +3401,22 @@ ${workspaceContext}`;
     text = (text ?? '').trim();
     if (!text || this._sending) return;
     /*
+     * THE HARD STOP — SHE IS NOT MADE TO SPEAK INTO A PACKAGE THAT HAS ALREADY RUN.
+     *
+     * This is the one place it is enforced, and it is enforced HERE because every rule that was
+     * supposed to be quiet — the arrival greeting, the run's own conversation being adopted, the
+     * console hello, whatever the host asks for — arrives through this function. Gating the rules
+     * individually is what let her keep talking: each new path into a send had to remember a rule
+     * it did not know about. The owner, 2026-09-24: "Grace needs to stop talking unless she's asked
+     * a question … stop questioning me."
+     *
+     * WHAT IS NOT SILENCED: the person's own turn (`silent` is false — that is the question she is
+     * answering), and the RUN REVIEW, which is the app asking her to judge a prompt before a run
+     * that has not happened yet. Everything else — a greeting, a suggestion, a note of her own —
+     * waits until the person asks, which is the whole of the rule.
+     */
+    if (opts.silent && !this._reviewingRun && this._hasResultTurns) return;
+    /*
      * THE CHAT DOES NOT REASON, AND THAT IS A MEASUREMENT, NOT A PREFERENCE.
      *
      * It used to reason on every turn the person typed. Measured on this provider, the
@@ -3635,6 +3789,21 @@ ${workspaceContext}`;
   adoptConversation(id: string): void {
     if (!id || id === this.conversationId) return;
     const leaving = String(this.conversationId ?? '');
+    /*
+     * AND SHE SAYS NOTHING ABOUT A RUN THAT JUST FINISHED.
+     *
+     * The results landing is not an arrival she answers — it is the output of the thing the person
+     * pressed. The owner, 2026-09-24: "she's not supposed to be chatting after run. She is done
+     * with recommendations after run." Measured the same evening: filing a run's results was
+     * followed by her opening the conversation out loud ("the app asked for this turn
+     * (person_turn=false): Grace is opening the conversation"), which is a greeting about work she
+     * had already delivered, sitting on top of the answer they pressed Run to read.
+     *
+     * The greeting is spent here rather than forbidden, so the next thing that IS an arrival — the
+     * person opening this package later — is answered normally (`_takeArrival` clears the flag).
+     */
+    this._wantsGreeting = '';
+    this._greeted = true;
     // THE HOST'S WORD IS THE AUTHORITY FOR THIS ONE MOVE — see _adoptedByHost. The
     // list is re-read alongside it, so the belongs-check passes for every later turn.
     this._adoptedByHost = id;
@@ -3908,6 +4077,14 @@ ${workspaceContext}`;
    * surface's own list length until the first successful read — real data either way, so
    * there is no stand-in value here and nothing is swallowed: the number simply stays as
    * true as it was.
+   *
+   * AND THE ATTEMPT IS OVER EITHER WAY. `_conversationsRead` says "this seat is no longer waiting
+   * on the list", not "the list came back" — so it is set on every exit, including the failures.
+   * The greeting waits on it (see C9 in AGENTS-instructions/THE_CONVERSATION_CONTRACT.md), and a
+   * wait that only ends when the server answers would strand a seat on an unreachable one: silent
+   * forever, which is the dead screen C8 calls out. A FAILED READ LEAVES `_conversationRows` NULL
+   * ON PURPOSE, because "there are no conversations" is a claim only a successful empty read can
+   * make — see the gate in _greetIfArriving that requires a real empty array.
    */
   private async _readPackageConversations(userId: string): Promise<void> {
     if (!this.sessionId) return;
@@ -3916,13 +4093,13 @@ ${workspaceContext}`;
         `/api/conversations?session_id=${encodeURIComponent(this.sessionId)}&include_archived=true`,
         { headers: { 'X-User-ID': userId } },
       );
-      if (!res.ok) return;
+      if (!res.ok) { this._conversationsRead = true; return; }
       const body = (await res.json()) as {
         conversations?: Array<{
           id?: unknown; title?: unknown; tab?: unknown; is_archived?: unknown; updated_at?: unknown;
         }>;
       };
-      if (!Array.isArray(body?.conversations)) return;
+      if (!Array.isArray(body?.conversations)) { this._conversationsRead = true; return; }
       const rows = body.conversations.map((c) => ({
         id: String(c?.id ?? ''),
         title: String(c?.title || '(untitled)'),
@@ -3940,6 +4117,7 @@ ${workspaceContext}`;
             // the early return would keep a stale timestamp on screen after a save.
             && r.savedAt === this._conversationRows?.[i]?.savedAt));
       this._conversationRows = rows;
+      this._conversationsRead = true;
 
       /*
        * IF THERE IS A CONVERSATION, LOAD THE LAST ONE.
@@ -3967,7 +4145,10 @@ ${workspaceContext}`;
       if (!rowsChanged) return;
       this.requestUpdate();
     } catch {
-      // Unreachable server: keep the number that was already true (see the header note).
+      // Unreachable server: keep the number that was already true (see the header note). The wait
+      // is still released — the attempt is over, and a seat that waits on a server that never
+      // answers never speaks (see the header note).
+      this._conversationsRead = true;
     }
   }
 

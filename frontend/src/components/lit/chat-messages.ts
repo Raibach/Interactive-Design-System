@@ -23,6 +23,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { asPlainText, stripControlTags } from '@/shared/plainText';
 import { renderMarkdown } from '@/shared/richText';
 import { HER_ANSWERS } from '@/shared/actionLink';
+import { resultsAreTheReading } from '@/shared/chatScroll';
 // The user's turn is the design's own row, not a styled div — v.4b draws it as
 // "user-response-bubble" #40001119:6352 and this element draws that element.
 import './user-response-bubble';
@@ -425,25 +426,20 @@ export class ChatMessages extends LitElement {
        * conversational turn, and the thread follows it to the bottom exactly as it
        * always has — answering the results reverts to the normal flow.
        */
-      if (list[list.length - 1]?.result) {
-        const first = thread.querySelector('.turn.result') as HTMLElement | null;
-        if (first) {
-          // THE COLUMN'S OWN SCROLLER IS THE ONE THAT OVERFLOWS, and it is found by
-          // walking up from this element (the panel's .content-scroll). The guard
-          // reads real heights, so a short answer that fits its column scrolls
-          // nothing — the "do nothing" case the owner described. `scrollIntoView`
-          // does the rest across the shadow boundary, aligning the head of the
-          // results with the top of that scroller.
-          let scroller: HTMLElement | null = this.parentElement;
-          while (scroller && !(scroller.scrollHeight > scroller.clientHeight)) {
-            scroller = scroller.parentElement;
-          }
-          // jsdom does not implement scrollIntoView, so the call is guarded — a
-          // test pins it with a mock of its own.
-          if (scroller && typeof first.scrollIntoView === 'function') {
-            first.scrollIntoView({ block: 'start', behavior: 'auto' });
-          }
-        }
+      if (resultsAreTheReading(list)) {
+        /*
+         * NOTHING IS MOVED, AND THAT IS THE WHOLE OF THE RULE.
+         *
+         * The results are the FIRST content of that conversation, so the scroller's natural
+         * position — the top — is already the head of the results. Reaching for it with a scroll
+         * is what turned "open at the top" into a clamp: every effort to hold the view there also
+         * stopped the person moving it, and every re-render re-applied it. The owner, 2026-09-24:
+         * "why you put a fucking clamp on it… unbelievable." There is nothing to place, so this
+         * does nothing — and the person scrolls the results like any other text.
+         *
+         * THE RULE ENDS THE MOMENT THE PERSON SPEAKS: their turn, or her reply, is a conversational
+         * turn, and the thread follows it to the bottom exactly as it always has.
+         */
         return;
       }
       // Nothing marked, nothing to follow: a new conversational turn keeps the
