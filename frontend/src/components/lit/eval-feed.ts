@@ -20,6 +20,9 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { designTokens } from '@/shared/design-tokens';
+// THE RUN-AT COLUMN'S FORMAT. It used to be written inline here; it moved to shared/when when
+// the conversations list needed the same shape, so the app has one writer of a moment.
+import { formatWhen } from '@/shared/when';
 
 /** One judged run. Mirrors the row the backend's /evaluations endpoint returns. */
 export interface EvaluationRecord {
@@ -50,14 +53,6 @@ const STATUS_WORD: Record<EvaluationRecord['verdict'], string> = {
   running: 'Running',
   error: 'Error',
 };
-
-/** "2026-09-24, 08:12:33" — the same two facts n8n's Run-at column shows. */
-function formatRunAt(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    + ', ' + d.toLocaleTimeString('en-US', { hour12: false });
-}
 
 export class EvalFeed extends LitElement {
   static properties = {
@@ -219,7 +214,7 @@ export class EvalFeed extends LitElement {
             <div class="main">
               <div class="top">
                 ${this._statusView(r)}
-                <span class="when" title=${r.runAt}>${formatRunAt(r.runAt)}</span>
+                <span class="when" title=${r.runAt}>${formatWhen(r.runAt)}</span>
               </div>
               ${r.sentence ? html`<div class="sentence">${r.sentence}</div>` : nothing}
             </div>

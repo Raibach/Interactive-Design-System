@@ -933,6 +933,58 @@ describe("<chat-panel> — a Run held on her verdict", () => {
   });
 });
 
+describe('<chat-panel> — a row says when its thread was last saved', () => {
+  /**
+   * THE OWNER'S ASK, 2026-09-24: "can you add timestamps to the conversations when they're saved."
+   *
+   * THE TIME IS THE SERVER'S. The read already carries `updated_at` and orders the list by it,
+   * so the number on a row and the row's place in the list are one fact — the newest thread is
+   * the top row and the top row carries the newest time. That is why this test pins the value
+   * the server sent rather than a string this file made up.
+   *
+   * THE FORMAT is pinned where the one writer of a moment lives (`when.test.ts`); what is pinned
+   * here is that the row draws it at all, carries the full stamp for the hover, and draws
+   * nothing when the read had no time to give — a missing time is not a missing row.
+   */
+  const openList = async (conversations: unknown[]) => {
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.startsWith('/api/conversations?') && (!init || init.method === undefined)) {
+        return json({ conversations });
+      }
+      if (u.includes('/messages')) return json({ messages: [] });
+      return json({ success: true });
+    }));
+    const el = await mount({ sessionId: 'sess-1', conversationId: 'conv-a' });
+    await settle(el);
+    // The CONVERSATIONS bar opens the list — it is the list's header (see the panel's own note
+    // on which bar is which), and the readout above it is not.
+    (el.shadowRoot!.querySelector('chat-header[bar-node="40001119:6318"]') as HTMLElement).click();
+    await settle(el);
+    return el;
+  };
+
+  it('shows the saved time the server sent, with the full stamp on the hover', async () => {
+    const el = await openList([
+      { id: 'conv-a', title: 'The run that landed', tab: 'chat', updated_at: '2026-09-24T20:25:29Z' },
+    ]);
+    const when = el.shadowRoot!.querySelector('.conversation-list .conv-when') as HTMLElement | null;
+    expect(when).not.toBeNull();
+    // The raw stamp, not the drawn text: the drawn text is local time and this assertion has to
+    // hold on a machine in any timezone (see when.test.ts).
+    expect(when!.getAttribute('title')).toBe('Last saved 2026-09-24T20:25:29Z');
+    expect(when!.textContent!.trim()).toMatch(/\d{4}, \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it('draws no time on a row the read gave none, and keeps the row', async () => {
+    const el = await openList([{ id: 'conv-a', title: 'No time on this one' }]);
+    expect(el.shadowRoot!.querySelector('.conversation-list .conv-when')).toBeNull();
+    expect(el.shadowRoot!.querySelector('.conversation-list li .conv-open')!.textContent)
+      .toContain('No time on this one');
+  });
+});
+
 describe('<chat-panel> — the console says hello as the console', () => {
   /**
    * THE CONSOLE IS AN INDEX, AND SHE USED TO GREET IT LIKE A PACKAGE.
