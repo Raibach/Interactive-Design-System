@@ -860,6 +860,59 @@ INDEX_DEFINITIONS = [
     "ON prompt_sessions(user_id) WHERE (metadata->>'session_type') = 'console'",
 ]
 
+
+# ── THE VIEWS. Three of them, and they existed in exactly one database. ──────────────
+#
+# `data_dignity_summary` is READ BY THE APP (`grace_memory_api.py`, the dignity summary),
+# and `current_month_usage` / `grace_health_current` are the same shape of reading. None
+# of the three was created here, or anywhere else in this repository — they were made by
+# hand in the development database, so the only place they existed was the machine they
+# were typed on. A fresh install had no way to get them, and production did not have them
+# either: an endpoint reading one would fail there while working perfectly on the laptop.
+#
+# Measured 2026-09-24, comparing the two schemas: local had 44 BASE TABLES and 3 VIEWS,
+# and this file's 44 table definitions accounted for every base table and no view at all.
+#
+# THEY ARE STATED HERE, ON THE SAME PRINCIPLE AS EVERYTHING ABOVE: the schema a database
+# needs is in the file that builds databases, so the migration that runs on every boot
+# brings every environment to the same shape. `CREATE OR REPLACE VIEW` is idempotent, so
+# this is safe on a database that already has them — where it also matters that the
+# definition, not just the name, is what is applied: a view changed here is a view changed
+# everywhere on the next start.
+VIEW_DEFINITIONS = [
+    # The current month's usage per person and metric.
+    """
+    CREATE OR REPLACE VIEW current_month_usage AS
+    SELECT user_id,
+           metric_type,
+           sum(count) AS total_count
+    FROM usage_metrics
+    WHERE period_month = date_trunc('month', now())
+    GROUP BY user_id, metric_type
+    """,
+    # What each person's contributed data has been worth, and how much is paid.
+    """
+    CREATE OR REPLACE VIEW data_dignity_summary AS
+    SELECT user_id,
+           count(*) AS total_contributions,
+           sum(value_points) AS total_value_points,
+           sum(value_usd) AS total_value_usd,
+           sum(CASE WHEN compensation_status = 'paid'    THEN value_usd ELSE 0 END) AS paid_amount,
+           sum(CASE WHEN compensation_status = 'pending' THEN value_usd ELSE 0 END) AS pending_amount
+    FROM data_dignity_ledger
+    GROUP BY user_id
+    """,
+    # Each person's most recent health reading, and only that one.
+    """
+    CREATE OR REPLACE VIEW grace_health_current AS
+    SELECT DISTINCT ON (user_id)
+           user_id, metric_period, mood_state, hallucination_rate,
+           coherence_score, confidence_avg, refusal_count
+    FROM grace_health_metrics
+    ORDER BY user_id, metric_period DESC
+    """,
+]
+
 # Default user that the frontend expects
 DEFAULT_USER_SQL = """
 INSERT INTO users (id, email, password_hash, full_name, status, email_verified)
@@ -1340,6 +1393,22 @@ def init_database():
             except Exception as e:
                 # Index might already exist
                 pass
+
+        # Step 3b: Create views
+        #
+        # A FAILURE HERE IS PRINTED, not swallowed like an index above. An index that
+        # already exists is the ordinary case; a view that will not create is a reading
+        # of the app that will not work, and it has to be visible in the boot log of
+        # whichever environment it happened in — see VIEW_DEFINITIONS for what these are
+        # and how they came to be missing from production.
+        print("Creating views...")
+        for view_sql in VIEW_DEFINITIONS:
+            name = view_sql.split("VIEW", 1)[1].split("AS", 1)[0].strip()
+            try:
+                cur.execute(view_sql)
+                print(f"  View ready: {name}")
+            except Exception as e:
+                print(f"  Warning: Could not create view {name}: {e}")
 
         # Step 4: Create stored procedures
         print("Creating stored procedures...")
