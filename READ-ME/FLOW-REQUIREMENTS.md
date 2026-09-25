@@ -23,8 +23,11 @@ before the run proceeds. Three things are true of that review:
 - **Recommendations are for the FIRST Run, not every Run after it.** They are the learning
   experience — how somebody finds out what the machine does with what they wrote — and once a
   package has produced results she stops proposing and waits to be asked. The gate is the
-  package's own thread (the results it carries are the fact), applied in
-  `<chat-panel>._greetIfArriving`; the rule and the owner's words are in `shared/autoAdvice`.
+  package's own record (the results in its thread, and the archived conversation a Run left in
+  its list), applied in `<chat-panel>._greetIfArriving`; the rule and the owner's words are in
+  `shared/autoAdvice`. **That record must have been READ before she speaks** — "not read yet" is
+  not "no", and twelve greetings were written into one results conversation by treating it as one
+  (see `AGENTS-instructions/THE_CONVERSATION_CONTRACT.md` C9).
 
 **The point of the list is not compliance.** It is that a bad prompt should be caught while
 it is cheap to fix, by the person who wrote it, before it becomes a bad flow.

@@ -193,7 +193,7 @@ export function asPlainText(text: string): string {
  * which had never heard of them. Anything added to her instructions belongs here too.
  */
 const CONTROL_TAG =
-  /<(update_agent|update_user|update_agent_role|update_tool|update_tool_call|update_few_shot|update_context|update_constraints|add_role|set_title|set_description|insert_tool|load_version|show_version|reassemble-console|project-card-element|add-button)\b[^>]*>[\s\S]*?<\/\1>/g;
+  /<(update_agent|update_user|update_agent_role|update_tool|update_tool_call|update_few_shot|update_context|update_constraints|add_role|set_title|set_description|insert_tool|load_version|show_version|reassemble-console|project-card-element|add-button|a2ui_surface)\b[^>]*>[\s\S]*?<\/\1>/g;
 const ADD_ROLE_TAG = /<add_role\b[^>]*>[\s\S]*?<\/add_role>/g;
 
 /**
@@ -209,9 +209,17 @@ const SOLO_PAIRED = /<(run_ok|run_blocked|save|get_versions)>[\s\S]*?<\/\1>/g;
  * `<run_ok/>`, and the forms she writes WITHOUT the slash — `<run_blocked>` was written bare,
  * which is why a paired-only pattern could never have caught it. Opening and closing halves
  * are both stripped, so a stray one does not survive as punctuation.
+ *
+ * `<a2ui_surface>` IS THE ASSEMBLY WRAPPER, and it is on this list for the same reason as the
+ * rest: `grace_gui.py` mandates it as the ONLY acceptable output shape ("ONLY <a2ui_surface>…
+ * </a2ui_surface> XML tags from the Registry"), the other display path already takes it off
+ * (`neuralNetworkService.ts` strips the same wrapper), and this one did not — so a chat reply
+ * that carried the wrapper showed the person the tags themselves. The owner, 2026-09-24: "it's
+ * got a bracket for a2UI service. It looks like some kind of hack bullshit." It is the app's own
+ * envelope, not her words, and it is stripped here whether it arrives paired or half-written.
  */
 const SOLO_TAG =
-  /<\/?(?:run_ok|run_blocked|save|clear_all|get_versions|eval_grounding|clear-surface)\s*\/?>/g;
+  /<\/?(?:run_ok|run_blocked|save|clear_all|get_versions|eval_grounding|clear-surface|a2ui_surface)\s*\/?>/g;
 
 export function stripControlTags(text: string): string {
   if (!text) return text;
