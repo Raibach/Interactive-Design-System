@@ -69,7 +69,7 @@ export class ChatFold extends LitElement {
          the same designed tile, one above the other. */
       .panel,
       .body-tile {
-        background: #ffffff;
+        background: #F7F8F2;
         border-radius: 6px;
         box-shadow: -4px -4px 5px rgba(0, 0, 0, 0.15), 4px 4px 5px rgba(0, 0, 0, 0.15);
         font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;

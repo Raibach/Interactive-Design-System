@@ -16,6 +16,20 @@
  * PAGE-LEVEL, NOT PERSISTED, and deliberately not in localStorage: a preference that
  * outlives the tab without anybody being able to see or change it is a setting with
  * no switch, which is worse than one that resets.
+ *
+ * AND THE BIGGER GATE IS NOT A PREFERENCE AT ALL — IT IS THE RUN. Recommendations are
+ * the learning experience: they are how somebody finds out what the machine does with
+ * what they wrote, so they belong to the FIRST Run and not to every visit after it. Once
+ * a package has produced results she stops proposing and waits to be asked. The owner,
+ * 2026-09-24: "Recommendations are really only for the first before run. It's part of the
+ * learning experience and then once they process a run they're gonna have to ask her for
+ * enhancements."
+ *
+ * That gate is a fact about the WORK — read from the package's own thread (does it carry a
+ * Run's results?) — rather than a flag kept beside this one, so it has no switch here and
+ * no lifetime to manage. It is applied in <chat-panel>._greetIfArriving, next to
+ * `autoAdviceOn()` and BEFORE the send: an offer she is not going to make must not be paid
+ * for with a model call.
  */
 
 let volunteering = true;

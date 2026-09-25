@@ -65,7 +65,7 @@ body {
      --chat-user-bg  user-response-bubble #40001119:6352 — #CBE6E3
      --chat-rule     no rule is drawn between the drawing's rows; kept transparent. */
 :root {
-  --chat-bg: #FFFFFF;
+  --chat-bg: #F7F8F2;
   --chat-text: #171717;
   --chat-user-bg: #CBE6E3;
   --chat-rule: transparent;

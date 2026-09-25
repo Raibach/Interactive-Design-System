@@ -621,30 +621,43 @@ describe('<workspace-layout> the Run: the dock holds, and the panel slides as on
     return { el, panel };
   };
 
-  it('the dock closes her, and a payload re-assert does not reopen her', async () => {
+  it('the dock leaves her open, so the chat is where a Run is watched', async () => {
     const { el } = await withPanelBox(950);
     el.isThirdOpen = true; // the composer's payload
     await el.updateComplete;
     expect(el.isThirdOpen).toBe(true);
 
+    /*
+     * THE OWNER'S 2026-09-24 REVERSAL. The dock used to close her with the prompt — his
+     * 2026-09-23 "collapse both sides to the edges" — so the canvas took the whole room.
+     * The chat is now where a Run is WATCHED: the prompt that was sent, what the tools
+     * brought back, and the answer all land in her column, so closing it at the click
+     * hid the output the Run produces. The dock folds the LEFT prompt to its rail and
+     * leaves her open.
+     */
     el.dockPrompt();
     await el.updateComplete;
-    expect(el.isThirdOpen).toBe(false);
+    expect(el.isThirdOpen).toBe(true);
 
-    // The next published update writes the same payload value again. It loses: the dock is the
-    // layout's own act, and the layout owns the fact from that moment on.
+    // A later payload write agrees with the dock now — both writers say open, so there is
+    // nothing to fight about, and the pane keeps its state through the whole Run.
     el.isThirdOpen = true;
     await el.updateComplete;
-    expect(el.isThirdOpen).toBe(false);
+    expect(el.isThirdOpen).toBe(true);
   });
 
-  it('holds her panel at the width she had open, so the collapse slides it out', async () => {
+  it('holds her panel at the width she had open, so a collapse slides it out', async () => {
     const { el, panel } = await withPanelBox(950);
     el.isThirdOpen = true;
     await el.updateComplete;
     expect(panel.style.width).toBe(''); // open: the pane's width is the panel's width
 
-    el.dockPrompt();
+    /*
+     * THE CLOSE IS THE PERSON'S OWN NOW — a collapse-toggle, or the rail — because the Run's
+     * dock no longer closes her (see the test above). The slab is the same whichever hand
+     * closes the column.
+     */
+    el.dispatchEvent(new CustomEvent('collapse-toggle', { detail: { collapsed: true } }));
     await el.updateComplete;
     // MEASURED WHILE SHE WAS STILL OPEN — the number is taken in the frame the close is decided,
     // because one frame later the pane is mid-slide.

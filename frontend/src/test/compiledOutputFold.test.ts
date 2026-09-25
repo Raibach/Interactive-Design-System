@@ -9,9 +9,12 @@
  * a way to open it — and short snippets are untouched, because they were never
  * the wall.
  *
- * What is pinned here is that the block is NOT rendered until it is asked for,
- * that asking works, and that the index-keyed state opens the block that was
- * clicked rather than every block of the same length.
+ * The fold was the viewer's own button machinery; it is now the native `<details>`
+ * element the shared marked renderer emits (shared/richText) — one summary line,
+ * the block inside, opened by the browser's own summary-click toggle. What is
+ * pinned here is the same behavior under the new mechanism: the block is
+ * announced rather than shown, a click opens it and closes it, and each long
+ * block folds on its own.
  */
 import { describe, it, expect } from 'vitest';
 import '@/components/lit/compiled-output-viewer';
@@ -40,57 +43,57 @@ const block = (marker: string, lines: number, lang = 'ts') =>
 const answerWithFile = (lines: number) =>
   ['RESULT: renamed the flag.', '', block('fileLine', lines), '', 'DONE'].join('\n');
 
-const heads = (el: ViewerEl) =>
-  Array.from(el.shadowRoot!.querySelectorAll('.fold-head')) as HTMLElement[];
+/** The fold, by its details element: one per long fenced block. */
+const folds = (el: ViewerEl) =>
+  Array.from(el.shadowRoot!.querySelectorAll('details.fold')) as HTMLDetailsElement[];
 
 describe('compiled-output-viewer folds a long fenced block', () => {
-  it('announces the block with its language and line count, and does not render it', async () => {
+  it('announces the block with its language and line count, and leaves it closed', async () => {
     const el = await mount(answerWithFile(60));
 
-    expect(heads(el)).toHaveLength(1);
-    expect(heads(el)[0].textContent).toContain('ts');
-    expect(heads(el)[0].textContent).toContain('60 lines');
-    expect(heads(el)[0].getAttribute('aria-expanded')).toBe('false');
-    // The sixty lines are not on screen, and the verdict above them still is.
-    expect(el.shadowRoot!.querySelector('.fold pre')).toBeNull();
+    expect(folds(el)).toHaveLength(1);
+    const summary = folds(el)[0].querySelector('summary')!;
+    expect(summary.textContent).toContain('ts');
+    expect(summary.textContent).toContain('60 lines');
+    expect(folds(el)[0].hasAttribute('open')).toBe(false);
+    // The verdict above the fold still reads.
     expect(el.shadowRoot!.querySelector('.md')!.textContent).toContain('RESULT: renamed the flag.');
-    expect(el.shadowRoot!.querySelector('.md')!.textContent).not.toContain('fileLine59');
   });
 
   it('opens the block on one click and closes it again', async () => {
     const el = await mount(answerWithFile(60));
 
-    heads(el)[0].click();
+    const details = folds(el)[0];
+    details.querySelector('summary')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await el.updateComplete;
-    const pre = el.shadowRoot!.querySelector('.fold pre');
-    expect(pre).not.toBeNull();
-    expect(pre!.textContent).toContain('const fileLine0 = 0;');
-    expect(pre!.textContent).toContain('const fileLine59 = 59;');
-    expect(heads(el)[0].getAttribute('aria-expanded')).toBe('true');
+    expect(details.hasAttribute('open')).toBe(true);
+    expect(details.querySelector('pre')!.textContent).toContain('const fileLine0 = 0;');
+    expect(details.querySelector('pre')!.textContent).toContain('const fileLine59 = 59;');
 
-    heads(el)[0].click();
+    details.querySelector('summary')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await el.updateComplete;
-    expect(el.shadowRoot!.querySelector('.fold pre')).toBeNull();
+    expect(details.hasAttribute('open')).toBe(false);
   });
 
   it('leaves a short snippet unfolded — it was never the wall', async () => {
     const el = await mount(['Run this:', '', block('cmd', 3, 'bash')].join('\n'));
 
-    expect(heads(el)).toHaveLength(0);
+    expect(folds(el)).toHaveLength(0);
     expect(el.shadowRoot!.querySelector('.md pre')!.textContent).toContain('const cmd0 = 0;');
   });
 
   it('folds each long block on its own, so a click opens the one that was clicked', async () => {
     const el = await mount([block('first', 60), '', block('second', 20)].join('\n'));
 
-    expect(heads(el)).toHaveLength(2);
-    heads(el)[1].click();
+    const all = folds(el);
+    expect(all).toHaveLength(2);
+    all[1].querySelector('summary')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await el.updateComplete;
 
-    const pres = Array.from(el.shadowRoot!.querySelectorAll('.fold pre'));
-    expect(pres).toHaveLength(1);
-    expect(pres[0].textContent).toContain('const second0 = 0;');
-    expect(pres[0].textContent).not.toContain('first0');
+    expect(all[1].hasAttribute('open')).toBe(true);
+    expect(all[0].hasAttribute('open')).toBe(false);
+    expect(all[1].querySelector('pre')!.textContent).toContain('const second0 = 0;');
+    expect(all[1].querySelector('pre')!.textContent).not.toContain('first0');
   });
 
   it('shows the whole block in Raw, the pane\'s own escape hatch', async () => {
@@ -107,7 +110,7 @@ describe('compiled-output-viewer folds a long fenced block', () => {
     const raw = el.shadowRoot!.querySelector('pre.raw');
     expect(raw).not.toBeNull();
     expect(raw!.textContent).toContain('const fileLine59 = 59;');
-    expect(heads(el)).toHaveLength(0);
+    expect(folds(el)).toHaveLength(0);
   });
 });
 

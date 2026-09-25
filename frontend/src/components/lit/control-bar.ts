@@ -153,7 +153,7 @@ export class ControlBar extends LitElement {
          not a flex gap. */
       margin-left: 18.81px;
       /* Figma: bg-white, h-[43px], w-[204.437px], rounded-[6px] */
-      background: #fff;
+      background: #F7F8F2;
       color: #5a5a5a;
       border: none;
       /* Figma: text-[#5a5a5a] text-[16px] font-bold */

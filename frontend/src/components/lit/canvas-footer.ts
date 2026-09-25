@@ -195,7 +195,7 @@ export class CanvasFooter extends LitElement {
     .bar button.primary:disabled { opacity: 0.5; cursor: default; }
     .bar button.secondary {
       padding: 0 15px;
-      font-size: 16px; font-weight: 700; color: #5A5A5A; background: #FFFFFF;
+      font-size: 16px; font-weight: 700; color: #5A5A5A; background: #F7F8F2;
     }
     .bar button.secondary:disabled { opacity: 0.5; cursor: default; }
 
@@ -237,7 +237,7 @@ export class CanvasFooter extends LitElement {
       font-family: 'Inter', system-ui, sans-serif;
       height: 32px; padding: 0 10px;
       font-size: 13px; font-weight: 700; color: #5A5A5A;
-      background: #FFFFFF;
+      background: #F7F8F2;
       border: none; border-radius: 6px; cursor: pointer;
       box-shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25), -4px -4px 10px 0px rgba(0, 0, 0, 0.15);
     }

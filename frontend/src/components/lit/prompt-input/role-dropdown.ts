@@ -47,7 +47,7 @@ export class RoleDropdown extends LitElement {
       width: 100%;
       box-sizing: border-box;
       padding: 0 10px;
-      background: #ffffff;
+      background: #F7F8F2;
       border: none;
       border-radius: 6px;
       box-shadow: -4px -4px 5px rgba(0, 0, 0, 0.15), 4px 4px 5px rgba(0, 0, 0, 0.15);

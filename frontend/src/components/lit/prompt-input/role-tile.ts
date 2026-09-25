@@ -38,7 +38,7 @@ export class RoleTile extends LitElement {
       box-sizing: border-box;
       padding: 0 18px;
       /* Figma 40000954-23865 role-tile: px-[10px], max-w-[500px] */
-      background: #ffffff;
+      background: #F7F8F2;
       border-radius: 6px;
       box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
       min-width: 0;

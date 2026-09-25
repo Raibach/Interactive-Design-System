@@ -89,7 +89,7 @@ export const designTokens = css`
     --ds-text: #171717;        /* body text, same as the thread in this slot */
     --ds-text-strong: #1c2f4e; /* the primitives' .t */
     --ds-muted: #6c757d;       /* secondary: timestamps, statuses, detail lines */
-    --ds-surface: #ffffff;
+    --ds-surface: #F7F8F2;
     --ds-surface-muted: #f7fafc; /* a user turn in the thread */
     --ds-surface-hover: #fafcfc;
     --ds-rule: #e3e8ec;

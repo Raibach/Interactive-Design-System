@@ -66,7 +66,7 @@ export class LeftColumnHeader extends LitElement {
       :host {
         display: block;
         flex: 0 0 auto;
-        background: #ffffff;
+        background: #F7F8F2;
         border-top: 1px solid rgba(0, 0, 0, 0.08);
         min-height: 44px;
         /*
@@ -115,7 +115,7 @@ export class LeftColumnHeader extends LitElement {
         font-size: 14px;
         font-weight: 600;
         color: #111827;
-        background: #ffffff;
+        background: #F7F8F2;
         border: 2px solid #4e68d2;
         border-radius: 4px;
         padding: 4px 8px;
@@ -165,7 +165,7 @@ export class LeftColumnHeader extends LitElement {
         padding: 2px 12px;
         border-radius: 4px;
         border: 1px solid #9ca3af;
-        background: #ffffff;
+        background: #F7F8F2;
         font-size: 12px;
         font-weight: 500;
         color: #374151;

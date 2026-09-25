@@ -44,7 +44,7 @@ export class ModelSelectorButton extends LitElement {
       height: 40px;           /* node 40000909:4322 sizing fixed */
       box-sizing: border-box;
       padding: 0 3px;         /* node 40000909:4322 padding */
-      background: #ffffff;    /* node 40000909:4322 fill (fill_658ab2fa) */
+      background: #F7F8F2;    /* node 40000909:4322 fill (fill_658ab2fa) */
       border-radius: 6px;     /* node 40000909:4322 borderRadius */
       box-shadow: 4px 4px 10px 0px rgba(0, 0, 0, 0.15),
                   -4px -4px 10px 0px rgba(0, 0, 0, 0.15); /* node 40000909:4322 "button drop" */

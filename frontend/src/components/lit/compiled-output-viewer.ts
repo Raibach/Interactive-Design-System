@@ -16,6 +16,8 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { renderMarkdown } from '@/shared/richText';
 // Chevron artwork for ouput-selector-tile / chevron-blue-closed — node
 // 40000922:4875, child "Arrow_drop_down" (40000922:4872, 14x13). The same file
 // role-tile.ts imports; the design references one asset from two places, so it
@@ -40,7 +42,6 @@ import './prompt-input/model-selector-button';
  * (a two-line type, a shell command) stay as they were — they were never the
  * wall.
  */
-const FOLD_AFTER_LINES = 12;
 
 export class CompiledOutputViewer extends LitElement {
   static properties = {
@@ -117,29 +118,10 @@ export class CompiledOutputViewer extends LitElement {
   /** True once this element has watched a Run finish, so no line appears on mount. */
   private _ranOnce = false;
 
-  /**
-   * The folded blocks the reader has opened, by index in the parsed reply.
-   *
-   * Keyed by position, not by text: the block a reader opens is the one they are
-   * looking at — block 3 of this reply — not "every block anywhere that happens
-   * to hold these characters". Cleared when a new Run starts or another session's
-   * output arrives, because that is a different document.
-   */
-  private _openBlocks = new Set<number>();
-
-  private _toggleBlock = (index: number): void => {
-    const next = new Set(this._openBlocks);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
-    this._openBlocks = next;
-    this.requestUpdate();
-  };
-
   private _startClock = (): void => {
     this._startedAt = Date.now();
     this._ranOnce = true;
     this.elapsed = 0;
-    this._openBlocks = new Set();
     if (this._timer !== null) return;
     this._timer = window.setInterval(() => {
       this.elapsed = Math.round((Date.now() - this._startedAt) / 1000);
@@ -196,11 +178,6 @@ export class CompiledOutputViewer extends LitElement {
       if (this.isRunning) this._startClock();
       else if (this._ranOnce) this._stopClock();
     }
-    if (changed.has('sessionId') && this.sessionId) {
-      // Another prompt's output is a different document: folds opened in the one
-      // that was on screen do not carry over to it (or to the same index in it).
-      this._openBlocks = new Set();
-    }
     if (changed.has('content') && this.isRunning) {
       // auto-scroll during streaming
       const el = this.shadowRoot?.querySelector('.output-body') as HTMLElement | null;
@@ -240,94 +217,6 @@ export class CompiledOutputViewer extends LitElement {
     this.viewMode = this.viewMode === 'rendered' ? 'raw' : 'rendered';
   };
 
-  // ── Markdown → Lit templates ─────────────────────────────────────────────
-  // No innerHTML anywhere (repo rule: declarative only). Every value is
-  // interpolated, so Lit escapes it — XSS-safe by construction.
-  private _parse(md: string): any[] {
-    const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
-    const out: any[] = [];
-    let i = 0;
-    const isRow = (l: string) => /^\s*\|.*\|\s*$/.test(l);
-    const cells = (l: string) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
-    const startsBlock = (l: string) =>
-      /^(#{1,6}\s|```)/.test(l) || /^\s*([-*+]\s|\d+[.)]\s|>|\|)/.test(l) || /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l);
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      if (/^```/.test(line)) {
-        const lang = line.slice(3).trim();
-        const buf: string[] = [];
-        i++;
-        while (i < lines.length && !/^```/.test(lines[i])) { buf.push(lines[i]); i++; }
-        i++;
-        out.push({ t: 'code', lang, text: buf.join('\n') });
-        continue;
-      }
-
-      const h = /^(#{1,6})\s+(.*)$/.exec(line);
-      if (h) { out.push({ t: 'h', level: h[1].length, text: h[2] }); i++; continue; }
-
-      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { out.push({ t: 'hr' }); i++; continue; }
-
-      if (isRow(line) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
-        const head = cells(line);
-        i += 2;
-        const rows: string[][] = [];
-        while (i < lines.length && isRow(lines[i])) { rows.push(cells(lines[i])); i++; }
-        out.push({ t: 'table', head, rows });
-        continue;
-      }
-
-      if (/^\s*[-*+]\s+/.test(line)) {
-        const items: string[] = [];
-        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*+]\s+/, '')); i++; }
-        out.push({ t: 'ul', items });
-        continue;
-      }
-
-      if (/^\s*\d+[.)]\s+/.test(line)) {
-        const items: string[] = [];
-        while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+[.)]\s+/, '')); i++; }
-        out.push({ t: 'ol', items });
-        continue;
-      }
-
-      if (/^\s*>\s?/.test(line)) {
-        const buf: string[] = [];
-        while (i < lines.length && /^\s*>\s?/.test(lines[i])) { buf.push(lines[i].replace(/^\s*>\s?/, '')); i++; }
-        out.push({ t: 'quote', text: buf.join(' ') });
-        continue;
-      }
-
-      if (!line.trim()) { i++; continue; }
-
-      const buf: string[] = [line.trim()];
-      i++;
-      while (i < lines.length && lines[i].trim() && !startsBlock(lines[i])) { buf.push(lines[i].trim()); i++; }
-      out.push({ t: 'p', text: buf.join(' ') });
-    }
-    return out;
-  }
-
-  /** Inline emphasis → Lit nodes (typed out, never injected as HTML). */
-  private _inline(text: string): unknown[] {
-    const parts: unknown[] = [];
-    const re = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
-    let last = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) {
-      if (m.index > last) parts.push(text.slice(last, m.index));
-      const tok = m[0];
-      if (tok.startsWith('**')) parts.push(html`<strong>${tok.slice(2, -2)}</strong>`);
-      else if (tok.startsWith('`')) parts.push(html`<code>${tok.slice(1, -1)}</code>`);
-      else parts.push(html`<em>${tok.slice(1, -1)}</em>`);
-      last = m.index + tok.length;
-    }
-    if (last < text.length) parts.push(text.slice(last));
-    return parts;
-  }
-
   static styles = css`
     /* ── The middle column, as drawn ────────────────────────────────────────
        Figma node 40000914:4677 "center-panel-3rd-col", file key
@@ -347,7 +236,7 @@ export class CompiledOutputViewer extends LitElement {
       height: 100%;
       min-height: 0;
       min-width: 0;
-      background: #fff;
+      background: #F7F8F2;
     }
 
     /* right-panel-horiz-tab — 40000909:4085 */
@@ -374,7 +263,7 @@ export class CompiledOutputViewer extends LitElement {
       min-width: 0;
       height: 100%;
       padding: 10px 10px 23px;      /* 40000909:4085 pt-10 px-10 pb-23 */
-      background: #fff;             /* 40000909:4085 bg-white */
+      background: #F7F8F2;             /* 40000909:4085 bg-white */
       box-sizing: border-box;
     }
 
@@ -401,7 +290,7 @@ export class CompiledOutputViewer extends LitElement {
       max-width: 500px;             /* 40001034:1187 max-w-[500px] */
       min-width: 1px;               /* 40001034:1187 min-w-px */
       padding: 0 10px;              /* 40001034:1187 px-[10px] */
-      background: #fff;             /* 40001034:1187 bg-white */
+      background: #F7F8F2;             /* 40001034:1187 bg-white */
       border: none;
       border-radius: 6px;           /* 40001034:1187 rounded-[6px] */
       /* 40001034:1187 drop-shadow — the applied blur is 5px. The "button drop"
@@ -458,7 +347,7 @@ export class CompiledOutputViewer extends LitElement {
       width: 100%;                  /* 40000909:4165 w-full */
       min-height: 0;
       padding: 20px;                /* 40000909:4165 p-[20px] */
-      background: #fff;             /* 40000909:4165 bg-white */
+      background: #F7F8F2;             /* 40000909:4165 bg-white */
       border-radius: 6px;           /* 40000909:4165 rounded-[6px] */
       box-sizing: border-box;
     }
@@ -516,7 +405,7 @@ export class CompiledOutputViewer extends LitElement {
       padding: 2px 8px;
       margin-left: 4px;
       border: 1px solid #d1d5db;
-      background: #fff;
+      background: #F7F8F2;
       border-radius: 4px;
       cursor: pointer;
     }
@@ -592,7 +481,7 @@ export class CompiledOutputViewer extends LitElement {
       justify-content: center;
       gap: 10px;
       padding: 24px 18px;
-      background: #fff;
+      background: #F7F8F2;
       text-align: center;
     }
     .failed-mark {
@@ -623,37 +512,23 @@ export class CompiledOutputViewer extends LitElement {
       text-align: left;
     }
 
-    /* ── Rendered markdown (no innerHTML — Lit templates only) ───────────── */
+    /* ── Rendered markdown — marked + github-markdown-css, the stack the owner
+         named (2026-09-24: "install marked and github-markdown-css… the model
+         already outputs markdown. This just renders it"). The parse happens in
+         shared/richText (marked + DOMPurify); this is the box it lands in. ── */
     .md {
       flex: 1;
       min-height: 0;
       overflow: auto;
       padding: 14px 16px;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      font-size: 13px;
+      background: #F7F8F2;
+    }
+    /* The owner's own measure: 72ch of line, 16px, 1.6 — long lines stay
+       readable instead of stretching across the column. */
+    .md .markdown-body {
+      max-width: 72ch;
+      font-size: 16px;
       line-height: 1.6;
-      color: #1f2937;
-      background: #fff;
-    }
-    .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
-      margin: 14px 0 6px;
-      color: #234354;
-      line-height: 1.25;
-      font-weight: 700;
-    }
-    .md h1 { font-size: 20px; }
-    .md h2 { font-size: 17px; }
-    .md h3 { font-size: 15px; }
-    .md h4, .md h5, .md h6 { font-size: 13px; }
-    .md p { margin: 0 0 10px; }
-    .md ul, .md ol { margin: 0 0 10px; padding-left: 20px; }
-    .md li { margin: 2px 0; }
-    .md code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 13px;
-      background: #f1f5f9;
-      border-radius: 3px;
-      padding: 1px 4px;
     }
     /* ── Scrollbar — matched EXACTLY to the left column's (.sections-scroll in
          prompt-section-editor): 14px, transparent track, #dadee4 rounded thumb.
@@ -665,26 +540,14 @@ export class CompiledOutputViewer extends LitElement {
     .output-body::-webkit-scrollbar-thumb,
     .md::-webkit-scrollbar-thumb { background: #dadee4; border-radius: 10px; }
 
-    .md pre {
-      margin: 0 0 12px;
-      padding: 10px 12px;
-      background: #0f172a;
-      color: #e2e8f0;
-      border-radius: 6px;
-      overflow: auto;
-      white-space: pre;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .md pre code { background: none; color: inherit; padding: 0; }
-    /* A folded code block: one line saying what it is, opening in place. */
-    .md .fold { margin: 0 0 12px; }
-    .md .fold-head {
+    /* A folded code block — now the native <details> the marked renderer emits
+       (shared/richText): one summary line saying what it is, opening in place.
+       The browser draws its own caret; the summary keeps the affordance. */
+    .md details.fold { margin: 0 0 12px; }
+    .md details.fold summary {
       display: flex;
       align-items: center;
       gap: 8px;
-      width: 100%;
       padding: 6px 10px;
       border: 1px solid #e5e7eb;
       border-radius: 6px;
@@ -695,84 +558,12 @@ export class CompiledOutputViewer extends LitElement {
       text-align: left;
       cursor: pointer;
     }
-    .md .fold-head:hover { background: #f3f4f6; }
-    .md .fold-head:focus-visible { outline: 2px solid #1B898D; outline-offset: 1px; }
-    .md .fold-caret { color: #6b7280; font-size: 13px; }
-    .md .fold-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-    .md .fold-action { margin-left: auto; color: #1B898D; text-decoration: underline; }
-    .md .fold pre { margin: 6px 0 0; }
-    .md blockquote {
-      margin: 0 0 10px;
-      padding: 6px 12px;
-      border-left: 3px solid #8EC1B3;
-      background: #f8fafb;
-      color: #374151;
-    }
-    .md hr { border: none; border-top: 1px solid #e5e7eb; margin: 14px 0; }
-    .md table { border-collapse: collapse; margin: 0 0 12px; width: 100%; }
-    .md th, .md td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; vertical-align: top; }
-    .md th { background: #f9fafb; font-weight: 700; color: #234354; }
+    .md details.fold summary:hover { background: #f3f4f6; }
+    .md details.fold summary:focus-visible { outline: 2px solid #1B898D; outline-offset: 1px; }
+    .md details.fold .fold-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .md details.fold pre { margin: 6px 0 0; }
     .md a { color: #1B898D; }
   `;
-
-  /**
-   * A fenced block, folded when it is long enough to be the whole reply.
-   *
-   * The reader is told what the block is (its language) and how big it is (its
-   * line count) instead of being handed all of it, and one click opens it. The
-   * text is still the whole block, still escaped by Lit — folding hides nothing
-   * from Copy, which copies the reply, not the fold.
-   */
-  private _codeBlock(b: any, index: number): unknown {
-    const text: string = b.text || '';
-    const lines = text ? text.split('\n').length : 0;
-    if (lines <= FOLD_AFTER_LINES) return html`<pre><code>${text}</code></pre>`;
-
-    const open = this._openBlocks.has(index);
-    return html`
-      <div class="fold">
-        <button
-          class="fold-head"
-          type="button"
-          aria-expanded=${open ? 'true' : 'false'}
-          @click=${() => this._toggleBlock(index)}
-        >
-          <span class="fold-caret" aria-hidden="true">${open ? '▾' : '▸'}</span>
-          <span class="fold-title">${b.lang ? `${b.lang} · ` : ''}${lines} lines</span>
-          <span class="fold-action">${open ? 'hide' : 'show'}</span>
-        </button>
-        ${open ? html`<pre><code>${text}</code></pre>` : html``}
-      </div>
-    `;
-  }
-
-  /** One parsed block → Lit template. */
-  private _block(b: any, index = -1): unknown {
-    switch (b.t) {
-      case 'h': {
-        const inner = this._inline(b.text);
-        switch (b.level) {
-          case 1: return html`<h1>${inner}</h1>`;
-          case 2: return html`<h2>${inner}</h2>`;
-          case 3: return html`<h3>${inner}</h3>`;
-          case 4: return html`<h4>${inner}</h4>`;
-          case 5: return html`<h5>${inner}</h5>`;
-          default: return html`<h6>${inner}</h6>`;
-        }
-      }
-      case 'p': return html`<p>${this._inline(b.text)}</p>`;
-      case 'code': return this._codeBlock(b, index);
-      case 'ul': return html`<ul>${(b.items || []).map((it: string) => html`<li>${this._inline(it)}</li>`)}</ul>`;
-      case 'ol': return html`<ol>${(b.items || []).map((it: string) => html`<li>${this._inline(it)}</li>`)}</ol>`;
-      case 'quote': return html`<blockquote>${this._inline(b.text)}</blockquote>`;
-      case 'hr': return html`<hr />`;
-      case 'table': return html`<table>
-        <thead><tr>${(b.head || []).map((c: string) => html`<th>${this._inline(c)}</th>`)}</tr></thead>
-        <tbody>${(b.rows || []).map((r: string[]) => html`<tr>${r.map((c: string) => html`<td>${this._inline(c)}</td>`)}</tr>`)}</tbody>
-      </table>`;
-      default: return html``;
-    }
-  }
 
   /**
    * Did the output FAIL to be generated, as opposed to not existing yet?
@@ -816,8 +607,8 @@ export class CompiledOutputViewer extends LitElement {
               </div>
             `
           : (this.content
-              ? html`<div class="md">${this._parse(this.content).map((b, i) => this._block(b, i))}</div>`
-              : html`<div class="md"><p style="color:#9ca3af">${this.isRunning ? `Running… ${this.elapsed}s` : '(no output yet)'}</p></div>`));
+              ? html`<div class="md markdown-body">${unsafeHTML(renderMarkdown(this.content))}</div>`
+              : html`<div class="md markdown-body"><p style="color:#9ca3af">${this.isRunning ? `Running… ${this.elapsed}s` : '(no output yet)'}</p></div>`));
 
     /* The §D5 placeholder strip. It lives in the BODY of the output area,
        beneath the content — spec §4 — which is the region the drawing leaves

@@ -35,7 +35,7 @@ export class PromptContainer extends LitElement {
       flex-direction: column;
       flex: 1 1 auto;
       min-height: 0;
-      background: #ffffff;
+      background: #F7F8F2;
       /* Figma 40000746:6 "left-column-panel-container": rounded-tl-[10px] (TOP-LEFT ONLY) */
       border-top-left-radius: 10px;
       box-sizing: border-box;
@@ -64,7 +64,7 @@ export class PromptContainer extends LitElement {
       flex-direction: column;
       align-items: center;
       gap: 10px;
-      background: #ffffff;
+      background: #F7F8F2;
       box-sizing: border-box;
     }
     .rail-meatballs {

@@ -228,7 +228,7 @@ export class PromptInputSection extends LitElement {
       display: block;
       flex: 0 0 auto;
       width: 100%;
-      background: #ffffff;
+      background: #F7F8F2;
       border-radius: 6px;
       box-sizing: border-box;
     }
@@ -285,7 +285,7 @@ export class PromptInputSection extends LitElement {
          the declaration had kept the pre-rebuild 171x40). */
       width: 177.04px;
       height: 43px;
-      background: #ffffff;
+      background: #F7F8F2;
       border-radius: 6px;
       box-sizing: border-box;
       box-shadow: -4px -4px 5px rgba(0,0,0,0.15), 4px 4px 5px rgba(0,0,0,0.15);
@@ -334,7 +334,7 @@ export class PromptInputSection extends LitElement {
       /* role-dropdown-tile: #FFFFFF, radius 6, "button drop" shadow.
          min-height (not height) so the rows expand with their content, and
          min-width:0 so the tiles can shrink with a narrow column. */
-      background: #ffffff;
+      background: #F7F8F2;
       border: none;
       cursor: pointer;
       text-align: left;
@@ -373,7 +373,7 @@ export class PromptInputSection extends LitElement {
       color: #8b8b8b;
       cursor: default;
     }
-    .menu-item.placeholder:hover { background: #ffffff; }
+    .menu-item.placeholder:hover { background: #F7F8F2; }
     /*
      * THE SEAT'S DESCRIPTION — a floating card, not a box in the menu.
      *
@@ -406,7 +406,7 @@ export class PromptInputSection extends LitElement {
       inset: auto;
       margin: 0;
       width: 288px;
-      background: #ffffff;
+      background: #F7F8F2;
       border-radius: 6px;
       padding: 12px 14px;
       /* Deeper and softer than the menu tiles' button drop, because this floats

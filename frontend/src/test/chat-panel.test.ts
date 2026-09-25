@@ -35,6 +35,7 @@ import '@/components/lit/chat-repair-actions';
 // root, and every read of its content comes back null.
 import type { ChatPanel } from '@/components/lit/chat-panel';
 import { parseRunAction, parseSaveAction, parseSetTitleAction } from '@/shared/actionLink';
+import { allowAutoAdvice } from '@/shared/autoAdvice';
 import { eventBus } from '@/shared/event-bus';
 
 type SeatEl = ChatPanel & { updateComplete: Promise<unknown> };
@@ -840,12 +841,21 @@ describe("<chat-panel> — a Run held on her verdict", () => {
     return { el, heard };
   };
 
-  it('her sentence lands BEFORE the run it asks for', async () => {
+  it('a clean verdict is silent, and the Run still waits for it', async () => {
     /*
-     * THE ORDER THE OWNER WATCHED GO WRONG, 2026-09-23: "we got to visually connect the run
-     * feature … give grace enough time to give her back at her output." The run used to be
-     * dispatched from inside the reply processing, so the middle column swapped and the button
-     * span BEFORE a character of the reply had been drawn.
+     * TWO CONTRACTS IN ONE TEST, both the owner's.
+     *
+     * 1. THE ORDER HE WATCHED GO WRONG, 2026-09-23: "we got to visually connect the run
+     *    feature … give grace enough time to give her back at her output." The run used to be
+     *    dispatched from inside the reply processing, so the screen changed before a character
+     *    of the reply had been drawn. The release still waits on the turn settling — here the
+     *    approval has NOT fired at settle time and only fires after the reading beat.
+     *
+     * 2. THE SILENCE, 2026-09-24. Her "everything is in place 🍾" reply is the same sentence
+     *    every run, and drawing it filled the thread with copies of one canned line — "it seems
+     *    fake." The gate still runs (the Run still waits on her `<run_ok/>`); only the drawing
+     *    of a clean verdict is skipped. A blocked verdict is still drawn, as the alert test
+     *    below pins.
      */
     vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
       if (String(url).includes('/api/teacher/query')) {
@@ -857,23 +867,22 @@ describe("<chat-panel> — a Run held on her verdict", () => {
       return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
     }));
     const el = await mount({ conversationId: 'conv-1730' });
-    let sawTheReply = false;
-    let spokeFirst = false;
-    const onApproved = () => { if (!sawTheReply) spokeFirst = true; };
+    let approved = false;
+    const onApproved = () => { approved = true; };
     window.addEventListener('a2ui:run-approved', onApproved);
 
     window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
       detail: { review: 'run', request: 'held' },
     }));
     await settle(el);
-    // Settled, and the run has NOT been released yet.
-    sawTheReply = shadowText(el).includes('I am running it now');
-    expect(sawTheReply).toBe(true);
-    expect(spokeFirst).toBe(false);
+    // Settled, and the run has NOT been released yet — the verdict was read, the reply is
+    // simply not drawn.
+    expect(approved).toBe(false);
+    expect(shadowText(el)).not.toContain('I am running it now');
 
     await new Promise((r) => setTimeout(r, 700));
     window.removeEventListener('a2ui:run-approved', onApproved);
-    expect(spokeFirst).toBe(false);
+    expect(approved).toBe(true);
   });
 
   it('releases the held Run on <run_ok/>, and says nothing else', async () => {
@@ -881,6 +890,10 @@ describe("<chat-panel> — a Run held on her verdict", () => {
 
     expect(heard).toEqual(['a2ui:run-approved']);
     expect(shadowText(el)).not.toContain('run_ok');
+    // THE CLEAN VERDICT IS NOT DRAWN AT ALL — the gate answered, the run went, and her canned
+    // "everything is in place" sentence stays off the thread (the owner, 2026-09-24: "it seems
+    // fake").
+    expect(shadowText(el)).not.toContain('Everything it needs is here');
     // Nothing was wrong, so nothing wears the alarm outline.
     const child = el.shadowRoot!.querySelector('chat-messages')!.shadowRoot!;
     expect(child.querySelectorAll('.turn.alert').length).toBe(0);
@@ -992,6 +1005,114 @@ describe('<chat-panel> — the console says hello as the console', () => {
     // 'unknown' is a third answer: an unanswered question is not a no, and it is not a yes.
     const asked = await greet({ __scope: 'unknown', sessionId: 'console-session', consoleCards: [] });
     expect(asked).toBe('');
+  });
+});
+
+describe('<chat-panel> — a package that has run is not offered recommendations', () => {
+  /**
+   * RECOMMENDATIONS BELONG TO THE FIRST RUN, AND ONLY THE FIRST.
+   *
+   * The owner, 2026-09-24: "Recommendations are really only for the first before run. It's part
+   * of the learning experience and then once they process a run they're gonna have to ask her
+   * for enhancements."
+   *
+   * He was reading the advisory she gives on a RESUME arrival, over a prompt that had just
+   * produced a briefing: "The Insurance Technology Scout runs end to end … what it has no seat
+   * for is the rules it is already obeying by instinct", then three buttons, "Which one do you
+   * want?" and a "No thanks". A model call nobody needed, telling somebody who had already run
+   * their prompt that they had not done enough.
+   *
+   * Two openings of the same package with ONE fact different — whether the thread carries a
+   * run's results. The one that has run must not reach her at all: not a quieter turn, no turn.
+   *
+   * THE MOUNT ORDER IS THE HOST'S and matters: the session and the conversation are bound
+   * together, and the history is READ from the conversation (`_loadHistory`), which is the path
+   * that marks a run's turns 'result' from the metadata the backend filed them with. Binding the
+   * session afterwards would clear the seat (a package change starts it over) and leave it with
+   * nothing to greet about.
+   */
+  const openPackage = async (history: unknown[]) => {
+    // The run gate is the subject here, not the person's own switch — pin that one on, so a
+    // test elsewhere that presses "No thanks" cannot make this one pass for the wrong reason.
+    allowAutoAdvice();
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/api/teacher/query')) return json({ content: 'Answer' });
+      if (init?.method === 'POST') return json({ id: 'msg-1', success: true });
+      if (u.includes('/messages')) return json({ messages: history });
+      // THE SEAT'S SCOPE, as the server answers it for a package: its row says 'prompt'.
+      if (u.includes('/api/prompt-sessions/')) return json({ session: { metadata: { session_type: 'prompt' } } });
+      return json({ conversations: [{ id: 'conv-1', title: 'A package' }] });
+    }));
+    const el = await mount({
+      sessionId: 'sess-1',
+      conversationId: 'conv-1',
+      conversations: [{ id: 'conv-1', title: 'A package' }],
+    });
+    await settle(el);
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
+      detail: { kind: 'resume', sessionId: 'sess-1' },
+    }));
+    await settle(el);
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const asked = calls.find((c) => String(c[0]).includes('/api/teacher/query'));
+    return String(((asked?.[1] as RequestInit | undefined)?.body as string) ?? '');
+  };
+
+  it('offers where to go next while the prompt has never run', async () => {
+    const asked = await openPackage([{ role: 'assistant', content: 'Where we left off.' }]);
+    expect(asked).toContain('offer two or three things to do next');
+  });
+
+  it("says nothing at all once the thread carries a run's results", async () => {
+    const asked = await openPackage([
+      { role: 'assistant', content: 'Where we left off.' },
+      { role: 'assistant', content: '**Your Results**\n\nA real briefing.', metadata: { kind: 'run-result' } },
+      { role: 'assistant', content: 'The answer she wrote from it.', metadata: { kind: 'tool-answer' } },
+    ]);
+    // NO CALL AT ALL, not a shorter one: the offer is not composed and then trimmed, it is never
+    // sent. She still answers anything the person asks — that is a different path (`_send`).
+    expect(asked).toBe('');
+  });
+});
+
+describe('<chat-panel> — a blank composer still gets her, with nothing offered', () => {
+  /**
+   * SHE POPS UP ON A NEW COMPOSER, AND SHE OFFERS NOTHING THERE.
+   *
+   * This is the path a person meets first: an empty composer, nothing said, nothing to read. She
+   * introduces herself and asks what to work on — no suggestion and no "No thanks", because a way
+   * out of an offer that was never made is a door in a room with no walls.
+   *
+   * IT IS HERE BECAUSE THE RUN GATE LIVES IN THE SAME FUNCTION as this arrival (see the describe
+   * above). A gate that silenced the wrong arrival would look exactly like this: her, simply not
+   * appearing, with nothing on screen to say why. Neither arrival can take the other's place
+   * while both are pinned.
+   */
+  it('says hello on an empty composer, and offers no buttons', async () => {
+    const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).includes('/api/teacher/query')) return json({ content: 'Hello.' });
+      if (init?.method === 'POST') return json({ id: 'msg-1', success: true });
+      return json({ messages: [] });
+    }));
+    // `conversationId: ''` is the host binding an empty column, which is also what marks the
+    // history attempt done — the greeting waits on that before it says anything.
+    const el = await mount({ conversationId: '' });
+    await settle(el);
+    // THE BLANK ARRIVAL IS ADDRESSED TO THE SEAT WITH NO PACKAGE, which is what a new composer is.
+    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'blank' } }));
+    await settle(el);
+
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const asked = calls.find((c) => String(c[0]).includes('/api/teacher/query'));
+    const body = String(((asked?.[1] as RequestInit | undefined)?.body as string) ?? '');
+    expect(body).toContain('Introduce yourself');
+    expect(body).toContain('ask what they want to work on');
+    // AND NO OFFER — the buttons and their way out belong to the resume arrival, not this one.
+    expect(body).not.toContain('offer two or three things');
+    expect(body).not.toContain('no-advice');
   });
 });
 
@@ -1740,5 +1861,129 @@ describe('the approvals tab carries the thread', () => {
     expect(el.shadowRoot?.querySelector('chat-messages')).toBeTruthy();
     expect(el.shadowRoot?.querySelector('.view-waiting')).toBeFalsy();
     expect(shadowText(el)).toContain('INSPECTION — OK');
+  });
+});
+
+describe('<chat-panel> — a run\'s results open at their head', () => {
+  it('scrolls the first result turn to the top when the thread overflows', async () => {
+    const el = await mount({
+      messages: [
+        { role: 'assistant', content: '**Your Results**\n\nThe head of the answer.', result: true },
+        { role: 'assistant', content: 'The long tail of the answer.', result: true },
+      ],
+    });
+    // jsdom has no layout: the overflow the guard reads is faked on the column's own
+    // scroller, the way a real column that holds more than its viewport measures.
+    const scroller = el.shadowRoot!.querySelector('.content-scroll') as HTMLElement;
+    Object.defineProperty(scroller, 'scrollHeight', { value: 900, configurable: true });
+    Object.defineProperty(scroller, 'clientHeight', { value: 200, configurable: true });
+    // jsdom does not implement scrollIntoView at all — the mock IS the assertion.
+    const intoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = intoView;
+
+    // The thread is re-published, which is the update that lands the results.
+    (el as unknown as { messages: unknown[] }).messages = [
+      { role: 'assistant', content: '**Your Results**\n\nThe head of the answer.', result: true },
+      { role: 'assistant', content: 'The long tail of the answer.', result: true },
+    ];
+    await settle(el);
+
+    expect(intoView).toHaveBeenCalledTimes(1);
+    expect(intoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+    (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = original;
+  });
+
+  it('leaves a short results thread alone — it fits, so nothing scrolls', async () => {
+    const el = await mount({
+      messages: [{ role: 'assistant', content: '**Your Results**\n\nOne short line.', result: true }],
+    });
+    const intoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = intoView;
+
+    // The thread is re-published; the column has no overflow to scroll (jsdom's own 0s).
+    (el as unknown as { messages: unknown[] }).messages = [
+      { role: 'assistant', content: '**Your Results**\n\nOne short line.', result: true },
+    ];
+    await settle(el);
+
+    expect(intoView).not.toHaveBeenCalled();
+    (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = original;
+  });
+
+  it('reads a run conversation the host hands it, before its own list knows the row', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/api/conversations/conv-new/messages')) {
+        return { ok: true, status: 200, json: async () => ({ messages: [
+          { role: 'assistant', content: '**Your Results**\n\nFresh run.', metadata: { kind: 'run-result' } },
+        ] }) } as Response;
+      }
+      if (u.includes('/api/conversations?session_id=')) {
+        return { ok: true, status: 200, json: async () => ({ conversations: [] }) } as Response;
+      }
+      if (init?.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: 'm', success: true }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ messages: [] }) } as Response;
+    }));
+    // The seat's own list knows only the OLD conversation — the run conversation was
+    // created this turn, after the list was read. The host's word is what matters.
+    const el = await mount({
+      sessionId: 'package-1',
+      conversationId: 'conv-old',
+      conversations: [{ id: 'conv-old', title: 'Old', tab: 'chat' }],
+    });
+    (el as unknown as { adoptConversation: (id: string) => void }).adoptConversation('conv-new');
+    await settle(el);
+
+    expect(shadowText(el)).toContain('Fresh run');
+  });
+
+  it("renders the tool's links as real links that open in a new tab", async () => {
+    const el = await mount({
+      messages: [
+        {
+          role: 'assistant',
+          result: true,
+          content:
+            '**Your Results**\n\nNEWS HEADLINES for "insurance":\n'
+            + '- [Headline one](https://news.example.com/story-1) — Publisher (Mon, 01 Jan 2026)',
+        },
+      ],
+    });
+    await settle(el);
+    const child = el.shadowRoot!.querySelector('chat-messages') as
+      | (HTMLElement & { updateComplete: Promise<unknown> })
+      | null;
+    for (let i = 0; i < 5 && child; i++) {
+      await Promise.resolve();
+      await child.updateComplete;
+    }
+    const anchor = child!.shadowRoot!.querySelector('.turn.result a');
+    expect(anchor).not.toBeNull();
+    expect(anchor!.getAttribute('href')).toBe('https://news.example.com/story-1');
+    expect(anchor!.getAttribute('target')).toBe('_blank');
+  });
+
+  it('follows a conversational turn to the bottom, results or no results before it', async () => {
+    const el = await mount({
+      messages: [
+        { role: 'assistant', content: '**Your Results**\n\nThe head.', result: true },
+      ],
+    });
+    const scroller = el.shadowRoot!.querySelector('.content-scroll') as HTMLElement;
+    Object.defineProperty(scroller, 'scrollHeight', { value: 900, configurable: true });
+    Object.defineProperty(scroller, 'clientHeight', { value: 200, configurable: true });
+
+    // The person speaks: the newest turn is theirs, and the thread follows it down.
+    (el as unknown as { messages: unknown[] }).messages = [
+      { role: 'assistant', content: '**Your Results**\n\nThe head.', result: true },
+      { role: 'user', content: 'What does the second headline mean?' },
+    ];
+    await settle(el);
+    // The seat's follow-scroll rides a double animation frame — let them fire.
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(scroller.scrollTop).toBe(scroller.scrollHeight);
   });
 });

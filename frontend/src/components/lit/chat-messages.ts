@@ -1,9 +1,16 @@
 /**
  * <chat-messages> — the package conversation's thread.
  *
- * Figma source: the "output-area" slots 40001066:4314–4326 inside
- * right-column-panel-container (40001066:3272) — column, padding 20px, gap 10px,
- * radius 6px, fill #FFFFFF, hug height. Those slots are the message wells.
+ * Figma source: the message wells inside the chat output slot — the container
+ * "output-output-results-area-container" #40001130:5059 (padding 6px 20px 4px, gap 7,
+ * fill #CBE6E3) and the card it holds, "chat-output-area-results" #40001130:5060
+ * (radius 8, the owner's fills #ADC7C3 / #F7F8F2), which sits in
+ * right-column-panel-container #40001119:6025. Those wells are what the turns fill.
+ *
+ * IT DRAWS NO GROUND OF ITS OWN, on purpose: the CARD is the surface a turn sits on
+ * (chat-header paints it), so every rule in this file that leaves a turn transparent is
+ * leaving the card's own fill to show through. A fill here would be a second surface
+ * over the drawing's.
  *
  * Pure render: it takes the resolved message list as a property and draws
  * role-styled turns. It owns scroll-to-bottom. It never fetches or writes — the
@@ -12,7 +19,9 @@
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
 import { LitElement, html, css, nothing } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { asPlainText, stripControlTags } from '@/shared/plainText';
+import { renderMarkdown } from '@/shared/richText';
 import { HER_ANSWERS } from '@/shared/actionLink';
 // The user's turn is the design's own row, not a styled div — v.4b draws it as
 // "user-response-bubble" #40001119:6352 and this element draws that element.
@@ -40,6 +49,14 @@ export interface ChatMessage {
    * that knows why it is an alert is the one that says so.
    */
   alert?: boolean;
+  /**
+   * A RUN'S RESULT, NOT CHAT. A turn the run produced — what the tools brought back, and the
+   * answer — is drawn as the output it is: rich text (markdown, rendered), at its own 14px
+   * size, so it reads differently from the conversation around it. The mark travels from the
+   * message's metadata (kind 'tool-answer' / 'run-result', read by the seat) or from the host's
+   * own dispatch; this element never guesses it from the words.
+   */
+  result?: boolean;
 }
 
 export interface ChatConversation {
@@ -149,12 +166,50 @@ export class ChatMessages extends LitElement {
       line-height: 1.5;
       padding: 10px 14px;
       border-radius: 6px;
+      /* A TURN PAINTS NOTHING — the CARD is the surface. Its fill is chat-header's
+         (the owner's #ADC7C3 between runs, #F7F8F2 while results are up), and a fill
+         written here as well would be a second surface laid over the drawing's. */
       background: transparent;
       transition: background 0.12s, outline-color 0.12s;
       outline: 2px solid transparent;
     }
     /* The message itself: pre-wrap, so the newlines a person typed are theirs. */
     .turn .body { white-space: pre-wrap; }
+    /* A RUN'S RESULT WEARS RENDERED MARKDOWN'S OWN TYPE — the owner named the stack
+       (marked + github-markdown-css, 2026-09-24) and the size (72ch of line, 16px,
+       1.6), so the output reads as the output rather than as more conversation. */
+    .turn.result .body { white-space: normal; }
+    .turn.result .markdown-body { max-width: 72ch; font-size: 16px; line-height: 1.6; }
+    /* CITATION PILLS — a result's links are sources, not prose. Blue underlined
+       text would run through the briefing; each link wears a pill instead: small,
+       rounded, its number, opening the source beside the app (see _onLinkClick).
+       The owner, 2026-09-24: "I just want the pill." (Recorded in the catalog —
+       registry.json values.card.citations — the design updates later.) */
+    .turn.result .markdown-body a {
+      display: inline-block;
+      padding: 1px 10px;
+      margin: 0 4px 4px 0;
+      border-radius: 999px;
+      border: 1px solid #CBE6E3;
+      background: #FFFFFF;
+      color: #234354;
+      font-size: 12px;
+      line-height: 1.6;
+      text-decoration: none;
+    }
+    .turn.result .markdown-body a:hover { background: #CBE6E3; }
+    /* A folded code block in a result — the native <details> the marked renderer
+       emits (shared/richText); the summary line opens it in place. */
+    .turn.result details.fold { margin: 0 0 10px; }
+    .turn.result details.fold summary {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 10px;
+      border: 1px solid #e5e7eb; border-radius: 6px;
+      background: #f9fafb; color: #234354;
+      font-size: 13px; cursor: pointer;
+    }
+    .turn.result details.fold summary:hover { background: #f3f4f6; }
+    .turn.result details.fold .fold-title { font-family: ui-monospace, 'SF Mono', monospace; }
     /* The small note above a linked turn: which part of the flow this is about. */
     .turn .note {
       font-size: 13px;
@@ -193,7 +248,7 @@ export class ChatMessages extends LitElement {
     .turn.alert .note { color: #a5281b; }
 
     /* THE USER'S TURN IS THE DESIGN'S BUBBLE, not a wash on this wrapper. v.4b draws
-       it as its own component — "user-response-bubble" #40001119:6352 — so the fill,
+       it as its own component — "user-response-bubble" #40001130:5064 — so the fill,
        the padding and the radius live there now and this wrapper paints nothing. It
        stays as the wrapper because a turn about a canvas node still answers a click
        and still marks when its node is selected, and that is the turn's behaviour,
@@ -236,8 +291,9 @@ export class ChatMessages extends LitElement {
        must not be reachable by keyboard as though it were still an answer. */
     .turn .action.spent:disabled { pointer-events: none; }
     /* THE EMPTY THREAD IS HER GREETING, IN THE CARD'S OWN TYPE.
-       Every value here is the drawing's, from "chat-output-header" #40001119:6327 — the card
-       holds its lines in Inter Medium 500 / 13px / 20px / #171717 (#40001119:6358, :6337) —
+       Every value here is the drawing's, from the results card "chat-output-area-results" #40001130:5060
+       (drawn as "chat-output-header" #40001119:6327 when this element was built, and its line
+       there was Inter Medium 500 / 13px / 20px / #171717, #40001119:6358, :6337) —
        and none of it is mine. Nothing else is declared: no opacity, no grey, no italic, no
        padding of its own, because the card already supplies the inset (padding 10px) and the
        drawing has no such treatment.
@@ -352,9 +408,48 @@ export class ChatMessages extends LitElement {
         return;
       }
     }
-    // Nothing marked, or nothing to mark: the newest turn is the one in view. Same reason.
-    const root = thread.parentElement;
-    if (root) root.scrollTop = root.scrollHeight;
+    if (changed.has('messages')) {
+      const list = this.messages ?? [];
+      const root = thread.parentElement;
+      /*
+       * A RUN'S RESULTS OPEN AT THEIR HEAD, NOT AT THEIR TAIL. When the thread's
+       * newest turn is a result (the run's conversation just loaded, or the results
+       * just landed in a seat with no package), the top of the first result turn —
+       * the "Your Results" line — is the top of the reading, and a long answer is
+       * scrolled so it opens the viewport with the rest below as a normal scroll
+       * (the owner, 2026-09-24: "the output should be visible at the top and then
+       * the user can scroll to see the rest"). A short thread fits the column
+       * anyway, so there is nothing to move — the guard reads the real heights.
+       *
+       * THE RULE ENDS THE MOMENT THE PERSON SPEAKS: their turn, or her reply, is a
+       * conversational turn, and the thread follows it to the bottom exactly as it
+       * always has — answering the results reverts to the normal flow.
+       */
+      if (list[list.length - 1]?.result) {
+        const first = thread.querySelector('.turn.result') as HTMLElement | null;
+        if (first) {
+          // THE COLUMN'S OWN SCROLLER IS THE ONE THAT OVERFLOWS, and it is found by
+          // walking up from this element (the panel's .content-scroll). The guard
+          // reads real heights, so a short answer that fits its column scrolls
+          // nothing — the "do nothing" case the owner described. `scrollIntoView`
+          // does the rest across the shadow boundary, aligning the head of the
+          // results with the top of that scroller.
+          let scroller: HTMLElement | null = this.parentElement;
+          while (scroller && !(scroller.scrollHeight > scroller.clientHeight)) {
+            scroller = scroller.parentElement;
+          }
+          // jsdom does not implement scrollIntoView, so the call is guarded — a
+          // test pins it with a mock of its own.
+          if (scroller && typeof first.scrollIntoView === 'function') {
+            first.scrollIntoView({ block: 'start', behavior: 'auto' });
+          }
+        }
+        return;
+      }
+      // Nothing marked, nothing to follow: a new conversational turn keeps the
+      // newest words in view.
+      if (root) root.scrollTop = root.scrollHeight;
+    }
   }
 
   /**
@@ -420,7 +515,7 @@ export class ChatMessages extends LitElement {
     return html`
       <div class="thread" role="log" aria-live="polite">
         ${turns.length
-          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.alert ? 'alert' : ''} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : html`<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? this._actionButton(seg.label, seg.action, String(m.content ?? '')) : seg.text))}</span>`}</div>`)
+          ? turns.map((m) => html`<div class="turn ${this._roleOf(m)} ${m.alert ? 'alert' : ''} ${m.result ? 'result' : ''} ${m.nodeId ? 'linked' : ''} ${m.nodeId && m.nodeId === this.highlightNodeId ? 'hl' : ''}" data-node-id=${m.nodeId ?? nothing} title=${m.nodeId ? 'The note on the canvas this is about — click to point at it' : nothing} @click=${() => this._onTurnClick(m)}>${m.label ? html`<div class="note">${m.label}</div>` : nothing}${this._roleOf(m) === 'user' ? html`<user-response-bubble .text=${String(m.content ?? '')}></user-response-bubble>` : (m.result ? html`<div class="body markdown-body">${unsafeHTML(renderMarkdown(String(m.content ?? '')))}</div>` : html`<span class="body">${this._segmentsOf(m).map((seg) => (seg.action !== undefined ? this._actionButton(seg.label, seg.action, String(m.content ?? '')) : seg.text))}</span>`)}</div>`)
           : nothing}
         ${this.sending
           ? html`<div class="thinking"><span class="spinner" aria-hidden="true"></span> Thinking…</div>`

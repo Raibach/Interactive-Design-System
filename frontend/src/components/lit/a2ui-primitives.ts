@@ -197,7 +197,7 @@ class A2UIButton extends LitElement {
       cursor: pointer;
     }
     .primary { background: #507274; color: #fff; }
-    .secondary { background: #fff; color: #1c2f4e; border-color: #cbd3d9; }
+    .secondary { background: #F7F8F2; color: #1c2f4e; border-color: #cbd3d9; }
   `;
 
   private _onClick() {

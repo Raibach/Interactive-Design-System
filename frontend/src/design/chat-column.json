@@ -1,2596 +1,2604 @@
 {
-  "_capture": {
-    "scope": "chat-column",
-    "nodeId": "40001119:6026",
+ "_capture": {
+  "scope": "chat-column",
+  "nodeId": "40001119:6026",
+  "name": "chat-panel-outer",
+  "fileKey": "20UPR2KQMsbAxlo5NJb1se",
+  "source": "Figma REST /v1/files/{key}/nodes (geometry=paths) \u2014 every node, every style field",
+  "captured": "2026-09-20",
+  "layers": 135,
+  "deepestLevel": 10
+ },
+ "result": {
+  "nodes": [
+   {
+    "id": "40001119:6026",
     "name": "chat-panel-outer",
-    "fileKey": "20UPR2KQMsbAxlo5NJb1se",
-    "source": "Figma REST /v1/files/{key}/nodes (geometry=paths) — every node, every style field",
-    "captured": "2026-09-20",
-    "layers": 135,
-    "deepestLevel": 10
-  },
-  "result": {
-    "nodes": [
-      {
-        "id": "40001119:6026",
-        "name": "chat-panel-outer",
-        "type": "FRAME",
-        "w": 540,
-        "h": 954,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 0,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "parent": null,
-        "depth": 0,
-        "children": [
-          "40001119:6027"
-        ]
-      },
-      {
-        "id": "40001119:6027",
-        "name": "panel-inner-container",
-        "type": "FRAME",
-        "w": 540,
-        "h": 954,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 0,
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "fill": "rgba(255,255,255,1)",
-        "parent": "40001119:6026",
-        "depth": 1,
-        "children": [
-          "40001119:6028",
-          "40001119:6034"
-        ]
-      },
-      {
-        "id": "40001119:6028",
-        "name": "chat-output-wrapper",
-        "type": "FRAME",
-        "w": 540,
-        "h": 660,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 0,
-        "sizingH": "FILL",
-        "sizingV": "FILL",
-        "grow": 1,
-        "parent": "40001119:6027",
-        "depth": 2,
-        "children": [
-          "40001119:6308",
-          "40001119:6317",
-          "40001123:6978",
-          "40001119:6326"
-        ]
-      },
-      {
-        "id": "40001119:6308",
-        "name": "output-header",
-        "type": "FRAME",
-        "w": 540,
-        "h": 83,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 20,
-          "paddingRight": 20,
-          "paddingTop": 16,
-          "paddingBottom": 0
-        },
-        "gap": 5,
-        "primaryAlign": "CENTER",
-        "sizingH": "HUG",
-        "sizingV": "HUG",
-        "fill": "rgba(203,230,227,1)",
-        "annotations": [
-          "Data:      the readout line — the seat's own status, and the usage figures it is handed: tokens, calls\nSource:    the seat's conversation; the usage arrives as the surface's own binding, never another scope's totals\nState:     always drawn — the leading panel of the output area; sticky, never removed\nA11y:      role=\"status\"\nConnects:  the model mark at the trailing edge (model-readout-tokens-etc) names the model in play; the gripper (gripper-prompt-input-chat-menu) resizes this panel against the one below\nBuilder:   leads the stack and takes 20px of top padding; every panel under it takes 6\nFailure:   a seat that cannot resolve its own conversation reads \"unattributed\" rather than showing another scope's numbers",
-          "State: sticky — the leading panel is always present; never removed, never moved\nDisabled: no action — nothing on this panel responds to a click"
-        ],
-        "parent": "40001119:6028",
-        "depth": 3,
-        "children": [
-          "40001119:6309",
-          "40001123:6773"
-        ]
-      },
-      {
-        "id": "40001119:6309",
-        "name": "chat-output-readout-area",
-        "type": "FRAME",
-        "w": 500,
-        "h": 55,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 7,
-          "paddingBottom": 7
-        },
-        "gap": 10,
-        "counterAlign": "CENTER",
-        "sizingH": "HUG",
-        "sizingV": "FIXED",
-        "fill": "rgba(117,142,135,0.35)",
-        "stroke": "rgba(117,142,135,0.5)",
-        "strokeW": 1,
-        "strokeAlign": "INSIDE",
-        "effects": [
-          "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
-          "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
-        ],
-        "radius": 8,
-        "parent": "40001119:6308",
-        "depth": 4,
-        "children": [
-          "40001123:6763",
-          "40001124:7096"
-        ]
-      },
-      {
-        "id": "40001123:6763",
-        "name": "textarea",
-        "type": "FRAME",
-        "w": 450,
-        "h": 40,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "parent": "40001119:6309",
-        "depth": 5,
-        "children": [
-          "40001123:6750"
-        ]
-      },
-      {
-        "id": "40001123:6750",
-        "name": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text",
-        "type": "TEXT",
-        "w": 450,
-        "h": 43,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 12,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "CENTER",
-          "characters": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text "
-        },
-        "annotations": [
-          "Insert token counts here",
-          "text in box for read outs"
-        ],
-        "parent": "40001123:6763",
-        "depth": 6
-      },
-      {
-        "id": "40001124:7096",
-        "name": "model-readout-tokens-etc",
-        "type": "FRAME",
-        "w": 20,
-        "h": 20,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "annotations": [],
-        "parent": "40001119:6309",
-        "depth": 5,
-        "children": [
-          "40001124:7442"
-        ]
-      },
-      {
-        "id": "40001124:7442",
-        "name": "model-icon",
-        "type": "FRAME",
-        "w": 18.75,
-        "h": 17.5,
-        "parent": "40001124:7096",
-        "depth": 6,
-        "children": [
-          "40001124:7097"
-        ]
-      },
-      {
-        "id": "40001124:7097",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 18.75,
-        "h": 17.5,
-        "fill": "rgba(147,58,69,0.84)",
-        "parent": "40001124:7442",
-        "depth": 7
-      },
-      {
-        "id": "40001123:6773",
-        "name": "gripper-prompt-input-chat-menu",
-        "type": "FRAME",
-        "w": 500,
-        "h": 7,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "parent": "40001119:6308",
-        "depth": 4,
-        "children": [
-          "40001123:6774"
-        ]
-      },
-      {
-        "id": "40001123:6774",
-        "name": "Meatballs",
-        "type": "FRAME",
-        "w": 480,
-        "h": 4.05,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 2,
-          "paddingRight": 2,
-          "paddingTop": 1,
-          "paddingBottom": 1
-        },
-        "gap": 4,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "parent": "40001123:6773",
-        "depth": 5,
-        "children": [
-          "40001123:6775",
-          "40001123:6776",
-          "40001123:6777",
-          "40001123:6778",
-          "40001123:6779"
-        ]
-      },
-      {
-        "id": "40001123:6775",
-        "name": "Ellipse 209",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6774",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6776",
-        "name": "Ellipse 210",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6774",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6777",
-        "name": "Ellipse 207",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6774",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6778",
-        "name": "Ellipse 206",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6774",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6779",
-        "name": "Ellipse 208",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6774",
-        "depth": 6
-      },
-      {
-        "id": "40001119:6317",
-        "name": "output-conversations-area",
-        "type": "FRAME",
-        "w": 540,
-        "h": 54,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 20,
-          "paddingRight": 20,
-          "paddingTop": 6,
-          "paddingBottom": 0
-        },
-        "gap": 5,
-        "primaryAlign": "CENTER",
-        "sizingH": "HUG",
-        "sizingV": "HUG",
-        "fill": "rgba(203,230,227,1)",
-        "annotations": [
-          "Data:      the conversations line — the count of this seat's conversations\nSource:    the seat's own conversation list; never another package's\nState:     drawn while the conversations window is open; removable\nA11y:      role=\"status\"\nConnects:  the chat history mark removes this window; the gripper resizes this window against the one below\nBuilder:   the card inside is chat-output-header; the icon is chat history"
-        ],
-        "parent": "40001119:6028",
-        "depth": 3,
-        "children": [
-          "40001119:6318",
-          "40001126:2014"
-        ]
-      },
-      {
-        "id": "40001119:6318",
-        "name": "chat-output-header",
-        "type": "FRAME",
-        "w": 500,
-        "h": 36,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 7,
-          "paddingBottom": 7
-        },
-        "gap": 10,
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(117,142,135,0.35)",
-        "stroke": "rgba(117,142,135,0.5)",
-        "strokeW": 1,
-        "strokeAlign": "INSIDE",
-        "effects": [
-          "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
-          "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
-        ],
-        "radius": 8,
-        "parent": "40001119:6317",
-        "depth": 4,
-        "children": [
-          "40001123:6744",
-          "40001123:6745"
-        ]
-      },
-      {
-        "id": "40001123:6744",
-        "name": "23 Conversations",
-        "type": "TEXT",
-        "w": 448,
-        "h": 22,
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "DM Sans",
-          "weight": 600,
-          "size": 14,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "CENTER",
-          "characters": "23 Conversations"
-        },
-        "parent": "40001119:6318",
-        "depth": 5
-      },
-      {
-        "id": "40001123:6745",
-        "name": "chat-history",
-        "type": "FRAME",
-        "w": 22,
-        "h": 22,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "annotations": [
-          "On click:  dispatch remove-output-window { window: \"conversations\" }\nState:     deactivated in appearance while the conversations window is open above\nA11y:      button, labelled \"chat history\""
-        ],
-        "parent": "40001119:6318",
-        "depth": 5,
-        "children": [
-          "40001123:6746",
-          "40001123:6747",
-          "40001123:6748"
-        ]
-      },
-      {
-        "id": "40001123:6746",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 19.25,
-        "h": 17.88,
-        "fill": "rgba(80,114,116,1)",
-        "parent": "40001123:6745",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6747",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 11,
-        "h": 1.38,
-        "fill": "rgba(80,114,116,1)",
-        "parent": "40001123:6745",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6748",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 6.88,
-        "h": 1.38,
-        "fill": "rgba(80,114,116,1)",
-        "parent": "40001123:6745",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2014",
-        "name": "gripper-prompt-input-chat-menu",
-        "type": "FRAME",
-        "w": 500,
-        "h": 7,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "parent": "40001119:6317",
-        "depth": 4,
-        "children": [
-          "40001126:2015"
-        ]
-      },
-      {
-        "id": "40001126:2015",
-        "name": "Meatballs",
-        "type": "FRAME",
-        "w": 480,
-        "h": 4.05,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 2,
-          "paddingRight": 2,
-          "paddingTop": 1,
-          "paddingBottom": 1
-        },
-        "gap": 4,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "parent": "40001126:2014",
-        "depth": 5,
-        "children": [
-          "40001126:2016",
-          "40001126:2017",
-          "40001126:2018",
-          "40001126:2019",
-          "40001126:2020"
-        ]
-      },
-      {
-        "id": "40001126:2016",
-        "name": "Ellipse 209",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2015",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2017",
-        "name": "Ellipse 210",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2015",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2018",
-        "name": "Ellipse 207",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2015",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2019",
-        "name": "Ellipse 206",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2015",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2020",
-        "name": "Ellipse 208",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2015",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6978",
-        "name": "output-approval-area",
-        "type": "FRAME",
-        "w": 540,
-        "h": 142,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 20,
-          "paddingRight": 20,
-          "paddingTop": 6,
-          "paddingBottom": 4
-        },
-        "gap": 7,
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "fill": "rgba(203,230,227,1)",
-        "parent": "40001119:6028",
-        "depth": 3,
-        "children": [
-          "40001123:6979",
-          "40001126:2022"
-        ]
-      },
-      {
-        "id": "40001123:6979",
-        "name": "chat-output-approvals",
-        "type": "FRAME",
-        "w": 500,
-        "h": 118,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 2,
-          "paddingRight": 10,
-          "paddingTop": 10,
-          "paddingBottom": 10
-        },
-        "gap": 10,
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "fill": "rgba(117,142,135,0.35)",
-        "stroke": "rgba(117,142,135,0.5)",
-        "strokeW": 1,
-        "strokeAlign": "INSIDE",
-        "effects": [
-          "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
-          "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
-        ],
-        "radius": 8,
-        "parent": "40001123:6978",
-        "depth": 4,
-        "children": [
-          "40001123:6980"
-        ]
-      },
-      {
-        "id": "40001123:6980",
-        "name": "chat-text-container",
-        "type": "FRAME",
-        "w": 488,
-        "h": 98,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 0,
-        "counterAlign": "MAX",
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "annotations": [
-          "internal mini scroll goes here - do not exceed the width"
-        ],
-        "parent": "40001123:6979",
-        "depth": 5,
-        "children": [
-          "40001123:6981",
-          "40001123:6982"
-        ]
-      },
-      {
-        "id": "40001123:6981",
-        "name": "scrollbar-goes-here",
-        "type": "FRAME",
-        "w": 8,
-        "h": 98,
-        "sizingH": "FIXED",
-        "sizingV": "FILL",
-        "parent": "40001123:6980",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6982",
-        "name": "approval-contetn-area",
-        "type": "FRAME",
-        "w": 480,
-        "h": 98,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "parent": "40001123:6980",
-        "depth": 6,
-        "children": [
-          "40001123:6992",
-          "40001124:7443",
-          "40001123:6999"
-        ]
-      },
-      {
-        "id": "40001123:6992",
-        "name": "user-response-bubble",
-        "type": "FRAME",
-        "w": 480,
-        "h": 30,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 5,
-          "paddingRight": 5,
-          "paddingTop": 5,
-          "paddingBottom": 5
-        },
-        "gap": 4,
-        "counterAlign": "MAX",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "fill": "rgba(203,230,227,1)",
-        "radius": 6,
-        "parent": "40001123:6982",
-        "depth": 7,
-        "children": [
-          "40001123:6993",
-          "40001126:2008"
-        ]
-      },
-      {
-        "id": "40001123:6993",
-        "name": "approval goes here",
-        "type": "TEXT",
-        "w": 444,
-        "h": 20,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 13,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "approval goes here"
-        },
-        "parent": "40001123:6992",
-        "depth": 8
-      },
-      {
-        "id": "40001126:2008",
-        "name": "ibm--engineering-workflow-mgmt 1",
-        "type": "FRAME",
-        "w": 18,
-        "h": 18,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "parent": "40001123:6992",
-        "depth": 8,
-        "children": [
-          "40001126:2009",
-          "40001126:2010",
-          "40001126:2011",
-          "40001126:2012"
-        ]
-      },
-      {
-        "id": "40001126:2009",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 15.67,
-        "h": 15.67,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2008",
-        "depth": 9
-      },
-      {
-        "id": "40001126:2010",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 2.25,
-        "h": 2.25,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2008",
-        "depth": 9
-      },
-      {
-        "id": "40001126:2011",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 2.25,
-        "h": 2.25,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2008",
-        "depth": 9
-      },
-      {
-        "id": "40001126:2012",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 2.25,
-        "h": 2.25,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2008",
-        "depth": 9
-      },
-      {
-        "id": "40001124:7443",
-        "name": "user-response-bubble",
-        "type": "FRAME",
-        "w": 480,
-        "h": 30,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 5,
-          "paddingRight": 5,
-          "paddingTop": 5,
-          "paddingBottom": 5
-        },
-        "gap": 4,
-        "counterAlign": "MAX",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "fill": "rgba(203,230,227,1)",
-        "radius": 6,
-        "parent": "40001123:6982",
-        "depth": 7,
-        "children": [
-          "40001124:7444",
-          "40001126:2002"
-        ]
-      },
-      {
-        "id": "40001124:7444",
-        "name": "approval goes here",
-        "type": "TEXT",
-        "w": 444,
-        "h": 20,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 13,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "approval goes here"
-        },
-        "parent": "40001124:7443",
-        "depth": 8
-      },
-      {
-        "id": "40001126:2002",
-        "name": "ibm--engineering-workflow-mgmt 1",
-        "type": "FRAME",
-        "w": 18,
-        "h": 18,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "parent": "40001124:7443",
-        "depth": 8,
-        "children": [
-          "40001126:2003",
-          "40001126:2004",
-          "40001126:2005",
-          "40001126:2006"
-        ]
-      },
-      {
-        "id": "40001126:2003",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 15.67,
-        "h": 15.67,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2002",
-        "depth": 9
-      },
-      {
-        "id": "40001126:2004",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 2.25,
-        "h": 2.25,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2002",
-        "depth": 9
-      },
-      {
-        "id": "40001126:2005",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 2.25,
-        "h": 2.25,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2002",
-        "depth": 9
-      },
-      {
-        "id": "40001126:2006",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 2.25,
-        "h": 2.25,
-        "fill": "rgba(31,172,194,1)",
-        "parent": "40001126:2002",
-        "depth": 9
-      },
-      {
-        "id": "40001123:6999",
-        "name": "model-response",
-        "type": "FRAME",
-        "w": 480,
-        "h": 18,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "counterAlign": "MAX",
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "parent": "40001123:6982",
-        "depth": 7,
-        "children": [
-          "40001123:7000"
-        ]
-      },
-      {
-        "id": "40001123:7000",
-        "name": "APPROVALS",
-        "type": "TEXT",
-        "w": 483,
-        "h": 18,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 14,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "APPROVALS"
-        },
-        "parent": "40001123:6999",
-        "depth": 8
-      },
-      {
-        "id": "40001126:2022",
-        "name": "gripper-prompt-input-chat-menu",
-        "type": "FRAME",
-        "w": 500,
-        "h": 7,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "parent": "40001123:6978",
-        "depth": 4,
-        "children": [
-          "40001126:2023"
-        ]
-      },
-      {
-        "id": "40001126:2023",
-        "name": "Meatballs",
-        "type": "FRAME",
-        "w": 480,
-        "h": 4.05,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 2,
-          "paddingRight": 2,
-          "paddingTop": 1,
-          "paddingBottom": 1
-        },
-        "gap": 4,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "parent": "40001126:2022",
-        "depth": 5,
-        "children": [
-          "40001126:2024",
-          "40001126:2025",
-          "40001126:2026",
-          "40001126:2027",
-          "40001126:2028"
-        ]
-      },
-      {
-        "id": "40001126:2024",
-        "name": "Ellipse 209",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2023",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2025",
-        "name": "Ellipse 210",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2023",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2026",
-        "name": "Ellipse 207",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2023",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2027",
-        "name": "Ellipse 206",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2023",
-        "depth": 6
-      },
-      {
-        "id": "40001126:2028",
-        "name": "Ellipse 208",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2023",
-        "depth": 6
-      },
-      {
-        "id": "40001119:6326",
-        "name": "output-header-area",
-        "type": "FRAME",
-        "w": 540,
-        "h": 381,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 20,
-          "paddingRight": 20,
-          "paddingTop": 6,
-          "paddingBottom": 4
-        },
-        "gap": 7,
-        "sizingH": "FILL",
-        "sizingV": "FILL",
-        "grow": 1,
-        "fill": "rgba(203,230,227,1)",
-        "parent": "40001119:6028",
-        "depth": 3,
-        "children": [
-          "40001119:6327"
-        ]
-      },
-      {
-        "id": "40001119:6327",
-        "name": "chat-output-header",
-        "type": "FRAME",
-        "w": 500,
-        "h": 371,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 2,
-          "paddingRight": 10,
-          "paddingTop": 10,
-          "paddingBottom": 10
-        },
-        "gap": 10,
-        "primaryAlign": "MAX",
-        "sizingH": "FILL",
-        "sizingV": "FILL",
-        "grow": 1,
-        "fill": "rgba(117,142,135,0.35)",
-        "stroke": "rgba(117,142,135,0.5)",
-        "strokeW": 1,
-        "strokeAlign": "INSIDE",
-        "effects": [
-          "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
-          "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
-        ],
-        "radius": 8,
-        "parent": "40001119:6326",
-        "depth": 4,
-        "children": [
-          "40001123:6860"
-        ]
-      },
-      {
-        "id": "40001123:6860",
-        "name": "Frame 886982",
-        "type": "FRAME",
-        "w": 488,
-        "h": 236,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 0,
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "parent": "40001119:6327",
-        "depth": 5,
-        "children": [
-          "40001123:6880",
-          "40001123:6881"
-        ]
-      },
-      {
-        "id": "40001123:6880",
-        "name": "scrollbar",
-        "type": "FRAME",
-        "w": 5,
-        "h": 261,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "parent": "40001123:6860",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6881",
-        "name": "Frame 886985",
-        "type": "FRAME",
-        "w": 483,
-        "h": 236,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "parent": "40001123:6860",
-        "depth": 6,
-        "children": [
-          "40001123:6882",
-          "40001123:6889",
-          "40001123:6891",
-          "40001123:6898"
-        ]
-      },
-      {
-        "id": "40001123:6882",
-        "name": "user-response-bubble",
-        "type": "FRAME",
-        "w": 483,
-        "h": 70,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 5,
-          "paddingRight": 5,
-          "paddingTop": 5,
-          "paddingBottom": 5
-        },
-        "gap": 4,
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "fill": "rgba(203,230,227,1)",
-        "radius": 6,
-        "parent": "40001123:6881",
-        "depth": 7,
-        "children": [
-          "40001123:6883",
-          "40001123:6884"
-        ]
-      },
-      {
-        "id": "40001123:6883",
-        "name": "User response Sample text -  Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets.",
-        "type": "TEXT",
-        "w": 444,
-        "h": 60,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 13,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "User response Sample text -  Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets."
-        },
-        "parent": "40001123:6882",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6884",
-        "name": "Frame 886978",
-        "type": "FRAME",
-        "w": 19,
-        "h": 60,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 5,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "sizingH": "FIXED",
-        "sizingV": "FILL",
-        "parent": "40001123:6882",
-        "depth": 8,
-        "children": [
-          "40001123:6885"
-        ]
-      },
-      {
-        "id": "40001123:6885",
-        "name": "user--feedback 1",
-        "type": "FRAME",
-        "w": 19,
-        "h": 19,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "parent": "40001123:6884",
-        "depth": 9,
-        "children": [
-          "40001123:6886",
-          "40001123:6887",
-          "40001123:6888"
-        ]
-      },
-      {
-        "id": "40001123:6886",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 8.31,
-        "h": 7.72,
-        "fill": "rgba(147,58,69,1)",
-        "parent": "40001123:6885",
-        "depth": 10
-      },
-      {
-        "id": "40001123:6887",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 8.31,
-        "h": 5.94,
-        "fill": "rgba(147,58,69,1)",
-        "parent": "40001123:6885",
-        "depth": 10
-      },
-      {
-        "id": "40001123:6888",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 5.94,
-        "h": 5.94,
-        "fill": "rgba(147,58,69,1)",
-        "parent": "40001123:6885",
-        "depth": 10
-      },
-      {
-        "id": "40001123:6889",
-        "name": "model-response",
-        "type": "FRAME",
-        "w": 483,
-        "h": 30,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "parent": "40001123:6881",
-        "depth": 7,
-        "children": [
-          "40001123:6890"
-        ]
-      },
-      {
-        "id": "40001123:6890",
-        "name": "Chat output from model",
-        "type": "TEXT",
-        "w": 483,
-        "h": 30,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 14,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "Chat output from model"
-        },
-        "parent": "40001123:6889",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6891",
-        "name": "user-response-bubble",
-        "type": "FRAME",
-        "w": 483,
-        "h": 70,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 5,
-          "paddingRight": 5,
-          "paddingTop": 5,
-          "paddingBottom": 5
-        },
-        "gap": 4,
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "fill": "rgba(203,230,227,1)",
-        "radius": 6,
-        "parent": "40001123:6881",
-        "depth": 7,
-        "children": [
-          "40001123:6892",
-          "40001123:6893"
-        ]
-      },
-      {
-        "id": "40001123:6892",
-        "name": "User response Sample text -  Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets.",
-        "type": "TEXT",
-        "w": 444,
-        "h": 60,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 13,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "User response Sample text -  Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets."
-        },
-        "parent": "40001123:6891",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6893",
-        "name": "Frame 886978",
-        "type": "FRAME",
-        "w": 19,
-        "h": 60,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 5,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "sizingH": "FIXED",
-        "sizingV": "FILL",
-        "parent": "40001123:6891",
-        "depth": 8,
-        "children": [
-          "40001123:6894"
-        ]
-      },
-      {
-        "id": "40001123:6894",
-        "name": "user--feedback 1",
-        "type": "FRAME",
-        "w": 19,
-        "h": 19,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "parent": "40001123:6893",
-        "depth": 9,
-        "children": [
-          "40001123:6895",
-          "40001123:6896",
-          "40001123:6897"
-        ]
-      },
-      {
-        "id": "40001123:6895",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 8.31,
-        "h": 7.72,
-        "fill": "rgba(147,58,69,1)",
-        "parent": "40001123:6894",
-        "depth": 10
-      },
-      {
-        "id": "40001123:6896",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 8.31,
-        "h": 5.94,
-        "fill": "rgba(147,58,69,1)",
-        "parent": "40001123:6894",
-        "depth": 10
-      },
-      {
-        "id": "40001123:6897",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 5.94,
-        "h": 5.94,
-        "fill": "rgba(147,58,69,1)",
-        "parent": "40001123:6894",
-        "depth": 10
-      },
-      {
-        "id": "40001123:6898",
-        "name": "model-response",
-        "type": "FRAME",
-        "w": 483,
-        "h": 36,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "parent": "40001123:6881",
-        "depth": 7,
-        "children": [
-          "40001123:6899"
-        ]
-      },
-      {
-        "id": "40001123:6899",
-        "name": "Good morning, You have @ new approvals from Marsha Bostic and Sally Mustang",
-        "type": "TEXT",
-        "w": 483,
-        "h": 36,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 14,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "Good morning, You have @ new approvals from Marsha Bostic and Sally Mustang "
-        },
-        "parent": "40001123:6898",
-        "depth": 8
-      },
-      {
-        "id": "40001119:6034",
-        "name": "chat-input-wrapper",
-        "type": "FRAME",
-        "w": 540,
-        "h": 294,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 5,
-          "paddingBottom": 0
-        },
-        "gap": 0,
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "fill": "rgba(203,230,227,1)",
-        "parent": "40001119:6027",
-        "depth": 2,
-        "children": [
-          "40001119:6035",
-          "40001119:6044",
-          "40001123:6689"
-        ]
-      },
-      {
-        "id": "40001119:6035",
-        "name": "chat-input-menu",
-        "type": "FRAME",
-        "w": 540,
-        "h": 66,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 20,
-          "paddingRight": 20,
-          "paddingTop": 10,
-          "paddingBottom": 20
-        },
-        "gap": 9,
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "fill": "rgba(203,230,227,1)",
-        "annotations": [
-          "Builder: the gripper at its left resizes the input area; this bar moves with it."
-        ],
-        "parent": "40001119:6034",
-        "depth": 3,
-        "children": [
-          "40001119:6359"
-        ]
-      },
-      {
-        "id": "40001119:6359",
-        "name": "Frame 886979",
-        "type": "FRAME",
-        "w": 500,
-        "h": 36,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 9,
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "parent": "40001119:6035",
-        "depth": 4,
-        "children": [
-          "40001119:6212",
-          "40001126:2030",
-          "40001120:6641"
-        ]
-      },
-      {
-        "id": "40001119:6212",
-        "name": "Frame 886975",
-        "type": "FRAME",
-        "w": 127,
-        "h": 36,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 35,
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "parent": "40001119:6359",
-        "depth": 5,
-        "children": [
-          "40001119:6370"
-        ]
-      },
-      {
-        "id": "40001119:6370",
-        "name": "send-to-model",
-        "type": "FRAME",
-        "w": 127,
-        "h": 36,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 5,
-        "counterAlign": "CENTER",
-        "sizingH": "HUG",
-        "sizingV": "HUG",
-        "fill": "rgba(255,255,255,0.5)",
-        "effects": [
-          "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
-          "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
-        ],
-        "radius": 6,
-        "annotations": [
-          "On click:  dispatch loads-cards-form-console-in-prompt-area\nConnects:  loads the console's prompt packages into the left column"
-        ],
-        "parent": "40001119:6212",
-        "depth": 6,
-        "children": [
-          "40001119:6376"
-        ]
-      },
-      {
-        "id": "40001119:6376",
-        "name": "btn-label",
-        "type": "FRAME",
-        "w": 127,
-        "h": 36,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 12,
-          "paddingRight": 12,
-          "paddingTop": 2,
-          "paddingBottom": 2
-        },
-        "gap": 10,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "parent": "40001119:6370",
-        "depth": 7,
-        "children": [
-          "40001119:6378"
-        ]
-      },
-      {
-        "id": "40001119:6378",
-        "name": "container",
-        "type": "FRAME",
-        "w": 103,
-        "h": 32,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "radius": 4,
-        "parent": "40001119:6376",
-        "depth": 8,
-        "children": [
-          "40001119:6379"
-        ]
-      },
-      {
-        "id": "40001119:6379",
-        "name": "send--alt 1",
-        "type": "FRAME",
-        "w": 78.97,
-        "h": 32,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 4,
-          "paddingBottom": 4
-        },
-        "gap": 14,
-        "counterAlign": "CENTER",
-        "sizingH": "HUG",
-        "sizingV": "HUG",
-        "clips": true,
-        "parent": "40001119:6378",
-        "depth": 9,
-        "children": [
-          "40001119:6380",
-          "40001119:6382"
-        ]
-      },
-      {
-        "id": "40001119:6380",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 23.97,
-        "h": 24,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "fill": "rgba(100,97,127,1)",
-        "parent": "40001119:6379",
-        "depth": 10
-      },
-      {
-        "id": "40001119:6382",
-        "name": "functions-label",
-        "type": "TEXT",
-        "w": 41,
-        "h": 19,
-        "sizingH": "HUG",
-        "sizingV": "HUG",
-        "fill": "rgba(100,97,127,1)",
-        "text": {
-          "family": "Inter",
-          "weight": 700,
-          "size": 16,
-          "lh": "AUTO",
-          "align": "CENTER",
-          "valign": "CENTER",
-          "characters": "Send"
-        },
-        "parent": "40001119:6379",
-        "depth": 10
-      },
-      {
-        "id": "40001126:2030",
-        "name": "gripper-prompt-input-chat-menu",
-        "type": "FRAME",
-        "w": 229,
-        "h": 7,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "grow": 1,
-        "parent": "40001119:6359",
-        "depth": 5,
-        "children": [
-          "40001126:2031"
-        ]
-      },
-      {
-        "id": "40001126:2031",
-        "name": "Meatballs",
-        "type": "FRAME",
-        "w": 209,
-        "h": 4.05,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 2,
-          "paddingRight": 2,
-          "paddingTop": 1,
-          "paddingBottom": 1
-        },
-        "gap": 4,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "grow": 1,
-        "parent": "40001126:2030",
-        "depth": 6,
-        "children": [
-          "40001126:2032",
-          "40001126:2033",
-          "40001126:2034",
-          "40001126:2035",
-          "40001126:2036"
-        ]
-      },
-      {
-        "id": "40001126:2032",
-        "name": "Ellipse 209",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2031",
-        "depth": 7
-      },
-      {
-        "id": "40001126:2033",
-        "name": "Ellipse 210",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2031",
-        "depth": 7
-      },
-      {
-        "id": "40001126:2034",
-        "name": "Ellipse 207",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2031",
-        "depth": 7
-      },
-      {
-        "id": "40001126:2035",
-        "name": "Ellipse 206",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2031",
-        "depth": 7
-      },
-      {
-        "id": "40001126:2036",
-        "name": "Ellipse 208",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001126:2031",
-        "depth": 7
-      },
-      {
-        "id": "40001120:6641",
-        "name": "Function - loads cards form console in prompt area",
-        "type": "FRAME",
-        "w": 126,
-        "h": 35,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "fill": "rgba(255,255,255,0.5)",
-        "effects": [
-          "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
-          "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
-        ],
-        "radius": 6,
-        "annotations": [
-          "On click:  dispatch loads-cards-form-console-in-prompt-area\nConnects:  loads the console's prompt packages into the left column"
-        ],
-        "parent": "40001119:6359",
-        "depth": 5,
-        "children": [
-          "40001120:6642"
-        ]
-      },
-      {
-        "id": "40001120:6642",
-        "name": "btn-label",
-        "type": "INSTANCE",
-        "w": 127,
-        "h": 35,
-        "parent": "40001120:6641",
-        "depth": 6,
-        "children": [
-          "I40001120:6642;40000973:24203"
-        ]
-      },
-      {
-        "id": "I40001120:6642;40000973:24203",
-        "name": "functions-label",
-        "type": "TEXT",
-        "w": 127,
-        "h": 35,
-        "fill": "rgba(100,97,127,1)",
-        "text": {
-          "family": "Inter",
-          "weight": 700,
-          "size": 16,
-          "lh": "AUTO",
-          "align": "CENTER",
-          "valign": "CENTER",
-          "characters": "Agent"
-        },
-        "parent": "40001120:6642",
-        "depth": 7
-      },
-      {
-        "id": "40001119:6044",
-        "name": "chat-input-area",
-        "type": "FRAME",
-        "w": 540,
-        "h": 126,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 20,
-          "paddingRight": 20,
-          "paddingTop": 20,
-          "paddingBottom": 20
-        },
-        "gap": 10,
-        "sizingH": "FIXED",
-        "sizingV": "FILL",
-        "grow": 1,
-        "fill": "rgba(228,231,200,1)",
-        "effects": [
-          "INNER_SHADOW 4 4 blur 4 rgba(0,0,0,0.25)"
-        ],
-        "cornerRadii": [
-          0,
-          10,
-          0,
-          0
-        ],
-        "annotations": [
-          "Data:      the draft text being typed\nConnects:  the send button reads this text"
-        ],
-        "parent": "40001119:6034",
-        "depth": 3,
-        "children": [
-          "40001119:6045"
-        ]
-      },
-      {
-        "id": "40001119:6045",
-        "name": "sample-text-for-role",
-        "type": "TEXT",
-        "w": 500,
-        "h": 86,
-        "sizingH": "FILL",
-        "sizingV": "FILL",
-        "grow": 1,
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 13,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "TOP",
-          "characters": "chat input"
-        },
-        "parent": "40001119:6044",
-        "depth": 4
-      },
-      {
-        "id": "40001123:6689",
-        "name": "output-header-area",
-        "type": "FRAME",
-        "w": 540,
-        "h": 97,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 20,
-          "paddingRight": 20,
-          "paddingTop": 10,
-          "paddingBottom": 20
-        },
-        "gap": 7,
-        "primaryAlign": "CENTER",
-        "sizingH": "HUG",
-        "sizingV": "FIXED",
-        "fill": "rgba(203,230,227,1)",
-        "annotations": [
-          "This gripper pulls this window and everything above it up and expands the section below it. It does have a limit. When everything stacked it has a limit, they can't go anymore and we'll have to add… Or some load more buttons but this is where a user builds their little stack of plug-ins that they like to work with when they're when they're when they're building agents and they can kind. It's like it's like a tool tray think of it that way and we'll have a limit and we need to work on that limit together",
-          "This belongs to this is the footer and this is where our plug-in tube bar will load. This is the default view. You can only see the first five tools for now."
-        ],
-        "parent": "40001119:6034",
-        "depth": 3,
-        "children": [
-          "40001123:6692",
-          "40001123:6690"
-        ]
-      },
-      {
-        "id": "40001123:6692",
-        "name": "gripper-prompt-input-chat-menu",
-        "type": "FRAME",
-        "w": 500,
-        "h": 7,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 10,
-          "paddingRight": 10,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "primaryAlign": "CENTER",
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "FIXED",
-        "parent": "40001123:6689",
-        "depth": 4,
-        "children": [
-          "40001123:6693"
-        ]
-      },
-      {
-        "id": "40001123:6693",
-        "name": "Meatballs",
-        "type": "FRAME",
-        "w": 24.65,
-        "h": 4.05,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 2,
-          "paddingRight": 2,
-          "paddingTop": 1,
-          "paddingBottom": 1
-        },
-        "gap": 4,
-        "counterAlign": "CENTER",
-        "sizingH": "HUG",
-        "sizingV": "HUG",
-        "parent": "40001123:6692",
-        "depth": 5,
-        "children": [
-          "40001123:6694",
-          "40001123:6695",
-          "40001123:6696",
-          "40001123:6697"
-        ]
-      },
-      {
-        "id": "40001123:6694",
-        "name": "Ellipse 209",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6693",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6695",
-        "name": "Ellipse 207",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6693",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6696",
-        "name": "Ellipse 206",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6693",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6697",
-        "name": "Ellipse 208",
-        "type": "ELLIPSE",
-        "w": 2.16,
-        "h": 2.05,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "stroke": "rgba(147,58,69,0.5)",
-        "strokeW": 2,
-        "strokeAlign": "CENTER",
-        "strokeCap": "ROUND",
-        "parent": "40001123:6693",
-        "depth": 6
-      },
-      {
-        "id": "40001123:6690",
-        "name": "chat-output-header",
-        "type": "FRAME",
-        "w": 500,
-        "h": 53,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 14,
-          "paddingRight": 14,
-          "paddingTop": 7,
-          "paddingBottom": 7
-        },
-        "gap": 10,
-        "primaryAlign": "MAX",
-        "sizingH": "FIXED",
-        "sizingV": "FILL",
-        "grow": 1,
-        "fill": "rgba(117,142,135,0.35)",
-        "stroke": "rgba(117,142,135,0.5)",
-        "strokeW": 1,
-        "strokeAlign": "INSIDE",
-        "effects": [
-          "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
-          "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
-        ],
-        "radius": 8,
-        "parent": "40001123:6689",
-        "depth": 4,
-        "children": [
-          "40001123:6722"
-        ]
-      },
-      {
-        "id": "40001123:6722",
-        "name": "Frame 886979",
-        "type": "FRAME",
-        "w": 472,
-        "h": 35,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 9,
-        "counterAlign": "CENTER",
-        "sizingH": "FILL",
-        "sizingV": "HUG",
-        "parent": "40001123:6690",
-        "depth": 5,
-        "children": [
-          "40001123:6723",
-          "40001123:6738"
-        ]
-      },
-      {
-        "id": "40001123:6723",
-        "name": "Frame 886975",
-        "type": "FRAME",
-        "w": 307,
-        "h": 32,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 20,
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "parent": "40001123:6722",
-        "depth": 6,
-        "children": [
-          "40001123:6829",
-          "40001124:7035",
-          "40001123:6728",
-          "40001123:6732",
-          "40001123:6724"
-        ]
-      },
-      {
-        "id": "40001123:6829",
-        "name": "Frame 886980",
-        "type": "FRAME",
-        "w": 54,
-        "h": 28,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 9,
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "parent": "40001123:6723",
-        "depth": 7,
-        "children": [
-          "40001123:6830"
-        ]
-      },
-      {
-        "id": "40001123:6830",
-        "name": "Function - loads cards form console in prompt area",
-        "type": "FRAME",
-        "w": 54,
-        "h": 28,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "effects": [
-          "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
-          "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
-        ],
-        "radius": 6,
-        "annotations": [
-          "On click: dispatch URL (http://raibach.net)\nAction: launch svae check before leaving application"
-        ],
-        "parent": "40001123:6829",
-        "depth": 8,
-        "children": [
-          "40001123:6831"
-        ]
-      },
-      {
-        "id": "40001123:6831",
-        "name": "btn-label",
-        "type": "FRAME",
-        "w": 58,
-        "h": 28,
-        "layout": "VERTICAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 0,
-        "sizingH": "HUG",
-        "sizingV": "HUG",
-        "parent": "40001123:6830",
-        "depth": 9,
-        "children": [
-          "40001123:6832"
-        ]
-      },
-      {
-        "id": "40001123:6832",
-        "name": "functions-label",
-        "type": "TEXT",
-        "w": 58,
-        "h": 28,
-        "sizingH": "FIXED",
-        "sizingV": "HUG",
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Arial Rounded MT Bold",
-          "weight": 400,
-          "size": 12,
-          "lh": "AUTO",
-          "align": "LEFT",
-          "valign": "CENTER",
-          "characters": "Active\nPlugins "
-        },
-        "parent": "40001123:6831",
-        "depth": 10
-      },
-      {
-        "id": "40001124:7035",
-        "name": "forum 1",
-        "type": "FRAME",
-        "w": 32,
-        "h": 32,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "parent": "40001123:6723",
-        "depth": 7,
-        "children": [
-          "40001124:7036",
-          "40001124:7037"
-        ]
-      },
-      {
-        "id": "40001124:7036",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 24,
-        "h": 24,
-        "fill": "rgba(61,81,91,1)",
-        "parent": "40001124:7035",
-        "depth": 8
-      },
-      {
-        "id": "40001124:7037",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 16,
-        "h": 16,
-        "fill": "rgba(61,81,91,1)",
-        "parent": "40001124:7035",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6728",
-        "name": "chat history",
-        "type": "FRAME",
-        "w": 32,
-        "h": 32,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "opacity": 0.5,
-        "clips": true,
-        "annotations": [
-          "need annotaiton - this is deactivated in appearance, but it is really selected and the history will appear above in the output as a insert section.",
-          "State:     deactivated in appearance, but really selected — the history appears above in the output as an insert section"
-        ],
-        "parent": "40001123:6723",
-        "depth": 7,
-        "children": [
-          "40001123:6729",
-          "40001123:6730",
-          "40001123:6731"
-        ]
-      },
-      {
-        "id": "40001123:6729",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 28,
-        "h": 26,
-        "fill": "rgba(80,114,116,1)",
-        "annotations": [
-          "State: deactivated in appearance, but really selected — the history appears above in the output as an insert section"
-        ],
-        "parent": "40001123:6728",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6730",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 16,
-        "h": 2,
-        "fill": "rgba(80,114,116,1)",
-        "parent": "40001123:6728",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6731",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 10,
-        "h": 2,
-        "fill": "rgba(80,114,116,1)",
-        "parent": "40001123:6728",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6732",
-        "name": "add-new-conversation",
-        "type": "FRAME",
-        "w": 32,
-        "h": 32,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "parent": "40001123:6723",
-        "depth": 7,
-        "children": [
-          "40001123:6733",
-          "40001123:6734"
-        ]
-      },
-      {
-        "id": "40001123:6733",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 28,
-        "h": 26,
-        "fill": "rgba(61,81,91,1)",
-        "parent": "40001123:6732",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6734",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 10,
-        "h": 10,
-        "fill": "rgba(61,81,91,1)",
-        "parent": "40001123:6732",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6724",
-        "name": "user--feedback 1",
-        "type": "FRAME",
-        "w": 32,
-        "h": 32,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "clips": true,
-        "parent": "40001123:6723",
-        "depth": 7,
-        "children": [
-          "40001123:6725",
-          "40001123:6726",
-          "40001123:6727"
-        ]
-      },
-      {
-        "id": "40001123:6725",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 14,
-        "h": 13,
-        "fill": "rgba(61,81,91,1)",
-        "parent": "40001123:6724",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6726",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 14,
-        "h": 10,
-        "fill": "rgba(61,81,91,1)",
-        "parent": "40001123:6724",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6727",
-        "name": "Vector",
-        "type": "VECTOR",
-        "w": 10,
-        "h": 10,
-        "fill": "rgba(61,81,91,1)",
-        "parent": "40001123:6724",
-        "depth": 8
-      },
-      {
-        "id": "40001123:6738",
-        "name": "Function - loads cards form console in prompt area",
-        "type": "FRAME",
-        "w": 156,
-        "h": 35,
-        "layout": "HORIZONTAL",
-        "pad": {
-          "paddingLeft": 0,
-          "paddingRight": 0,
-          "paddingTop": 0,
-          "paddingBottom": 0
-        },
-        "gap": 10,
-        "counterAlign": "CENTER",
-        "sizingH": "FIXED",
-        "sizingV": "FILL",
-        "effects": [
-          "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
-          "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
-        ],
-        "radius": 6,
-        "annotations": [
-          "On click: dispatch URL (http://raibach.net)\nAction: launch svae check before leaving application"
-        ],
-        "parent": "40001123:6722",
-        "depth": 6,
-        "children": [
-          "40001123:6739"
-        ]
-      },
-      {
-        "id": "40001123:6739",
-        "name": "btn-label",
-        "type": "FRAME",
-        "w": 156,
-        "h": 35,
-        "sizingH": "FIXED",
-        "sizingV": "FIXED",
-        "parent": "40001123:6738",
-        "depth": 7,
-        "children": [
-          "40001123:6740"
-        ]
-      },
-      {
-        "id": "40001123:6740",
-        "name": "functions-label",
-        "type": "TEXT",
-        "w": 163,
-        "h": 35,
-        "fill": "rgba(61,81,91,1)",
-        "text": {
-          "family": "Inter",
-          "weight": 700,
-          "size": 9,
-          "lh": "AUTO",
-          "align": "RIGHT",
-          "valign": "BOTTOM",
-          "characters": "Created by John Travis Holt\nRaibach.net © 2026 Raibach IDS"
-        },
-        "parent": "40001123:6739",
-        "depth": 8
-      }
+    "type": "FRAME",
+    "w": 540,
+    "h": 954,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 0,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "parent": null,
+    "depth": 0,
+    "children": [
+     "40001119:6027"
     ]
+   },
+   {
+    "id": "40001119:6027",
+    "name": "panel-inner-container",
+    "type": "FRAME",
+    "w": 540,
+    "h": 954,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 0,
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "fill": "rgba(255,255,255,1)",
+    "parent": "40001119:6026",
+    "depth": 1,
+    "children": [
+     "40001119:6028",
+     "40001119:6034"
+    ]
+   },
+   {
+    "id": "40001119:6028",
+    "name": "chat-output-wrapper",
+    "type": "FRAME",
+    "w": 540,
+    "h": 660,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 0,
+    "sizingH": "FILL",
+    "sizingV": "FILL",
+    "grow": 1,
+    "parent": "40001119:6027",
+    "depth": 2,
+    "children": [
+     "40001119:6308",
+     "40001119:6317",
+     "40001123:6978",
+     "40001119:6326"
+    ]
+   },
+   {
+    "id": "40001119:6308",
+    "name": "output-header",
+    "type": "FRAME",
+    "w": 540,
+    "h": 83,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 20,
+     "paddingRight": 20,
+     "paddingTop": 16,
+     "paddingBottom": 0
+    },
+    "gap": 5,
+    "primaryAlign": "CENTER",
+    "sizingH": "HUG",
+    "sizingV": "HUG",
+    "fill": "rgba(203,230,227,1)",
+    "annotations": [
+     "Data:      the readout line \u2014 the seat's own status, and the usage figures it is handed: tokens, calls\nSource:    the seat's conversation; the usage arrives as the surface's own binding, never another scope's totals\nState:     always drawn \u2014 the leading panel of the output area; sticky, never removed\nA11y:      role=\"status\"\nConnects:  the model mark at the trailing edge (model-readout-tokens-etc) names the model in play; the gripper (gripper-prompt-input-chat-menu) resizes this panel against the one below\nBuilder:   leads the stack and takes 20px of top padding; every panel under it takes 6\nFailure:   a seat that cannot resolve its own conversation reads \"unattributed\" rather than showing another scope's numbers",
+     "State: sticky \u2014 the leading panel is always present; never removed, never moved\nDisabled: no action \u2014 nothing on this panel responds to a click"
+    ],
+    "parent": "40001119:6028",
+    "depth": 3,
+    "children": [
+     "40001119:6309",
+     "40001123:6773"
+    ]
+   },
+   {
+    "id": "40001119:6309",
+    "name": "chat-output-readout-area",
+    "type": "FRAME",
+    "w": 500,
+    "h": 55,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 7,
+     "paddingBottom": 7
+    },
+    "gap": 10,
+    "counterAlign": "CENTER",
+    "sizingH": "HUG",
+    "sizingV": "FIXED",
+    "fill": "rgba(117,142,135,0.35)",
+    "stroke": "rgba(117,142,135,0.5)",
+    "strokeW": 1,
+    "strokeAlign": "INSIDE",
+    "effects": [
+     "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
+     "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
+    ],
+    "radius": 8,
+    "parent": "40001119:6308",
+    "depth": 4,
+    "children": [
+     "40001123:6763",
+     "40001124:7096"
+    ]
+   },
+   {
+    "id": "40001123:6763",
+    "name": "textarea",
+    "type": "FRAME",
+    "w": 450,
+    "h": 40,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "parent": "40001119:6309",
+    "depth": 5,
+    "children": [
+     "40001123:6750"
+    ]
+   },
+   {
+    "id": "40001123:6750",
+    "name": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text",
+    "type": "TEXT",
+    "w": 450,
+    "h": 43,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 12,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "CENTER",
+     "characters": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text "
+    },
+    "annotations": [
+     "Insert token counts here",
+     "text in box for read outs"
+    ],
+    "parent": "40001123:6763",
+    "depth": 6
+   },
+   {
+    "id": "40001124:7096",
+    "name": "model-readout-tokens-etc",
+    "type": "FRAME",
+    "w": 20,
+    "h": 20,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "annotations": [],
+    "parent": "40001119:6309",
+    "depth": 5,
+    "children": [
+     "40001124:7442"
+    ]
+   },
+   {
+    "id": "40001124:7442",
+    "name": "model-icon",
+    "type": "FRAME",
+    "w": 18.75,
+    "h": 17.5,
+    "parent": "40001124:7096",
+    "depth": 6,
+    "children": [
+     "40001124:7097"
+    ]
+   },
+   {
+    "id": "40001124:7097",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 18.75,
+    "h": 17.5,
+    "fill": "rgba(147,58,69,0.84)",
+    "parent": "40001124:7442",
+    "depth": 7
+   },
+   {
+    "id": "40001123:6773",
+    "name": "gripper-prompt-input-chat-menu",
+    "type": "FRAME",
+    "w": 500,
+    "h": 7,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "parent": "40001119:6308",
+    "depth": 4,
+    "children": [
+     "40001123:6774"
+    ]
+   },
+   {
+    "id": "40001123:6774",
+    "name": "Meatballs",
+    "type": "FRAME",
+    "w": 480,
+    "h": 4.05,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 2,
+     "paddingRight": 2,
+     "paddingTop": 1,
+     "paddingBottom": 1
+    },
+    "gap": 4,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "parent": "40001123:6773",
+    "depth": 5,
+    "children": [
+     "40001123:6775",
+     "40001123:6776",
+     "40001123:6777",
+     "40001123:6778",
+     "40001123:6779"
+    ]
+   },
+   {
+    "id": "40001123:6775",
+    "name": "Ellipse 209",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6774",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6776",
+    "name": "Ellipse 210",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6774",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6777",
+    "name": "Ellipse 207",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6774",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6778",
+    "name": "Ellipse 206",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6774",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6779",
+    "name": "Ellipse 208",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6774",
+    "depth": 6
+   },
+   {
+    "id": "40001119:6317",
+    "name": "output-conversations-area",
+    "type": "FRAME",
+    "w": 540,
+    "h": 54,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 20,
+     "paddingRight": 20,
+     "paddingTop": 6,
+     "paddingBottom": 0
+    },
+    "gap": 5,
+    "primaryAlign": "CENTER",
+    "sizingH": "HUG",
+    "sizingV": "HUG",
+    "fill": "rgba(203,230,227,1)",
+    "annotations": [
+     "Data:      the conversations line \u2014 the count of this seat's conversations\nSource:    the seat's own conversation list; never another package's\nState:     drawn while the conversations window is open; removable\nA11y:      role=\"status\"\nConnects:  the chat history mark removes this window; the gripper resizes this window against the one below\nBuilder:   the card inside is chat-output-header; the icon is chat history"
+    ],
+    "parent": "40001119:6028",
+    "depth": 3,
+    "children": [
+     "40001119:6318",
+     "40001126:2014"
+    ]
+   },
+   {
+    "id": "40001119:6318",
+    "name": "chat-output-header",
+    "type": "FRAME",
+    "w": 500,
+    "h": 36,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 7,
+     "paddingBottom": 7
+    },
+    "gap": 10,
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(117,142,135,0.35)",
+    "stroke": "rgba(117,142,135,0.5)",
+    "strokeW": 1,
+    "strokeAlign": "INSIDE",
+    "effects": [
+     "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
+     "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
+    ],
+    "radius": 8,
+    "parent": "40001119:6317",
+    "depth": 4,
+    "children": [
+     "40001123:6744",
+     "40001123:6745"
+    ]
+   },
+   {
+    "id": "40001123:6744",
+    "name": "23 Conversations",
+    "type": "TEXT",
+    "w": 448,
+    "h": 22,
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "DM Sans",
+     "weight": 600,
+     "size": 14,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "CENTER",
+     "characters": "23 Conversations"
+    },
+    "parent": "40001119:6318",
+    "depth": 5
+   },
+   {
+    "id": "40001123:6745",
+    "name": "chat-history",
+    "type": "FRAME",
+    "w": 22,
+    "h": 22,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "annotations": [
+     "On click:  dispatch remove-output-window { window: \"conversations\" }\nState:     deactivated in appearance while the conversations window is open above\nA11y:      button, labelled \"chat history\""
+    ],
+    "parent": "40001119:6318",
+    "depth": 5,
+    "children": [
+     "40001123:6746",
+     "40001123:6747",
+     "40001123:6748"
+    ]
+   },
+   {
+    "id": "40001123:6746",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 19.25,
+    "h": 17.88,
+    "fill": "rgba(80,114,116,1)",
+    "parent": "40001123:6745",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6747",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 11,
+    "h": 1.38,
+    "fill": "rgba(80,114,116,1)",
+    "parent": "40001123:6745",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6748",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 6.88,
+    "h": 1.38,
+    "fill": "rgba(80,114,116,1)",
+    "parent": "40001123:6745",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2014",
+    "name": "gripper-prompt-input-chat-menu",
+    "type": "FRAME",
+    "w": 500,
+    "h": 7,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "parent": "40001119:6317",
+    "depth": 4,
+    "children": [
+     "40001126:2015"
+    ]
+   },
+   {
+    "id": "40001126:2015",
+    "name": "Meatballs",
+    "type": "FRAME",
+    "w": 480,
+    "h": 4.05,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 2,
+     "paddingRight": 2,
+     "paddingTop": 1,
+     "paddingBottom": 1
+    },
+    "gap": 4,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "parent": "40001126:2014",
+    "depth": 5,
+    "children": [
+     "40001126:2016",
+     "40001126:2017",
+     "40001126:2018",
+     "40001126:2019",
+     "40001126:2020"
+    ]
+   },
+   {
+    "id": "40001126:2016",
+    "name": "Ellipse 209",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2015",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2017",
+    "name": "Ellipse 210",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2015",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2018",
+    "name": "Ellipse 207",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2015",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2019",
+    "name": "Ellipse 206",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2015",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2020",
+    "name": "Ellipse 208",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2015",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6978",
+    "name": "output-approval-area",
+    "type": "FRAME",
+    "w": 540,
+    "h": 142,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 20,
+     "paddingRight": 20,
+     "paddingTop": 6,
+     "paddingBottom": 4
+    },
+    "gap": 7,
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "fill": "rgba(203,230,227,1)",
+    "parent": "40001119:6028",
+    "depth": 3,
+    "children": [
+     "40001123:6979",
+     "40001126:2022"
+    ]
+   },
+   {
+    "id": "40001123:6979",
+    "name": "chat-output-approvals",
+    "type": "FRAME",
+    "w": 500,
+    "h": 118,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 2,
+     "paddingRight": 10,
+     "paddingTop": 10,
+     "paddingBottom": 10
+    },
+    "gap": 10,
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "fill": "rgba(117,142,135,0.35)",
+    "stroke": "rgba(117,142,135,0.5)",
+    "strokeW": 1,
+    "strokeAlign": "INSIDE",
+    "effects": [
+     "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
+     "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
+    ],
+    "radius": 8,
+    "parent": "40001123:6978",
+    "depth": 4,
+    "children": [
+     "40001123:6980"
+    ]
+   },
+   {
+    "id": "40001123:6980",
+    "name": "chat-text-container",
+    "type": "FRAME",
+    "w": 488,
+    "h": 98,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 0,
+    "counterAlign": "MAX",
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "annotations": [
+     "internal mini scroll goes here - do not exceed the width"
+    ],
+    "parent": "40001123:6979",
+    "depth": 5,
+    "children": [
+     "40001123:6981",
+     "40001123:6982"
+    ]
+   },
+   {
+    "id": "40001123:6981",
+    "name": "scrollbar-goes-here",
+    "type": "FRAME",
+    "w": 8,
+    "h": 98,
+    "sizingH": "FIXED",
+    "sizingV": "FILL",
+    "parent": "40001123:6980",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6982",
+    "name": "approval-contetn-area",
+    "type": "FRAME",
+    "w": 480,
+    "h": 98,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "parent": "40001123:6980",
+    "depth": 6,
+    "children": [
+     "40001123:6992",
+     "40001124:7443",
+     "40001123:6999"
+    ]
+   },
+   {
+    "id": "40001123:6992",
+    "name": "user-response-bubble",
+    "type": "FRAME",
+    "w": 480,
+    "h": 30,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 5,
+     "paddingRight": 5,
+     "paddingTop": 5,
+     "paddingBottom": 5
+    },
+    "gap": 4,
+    "counterAlign": "MAX",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "fill": "rgba(203,230,227,1)",
+    "radius": 6,
+    "parent": "40001123:6982",
+    "depth": 7,
+    "children": [
+     "40001123:6993",
+     "40001126:2008"
+    ]
+   },
+   {
+    "id": "40001123:6993",
+    "name": "approval goes here",
+    "type": "TEXT",
+    "w": 444,
+    "h": 20,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 13,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "approval goes here"
+    },
+    "parent": "40001123:6992",
+    "depth": 8
+   },
+   {
+    "id": "40001126:2008",
+    "name": "ibm--engineering-workflow-mgmt 1",
+    "type": "FRAME",
+    "w": 18,
+    "h": 18,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "parent": "40001123:6992",
+    "depth": 8,
+    "children": [
+     "40001126:2009",
+     "40001126:2010",
+     "40001126:2011",
+     "40001126:2012"
+    ]
+   },
+   {
+    "id": "40001126:2009",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 15.67,
+    "h": 15.67,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2008",
+    "depth": 9
+   },
+   {
+    "id": "40001126:2010",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 2.25,
+    "h": 2.25,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2008",
+    "depth": 9
+   },
+   {
+    "id": "40001126:2011",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 2.25,
+    "h": 2.25,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2008",
+    "depth": 9
+   },
+   {
+    "id": "40001126:2012",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 2.25,
+    "h": 2.25,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2008",
+    "depth": 9
+   },
+   {
+    "id": "40001124:7443",
+    "name": "user-response-bubble",
+    "type": "FRAME",
+    "w": 480,
+    "h": 30,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 5,
+     "paddingRight": 5,
+     "paddingTop": 5,
+     "paddingBottom": 5
+    },
+    "gap": 4,
+    "counterAlign": "MAX",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "fill": "rgba(203,230,227,1)",
+    "radius": 6,
+    "parent": "40001123:6982",
+    "depth": 7,
+    "children": [
+     "40001124:7444",
+     "40001126:2002"
+    ]
+   },
+   {
+    "id": "40001124:7444",
+    "name": "approval goes here",
+    "type": "TEXT",
+    "w": 444,
+    "h": 20,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 13,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "approval goes here"
+    },
+    "parent": "40001124:7443",
+    "depth": 8
+   },
+   {
+    "id": "40001126:2002",
+    "name": "ibm--engineering-workflow-mgmt 1",
+    "type": "FRAME",
+    "w": 18,
+    "h": 18,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "parent": "40001124:7443",
+    "depth": 8,
+    "children": [
+     "40001126:2003",
+     "40001126:2004",
+     "40001126:2005",
+     "40001126:2006"
+    ]
+   },
+   {
+    "id": "40001126:2003",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 15.67,
+    "h": 15.67,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2002",
+    "depth": 9
+   },
+   {
+    "id": "40001126:2004",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 2.25,
+    "h": 2.25,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2002",
+    "depth": 9
+   },
+   {
+    "id": "40001126:2005",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 2.25,
+    "h": 2.25,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2002",
+    "depth": 9
+   },
+   {
+    "id": "40001126:2006",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 2.25,
+    "h": 2.25,
+    "fill": "rgba(31,172,194,1)",
+    "parent": "40001126:2002",
+    "depth": 9
+   },
+   {
+    "id": "40001123:6999",
+    "name": "model-response",
+    "type": "FRAME",
+    "w": 480,
+    "h": 18,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "counterAlign": "MAX",
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "parent": "40001123:6982",
+    "depth": 7,
+    "children": [
+     "40001123:7000"
+    ]
+   },
+   {
+    "id": "40001123:7000",
+    "name": "APPROVALS",
+    "type": "TEXT",
+    "w": 483,
+    "h": 18,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 14,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "APPROVALS"
+    },
+    "parent": "40001123:6999",
+    "depth": 8
+   },
+   {
+    "id": "40001126:2022",
+    "name": "gripper-prompt-input-chat-menu",
+    "type": "FRAME",
+    "w": 500,
+    "h": 7,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "parent": "40001123:6978",
+    "depth": 4,
+    "children": [
+     "40001126:2023"
+    ]
+   },
+   {
+    "id": "40001126:2023",
+    "name": "Meatballs",
+    "type": "FRAME",
+    "w": 480,
+    "h": 4.05,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 2,
+     "paddingRight": 2,
+     "paddingTop": 1,
+     "paddingBottom": 1
+    },
+    "gap": 4,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "parent": "40001126:2022",
+    "depth": 5,
+    "children": [
+     "40001126:2024",
+     "40001126:2025",
+     "40001126:2026",
+     "40001126:2027",
+     "40001126:2028"
+    ]
+   },
+   {
+    "id": "40001126:2024",
+    "name": "Ellipse 209",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2023",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2025",
+    "name": "Ellipse 210",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2023",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2026",
+    "name": "Ellipse 207",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2023",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2027",
+    "name": "Ellipse 206",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2023",
+    "depth": 6
+   },
+   {
+    "id": "40001126:2028",
+    "name": "Ellipse 208",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2023",
+    "depth": 6
+   },
+   {
+    "id": "40001119:6326",
+    "name": "output-header-area",
+    "type": "FRAME",
+    "w": 540,
+    "h": 381,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 20,
+     "paddingRight": 20,
+     "paddingTop": 6,
+     "paddingBottom": 4
+    },
+    "gap": 7,
+    "sizingH": "FILL",
+    "sizingV": "FILL",
+    "grow": 1,
+    "fill": "rgba(203,230,227,1)",
+    "parent": "40001119:6028",
+    "depth": 3,
+    "children": [
+     "40001119:6327"
+    ]
+   },
+   {
+    "id": "40001119:6327",
+    "name": "chat-output-header",
+    "type": "FRAME",
+    "w": 500,
+    "h": 371,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 2,
+     "paddingRight": 10,
+     "paddingTop": 10,
+     "paddingBottom": 10
+    },
+    "gap": 10,
+    "primaryAlign": "MAX",
+    "sizingH": "FILL",
+    "sizingV": "FILL",
+    "grow": 1,
+    "fill": "#F8FFF9",
+    "stroke": "rgba(117,142,135,0.5)",
+    "strokeW": 1,
+    "strokeAlign": "INSIDE",
+    "effects": [
+     "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
+     "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
+    ],
+    "radius": 8,
+    "parent": "40001119:6326",
+    "depth": 4,
+    "children": [
+     "40001123:6860"
+    ],
+    "_amended": "2026-09-24 \u2014 fill read live from the Figma REST API; the results card was also renamed in Figma to \"chat-output-area-results\" #40001130:5060 (see src/components/registry.json)."
+   },
+   {
+    "id": "40001123:6860",
+    "name": "Frame 886982",
+    "type": "FRAME",
+    "w": 488,
+    "h": 236,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 0,
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "parent": "40001119:6327",
+    "depth": 5,
+    "children": [
+     "40001123:6880",
+     "40001123:6881"
+    ]
+   },
+   {
+    "id": "40001123:6880",
+    "name": "scrollbar",
+    "type": "FRAME",
+    "w": 5,
+    "h": 261,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "parent": "40001123:6860",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6881",
+    "name": "Frame 886985",
+    "type": "FRAME",
+    "w": 483,
+    "h": 236,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "parent": "40001123:6860",
+    "depth": 6,
+    "children": [
+     "40001123:6882",
+     "40001123:6889",
+     "40001123:6891",
+     "40001123:6898"
+    ]
+   },
+   {
+    "id": "40001123:6882",
+    "name": "user-response-bubble",
+    "type": "FRAME",
+    "w": 483,
+    "h": 70,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 5,
+     "paddingRight": 5,
+     "paddingTop": 5,
+     "paddingBottom": 5
+    },
+    "gap": 4,
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "fill": "rgba(203,230,227,1)",
+    "radius": 6,
+    "parent": "40001123:6881",
+    "depth": 7,
+    "children": [
+     "40001123:6883",
+     "40001123:6884"
+    ]
+   },
+   {
+    "id": "40001123:6883",
+    "name": "User response Sample text - \u00a0Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets.",
+    "type": "TEXT",
+    "w": 444,
+    "h": 60,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 13,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "User response Sample text - \u00a0Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets."
+    },
+    "parent": "40001123:6882",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6884",
+    "name": "Frame 886978",
+    "type": "FRAME",
+    "w": 19,
+    "h": 60,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 5,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "sizingH": "FIXED",
+    "sizingV": "FILL",
+    "parent": "40001123:6882",
+    "depth": 8,
+    "children": [
+     "40001123:6885"
+    ]
+   },
+   {
+    "id": "40001123:6885",
+    "name": "user--feedback 1",
+    "type": "FRAME",
+    "w": 19,
+    "h": 19,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "parent": "40001123:6884",
+    "depth": 9,
+    "children": [
+     "40001123:6886",
+     "40001123:6887",
+     "40001123:6888"
+    ]
+   },
+   {
+    "id": "40001123:6886",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 8.31,
+    "h": 7.72,
+    "fill": "rgba(147,58,69,1)",
+    "parent": "40001123:6885",
+    "depth": 10
+   },
+   {
+    "id": "40001123:6887",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 8.31,
+    "h": 5.94,
+    "fill": "rgba(147,58,69,1)",
+    "parent": "40001123:6885",
+    "depth": 10
+   },
+   {
+    "id": "40001123:6888",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 5.94,
+    "h": 5.94,
+    "fill": "rgba(147,58,69,1)",
+    "parent": "40001123:6885",
+    "depth": 10
+   },
+   {
+    "id": "40001123:6889",
+    "name": "model-response",
+    "type": "FRAME",
+    "w": 483,
+    "h": 30,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "parent": "40001123:6881",
+    "depth": 7,
+    "children": [
+     "40001123:6890"
+    ]
+   },
+   {
+    "id": "40001123:6890",
+    "name": "Chat output from model",
+    "type": "TEXT",
+    "w": 483,
+    "h": 30,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 14,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "Chat output from model"
+    },
+    "parent": "40001123:6889",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6891",
+    "name": "user-response-bubble",
+    "type": "FRAME",
+    "w": 483,
+    "h": 70,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 5,
+     "paddingRight": 5,
+     "paddingTop": 5,
+     "paddingBottom": 5
+    },
+    "gap": 4,
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "fill": "rgba(203,230,227,1)",
+    "radius": 6,
+    "parent": "40001123:6881",
+    "depth": 7,
+    "children": [
+     "40001123:6892",
+     "40001123:6893"
+    ]
+   },
+   {
+    "id": "40001123:6892",
+    "name": "User response Sample text - \u00a0Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets.",
+    "type": "TEXT",
+    "w": 444,
+    "h": 60,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 13,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "User response Sample text - \u00a0Carbon, IBM's design system, is fully open source and the icons are included under the Apache 2.0 license, which is about as permissive as it gets."
+    },
+    "parent": "40001123:6891",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6893",
+    "name": "Frame 886978",
+    "type": "FRAME",
+    "w": 19,
+    "h": 60,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 5,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "sizingH": "FIXED",
+    "sizingV": "FILL",
+    "parent": "40001123:6891",
+    "depth": 8,
+    "children": [
+     "40001123:6894"
+    ]
+   },
+   {
+    "id": "40001123:6894",
+    "name": "user--feedback 1",
+    "type": "FRAME",
+    "w": 19,
+    "h": 19,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "parent": "40001123:6893",
+    "depth": 9,
+    "children": [
+     "40001123:6895",
+     "40001123:6896",
+     "40001123:6897"
+    ]
+   },
+   {
+    "id": "40001123:6895",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 8.31,
+    "h": 7.72,
+    "fill": "rgba(147,58,69,1)",
+    "parent": "40001123:6894",
+    "depth": 10
+   },
+   {
+    "id": "40001123:6896",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 8.31,
+    "h": 5.94,
+    "fill": "rgba(147,58,69,1)",
+    "parent": "40001123:6894",
+    "depth": 10
+   },
+   {
+    "id": "40001123:6897",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 5.94,
+    "h": 5.94,
+    "fill": "rgba(147,58,69,1)",
+    "parent": "40001123:6894",
+    "depth": 10
+   },
+   {
+    "id": "40001123:6898",
+    "name": "model-response",
+    "type": "FRAME",
+    "w": 483,
+    "h": 36,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "parent": "40001123:6881",
+    "depth": 7,
+    "children": [
+     "40001123:6899"
+    ]
+   },
+   {
+    "id": "40001123:6899",
+    "name": "Good morning, You have @ new approvals from Marsha Bostic and Sally Mustang",
+    "type": "TEXT",
+    "w": 483,
+    "h": 36,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 14,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "Good morning, You have @ new approvals from Marsha Bostic and Sally Mustang "
+    },
+    "parent": "40001123:6898",
+    "depth": 8
+   },
+   {
+    "id": "40001119:6034",
+    "name": "chat-input-wrapper",
+    "type": "FRAME",
+    "w": 540,
+    "h": 294,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 5,
+     "paddingBottom": 0
+    },
+    "gap": 0,
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "fill": "rgba(203,230,227,1)",
+    "parent": "40001119:6027",
+    "depth": 2,
+    "children": [
+     "40001119:6035",
+     "40001119:6044",
+     "40001123:6689"
+    ]
+   },
+   {
+    "id": "40001119:6035",
+    "name": "chat-input-menu",
+    "type": "FRAME",
+    "w": 540,
+    "h": 66,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 20,
+     "paddingRight": 20,
+     "paddingTop": 10,
+     "paddingBottom": 20
+    },
+    "gap": 9,
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "fill": "rgba(203,230,227,1)",
+    "annotations": [
+     "Builder: the gripper at its left resizes the input area; this bar moves with it."
+    ],
+    "parent": "40001119:6034",
+    "depth": 3,
+    "children": [
+     "40001119:6359"
+    ]
+   },
+   {
+    "id": "40001119:6359",
+    "name": "Frame 886979",
+    "type": "FRAME",
+    "w": 500,
+    "h": 36,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 9,
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "parent": "40001119:6035",
+    "depth": 4,
+    "children": [
+     "40001119:6212",
+     "40001126:2030",
+     "40001120:6641"
+    ]
+   },
+   {
+    "id": "40001119:6212",
+    "name": "Frame 886975",
+    "type": "FRAME",
+    "w": 127,
+    "h": 36,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 35,
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "parent": "40001119:6359",
+    "depth": 5,
+    "children": [
+     "40001119:6370"
+    ]
+   },
+   {
+    "id": "40001119:6370",
+    "name": "send-to-model",
+    "type": "FRAME",
+    "w": 127,
+    "h": 36,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 5,
+    "counterAlign": "CENTER",
+    "sizingH": "HUG",
+    "sizingV": "HUG",
+    "fill": "rgba(255,255,255,0.5)",
+    "effects": [
+     "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
+     "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
+    ],
+    "radius": 6,
+    "annotations": [
+     "On click:  dispatch loads-cards-form-console-in-prompt-area\nConnects:  loads the console's prompt packages into the left column"
+    ],
+    "parent": "40001119:6212",
+    "depth": 6,
+    "children": [
+     "40001119:6376"
+    ]
+   },
+   {
+    "id": "40001119:6376",
+    "name": "btn-label",
+    "type": "FRAME",
+    "w": 127,
+    "h": 36,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 12,
+     "paddingRight": 12,
+     "paddingTop": 2,
+     "paddingBottom": 2
+    },
+    "gap": 10,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "parent": "40001119:6370",
+    "depth": 7,
+    "children": [
+     "40001119:6378"
+    ]
+   },
+   {
+    "id": "40001119:6378",
+    "name": "container",
+    "type": "FRAME",
+    "w": 103,
+    "h": 32,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "radius": 4,
+    "parent": "40001119:6376",
+    "depth": 8,
+    "children": [
+     "40001119:6379"
+    ]
+   },
+   {
+    "id": "40001119:6379",
+    "name": "send--alt 1",
+    "type": "FRAME",
+    "w": 78.97,
+    "h": 32,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 4,
+     "paddingBottom": 4
+    },
+    "gap": 14,
+    "counterAlign": "CENTER",
+    "sizingH": "HUG",
+    "sizingV": "HUG",
+    "clips": true,
+    "parent": "40001119:6378",
+    "depth": 9,
+    "children": [
+     "40001119:6380",
+     "40001119:6382"
+    ]
+   },
+   {
+    "id": "40001119:6380",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 23.97,
+    "h": 24,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "fill": "rgba(100,97,127,1)",
+    "parent": "40001119:6379",
+    "depth": 10
+   },
+   {
+    "id": "40001119:6382",
+    "name": "functions-label",
+    "type": "TEXT",
+    "w": 41,
+    "h": 19,
+    "sizingH": "HUG",
+    "sizingV": "HUG",
+    "fill": "rgba(100,97,127,1)",
+    "text": {
+     "family": "Inter",
+     "weight": 700,
+     "size": 16,
+     "lh": "AUTO",
+     "align": "CENTER",
+     "valign": "CENTER",
+     "characters": "Send"
+    },
+    "parent": "40001119:6379",
+    "depth": 10
+   },
+   {
+    "id": "40001126:2030",
+    "name": "gripper-prompt-input-chat-menu",
+    "type": "FRAME",
+    "w": 229,
+    "h": 7,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "grow": 1,
+    "parent": "40001119:6359",
+    "depth": 5,
+    "children": [
+     "40001126:2031"
+    ]
+   },
+   {
+    "id": "40001126:2031",
+    "name": "Meatballs",
+    "type": "FRAME",
+    "w": 209,
+    "h": 4.05,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 2,
+     "paddingRight": 2,
+     "paddingTop": 1,
+     "paddingBottom": 1
+    },
+    "gap": 4,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "grow": 1,
+    "parent": "40001126:2030",
+    "depth": 6,
+    "children": [
+     "40001126:2032",
+     "40001126:2033",
+     "40001126:2034",
+     "40001126:2035",
+     "40001126:2036"
+    ]
+   },
+   {
+    "id": "40001126:2032",
+    "name": "Ellipse 209",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2031",
+    "depth": 7
+   },
+   {
+    "id": "40001126:2033",
+    "name": "Ellipse 210",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2031",
+    "depth": 7
+   },
+   {
+    "id": "40001126:2034",
+    "name": "Ellipse 207",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2031",
+    "depth": 7
+   },
+   {
+    "id": "40001126:2035",
+    "name": "Ellipse 206",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2031",
+    "depth": 7
+   },
+   {
+    "id": "40001126:2036",
+    "name": "Ellipse 208",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001126:2031",
+    "depth": 7
+   },
+   {
+    "id": "40001120:6641",
+    "name": "Function - loads cards form console in prompt area",
+    "type": "FRAME",
+    "w": 126,
+    "h": 35,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "fill": "rgba(255,255,255,0.5)",
+    "effects": [
+     "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
+     "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
+    ],
+    "radius": 6,
+    "annotations": [
+     "On click:  dispatch loads-cards-form-console-in-prompt-area\nConnects:  loads the console's prompt packages into the left column"
+    ],
+    "parent": "40001119:6359",
+    "depth": 5,
+    "children": [
+     "40001120:6642"
+    ]
+   },
+   {
+    "id": "40001120:6642",
+    "name": "btn-label",
+    "type": "INSTANCE",
+    "w": 127,
+    "h": 35,
+    "parent": "40001120:6641",
+    "depth": 6,
+    "children": [
+     "I40001120:6642;40000973:24203"
+    ]
+   },
+   {
+    "id": "I40001120:6642;40000973:24203",
+    "name": "functions-label",
+    "type": "TEXT",
+    "w": 127,
+    "h": 35,
+    "fill": "rgba(100,97,127,1)",
+    "text": {
+     "family": "Inter",
+     "weight": 700,
+     "size": 16,
+     "lh": "AUTO",
+     "align": "CENTER",
+     "valign": "CENTER",
+     "characters": "Agent"
+    },
+    "parent": "40001120:6642",
+    "depth": 7
+   },
+   {
+    "id": "40001119:6044",
+    "name": "chat-input-area",
+    "type": "FRAME",
+    "w": 540,
+    "h": 126,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 20,
+     "paddingRight": 20,
+     "paddingTop": 20,
+     "paddingBottom": 20
+    },
+    "gap": 10,
+    "sizingH": "FIXED",
+    "sizingV": "FILL",
+    "grow": 1,
+    "fill": "rgba(228,231,200,1)",
+    "effects": [
+     "INNER_SHADOW 4 4 blur 4 rgba(0,0,0,0.25)"
+    ],
+    "cornerRadii": [
+     0,
+     10,
+     0,
+     0
+    ],
+    "annotations": [
+     "Data:      the draft text being typed\nConnects:  the send button reads this text"
+    ],
+    "parent": "40001119:6034",
+    "depth": 3,
+    "children": [
+     "40001119:6045"
+    ]
+   },
+   {
+    "id": "40001119:6045",
+    "name": "sample-text-for-role",
+    "type": "TEXT",
+    "w": 500,
+    "h": 86,
+    "sizingH": "FILL",
+    "sizingV": "FILL",
+    "grow": 1,
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 13,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "TOP",
+     "characters": "chat input"
+    },
+    "parent": "40001119:6044",
+    "depth": 4
+   },
+   {
+    "id": "40001123:6689",
+    "name": "output-header-area",
+    "type": "FRAME",
+    "w": 540,
+    "h": 97,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 20,
+     "paddingRight": 20,
+     "paddingTop": 10,
+     "paddingBottom": 20
+    },
+    "gap": 7,
+    "primaryAlign": "CENTER",
+    "sizingH": "HUG",
+    "sizingV": "FIXED",
+    "fill": "rgba(203,230,227,1)",
+    "annotations": [
+     "This gripper pulls this window and everything above it up and expands the section below it. It does have a limit. When everything stacked it has a limit, they can't go anymore and we'll have to add\u2026 Or some load more buttons but this is where a user builds their little stack of plug-ins that they like to work with when they're when they're when they're building agents and they can kind. It's like it's like a tool tray think of it that way and we'll have a limit and we need to work on that limit together",
+     "This belongs to this is the footer and this is where our plug-in tube bar will load. This is the default view. You can only see the first five tools for now."
+    ],
+    "parent": "40001119:6034",
+    "depth": 3,
+    "children": [
+     "40001123:6692",
+     "40001123:6690"
+    ]
+   },
+   {
+    "id": "40001123:6692",
+    "name": "gripper-prompt-input-chat-menu",
+    "type": "FRAME",
+    "w": 500,
+    "h": 7,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 10,
+     "paddingRight": 10,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "primaryAlign": "CENTER",
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "FIXED",
+    "parent": "40001123:6689",
+    "depth": 4,
+    "children": [
+     "40001123:6693"
+    ]
+   },
+   {
+    "id": "40001123:6693",
+    "name": "Meatballs",
+    "type": "FRAME",
+    "w": 24.65,
+    "h": 4.05,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 2,
+     "paddingRight": 2,
+     "paddingTop": 1,
+     "paddingBottom": 1
+    },
+    "gap": 4,
+    "counterAlign": "CENTER",
+    "sizingH": "HUG",
+    "sizingV": "HUG",
+    "parent": "40001123:6692",
+    "depth": 5,
+    "children": [
+     "40001123:6694",
+     "40001123:6695",
+     "40001123:6696",
+     "40001123:6697"
+    ]
+   },
+   {
+    "id": "40001123:6694",
+    "name": "Ellipse 209",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6693",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6695",
+    "name": "Ellipse 207",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6693",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6696",
+    "name": "Ellipse 206",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6693",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6697",
+    "name": "Ellipse 208",
+    "type": "ELLIPSE",
+    "w": 2.16,
+    "h": 2.05,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "stroke": "rgba(147,58,69,0.5)",
+    "strokeW": 2,
+    "strokeAlign": "CENTER",
+    "strokeCap": "ROUND",
+    "parent": "40001123:6693",
+    "depth": 6
+   },
+   {
+    "id": "40001123:6690",
+    "name": "chat-output-header",
+    "type": "FRAME",
+    "w": 500,
+    "h": 53,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 14,
+     "paddingRight": 14,
+     "paddingTop": 7,
+     "paddingBottom": 7
+    },
+    "gap": 10,
+    "primaryAlign": "MAX",
+    "sizingH": "FIXED",
+    "sizingV": "FILL",
+    "grow": 1,
+    "fill": "rgba(117,142,135,0.35)",
+    "stroke": "rgba(117,142,135,0.5)",
+    "strokeW": 1,
+    "strokeAlign": "INSIDE",
+    "effects": [
+     "INNER_SHADOW 0 -2 blur 5 rgba(0,0,0,0.15)",
+     "INNER_SHADOW 0 2 blur 4 rgba(0,0,0,0.25)"
+    ],
+    "radius": 8,
+    "parent": "40001123:6689",
+    "depth": 4,
+    "children": [
+     "40001123:6722"
+    ]
+   },
+   {
+    "id": "40001123:6722",
+    "name": "Frame 886979",
+    "type": "FRAME",
+    "w": 472,
+    "h": 35,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 9,
+    "counterAlign": "CENTER",
+    "sizingH": "FILL",
+    "sizingV": "HUG",
+    "parent": "40001123:6690",
+    "depth": 5,
+    "children": [
+     "40001123:6723",
+     "40001123:6738"
+    ]
+   },
+   {
+    "id": "40001123:6723",
+    "name": "Frame 886975",
+    "type": "FRAME",
+    "w": 307,
+    "h": 32,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 20,
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "parent": "40001123:6722",
+    "depth": 6,
+    "children": [
+     "40001123:6829",
+     "40001124:7035",
+     "40001123:6728",
+     "40001123:6732",
+     "40001123:6724"
+    ]
+   },
+   {
+    "id": "40001123:6829",
+    "name": "Frame 886980",
+    "type": "FRAME",
+    "w": 54,
+    "h": 28,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 9,
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "parent": "40001123:6723",
+    "depth": 7,
+    "children": [
+     "40001123:6830"
+    ]
+   },
+   {
+    "id": "40001123:6830",
+    "name": "Function - loads cards form console in prompt area",
+    "type": "FRAME",
+    "w": 54,
+    "h": 28,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "effects": [
+     "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
+     "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
+    ],
+    "radius": 6,
+    "annotations": [
+     "On click: dispatch URL (http://raibach.net)\nAction: launch svae check before leaving application"
+    ],
+    "parent": "40001123:6829",
+    "depth": 8,
+    "children": [
+     "40001123:6831"
+    ]
+   },
+   {
+    "id": "40001123:6831",
+    "name": "btn-label",
+    "type": "FRAME",
+    "w": 58,
+    "h": 28,
+    "layout": "VERTICAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 0,
+    "sizingH": "HUG",
+    "sizingV": "HUG",
+    "parent": "40001123:6830",
+    "depth": 9,
+    "children": [
+     "40001123:6832"
+    ]
+   },
+   {
+    "id": "40001123:6832",
+    "name": "functions-label",
+    "type": "TEXT",
+    "w": 58,
+    "h": 28,
+    "sizingH": "FIXED",
+    "sizingV": "HUG",
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Arial Rounded MT Bold",
+     "weight": 400,
+     "size": 12,
+     "lh": "AUTO",
+     "align": "LEFT",
+     "valign": "CENTER",
+     "characters": "Active\nPlugins "
+    },
+    "parent": "40001123:6831",
+    "depth": 10
+   },
+   {
+    "id": "40001124:7035",
+    "name": "forum 1",
+    "type": "FRAME",
+    "w": 32,
+    "h": 32,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "parent": "40001123:6723",
+    "depth": 7,
+    "children": [
+     "40001124:7036",
+     "40001124:7037"
+    ]
+   },
+   {
+    "id": "40001124:7036",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 24,
+    "h": 24,
+    "fill": "rgba(61,81,91,1)",
+    "parent": "40001124:7035",
+    "depth": 8
+   },
+   {
+    "id": "40001124:7037",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 16,
+    "h": 16,
+    "fill": "rgba(61,81,91,1)",
+    "parent": "40001124:7035",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6728",
+    "name": "chat history",
+    "type": "FRAME",
+    "w": 32,
+    "h": 32,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "opacity": 0.5,
+    "clips": true,
+    "annotations": [
+     "need annotaiton - this is deactivated in appearance, but it is really selected and the history will appear above in the output as a insert section.",
+     "State:     deactivated in appearance, but really selected \u2014 the history appears above in the output as an insert section"
+    ],
+    "parent": "40001123:6723",
+    "depth": 7,
+    "children": [
+     "40001123:6729",
+     "40001123:6730",
+     "40001123:6731"
+    ]
+   },
+   {
+    "id": "40001123:6729",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 28,
+    "h": 26,
+    "fill": "rgba(80,114,116,1)",
+    "annotations": [
+     "State: deactivated in appearance, but really selected \u2014 the history appears above in the output as an insert section"
+    ],
+    "parent": "40001123:6728",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6730",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 16,
+    "h": 2,
+    "fill": "rgba(80,114,116,1)",
+    "parent": "40001123:6728",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6731",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 10,
+    "h": 2,
+    "fill": "rgba(80,114,116,1)",
+    "parent": "40001123:6728",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6732",
+    "name": "add-new-conversation",
+    "type": "FRAME",
+    "w": 32,
+    "h": 32,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "parent": "40001123:6723",
+    "depth": 7,
+    "children": [
+     "40001123:6733",
+     "40001123:6734"
+    ]
+   },
+   {
+    "id": "40001123:6733",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 28,
+    "h": 26,
+    "fill": "rgba(61,81,91,1)",
+    "parent": "40001123:6732",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6734",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 10,
+    "h": 10,
+    "fill": "rgba(61,81,91,1)",
+    "parent": "40001123:6732",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6724",
+    "name": "user--feedback 1",
+    "type": "FRAME",
+    "w": 32,
+    "h": 32,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "clips": true,
+    "parent": "40001123:6723",
+    "depth": 7,
+    "children": [
+     "40001123:6725",
+     "40001123:6726",
+     "40001123:6727"
+    ]
+   },
+   {
+    "id": "40001123:6725",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 14,
+    "h": 13,
+    "fill": "rgba(61,81,91,1)",
+    "parent": "40001123:6724",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6726",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 14,
+    "h": 10,
+    "fill": "rgba(61,81,91,1)",
+    "parent": "40001123:6724",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6727",
+    "name": "Vector",
+    "type": "VECTOR",
+    "w": 10,
+    "h": 10,
+    "fill": "rgba(61,81,91,1)",
+    "parent": "40001123:6724",
+    "depth": 8
+   },
+   {
+    "id": "40001123:6738",
+    "name": "Function - loads cards form console in prompt area",
+    "type": "FRAME",
+    "w": 156,
+    "h": 35,
+    "layout": "HORIZONTAL",
+    "pad": {
+     "paddingLeft": 0,
+     "paddingRight": 0,
+     "paddingTop": 0,
+     "paddingBottom": 0
+    },
+    "gap": 10,
+    "counterAlign": "CENTER",
+    "sizingH": "FIXED",
+    "sizingV": "FILL",
+    "effects": [
+     "DROP_SHADOW 4 4 blur 10 rgba(0,0,0,0.15)",
+     "DROP_SHADOW -4 -4 blur 10 rgba(0,0,0,0.15)"
+    ],
+    "radius": 6,
+    "annotations": [
+     "On click: dispatch URL (http://raibach.net)\nAction: launch svae check before leaving application"
+    ],
+    "parent": "40001123:6722",
+    "depth": 6,
+    "children": [
+     "40001123:6739"
+    ]
+   },
+   {
+    "id": "40001123:6739",
+    "name": "btn-label",
+    "type": "FRAME",
+    "w": 156,
+    "h": 35,
+    "sizingH": "FIXED",
+    "sizingV": "FIXED",
+    "parent": "40001123:6738",
+    "depth": 7,
+    "children": [
+     "40001123:6740"
+    ]
+   },
+   {
+    "id": "40001123:6740",
+    "name": "functions-label",
+    "type": "TEXT",
+    "w": 163,
+    "h": 35,
+    "fill": "rgba(61,81,91,1)",
+    "text": {
+     "family": "Inter",
+     "weight": 700,
+     "size": 9,
+     "lh": "AUTO",
+     "align": "RIGHT",
+     "valign": "BOTTOM",
+     "characters": "Created by John Travis Holt\nRaibach.net \u00a9 2026 Raibach IDS"
+    },
+    "parent": "40001123:6739",
+    "depth": 8
+   }
+  ]
+ },
+ "_amendments": [
+  {
+   "at": "2026-09-24",
+   "what": "The results card frame was renamed in Figma: 'chat-output-header' #40001119:6327 -> 'chat-output-area-results' #40001130:5060 (new node id). REST facts for the new frame: fill rgba(117,142,135,0.35), stroke rgba(117,142,135,0.5), radius 8, pad 2/10/10/10. The pre-rename card #40001119:6327 now carries the owner's light fill #F8FFF9.",
+   "why": "One Figma name covered two shapes (the bar and the results card); the catalog/registry conflated them. The association is fixed in src/components/registry.json."
   }
+ ]
 }

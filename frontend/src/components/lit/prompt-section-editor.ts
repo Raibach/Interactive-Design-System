@@ -138,7 +138,7 @@ class PromptSectionEditor extends LitElement {
       flex-direction: column;
       height: 100%;
       min-height: 0;
-      background: #ffffff;
+      background: #F7F8F2;
       font-family: 'Inter', system-ui, sans-serif;
     }
     .sections-scroll {
