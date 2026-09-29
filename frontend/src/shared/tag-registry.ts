@@ -1402,6 +1402,18 @@ export const TAG_REGISTRY = {
     },
     events: [],
   },
+  // Ingested from Figma — layout-id-component (40001206:2888)
+  'f-40001206-2888': {
+    tag: 'f-40001206-2888',
+    surface: 'composer',
+    description: 'Generated from Figma node 40001206:2888 (layout-id-component). Implemented by <f-40001206-2888> in src/components/lit/f-40001206-2888.ts.',
+    props: {
+      content: { type: 'string', optional: true },
+      justify: { type: 'string', optional: true },
+      align: { type: 'string', optional: true },
+    },
+    events: [],
+  },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1490,6 +1502,7 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   'f-40001204-5752',
   'f-40001207-3497',
   'f-40001207-3559',
+  'f-40001206-2888',
 ];
 
 /** Tags belonging to the shell — AI must never touch these */

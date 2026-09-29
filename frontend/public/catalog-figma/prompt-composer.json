@@ -1367,9 +1367,573 @@
      "note": "the bytes could not be obtained, so only the pointer was captured"
     }
    ]
+  },
+  "40001206:2888": {
+   "tag": "f-40001206-2888",
+   "nodeId": "40001206:2888",
+   "approvedAt": "2026-09-29T20:53:06.748839Z",
+   "layers": 15,
+   "tree": {
+    "id": "40001206:2888",
+    "name": "layout-id-component",
+    "type": "FRAME",
+    "size": [
+     622.0,
+     40.0
+    ],
+    "position": [
+     -19924.0,
+     20240.0
+    ],
+    "layout": {
+     "layoutMode": "HORIZONTAL",
+     "itemSpacing": 1.0,
+     "layoutWrap": "NO_WRAP"
+    },
+    "strokeAlign": "INSIDE",
+    "constraints": {
+     "vertical": "TOP",
+     "horizontal": "LEFT"
+    },
+    "sizing": {
+     "layoutSizingHorizontal": "FIXED",
+     "layoutSizingVertical": "HUG"
+    },
+    "children": [
+     {
+      "id": "40001206:3410",
+      "name": "status-component-caution",
+      "type": "INSTANCE",
+      "size": [
+       40.0,
+       40.0
+      ],
+      "position": [
+       -19924.0,
+       20240.0
+      ],
+      "layout": {
+       "layoutMode": "HORIZONTAL",
+       "primaryAxisAlignItems": "CENTER",
+       "counterAxisAlignItems": "CENTER",
+       "layoutWrap": "NO_WRAP"
+      },
+      "strokeAlign": "INSIDE",
+      "constraints": {
+       "vertical": "TOP",
+       "horizontal": "LEFT"
+      },
+      "sizing": {
+       "layoutSizingHorizontal": "FIXED",
+       "layoutSizingVertical": "FIXED",
+       "layoutGrow": 0.0,
+       "layoutAlign": "INHERIT"
+      },
+      "componentId": "40001196:9578",
+      "children": [
+       {
+        "id": "I40001206:3410;40001196:9576",
+        "name": "Polygon 4",
+        "type": "VECTOR",
+        "size": [
+         22.3,
+         20.4
+        ],
+        "position": [
+         -19915.2,
+         20249.8
+        ],
+        "fill": "#e4d48e",
+        "stroke": {
+         "color": "#d29207",
+         "weight": 1.0
+        },
+        "paths": [
+         "M9.40723 1.02531C10.1702 -0.34177 12.1371 -0.341772 12.9001 1.02531L22.0508 17.4214C22.7949 18.7546 21.8311 20.3961 20.3044 20.3961L2.00289 20.3961C0.476197 20.3961 -0.487554 18.7546 0.256469 17.4214L9.40723 1.02531Z"
+        ],
+        "path": "M9.40723 1.02531C10.1702 -0.34177 12.1371 -0.341772 12.9001 1.02531L22.0508 17.4214C22.7949 18.7546 21.8311 20.3961 20.3044 20.3961L2.00289 20.3961C0.476197 20.3961 -0.487554 18.7546 0.256469 17.4214L9.40723 1.02531Z",
+        "windingRule": "NONZERO",
+        "svg": "<svg width=\"22.31\" height=\"20.4\" viewBox=\"166.36 804.46 22.31 20.4\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M 176.25 805.83 C 177.02 804.46 178.98 804.46 179.75 805.83 L 188.9 822.22 C 189.64 823.56 188.68 825.2 187.15 825.2 L 168.85 825.2 C 167.32 825.2 166.36 823.56 167.1 822.22 L 176.25 805.83 Z\" fill=\"#e4d48e\" stroke=\"#d29207\" stroke-width=\"1.0\"/></svg>",
+        "radius": 2.0,
+        "strokeAlign": "INSIDE",
+        "constraints": {
+         "vertical": "TOP",
+         "horizontal": "LEFT"
+        },
+        "sizing": {
+         "layoutSizingHorizontal": "FIXED",
+         "layoutSizingVertical": "FIXED",
+         "layoutGrow": 0.0,
+         "layoutAlign": "INHERIT"
+        }
+       }
+      ]
+     },
+     {
+      "id": "40001206:2890",
+      "name": "Frame 887025",
+      "type": "FRAME",
+      "size": [
+       382.0,
+       40.0
+      ],
+      "position": [
+       -19883.0,
+       20240.0
+      ],
+      "layout": {
+       "layoutMode": "HORIZONTAL",
+       "paddingLeft": 24.0,
+       "counterAxisAlignItems": "CENTER",
+       "layoutWrap": "NO_WRAP"
+      },
+      "strokeAlign": "INSIDE",
+      "constraints": {
+       "vertical": "TOP",
+       "horizontal": "LEFT"
+      },
+      "sizing": {
+       "layoutSizingHorizontal": "FILL",
+       "layoutSizingVertical": "FIXED",
+       "layoutGrow": 1.0,
+       "layoutAlign": "INHERIT"
+      },
+      "children": [
+       {
+        "id": "40001206:2892",
+        "name": "Frame 887004",
+        "type": "FRAME",
+        "size": [
+         318.0,
+         42.0
+        ],
+        "position": [
+         -19859.0,
+         20239.0
+        ],
+        "layout": {
+         "layoutMode": "HORIZONTAL",
+         "itemSpacing": 7.0,
+         "counterAxisAlignItems": "CENTER",
+         "layoutWrap": "NO_WRAP"
+        },
+        "strokeAlign": "INSIDE",
+        "constraints": {
+         "vertical": "TOP",
+         "horizontal": "LEFT"
+        },
+        "sizing": {
+         "layoutSizingHorizontal": "FILL",
+         "layoutSizingVertical": "HUG",
+         "layoutGrow": 1.0,
+         "layoutAlign": "INHERIT"
+        },
+        "children": [
+         {
+          "id": "40001206:2893",
+          "name": "Database_fill",
+          "type": "INSTANCE",
+          "size": [
+           30.0,
+           28.0
+          ],
+          "position": [
+           -19859.0,
+           20246.0
+          ],
+          "strokeAlign": "INSIDE",
+          "constraints": {
+           "vertical": "TOP",
+           "horizontal": "LEFT"
+          },
+          "sizing": {
+           "layoutSizingHorizontal": "FIXED",
+           "layoutSizingVertical": "FIXED",
+           "layoutGrow": 0.0,
+           "layoutAlign": "INHERIT"
+          },
+          "componentId": "40001066:3480",
+          "children": [
+           {
+            "id": "I40001206:2893;40000250:13300",
+            "name": "image 119",
+            "type": "RECTANGLE",
+            "size": [
+             28.0,
+             28.0
+            ],
+            "position": [
+             -19859.0,
+             20246.0
+            ],
+            "fill": "#8ec1b3",
+            "stroke": {
+             "color": "#8ec1b3",
+             "weight": 1.0
+            },
+            "radius": 6.0,
+            "effects": [
+             {
+              "type": "DROP_SHADOW",
+              "x": 0.0,
+              "y": 4.0,
+              "radius": 4.0,
+              "color": "rgba(0, 0, 0, 0.25)"
+             }
+            ],
+            "strokeAlign": "INSIDE",
+            "constraints": {
+             "vertical": "TOP",
+             "horizontal": "LEFT"
+            }
+           },
+           {
+            "id": "I40001206:2893;40000250:13301",
+            "name": "( )",
+            "type": "TEXT",
+            "size": [
+             21.0,
+             16.0
+            ],
+            "position": [
+             -19855.0,
+             20251.0
+            ],
+            "fill": "#ffffff",
+            "strokeAlign": "OUTSIDE",
+            "constraints": {
+             "vertical": "TOP",
+             "horizontal": "LEFT"
+            },
+            "text": "( )",
+            "type_style": {
+             "fontFamily": "Inter",
+             "fontWeight": 700,
+             "fontSize": 20.0,
+             "lineHeightPx": 16.0,
+             "lineHeightUnit": "PIXELS",
+             "letterSpacing": 0.0,
+             "textAlignHorizontal": "LEFT",
+             "textAlignVertical": "CENTER"
+            }
+           }
+          ]
+         },
+         {
+          "id": "40001206:2894",
+          "name": "Component f-40001185-2176",
+          "type": "TEXT",
+          "size": [
+           264.0,
+           42.0
+          ],
+          "position": [
+           -19822.0,
+           20239.0
+          ],
+          "fill": "#171717",
+          "strokeAlign": "OUTSIDE",
+          "constraints": {
+           "vertical": "TOP",
+           "horizontal": "LEFT"
+          },
+          "sizing": {
+           "layoutSizingHorizontal": "FIXED",
+           "layoutSizingVertical": "FIXED",
+           "layoutGrow": 0.0,
+           "layoutAlign": "INHERIT"
+          },
+          "text": "Component\nf-40001185-2176",
+          "type_style": {
+           "fontFamily": "Inter",
+           "fontWeight": 500,
+           "fontSize": 14.0,
+           "lineHeightPx": 16.0,
+           "lineHeightUnit": "PIXELS",
+           "letterSpacing": 0.0,
+           "textAlignHorizontal": "LEFT",
+           "textAlignVertical": "CENTER"
+          },
+          "runs": [
+           {
+            "start": 0,
+            "end": 10,
+            "text": "Component\n",
+            "style": {
+             "fontFamily": "Inter",
+             "fontWeight": 600
+            }
+           },
+           {
+            "start": 10,
+            "end": 25,
+            "text": "f-40001185-2176",
+            "style": {
+             "fontSize": 13.0,
+             "fill": "#767676"
+            }
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": "40001206:2895",
+        "name": "chevron-blue-closed",
+        "type": "INSTANCE",
+        "size": [
+         40.0,
+         40.0
+        ],
+        "position": [
+         -19541.0,
+         20240.0
+        ],
+        "layout": {
+         "layoutMode": "VERTICAL",
+         "itemSpacing": 10.0,
+         "paddingLeft": 7.0,
+         "paddingRight": 7.0,
+         "paddingTop": 7.0,
+         "paddingBottom": 7.0,
+         "primaryAxisAlignItems": "CENTER",
+         "counterAxisAlignItems": "CENTER",
+         "layoutWrap": "NO_WRAP"
+        },
+        "strokeAlign": "INSIDE",
+        "constraints": {
+         "vertical": "TOP",
+         "horizontal": "LEFT"
+        },
+        "sizing": {
+         "layoutSizingHorizontal": "FIXED",
+         "layoutSizingVertical": "FIXED",
+         "layoutGrow": 0.0,
+         "layoutAlign": "INHERIT"
+        },
+        "componentId": "40000922:4875",
+        "children": [
+         {
+          "id": "I40001206:2895;40001209:6930",
+          "name": "Arrow_drop_down",
+          "type": "FRAME",
+          "size": [
+           16.0,
+           14.0
+          ],
+          "position": [
+           -19529.0,
+           20253.0
+          ],
+          "layout": {
+           "layoutMode": "VERTICAL",
+           "itemSpacing": 10.0,
+           "paddingLeft": 2.0,
+           "paddingRight": 2.0,
+           "paddingTop": 3.0,
+           "paddingBottom": 3.0,
+           "layoutWrap": "NO_WRAP"
+          },
+          "stroke": {
+           "color": "#4e68d2",
+           "weight": 1.0
+          },
+          "radius": 1.0,
+          "strokeAlign": "INSIDE",
+          "constraints": {
+           "vertical": "TOP",
+           "horizontal": "LEFT"
+          },
+          "sizing": {
+           "layoutSizingHorizontal": "HUG",
+           "layoutSizingVertical": "HUG",
+           "layoutGrow": 0.0,
+           "layoutAlign": "INHERIT"
+          },
+          "children": [
+           {
+            "id": "I40001206:2895;40001209:6931",
+            "name": "Vector 10",
+            "type": "VECTOR",
+            "size": [
+             10.0,
+             6.0
+            ],
+            "position": [
+             -19526.0,
+             20257.0
+            ],
+            "fill": "#4e68d2",
+            "paths": [
+             "M0.230466 4.80794L4.68785 1.09346C5.20891 0.659238 6 1.02976 6 1.70803L6 8.29197C6 8.97024 5.20892 9.34076 4.68785 8.90654L0.230466 5.19206C0.110528 5.09211 0.110528 4.90789 0.230466 4.80794Z"
+            ],
+            "path": "M0.230466 4.80794L4.68785 1.09346C5.20891 0.659238 6 1.02976 6 1.70803L6 8.29197C6 8.97024 5.20892 9.34076 4.68785 8.90654L0.230466 5.19206C0.110528 5.09211 0.110528 4.90789 0.230466 4.80794Z",
+            "windingRule": "NONZERO",
+            "svg": "<svg width=\"10.0\" height=\"6.0\" viewBox=\"556.0 812.0 10.0 6.0\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M 560.81 812.23 L 557.09 816.69 C 556.66 817.21 557.03 818.0 557.71 818.0 L 564.29 818.0 C 564.97 818.0 565.34 817.21 564.91 816.69 L 561.19 812.23 C 561.09 812.11 560.91 812.11 560.81 812.23 Z\" fill=\"#4e68d2\"/></svg>",
+            "radii": [
+             0.0,
+             0.0,
+             0.0,
+             0.0
+            ],
+            "rotation": -1.571,
+            "strokeAlign": "INSIDE",
+            "strokeCap": "ROUND",
+            "strokeJoin": "ROUND",
+            "constraints": {
+             "vertical": "TOP",
+             "horizontal": "LEFT"
+            },
+            "sizing": {
+             "layoutSizingHorizontal": "FIXED",
+             "layoutSizingVertical": "FIXED",
+             "layoutGrow": 0.0,
+             "layoutAlign": "INHERIT"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "40001206:2896",
+      "name": "catalog-description-dt",
+      "type": "FRAME",
+      "size": [
+       198.0,
+       40.0
+      ],
+      "position": [
+       -19500.0,
+       20240.0
+      ],
+      "layout": {
+       "layoutMode": "HORIZONTAL",
+       "itemSpacing": 10.0,
+       "paddingLeft": 3.0,
+       "paddingRight": 3.0,
+       "counterAxisAlignItems": "CENTER",
+       "layoutWrap": "NO_WRAP"
+      },
+      "annotation": [
+       "This tool already exist in our system, which you should notice although the button may be different and I've changed the label to function/tools from modeling. I've changed all of the frame labels, so I wanna make sure all of that gets updated. This one is a little bit short we need to expand whenever you click on it and expand the drop-down toggle. It needs to. We need to add an extra 50 pixels to the left of what it currently does."
+      ],
+      "radius": 6.0,
+      "strokeAlign": "INSIDE",
+      "constraints": {
+       "vertical": "TOP",
+       "horizontal": "LEFT"
+      },
+      "sizing": {
+       "layoutSizingHorizontal": "FIXED",
+       "layoutSizingVertical": "FIXED",
+       "layoutGrow": 0.0,
+       "layoutAlign": "INHERIT"
+      },
+      "children": [
+       {
+        "id": "40001206:2897",
+        "name": "id-label",
+        "type": "FRAME",
+        "size": [
+         165.0,
+         40.0
+        ],
+        "position": [
+         -19497.0,
+         20240.0
+        ],
+        "layout": {
+         "layoutMode": "HORIZONTAL",
+         "paddingTop": 3.0,
+         "paddingBottom": 3.0,
+         "primaryAxisAlignItems": "CENTER",
+         "counterAxisAlignItems": "CENTER",
+         "layoutWrap": "NO_WRAP"
+        },
+        "strokeAlign": "INSIDE",
+        "constraints": {
+         "vertical": "TOP",
+         "horizontal": "LEFT"
+        },
+        "sizing": {
+         "layoutSizingHorizontal": "HUG",
+         "layoutSizingVertical": "FILL",
+         "layoutGrow": 0.0,
+         "layoutAlign": "STRETCH"
+        },
+        "children": [
+         {
+          "id": "40001206:2898",
+          "name": "functions-label",
+          "type": "TEXT",
+          "size": [
+           165.0,
+           43.0
+          ],
+          "position": [
+           -19497.0,
+           20238.5
+          ],
+          "fill": "#171717",
+          "strokeAlign": "OUTSIDE",
+          "constraints": {
+           "vertical": "TOP",
+           "horizontal": "LEFT"
+          },
+          "sizing": {
+           "layoutSizingHorizontal": "FIXED",
+           "layoutSizingVertical": "FIXED",
+           "layoutGrow": 0.0,
+           "layoutAlign": "INHERIT"
+          },
+          "text": "FigmaNode: 40001185-2176\nSystem Role Dropdown used in prompt area",
+          "type_style": {
+           "fontFamily": "Inter",
+           "fontWeight": 500,
+           "fontSize": 12.0,
+           "lineHeightPx": 14.522727012634277,
+           "lineHeightUnit": "INTRINSIC_%",
+           "letterSpacing": 0.0,
+           "textAlignHorizontal": "LEFT",
+           "textAlignVertical": "CENTER"
+          },
+          "truncation": "ENDING"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "assets": [
+    {
+     "kind": "mcp-url",
+     "mime": "image/svg+xml",
+     "file": "/assets/figma-5711d5fe19a3d388e5144221dae297ffd0a748e9.svg",
+     "bytes": 469,
+     "source": "http://localhost:3845/assets/5711d5fe19a3d388e5144221dae297ffd0a748e9.svg"
+    },
+    {
+     "kind": "mcp-url",
+     "mime": "image/svg+xml",
+     "file": "/assets/figma-c0ee34660888017f12dbf9f8787d6096a55b1c49.svg",
+     "bytes": 503,
+     "source": "http://localhost:3845/assets/c0ee34660888017f12dbf9f8787d6096a55b1c49.svg"
+    },
+    {
+     "kind": "mcp-url",
+     "mime": "image/png",
+     "file": null,
+     "source": "http://localhost:3845/assets/10c13ac1a228a365cb98a0064b1d5afbc84887b2.png",
+     "note": "the bytes could not be obtained, so only the pointer was captured"
+    }
+   ]
   }
  },
- "generatedAt": "2026-09-29T20:17:55.342287Z",
+ "generatedAt": "2026-09-29T20:53:06.748848Z",
  "removed": {
   "40001206:3422": {
    "tag": "f-40001206-3422",

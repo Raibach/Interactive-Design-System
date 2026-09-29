@@ -875,6 +875,18 @@
     "behavior": "generated",
     "generator": "figma ingest \u2014 approve step"
   }
+},
+{
+  "figmaName": "layout-id-component",
+  "figmaNodeId": "40001206:2888",
+  "litComponent": "f-40001206-2888",
+  "file": "frontend/src/components/lit/f-40001206-2888.ts",
+  "status": "built",
+  "provenance": {
+    "litComponent": "generated",
+    "behavior": "generated",
+    "generator": "figma ingest \u2014 approve step"
+  }
 }
 ]
 }

@@ -1937,6 +1937,39 @@
           "unevaluatedProperties": false
         }
       ]
+    },
+    "f-40001206-2888": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Lit web component <f-40001206-2888>, generated from Figma node 40001206:2888 (layout-id-component) and rendered from src/components/lit/f-40001206-2888.ts. Ingested, then approved into the catalogue.",
+          "properties": {
+            "component": {
+              "const": "f-40001206-2888"
+            },
+            "content": {
+              "type": "string"
+            },
+            "justify": {
+              "type": "string"
+            },
+            "align": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
     }
   },
   "$defs": {
@@ -2129,6 +2162,9 @@
         },
         {
           "$ref": "#/components/f-40001207-3559"
+        },
+        {
+          "$ref": "#/components/f-40001206-2888"
         }
       ],
       "discriminator": {
