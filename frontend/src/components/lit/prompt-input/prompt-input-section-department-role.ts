@@ -317,7 +317,11 @@ export class PromptInputSectionDepartmentRole extends LitElement {
     this.requestUpdate();
   }
 
-  private _onMenuSelect(e: Event, dept: typeof DEPARTMENTS[0]) {
+  // `typeof DEPARTMENTS[0]` is the type of the FIRST element — the Design entry — and
+  // nothing else. So the menu could only hand this method the one department it happens
+  // to list first, and every other button in it was a type error. `(typeof DEPARTMENTS)[number]`
+  // is the union of what the array actually holds, which is what the menu passes.
+  private _onMenuSelect(e: Event, dept: (typeof DEPARTMENTS)[number]) {
     e.stopPropagation();
     this.department = dept.name;
     this._closeMenu();
