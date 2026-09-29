@@ -1,33 +1,12 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import asyncio
-import json
 import os
-import sys
-import time
-import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
-import services as state
-from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
-    get_user_id_from_header,
-)
-from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
-)
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 # The write a repair performs, and the read that makes it possible. Kept in its
 # own small module because it is the only code in this project that overwrites
 # source, and because /api/files/write below cannot do it: that endpoint allows
@@ -137,10 +116,10 @@ async def read_file(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ [File API] Error reading file: {str(e)}")
+        print(f"❌ [File API] Error reading file: {e!s}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error reading file: {str(e)}"
+            detail=f"Error reading file: {e!s}"
         )
 
 @router.post("/api/files/write")
@@ -216,10 +195,10 @@ async def write_file(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ [File API] Error writing file: {str(e)}")
+        print(f"❌ [File API] Error writing file: {e!s}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error writing file: {str(e)}"
+            detail=f"Error writing file: {e!s}"
         )
 
 @router.get("/api/files/list")
@@ -262,10 +241,10 @@ async def list_files(
         }
 
     except Exception as e:
-        print(f"❌ [File API] Error listing files: {str(e)}")
+        print(f"❌ [File API] Error listing files: {e!s}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error listing files: {str(e)}"
+            detail=f"Error listing files: {e!s}"
         )
 
 
@@ -305,7 +284,7 @@ async def repair_read(
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         print(f"❌ [Repair] Error reading {path}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reading file: {e!s}")
 
 
 @router.post("/api/repair/apply")
@@ -342,7 +321,7 @@ async def repair_apply_endpoint(
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         print(f"❌ [Repair] Error applying to {request.path}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error applying the change: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error applying the change: {e!s}")
 
 
 

@@ -10,16 +10,16 @@ This module provides:
 - Log rotation and retention
 """
 
-import os
 import json
 import logging
 import traceback
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
-from pathlib import Path
 import uuid
+from datetime import datetime
 from functools import wraps
-from flask import request, g, has_request_context
+from pathlib import Path
+from typing import Any, Optional
+
+from flask import g, has_request_context, request
 
 # Log directory
 LOG_DIR = Path("logs")
@@ -61,10 +61,10 @@ class DebugLogger:
     """Comprehensive debugging and error logging system"""
     
     def __init__(self):
-        self.logs: List[Dict[str, Any]] = []
+        self.logs: list[dict[str, Any]] = []
         self.max_logs = 1000  # Keep last 1000 log entries in memory
         
-    def _write_log(self, level: str, message: str, context: Optional[Dict] = None, error: Optional[Exception] = None):
+    def _write_log(self, level: str, message: str, context: Optional[dict] = None, error: Optional[Exception] = None):
         """Write log entry to file and memory"""
         correlation_id = None
         if has_request_context() and hasattr(g, 'correlation_id'):
@@ -127,7 +127,7 @@ class DebugLogger:
         if context:
             log_message += f" | Context: {json.dumps(context)}"
         if error:
-            log_message += f" | Error: {str(error)}"
+            log_message += f" | Error: {error!s}"
         log_method(log_message, exc_info=error if error else None)
         
         # Keep in memory (limited)
@@ -135,23 +135,23 @@ class DebugLogger:
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
     
-    def debug(self, message: str, context: Optional[Dict] = None):
+    def debug(self, message: str, context: Optional[dict] = None):
         """Log debug message"""
         self._write_log('DEBUG', message, context)
     
-    def info(self, message: str, context: Optional[Dict] = None):
+    def info(self, message: str, context: Optional[dict] = None):
         """Log info message"""
         self._write_log('INFO', message, context)
     
-    def warning(self, message: str, context: Optional[Dict] = None):
+    def warning(self, message: str, context: Optional[dict] = None):
         """Log warning message"""
         self._write_log('WARNING', message, context)
     
-    def error(self, message: str, error: Optional[Exception] = None, context: Optional[Dict] = None):
+    def error(self, message: str, error: Optional[Exception] = None, context: Optional[dict] = None):
         """Log error message"""
         self._write_log('ERROR', message, context, error)
     
-    def critical(self, message: str, error: Optional[Exception] = None, context: Optional[Dict] = None):
+    def critical(self, message: str, error: Optional[Exception] = None, context: Optional[dict] = None):
         """Log critical error"""
         self._write_log('CRITICAL', message, context, error)
     
@@ -189,7 +189,7 @@ class DebugLogger:
             print(json.dumps(log_entry, ensure_ascii=False))
     
     def log_database(self, operation: str, query: Optional[str] = None, 
-                    params: Optional[Dict] = None, duration_ms: Optional[float] = None,
+                    params: Optional[dict] = None, duration_ms: Optional[float] = None,
                     error: Optional[Exception] = None):
         """Log database operation"""
         log_entry = {
@@ -218,7 +218,7 @@ class DebugLogger:
             print(json.dumps(log_entry, ensure_ascii=False))
     
     def log_audit(self, action: str, user_id: Optional[str] = None, 
-                 resource: Optional[str] = None, details: Optional[Dict] = None):
+                 resource: Optional[str] = None, details: Optional[dict] = None):
         """Log audit event"""
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -259,7 +259,7 @@ class DebugLogger:
             return data
     
     def get_logs(self, level: Optional[str] = None, limit: int = 100, 
-                since: Optional[datetime] = None) -> List[Dict]:
+                since: Optional[datetime] = None) -> list[dict]:
         """Get logs from memory"""
         logs = self.logs
         
@@ -274,7 +274,7 @@ class DebugLogger:
         # Return last N logs
         return logs[-limit:]
     
-    def get_recent_errors(self, limit: int = 50) -> List[Dict]:
+    def get_recent_errors(self, limit: int = 50) -> list[dict]:
         """Get recent errors"""
         try:
             errors = []

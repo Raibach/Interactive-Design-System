@@ -5,7 +5,7 @@ Creates core tables if they don't exist, and safely adds missing columns.
 NEVER drops existing tables - uses migrations only.
 """
 import os
-import sys
+
 import psycopg2
 
 # Tables to create if they don't exist

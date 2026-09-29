@@ -8,37 +8,37 @@ import math
 import os
 import re
 import shutil
-import sys
-import time
-import traceback
 import subprocess
+import time
 import urllib.request
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from config import is_development  # noqa: F401  (retained for route modules that re-import *)
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
-import services as state
+from config import (
+    is_development,
+)
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
-    get_user_id_from_header,
+    a2ui_catalog,
+)
+from design_renderer import accepted_unrendered, render_spec
+from design_renderer import unrendered_keys as unrendered_spec_keys
+from figma_service import (
+    get_cached_spec,
+    get_component,
+    get_component_descriptions,
+    get_dev_resources,
+    get_file,
+    get_file_versions,
+    get_node,
+    search_file,
 )
 from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
+    query_llm,
 )
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-    get_cached_spec, get_component_descriptions,
-)
-from milvus_rest import MilvusREST
-from design_renderer import render_spec, unrendered_keys as unrendered_spec_keys, accepted_unrendered
 
 router = APIRouter()
 
@@ -293,13 +293,13 @@ class IngestRequest(BaseModel):
 
 class JobStatus(BaseModel):
     status: str  # queued | processing | done | error
-    result: Optional[Dict[str, Any]] = None
+    result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
     mcp_status: Optional[str] = None
     rest_status: Optional[str] = None
 
 # In-memory job queue (simple, sequential processing per user spec)
-ingest_jobs: Dict[str, JobStatus] = {}
+ingest_jobs: dict[str, JobStatus] = {}
 
 # Frontend directories — the catalog the ingest writes into, and the app root
 # (whose node_modules supplies esbuild for validating generated code).
@@ -326,9 +326,9 @@ INGEST_MAX_NODES = int(os.getenv("FIGMA_INGEST_MAX_NODES", "400"))
 # Generated sources that have NOT been committed. Ingesting returns drafts; nothing
 # reaches src/ until a designer commits, so pasting URLs to look at them cannot fill
 # the tree with components nobody asked for. Keyed by jobId, then by tag.
-ingest_drafts: Dict[str, Dict[str, str]] = {}
-ingest_draft_validation: Dict[str, Dict[str, Dict[str, Any]]] = {}
-ingest_job_meta: Dict[str, Dict[str, Any]] = {}
+ingest_drafts: dict[str, dict[str, str]] = {}
+ingest_draft_validation: dict[str, dict[str, dict[str, Any]]] = {}
+ingest_job_meta: dict[str, dict[str, Any]] = {}
 # (The cap that used to live here is gone: there is never more than one preview — see
 # _remember_drafts. A new ingest replaces the previous one.)
 
@@ -355,7 +355,7 @@ ingest_job_meta: Dict[str, Dict[str, Any]] = {}
 #
 # A screen that dies silently leaves its entry until rule 2 or 3 happens. Stated here rather than
 # cleaned up: nothing about it is hidden, and nothing else in the process depends on it.
-ingest_preview_abandoned: Dict[str, float] = {}
+ingest_preview_abandoned: dict[str, float] = {}
 INGEST_PREVIEW_ABANDON_GRACE = int(os.getenv("FIGMA_PREVIEW_ABANDON_GRACE", "5"))
 
 
@@ -420,7 +420,7 @@ def _drop_preview_files(job_id: str = "") -> None:
         print(f"⚠️ [figma-ingest] the preview folder {target} could not be removed: {e}")
 
 
-def _write_preview_files(job_id: str, drafts: Dict[str, str]) -> List[str]:
+def _write_preview_files(job_id: str, drafts: dict[str, str]) -> list[str]:
     """Write this ingest's drafts into the preview folder, replacing whatever was there.
 
     THE FOLDER HOLDS ONE PREVIEW, so it is emptied before the new one is written: a component
@@ -428,7 +428,7 @@ def _write_preview_files(job_id: str, drafts: Dict[str, str]) -> List[str]:
     temporary file and a store, and it is why the folder is emptied rather than added to.
     """
     _drop_preview_files()
-    written: List[str] = []
+    written: list[str] = []
     if not drafts:
         return written
     root = os.path.join(PREVIEW_DIR, job_id)
@@ -445,7 +445,7 @@ def _write_preview_files(job_id: str, drafts: Dict[str, str]) -> List[str]:
     return written
 
 
-def _drop_departed_previews() -> List[str]:
+def _drop_departed_previews() -> list[str]:
     """Evict the entries whose screen left and did not come back. Returns what went.
 
     The leave rule, on the request path: a request either finds the entry or finds it evicted. This
@@ -471,9 +471,9 @@ _SAFE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,120}$")
 
 def _remember_drafts(
     job_id: str,
-    drafts: Dict[str, str],
-    validation: Dict[str, Dict[str, Any]],
-    meta: Optional[Dict[str, Any]] = None,
+    drafts: dict[str, str],
+    validation: dict[str, dict[str, Any]],
+    meta: Optional[dict[str, Any]] = None,
 ) -> None:
     """Hold the PREVIEW: the one component that has been built and not yet approved or discarded.
 
@@ -530,21 +530,21 @@ def _find_array_close(text: str, start: int) -> int:
     raise ValueError("unterminated array")
 
 
-def _measure(node: Dict[str, Any]) -> Dict[str, int]:
+def _measure(node: dict[str, Any]) -> dict[str, int]:
     """How big a design is, in the units the bill and the limits use."""
     spec = _figma_spec_for_model(node)
     chars = len(json.dumps(spec, ensure_ascii=False))
     return {"nodes": sum(1 for _ in _walk_spec(spec)), "chars": chars, "tokens": chars // 4}
 
 
-def _size_report(node: Dict[str, Any], spec: Dict[str, Any], limit: int = 6) -> Dict[str, Any]:
+def _size_report(node: dict[str, Any], spec: dict[str, Any], limit: int = 6) -> dict[str, Any]:
     """Everything measurable about why a design is too big, and what could be ingested instead.
 
     "Too large" is only actionable if it says which part. The largest children are ranked by
     node count so the answer is a list of frames the designer can point at — usually one of them
     is the component they actually meant.
     """
-    by_type: Dict[str, int] = {}
+    by_type: dict[str, int] = {}
     for n in _walk_spec(spec):
         key = str(n.get("type") or "?")
         by_type[key] = by_type.get(key, 0) + 1
@@ -571,8 +571,8 @@ def _size_report(node: Dict[str, Any], spec: Dict[str, Any], limit: int = 6) -> 
     }
 
 
-def _refusal_detail(node: Dict[str, Any], spec: Dict[str, Any], spec_chars: int, node_count: int,
-                    token_estimate: int, over: List[str]) -> str:
+def _refusal_detail(node: dict[str, Any], spec: dict[str, Any], spec_chars: int, node_count: int,
+                    token_estimate: int, over: list[str]) -> str:
     """A refusal written to be acted on: what failed, by how much, which part, and the cost."""
     report = _size_report(node, spec)
     lines = [
@@ -608,7 +608,7 @@ def _refusal_detail(node: Dict[str, Any], spec: Dict[str, Any], spec_chars: int,
     return "\n".join(lines)
 
 
-def _component_contract(node: Dict[str, Any]) -> Dict[str, Any]:
+def _component_contract(node: dict[str, Any]) -> dict[str, Any]:
     """The props/events/actions an ingested component is generated with.
 
     Derived by the same helpers the generator uses, so what is registered in the
@@ -639,7 +639,7 @@ def _insert_before_line(text: str, start_marker: str, end_line: str, addition: s
     return None
 
 
-def _register_in_allowlist(tag: str, meta: Dict[str, Any]) -> str:
+def _register_in_allowlist(tag: str, meta: dict[str, Any]) -> str:
     """Add the component to the AI allowlist (frontend/src/shared/tag-registry.ts).
 
     Two edits, because both are what make a tag usable: TAG_REGISTRY is what may be
@@ -660,7 +660,7 @@ def _register_in_allowlist(tag: str, meta: Dict[str, Any]) -> str:
     props = contract.get("props", [])
     events = [e.get("name") for e in contract.get("events", []) if e.get("name")]
 
-    def ts_type(spec: Dict[str, Any]) -> str:
+    def ts_type(spec: dict[str, Any]) -> str:
         return {"String": "string", "Boolean": "boolean", "Number": "number"}.get(spec.get("type"), "string")
 
     props_lines = "".join(
@@ -709,7 +709,7 @@ def _catalog_file_path() -> Optional[str]:
     return None
 
 
-def _register_in_catalog(tag: str, meta: Dict[str, Any], pipeline: str = "prompt-composer") -> str:
+def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt-composer") -> str:
     """Declare the component in the pipeline catalog's JSON Schema (A2UI/catalogs/<pipeline>).
 
     The catalog is what the SERVER validates an AI payload against, so a component that
@@ -829,7 +829,7 @@ def _sync_catalog_claims(new_total: int) -> str:
     return f"counts updated in {', '.join(updated)}" if updated else "no count claims to update"
 
 
-def _catalog_check() -> Dict[str, Any]:
+def _catalog_check() -> dict[str, Any]:
     """Run the repository's own catalog check and read what it wrote.
 
     THE CHECK REPORTS; IT DOES NOT GATE. `npm run catalog:check` exits 0 whatever its findings
@@ -863,7 +863,7 @@ def _catalog_check() -> Dict[str, Any]:
             with open(CATALOG_AUDIT_PATH, encoding="utf-8") as f:
                 written = json.load(f).get("findings") or []
             blocking = sum(1 for x in written if x.get("level") == "blocking")
-    except Exception as e:  # noqa: BLE001 — reported through `ok`, not swallowed
+    except Exception as e:
         blocking = None
         print(f"⚠️  [figma-ingest] the catalog report could not be read after the check: {e}")
     return {
@@ -934,7 +934,7 @@ def _register_in_figma_map(tag: str, node_id: str, figma_name: str) -> Optional[
     return "mapped"
 
 
-def _validate_generated_module(code: str) -> Dict[str, Any]:
+def _validate_generated_module(code: str) -> dict[str, Any]:
     """Compile a generated module with the frontend's own esbuild.
 
     The point is to catch a malformed draft while a designer is still looking at it,
@@ -988,14 +988,14 @@ def _run_cem_analyze() -> None:
         if result.returncode != 0:
             print(f"⚠️ cem analyze failed: {result.stderr}")
         else:
-            print(f"✅ cem analyze completed")
+            print("✅ cem analyze completed")
     except subprocess.TimeoutExpired:
         print("⚠️ cem analyze timed out")
     except Exception as e:
         print(f"⚠️ cem analyze error: {e}")
 
 
-def _fetch_figma_nodes(file_key: str, node_id: str) -> Dict[str, Any]:
+def _fetch_figma_nodes(file_key: str, node_id: str) -> dict[str, Any]:
     """Fetch nodes from Figma REST API: GET /v1/files/:key/nodes?ids=&geometry=paths.
 
     `geometry=paths` IS NOT OPTIONAL, and it is the difference between drawing a design and
@@ -1076,7 +1076,7 @@ INGEST_ACTIVITY_WARN_ROWS = 5000
 INGEST_ACTIVITY_KEEP_DAYS = 30
 
 
-def _activity_audit() -> Dict[str, Any]:
+def _activity_audit() -> dict[str, Any]:
     """How much record there is, and whether that is more than anyone asked for.
 
     Read-only, and cheap: the file's size comes from `os.stat` rather than its contents, and the
@@ -1084,7 +1084,7 @@ def _activity_audit() -> Dict[str, Any]:
     measured is reported as unmeasured, never as empty, because "0 bytes" and "could not look"
     are the pair this whole application keeps apart.
     """
-    audit: Dict[str, Any] = {
+    audit: dict[str, Any] = {
         "warnAtKiB": INGEST_ACTIVITY_WARN_KIB,
         "warnAtRows": INGEST_ACTIVITY_WARN_ROWS,
         "table": INGEST_ACTIVITY_TABLE,
@@ -1141,7 +1141,7 @@ def _activity_audit() -> Dict[str, Any]:
     return audit
 
 
-def _activity_insert(record: Dict[str, Any]) -> None:
+def _activity_insert(record: dict[str, Any]) -> None:
     """Write one activity row. Never raises: a logging failure must not fail the work."""
     conn = _activity_db()
     if not conn:
@@ -1217,7 +1217,7 @@ def _resolve_actor(request: Request) -> str:
     return request.headers.get("X-User-ID", "")
 
 
-def _log_ingest(record: Dict[str, Any]) -> None:
+def _log_ingest(record: dict[str, Any]) -> None:
     """Append one line per ingest to backend/logs/figma-ingest.jsonl.
 
     Errors are not suppressed anywhere in this pipeline, and a failure that only existed
@@ -1238,14 +1238,14 @@ def _log_ingest(record: Dict[str, Any]) -> None:
     _activity_insert(stamped)
 
 
-_ASSET_URI_RE = re.compile(r"data:image/(?:svg\+xml|png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]{40,}", re.I)
-_INLINE_SVG_RE = re.compile(r"<svg\b[^>]*>[\s\S]{0,30000}?</svg>", re.I)
+_ASSET_URI_RE = re.compile(r"data:image/(?:svg\+xml|png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]{40,}", re.IGNORECASE)
+_INLINE_SVG_RE = re.compile(r"<svg\b[^>]*>[\s\S]{0,30000}?</svg>", re.IGNORECASE)
 # Figma's MCP serves a library vector as a file on its own local server, named by the
 # artwork's hash — the form the chevron in this design arrives in.
-_MCP_ASSET_URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1):3845/assets/[A-Za-z0-9._-]+\.(?:svg|png|jpe?g|webp)", re.I)
+_MCP_ASSET_URL_RE = re.compile(r"https?://(?:localhost|127\.0\.0\.1):3845/assets/[A-Za-z0-9._-]+\.(?:svg|png|jpe?g|webp)", re.IGNORECASE)
 
 
-def _extract_assets(text: str, limit: int = 10) -> List[Dict[str, str]]:
+def _extract_assets(text: str, limit: int = 10) -> list[dict[str, str]]:
     """The vectors and images MCP embeds in its reply.
 
     A library component's artwork exists ONLY here: the REST API answers with a reference
@@ -1256,7 +1256,7 @@ def _extract_assets(text: str, limit: int = 10) -> List[Dict[str, str]]:
     """
     if not text:
         return []
-    assets: List[Dict[str, str]] = []
+    assets: list[dict[str, str]] = []
     for match in _ASSET_URI_RE.finditer(text):
         uri = re.sub(r"\s+", "", match.group(0))
         assets.append({"kind": "data-uri", "mime": uri.split(";")[0].replace("data:", ""), "data": uri[:60000]})
@@ -1301,7 +1301,7 @@ _IMAGE_EXTENSIONS = {
 }
 
 
-def _asset_bytes(asset: Dict[str, Any]) -> Optional[bytes]:
+def _asset_bytes(asset: dict[str, Any]) -> Optional[bytes]:
     """The asset's own bytes, or None when they cannot be obtained."""
     kind = str(asset.get("kind") or "")
     data = str(asset.get("data") or "")
@@ -1315,14 +1315,14 @@ def _asset_bytes(asset: Dict[str, Any]) -> Optional[bytes]:
             return None
     if kind == "mcp-url":
         try:
-            with urllib.request.urlopen(data, timeout=10) as response:  # noqa: S310 — the URL is the local MCP server's, matched by _MCP_ASSET_URL_RE
+            with urllib.request.urlopen(data, timeout=10) as response:
                 return response.read() or None
         except Exception:
             return None
     return None
 
 
-def _vendor_assets(assets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _vendor_assets(assets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Write each asset into public/assets and return it with the path that serves it.
 
     THE NAME IS THE CONTENT'S. A pointer keeps the hash it was fetched by — the MCP server names
@@ -1333,7 +1333,7 @@ def _vendor_assets(assets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     An asset whose bytes cannot be obtained is REPORTED, never dropped quietly: it is a component
     that will lose that artwork, and the record has to say which artwork that was.
     """
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for asset in assets or []:
         if not isinstance(asset, dict):
             continue
@@ -1415,7 +1415,7 @@ def _vendor_assets(assets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def _repoint_assets(code: str, vendored: List[Dict[str, Any]]) -> str:
+def _repoint_assets(code: str, vendored: list[dict[str, Any]]) -> str:
     """Point a generated component at the vendored copies instead of at Figma's server.
 
     A plain substitution, because that is what the reference is: the model was handed an asset
@@ -1438,7 +1438,7 @@ _ASSET_SCAN_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json",
 _ASSET_SCAN_ROOTS = ("frontend", "backend", "design", "docs", "scripts", "packages", "catalog-audit")
 
 
-def _assets_referenced_by() -> Dict[str, List[str]]:
+def _assets_referenced_by() -> dict[str, list[str]]:
     """public path (`/assets/<name>`) → the files that mention it.
 
     A plain text search, on purpose: the question is "does anything in this repository point at
@@ -1456,7 +1456,7 @@ def _assets_referenced_by() -> Dict[str, List[str]]:
     the root: a quote, whitespace, a bracket or a colon, and never a path segment, an alias or the
     end of another name.
     """
-    references: Dict[str, List[str]] = {}
+    references: dict[str, list[str]] = {}
     pattern = re.compile(r"(?<![A-Za-z0-9._@/~-])/assets/([A-Za-z0-9][A-Za-z0-9._-]*)")
     for root in _ASSET_SCAN_ROOTS:
         for dirpath, dirnames, filenames in os.walk(os.path.join(REPO_ROOT, root)):
@@ -1477,7 +1477,7 @@ def _assets_referenced_by() -> Dict[str, List[str]]:
     return references
 
 
-def _prune_unreferenced_assets() -> Dict[str, Any]:
+def _prune_unreferenced_assets() -> dict[str, Any]:
     """Delete the files nothing in this repository refers to, and say what was deleted.
 
     AN ASSET IS WRITTEN WHEN A COMPONENT IS APPROVED AND NOTHING HAS EVER TAKEN ONE BACK. Every
@@ -1512,8 +1512,8 @@ def _prune_unreferenced_assets() -> Dict[str, Any]:
             "note": f"the reference scan failed ({e}), so nothing was deleted — no reference found is not the same as could not look",
         }
 
-    pruned: List[str] = []
-    kept: List[Dict[str, Any]] = []
+    pruned: list[str] = []
+    kept: list[dict[str, Any]] = []
     for filename in sorted(os.listdir(ASSETS_PUBLIC_DIR)):
         path = os.path.join(ASSETS_PUBLIC_DIR, filename)
         if not os.path.isfile(path):
@@ -1531,7 +1531,7 @@ def _prune_unreferenced_assets() -> Dict[str, Any]:
     return {"dir": os.path.relpath(ASSETS_PUBLIC_DIR, REPO_ROOT), "pruned": pruned, "kept": kept}
 
 
-def _parse_mcp_response(text: str) -> Dict[str, Any]:
+def _parse_mcp_response(text: str) -> dict[str, Any]:
     """
     Parse MCP get_design_context text response into structured data.
     
@@ -1557,11 +1557,11 @@ def _parse_mcp_response(text: str) -> Dict[str, Any]:
         "style_info": {node_id: {fills, strokes, radius, ...}},
     }
     """
-    annotations: Dict[str, List[str]] = {}
-    descriptions: Dict[str, str] = {}
-    reference_code: Dict[str, str] = {}
-    layout_info: Dict[str, Dict] = {}
-    style_info: Dict[str, Dict] = {}
+    annotations: dict[str, list[str]] = {}
+    descriptions: dict[str, str] = {}
+    reference_code: dict[str, str] = {}
+    layout_info: dict[str, dict] = {}
+    style_info: dict[str, dict] = {}
     
     current_node_id = None
     current_node_type = None
@@ -1675,7 +1675,7 @@ def _parse_mcp_response(text: str) -> Dict[str, Any]:
     }
 
 
-def _fetch_figma_mcp(file_key: str, node_id: str) -> Optional[Dict[str, Any]]:
+def _fetch_figma_mcp(file_key: str, node_id: str) -> Optional[dict[str, Any]]:
     """
     Fetch design context from Figma MCP server.
     
@@ -1813,7 +1813,7 @@ def _fetch_figma_mcp(file_key: str, node_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _merge_mcp_rest(mcp_context: Optional[Dict], rest_response: Dict) -> Dict[str, Any]:
+def _merge_mcp_rest(mcp_context: Optional[dict], rest_response: dict) -> dict[str, Any]:
     """
     Merge MCP context (annotations + reference code) with REST response (geometry + node tree).
     
@@ -1889,7 +1889,7 @@ def _merge_mcp_rest(mcp_context: Optional[Dict], rest_response: Dict) -> Dict[st
     return merged
 
 
-def _figma_color(fill: Dict[str, Any]) -> Optional[str]:
+def _figma_color(fill: dict[str, Any]) -> Optional[str]:
     """A Figma paint as a CSS colour, when it is a plain solid one."""
     color = (fill or {}).get("color")
     if not color:
@@ -1903,7 +1903,7 @@ def _figma_color(fill: Dict[str, Any]) -> Optional[str]:
     return f"rgba({r}, {g}, {b}, {round(float(a), 3)})"
 
 
-def _figma_gradient(fill: Dict[str, Any]) -> Optional[str]:
+def _figma_gradient(fill: dict[str, Any]) -> Optional[str]:
     """A Figma gradient paint as a CSS gradient.
 
     Figma sends gradients as stops plus handle positions, not as CSS: the stops are
@@ -1938,7 +1938,7 @@ def _figma_gradient(fill: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _figma_paint(fill: Dict[str, Any]) -> Optional[str]:
+def _figma_paint(fill: dict[str, Any]) -> Optional[str]:
     """Any Figma paint as CSS: a flat colour, a gradient, or a noted image."""
     if not isinstance(fill, dict) or not fill.get("visible", True):
         return None
@@ -1961,7 +1961,7 @@ def _figma_paint(fill: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _style_from_override(style: Dict[str, Any]) -> Dict[str, Any]:
+def _style_from_override(style: dict[str, Any]) -> dict[str, Any]:
     """One range's style, in the same shape the primary style is kept in."""
     out = {
         k: style.get(k)
@@ -1975,7 +1975,7 @@ def _style_from_override(style: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _text_runs(node: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _text_runs(node: dict[str, Any]) -> list[dict[str, Any]]:
     """The styled ranges inside one text layer — start, end, and the style that applies.
 
     Figma reports the layer's PRIMARY style in `style`, and any word or phrase styled differently
@@ -1993,7 +1993,7 @@ def _text_runs(node: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not overrides or not isinstance(overrides, list) or not table:
         return []
 
-    runs: List[Dict[str, Any]] = []
+    runs: list[dict[str, Any]] = []
     index = 0
     length = min(len(overrides), len(text))
     while index < length:
@@ -2047,11 +2047,11 @@ _RENDER_FIELDS = {
 }
 
 
-def _spec_nodes_by_id(spec: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+def _spec_nodes_by_id(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Every spec entry, keyed by the node id it came from."""
-    out: Dict[str, Dict[str, Any]] = {}
+    out: dict[str, dict[str, Any]] = {}
 
-    def walk(node: Dict[str, Any]) -> None:
+    def walk(node: dict[str, Any]) -> None:
         node_id = str(node.get("id") or "")
         if node_id:
             out[node_id] = node
@@ -2062,7 +2062,7 @@ def _spec_nodes_by_id(spec: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
-def _states_value(field: str, raw: Dict[str, Any]) -> bool:
+def _states_value(field: str, raw: dict[str, Any]) -> bool:
     """Whether a node actually STATES something for this field, as against naming a default.
 
     THE PREDICATE IS THE SAME ONE THE SPEC BUILDER APPLIES. Figma puts `effects: []` on almost
@@ -2104,7 +2104,7 @@ def _states_value(field: str, raw: Dict[str, Any]) -> bool:
     return True
 
 
-def _figma_read_gaps(spec: Dict[str, Any], raw_nodes: Any) -> List[str]:
+def _figma_read_gaps(spec: dict[str, Any], raw_nodes: Any) -> list[str]:
     """What Figma stated that the spec did not carry — the coverage report for an ingest.
 
     ONE DIRECTION ONLY: raw → spec. A renderable field the node STATES, on a node whose spec entry
@@ -2114,7 +2114,7 @@ def _figma_read_gaps(spec: Dict[str, Any], raw_nodes: Any) -> List[str]:
     Between the two, "the component differs from the design" stops being a mystery.
     """
     by_id = _spec_nodes_by_id(spec)
-    gaps: Dict[str, List[str]] = {}
+    gaps: dict[str, list[str]] = {}
     for raw in _walk_raw_nodes(raw_nodes):
         node_id = str(raw.get("id") or "")
         entry = by_id.get(node_id)
@@ -2141,7 +2141,7 @@ def _figma_read_gaps(spec: Dict[str, Any], raw_nodes: Any) -> List[str]:
     ]
 
 
-def _figma_spec_for_model(node: Dict[str, Any], depth: Optional[int] = None) -> Dict[str, Any]:
+def _figma_spec_for_model(node: dict[str, Any], depth: Optional[int] = None) -> dict[str, Any]:
     """The design as the renderer needs to read it — EVERY layer, unless a depth is asked for.
 
     Geometry, auto-layout, paints, radius, effects and typography for every node in the
@@ -2162,7 +2162,7 @@ def _figma_spec_for_model(node: Dict[str, Any], depth: Optional[int] = None) -> 
     response's own report asks for one level), and `None` means the whole tree.
     """
     box = node.get("absoluteBoundingBox") or {}
-    spec: Dict[str, Any] = {
+    spec: dict[str, Any] = {
         "id": node.get("id"),
         "name": node.get("name"),
         "type": node.get("type"),
@@ -2405,9 +2405,9 @@ def _write_figma_layers(
     pipeline: str,
     tag: str,
     node_id: str,
-    spec: Dict[str, Any],
-    assets: Optional[List[Dict[str, Any]]] = None,
-) -> Dict[str, Any]:
+    spec: dict[str, Any],
+    assets: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
     """Persist one node's measured layer tree for the screen.
 
     Merges into the pipeline's file rather than replacing it: an ingest names one node,
@@ -2422,7 +2422,7 @@ def _write_figma_layers(
     os.makedirs(FIGMA_LAYERS_DIR, exist_ok=True)
     path = os.path.join(FIGMA_LAYERS_DIR, f"{pipeline}.json")
 
-    document: Dict[str, Any] = {"pipeline": pipeline, "nodes": {}}
+    document: dict[str, Any] = {"pipeline": pipeline, "nodes": {}}
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             prior = json.load(f)
@@ -2544,7 +2544,7 @@ def _mark_removed_in_figma_layers(
         return f"the layer record could not be annotated: {e}"
 
 
-def _catalog_component_names() -> List[str]:
+def _catalog_component_names() -> list[str]:
     """The names the assembly model is allowed to compose with."""
     try:
         components = getattr(a2ui_catalog, "components", None)
@@ -2564,7 +2564,7 @@ def _catalog_component_names() -> List[str]:
         return []
 
 
-def _extract_json_object(text: str) -> Dict[str, Any]:
+def _extract_json_object(text: str) -> dict[str, Any]:
     """The JSON object in a model reply, fences and trailing prose tolerated.
 
     The strict parser is tried first. It is then retried with `strict=False`, which is the
@@ -2600,7 +2600,7 @@ def _extract_json_object(text: str) -> Dict[str, Any]:
     return None
 
 
-def _json_failure_detail(text: str) -> Dict[str, Any]:
+def _json_failure_detail(text: str) -> dict[str, Any]:
     """Why a reply could not be read, in terms someone can act on."""
     cleaned = (text or "").strip()
     start = cleaned.find("{")
@@ -2626,7 +2626,7 @@ def _json_failure_detail(text: str) -> Dict[str, Any]:
     }
 
 
-def _figma_map_lookup(node_id: str) -> Optional[Dict[str, Any]]:
+def _figma_map_lookup(node_id: str) -> Optional[dict[str, Any]]:
     """The Figma map's entry for a node, if the design already has a component for it."""
     try:
         with open(os.path.join(FRONTEND_DIR, "src", "components", "registry.json"), encoding="utf-8") as f:
@@ -2638,7 +2638,7 @@ def _figma_map_lookup(node_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _catalogue_by_reference() -> Dict[str, Dict[str, Any]]:
+def _catalogue_by_reference() -> dict[str, dict[str, Any]]:
     """Component reference → the catalogue's entry for it, read fresh from the Figma map.
 
     Keyed by the COMPONENT part of the node id (everything before the last `;`), never the whole
@@ -2646,7 +2646,7 @@ def _catalogue_by_reference() -> Dict[str, Dict[str, Any]]:
     and at any location. Read on every call rather than cached — an ingest must see the catalogue
     as it is at that moment, including a component approved a minute ago.
     """
-    out: Dict[str, Dict[str, Any]] = {}
+    out: dict[str, dict[str, Any]] = {}
     try:
         with open(os.path.join(FRONTEND_DIR, "src", "components", "registry.json"), encoding="utf-8") as f:
             for entry in json.load(f).get("components", []):
@@ -2658,7 +2658,7 @@ def _catalogue_by_reference() -> Dict[str, Dict[str, Any]]:
     return out
 
 
-def _catalogue_children(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _catalogue_children(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Every child of this design the catalogue ALREADY HAS — the question the scan produces.
 
     THE OWNER'S RULE, stated three times and now the contract: *"It has to scan the lit catalog on
@@ -2679,13 +2679,13 @@ def _catalogue_children(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not catalogue:
         return []
 
-    found: Dict[str, Dict[str, Any]] = {}
+    found: dict[str, dict[str, Any]] = {}
     draft_tags = set()
     for node in _walk_spec(spec):
         if node.get("path") and node.get("svg"):
             draft_tags.add(str(node.get("name") or ""))
 
-    def walk(node: Dict[str, Any]) -> None:
+    def walk(node: dict[str, Any]) -> None:
         for child in node.get("children") or []:
             reference = node_code_identity(child.get("componentId"))
             entry = catalogue.get(reference) if reference else None
@@ -2708,7 +2708,7 @@ def _catalogue_children(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     return sorted(found.values(), key=lambda x: str(x.get("layerName")))
 
 
-def _catalogue_tags_map() -> Dict[str, str]:
+def _catalogue_tags_map() -> dict[str, str]:
     """Component reference → tag, in the shape `design_renderer.render_spec` composes with."""
     return {
         reference: entry.get("litComponent")
@@ -2717,7 +2717,7 @@ def _catalogue_tags_map() -> Dict[str, str]:
     }
 
 
-def _walk_spec(spec: Dict[str, Any]):
+def _walk_spec(spec: dict[str, Any]):
     yield spec
     for child in spec.get("children", []) or []:
         yield from _walk_spec(child)
@@ -2762,7 +2762,7 @@ def _path_box(path: str) -> Optional[tuple]:
     """
     if not isinstance(path, str) or not path.strip():
         return None
-    nums: List[float] = []
+    nums: list[float] = []
     for token in re.findall(r"-?\d*\.?\d+(?:e-?\d+)?", path):
         try:
             nums.append(float(token))
@@ -2777,7 +2777,7 @@ def _path_box(path: str) -> Optional[tuple]:
     return (min_x, min_y, max(xs) - min_x, max(ys) - min_y)
 
 
-def _matrix_multiply(a: List[List[float]], b: List[List[float]]) -> List[List[float]]:
+def _matrix_multiply(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
     """Figma's 2×3 affine composition: `a` applied after `b`."""
     return [
         [a[0][0] * b[0][0] + a[0][1] * b[1][0], a[0][0] * b[0][1] + a[0][1] * b[1][1],
@@ -2787,7 +2787,7 @@ def _matrix_multiply(a: List[List[float]], b: List[List[float]]) -> List[List[fl
     ]
 
 
-def _absolute_transform(node: Dict[str, Any], root: Optional[Dict[str, Any]] = None) -> Optional[List[List[float]]]:
+def _absolute_transform(node: dict[str, Any], root: Optional[dict[str, Any]] = None) -> Optional[list[list[float]]]:
     """A node's full transform in the space its ancestors are drawn in.
 
     A vector's `path` is written in the VECTOR'S OWN coordinates — not the page's. What places it
@@ -2800,8 +2800,8 @@ def _absolute_transform(node: Dict[str, Any], root: Optional[Dict[str, Any]] = N
     The chain is walked from the node up to `root` (exclusive), and the matrices are composed in
     top-down order so the result maps the node's coordinates into the root's.
     """
-    chain: List[Dict[str, Any]] = []
-    current: Optional[Dict[str, Any]] = node
+    chain: list[dict[str, Any]] = []
+    current: Optional[dict[str, Any]] = node
     guard = 0
     while current is not None and current is not root and guard < 64:
         chain.append(current)
@@ -2813,7 +2813,7 @@ def _absolute_transform(node: Dict[str, Any], root: Optional[Dict[str, Any]] = N
     if not chain:
         return None
     chain.reverse()
-    matrix: Optional[List[List[float]]] = None
+    matrix: Optional[list[list[float]]] = None
     for entry in chain:
         relative = entry.get("relativeTransform")
         if not relative or len(relative) != 2:
@@ -2822,7 +2822,7 @@ def _absolute_transform(node: Dict[str, Any], root: Optional[Dict[str, Any]] = N
     return matrix
 
 
-def _invert_matrix(matrix: List[List[float]]) -> Optional[List[List[float]]]:
+def _invert_matrix(matrix: list[list[float]]) -> Optional[list[list[float]]]:
     """The inverse of a Figma 2×3 affine, or None when it is degenerate."""
     a, b, tx = matrix[0]
     c, d, ty = matrix[1]
@@ -2835,14 +2835,14 @@ def _invert_matrix(matrix: List[List[float]]) -> Optional[List[List[float]]]:
     ]
 
 
-def _apply_matrix(matrix: List[List[float]], x: float, y: float) -> tuple:
+def _apply_matrix(matrix: list[list[float]], x: float, y: float) -> tuple:
     """One point through a Figma 2×3 transform."""
     return (matrix[0][0] * x + matrix[0][1] * y + matrix[0][2],
             matrix[1][0] * x + matrix[1][1] * y + matrix[1][2])
 
 
-_raw_node_by_id: Dict[str, Dict[str, Any]] = {}
-_raw_parent_by_id: Dict[str, str] = {}
+_raw_node_by_id: dict[str, dict[str, Any]] = {}
+_raw_parent_by_id: dict[str, str] = {}
 
 
 def _remember_raw_nodes(nodes: Any) -> None:
@@ -2869,7 +2869,7 @@ def _remember_raw_nodes(nodes: Any) -> None:
                 _raw_parent_by_id[child_id] = node_id
 
 
-def _svg_for_vector(node: Dict[str, Any], root: Optional[Dict[str, Any]] = None) -> Optional[str]:
+def _svg_for_vector(node: dict[str, Any], root: Optional[dict[str, Any]] = None) -> Optional[str]:
     """A measured vector, already drawn — the exact `<svg>` the element should contain.
 
     THE WORK IS DONE HERE, ONCE, INSTEAD OF BY THE MODEL EVERY TIME. A vector arrives as a path
@@ -2976,7 +2976,7 @@ def _svg_for_vector(node: Dict[str, Any], root: Optional[Dict[str, Any]] = None)
     # EVERY PATH GOES THROUGH THE SAME TRANSFORM AND IS DRAWN, in the design's own order. A
     # composed glyph is several entries that only read as the design together — the `( )` is one
     # path per paren, and drawing one of them is a design that does not match.
-    paths_out: List[str] = []
+    paths_out: list[str] = []
     for one in paths:
         out = one
         if fit == "transformed" and transform:
@@ -3085,7 +3085,7 @@ def _svg_for_vector(node: Dict[str, Any], root: Optional[Dict[str, Any]] = None)
     return "".join(parts)
 
 
-def _transform_path(path: str, matrix: List[List[float]]) -> Optional[str]:
+def _transform_path(path: str, matrix: list[list[float]]) -> Optional[str]:
     """A path with every point carried through a transform, commands intact.
 
     The alternative — `transform="matrix(...)"` on the path — was tried and rendered wrongly: an
@@ -3101,7 +3101,7 @@ def _transform_path(path: str, matrix: List[List[float]]) -> Optional[str]:
     """
     tokens = re.findall(r"[MmLlHhVvCcSsQqTtAaZz]|-?\d*\.?\d+(?:e-?\d+)?", path)
     arity = {"M": 2, "L": 2, "T": 2, "C": 6, "S": 4, "Q": 4, "H": 1, "V": 1, "A": 7, "Z": 0}
-    out: List[str] = []
+    out: list[str] = []
     cursor_x = cursor_y = 0.0
     start_x = start_y = 0.0
     index = 0
@@ -3160,7 +3160,7 @@ def _transform_path(path: str, matrix: List[List[float]]) -> Optional[str]:
         return None
 
 
-def _design_system_context(spec: Dict[str, Any]) -> str:
+def _design_system_context(spec: dict[str, Any]) -> str:
     """This design's own layers, and which of them the design system already has.
 
     The ingest already hands the model the catalogue's NAMES — a flat list of 58 strings —
@@ -3183,7 +3183,7 @@ def _design_system_context(spec: Dict[str, Any]) -> str:
     # KEYED BY COMPONENT IDENTITY, not by the whole id: the map may record any one instance of a
     # component, and every OTHER instance of it in this design must resolve to that same entry —
     # that is what makes "one component used in three places" visible instead of three mysteries.
-    by_identity: Dict[str, Dict[str, Any]] = {}
+    by_identity: dict[str, dict[str, Any]] = {}
     for e in entries:
         identity = node_code_identity(e.get("figmaNodeId"))
         if identity:
@@ -3192,9 +3192,9 @@ def _design_system_context(spec: Dict[str, Any]) -> str:
     # Which node was the first of each component in this spec — the one line that gets the
     # "already a component" sentence. Later ones are the same component in another place, and
     # repeating the first line would read as a second component rather than a second instance.
-    first_of: Dict[str, str] = {}
+    first_of: dict[str, str] = {}
 
-    lines: List[str] = []
+    lines: list[str] = []
     for node in _walk_spec(spec):
         if node is spec:
             continue  # the root is the thing being built; it is not a candidate to compose
@@ -3234,7 +3234,7 @@ def _design_system_context(spec: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _name_index() -> Dict[str, Dict[str, Any]]:
+def _name_index() -> dict[str, dict[str, Any]]:
     """The design system's components, keyed by the NAME each one is known by.
 
     THREE NAMES ARE ONE NAME HERE. A component is known by its Figma layer name (`figmaName`),
@@ -3246,7 +3246,7 @@ def _name_index() -> Dict[str, Dict[str, Any]]:
     map_path = os.path.join(FRONTEND_DIR, "src", "components", "registry.json")
     with open(map_path, encoding="utf-8") as f:
         entries = json.load(f).get("components", []) or []
-    index: Dict[str, Dict[str, Any]] = {}
+    index: dict[str, dict[str, Any]] = {}
     for entry in entries:
         for key in ("figmaName", "litComponent"):
             name = entry.get(key)
@@ -3255,7 +3255,7 @@ def _name_index() -> Dict[str, Dict[str, Any]]:
     return index
 
 
-def _name_collisions(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _name_collisions(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Layers whose NAME the design system already has on a DIFFERENT component.
 
     The node-id lookup answers "does this exact node have a component". This answers the other
@@ -3272,7 +3272,7 @@ def _name_collisions(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     instance is reported by `_name_instances`, which asks no question.
     """
     index = _name_index()
-    seen: Dict[str, Dict[str, Any]] = {}
+    seen: dict[str, dict[str, Any]] = {}
     for node in _walk_spec(spec):
         if node is spec:
             continue  # the root is what is being built
@@ -3306,7 +3306,7 @@ def _name_collisions(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     return list(seen.values())
 
 
-def _name_instances(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _name_instances(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Layers that ARE a component the design system already has, in another place.
 
     The other half of `_name_collisions`, and a different fact: same component reference, a
@@ -3316,7 +3316,7 @@ def _name_instances(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     the location differs" is the sentence that stops a second component being made for it.
     """
     index = _name_index()
-    seen: Dict[str, Dict[str, Any]] = {}
+    seen: dict[str, dict[str, Any]] = {}
     for node in _walk_spec(spec):
         if node is spec:
             continue
@@ -3343,13 +3343,13 @@ def _name_instances(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     return list(seen.values())
 
 
-def _svg_shape(svg: str) -> Dict[str, Any]:
+def _svg_shape(svg: str) -> dict[str, Any]:
     """The measurable facts of a piece of markup: fill, stroke, width and stroke weight.
 
     Used to compare what the model drew with what was measured, so the comparison reasons about
     the artwork rather than about formatting. Returns only the keys it could read.
     """
-    shape: Dict[str, Any] = {}
+    shape: dict[str, Any] = {}
     tag = re.search(r"<svg[^>]*>", svg or "")
     if tag:
         width = re.search(r'width\s*=\s*"([\d.]+)', tag.group(0))
@@ -3375,7 +3375,7 @@ def _svg_shape(svg: str) -> Dict[str, Any]:
     return shape
 
 
-def _vector_findings(spec: Dict[str, Any], code: str) -> List[str]:
+def _vector_findings(spec: dict[str, Any], code: str) -> list[str]:
     """WHAT THE ELEMENT DRAWS AGAINST WHAT THE DESIGN MEASURED — the post-build vector check.
 
     The model is handed a finished `<svg>` per vector (see `_svg_for_vector`) and told to copy it.
@@ -3396,9 +3396,9 @@ def _vector_findings(spec: Dict[str, Any], code: str) -> List[str]:
     Vector-only for now, at the owner's word: *"I think a verification process after build is a
     great idea. It's worth the tokens. And we can apply it to vectors for now."*
     """
-    findings: List[str] = []
+    findings: list[str] = []
 
-    def walk(node: Dict[str, Any]):
+    def walk(node: dict[str, Any]):
         yield node
         for child in node.get("children", []) or []:
             yield from walk(child)
@@ -3484,10 +3484,10 @@ def _vector_findings(spec: Dict[str, Any], code: str) -> List[str]:
 
 
 def _channel_report(
-    merged: Dict[str, Any],
-    mcp_context: Optional[Dict[str, Any]],
-    component_descriptions: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    merged: dict[str, Any],
+    mcp_context: Optional[dict[str, Any]],
+    component_descriptions: Optional[dict[str, str]] = None,
+) -> dict[str, Any]:
     """What each channel gave, counted from where the fact actually comes from.
 
     Separate from the ingest body because it is now reported twice — with the result and with the
@@ -3531,18 +3531,18 @@ def _channel_report(
             reference: (component_descriptions or {})[reference] for reference in described
         },
         "componentsUsed": sorted(used_components),
-        "assets": len((mcp_parsed.get("assets") or [])),
+        "assets": len(mcp_parsed.get("assets") or []),
     }
 
 
-def _compliance_warnings(node: Dict[str, Any], spec: Dict[str, Any], code: str, tag: str) -> List[str]:
+def _compliance_warnings(node: dict[str, Any], spec: dict[str, Any], code: str, tag: str) -> list[str]:
     """What the element does not carry from the design, and what to do about it.
 
     A generated component that compiles can still be wrong: it drew no chevron, it set no
     gradient, it declared no type. Each of those is measurable against the spec that was
     sent, so it is measured and stated rather than left for the designer to notice.
     """
-    warnings: List[str] = []
+    warnings: list[str] = []
     nodes = list(_walk_spec(spec))
 
     if any("gradient(" in json.dumps(n.get("fill") or "") for n in nodes) and "gradient(" not in code:
@@ -3592,7 +3592,7 @@ def _compliance_warnings(node: Dict[str, Any], spec: Dict[str, Any], code: str, 
 
 
 async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_id: str = "",
-                              session_title: str = "", actor: str = "") -> Dict[str, Any]:
+                              session_title: str = "", actor: str = "") -> dict[str, Any]:
     """
     Hybrid MCP + REST two-pass pipeline:
     1. Fetch from Figma REST API (always works on server with FIGMA_TOKEN)
@@ -3693,7 +3693,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             print(f"⚠️ [figma-ingest] the referenced components could not be fetched ({e}); "
                   f"only the target will be drafted: {', '.join(referenced)}")
 
-    drafts: Dict[str, str] = {}
+    drafts: dict[str, str] = {}
 
     # THE COMPONENTS THIS DESIGN REFERENCES, EACH DRAFTED AS ITS OWN COMPONENT — rendered from
     # their own measured nodes, by the same function that renders the design, and validated with
@@ -3778,8 +3778,8 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # THE COMPARISON MOVES TO APPROVAL, where a duplicate is a question worth asking: approve, and
     # then "this already exists as <tag> — replace it, or use the existing one?" until that question
     # exists, nothing is compared here and nothing is composed.
-    composed: Dict[str, str] = {}
-    child_matches: List[Dict[str, Any]] = []
+    composed: dict[str, str] = {}
+    child_matches: list[dict[str, Any]] = []
 
     # ── WHAT THE DESIGNER WROTE ABOUT THE COMPONENTS THIS DESIGN USES ───────
     # Read once per ingest, from the file's own component list, because the description is written
@@ -3807,7 +3807,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             detail=(
                 "Nothing was written: the renderer has no rule for "
                 + ", ".join(f"`{k}`" for k in unplaceable)
-                + f" — measured on this design but not something it knows how to place. "
+                + " — measured on this design but not something it knows how to place. "
                 "The measurement is complete; the renderer is missing a rule. This is a refusal "
                 "on purpose: rendering it without that rule would produce a component that "
                 "differs from the design in a way nobody chose."
@@ -3818,7 +3818,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         render_spec, spec_for_model, target_tag, composed
     )
     generated_by = "renderer"
-    rejected: List[str] = []
+    rejected: list[str] = []
 
     # ── THERE IS NO FALLBACK, AND THAT IS THE POINT ──────────────────────────
     # The renderer is the only builder of a Figma component. If it cannot produce one, this
@@ -3853,8 +3853,8 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # The model is not called anywhere in this pipeline any more. `assembled` stays as a shape the
     # result and the record still carry — the frontend reads `generatedBy` from it — but nothing
     # fills it with a model's work.
-    assembled: Dict[str, Any] = {}
-    from_model: List[str] = []
+    assembled: dict[str, Any] = {}
+    from_model: list[str] = []
 
     compliance = await asyncio.to_thread(
         _compliance_warnings, target_node, _figma_spec_for_model(target_node), drafts.get(target_tag, ""), target_tag
@@ -4035,7 +4035,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     }
 
 
-def _extract_properties_from_node(node: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _extract_properties_from_node(node: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract Lit properties from node data and MCP annotations."""
     props = []
     
@@ -4073,7 +4073,7 @@ def _extract_properties_from_node(node: Dict[str, Any]) -> List[Dict[str, Any]]:
     return props
 
 
-def _generate_button_template(node: Dict[str, Any]) -> str:
+def _generate_button_template(node: dict[str, Any]) -> str:
     """Generate button template with A2UI-compatible structure."""
     # Button has a child (typically text) - use slot for the label
     return """<button part="button" @click=${this._handleAction} ?disabled=${this.disabled}>
@@ -4081,7 +4081,7 @@ def _generate_button_template(node: Dict[str, Any]) -> str:
 </button>"""
 
 
-def _generate_textfield_template(node: Dict[str, Any]) -> str:
+def _generate_textfield_template(node: dict[str, Any]) -> str:
     """Generate textfield template with A2UI-compatible structure."""
     return """<input 
   part="input" 
@@ -4098,13 +4098,13 @@ def _generate_textfield_template(node: Dict[str, Any]) -> str:
 />"""
 
 
-def _generate_text_template(node: Dict[str, Any]) -> str:
+def _generate_text_template(node: dict[str, Any]) -> str:
     """Generate text template with A2UI-compatible structure."""
     # Text component uses variant for styling
     return """<span part="text" class=${this.variant}>${this.content}</span>"""
 
 
-def _generate_layout_template(node: Dict[str, Any], layout_type: str) -> str:
+def _generate_layout_template(node: dict[str, Any], layout_type: str) -> str:
     """Generate row/column template with A2UI-compatible structure."""
     children = node.get("children", [])
     
@@ -4125,7 +4125,7 @@ def _generate_layout_template(node: Dict[str, Any], layout_type: str) -> str:
     return "\n".join(child_templates)
 
 
-def _generate_card_template(node: Dict[str, Any]) -> str:
+def _generate_card_template(node: dict[str, Any]) -> str:
     """Generate card template with A2UI-compatible structure."""
     children = node.get("children", [])
     
@@ -4156,7 +4156,7 @@ def _generate_card_template(node: Dict[str, Any]) -> str:
 # A2UI-COMPATIBLE COMPONENT GENERATION HELPERS
 # ============================================
 
-def _determine_component_type(node: Dict[str, Any]) -> str:
+def _determine_component_type(node: dict[str, Any]) -> str:
     """Determine the A2UI component type from Figma node data."""
     node_type = node.get("type", "").upper()
     name = node.get("name", "").lower()
@@ -4202,7 +4202,7 @@ def _determine_component_type(node: Dict[str, Any]) -> str:
     return "generic"
 
 
-def _extract_a2ui_properties(node: Dict[str, Any], component_type: str) -> List[Dict[str, Any]]:
+def _extract_a2ui_properties(node: dict[str, Any], component_type: str) -> list[dict[str, Any]]:
     """Extract A2UI-compatible Lit properties from node data."""
     props = []
     
@@ -4311,7 +4311,7 @@ def _extract_a2ui_properties(node: Dict[str, Any], component_type: str) -> List[
     return props
 
 
-def _extract_a2ui_events(node: Dict[str, Any], component_type: str) -> List[Dict[str, Any]]:
+def _extract_a2ui_events(node: dict[str, Any], component_type: str) -> list[dict[str, Any]]:
     """Extract A2UI-compatible events from node data."""
     events = []
     
@@ -4344,7 +4344,7 @@ def _extract_a2ui_events(node: Dict[str, Any], component_type: str) -> List[Dict
     return events
 
 
-def _extract_a2ui_actions(node: Dict[str, Any], component_type: str) -> Optional[Dict[str, Any]]:
+def _extract_a2ui_actions(node: dict[str, Any], component_type: str) -> Optional[dict[str, Any]]:
     """Extract A2UI action configuration from node data."""
     # Check MCP annotations for action hints
     for ann in node.get("annotations", []):
@@ -4552,7 +4552,7 @@ def _activity_backfill() -> None:
             pass
 
 
-def _activity_from_db(limit: int, session_id: Optional[str], outcomes: bool) -> Optional[List[Dict[str, Any]]]:
+def _activity_from_db(limit: int, session_id: Optional[str], outcomes: bool) -> Optional[list[dict[str, Any]]]:
     """The procession from Postgres, or None when the table cannot be read."""
     _activity_backfill()
     conn = _activity_db()
@@ -4590,7 +4590,7 @@ def _activity_from_db(limit: int, session_id: Optional[str], outcomes: bool) -> 
             pass
 
 
-def _history_for_tag(tag: str) -> List[Dict[str, Any]]:
+def _history_for_tag(tag: str) -> list[dict[str, Any]]:
     """Every recorded event belonging to a component, newest first.
 
     A row belongs to the component if it carries the tag, or if the node it was ingested
@@ -4601,7 +4601,7 @@ def _history_for_tag(tag: str) -> List[Dict[str, Any]]:
     """
     node_from_tag = tag[len("f-"):].replace("-", ":")
 
-    def belongs(record: Dict[str, Any]) -> bool:
+    def belongs(record: dict[str, Any]) -> bool:
         if record.get("tag") == tag:
             return True
         if any(t == tag for t in (record.get("tags") or []) + (record.get("discarded") or [])):
@@ -4632,7 +4632,7 @@ def _history_for_tag(tag: str) -> List[Dict[str, Any]]:
 CATALOG_AUDIT_PATH = os.path.join(FRONTEND_DIR, "catalog-audit", f"{INGEST_CATALOG_PIPELINE}.json")
 
 
-def _catalog_state() -> Dict[str, Any]:
+def _catalog_state() -> dict[str, Any]:
     """What the catalogue holds and what its own check last said.
 
     Read from the two places that actually state it — the catalogue file, and the audit
@@ -4734,7 +4734,7 @@ def _remove_from_figma_map(tag: str) -> str:
                 break
         i += 1
     tail = raw[i + 1:]
-    tail = tail[1:] if tail.startswith(",") else tail
+    tail = tail.removeprefix(",")
     raw = raw[:open_at] + tail
     with open(path, "w", encoding="utf-8") as f:
         f.write(raw)
@@ -5008,7 +5008,7 @@ async def _remove_component(tag: str, reason: str, http_request: Request):
 _ELEMENT_TAG_RE = re.compile(r"<([a-z][a-z0-9]*-[a-z0-9-]+)[\s/>]")
 
 
-def _template_bodies(src: str) -> List[str]:
+def _template_bodies(src: str) -> list[str]:
     """The insides of html`` template literals, and nothing else.
 
     Reading tags from a whole file counts the ones this repo writes about itself in comments —
@@ -5089,7 +5089,7 @@ async def api_figma_elements():
     map_path = os.path.join(FRONTEND_DIR, "src", "components", "registry.json")
     allowlist_path = os.path.join(FRONTEND_DIR, "src", "shared", "tag-registry.ts")
 
-    declared: Dict[str, Any] = {}
+    declared: dict[str, Any] = {}
     if catalog_path:
         try:
             with open(catalog_path, encoding="utf-8") as f:
@@ -5097,7 +5097,7 @@ async def api_figma_elements():
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"The catalogue could not be read: {e}")
 
-    mapped: Dict[str, Dict[str, Any]] = {}
+    mapped: dict[str, dict[str, Any]] = {}
     try:
         with open(map_path, encoding="utf-8") as f:
             for entry in json.load(f).get("components", []):
@@ -5113,7 +5113,7 @@ async def api_figma_elements():
     except Exception:
         pass
 
-    elements: Dict[str, Dict[str, Any]] = {}
+    elements: dict[str, dict[str, Any]] = {}
     try:
         with open(manifest_path, encoding="utf-8") as f:
             manifest = json.load(f)
@@ -5200,7 +5200,7 @@ async def api_figma_find(q: str = Query(..., min_length=1), fileKey: Optional[st
     the design it already has.
     """
     needle = q.strip().lower()
-    candidates: List[Dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     seen: set = set()
 
     # 1. What we already know, locally and instantly: the Figma map names every node a
@@ -5425,7 +5425,7 @@ async def api_figma_activity(
     if rows is not None:
         return {"entries": rows, "source": "database", "total": len(rows), "audit": audit}
 
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     try:
         with open(INGEST_LOG_PATH, encoding="utf-8") as f:
             for line in f:
@@ -5453,7 +5453,7 @@ async def api_figma_activity(
     return {"entries": entries[:limit], "source": "file", "total": len(entries), "audit": audit}
 
 
-def _activity_timestamp(record: Dict[str, Any]) -> Optional[datetime]:
+def _activity_timestamp(record: dict[str, Any]) -> Optional[datetime]:
     """A record's own timestamp, or None when it has none that can be read.
 
     Tolerant on purpose: this line was written by whichever version of this application was
@@ -5523,7 +5523,7 @@ async def api_figma_activity_purge(request: PurgeRequest):
         summarized["tableError"] = "the table could not be reached"
     summarized["removedFromTable"] = removed_rows
 
-    kept: List[str] = []
+    kept: list[str] = []
     dropped = 0
     try:
         with open(INGEST_LOG_PATH, encoding="utf-8") as f:
@@ -5615,7 +5615,7 @@ async def api_figma_ingest_code(job_id: str, tag: str):
 
 class CommitRequest(BaseModel):
     jobId: str
-    tags: Optional[List[str]] = None  # default: every draft the job produced
+    tags: Optional[list[str]] = None  # default: every draft the job produced
     addToCatalogue: bool = True  # also map, allowlist and declare it
                               # (False writes the file only)
     # THE DESIGNER'S ANSWER to a name collision: this design has a layer whose NAME the design
@@ -5827,7 +5827,7 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
 
     os.makedirs(FRONTEND_COMPONENTS_DIR, exist_ok=True)
     written = []
-    replaced: Dict[str, Any] = {}
+    replaced: dict[str, Any] = {}
     for tag in tags:
         if not _SAFE_TAG_RE.match(tag):
             raise HTTPException(status_code=400, detail=f"Refusing to write an unexpected tag: {tag!r}")
@@ -5852,8 +5852,8 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     # been superseded, and it is deleted rather than left beside the real one.
     _drop_preview(request.jobId)
 
-    registration: Dict[str, Any] = {}
-    catalog_check: Dict[str, Any] = {}
+    registration: dict[str, Any] = {}
+    catalog_check: dict[str, Any] = {}
     if request.addToCatalogue and meta:
         target_tag = meta.get("targetTag")
         if target_tag in tags:

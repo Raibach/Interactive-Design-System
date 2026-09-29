@@ -11,7 +11,7 @@ Anything exact is answered here. The models never see a file dump.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -21,7 +21,7 @@ def _conn():
     return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
-def item_id(kind: str, row: Dict[str, Any]) -> str:
+def item_id(kind: str, row: dict[str, Any]) -> str:
     """One stable id per row, so a re-seed updates instead of piling up.
 
     The register carries its own ids; the corrections are keyed by the finding they closed;
@@ -38,7 +38,7 @@ def item_id(kind: str, row: Dict[str, Any]) -> str:
     return str(row.get("id") or "?")
 
 
-def clear_kinds(kinds: List[str]) -> int:
+def clear_kinds(kinds: list[str]) -> int:
     """Drop the rows of the kinds a reseed is about to rewrite.
 
     The table MIRRORS the register/corrections files and the audit reports; a seed replaces
@@ -56,7 +56,7 @@ def clear_kinds(kinds: List[str]) -> int:
         return deleted
 
 
-def upsert_items(kind: str, rows: List[Dict[str, Any]]) -> int:
+def upsert_items(kind: str, rows: list[dict[str, Any]]) -> int:
     """Insert or update a batch of governance rows. Returns how many were written."""
     if not rows:
         return 0
@@ -113,7 +113,7 @@ def query(
     open_only: bool = False,
     package_id: Optional[str] = None,
     limit: int = 200,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Exact reads — the questions a table answers better than a similarity search."""
     where, params = [], []
     if kind:

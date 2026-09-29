@@ -2,31 +2,29 @@
 import asyncio
 import json
 import os
-import sys
 import time
-import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 import services as state
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
+    A2UI_CATALOG_ID,
+    a2ui_catalog,
     get_user_id_from_header,
+    user_is_admin,
+    validate_a2ui_components,
 )
 from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
     LAST_USAGE,
+    milvus_get_versions,
+    milvus_save_version,
+    query_llm,
 )
-from agent_rpc_handler import AgentRpcHandler
-from milvus_rest import MilvusREST
-from role_caps import get_filtered_manifest, get_user_role, get_role_capabilities
-from tools import render_tools_block, get_tool, list_tools, categories, ToolError
+from role_caps import get_filtered_manifest, get_role_capabilities, get_user_role
+from tools import ToolError, categories, get_tool, list_tools, render_tools_block
 
 router = APIRouter()
 
@@ -103,10 +101,10 @@ def _catalog_component_vocabulary() -> str:
             "the model can only invent components that will be rejected with a 503."
         )
 
-    lines: List[str] = []
+    lines: list[str] = []
     for name in sorted(components):
         spec = components[name] or {}
-        props: List[str] = []
+        props: list[str] = []
         # Properties live in the `allOf` branches (the component carries one or
         # more $refs), so walk those as well as the top level.
         for part in list(spec.get("allOf") or []) + [spec]:
@@ -131,7 +129,7 @@ def _catalog_component_vocabulary() -> str:
 
     return f"COMPONENT CATALOG — all {len(components)} (only these; anything else is a 503):\n" + "\n".join(lines)
 
-def _repair_rows(catalog: str = "prompt-composer") -> List[Dict[str, Any]]:
+def _repair_rows(catalog: str = "prompt-composer") -> list[dict[str, Any]]:
     """
     The checker's open findings, as rows that arrive READY TO DRAW.
 
@@ -163,7 +161,7 @@ def _repair_rows(catalog: str = "prompt-composer") -> List[Dict[str, Any]]:
             "level": "blocking",
         }]
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for f in audit.get("findings", []):
         if f.get("level") == "pass":
             continue
@@ -218,7 +216,7 @@ def _extract_json_payload(response_text: str) -> Any:
 # process-wide list on purpose: this server is single-process and every handler drains
 # what it collected; a warning that lands in another handler's response is still SAID,
 # which is the property that matters (nothing here is dropped silently).
-_REQUEST_WARNINGS: List[str] = []
+_REQUEST_WARNINGS: list[str] = []
 
 
 def _warn(message: str) -> None:
@@ -236,14 +234,14 @@ def _warn(message: str) -> None:
     _REQUEST_WARNINGS.append(message)
 
 
-def _drain_warnings() -> List[str]:
+def _drain_warnings() -> list[str]:
     """Hand the warnings collected during THIS handler to its response, and reset."""
     out = list(_REQUEST_WARNINGS)
     _REQUEST_WARNINGS.clear()
     return out
 
 
-def _compose_sections(sections: List[Dict[str, Any]]) -> str:
+def _compose_sections(sections: list[dict[str, Any]]) -> str:
     """Join a prompt's sections into one piece of text, in order, as written.
 
     This is what the output column holds when a Save carries no output at all:
@@ -252,7 +250,7 @@ def _compose_sections(sections: List[Dict[str, Any]]) -> str:
     already had, and the field that pushed that reply past the token budget and
     left it unparseable (see the compile call in ai_save_surface).
     """
-    parts: List[str] = []
+    parts: list[str] = []
     for s in sections or []:
         content = (s.get("content") or "").strip()
         if not content:
@@ -699,7 +697,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
             )
             raise HTTPException(
                 status_code=503, 
-                detail=f"A2UI FAILURE: AI returned invalid JSON for render-console — {type(e).__name__}: {str(e)}. Raw (first 300 chars): {response_text[:300]}"
+                detail=f"A2UI FAILURE: AI returned invalid JSON for render-console — {type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
             )
 
         elapsed_ms = int((time.time() - start_time) * 1000)
@@ -894,7 +892,7 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
                 status_code=503,
                 detail=(
                     f"A2UI FAILURE: AI returned invalid JSON for catalog-health — "
-                    f"{type(e).__name__}: {str(e)}. Raw (first 300 chars): {response_text[:300]}"
+                    f"{type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
                 ),
             )
 
@@ -1092,7 +1090,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             )
             raise HTTPException(
                 status_code=503, 
-                detail=f"A2UI FAILURE: AI returned invalid JSON for render-composer — {type(e).__name__}: {str(e)}. Raw (first 300 chars): {response_text[:300]}"
+                detail=f"A2UI FAILURE: AI returned invalid JSON for render-composer — {type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
             )
 
         # No DB update here. suggested_title lives in the in-memory data model only.
@@ -1365,7 +1363,7 @@ Output ONLY this JSON (no markdown):
             print(f"[A2UI Session] Raw response: {response_text[:500]}")
             raise HTTPException(
                 status_code=503, 
-                detail=f"A2UI FAILURE: AI returned invalid JSON - {str(e)}"
+                detail=f"A2UI FAILURE: AI returned invalid JSON - {e!s}"
             )
 
         elapsed_ms = int((time.time() - start_time) * 1000)
@@ -1648,7 +1646,7 @@ Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
             )
             raise HTTPException(
                 status_code=503,
-                detail=f"A2UI FAILURE: AI returned invalid JSON for render-run — {type(e).__name__}: {str(e)}. Raw (first 300 chars): {response_text[:300]}"
+                detail=f"A2UI FAILURE: AI returned invalid JSON for render-run — {type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
             )
 
         elapsed_ms = int((time.time() - start_time) * 1000)
@@ -2118,7 +2116,7 @@ Compiled Prompt:
                     for s in sections if s.get("content", "").strip()
                 ])
                 semantic_content = f"Title: {request.title or 'Untitled'}\nSections: {section_summary}"
-                print(f"[AI Save] Embedding section summary (no AI compilation)")
+                print("[AI Save] Embedding section summary (no AI compilation)")
 
             # Pass AI metadata to Milvus for filtering and retrieval. Off the
             # event loop for the same reason as the summary call above: this is a
@@ -2192,7 +2190,7 @@ Compiled Prompt:
         traceback.print_exc()
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save surface: {str(e)}"
+            detail=f"Failed to save surface: {e!s}"
         )
 
 
@@ -2318,7 +2316,7 @@ async def api_admin_audit_logs(
         conn.close()
         return {"logs": logs, "count": len(logs)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading audit logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error loading audit logs: {e!s}")
 
 
 # ============================================

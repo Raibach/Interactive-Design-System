@@ -1,32 +1,13 @@
 """Auto-extracted route module from main.py — zero behavior change."""
-import json
-import os
-import sys
-import time
-import traceback
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 import services as state
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
     get_user_id_from_header,
 )
-from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
-)
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -67,9 +48,9 @@ async def get_projects(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error loading projects: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error loading projects: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Projects API error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error loading projects: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error loading projects: {e!s}")
 
 
 @router.get("/api/projects/{project_id}")
@@ -96,9 +77,9 @@ async def get_project(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error loading project: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error loading project: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Project API error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error loading project: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error loading project: {e!s}")
 
 
 @router.post("/api/projects")
@@ -124,9 +105,9 @@ async def create_project(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error creating project: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error creating project: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Create project error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error creating project: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating project: {e!s}")
 
 
 @router.put("/api/projects/{project_id}")
@@ -161,9 +142,9 @@ async def update_project(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error updating project: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error updating project: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Update project error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error updating project: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating project: {e!s}")
 
 
 @router.delete("/api/projects/{project_id}")
@@ -190,8 +171,8 @@ async def delete_project(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error deleting project: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error deleting project: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Delete project error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error deleting project: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting project: {e!s}")
 
 

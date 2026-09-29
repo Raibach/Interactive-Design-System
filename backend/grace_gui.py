@@ -16,7 +16,7 @@ model cannot answer. No fake surfaces: there is no cache and no substitute of an
 import itertools
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -60,7 +60,7 @@ MODEL_PROVIDERS = [
 ]
 
 
-def _provider_for_mode(mode: str) -> Optional[Dict[str, Any]]:
+def _provider_for_mode(mode: str) -> Optional[dict[str, Any]]:
     """THE model this mode runs on — the only one that will ever be called.
 
     There is one entry in MODEL_PROVIDERS, so this returns it for every mode, and the name
@@ -232,7 +232,7 @@ came from the design.
 # provider's own response.usage. It lives here rather than as a second return
 # value because query_llm returns a string and every existing caller expects
 # one. Read it immediately after the call; the next call overwrites it.
-LAST_USAGE: Dict[str, Any] = {}
+LAST_USAGE: dict[str, Any] = {}
 
 # Every query_llm() call gets a monotonically increasing id so the client can
 # tell one measured cost from the next. Without it, a surface that gets applied
@@ -249,7 +249,7 @@ def query_llm(
     memory_context: str = "",
     temperature: float = 0.0,
     self_reflection: bool = False,
-    editorial: Optional[Dict[str, Any]] = None,
+    editorial: Optional[dict[str, Any]] = None,
     mode: str = "writer",
     prompt_id: str = "unknown",
     model: Optional[str] = None,
@@ -879,16 +879,17 @@ def _process_backend_tags(response_text: str, workspace_context: str = "", promp
 def milvus_save_version(
     prompt_id: str,
     content: str,
-    ai_metadata: Optional[Dict[str, Any]] = None,
+    ai_metadata: Optional[dict[str, Any]] = None,
 ) -> dict:
     """Save a workspace snapshot to prompt_versions via Zilliz Cloud.
 
     Returns {version_number, saved_at, prompt_id} or raises RuntimeError.
     """
-    from milvus_client import get_milvus_client
-    from memory_embedder import get_embedder
-    from datetime import datetime
     import json as json_module
+    from datetime import datetime
+
+    from memory_embedder import get_embedder
+    from milvus_client import get_milvus_client
 
     client = get_milvus_client()
     if not client or not client.client:
@@ -961,7 +962,7 @@ Please provide a summary of relevant news articles."""
     return query_llm(context="You are a news research assistant.", question=prompt, reasoning=reasoning)
 
 
-def summarize_pdfs(files: List[Any], reasoning: bool = False) -> str:
+def summarize_pdfs(files: list[Any], reasoning: bool = False) -> str:
     """Summarize PDFs using the LLM."""
     return "PDF summarization requires actual PDF processing. This feature will be implemented when PDF files are provided."
 
@@ -971,7 +972,7 @@ def retrieve_memory_context(query: str) -> str:
     return ""
 
 
-def evaluate_source(url: str, title: str = "", content: str = "") -> Dict[str, Any]:
+def evaluate_source(url: str, title: str = "", content: str = "") -> dict[str, Any]:
     """Evaluate a source using the LLM."""
     evaluation_prompt = (
         f"Evaluate the credibility and relevance of this source:\n\n"
@@ -996,4 +997,3 @@ def evaluate_source(url: str, title: str = "", content: str = "") -> Dict[str, A
 
 def load_logs_to_vectorstore() -> None:
     """Placeholder — called at startup from main.py."""
-    pass

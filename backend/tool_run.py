@@ -45,7 +45,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 # Long enough for a slow public endpoint, short enough that a Run is not held
 # hostage by one. Every tool here answers in under a second in practice.
@@ -110,16 +110,16 @@ def _stamp(value: Any) -> str:
 #: 2026-09-23: "insurance industry news from the past 24 hours" came back with a story
 #: about marijuana and one from July. The window is taken out of the words and said as
 #: the operator, which is the same question in the language the service speaks.
-TIME_WINDOWS: Tuple[Tuple[Any, str], ...] = (
-    (re.compile(r"\b(?:past|last|previous)\s+24\s*(?:hours?|hrs?)\b", re.I), "1d"),
-    (re.compile(r"\b(?:past|last|previous)\s+(?:1|one)\s+day\b", re.I), "1d"),
-    (re.compile(r"\b(?:today|today's|this\s+morning|right\s+now)\b", re.I), "1d"),
-    (re.compile(r"\b(?:past|last|previous)\s+(?:7|seven)\s+days?\b", re.I), "7d"),
-    (re.compile(r"\b(?:past|last|previous)\s+week\b", re.I), "7d"),
-    (re.compile(r"\bthis\s+week\b", re.I), "7d"),
-    (re.compile(r"\b(?:past|last|previous)\s+(?:30|thirty)\s+days?\b", re.I), "30d"),
-    (re.compile(r"\b(?:past|last|previous)\s+month\b", re.I), "30d"),
-    (re.compile(r"\bthis\s+month\b", re.I), "30d"),
+TIME_WINDOWS: tuple[tuple[Any, str], ...] = (
+    (re.compile(r"\b(?:past|last|previous)\s+24\s*(?:hours?|hrs?)\b", re.IGNORECASE), "1d"),
+    (re.compile(r"\b(?:past|last|previous)\s+(?:1|one)\s+day\b", re.IGNORECASE), "1d"),
+    (re.compile(r"\b(?:today|today's|this\s+morning|right\s+now)\b", re.IGNORECASE), "1d"),
+    (re.compile(r"\b(?:past|last|previous)\s+(?:7|seven)\s+days?\b", re.IGNORECASE), "7d"),
+    (re.compile(r"\b(?:past|last|previous)\s+week\b", re.IGNORECASE), "7d"),
+    (re.compile(r"\bthis\s+week\b", re.IGNORECASE), "7d"),
+    (re.compile(r"\b(?:past|last|previous)\s+(?:30|thirty)\s+days?\b", re.IGNORECASE), "30d"),
+    (re.compile(r"\b(?:past|last|previous)\s+month\b", re.IGNORECASE), "30d"),
+    (re.compile(r"\bthis\s+month\b", re.IGNORECASE), "30d"),
 )
 
 #: Words that describe the asking rather than the subject. A prompt says "news about
@@ -127,7 +127,7 @@ TIME_WINDOWS: Tuple[Tuple[Any, str], ...] = (
 SEARCH_FILLER = re.compile(
     r"\b(?:news|headlines|stories|articles|look\s+up|search(?:\s+for)?|find|get|"
     r"bring\s+back|report\s+on|the|a|an|me|please)\b",
-    re.I,
+    re.IGNORECASE,
 )
 
 #: A preposition with nothing after it — what is left when a window is taken out of a
@@ -138,7 +138,7 @@ SEARCH_FILLER = re.compile(
 DANGLING = re.compile(
     r"(?:^|\s)(?:from|in|on|for|of|during|within|since|at|to|into|over|about|regarding)"
     r"(?=\s|$)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -160,7 +160,7 @@ def _strip_dangling(terms: str) -> str:
     return out
 
 
-def _news_query(question: str) -> Tuple[str, str]:
+def _news_query(question: str) -> tuple[str, str]:
     """The person's words as the service wants them, and the window if one was asked for.
 
     The subject words all survive; only the ones describing the ASKING are dropped. A
@@ -211,7 +211,7 @@ def _clean(text: Any) -> str:
 def _first(pattern: str, text: str) -> str:
     """The first group of the first match, or empty. A feed field that is absent is
     absent — not an error worth losing the other four fields over."""
-    m = re.search(pattern, text, re.S)
+    m = re.search(pattern, text, re.DOTALL)
     return m.group(1) if m else ""
 
 
@@ -257,11 +257,11 @@ def search_the_internet(query: str) -> str:
             print(f"ℹ️  [tool_run] nothing in the last {when} for {terms!r} — widened the window")
             when = ""
 
-    items = re.findall(r"<item>(.*?)</item>", raw, re.S)
+    items = re.findall(r"<item>(.*?)</item>", raw, re.DOTALL)
     if not items:
         return f'GOOGLE NEWS — nothing found for "{question}".'
 
-    rows: List[Tuple[str, str, str, str]] = []
+    rows: list[tuple[str, str, str, str]] = []
     for item in items:
         rows.append((
             _clean(_first(r"<title>(.*?)</title>", item)),
@@ -367,7 +367,7 @@ def research_a_topic(query: str) -> str:
     subject = (query or "").strip()
     if not subject:
         raise ToolRunError("no subject was given")
-    parts: List[str] = []
+    parts: list[str] = []
     for label, fn in (("BACKGROUND", read_a_wiki), ("CURRENT", search_the_internet)):
         try:
             parts.append(fn(subject))
@@ -458,7 +458,7 @@ RUNNERS = {
 
 def run_tool(name: str, query: str) -> str:
     """One registered tool, by the runner its row names. Raises with a reason."""
-    from tools import get_tool, ToolError
+    from tools import ToolError, get_tool
 
     try:
         row = get_tool(name)
@@ -485,7 +485,7 @@ def run_tool(name: str, query: str) -> str:
 TOOL_TOKEN = re.compile(r"\{\{tool:([A-Za-z0-9._-]+)\}\}")
 
 
-def named_tools(text: str) -> List[Tuple[str, str]]:
+def named_tools(text: str) -> list[tuple[str, str]]:
     """Every tool a prompt names, with the words that follow its token.
 
     ONE TOKEN, ONE QUESTION, and the question runs to the next token or the end of
@@ -495,7 +495,7 @@ def named_tools(text: str) -> List[Tuple[str, str]]:
     what it does with them is the runner's business (see `search_the_internet`,
     which uses the whole thing as the query).
     """
-    found: List[Tuple[str, str]] = []
+    found: list[tuple[str, str]] = []
     matches = list(TOOL_TOKEN.finditer(text or ""))
     for i, m in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
@@ -518,7 +518,7 @@ def _query_for(name: str, body: str) -> str:
     return lines[-1]
 
 
-def run_named_tools(pairs: List[Tuple[str, str]]) -> Tuple[List[str], List[str]]:
+def run_named_tools(pairs: list[tuple[str, str]]) -> tuple[list[str], list[str]]:
     """Execute every tool a prompt names. Returns (blocks, warnings).
 
     BOTH ARE ALWAYS RETURNED, in the shape routes/teacher.py already folds into a
@@ -526,8 +526,8 @@ def run_named_tools(pairs: List[Tuple[str, str]]) -> Tuple[List[str], List[str]]
     the prompt as something the model must not paper over rather than as an
     absence nobody mentions.
     """
-    blocks: List[str] = []
-    warnings: List[str] = []
+    blocks: list[str] = []
+    warnings: list[str] = []
     for name, body in pairs:
         started = time.time()
         try:

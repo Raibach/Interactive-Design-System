@@ -16,8 +16,7 @@ in its system prompt — role filtering happens before the LLM is called.
 """
 
 import json
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Departmental roles — must match frontend/src/shared/role-caps.ts
@@ -30,7 +29,7 @@ VALID_DEPARTMENTAL_ROLES = {"governance", "ux-design", "research", "product", "b
 # ═══════════════════════════════════════════════════════════════════════════════
 # If you change this dict, also change ROLE_CAPABILITIES in role-caps.ts.
 
-ROLE_CAPABILITIES: Dict[str, Dict[str, Any]] = {
+ROLE_CAPABILITIES: dict[str, dict[str, Any]] = {
     "governance": {
         "label": "Governance",
         "persona": "Corporate director, compliance officer, department head",
@@ -182,22 +181,22 @@ def get_user_role(user_id: str) -> str:
 # Capability accessors
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_role_capabilities(role: str) -> Dict[str, Any]:
+def get_role_capabilities(role: str) -> dict[str, Any]:
     """Get the full capability set for a departmental role. Falls back to 'basic'."""
     return ROLE_CAPABILITIES.get(role, ROLE_CAPABILITIES["basic"])
 
 
-def get_allowed_tags(role: str) -> List[str]:
+def get_allowed_tags(role: str) -> list[str]:
     """Get the list of AI tags a role is permitted to emit."""
     return get_role_capabilities(role).get("allowed_tags", [])
 
 
-def get_visible_tabs(role: str) -> List[str]:
+def get_visible_tabs(role: str) -> list[str]:
     """Get the list of right-column tabs visible to a role."""
     return get_role_capabilities(role).get("tabs", ["chat"])
 
 
-def get_governance_tables(role: str) -> List[str]:
+def get_governance_tables(role: str) -> list[str]:
     """Get the list of governance tables a role can query."""
     return get_role_capabilities(role).get("governance_tables", [])
 
@@ -221,7 +220,7 @@ def role_sees_decision_trace(role: str) -> bool:
 # Manifest filtering
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_filtered_manifest(user_id: str, full_manifest: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def get_filtered_manifest(user_id: str, full_manifest: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """
     Return the AI playground manifest filtered by the user's departmental role.
 

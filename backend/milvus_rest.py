@@ -7,7 +7,9 @@ the real exception (HTTP error, auth failure, timeout) so problems surface
 immediately instead of degrading silently. The /api/health endpoint catches
 and reports the real message; everywhere else, exceptions propagate.
 """
-import urllib.request, json, os
+import json
+import os
+import urllib.request
 
 
 class MilvusREST:

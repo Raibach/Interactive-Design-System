@@ -15,7 +15,7 @@ through the same client the rest of the app uses.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 COLLECTION = "governance"
 
@@ -44,7 +44,7 @@ def ensure_collection() -> None:
         print(f"[governance_vector] created collection: {COLLECTION}")
 
 
-def _row_text(kind: str, row: Dict[str, Any]) -> str:
+def _row_text(kind: str, row: dict[str, Any]) -> str:
     """One row, as the sentence that gets embedded — the same words a reader sees."""
     if kind == "register":
         return f"{row.get('id', '')} [{row.get('status', '')}/{row.get('owner', '')}] {row.get('what', '')}"
@@ -57,7 +57,7 @@ def _row_text(kind: str, row: Dict[str, Any]) -> str:
     return str(row.get("text", ""))
 
 
-def index_rows(kind: str, rows: List[Dict[str, Any]]) -> int:
+def index_rows(kind: str, rows: list[dict[str, Any]]) -> int:
     """Embed and store a batch of governance rows. Returns how many landed.
 
     Every row carries its own identity in metadata, so a search hit can be cited
@@ -97,7 +97,7 @@ def index_rows(kind: str, rows: List[Dict[str, Any]]) -> int:
     return len(payload)
 
 
-def search(query: str, k: int = 8, kind: Optional[str] = None) -> List[Dict[str, Any]]:
+def search(query: str, k: int = 8, kind: Optional[str] = None) -> list[dict[str, Any]]:
     """The closest governance rows to `query`, optionally one kind only."""
     client = _client()
     if COLLECTION not in client.client.list_collections():
@@ -115,7 +115,7 @@ def search(query: str, k: int = 8, kind: Optional[str] = None) -> List[Dict[str,
             limit=k,
             output_fields=["kind", "ref_id", "status", "owner", "check", "level", "component", "file", "at", "text"],
         )
-    except Exception as exc:  # noqa: BLE001 — a store that cannot answer says so
+    except Exception as exc:
         print(f"[governance_vector] search failed: {type(exc).__name__}: {exc}")
         return []
     out = []
@@ -133,5 +133,5 @@ def count(kind: Optional[str] = None) -> int:
     try:
         result = client.client.query(collection_name=COLLECTION, filter=expr, output_fields=["count(*)"])
         return int(result[0].get("count(*)", 0)) if result else 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         return 0

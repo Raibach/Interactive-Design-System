@@ -3,16 +3,15 @@ Projects API - PostgreSQL service for project management
 Handles user projects with offline support
 """
 
-import os
-import uuid
-import json
 import time
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2 import OperationalError, InterfaceError
 from datetime import datetime
-from typing import Dict, List, Optional
-from urllib.parse import urlparse, parse_qs
+from typing import Optional
+from urllib.parse import parse_qs, urlparse
+
+import psycopg2
+from psycopg2 import InterfaceError, OperationalError
+from psycopg2.extras import RealDictCursor
+
 from database_pool import DatabasePoolManager
 
 
@@ -139,7 +138,7 @@ class ProjectsAPI:
             elif 'authentication failed' in error_msg or 'password' in error_msg:
                 raise ConnectionError("Database authentication failed. Please check your connection settings.") from e
             else:
-                raise ConnectionError(f"Database connection error: {str(e)}") from e
+                raise ConnectionError(f"Database connection error: {e!s}") from e
         except Exception as e:
             # Check for port-related errors
             error_msg = str(e).lower()
@@ -172,11 +171,11 @@ class ProjectsAPI:
                     )
                 except Exception as retry_error:
                     print(f"❌ Retry with clean URL also failed: {retry_error}")
-                    raise ConnectionError(f"Database connection error: {str(e)}") from e
+                    raise ConnectionError(f"Database connection error: {e!s}") from e
             
             # Other errors
             print(f"Database connection error: {e}")
-            raise ConnectionError(f"Database error: {str(e)}") from e
+            raise ConnectionError(f"Database error: {e!s}") from e
 
     def set_user_context(self, cursor, user_id: str):
         """Set PostgreSQL RLS context for multi-tenancy"""
@@ -194,7 +193,7 @@ class ProjectsAPI:
         self,
         user_id: str,
         include_archived: bool = False
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Get all projects for a user"""
         start_time = time.time()
         conn = None
@@ -266,7 +265,7 @@ class ProjectsAPI:
             if conn:
                 conn.close()
 
-    def get_project(self, project_id: str, user_id: str) -> Optional[Dict]:
+    def get_project(self, project_id: str, user_id: str) -> Optional[dict]:
         """Get a specific project by ID"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -332,7 +331,7 @@ class ProjectsAPI:
                 print(f"🚨 [ProjectsAPI] Attempting to create '{name}'")
                 print(f"🚨 [ProjectsAPI] User ID: {user_id}")
                 print(f"🚨 [ProjectsAPI] Timestamp: {datetime.now().isoformat()}")
-                print(f"🚨 [ProjectsAPI] Call stack:")
+                print("🚨 [ProjectsAPI] Call stack:")
                 for line in traceback.format_stack():
                     print(f"   {line.strip()}")
                 print("=" * 80)
@@ -358,7 +357,7 @@ class ProjectsAPI:
                     
                     if len(existing_projects) > 1:
                         print(f"🚨🚨🚨 WARNING: {len(existing_projects)} active '{name}' projects exist!")
-                        print(f"🚨 This should have been prevented! All IDs:")
+                        print("🚨 This should have been prevented! All IDs:")
                         for proj in existing_projects:
                             print(f"   - {proj['id']} (created: {proj['created_at']})")
                     
@@ -366,7 +365,7 @@ class ProjectsAPI:
                     return existing_id
                 else:
                     print(f"⚠️ [ProjectsAPI] No existing '{name}' found - will create new one")
-                    print(f"⚠️ [ProjectsAPI] Unique constraint should prevent duplicates at database level")
+                    print("⚠️ [ProjectsAPI] Unique constraint should prevent duplicates at database level")
                     print("=" * 80)
 
             print("📝 [ProjectsAPI] Executing INSERT INTO projects...")
@@ -376,10 +375,10 @@ class ProjectsAPI:
                 import traceback
                 print("=" * 80)
                 print("🚨🚨🚨 CREATING NEW 'Archived Unassigned Chats' PROJECT 🚨🚨🚨")
-                print(f"🚨 [ProjectsAPI] This should NOT happen if duplicate check worked!")
+                print("🚨 [ProjectsAPI] This should NOT happen if duplicate check worked!")
                 print(f"🚨 [ProjectsAPI] User ID: {user_id}")
                 print(f"🚨 [ProjectsAPI] Timestamp: {datetime.now().isoformat()}")
-                print(f"🚨 [ProjectsAPI] Call stack:")
+                print("🚨 [ProjectsAPI] Call stack:")
                 for line in traceback.format_stack():
                     print(f"   {line.strip()}")
                 print("=" * 80)
@@ -406,15 +405,15 @@ class ProjectsAPI:
                                          any(constraint in error_msg for constraint in constraint_names))
                 
                 if is_constraint_violation:
-                    print(f"🚨🚨🚨 UNIQUE CONSTRAINT VIOLATION 🚨🚨🚨")
+                    print("🚨🚨🚨 UNIQUE CONSTRAINT VIOLATION 🚨🚨🚨")
                     print(f"🚨 [ProjectsAPI] Duplicate '{name}' prevented by database constraint!")
-                    print(f"🚨 [ProjectsAPI] This means another process created it between our check and insert")
+                    print("🚨 [ProjectsAPI] This means another process created it between our check and insert")
                     
                     # CRITICAL: Rollback the transaction first - PostgreSQL aborts transactions on constraint violations
                     # We must rollback before we can execute any more queries
-                    print(f"📝 [ProjectsAPI] Rolling back transaction due to constraint violation...")
+                    print("📝 [ProjectsAPI] Rolling back transaction due to constraint violation...")
                     conn.rollback()
-                    print(f"✅ [ProjectsAPI] Transaction rolled back, re-checking for existing project...")
+                    print("✅ [ProjectsAPI] Transaction rolled back, re-checking for existing project...")
                     
                     # Re-check for existing project (race condition occurred) - this is now a fresh transaction
                     cursor.execute("""
@@ -429,33 +428,33 @@ class ProjectsAPI:
                     if existing:
                         existing_id = str(existing['id'])
                         print(f"✅ [ProjectsAPI] Found existing project created by another process: {existing_id}")
-                        print(f"✅ [ProjectsAPI] Returning existing project instead")
+                        print("✅ [ProjectsAPI] Returning existing project instead")
                         conn.commit()  # Commit the read transaction
                         return existing_id
                     else:
                         # This shouldn't happen, but handle it
-                        print(f"❌ [ProjectsAPI] Constraint violation but no existing project found - this is unexpected")
+                        print("❌ [ProjectsAPI] Constraint violation but no existing project found - this is unexpected")
                         conn.rollback()  # Rollback the read transaction
                         raise insert_error
                 else:
                     # Some other error - rollback and re-raise it
-                    print(f"📝 [ProjectsAPI] Non-constraint error, rolling back transaction...")
+                    print("📝 [ProjectsAPI] Non-constraint error, rolling back transaction...")
                     conn.rollback()
                     raise insert_error
             
             print("📝 [ProjectsAPI] Committing transaction...")
             conn.commit()
             print(f"✅ [ProjectsAPI] Project created successfully: {project_id}")
-            print(f"📝 [ProjectsAPI] Project structure:")
+            print("📝 [ProjectsAPI] Project structure:")
             print(f"   - User ID: {user_id[:8]}... (user-scoped)")
             print(f"   - Project ID: {project_id}")
-            print(f"   - Contains: chats, attachments, memories")
-            print(f"   - Top-level container for Milvus collections")
+            print("   - Contains: chats, attachments, memories")
+            print("   - Top-level container for Milvus collections")
             print("=" * 60)
             
             return project_id
         except Exception as e:
-            print(f"❌ [ProjectsAPI] Error creating project: {str(e)}")
+            print(f"❌ [ProjectsAPI] Error creating project: {e!s}")
             import traceback
             print(f"❌ [ProjectsAPI] Traceback:\n{traceback.format_exc()}")
             if conn:
@@ -527,7 +526,7 @@ class ProjectsAPI:
         print(f"🗑️ [ProjectsAPI] User ID: {user_id}")
         print(f"🗑️ [ProjectsAPI] Project ID: {project_id}")
         print(f"🗑️ [ProjectsAPI] Timestamp: {datetime.now().isoformat()}")
-        print(f"🗑️ [ProjectsAPI] Call stack:")
+        print("🗑️ [ProjectsAPI] Call stack:")
         for line in traceback.format_stack():
             print(f"   {line.strip()}")
         
@@ -570,7 +569,7 @@ class ProjectsAPI:
                 # NOTE: "Default Project" can be deleted - it's not a required system project
                 # Only "Archived Unassigned Chats" is protected
             else:
-                print(f"⚠️ [ProjectsAPI] Project not found or access denied")
+                print("⚠️ [ProjectsAPI] Project not found or access denied")
             
             cursor.close()
             conn.close()

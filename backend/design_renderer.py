@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import html as _html
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 # The spec keys this renderer knows how to place. Anything outside this set that turns up in a
 # spec is a key the two halves of the contract disagree about, and the ingest REFUSES on it — a
@@ -87,13 +87,13 @@ _TEXT_DECORATION = {
 }
 
 
-def unrendered_keys(spec: Dict[str, Any]) -> List[str]:
+def unrendered_keys(spec: dict[str, Any]) -> list[str]:
     """Spec keys this renderer does not know how to place — reported, never dropped in silence."""
-    found: List[str] = []
+    found: list[str] = []
     seen: set = set()
 
-    def walk(node: Dict[str, Any]) -> None:
-        for key in node.keys():
+    def walk(node: dict[str, Any]) -> None:
+        for key in node:
             if key not in RENDERED_KEYS and key not in seen:
                 seen.add(key)
                 found.append(key)
@@ -104,12 +104,12 @@ def unrendered_keys(spec: Dict[str, Any]) -> List[str]:
     return sorted(found)
 
 
-def accepted_unrendered(spec: Dict[str, Any]) -> List[str]:
+def accepted_unrendered(spec: dict[str, Any]) -> list[str]:
     """Measured keys that are known and deliberately not emitted — named, with the reason."""
-    out: Dict[str, str] = {}
+    out: dict[str, str] = {}
 
-    def walk(node: Dict[str, Any]) -> None:
-        for key in node.keys():
+    def walk(node: dict[str, Any]) -> None:
+        for key in node:
             if key in ACCEPTED_UNRENDERED and key not in out:
                 out[key] = ACCEPTED_UNRENDERED[key]
         for child in node.get("children") or []:
@@ -155,7 +155,7 @@ def _css_string_in_attr(value: str) -> str:
     return "'" + str(value).replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-def _text_html(node: Dict[str, Any]) -> str:
+def _text_html(node: dict[str, Any]) -> str:
     """A measured text layer, as markup: the runs styled as measured, the words escaped.
 
     THE RUNS ARE THE POINT. A layer styled in ranges — a bold title over a grey subtitle in the
@@ -173,7 +173,7 @@ def _text_html(node: Dict[str, Any]) -> str:
     if not runs:
         return _html.escape(text).replace("\n", "<br/>")
 
-    out: List[str] = []
+    out: list[str] = []
     cursor = 0
     for run in sorted(runs, key=lambda r: r["start"]):
         start, end = int(run["start"]), int(run["end"])
@@ -208,7 +208,7 @@ def _text_html(node: Dict[str, Any]) -> str:
     return "".join(out)
 
 
-def _declarations(node: Dict[str, Any], place: Optional[Dict[str, float]] = None) -> List[str]:
+def _declarations(node: dict[str, Any], place: Optional[dict[str, float]] = None) -> list[str]:
     """The CSS this layer's own measurements produce, in a fixed order.
 
     Fixed order matters: the same spec must produce the same bytes, or a diff between two runs of
@@ -218,7 +218,7 @@ def _declarations(node: Dict[str, Any], place: Optional[Dict[str, float]] = None
     see `_child_offset`. When it is given, this layer is positioned at that offset and nothing
     else decides where it goes.
     """
-    out: List[str] = []
+    out: list[str] = []
     layout = node.get("layout") or {}
     size = node.get("size") or []
 
@@ -287,7 +287,7 @@ def _declarations(node: Dict[str, Any], place: Optional[Dict[str, float]] = None
         if weights:
             parts = " ".join(_px(weights.get(side, weight or 1)) for side in ("top", "right", "bottom", "left"))
             out.append(f"border-width: {parts}")
-            out.append(f"border-style: solid")
+            out.append("border-style: solid")
             out.append(f"border-color: {stroke['color']}")
         elif node.get("strokeAlign") == "OUTSIDE":
             # A stroke drawn OUTSIDE the box is not a border: a border lives inside the box and
@@ -392,7 +392,7 @@ def _px(value: Any) -> str:
     return f"{round(number, 4)}px".replace(".0px", "px")
 
 
-def _shadow(effect: Dict[str, Any]) -> Optional[str]:
+def _shadow(effect: dict[str, Any]) -> Optional[str]:
     """One measured effect as CSS. Reads the spec's own effect shape; invents nothing.
 
     `DROP_SHADOW` and `INNER_SHADOW` are box-shadows, with the spread Figma states — a spread was
@@ -414,7 +414,7 @@ def _shadow(effect: Dict[str, Any]) -> Optional[str]:
     return ("inset " if kind == "INNER_SHADOW" else "") + " ".join(parts)
 
 
-def _child_offset(node: Dict[str, Any], parent: Optional[Dict[str, Any]]) -> Optional[Dict[str, float]]:
+def _child_offset(node: dict[str, Any], parent: Optional[dict[str, Any]]) -> Optional[dict[str, float]]:
     """Where a child sits inside a parent that does not lay it out — the measured offset.
 
     ONE RULE, ONE PLACE. This existed twice and the two copies disagreed: the vector's copy
@@ -437,7 +437,7 @@ def _child_offset(node: Dict[str, Any], parent: Optional[Dict[str, Any]]) -> Opt
         "top": round(pos[1] - parent_pos[1] - inset, 2),
     }
 
-def render_spec(spec: Dict[str, Any], tag: str, catalog: Optional[Dict[str, str]] = None) -> str:
+def render_spec(spec: dict[str, Any], tag: str, catalog: Optional[dict[str, str]] = None) -> str:
     """The Lit component for a measured design. Pure: same spec, same source.
 
     THE CATALOGUE IS CONSULTED FIRST — `catalog` maps a component reference (the part of a node id
@@ -453,10 +453,10 @@ def render_spec(spec: Dict[str, Any], tag: str, catalog: Optional[Dict[str, str]
     layout belong to the component that already owns them.
     """
     catalog = catalog or {}
-    class_names: Dict[int, str] = {}
-    used: Dict[str, int] = {}
+    class_names: dict[int, str] = {}
+    used: dict[str, int] = {}
 
-    def assign(node: Dict[str, Any]) -> None:
+    def assign(node: dict[str, Any]) -> None:
         base = _class_name(node.get("name") or "", "layer")
         count = used.get(base, 0) + 1
         used[base] = count
@@ -466,7 +466,7 @@ def render_spec(spec: Dict[str, Any], tag: str, catalog: Optional[Dict[str, str]
 
     assign(spec)
 
-    def supplied_tag(node: Dict[str, Any]) -> Optional[str]:
+    def supplied_tag(node: dict[str, Any]) -> Optional[str]:
         """The catalogue's tag for this layer, when it is an instance of one of its components."""
         if not catalog:
             return None
@@ -488,7 +488,7 @@ def render_spec(spec: Dict[str, Any], tag: str, catalog: Optional[Dict[str, str]
     # design never mentions comes from. The chevron's arrow landed at 2.5px because a line said
     # "centre it" while the design said 4 from the top (owner, 2026-09-29: *"this is not AI right…
     # how can a Turing process invent something?"* — it cannot; a constant in this file did).
-    root_decls: List[str] = []
+    root_decls: list[str] = []
     layout = spec.get("layout") or {}
     mode = layout.get("layoutMode")
     if mode in ("HORIZONTAL", "VERTICAL"):
@@ -520,14 +520,14 @@ def render_spec(spec: Dict[str, Any], tag: str, catalog: Optional[Dict[str, str]
         root_decls.append(f"height: {_px(size[1])}")
     root_decls.append("box-sizing: border-box")
 
-    rules: List[str] = []
-    markup: List[str] = []
+    rules: list[str] = []
+    markup: list[str] = []
 
-    def emit_class(selector: str, declarations: List[str]) -> None:
+    def emit_class(selector: str, declarations: list[str]) -> None:
         body = "".join(f"      {d};\n" for d in declarations)
         rules.append(f"    {selector} {{\n{body}    }}")
 
-    def emit_node(node: Dict[str, Any], depth: int, parent: Optional[Dict[str, Any]] = None) -> str:
+    def emit_node(node: dict[str, Any], depth: int, parent: Optional[dict[str, Any]] = None) -> str:
         cls = class_names[id(node)]
         node_type = (node.get("type") or "").upper()
         kids = node.get("children") or []

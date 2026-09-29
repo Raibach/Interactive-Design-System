@@ -1,32 +1,14 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import json
-import os
-import sys
-import time
-import traceback
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 import services as state
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
     get_user_id_from_header,
 )
-from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
-)
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -51,7 +33,7 @@ class UpdateConversationRequest(BaseModel):
 class AddMessageRequest(BaseModel):
     role: str
     content: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 @router.get("/api/conversations")
@@ -100,11 +82,11 @@ async def get_conversations(
         import traceback
 
         error_detail = (
-            f"Error loading conversations: {str(e)}\n{traceback.format_exc()}"
+            f"Error loading conversations: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Conversations API error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error loading conversations: {str(e)}"
+            status_code=500, detail=f"Error loading conversations: {e!s}"
         )
 
 
@@ -132,10 +114,10 @@ async def get_conversation(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error loading conversation: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error loading conversation: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Get conversation error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error loading conversation: {str(e)}"
+            status_code=500, detail=f"Error loading conversation: {e!s}"
         )
 
 
@@ -180,11 +162,11 @@ async def create_conversation(
         import traceback
 
         error_detail = (
-            f"Error creating conversation: {str(e)}\n{traceback.format_exc()}"
+            f"Error creating conversation: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Create conversation error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error creating conversation: {str(e)}"
+            status_code=500, detail=f"Error creating conversation: {e!s}"
         )
 
 
@@ -219,7 +201,7 @@ async def update_conversation(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error saving conversation: {str(e)}"
+            status_code=500, detail=f"Error saving conversation: {e!s}"
         )
 
 
@@ -246,7 +228,7 @@ async def delete_conversation(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error deleting conversation: {str(e)}"
+            status_code=500, detail=f"Error deleting conversation: {e!s}"
         )
 
 
@@ -326,7 +308,7 @@ async def archive_conversation(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error archiving conversation: {str(e)}"
+            status_code=500, detail=f"Error archiving conversation: {e!s}"
         )
 
 
@@ -350,7 +332,7 @@ async def get_archived_conversations(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error loading archived conversations: {str(e)}"
+            status_code=500, detail=f"Error loading archived conversations: {e!s}"
         )
 
 
@@ -381,7 +363,7 @@ async def get_messages(
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error loading messages: {e!s}")
 
 
 @router.post("/api/conversations/{conversation_id}/messages")
@@ -408,7 +390,7 @@ async def add_message(
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving message: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving message: {e!s}")
 
 
 @router.delete("/api/messages/{message_id}")
@@ -433,12 +415,12 @@ async def delete_message(
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting message: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting message: {e!s}")
 
 
 class ConfirmTagRequest(BaseModel):
-    confirmed_tags: Optional[List[str]] = None
-    detected_entities: Dict[str, Any]
+    confirmed_tags: Optional[list[str]] = None
+    detected_entities: dict[str, Any]
 
 
 @router.post("/api/conversation/confirm-tag")
@@ -524,15 +506,15 @@ async def confirm_tag(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error confirming tags: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error confirming tags: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Confirm tag error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error confirming tags: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error confirming tags: {e!s}")
 
 
 @router.post("/api/conversation/track-tag-suggestion")
 async def track_tag_suggestion(
     conversation_id: str = Query(...),
-    suggested_tags: List[str] = Query(...),
+    suggested_tags: list[str] = Query(...),
     confirmed: bool = Query(False),
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ):
@@ -574,7 +556,7 @@ async def track_tag_suggestion(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error tracking tag suggestion: {str(e)}"
+            status_code=500, detail=f"Error tracking tag suggestion: {e!s}"
         )
 
 
@@ -604,7 +586,7 @@ async def get_tag_suggestion_stats(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error getting tag suggestion stats: {str(e)}"
+            status_code=500, detail=f"Error getting tag suggestion stats: {e!s}"
         )
 
 

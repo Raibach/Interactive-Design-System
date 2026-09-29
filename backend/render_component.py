@@ -21,7 +21,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 # Where a browser may be, in the order worth trying. A path that does not exist is skipped; the
 # list existing is what makes this runnable on a machine that is not this one.
@@ -64,12 +64,12 @@ def document_for(
     draws, and a helpful stylesheet here would be a thumb on the scale.
     """
     styles = ""
-    match = re.search(r"css`(.*?)`", code, re.S)
+    match = re.search(r"css`(.*?)`", code, re.DOTALL)
     if match:
         styles = match.group(1).replace(":host", f"#{tag}")
 
     markup = ""
-    match = re.search(r"return html`(.*?)`;\s*\}", code, re.S)
+    match = re.search(r"return html`(.*?)`;\s*\}", code, re.DOTALL)
     if match:
         markup = match.group(1).strip()
 
@@ -95,8 +95,8 @@ def render_component(
     width: float,
     height: float,
     scale: float = 2.0,
-    window_size: Optional[Tuple[float, float]] = None,
-) -> Dict[str, Any]:
+    window_size: Optional[tuple[float, float]] = None,
+) -> dict[str, Any]:
     """A screenshot of the component, at the measured size, as PNG bytes.
 
     `scale` matches the scale the design's own image is fetched at, because two images of different
