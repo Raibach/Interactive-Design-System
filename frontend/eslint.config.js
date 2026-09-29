@@ -37,6 +37,15 @@ export default defineConfig([
       'import/default': 'error',
       'import/named': 'off',
       'import/no-named-as-default': 'off',
+      // A Lit component tells TypeScript what its tag means by DECLARING it, and a
+      // declaration is written with a namespace:
+      //
+      //     declare module 'react' { namespace JSX { interface IntrinsicElements { … } } }
+      //
+      // That is the one shape this rule exists to permit, so `allowDeclarations` is the
+      // option for it: the 23 components that declare their tag stop being errors, and a
+      // namespace written in ordinary code still is one.
+      '@typescript-eslint/no-namespace': ['error', { allowDeclarations: true }],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': [
         'off',

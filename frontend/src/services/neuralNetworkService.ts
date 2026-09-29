@@ -116,7 +116,6 @@ export const neuralNetworkService = {
             // TypeScript options above stay camelCase; only the wire names change.
             reasoning_style: options?.reasoningStyle || 'chain_of_thought',
             include_memory: options?.includeMemory ?? true,  // Enable memory by default
-            // eslint-disable-next-line camelcase
             self_reflection: options?.selfReflection ?? false,
             project_id: options?.projectId,  // Send project ID for memory retrieval
             conversation_id: options?.conversationId,  // Send conversation ID so model can update title

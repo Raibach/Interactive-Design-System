@@ -1348,7 +1348,7 @@ export const TAG_REGISTRY = {
       'the column\'s header, not the body\'s: it is drawn in every view of the middle column',
       'the tile is inert until the menu is designed — absent behaviour, not invented behaviour',
       'RECORDED NESTING (2026-09-18): the model control is the published <model-selector-button>, instantiated from this element\'s own template, never restyled — the one place this protocol\'s flat-adjacency rule is knowingly excepted, and it is recorded rather than hidden',
-      'ASSEMBLED ON RUN (2026-09-23): the model emits this as the canvas\'s \"header\" slot (render-run), which is the point of it being its own element. It used to be written by WritingAreaIndex.setOutputColumn by hand.',
+      'ASSEMBLED ON RUN (2026-09-23): the model emits this as the canvas\'s "header" slot (render-run), which is the point of it being its own element. It used to be written by WritingAreaIndex.setOutputColumn by hand.',
     ],
   },
   'workspace-layout': {
