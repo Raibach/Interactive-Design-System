@@ -18,5 +18,5 @@ bcrypt>=4.1.0,<6.0.0
 # The local vector store (embedded milvus + in-process embeddings). Installed 2026-09-19
 # with the Zilliz retirement; weights for BAAI/bge-small-en are cached locally, so no
 # network is needed at first use.
-milvus-lite>=2.5.0
+milvus-lite>=3.2.1
 sentence-transformers>=3.0.0
