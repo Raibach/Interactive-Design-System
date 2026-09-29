@@ -95,7 +95,7 @@
     "@types/node": "^24.6.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "@types/three": "^0.176.0",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^5.1.0",
     "@vitejs/plugin-react-swc": "^4.0.0",
     "@vitest/browser": "^3.2.4",
