@@ -1,0 +1,143 @@
+{
+  "generatedAt": "2026-09-28T16:44:59.248Z",
+  "catalogs": [
+    {
+      "id": "ecommerce",
+      "catalogId": "https://raibach.net/a2ui/catalogs/ecommerce/v0_9_1/catalog.json",
+      "title": "Raibach E-Commerce Catalog",
+      "counts": {
+        "declared": 38,
+        "annotated": 34,
+        "built": 32,
+        "inManifest": 32,
+        "allowlisted": 25,
+        "mapped": 17,
+        "inTheFigmaMap": 21
+      },
+      "gate": null,
+      "groups": [
+        {
+          "title": "not in the allowlist",
+          "elements": 13,
+          "derived": true
+        },
+        {
+          "title": "console column",
+          "elements": 3,
+          "derived": true
+        },
+        {
+          "title": "left column",
+          "elements": 10,
+          "derived": true
+        },
+        {
+          "title": "middle column",
+          "elements": 5,
+          "derived": true
+        },
+        {
+          "title": "surface: both",
+          "elements": 2,
+          "derived": true
+        },
+        {
+          "title": "right column",
+          "elements": 3,
+          "derived": true
+        },
+        {
+          "title": "surface: composer",
+          "elements": 2,
+          "derived": true
+        }
+      ]
+    },
+    {
+      "id": "primitives",
+      "catalogId": "https://raibach.net/a2ui/catalogs/primitives/v0_9_1/catalog.json",
+      "title": "Raibach Primitives Catalog",
+      "counts": {
+        "declared": 7,
+        "annotated": 3,
+        "built": 7,
+        "inManifest": 7,
+        "allowlisted": 1,
+        "mapped": 1,
+        "inTheFigmaMap": 1
+      },
+      "gate": null,
+      "groups": [
+        {
+          "title": "not in the allowlist",
+          "elements": 6,
+          "derived": true
+        },
+        {
+          "title": "right column",
+          "elements": 1,
+          "derived": true
+        }
+      ]
+    },
+    {
+      "id": "prompt-composer",
+      "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
+      "title": "Raibach Prompt Composer Catalog",
+      "counts": {
+        "declared": 57,
+        "annotated": 53,
+        "built": 51,
+        "inManifest": 51,
+        "allowlisted": 44,
+        "mapped": 21,
+        "inTheFigmaMap": 27
+      },
+      "gate": {
+        "status": "partial",
+        "generatedAt": "2026-09-28T15:53:43.989Z",
+        "findings": 13,
+        "blocking": 1,
+        "fileKey": null,
+        "report": "frontend/catalog-audit/prompt-composer.json"
+      },
+      "groups": [
+        {
+          "title": "right column",
+          "elements": 11,
+          "derived": true
+        },
+        {
+          "title": "middle column",
+          "elements": 13,
+          "derived": true
+        },
+        {
+          "title": "surface: both",
+          "elements": 3,
+          "derived": true
+        },
+        {
+          "title": "not in the allowlist",
+          "elements": 13,
+          "derived": true
+        },
+        {
+          "title": "console column",
+          "elements": 3,
+          "derived": true
+        },
+        {
+          "title": "left column",
+          "elements": 12,
+          "derived": true
+        },
+        {
+          "title": "surface: composer",
+          "elements": 2,
+          "derived": true
+        }
+      ]
+    }
+  ]
+}

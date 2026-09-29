@@ -1,0 +1,15 @@
+# CODEOWNERS — Raibach/Interactive-Design-System
+
+# Frontend (React + Vite + Lit)
+/frontend/          @Raibach
+
+# Backend (FastAPI + Python)
+/backend/           @Raibach
+
+# Infrastructure
+/Dockerfile         @Raibach
+/.dockerignore      @Raibach
+/.github/           @Raibach
+
+# Default — everything else
+*                   @Raibach

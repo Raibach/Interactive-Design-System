@@ -676,235 +676,6 @@
       ],
       "unevaluatedProperties": false
     },
-    "filter-pill": {
-      "deprecated": true,
-      "x-deprecated-reason": "No element defines this tag - console toolbar filters were never built. Emitting it draws an empty box. Deprecated rather than deleted (catalogs.md: deprecate, never delete).",
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Category filter pill for the console homepage grid. Toggles visibility of cards by category.",
-          "properties": {
-            "component": {
-              "const": "filter-pill"
-            },
-            "category": {
-              "type": "string",
-              "description": "The category this pill filters for.",
-              "enum": [
-                "Design System",
-                "Learning Module",
-                "Graphics",
-                "Writing",
-                "Coding",
-                "General"
-              ]
-            },
-            "label": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Display label for the pill."
-            },
-            "active": {
-              "type": "boolean",
-              "description": "Whether this filter is currently active.",
-              "default": false
-            }
-          },
-          "required": [
-            "component",
-            "category",
-            "label"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "search-bar": {
-      "deprecated": true,
-      "x-deprecated-reason": "No element defines this tag - console search was never built. Emitting it draws an empty box.",
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Search input for filtering console cards by text query.",
-          "properties": {
-            "component": {
-              "const": "search-bar"
-            },
-            "placeholder": {
-              "type": "string",
-              "description": "Placeholder text shown when empty.",
-              "default": "Search\u2026"
-            },
-            "value": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Current search query value.",
-              "default": ""
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "prompt-section": {
-      "deprecated": true,
-      "x-deprecated-reason": "No element defines this tag. The implemented element is <prompt-section-editor> (catalog: SectionEditor / prompt-section-editor); this name predates it and nothing draws it.",
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "A section within the prompt composer (left column). Each section has a type that determines its role in the prompt architecture. Used in ResponsivePromptBuilderWithDnD for drag-and-drop prompt assembly.",
-          "properties": {
-            "component": {
-              "const": "prompt-section"
-            },
-            "type": {
-              "type": "string",
-              "description": "The architectural role of this section.",
-              "enum": [
-                "system-role",
-                "user-role",
-                "agent-role",
-                "tool-call",
-                "few-shot",
-                "constraints"
-              ]
-            },
-            "content": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "The content/text of the section."
-            },
-            "order": {
-              "type": "number",
-              "description": "Display order within the section list."
-            },
-            "state": {
-              "type": "string",
-              "enum": [
-                "idle",
-                "editing",
-                "saving",
-                "error"
-              ],
-              "default": "idle"
-            }
-          },
-          "required": [
-            "component",
-            "type",
-            "content",
-            "order"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "output-panel": {
-      "deprecated": true,
-      "x-deprecated-reason": "No element defines this tag. The implemented element is <compiled-output-viewer> (catalog: CompiledOutput / compiled-output-viewer).",
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The output panel in the middle column that displays AI-generated content. Shows compiled prompt output, evaluation results, and streaming content.",
-          "properties": {
-            "component": {
-              "const": "output-panel"
-            },
-            "content": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "The output content (Markdown supported)."
-            },
-            "status": {
-              "type": "string",
-              "enum": [
-                "empty",
-                "streaming",
-                "complete",
-                "error"
-              ],
-              "default": "empty"
-            },
-            "model": {
-              "type": "string",
-              "description": "The AI model that generated this output."
-            },
-            "tokens": {
-              "type": "number",
-              "description": "Token count for the generated output."
-            }
-          },
-          "required": [
-            "component",
-            "content"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "version-trace": {
-      "deprecated": true,
-      "x-deprecated-reason": "No element defines this tag. Versions live in the seat's own rail tab (chat-navigation-bar 'versions') and VersionManager; nothing draws a version-trace.",
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Version history trace component. Displays a timeline of prompt versions with comparison capability. Replaces the React TraceTree component.",
-          "properties": {
-            "component": {
-              "const": "version-trace"
-            },
-            "sessionId": {
-              "type": "string",
-              "format": "uuid",
-              "description": "The prompt session this trace belongs to."
-            },
-            "activeVersion": {
-              "type": "number",
-              "description": "The currently active/selected version number."
-            }
-          },
-          "required": [
-            "component",
-            "sessionId"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
     "chat-navigation-bar": {
       "type": "object",
       "x-figma-source": {
@@ -2070,6 +1841,36 @@
       "required": [
         "component"
       ]
+    },
+    "f-40001204-5752": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Lit web component <f-40001204-5752>, generated from Figma node 40001204:5752 (System_Role) and rendered from src/components/lit/f-40001204-5752.ts. Ingested, then approved into the catalogue.",
+          "properties": {
+            "component": {
+              "const": "f-40001204-5752"
+            },
+            "content": {
+              "type": "string"
+            },
+            "disabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "component"
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
     }
   },
   "$defs": {
@@ -2177,21 +1978,6 @@
           "$ref": "#/components/agent-card"
         },
         {
-          "$ref": "#/components/filter-pill"
-        },
-        {
-          "$ref": "#/components/search-bar"
-        },
-        {
-          "$ref": "#/components/prompt-section"
-        },
-        {
-          "$ref": "#/components/output-panel"
-        },
-        {
-          "$ref": "#/components/version-trace"
-        },
-        {
           "$ref": "#/components/chat-navigation-bar"
         },
         {
@@ -2234,9 +2020,6 @@
           "$ref": "#/components/user-response-bubble"
         },
         {
-          "$ref": "#/components/TraceFeed"
-        },
-        {
           "$ref": "#/components/chat-repair-actions"
         },
         {
@@ -2250,6 +2033,9 @@
         },
         {
           "$ref": "#/components/CanvasFooter"
+        },
+        {
+          "$ref": "#/components/TraceFeed"
         },
         {
           "$ref": "#/components/canvas-footer"
@@ -2268,6 +2054,9 @@
         },
         {
           "$ref": "#/components/LeftColumnHeader"
+        },
+        {
+          "$ref": "#/components/f-40001204-5752"
         }
       ],
       "discriminator": {

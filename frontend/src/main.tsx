@@ -39,9 +39,15 @@ import "@/components/lit/chat-panel";
 // the one that guarantees the tag exists whether or not the thread ever draws one.
 import "@/components/lit/user-response-bubble";
 import "@/components/lit/trace-feed";
-// The judged runs of one package, for the rail's Evals view. Same registration rule as
-// the two above: an element that is never imported is never defined, and the surface
-// would emit the name into an empty slot, silently.
+// The judged runs of one package, for the rail's Evals view. Same registration rule as the two
+// above: an element that is never imported is never defined, and the surface would emit the name
+// into an empty slot, silently.
+//
+// REMOVED ONCE, AND RESTORED — 2026-09-28. This line was deleted when <eval-feed> was removed
+// from the catalogue, and the package assembly still names EvalFeed (backend/routes/ai.py), so
+// the surface went on asking for a component nothing could draw. The component is back; the
+// prompt never changed. If the Evals view is ever retired for real, it comes out of the prompt
+// first — removing the component while the prompt names it is a 503, not a cleanup.
 import "@/components/lit/eval-feed";
 // The repair list the console's chat panel draws in its "view" slot. It used to be
 // registered as a side effect of chat-panel's own import; the panel no longer draws it,

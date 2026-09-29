@@ -87,7 +87,7 @@ import settingsButtonIcon from '@/assets/figma-settings-icon.svg';
 // icon "settings 1" #40001119:6637. It is drawn because the design draws it and it is
 // NOT wired: the node carries no annotation, so there is no event name to emit and
 // inventing one is the thing the annotation rule exists to stop. See the click handler.
-export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals' | 'executions' | 'eval' | 'states' | 'repair' | 'settings';
+export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals' | 'eval' | 'states' | 'repair' | 'settings';
 
 /** Detail payload for the 'tab-change' CustomEvent. */
 export interface TabChangeEventDetail {
@@ -253,26 +253,7 @@ const TABS: TabDef[] = [
     iconSrc: approveButtonIcon,
     labelFill: '#2793A3',
   },
-  {
-    // REUSED AND RENAMED, on the owner's instruction: the n8n-style EXECUTIONS view
-    // (a list of runs beside the flow as it ran) needs a menu item, and until the rail's
-    // taxonomy is settled this button carries it. The label is RUNS — four characters,
-    // and the word this app already uses for one execution ("a Run", "the run's
-    // answer"). The ID stays `executions` because ids are the stable key and labels are
-    // presentation. It was 'flow' for an afternoon before that.
-    id: 'executions',
-    label: 'Runs',
-    tooltip: 'Runs of this flow',
-    // A RAIL BUTTON OF OUR OWN, and there was room for it: the menu is where things
-    // get DROPPED IN. This one switches the panel to its view slot, which is the hole
-    // this view arrives through — her words on Chat, the raw trace on Trace, the runs
-    // of the flow here. Drawn rather than pulled: no Figma node exists for it yet, so
-    // it carries no nodeId instead of claiming one, and the glyph is a plain three-line
-    // list (filled shapes only, so one path can be filled the way this bar fills the
-    // rest).
-    viewBox: '0 0 24 24',
-    svgPath: 'M4 4h16v3H4zM4 10h11v3H4zM4 16h14v3H4z',
-  },
+// Removed: runs/evaluations surface is not a standalone navigation target.
   {
     // EVALUATIONS — its own thing, and NOT Trace. The owner corrected this on
     // 2026-09-18: Trace is the execution trace and stays what it is; evaluations are

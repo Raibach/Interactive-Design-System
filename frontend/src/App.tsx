@@ -7,6 +7,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import WritingAreaIndex from "@/pages/WritingAreaIndex";
 import PinGate from "@/components/PinGate";
 import CommandCenter from "@/pages/CommandCenter";
+// The catalogue inspector — the real structure of catalog.json on screen, read-only. Its own
+// route because it is a reader of the catalogue, not a surface the AI assembles: no catalog
+// entry names it, and nothing on `/` links to it except this route's own path.
+import CatalogInspector from "@/pages/CatalogInspector";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 import "./global.css";
 
@@ -89,6 +93,12 @@ function App() {
                   <Route
                     path="/debug/command-center"
                     element={<CommandCenter />}
+                  />
+                  {/* The catalogue inspector. A fixed route rather than a redirect, and
+                      additive: `/` and the debug route are untouched. */}
+                  <Route
+                    path="/catalogs"
+                    element={<CatalogInspector />}
                   />
                   {/* All other paths redirect to root - AI controls navigation */}
                   <Route path="*" element={<Navigate to="/" replace />} />

@@ -576,20 +576,6 @@ export const ModelSelectorButtonSchema = z.object({
 
 export const TAG_REGISTRY = {
   // Composer — Left Column
-  'prompt-section': {
-    tag: 'prompt-section',
-    surface: 'composer',
-    column: 'left',
-    description: 'A prompt builder section — System Role, User Role, Agent Role, Tool Call, Few Shot, Constraints, or Context.',
-    props: {
-      type: { type: 'enum', values: ['system-role', 'user-role', 'agent-role', 'tool-call', 'few-shot', 'constraints', 'context'] },
-      content: { type: 'string' },
-      order: { type: 'number' },
-      state: { type: 'enum', values: ['idle', 'editing', 'saving', 'error'], default: 'idle' },
-    },
-    events: ['section-update', 'section-remove', 'section-reorder'],
-    constraints: ['type=system-role is required before Run'],
-  },
   'prompt-container': {
     tag: 'prompt-container',
     surface: 'composer',
@@ -705,32 +691,6 @@ export const TAG_REGISTRY = {
   },
 
   // Composer — Middle Column
-  'output-panel': {
-    tag: 'output-panel',
-    surface: 'composer',
-    column: 'middle',
-    description: 'Displays compiled/streamed output from the Run pipeline.',
-    props: {
-      content: { type: 'string' },
-      status: { type: 'enum', values: ['empty', 'streaming', 'complete', 'error'], default: 'empty' },
-      model: { type: 'string', optional: true },
-      tokens: { type: 'number', optional: true },
-    },
-    events: ['copy-output'],
-    constraints: [],
-  },
-  'version-trace': {
-    tag: 'version-trace',
-    surface: 'composer',
-    column: 'middle',
-    description: 'Version timeline and audit trail for the session.',
-    props: {
-      sessionId: { type: 'string', format: 'uuid' },
-      activeVersion: { type: 'number', optional: true },
-    },
-    events: ['version-select', 'version-compare'],
-    constraints: ['sessionId must match current session'],
-  },
 
   // Composer — Right Column / Both
   // THE OUTPUT PANEL — one element drawing every block of the output area. The drawing
@@ -948,32 +908,6 @@ export const TAG_REGISTRY = {
     // dispatcher is a control a reader believes exists.
     events: ['card-open', 'card-delete'],
     constraints: ['id must be a valid session UUID'],
-  },
-  'filter-pill': {
-    tag: 'filter-pill',
-    surface: 'console',
-    column: 'console',
-    description: 'A toggleable filter pill in the console toolbar.',
-    props: {
-      category: { type: 'string' },
-      label: { type: 'string' },
-      active: { type: 'boolean', default: false },
-    },
-    events: ['filter-toggle'],
-    constraints: [],
-  },
-  'search-bar': {
-    tag: 'search-bar',
-    surface: 'console',
-    column: 'console',
-    description: 'Text search input for filtering console cards.',
-    props: {
-      placeholder: { type: 'string', default: 'Search…' },
-      value: { type: 'string', default: '' },
-      state: { type: 'enum', values: ['idle', 'searching', 'complete'], default: 'idle' },
-    },
-    events: ['search-change', 'search-submit'],
-    constraints: [],
   },
 
   // Structural — Sandbox Viewport
@@ -1433,6 +1367,17 @@ export const TAG_REGISTRY = {
     events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
     constraints: ['must contain prompt-section-editor (left), compiled-output-viewer (middle), chat-panel (right)'],
   },
+  // Ingested from Figma — System_Role (40001204:5752)
+  'f-40001204-5752': {
+    tag: 'f-40001204-5752',
+    surface: 'composer',
+    description: 'Generated from Figma node 40001204:5752 (System_Role). Implemented by <f-40001204-5752> in src/components/lit/f-40001204-5752.ts.',
+    props: {
+      content: { type: 'string', optional: true },
+      disabled: { type: 'boolean', optional: true },
+    },
+    events: [],
+  },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1479,11 +1424,8 @@ export function tierOf(tag: TagName): CatalogTier {
 /** Tags the AI is permitted to emit inside the island (composer surface) */
 export const AI_PLAYGROUND_TAGS: TagName[] = [
   // Composer — Left Column
-  'prompt-section',
   'save-button',
   // Composer — Middle Column
-  'output-panel',
-  'version-trace',
   // Lexical Editor — Lifecycle
   'load_tool',
   'close_tool',
@@ -1521,14 +1463,13 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   'prompt-section-editor',
   'compiled-output-viewer',
   'workspace-layout',
+  'f-40001204-5752',
 ];
 
 /** Tags belonging to the shell — AI must never touch these */
 export const SHELL_TAGS: TagName[] = [
   'ai-surface-sandbox',  // P5: structural viewport — React shell owns this frame
   'agent-card',
-  'filter-pill',
-  'search-bar',
 ];
 
 /** Tags shared between both surfaces */

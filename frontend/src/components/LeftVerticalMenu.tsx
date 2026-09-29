@@ -2,6 +2,7 @@ import { API_BASE } from "@/shared/apiHelper";
 import { useState, useEffect } from "react";
 import { getStoredUserId } from "@/services/authService";
 import raibachLogo from "../assets/raibach-logo.jpg";
+import { IngestModal } from "./IngestModal";
 
 interface MenuItem {
   id: string;
@@ -92,6 +93,14 @@ const UploadIcon = () => (
   </svg>
 );
 
+// Ingest / Import icon (down arrow into box)
+const IngestIcon = () => (
+  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
+    <path d="M10 4v12M4 14l6 6 6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
 // Helper to make authenticated API calls with required X-User-ID header
 // Uses the stored user ID via getStoredUserId() — same pattern as every other file
 const apiFetch = (url: string, options?: RequestInit): Promise<Response> => {
@@ -104,7 +113,14 @@ const apiFetch = (url: string, options?: RequestInit): Promise<Response> => {
     const existingHeaders = options.headers as Record<string, string>;
     Object.assign(headers, existingHeaders);
   }
-  return fetch(url, { ...options, headers });
+  // NO CACHE, ON EVERY READ. The owner's rule for this application: *"the whole application has to
+  // be honest. Caching stuff is not allowed."* The server already sends `Cache-Control: no-store`
+  // (see main.py), and this says the same thing from the request side — so a proxy, an interposed
+  // cache or the browser's own store cannot answer a read with something older than the write that
+  // preceded it. The reads this carries are exactly the ones where that matters: a component's
+  // record, a design's layers, the activity. (A2UI's own contract is not the issue — its structure
+  // is cacheable by design; the transport and the reads here are what must not be.)
+  return fetch(url, { cache: "no-store", ...options, headers });
 };
 
 export default function LeftVerticalMenu({
@@ -126,6 +142,10 @@ export default function LeftVerticalMenu({
   const [componentList, setComponentList] = useState<Array<{name:string;id:string;description?:string}>>([]);
   const [componentsLoading, setComponentsLoading] = useState(false);
   const [loadingPromptId, setLoadingPromptId] = useState<string | null>(null);
+  const [ingestModalOpen, setIngestModalOpen] = useState(false);
+  // The prompt package currently open — the ingest tool records what it adds against it.
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionTitle, setActiveSessionTitle] = useState<string | null>(null);
 
   // Detect mobile breakpoint — collapse to hamburger below 768px (2-card break)
   useEffect(() => {
@@ -143,6 +163,12 @@ export default function LeftVerticalMenu({
   );
 
   const handleItemClick = (id: string, callback?: () => void) => {
+    if (id === "ingest") {
+      setIngestModalOpen(true);
+      setIsNavOpen(false);
+      handleCollapse();
+      return;
+    }
     if (expandedItem === id) {
       setExpandedItem(null);
       setIsExpanded(false);
@@ -233,6 +259,11 @@ const LogoutIcon = () => (
       id: "components",
       icon: <ComponentIcon />,
       label: "Plugins",
+    },
+    {
+      id: "ingest",
+      icon: <IngestIcon />,
+      label: "Ingest Design",
     },
     {
       id: "upload",
@@ -409,6 +440,8 @@ const LogoutIcon = () => (
                         onClick={() => {
                           setLoadingPromptId(p.id);
                           // Only dispatch session-loaded — WritingAreaIndex handles all data fetching
+                          setActiveSessionId(p.id);
+                          setActiveSessionTitle(p.title || null);
                           window.dispatchEvent(new CustomEvent("prompt-session-loaded", {
                             detail: { sessionId: p.id }
                           }));
@@ -578,6 +611,15 @@ const LogoutIcon = () => (
           )}
         </>
       )}
+
+      {/* Ingest Modal */}
+      <IngestModal
+        open={ingestModalOpen}
+        onClose={() => setIngestModalOpen(false)}
+        apiFetch={apiFetch}
+        sessionId={activeSessionId}
+        sessionTitle={activeSessionTitle}
+      />
     </div>
   );
 }

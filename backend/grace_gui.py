@@ -143,7 +143,7 @@ LLM_TIMEOUT_ASSEMBLY = int(os.getenv(ASSEMBLY_TIMEOUT_ENV, "45"))
 # writes a word (18 reasoning tokens to answer "Say OK", measured). The first fix
 # covered `prompt_output` and left `chat` on 10s. Naming the surface set means a new
 # writing mode is safe by default, and one that IS a surface has to say so here.
-SURFACE_MODES = {"console_assembly", "surface_assembly", "catalog_health_assembly"}
+SURFACE_MODES = {"console_assembly", "surface_assembly", "catalog_health_assembly", "figma_ingest"}
 
 # The writing budget. The ENV VAR keeps its old name on purpose: an operator may
 # already have set LLM_TIMEOUT_PROMPT_OUTPUT, and renaming the variable would
@@ -270,7 +270,7 @@ def query_llm(
         return "Please provide a question to answer."
 
     # ── System prompt by mode ──────────────────────────────────────────
-    if mode in ("console_assembly", "surface_assembly"):
+    if mode in ("console_assembly", "surface_assembly", "figma_ingest"):
         system_prompt = (
             "You are a strict JSON generator for A2UI surface contracts. "
             "Output ONLY the exact JSON object described in the user message. "
@@ -291,7 +291,7 @@ def query_llm(
     # out of the JSON contract (verified live 2026-09-09: composer 503
     # KeyError 'components' with envelope-shaped response).
     messages = []
-    if mode in ("console_assembly", "surface_assembly"):
+    if mode in ("console_assembly", "surface_assembly", "figma_ingest"):
         messages.append({"role": "system", "content": system_prompt})
     elif mode == "prompt_output":
         # RUN executes the USER'S prompt. The A2UI MISSION_HEADER must NOT be
@@ -338,6 +338,12 @@ def query_llm(
     # lowering them to the measured spend would make a larger assembly fail for no gain.
     token_budgets = {
         "console_assembly": 4000,
+        # FIGMA_INEGST WRITES A WHOLE COMPONENT, NOT A SURFACE UPDATE. At 4000 the reply to a
+        # real design was cut off mid-string (measured: an 18,441-character reply to a
+        # 26,454-character prompt, refused as an unterminated string) and the work was thrown
+        # away. This is the one caller that emits source code, so it gets the room to finish;
+        # the surfaces keep their own ceilings.
+        "figma_ingest": 16000,
         "surface_assembly": 8000,
         "prompt_output": 8000,
         # A CHAT REPLY IS BOUNDED SEPARATELY AND MUCH TIGHTER. It was 8000 for the
