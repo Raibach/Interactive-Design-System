@@ -15,8 +15,30 @@ openai>=1.0.0
 # now, because no auth endpoint existed and this library was never installed.
 bcrypt>=4.1.0,<6.0.0
 
-# The local vector store (embedded milvus + in-process embeddings). Installed 2026-09-19
-# with the Zilliz retirement; weights for BAAI/bge-small-en are cached locally, so no
-# network is needed at first use.
+# The local vector store (embedded milvus). Installed 2026-09-19 with the Zilliz
+# retirement.
 milvus-lite>=2.5.0
-sentence-transformers>=3.0.0
+
+# SENTENCE-TRANSFORMERS IS NOT INSTALLED HERE, AND THAT IS THE POINT (2026-09-29).
+#
+# It pulls torch, and torch on Linux pulls the CUDA stack whether or not a GPU exists:
+# measured inside the production image, torch brought `nvidia` (3.2 GB), `torch` itself
+# (1.2 GB) and `triton` (897 MB) — about 5.5 GB of the image's 6.2 GB of site-packages,
+# in a container capped at 512 MB of memory that can never load any of it.
+#
+# Nothing in production used it. `memory_embedder.py` imports it lazily and behind a cheap
+# `importlib.util.find_spec` guard written for exactly this case — its own header says that
+# importing it "drags torch onto the API's startup path" — and the memory guard refuses to
+# load the model on this instance anyway. The models were a local-embedding experiment; the
+# system runs on a hosted model (DeepSeek) and does not embed in the container.
+#
+# Measured before removing it: a virtual environment built WITHOUT this line holds the same
+# 130 routes, imports every backend module, and fails on exactly the one module that already
+# failed before (`debug_logger`, which wants `flask`). The app is identical without it.
+#
+# A MACHINE THAT ACTUALLY EMBEDS INSTALLS IT FROM THE OTHER FILE:
+#
+#     pip install -r requirements.txt -r requirements-embeddings.txt
+#
+# That is the development machine, where the embeddings run locally and the weights are
+# cached on disk. See requirements-embeddings.txt for what it costs.
