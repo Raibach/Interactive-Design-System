@@ -1871,6 +1871,72 @@
           "unevaluatedProperties": false
         }
       ]
+    },
+    "f-40001207-3497": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Lit web component <f-40001207-3497>, generated from Figma node 40001207:3497 (catalog-component-node-raibach-ids) and rendered from src/components/lit/f-40001207-3497.ts. Ingested, then approved into the catalogue.",
+          "properties": {
+            "component": {
+              "const": "f-40001207-3497"
+            },
+            "content": {
+              "type": "string"
+            },
+            "justify": {
+              "type": "string"
+            },
+            "align": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "f-40001207-3559": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Lit web component <f-40001207-3559>, generated from Figma node 40001207:3559 (catalog-node-raibach-ids) and rendered from src/components/lit/f-40001207-3559.ts. Ingested, then approved into the catalogue.",
+          "properties": {
+            "component": {
+              "const": "f-40001207-3559"
+            },
+            "content": {
+              "type": "string"
+            },
+            "justify": {
+              "type": "string"
+            },
+            "align": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ],
+          "unevaluatedProperties": false
+        }
+      ]
     }
   },
   "$defs": {
@@ -2057,6 +2123,12 @@
         },
         {
           "$ref": "#/components/f-40001204-5752"
+        },
+        {
+          "$ref": "#/components/f-40001207-3497"
+        },
+        {
+          "$ref": "#/components/f-40001207-3559"
         }
       ],
       "discriminator": {
