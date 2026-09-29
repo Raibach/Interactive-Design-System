@@ -246,6 +246,14 @@ const COMPOSITE_MAP: Record<string, string> = {
   OutputControls: 'output-controls',  // the middle column's header row, drawn in every view of it
   CanvasFooter: 'canvas-footer',      // the canvas column's foot: the host's controls and the tone switch
   LeftColumnHeader: 'left-column-header', // the prompt's own bar — title, version, and what is known about it
+  // THE CATALOGUE NAME THE ELEMENT WAS NEVER GIVEN. `agent-card` is declared as its own tag in
+  // the allowlist, and nothing defines a tag by that name — so the entry resolved to nothing and
+  // its row read "nothing draws this" while the console drew cards all day. The element is
+  // `<agent-card-element>`, which the catalogue entry's OWN description names ("Lit web
+  // component <agent-card-element>. Console prompt card (262x251px) per Figma node
+  // 40001114:5813"), and which `A2UIConsoleCardGrid` renders. One name, one element, and the
+  // pairing was missing.
+  'agent-card': 'agent-card-element',
 };
 
 /**
@@ -263,9 +271,21 @@ const COMPOSITE_MAP: Record<string, string> = {
  * problem instead of a missing component.
  */
 export function resolveTag(name: string): string | null {
+  // 1. Explicit composites — a name that is really another element
   if (COMPOSITE_MAP[name]) return COMPOSITE_MAP[name];
+  // 2. Spec primitives — A2UI's six, which the renderer owns
   if (A2UI_PRIMITIVES[name]) return A2UI_PRIMITIVES[name];
+  // 3. Structural composites — ours, which the renderer also owns
   if (A2UI_STRUCTURAL[name]) return A2UI_STRUCTURAL[name];
+  // 4. Figma-generated components — tags starting with "f-" (e.g., f-1234-5678)
+  // These are auto-generated Lit components from Figma nodes. If the name already
+  // looks like a generated tag, check if the custom element is defined.
+  if (name.startsWith('f-')) {
+    // The name IS the tag for generated components. The customElements check
+    // in _build will verify it's actually defined.
+    return name;
+  }
+  // 5. The allowlist — names that map to a real design-system element
   const registry = TAG_REGISTRY as unknown as Record<string, { tag?: string } | undefined>;
   const entry = registry[pascalToKebab(name)];
   return entry?.tag ?? null;

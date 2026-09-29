@@ -4,6 +4,7 @@
   "description": "Registry of existing Lit components in this repository. The AI is a COMPOSER, not a BUILDER. Before generating any component, look up its figmaName here. If present, import it \u2014 do NOT regenerate. If absent, ask before building.",
   "ruleFile": ".continue/rules/design-system.md",
   "nodeIdsVerifiedFrom": "get_design_context node 40000746:94 pull (2026-09-09); chat-button re-pulled from Figma REST /v1/files/20UPR2KQMsbAxlo5NJb1se/nodes (2026-09-11) after the design edited the node \u2014 the previously recorded icon node 40001010:25766 no longer exists.",
+  "nodeIdGrammar": "A FIGMA NODE ID CARRIES TWO FACTS. `I40001206:3418;40001205:5529` is a component REFERENCE (`i40001206:3418`, the part before the semicolon \u2014 the same for every instance of that component) followed by an OCCURRENCE (`40001205:5529`, the part after it \u2014 only the LOCATION that instance sits in). Compare the whole string and a second instance of a known component reads as a brand-new node, which is how a copy was once offered an overwrite against a different component's file. So: identity = before the last semicolon (compare this), location = after it (never a reason to call two things different components). The full string is still what is stored and sent \u2014 Figma's endpoints round-trip it. `figmaNodeId` here may therefore record any one instance of a component; every other instance of it resolves to the same entry. Implemented once per side, and the two must agree: backend/routes/figma.py (`node_code_identity`, `node_location`, `node_ids_match`) and frontend/src/shared/node-id.ts (`nodeIdentity`, `nodeLocation`, `sameComponent`).",
   "provenanceConvention": "A component's optional `provenance` object marks each field `verbatim` (from the Figma annotation) or `inferred` (agent-invented \u2014 audit against the source annotation)."
  },
  "containers": {
@@ -109,19 +110,47 @@
     "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
    }
   },
-  {
-   "figmaName": "prompt-input-section",
-   "figmaNodeId": "40000746:94",
-   "litComponent": "prompt-input-section",
-   "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
-   "status": "built",
-   "provenance": {
+{
+  "figmaName": "prompt-input-section",
+  "figmaNodeId": "40000746:94",
+  "litComponent": "prompt-input-section",
+  "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
+  "status": "built",
+  "provenance": {
     "behavior": "inferred",
     "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
-   }
-  },
-  {
-   "figmaName": "prompt-section-editor",
+  }
+},
+{
+  "figmaName": "prompt-input-section-sytem-user-seat-one",
+  "figmaNodeId": "40001177:2458",
+  "litComponent": "prompt-input-section-system-role",
+  "file": "frontend/src/components/lit/prompt-input/prompt-input-section-system-role.ts",
+  "status": "built",
+  "provenance": {
+    "geometry": "verbatim",
+    "fills": "verbatim",
+    "typography": "verbatim",
+    "litComponent": "inferred",
+    "behavior": "verbatim"
+  }
+},
+{
+  "figmaName": "responsive-prompt-container",
+  "figmaNodeId": "40001177:2598",
+  "litComponent": "prompt-input-section-department-role",
+  "file": "frontend/src/components/lit/prompt-input/prompt-input-section-department-role.ts",
+  "status": "built",
+  "provenance": {
+    "geometry": "verbatim",
+    "fills": "verbatim",
+    "typography": "verbatim",
+    "litComponent": "inferred",
+    "behavior": "verbatim"
+  }
+},
+{
+  "figmaName": "prompt-section-editor",
    "figmaNodeId": null,
    "litComponent": "prompt-section-editor",
    "file": "frontend/src/components/lit/prompt-section-editor.ts",
@@ -810,6 +839,18 @@
    "gaps": [
     "THE ROWS CARRY A TIMESTAMP AND THE DRAWING HAS NONE (owner, 2026-09-24: \"can you add timestamps to the conversations when they're saved\"). v.4b draws no conversation selector in this area at all \u2014 the list's look is the older small-dropdown state=open #40001085:2414 \u2014 so there is no drawn time to copy. Each row shows the server's updated_at, the same fact the list is ordered by, in the app's one date format (shared/when.ts, the same the Evals feed shows). The design must catch up, as with the citation pill."
    ]
+  },
+{
+  "figmaName": "System_Role",
+  "figmaNodeId": "40001204:5752",
+  "litComponent": "f-40001204-5752",
+  "file": "frontend/src/components/lit/f-40001204-5752.ts",
+  "status": "built",
+  "provenance": {
+    "litComponent": "generated",
+    "behavior": "generated",
+    "generator": "figma ingest \u2014 approve step"
   }
- ]
+}
+]
 }

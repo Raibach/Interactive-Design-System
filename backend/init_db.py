@@ -781,6 +781,43 @@ COLUMN_MIGRATIONS = [
     # yet" — which is the truth about those rows until TOOL_RUNNERS_SQL says
     # otherwise, and what the review before a Run reads.
     ("tools", "runner", "VARCHAR(40)"),
+
+    # ── THE COLUMNS THAT WERE ONLY EVER IN A CREATE TABLE ───────────────────────
+    #
+    # A table that already exists does not gain columns from `CREATE TABLE IF NOT
+    # EXISTS`. The definitions above are therefore read by exactly ONE kind of
+    # database — a fresh one — and a column declared there and nowhere else exists
+    # on every new install and on no running one.
+    #
+    # MEASURED 2026-09-29, building a database from this file and comparing it with
+    # the local one, column by column: a fresh database had 16 columns the local
+    # database did not. They are the ones below. `user_memories.memory_category` is
+    # WRITTEN by the application (`grace_memory_api.py`, and read by
+    # `query_generator.py`), so that write fails on the local database and succeeds
+    # on a fresh install — the same divergence as the three views in the commit that
+    # added VIEW_DEFINITIONS, in the other direction.
+    #
+    # Types are copied from the CREATE TABLE bodies above so that a database which
+    # gained the column here and one built fresh agree on it, including defaults.
+    ("user_memories", "content_preview", "TEXT"),
+    ("user_memories", "source_id", "UUID"),
+    ("user_memories", "milvus_collection", "VARCHAR(100)"),
+    ("user_memories", "milvus_vector_id", "VARCHAR(255)"),
+    ("user_memories", "embedding_dimension", "INTEGER"),
+    ("user_memories", "memory_category", "VARCHAR(100)"),
+    ("user_memories", "memory_category_confidence", "DECIMAL(3,2)"),
+    ("user_memories", "access_count", "INTEGER DEFAULT 0"),
+    ("user_memories", "last_accessed_at", "TIMESTAMP"),
+    ("user_memories", "metadata", "JSONB DEFAULT '{}'"),
+    ("user_memories", "tags", "TEXT[] DEFAULT '{}'"),
+    ("ai_suggestions", "suggestion_content", "TEXT"),
+    ("ai_suggestions", "status", "VARCHAR(20) DEFAULT 'pending'"),
+    # ai_suggestions.user_id is NOT NULL in the definition above and NULLABLE here,
+    # on purpose and for the reason conversations.user_id is: a column added to a
+    # table that already holds rows cannot be NOT NULL without a default, and this
+    # table holds rows in other environments. The code sets it on every insert.
+    ("ai_suggestions", "user_id", "UUID"),
+    ("projects", "metadata", "JSONB DEFAULT '{}'"),
 ]
 
 # SQL to run after column migrations — fixes NOT NULL constraints that should be nullable

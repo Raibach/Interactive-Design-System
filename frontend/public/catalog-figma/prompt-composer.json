@@ -1,0 +1,301 @@
+{
+ "pipeline": "prompt-composer",
+ "nodes": {
+  "40001204:5752": {
+   "tag": "f-40001204-5752",
+   "nodeId": "40001204:5752",
+   "approvedAt": "2026-09-28T23:06:02.061375Z",
+   "layers": 12,
+   "tree": {
+    "id": "40001204:5752",
+    "name": "System_Role",
+    "type": "COMPONENT",
+    "size": [
+     775.0,
+     40.0
+    ],
+    "position": [
+     -20151.0,
+     -5170.0
+    ],
+    "layout": {
+     "layoutMode": "HORIZONTAL",
+     "itemSpacing": 11.0,
+     "counterAxisAlignItems": "CENTER",
+     "layoutWrap": "NO_WRAP"
+    },
+    "fill": "#ebf6f5",
+    "children": [
+     {
+      "id": "40001185:2168",
+      "name": "system-role-dropdown",
+      "type": "FRAME",
+      "size": [
+       564.0,
+       40.0
+      ],
+      "position": [
+       -20151.0,
+       -5170.0
+      ],
+      "layout": {
+       "layoutMode": "HORIZONTAL",
+       "layoutWrap": "NO_WRAP"
+      },
+      "fill": "#ffffff",
+      "radius": 6.0,
+      "effects": [
+       "DROP_SHADOW offset(4,4) radius 10.0 rgba(0, 0, 0, 0.15)",
+       "DROP_SHADOW offset(-4,-4) radius 10.0 rgba(0, 0, 0, 0.15)"
+      ],
+      "children": [
+       {
+        "id": "40001185:2170",
+        "name": "chevron-blue-closed",
+        "type": "INSTANCE",
+        "size": [
+         40.0,
+         40.0
+        ],
+        "position": [
+         -20151.0,
+         -5170.0
+        ],
+        "layout": {
+         "layoutMode": "VERTICAL",
+         "itemSpacing": 10.0,
+         "paddingLeft": 7.0,
+         "paddingRight": 7.0,
+         "paddingTop": 7.0,
+         "paddingBottom": 7.0,
+         "primaryAxisAlignItems": "CENTER",
+         "counterAxisAlignItems": "CENTER",
+         "layoutWrap": "NO_WRAP"
+        },
+        "componentId": "40000922:4875",
+        "children": [
+         {
+          "id": "I40001185:2170;40000922:4872",
+          "name": "Arrow_drop_down",
+          "type": "INSTANCE",
+          "size": [
+           14.0,
+           13.0
+          ],
+          "position": [
+           -20138.0,
+           -5156.5
+          ],
+          "stroke": {
+           "color": "#4e68d2",
+           "weight": 1.0
+          },
+          "radius": 1.0,
+          "componentId": "1:118",
+          "children": [
+           {
+            "id": "I40001185:2170;40000922:4872;184:1427",
+            "name": "Vector 10",
+            "type": "VECTOR",
+            "size": [
+             10.0,
+             6.0
+            ],
+            "position": [
+             -20136.0,
+             -5152.5
+            ],
+            "fill": "#4e68d2"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": "40001185:2169",
+        "name": "dropdwon-tile",
+        "type": "FRAME",
+        "size": [
+         524.0,
+         40.0
+        ],
+        "position": [
+         -20111.0,
+         -5170.0
+        ],
+        "layout": {
+         "layoutMode": "HORIZONTAL",
+         "counterAxisAlignItems": "CENTER",
+         "layoutWrap": "NO_WRAP"
+        },
+        "children": [
+         {
+          "id": "40001185:2172",
+          "name": "empty",
+          "type": "TEXT",
+          "size": [
+           524.0,
+           22.0
+          ],
+          "position": [
+           -20111.0,
+           -5161.0
+          ],
+          "fill": "#171717",
+          "text": "System Role",
+          "type_style": {
+           "fontFamily": "Inter",
+           "fontWeight": 700,
+           "fontSize": 18.0,
+           "lineHeightPx": 21.784090042114258,
+           "letterSpacing": 0.0,
+           "textAlignHorizontal": "LEFT"
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "40001185:2161",
+      "name": "tool-dropdown",
+      "type": "FRAME",
+      "size": [
+       200.0,
+       40.0
+      ],
+      "position": [
+       -19576.0,
+       -5170.0
+      ],
+      "layout": {
+       "layoutMode": "HORIZONTAL",
+       "itemSpacing": 10.0,
+       "counterAxisAlignItems": "CENTER",
+       "layoutWrap": "NO_WRAP"
+      },
+      "fill": "#ffffff",
+      "radius": 6.0,
+      "effects": [
+       "DROP_SHADOW offset(4,4) radius 10.0 rgba(0, 0, 0, 0.15)",
+       "DROP_SHADOW offset(-4,-4) radius 10.0 rgba(0, 0, 0, 0.15)"
+      ],
+      "children": [
+       {
+        "id": "40001185:2162",
+        "name": "tile-label",
+        "type": "FRAME",
+        "size": [
+         200.0,
+         40.0
+        ],
+        "position": [
+         -19576.0,
+         -5170.0
+        ],
+        "layout": {
+         "layoutMode": "HORIZONTAL",
+         "itemSpacing": 10.0,
+         "counterAxisAlignItems": "CENTER",
+         "layoutWrap": "NO_WRAP"
+        },
+        "children": [
+         {
+          "id": "40001185:2163",
+          "name": "chevron-blue-closed",
+          "type": "INSTANCE",
+          "size": [
+           40.0,
+           40.0
+          ],
+          "position": [
+           -19576.0,
+           -5170.0
+          ],
+          "layout": {
+           "layoutMode": "VERTICAL",
+           "itemSpacing": 10.0,
+           "paddingLeft": 7.0,
+           "paddingRight": 7.0,
+           "paddingTop": 7.0,
+           "paddingBottom": 7.0,
+           "primaryAxisAlignItems": "CENTER",
+           "counterAxisAlignItems": "CENTER",
+           "layoutWrap": "NO_WRAP"
+          },
+          "componentId": "40000922:4875",
+          "children": [
+           {
+            "id": "I40001185:2163;40000922:4872",
+            "name": "Arrow_drop_down",
+            "type": "INSTANCE",
+            "size": [
+             14.0,
+             13.0
+            ],
+            "position": [
+             -19563.0,
+             -5156.5
+            ],
+            "stroke": {
+             "color": "#4e68d2",
+             "weight": 1.0
+            },
+            "radius": 1.0,
+            "componentId": "1:118"
+           }
+          ]
+         },
+         {
+          "id": "40001185:2164",
+          "name": "System Role",
+          "type": "TEXT",
+          "size": [
+           150.0,
+           22.0
+          ],
+          "position": [
+           -19526.0,
+           -5161.0
+          ],
+          "fill": "#171717",
+          "text": "Tools",
+          "type_style": {
+           "fontFamily": "Inter",
+           "fontWeight": 700,
+           "fontSize": 18.0,
+           "lineHeightPx": 21.784090042114258,
+           "letterSpacing": 0.0,
+           "textAlignHorizontal": "LEFT"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "generatedAt": "2026-09-29T16:48:02.817565Z",
+ "removed": {
+  "40001206:3422": {
+   "tag": "f-40001206-3422",
+   "removedAt": "2026-09-29T15:47:07.682692Z",
+   "actor": "",
+   "reason": "the removed design left its measurement and artwork in the record — taking them back"
+  },
+  "40001207:3497": {
+   "tag": "f-40001207-3497",
+   "removedAt": "2026-09-29T16:47:42.135957Z",
+   "actor": "00000000-0000-0000-0000-000000000001",
+   "reason": "removed from the tool"
+  },
+  "40001207:3559": {
+   "tag": "f-40001207-3559",
+   "removedAt": "2026-09-29T16:48:02.817561Z",
+   "actor": "00000000-0000-0000-0000-000000000001",
+   "reason": "removed from the tool"
+  }
+ }
+}

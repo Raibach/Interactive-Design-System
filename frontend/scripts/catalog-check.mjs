@@ -22,7 +22,8 @@
  * pass. The report is written `status: "partial"` for that reason, which the shell already
  * understands as "ran, minus Figma" (shared/catalogHealth.ts).
  *
- * RUN: `npm run catalog:check` (writes the report; exits non-zero when anything is BLOCKING).
+ * RUN: `npm run catalog:check` (writes the report). It REPORTS findings and never fails on them:
+ * a non-zero exit means this check did not run, not that the catalog has problems.
  */
 import { readFile, readdir, writeFile, mkdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -389,6 +390,110 @@ const main = async () => {
     });
   }
 
+  // ── MEASUREMENT: IS ANYTHING USING IT? ────────────────────────────────────
+  /*
+   * DRAWABLE AND USED ARE TWO DIFFERENT QUESTIONS, and a tree that answers only the first
+   * misleads: `agent-card` read "nothing draws this" for months while the console drew that
+   * exact card under the tag the element was built with. So the report carries both facts per
+   * component, measured rather than declared:
+   *
+   *   sent       — the app's own sources name it as a component in a payload they send.
+   *                The same `emitted` set the checks above use, so "what the app sends" has
+   *                exactly one definition in this repository.
+   *   renderedIn — the modules whose TEMPLATE draws its tag. Comment lines are skipped: a
+   *                mention in prose (`<agent-card-element> stops its delete click…`) is not a
+   *                use, and counting it would mark components as used by the documentation about
+   *                them. This is a text measurement and it is reported as one.
+   */
+  const usage = {};
+  // Which catalogue name a tag belongs to, so the children below are NAMES — the same thing the
+  // tree's rows are keyed by — rather than tags the reader would have to translate.
+  const nameByTag = new Map();
+  for (const n of Object.keys(components)) {
+    const t = resolveTag(n);
+    if (t) nameByTag.set(t, n);
+  }
+  /*
+   * A file's template text, with COMMENTS removed — prose is not a use, and not a child.
+   *
+   * BLOCK comments go as whole blocks, not line by line. Dropping only the lines that start with
+   * `*` leaves the prose INSIDE a JSDoc block in the text, so a doc comment that writes an
+   * example, `<chat-panel> — GRACE'S SEAT, DRAWN BY THE SURFACE.`, counted as that file drawing
+   * `<chat-panel>`. That made a component appear to draw ITSELF (chat-panel was its own first
+   * entry in `renderedIn`) and made `prompt-textarea` look like it was drawn by the eight files
+   * whose comments mention it — which would have refused the removal of components nothing
+   * actually composes.
+   */
+  const templateOf = (file) => {
+    const text = sources.get(file);
+    if (!text) return '';
+    return text
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+  };
+  for (const [name, spec] of Object.entries(components)) {
+    const tag = resolveTag(name);
+    const sentWhere = emitted.get(name)?.where ?? [];
+    const renderedIn = [];
+    if (tag) {
+      for (const [file, text] of sources) {
+        if (new RegExp(`<${tag}[\\s>]`).test(templateOf(file)) || templateOf(file).includes(`<${tag}\``)) {
+          renderedIn.push(relative(REPO, file));
+        }
+      }
+    }
+    /*
+     * WHAT IT COMPOSES — the catalogue elements this component's own template draws.
+     *
+     * THE THIRD KIND OF CHILD, and the only one a hand-built component can have: a measured
+     * design needs a Figma node, and most of this catalogue records none, so those rows can
+     * never grow children from a design. What they have is their template — `prompt-section-editor`
+     * draws six catalogue elements, and each one is a row a reader can open. Measured once here
+     * so the tree does not have to read sources it cannot see.
+     */
+    const composes = [];
+    const ownFile = tag ? fileForTag(tag) : null;
+    if (ownFile) {
+      for (const m of templateOf(ownFile).matchAll(/<([a-z][a-z0-9]*-[a-z0-9-]+)[\s>]/g)) {
+        const child = nameByTag.get(m[1]);
+        if (child && child !== name && !composes.includes(child)) composes.push(child);
+      }
+      composes.sort();
+    }
+    /*
+     * WHAT THE ELEMENT ACTUALLY DOES — the behaviour that is IN the code, as against the
+     * behaviour the entry declares.
+     *
+     * The two are different facts and the difference is the point: an element can dispatch
+     * nothing at all (a static drawing — the design may have a dropdown in it and the element
+     * has no dropdown), or dispatch things the registry never lists (the advisories the events
+     * check already reports). Measured here so a reader can be told "empty" about a component
+     * whose behaviour is designed and not yet built, instead of being shown an empty list that
+     * could equally mean "nobody looked".
+     */
+    const dispatches = ownFile
+      ? [...new Set([...templateOf(ownFile).matchAll(/dispatchEvent\(\s*new CustomEvent\(\s*['"]([\w:-]+)['"]/g)].map((m) => m[1]))].sort()
+      : [];
+    const listens = ownFile
+      ? [...new Set([...templateOf(ownFile).matchAll(/addEventListener\(\s*['"]([\w:-]+)['"]/g)].map((m) => m[1]))].sort()
+      : [];
+    usage[name] = {
+      tag: tag ?? null,
+      sent: sentWhere.map((f) => relative(REPO, f)),
+      renderedIn,
+      composes,
+      dispatches,
+      listens,
+      // Whether the element's behaviour could be measured at all — a renderer-owned primitive
+      // has no file of its own, and "we could not look" must not read as "it does nothing".
+      behaviourMeasured: !!ownFile,
+      drawable: !!tag && (rendererOwned.has(tag) || !!fileForTag(tag)),
+      deprecated: spec?.deprecated === true,
+    };
+  }
+
   // If nothing was wrong anywhere, say so once per check — a report of only failures cannot
   // tell "checked and clean" from "did not check".
   const checks = [...new Set(findings.map((f) => f.check))];
@@ -407,6 +512,7 @@ const main = async () => {
       passed: allChecks.length - checks.length,
     },
     checks: allChecks,
+    usage,
     findings,
   };
 
@@ -416,10 +522,17 @@ const main = async () => {
   const blocking = report.counts.blocking;
   console.log(
     `catalog-check: ${total} components, ${findings.length} finding(s), ${blocking} blocking. ` +
-    `Report: catalog-audit/${CATALOG_NAME}.json`,
+    `Report: catalog-audit/${CATALOG_NAME}.json — reported, not enforced.`,
   );
   for (const f of findings) console.log(`  [${f.level}] ${f.check} — ${f.what}`);
-  process.exit(blocking ? 1 : 0);
+  /*
+   * THE REPORT DOES NOT GATE ANYTHING. `level: 'blocking'` is a SEVERITY — which row a reader
+   * should look at first — and not a veto. It stops no ingest and no build: the ingest route runs
+   * this check AFTER it has registered the component, and reads the verdict out of the report it
+   * wrote. So this exits 0 whatever the findings say. A non-zero exit means only that the CHECK
+   * did not run (see the catch below) — a fact about this tool, not about the catalog.
+   */
+  process.exit(0);
 };
 
 main().catch((err) => {

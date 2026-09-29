@@ -176,6 +176,43 @@ def get_node(file_key: str, node_id: str) -> Optional[Dict]:
     except Exception as e:
         return {"error": str(e)}
 
+def get_node_image(file_key: str, node_id: str, scale: float = 2.0) -> Optional[Dict[str, Any]]:
+    """Figma's OWN rendering of a node, as PNG bytes — the design's side of the comparison.
+
+    THE GATE NEEDS THE DESIGN AS AN IMAGE, not as more numbers: the whole point is to compare what
+    a browser draws from our component with what Figma draws from the design, and only Figma can
+    say what Figma draws. `GET /v1/images/<key>` answers with a URL to a rendered PNG; the bytes
+    are fetched here so the caller gets the picture rather than a link that may expire.
+
+    Returns {"ok": True, "data": bytes, "scale": s, "format": "png"} or {"ok": False, "error": …}.
+    A failure is a failure: the caller reports "could not render the design" and never passes a
+    comparison it did not make.
+    """
+    if not FIGMA_TOKEN:
+        return {"ok": False, "error": "FIGMA_TOKEN not configured"}
+    try:
+        r = requests.get(
+            f"{FIGMA_BASE}/images/{file_key}",
+            headers=_headers(),
+            params={"ids": node_id, "format": "png", "scale": scale},
+            timeout=30,
+        )
+        if r.status_code != 200:
+            return {"ok": False, "error": f"Figma returned {r.status_code} for the node image"}
+        payload = r.json()
+        if payload.get("err"):
+            return {"ok": False, "error": str(payload["err"])[:300]}
+        url = (payload.get("images") or {}).get(node_id.replace("-", ":")) or next(iter((payload.get("images") or {}).values()), None)
+        if not url:
+            return {"ok": False, "error": "Figma returned no image URL for this node"}
+        image = requests.get(url, timeout=60)
+        if image.status_code != 200:
+            return {"ok": False, "error": f"the rendered image could not be downloaded ({image.status_code})"}
+        return {"ok": True, "data": image.content, "scale": scale, "format": "png"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def search_file(file_key: str, query: str) -> Optional[Dict]:
     """Search for nodes by name in a Figma file."""
     data = get_file(file_key, depth=3)

@@ -3,6 +3,7 @@ import { execSync } from "child_process"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import figmaAssetPlugin from './vite-plugin-figma-asset'
+import figmaPreviewPlugin from './vite-plugin-figma-preview'
 
 // Git hash for Sentry release tracking
 let releaseHash = "unknown";
@@ -15,7 +16,7 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_RELEASE_VERSION": JSON.stringify(releaseHash),
   },
-  plugins: [react(), figmaAssetPlugin()],
+  plugins: [react(), figmaAssetPlugin(), figmaPreviewPlugin()],
   esbuild: {
     // Target es2020 to force decorator transpilation for broader browser support
     target: 'es2020',
@@ -76,6 +77,14 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+    },
+    // THE PREVIEW FOLDER IS NOT SOURCE. Previews are written and deleted under `.preview/`
+    // continuously — one file per ingest, gone on the next — and each write would otherwise look
+    // like an edit to the project. Nothing imports from it by path (the preview arrives through
+    // the plugin's own namespace), so ignoring it here changes nothing about how a preview
+    // renders and stops the churn from being watched as if it were the catalogue.
+    watch: {
+      ignored: ['**/.preview/**'],
     },
   },
 })

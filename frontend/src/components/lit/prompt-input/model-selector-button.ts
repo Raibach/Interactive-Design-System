@@ -1,18 +1,20 @@
 /**
  * <model-selector-button> — Figma 40000922:4882 "Frame 886944" /
- * "Function - Model Selector Button" slot (node 40000909:4322) +
+ * "Function-toolsSelector-btn" slot (node 40000909:4322) +
  * "model-btn-label" instance (node 40000973:24208, component 40000973:24205).
  *
  * The model selector in the "Prompt Output" prompt-accordion header. White
- * button, radius 6, "button drop" shadow, fixed 171×40, centered "Models"
- * label (Inter Bold 16px, #8B8B8B). Every value traces to the Figma MCP
- * get_design_context pull of node 40000922:4882 (2026-09-10). No invented
- * values.
+ * button, radius 6, "button drop" shadow, fixed 171×40, centered "Functions |
+ * Tools" label (Inter Bold 16px, #8B8B8B). Every value traces to the 2026-09-10
+ * pull of node 40000922:4882.
+ *
+ * THE LABEL DIVERGES FROM THAT PULL and must not be reverted to it: the pull's
+ * text node reads "Models". This control reads "Functions | Tools".
  *
  * Design-tree mapping (node → element):
- *   40000909:4322   "Function - Model Selector Button" → <button class="model-btn">
+ *   40000909:4322   "Function-toolsSelector-btn"        → <button class="model-btn">
  *   40000973:24208  "model-btn-label"                  → <span class="model-label">
- *   I40000973:24208;40000973:24203 "Models" text       → label text (property `label`)
+ *   I40000973:24208;40000973:24203 "Models" text       → label text (property `label`, default "Functions | Tools")
  *
  * Events (composed): `model-selector-toggle` (click).
  * // TODO(behavior): the model menu this button opens is not drawn in node
@@ -30,7 +32,7 @@ export class ModelSelectorButton extends LitElement {
 
   constructor() {
     super();
-    this.label = 'Models';
+    this.label = 'Functions | Tools';
   }
 
   static styles = css`

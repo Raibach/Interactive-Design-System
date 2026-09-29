@@ -43,6 +43,35 @@ RESTART-LOCAL.sh
 architectural_philosophy
 spec-techincal direction doc.pdf
 
+#
+# ── THE SESSION'S OWN WORKING FILES (2026-09-29) ─────────────────────────────
+# By the owner's instruction, the same instruction that named n8n/ and the plans folder:
+# "ignore: CANVAS-AND-CLEANUP, html_figma_visualization.html, prompt-input-section.html,
+# START-HERE-INGESTION.md, RESTART-LOCAL.sh".
+#
+# All five are instruments the work was done WITH rather than the product itself: the notes
+# written while the ingestion pipeline was built and measured, two standalone probe pages that
+# exist to be opened and looked at, the canvas session record, and the local launcher above.
+#
+# RESTART-LOCAL.sh is listed twice on purpose. Its rule was added when it was first removed
+# from the repository (01d4c51, "gitignore local-only files (owner-removed)"), and an ignore
+# rule does nothing to a file git already tracks — it was re-added in 10af949 and has been
+# tracked ever since. It is UNTRACKED in this change, which is what the rule always meant.
+/CANVAS-AND-CLEANUP/
+/START-HERE-INGESTION.md
+/html_figma_visualization.html
+/prompt-input-section.html
+
+# ── Static assets & binary files ───────────────────────────────────
+# Canvas lab workspace with large data files
+canvas-lab/
+
+# Pages export files (*.pages)
+*.pages
+
+# Local frontend gate-drive temporary file
+frontend/gate-drive.mjs
+
 # ── Reference repos (old snapshots — never tracked) ─────
 dsmanager/
 
@@ -103,6 +132,17 @@ governance/
 AGENTIC_EDITOR/
 
 #
+# ── THE WORKING PLANS AND THE DESIGN CAPTURES (2026-09-29) ────────────────────
+# The same rule as the governance folder above, and by the owner's instruction:
+# "ignore: PLANS.AGENT, design". Both are the operator's own working record — the plans
+# for the ingestion work, and the design captures read while it was built (VALUES.json,
+# chat-column.json, node-census.json …). They are read and written locally and belong to
+# no clone. The copies under frontend/src/design/ that were tracked are removed in the
+# same change, so nothing of either survives in the history.
+/PLANS.AGENT/
+/design/
+
+#
 # THE DESIGNER PROFILE — local-only by the owner instruction (2026-09-19):
 # "put it in the gitignore, I sure as hell don't want anybody to see it."
 DESIGNER-PROFILE.md
@@ -139,7 +179,37 @@ DESIGNER-PROFILE.md
 /RELEASING.md
 /SECURITY.md
 
+# ── VENDORED TREES AND RUNTIME DATA (2026-09-29) ─────────────────────────────
+# Four more trees arrived on disk while the ingestion pipeline was read against a real
+# implementation. None of them is this repository's source, and measured together they are
+# 4,870 MB — against the rule above about weight at the root:
+#
+#   n8n/                  4,210 MB — the n8n repository, a clone carrying its own .git
+#   resources/              334 MB — n8n-master.zip and two more archives under it
+#   lit_design-catalogs/    250 MB — third-party design-system archives, read for reference
+#   n8n-data/                74 MB — n8n's own runtime directory
+#
+# Same rule as the vendored reference above: kept on disk for READING, kept out of the
+# history. Nothing here is imported, built or served. n8n-data is the one that would be
+# worse than heavy — an automation tool's own database holds its credential rows, so
+# committing it would put secrets into every clone of this repository forever.
+n8n/
+resources/
+lit_design-catalogs/
+n8n-data/
+
+# A dump of THIS repository's database, taken before it is changed. Same rule as the
+# .prod-backup-*.json below: insurance, kept on disk, and it holds other people's rows —
+# emails, prompt text, password hashes. Never in the history. Written by pg_dump into
+# backend/backups/ (custom format, restorable with pg_restore).
+/backend/backups/
+
 # A dump of a live database taken before it is changed. It is insurance, it is kept on
 # disk, and it holds other people's rows — emails, prompt text, password hashes. Never
 # in the history.
 .prod-backup-*.json
+
+# A preview is a TEMPORARY FILE, written per ingest and deleted when the designer leaves,
+# discards, or asks for something else. It is not source, not a component, and must never be
+# committed (backend/routes/figma.py _write_preview_files / _drop_preview_files).
+frontend/.preview/

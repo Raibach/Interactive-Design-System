@@ -19,7 +19,9 @@ import { LitElement, html, css, nothing } from 'lit';
 import { designTokens } from '@/shared/design-tokens';
 // THE DESIGN'S OWN CHEVRON, the exported 14x13 artwork — the same file the catalog check
 // and the Conversations dropdown import. One asset, imported, never re-drawn.
-import arrowDropDown from '../../assets/figma-9598a83b0a4eb9b9fc9c226f302689fd4f7075df.svg';
+// The dropdown chevron, INLINE: no path, no name, nothing can resolve it. It used to be the file
+// `assets/figma-9598a83b….svg` — an image in an assets folder, loadable by name from anywhere.
+const arrowDropDown = "data:image/svg+xml;utf8,<svg preserveAspectRatio='none' overflow='visible' style='display: block;' width='14' height='13' viewBox='0 0 14 13' fill='none' xmlns='http://www.w3.org/2000/svg'><g id='Arrow_drop_down'><rect x='0.5' y='0.5' width='13' height='12' rx='0.5' stroke='%234E68D2'/><path id='Vector 10' d='M6.80794 9.76953L3.09346 5.31215C2.65924 4.79109 3.02976 4 3.70803 4L10.292 4C10.9702 4 11.3408 4.79108 10.9065 5.31215L7.19206 9.76953C7.09211 9.88947 6.90789 9.88947 6.80794 9.76953Z' fill='%234E68D2'/></g></svg>";
 
 export class ChatFold extends LitElement {
   static properties = {

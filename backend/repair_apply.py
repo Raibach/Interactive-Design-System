@@ -26,6 +26,7 @@ library, so it can be exercised directly, and because being the only writer is a
 thing a reader should be able to verify by looking at one small file.
 """
 
+import json
 import os
 import subprocess
 from datetime import datetime
@@ -202,11 +203,13 @@ def apply_repair(path: str, content: str) -> dict:
 # ── After the write: a verdict worth having ────────────────────────────────
 #
 # The report the app reads (/api/catalog/audit) is produced by
-# frontend/scripts/catalog-check.mjs, which was removed from this project along
-# with the rest of the governance tooling. This function is kept because it fails
-# honestly: with the checker absent it returns {"ran": False, "why": …}, and the
-# caller reports that the check did not run instead of inventing a verdict. A
-# stale report left on disk must never be read as a fresh one.
+# frontend/scripts/catalog-check.mjs. That run REPORTS its findings and never fails
+# on them — it exits 0 whatever they say — so the verdict is read from the report it
+# wrote, and never from its exit code: an exit code cannot tell "no findings" from
+# "twelve findings, one of them blocking". With the checker absent, or its report
+# unreadable, this returns {"ran": False, "why": …} and the caller reports that the
+# check did not run instead of inventing a verdict. A stale report left on disk must
+# never be read as a fresh one.
 
 DEFAULT_CATALOG = "prompt-composer"
 CHECK_TIMEOUT = 180
@@ -222,9 +225,10 @@ def rerun_catalog_check(catalog: str = DEFAULT_CATALOG, timeout: int = CHECK_TIM
     frontend = os.path.join(REPO_ROOT, "frontend")
     if not os.path.isfile(os.path.join(frontend, "scripts", "catalog-check.mjs")):
         return {"ran": False, "why": "the checker is not in this project"}
+    started = datetime.now().timestamp()
     try:
         proc = subprocess.run(
-            ["node", "scripts/catalog-check.mjs", "--catalog", catalog],
+            ["node", "scripts/catalog-check.mjs"],
             cwd=frontend, capture_output=True, text=True, timeout=timeout,
         )
     except FileNotFoundError:
@@ -232,15 +236,25 @@ def rerun_catalog_check(catalog: str = DEFAULT_CATALOG, timeout: int = CHECK_TIM
     except subprocess.TimeoutExpired:
         return {"ran": False, "why": f"the check did not finish in {timeout}s"}
 
-    verdict = ""
-    for line in (proc.stdout or "").splitlines():
-        if line.strip().startswith("VERDICT:"):
-            verdict = line.strip()
+    report_path = os.path.join(frontend, "catalog-audit", f"{catalog}.json")
+    try:
+        if os.path.getmtime(report_path) < started - 1:
+            return {"ran": False, "why": "the check left no report from this run"}
+        with open(report_path, encoding="utf-8") as f:
+            report = json.load(f)
+    except Exception as e:  # noqa: BLE001 — reported, never swallowed
+        return {"ran": False, "why": f"the report could not be read: {e}"}
+
+    findings = report.get("findings") or []
+    blocking = sum(1 for x in findings if x.get("level") == "blocking")
     return {
         "ran": True,
         "exit_code": proc.returncode,
         "catalog": catalog,
-        # The checker FAILS its own run when findings stay open, so a non-zero exit
-        # here is not an error in the check — it is the check reporting the catalog.
-        "verdict": verdict or ("no findings" if proc.returncode == 0 else "findings remain"),
+        # MEASURED, not inferred: the counts come from the report's own findings. `exit_code` is
+        # carried for the record only — it says whether the check ran, nothing about what it found.
+        "verdict": (
+            "no findings" if not findings
+            else f"{len(findings)} finding(s), {blocking} blocking"
+        ),
     }

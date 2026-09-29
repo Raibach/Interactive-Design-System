@@ -1,0 +1,3950 @@
+{
+  "generatedAt": "2026-09-28T16:44:59.290Z",
+  "system": {
+    "id": "ecommerce",
+    "catalogId": "https://raibach.net/a2ui/catalogs/ecommerce/v0_9_1/catalog.json",
+    "title": "Raibach E-Commerce Catalog",
+    "version": "v0_9_1",
+    "versionNote": "the version is the /v…/ segment of the catalogId — catalog.json declares no version field of its own",
+    "source": "frontend/src/components/A2UI/catalogs/ecommerce/catalog.json",
+    "schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "THE SCHEMA for the e-commerce pipeline. Same job as the prompt-composer catalog: what the server validates an A2UI payload against. One file per pipeline — the pipelines never share a catalogId, so a surface can only render its own components.",
+    "owner": null,
+    "ownerNote": "The catalogue declares no owner field. Nothing in the repository says who owns a catalogue.",
+    "counts": {
+      "declared": 38,
+      "annotated": 34,
+      "built": 32,
+      "inManifest": 32,
+      "allowlisted": 25,
+      "mapped": 17,
+      "inTheFigmaMap": 21
+    },
+    "tokens": null,
+    "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+    "categoryNote": "No declared category exists (layout / components / actions are not in any file). The groups below are DERIVED from the allowlist's surface + column — the only grouping the repository actually states. A real layout/component/action category has to be DECLARED per element in the catalogue.",
+    "figmaLayersNote": "Figma layers are not drawn: they need the design file and an API token. The Figma node each element came from is shown instead (registry.json), and the ingest ledger for it.",
+    "gate": null,
+    "gateNote": "no audit has been run for this catalogue (frontend/catalog-audit/ecommerce.json is absent)",
+    "removalNote": "6 removal record(s) in backend/logs/figma-ingest.jsonl, and not one names a node or a tag. The ledger says a removal happened and what the audit counted afterwards; it does not say what was removed. The counts in those verdicts are the only trace (58 components before 01:10:49Z, 57 after 01:11:58Z).",
+    "duplicateTags": [
+      {
+        "tag": "prompt-section-editor",
+        "names": [
+          "SectionEditor",
+          "prompt-section-editor"
+        ],
+        "declaredPropsDiffer": true
+      },
+      {
+        "tag": "compiled-output-viewer",
+        "names": [
+          "CompiledOutput",
+          "compiled-output-viewer"
+        ],
+        "declaredPropsDiffer": true
+      },
+      {
+        "tag": "chat-panel",
+        "names": [
+          "ChatPanel",
+          "chat-panel"
+        ],
+        "declaredPropsDiffer": true
+      }
+    ]
+  },
+  "groups": [
+    {
+      "title": "not in the allowlist",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 13,
+        "annotated": 9,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "Text",
+          "tag": "a2ui-text",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": false,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "◐",
+            "∅"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "text",
+              "variant"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "Image",
+          "tag": "a2ui-image",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": false,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "◐",
+            "∅"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "description",
+              "fit",
+              "url",
+              "variant"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "Row",
+          "tag": "a2ui-row",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●",
+            "∅"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "align",
+              "component",
+              "justify"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "Column",
+          "tag": "a2ui-column",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●",
+            "∅"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "align",
+              "component",
+              "justify"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "Card",
+          "tag": "a2ui-card",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": false,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "◐",
+            "∅"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "child",
+              "component"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "Button",
+          "tag": "a2ui-button",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": false,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "◐",
+            "∅"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "action",
+              "child",
+              "component",
+              "variant"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "ConsoleCardGrid",
+          "tag": "a2ui-console-card-grid",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "items"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "DecisionDialog",
+          "tag": "a2ui-decision-dialog",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "ActionGroup",
+          "tag": "a2ui-action-group",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "items"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "footer-bar",
+          "tag": "a2ui-footer-bar",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "isSaving",
+              "runShortcut",
+              "saveShortcut",
+              "versionText"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "add-section-button",
+          "tag": "a2ui-add-section-button",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "chips",
+              "component",
+              "label"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "status-readout",
+          "tag": "a2ui-status-readout",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "level",
+              "message",
+              "userId"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "token-cost-readout",
+          "tag": "a2ui-token-cost-readout",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": false,
+            "rendererOwned": true,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "costUsd",
+              "tokens"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    },
+    {
+      "title": "console column",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 3,
+        "annotated": 3,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "agent-card",
+          "tag": "agent-card",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "author",
+              "avatar_url",
+              "category",
+              "category_color",
+              "category_text_color",
+              "category_title_color",
+              "component",
+              "created_at",
+              "description",
+              "id",
+              "last_used",
+              "likes",
+              "model_name",
+              "status",
+              "team_name",
+              "title",
+              "username",
+              "version"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "card-open",
+              "card-delete"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "card-open",
+              "card-delete"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "filter-pill",
+          "tag": "filter-pill",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "active",
+              "category",
+              "component",
+              "label"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "filter-toggle"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "filter-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "search-bar",
+          "tag": "search-bar",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "placeholder",
+              "value"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "search-change",
+              "search-submit"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "search-change",
+              "search-submit"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    },
+    {
+      "title": "left column",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 10,
+        "annotated": 10,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "prompt-section",
+          "tag": "prompt-section",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "content",
+              "order",
+              "state",
+              "type"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "section-update",
+              "section-remove",
+              "section-reorder"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "section-update",
+              "section-remove",
+              "section-reorder"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "SectionEditor",
+          "tag": "prompt-section-editor",
+          "tagNote": null,
+          "className": "PromptSectionEditor",
+          "file": "frontend/src/components/lit/prompt-section-editor.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●",
+            "⇄"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "sections"
+            ],
+            "inManifest": [
+              "_sections",
+              "_sessionId",
+              "_isRunning",
+              "_menu",
+              "_collapsed",
+              "_dragIndex",
+              "_listenersBound",
+              "_countedCalls",
+              "_totalTokens",
+              "_calls",
+              "_tools",
+              "sections",
+              "sessionId",
+              "isRunning",
+              "_onSetText",
+              "_onForceSet",
+              "_onFillField",
+              "_onAddRole",
+              "_onWriteSeat",
+              "_onInsertTool",
+              "_onMoveTool",
+              "_onMergeSeat",
+              "_onRemoveRole",
+              "_onUsage",
+              "_tokensLabel"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "section-update",
+              "section-add",
+              "section-remove",
+              "section-reorder"
+            ],
+            "dispatched": [
+              "a2ui-update-error-banner",
+              "a2ui:ask-grace",
+              "section-add",
+              "section-remove",
+              "section-reorder",
+              "section-update",
+              "section-write-failed"
+            ],
+            "dispatchedNotListed": [
+              "a2ui-update-error-banner",
+              "a2ui:ask-grace",
+              "section-write-failed"
+            ],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "prompt-container",
+              "prompt-input-section"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "section-update",
+              "section-add",
+              "section-remove",
+              "section-reorder",
+              "a2ui-update-error-banner",
+              "a2ui:ask-grace",
+              "section-write-failed"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "prompt-section-editor",
+            "figmaNodeId": null,
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "prompt-section-editor"
+          ]
+        },
+        {
+          "name": "prompt-section-editor",
+          "tag": "prompt-section-editor",
+          "tagNote": null,
+          "className": "PromptSectionEditor",
+          "file": "frontend/src/components/lit/prompt-section-editor.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●",
+            "⇄"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id",
+              "sections"
+            ],
+            "inManifest": [
+              "_sections",
+              "_sessionId",
+              "_isRunning",
+              "_menu",
+              "_collapsed",
+              "_dragIndex",
+              "_listenersBound",
+              "_countedCalls",
+              "_totalTokens",
+              "_calls",
+              "_tools",
+              "sections",
+              "sessionId",
+              "isRunning",
+              "_onSetText",
+              "_onForceSet",
+              "_onFillField",
+              "_onAddRole",
+              "_onWriteSeat",
+              "_onInsertTool",
+              "_onMoveTool",
+              "_onMergeSeat",
+              "_onRemoveRole",
+              "_onUsage",
+              "_tokensLabel"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "section-update",
+              "section-add",
+              "section-remove",
+              "section-reorder"
+            ],
+            "dispatched": [
+              "a2ui-update-error-banner",
+              "a2ui:ask-grace",
+              "section-add",
+              "section-remove",
+              "section-reorder",
+              "section-update",
+              "section-write-failed"
+            ],
+            "dispatchedNotListed": [
+              "a2ui-update-error-banner",
+              "a2ui:ask-grace",
+              "section-write-failed"
+            ],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "prompt-container",
+              "prompt-input-section"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "section-update",
+              "section-add",
+              "section-remove",
+              "section-reorder",
+              "a2ui-update-error-banner",
+              "a2ui:ask-grace",
+              "section-write-failed"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "prompt-section-editor",
+            "figmaNodeId": null,
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "SectionEditor"
+          ]
+        },
+        {
+          "name": "prompt-container",
+          "tag": "prompt-container",
+          "tagNote": null,
+          "className": "PromptContainer",
+          "file": "frontend/src/components/lit/prompt-input/prompt-container.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "formatLabel",
+              "id",
+              "tokensLabel"
+            ],
+            "inManifest": [
+              "formatLabel",
+              "tokensLabel"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": true
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "prompt-container",
+            "figmaNodeId": "40000746:6",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 2,
+            "timeline": [
+              {
+                "kind": "(untyped)",
+                "n": 1,
+                "first": "2026-09-27T19:23:44Z",
+                "last": "2026-09-27T19:23:44Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-27T22:58:27Z",
+                "last": "2026-09-27T22:58:27Z"
+              }
+            ],
+            "lastAt": "2026-09-27T22:58:27Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "prompt-input-section",
+          "tag": "prompt-input-section",
+          "tagNote": null,
+          "className": "PromptInputSection",
+          "file": "frontend/src/components/lit/prompt-input/prompt-input-section.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "content",
+              "id",
+              "minHeight",
+              "name",
+              "sticky",
+              "type"
+            ],
+            "inManifest": [
+              "name",
+              "type",
+              "content",
+              "sticky",
+              "minHeight",
+              "menuOpen",
+              "_pick",
+              "placeholder",
+              "tools",
+              "_tipType",
+              "_tipBox",
+              "_tip"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "section-content-input",
+              "section-menu-select",
+              "section-collapse-toggle"
+            ],
+            "dispatched": [
+              "section-collapse-toggle",
+              "section-content-input",
+              "section-menu-select"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "gripper-prompt-input",
+              "prompt-textarea",
+              "role-tile",
+              "status-bar-prompt-input"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "section-content-input",
+              "section-menu-select",
+              "section-collapse-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "prompt-input-section",
+            "figmaNodeId": "40000746:94",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 2,
+            "timeline": [
+              {
+                "kind": "(untyped)",
+                "n": 1,
+                "first": "2026-09-27T19:23:44Z",
+                "last": "2026-09-27T19:23:44Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-27T22:58:27Z",
+                "last": "2026-09-27T22:58:27Z"
+              }
+            ],
+            "lastAt": "2026-09-27T22:58:27Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "gripper-prompt-input",
+          "tag": "gripper-prompt-input",
+          "tagNote": null,
+          "className": "GripperPromptInput",
+          "file": "frontend/src/components/lit/prompt-input/gripper-prompt-input.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id"
+            ],
+            "inManifest": [],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "gripper-prompt-input",
+            "figmaNodeId": "40000941:23074",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 4,
+            "timeline": [
+              {
+                "kind": "ingested",
+                "n": 4,
+                "first": "2026-09-27T19:58:19Z",
+                "last": "2026-09-28T00:35:45Z"
+              }
+            ],
+            "lastAt": "2026-09-28T00:35:45Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "role-tile",
+          "tag": "role-tile",
+          "tagNote": null,
+          "className": "RoleTile",
+          "file": "frontend/src/components/lit/prompt-input/role-tile.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id",
+              "label",
+              "showMenu"
+            ],
+            "inManifest": [
+              "label",
+              "showMenu"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "role-menu-toggle",
+              "role-tile-collapse-toggle"
+            ],
+            "dispatched": [
+              "role-menu-toggle",
+              "role-tile-collapse-toggle"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "role-menu-toggle",
+              "role-tile-collapse-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "role-tile",
+            "figmaNodeId": "40000909:4316",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-27T22:58:27Z",
+                "last": "2026-09-27T22:58:27Z"
+              }
+            ],
+            "lastAt": "2026-09-27T22:58:27Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "status-bar-prompt-input",
+          "tag": "status-bar-prompt-input",
+          "tagNote": null,
+          "className": "StatusBarPromptInput",
+          "file": "frontend/src/components/lit/prompt-input/status-bar-prompt-input.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "icons",
+              "id"
+            ],
+            "inManifest": [
+              "icons",
+              "NODE_ID",
+              "NODE_OF_ICON"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "status-bar-prompt-input",
+            "figmaNodeId": "40000878:239",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "prompt-textarea",
+          "tag": "prompt-textarea",
+          "tagNote": null,
+          "className": "PromptTextarea",
+          "file": "frontend/src/components/lit/prompt-input/prompt-textarea.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id",
+              "minHeight",
+              "placeholder",
+              "value"
+            ],
+            "inManifest": [
+              "value",
+              "placeholder",
+              "minHeight",
+              "_resizeQueued",
+              "_ro",
+              "_measuredWidth"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "value-input"
+            ],
+            "dispatched": [
+              "value-input"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "value-input"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "prompt-textarea",
+            "figmaNodeId": "40000746:95",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "(untyped)",
+                "n": 1,
+                "first": "2026-09-27T19:23:44Z",
+                "last": "2026-09-27T19:23:44Z"
+              }
+            ],
+            "lastAt": "2026-09-27T19:23:44Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "control-bar",
+          "tag": "control-bar",
+          "tagNote": null,
+          "className": "ControlBar",
+          "file": "frontend/src/components/lit/control-bar.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "isRunning",
+              "isSaving",
+              "runShortcut",
+              "saveShortcut"
+            ],
+            "inManifest": [
+              "isSaving",
+              "isRunning",
+              "saveShortcut",
+              "runShortcut"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "undo-click",
+              "save-click",
+              "run-click"
+            ],
+            "dispatched": [
+              "run-click",
+              "save-click",
+              "undo-click"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "undo-click",
+              "save-click",
+              "run-click"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "control-bar",
+            "figmaNodeId": null,
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    },
+    {
+      "title": "middle column",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 5,
+        "annotated": 5,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "output-panel",
+          "tag": "output-panel",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "content",
+              "model",
+              "status",
+              "tokens"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "copy-output"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "copy-output"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "version-trace",
+          "tag": "version-trace",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "activeVersion",
+              "component",
+              "sessionId"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "version-select",
+              "version-compare"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "version-select",
+              "version-compare"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "CompiledOutput",
+          "tag": "compiled-output-viewer",
+          "tagNote": null,
+          "className": "CompiledOutputViewer",
+          "file": "frontend/src/components/lit/compiled-output-viewer.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●",
+            "⇄"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "content"
+            ],
+            "inManifest": [
+              "content",
+              "status",
+              "model",
+              "tokens",
+              "isRunning",
+              "sessionId",
+              "outputType",
+              "outputDescription",
+              "cost",
+              "viewMode",
+              "elapsed",
+              "_prevContent",
+              "_timer",
+              "_startedAt",
+              "_ranOnce",
+              "_startClock",
+              "_stopClock",
+              "_finishedLine",
+              "_statusWord",
+              "_copy",
+              "_regenerate",
+              "_clear",
+              "_toggleView",
+              "_failed"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "copy-output",
+              "regenerate-requested",
+              "clear-output"
+            ],
+            "dispatched": [
+              "clear-output",
+              "copy-output",
+              "regenerate-requested"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "model-selector-button"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "copy-output",
+              "regenerate-requested",
+              "clear-output"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "compiled-output-viewer",
+            "figmaNodeId": null,
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "compiled-output-viewer"
+          ]
+        },
+        {
+          "name": "compiled-output-viewer",
+          "tag": "compiled-output-viewer",
+          "tagNote": null,
+          "className": "CompiledOutputViewer",
+          "file": "frontend/src/components/lit/compiled-output-viewer.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●",
+            "⇄"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "content",
+              "id"
+            ],
+            "inManifest": [
+              "content",
+              "status",
+              "model",
+              "tokens",
+              "isRunning",
+              "sessionId",
+              "outputType",
+              "outputDescription",
+              "cost",
+              "viewMode",
+              "elapsed",
+              "_prevContent",
+              "_timer",
+              "_startedAt",
+              "_ranOnce",
+              "_startClock",
+              "_stopClock",
+              "_finishedLine",
+              "_statusWord",
+              "_copy",
+              "_regenerate",
+              "_clear",
+              "_toggleView",
+              "_failed"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "copy-output",
+              "regenerate-requested",
+              "clear-output"
+            ],
+            "dispatched": [
+              "clear-output",
+              "copy-output",
+              "regenerate-requested"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "model-selector-button"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "copy-output",
+              "regenerate-requested",
+              "clear-output"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "compiled-output-viewer",
+            "figmaNodeId": null,
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "CompiledOutput"
+          ]
+        },
+        {
+          "name": "model-selector-button",
+          "tag": "model-selector-button",
+          "tagNote": null,
+          "className": "ModelSelectorButton",
+          "file": "frontend/src/components/lit/prompt-input/model-selector-button.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id",
+              "label"
+            ],
+            "inManifest": [
+              "label"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "model-selector-toggle"
+            ],
+            "dispatched": [
+              "model-selector-toggle"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "model-selector-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "model-selector-button",
+            "figmaNodeId": "40000909:4322",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-27T19:58:19Z",
+                "last": "2026-09-27T19:58:19Z"
+              }
+            ],
+            "lastAt": "2026-09-27T19:58:19Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    },
+    {
+      "title": "surface: both",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 2,
+        "annotated": 2,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "chat-navigation-bar",
+          "tag": "chat-navigation-bar",
+          "tagNote": null,
+          "className": "ChatNavigationBar",
+          "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "activeTab",
+              "allowedTabs",
+              "collapsed",
+              "component",
+              "healthCount",
+              "healthState"
+            ],
+            "inManifest": [
+              "activeTab",
+              "collapsed",
+              "unread",
+              "healthCount",
+              "healthState",
+              "allowedTabs",
+              "_previousTab"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "tab-change",
+              "collapse-toggle"
+            ],
+            "dispatched": [
+              "navigate-console"
+            ],
+            "dispatchedNotListed": [
+              "navigate-console"
+            ],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [
+              "logo"
+            ],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [
+              "logo"
+            ],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "tab-change",
+              "collapse-toggle",
+              "navigate-console"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "tools-button (Settings)",
+            "figmaNodeId": "40001119:6593",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "error-banner",
+          "tag": "error-banner",
+          "tagNote": null,
+          "className": "ErrorBanner",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/error-banner.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "code",
+              "component",
+              "message",
+              "retry"
+            ],
+            "inManifest": [
+              "message",
+              "code",
+              "retry"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "error-dismiss",
+              "error-retry"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "error-dismiss",
+              "error-retry"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    },
+    {
+      "title": "right column",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 3,
+        "annotated": 3,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "ChatPanel",
+          "tag": "chat-panel",
+          "tagNote": null,
+          "className": "ChatPanel",
+          "file": "frontend/src/components/lit/chat-panel.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●",
+            "⇄"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "conversationId"
+            ],
+            "inManifest": [
+              "conversationId",
+              "messages",
+              "_inspectionReports",
+              "_approvalsOpen",
+              "_traceOpen",
+              "_conversationsTopSlot",
+              "_railVisible",
+              "_thumbH",
+              "_thumbTop",
+              "_showScrollBar",
+              "_scrollPos",
+              "_scrollMax",
+              "_conversationRows",
+              "_conversationsRead",
+              "_adoptedByHost",
+              "_creatingConversation",
+              "_conversationEnsured",
+              "_conversationsOpen",
+              "_seatIsConsole",
+              "_unread",
+              "_seenTurns",
+              "_seenStatus",
+              "_armedDelete",
+              "_deleteTimer",
+              "_listNote",
+              "_outputRO",
+              "sessionId",
+              "packageTitle",
+              "packageDescription",
+              "statusText",
+              "status",
+              "sessionLabel",
+              "sessionName",
+              "duration",
+              "qaScore",
+              "usage",
+              "leftColumnContent",
+              "compiledOutput",
+              "consoleCards",
+              "catalogFindings",
+              "unannotatedInUse",
+              "modelLabel",
+              "conversations",
+              "inputHeight",
+              "activeTab",
+              "collapsed",
+              "allowedTabs",
+              "tracePrompt",
+              "_sending",
+              "_offerOnly",
+              "_historyChecked",
+              "_greeted",
+              "_tools",
+              "_wantsGreeting",
+              "_local",
+              "_pending",
+              "_pendingOwner",
+              "_sessionHeld",
+              "_historyError",
+              "_draft",
+              "_abort",
+              "_gripMove",
+              "_gripUp",
+              "_gripBoundary",
+              "_onHostSay",
+              "_onWriteFailed",
+              "_onHostAsk",
+              "_spent",
+              "_spentTurn",
+              "_reviewingRun",
+              "_pendingRun",
+              "READ_THE_REPLY_MS",
+              "_runVerdict",
+              "_onOutputScroll",
+              "_onThumbDown",
+              "_onActionSend",
+              "_dragStartY",
+              "_dragStartHeight",
+              "_barHeight",
+              "_footerHeight",
+              "_outputWindows",
+              "_trayPlaced",
+              "_thread",
+              "_hasResultTurns",
+              "_showsThread",
+              "_hasStatusLine",
+              "_statusLine",
+              "_onComposerOpened",
+              "_toggleConversations",
+              "_onConversationsKey",
+              "_onConversationRemove"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "message-sent",
+              "command-received"
+            ],
+            "dispatched": [
+              "a2ui:console-command",
+              "a2ui:fix-all",
+              "a2ui:run-approved",
+              "a2ui:run-blocked",
+              "a2ui:system-message",
+              "a2ui:usage",
+              "a2ui:write-seat",
+              "add-prompt-role",
+              "ai-eval-grounding",
+              "ai-show-version",
+              "clear-left-column",
+              "conversation-change",
+              "conversation-select",
+              "input-resize-end",
+              "input-resize-move",
+              "input-resize-start",
+              "insert-tool",
+              "merge-seat",
+              "move-tool",
+              "remove-prompt-role",
+              "set-left-column-text",
+              "set-package-description",
+              "set-prompt-title"
+            ],
+            "dispatchedNotListed": [
+              "a2ui:console-command",
+              "a2ui:fix-all",
+              "a2ui:run-approved",
+              "a2ui:run-blocked",
+              "a2ui:system-message",
+              "a2ui:usage",
+              "a2ui:write-seat",
+              "add-prompt-role",
+              "ai-eval-grounding",
+              "ai-show-version",
+              "clear-left-column",
+              "conversation-change",
+              "conversation-select",
+              "input-resize-end",
+              "input-resize-move",
+              "input-resize-start",
+              "insert-tool",
+              "merge-seat",
+              "move-tool",
+              "remove-prompt-role",
+              "set-left-column-text",
+              "set-package-description",
+              "set-prompt-title"
+            ],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [
+              "content-header",
+              "view"
+            ],
+            "declaredNotRendered": [],
+            "bareSlot": true
+          },
+          "children": {
+            "slot": [
+              "content-header",
+              "view"
+            ],
+            "composed": [
+              "chat-fold",
+              "chat-header",
+              "chat-navigation-bar",
+              "error-banner",
+              "output-header",
+              "small-dropdown"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "message-sent",
+              "command-received",
+              "a2ui:console-command",
+              "a2ui:fix-all",
+              "a2ui:run-approved",
+              "a2ui:run-blocked",
+              "a2ui:system-message",
+              "a2ui:usage",
+              "a2ui:write-seat",
+              "add-prompt-role",
+              "ai-eval-grounding",
+              "ai-show-version",
+              "clear-left-column",
+              "conversation-change",
+              "conversation-select",
+              "input-resize-end",
+              "input-resize-move",
+              "input-resize-start",
+              "insert-tool",
+              "merge-seat",
+              "move-tool",
+              "remove-prompt-role",
+              "set-left-column-text",
+              "set-package-description",
+              "set-prompt-title"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "right-column-panel-container",
+            "figmaNodeId": "40001119:6025",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "chat-panel"
+          ]
+        },
+        {
+          "name": "chat-panel",
+          "tag": "chat-panel",
+          "tagNote": null,
+          "className": "ChatPanel",
+          "file": "frontend/src/components/lit/chat-panel.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●",
+            "⇄"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "conversationId",
+              "conversations",
+              "id"
+            ],
+            "inManifest": [
+              "conversationId",
+              "messages",
+              "_inspectionReports",
+              "_approvalsOpen",
+              "_traceOpen",
+              "_conversationsTopSlot",
+              "_railVisible",
+              "_thumbH",
+              "_thumbTop",
+              "_showScrollBar",
+              "_scrollPos",
+              "_scrollMax",
+              "_conversationRows",
+              "_conversationsRead",
+              "_adoptedByHost",
+              "_creatingConversation",
+              "_conversationEnsured",
+              "_conversationsOpen",
+              "_seatIsConsole",
+              "_unread",
+              "_seenTurns",
+              "_seenStatus",
+              "_armedDelete",
+              "_deleteTimer",
+              "_listNote",
+              "_outputRO",
+              "sessionId",
+              "packageTitle",
+              "packageDescription",
+              "statusText",
+              "status",
+              "sessionLabel",
+              "sessionName",
+              "duration",
+              "qaScore",
+              "usage",
+              "leftColumnContent",
+              "compiledOutput",
+              "consoleCards",
+              "catalogFindings",
+              "unannotatedInUse",
+              "modelLabel",
+              "conversations",
+              "inputHeight",
+              "activeTab",
+              "collapsed",
+              "allowedTabs",
+              "tracePrompt",
+              "_sending",
+              "_offerOnly",
+              "_historyChecked",
+              "_greeted",
+              "_tools",
+              "_wantsGreeting",
+              "_local",
+              "_pending",
+              "_pendingOwner",
+              "_sessionHeld",
+              "_historyError",
+              "_draft",
+              "_abort",
+              "_gripMove",
+              "_gripUp",
+              "_gripBoundary",
+              "_onHostSay",
+              "_onWriteFailed",
+              "_onHostAsk",
+              "_spent",
+              "_spentTurn",
+              "_reviewingRun",
+              "_pendingRun",
+              "READ_THE_REPLY_MS",
+              "_runVerdict",
+              "_onOutputScroll",
+              "_onThumbDown",
+              "_onActionSend",
+              "_dragStartY",
+              "_dragStartHeight",
+              "_barHeight",
+              "_footerHeight",
+              "_outputWindows",
+              "_trayPlaced",
+              "_thread",
+              "_hasResultTurns",
+              "_showsThread",
+              "_hasStatusLine",
+              "_statusLine",
+              "_onComposerOpened",
+              "_toggleConversations",
+              "_onConversationsKey",
+              "_onConversationRemove"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "message-sent",
+              "command-received"
+            ],
+            "dispatched": [
+              "a2ui:console-command",
+              "a2ui:fix-all",
+              "a2ui:run-approved",
+              "a2ui:run-blocked",
+              "a2ui:system-message",
+              "a2ui:usage",
+              "a2ui:write-seat",
+              "add-prompt-role",
+              "ai-eval-grounding",
+              "ai-show-version",
+              "clear-left-column",
+              "conversation-change",
+              "conversation-select",
+              "input-resize-end",
+              "input-resize-move",
+              "input-resize-start",
+              "insert-tool",
+              "merge-seat",
+              "move-tool",
+              "remove-prompt-role",
+              "set-left-column-text",
+              "set-package-description",
+              "set-prompt-title"
+            ],
+            "dispatchedNotListed": [
+              "a2ui:console-command",
+              "a2ui:fix-all",
+              "a2ui:run-approved",
+              "a2ui:run-blocked",
+              "a2ui:system-message",
+              "a2ui:usage",
+              "a2ui:write-seat",
+              "add-prompt-role",
+              "ai-eval-grounding",
+              "ai-show-version",
+              "clear-left-column",
+              "conversation-change",
+              "conversation-select",
+              "input-resize-end",
+              "input-resize-move",
+              "input-resize-start",
+              "insert-tool",
+              "merge-seat",
+              "move-tool",
+              "remove-prompt-role",
+              "set-left-column-text",
+              "set-package-description",
+              "set-prompt-title"
+            ],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [
+              "content-header",
+              "view"
+            ],
+            "declaredNotRendered": [],
+            "bareSlot": true
+          },
+          "children": {
+            "slot": [
+              "content-header",
+              "view"
+            ],
+            "composed": [
+              "chat-fold",
+              "chat-header",
+              "chat-navigation-bar",
+              "error-banner",
+              "output-header",
+              "small-dropdown"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "message-sent",
+              "command-received",
+              "a2ui:console-command",
+              "a2ui:fix-all",
+              "a2ui:run-approved",
+              "a2ui:run-blocked",
+              "a2ui:system-message",
+              "a2ui:usage",
+              "a2ui:write-seat",
+              "add-prompt-role",
+              "ai-eval-grounding",
+              "ai-show-version",
+              "clear-left-column",
+              "conversation-change",
+              "conversation-select",
+              "input-resize-end",
+              "input-resize-move",
+              "input-resize-start",
+              "insert-tool",
+              "merge-seat",
+              "move-tool",
+              "remove-prompt-role",
+              "set-left-column-text",
+              "set-package-description",
+              "set-prompt-title"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "right-column-panel-container",
+            "figmaNodeId": "40001119:6025",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "ChatPanel"
+          ]
+        },
+        {
+          "name": "chat-repair-actions",
+          "tag": "chat-repair-actions",
+          "tagNote": null,
+          "className": "ChatRepairActions",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/chat-repair-actions.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "findings"
+            ],
+            "inManifest": [
+              "findings",
+              "stages",
+              "collapsed"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "repair-finding"
+            ],
+            "dispatched": [
+              "repair-finding"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "chat-fold"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "repair-finding"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    },
+    {
+      "title": "surface: composer",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 2,
+        "annotated": 2,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "workspace-layout",
+          "tag": "workspace-layout",
+          "tagNote": null,
+          "className": "WorkspaceLayout",
+          "file": "frontend/src/components/lit/workspace-layout.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id"
+            ],
+            "inManifest": [
+              "_leftCollapsed",
+              "_leftOwnedByOperator",
+              "leftCollapsed",
+              "_hasMiddle",
+              "_isThirdOpen",
+              "_openOwnedByOperator",
+              "isThirdOpen",
+              "_slabWidthPx",
+              "DOCK_FALLBACK_MS",
+              "MIN_LEFT_PX",
+              "MIN_CHAT_PX",
+              "SNAP_PX",
+              "GRIP_LEFT_PX",
+              "GRIP_CHAT_PX",
+              "MIN_RIGHT_PX",
+              "OPEN_CHAT_PX",
+              "OVER_DRAWING_SHARE",
+              "MIN_PROMPT_PX",
+              "_left",
+              "_middle",
+              "_rightPx",
+              "_rightIsOperatorSet",
+              "_columnGround",
+              "_groundObserver",
+              "_groundElement",
+              "_dragging",
+              "_onMiddleSlotChange",
+              "_onWindowResize",
+              "_onPointerBoundary",
+              "_rightPanel",
+              "_hasRight",
+              "_onRightSlotChange",
+              "_onCollapseToggle",
+              "_onTabChange",
+              "_onGripStart",
+              "_onGripEnd",
+              "_dockTimer",
+              "_onRunClick",
+              "_leftOwnedBeforeRun",
+              "_onRunHeld",
+              "_dockNow",
+              "_runInFlight",
+              "_onFlowViewReady",
+              "_rightOverDrawing",
+              "CONSOLE_CHAT_MAX_PX",
+              "_onGripDown",
+              "_onMouseMove",
+              "_onMouseUp",
+              "_toggleThird"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "dispatched": [
+              "resize",
+              "resize-end",
+              "resize-start",
+              "third-column-toggle"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [
+              "left",
+              "left-footer",
+              "left-header",
+              "middle",
+              "right"
+            ],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [
+              "left",
+              "left-footer",
+              "left-header",
+              "middle",
+              "right"
+            ],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "workspace-layout",
+            "figmaNodeId": null,
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "role-dropdown",
+          "tag": "role-dropdown",
+          "tagNote": null,
+          "className": "RoleDropdown",
+          "file": "frontend/src/components/lit/prompt-input/role-dropdown.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id"
+            ],
+            "inManifest": [],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "role-select",
+              "role-remove"
+            ],
+            "dispatched": [
+              "role-remove",
+              "role-select"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "role-select",
+              "role-remove"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "Component 24/Frame 886946",
+            "figmaNodeId": "40000934:22851",
+            "status": "built",
+            "annotation": "This is supposed to be the drop-down for the accordion tiles in the left column where we enter our prompt information. I collect prompt input area for the agents.",
+            "annotationSource": "verbatim"
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 22,
+            "timeline": [
+              {
+                "kind": "(untyped)",
+                "n": 2,
+                "first": "2026-09-27T19:30:38Z",
+                "last": "2026-09-27T19:31:24Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 20,
+                "first": "2026-09-28T00:32:27Z",
+                "last": "2026-09-28T15:45:30Z"
+              }
+            ],
+            "lastAt": "2026-09-28T15:45:30Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    }
+  ],
+  "undeclared": [
+    {
+      "tag": "a2ui-renderer",
+      "className": "A2UIRenderer",
+      "file": "src/components/lit/a2ui-renderer.ts"
+    },
+    {
+      "tag": "agent-canvas",
+      "className": "AgentCanvas",
+      "file": "src/components/lit/agent-canvas.ts"
+    },
+    {
+      "tag": "agent-card-element",
+      "className": "AgentCardElement",
+      "file": "src/components/lit/agent-card-element.ts"
+    },
+    {
+      "tag": "agent-flow",
+      "className": "AgentFlow",
+      "file": "src/components/lit/agent-flow.ts"
+    },
+    {
+      "tag": "ai-surface-sandbox",
+      "className": "AISurfaceSandbox",
+      "file": "src/components/lit/ai-surface-sandbox.ts"
+    },
+    {
+      "tag": "canvas-footer",
+      "className": "CanvasFooter",
+      "file": "src/components/lit/canvas-footer.ts"
+    },
+    {
+      "tag": "chat-action-bar",
+      "className": "ChatActionBar",
+      "file": "src/components/lit/chat-action-bar.ts"
+    },
+    {
+      "tag": "chat-fold",
+      "className": "ChatFold",
+      "file": "src/components/lit/chat-fold.ts"
+    },
+    {
+      "tag": "chat-footer",
+      "className": "ChatFooter",
+      "file": "src/components/lit/chat-footer.ts"
+    },
+    {
+      "tag": "chat-header",
+      "className": "ChatHeader",
+      "file": "src/components/lit/chat-header.ts"
+    },
+    {
+      "tag": "chat-input",
+      "className": "ChatInput",
+      "file": "src/components/lit/chat-input.ts"
+    },
+    {
+      "tag": "chat-messages",
+      "className": "ChatMessages",
+      "file": "src/components/lit/chat-messages.ts"
+    },
+    {
+      "tag": "chat-plugin-tray",
+      "className": "ChatPluginTray",
+      "file": "src/components/lit/chat-plugin-tray.ts"
+    },
+    {
+      "tag": "eval-feed",
+      "className": "EvalFeed",
+      "file": "src/components/lit/eval-feed.ts"
+    },
+    {
+      "tag": "left-column-header",
+      "className": "LeftColumnHeader",
+      "file": "src/components/lit/left-column-header.ts"
+    },
+    {
+      "tag": "output-controls",
+      "className": "OutputControls",
+      "file": "src/components/lit/output-controls.ts"
+    },
+    {
+      "tag": "output-footer-area",
+      "className": "OutputFooterArea",
+      "file": "src/components/lit/output-footer-area.ts"
+    },
+    {
+      "tag": "output-header",
+      "className": "OutputHeader",
+      "file": "src/components/lit/output-header.ts"
+    },
+    {
+      "tag": "small-dropdown",
+      "className": "SmallDropdown",
+      "file": "src/components/lit/small-dropdown.ts"
+    },
+    {
+      "tag": "trace-feed",
+      "className": "TraceFeed",
+      "file": "src/components/lit/trace-feed.ts"
+    },
+    {
+      "tag": "user-response-bubble",
+      "className": "UserResponseBubble",
+      "file": "src/components/lit/user-response-bubble.ts"
+    },
+    {
+      "tag": "prompt-input-section-department-role",
+      "className": "PromptInputSectionDepartmentRole",
+      "file": "src/components/lit/prompt-input/prompt-input-section-department-role.ts"
+    },
+    {
+      "tag": "prompt-input-section-system-role",
+      "className": "PromptInputSectionSystemRole",
+      "file": "src/components/lit/prompt-input/prompt-input-section-system-role.ts"
+    }
+  ],
+  "ledgerOnly": [
+    {
+      "nodeId": "40001185:2176",
+      "nodeName": "Frame 886987",
+      "records": 28,
+      "history": "ingested×19 · approved×9",
+      "firstAt": "2026-09-28T00:32:27Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 5,
+          "first": "2026-09-28T00:32:27Z",
+          "last": "2026-09-28T00:38:23Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T00:38:55Z",
+          "last": "2026-09-28T00:38:55Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T00:39:48Z",
+          "last": "2026-09-28T00:39:48Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T00:39:49Z",
+          "last": "2026-09-28T00:39:49Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T00:40:38Z",
+          "last": "2026-09-28T00:40:38Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T00:40:38Z",
+          "last": "2026-09-28T00:40:38Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-09-28T00:42:49Z",
+          "last": "2026-09-28T00:52:43Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T00:52:44Z",
+          "last": "2026-09-28T00:52:44Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-09-28T00:53:15Z",
+          "last": "2026-09-28T00:54:23Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T00:54:56Z",
+          "last": "2026-09-28T00:54:56Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T00:57:44Z",
+          "last": "2026-09-28T00:57:44Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T00:57:49Z",
+          "last": "2026-09-28T00:57:49Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T01:00:26Z",
+          "last": "2026-09-28T01:00:26Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T01:00:30Z",
+          "last": "2026-09-28T01:00:30Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T01:18:47Z",
+          "last": "2026-09-28T01:18:47Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T01:18:50Z",
+          "last": "2026-09-28T01:18:50Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 5,
+          "first": "2026-09-28T14:47:28Z",
+          "last": "2026-09-28T15:45:30Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T15:45:36Z",
+          "last": "2026-09-28T15:45:36Z"
+        }
+      ],
+      "tags": [
+        "f-40001185-2176"
+      ],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-28T15:45:36Z",
+      "lastVerdict": "catalog-check: 58 components, 13 finding(s), 1 blocking. Report: catalog-audit/prompt-composer.json"
+    },
+    {
+      "nodeId": "40001114:4012",
+      "nodeName": "console-card",
+      "records": 10,
+      "history": "ingested×5 · discarded×5",
+      "firstAt": "2026-09-27T19:49:14Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-27T19:49:14Z",
+          "last": "2026-09-27T19:49:14Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-27T19:49:14Z",
+          "last": "2026-09-27T19:49:14Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-27T19:51:03Z",
+          "last": "2026-09-27T19:51:03Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-27T19:51:03Z",
+          "last": "2026-09-27T19:51:03Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-27T19:52:19Z",
+          "last": "2026-09-27T19:52:19Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-27T19:52:19Z",
+          "last": "2026-09-27T19:52:19Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-27T19:54:53Z",
+          "last": "2026-09-27T19:54:53Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-27T19:54:53Z",
+          "last": "2026-09-27T19:54:53Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T00:40:51Z",
+          "last": "2026-09-28T00:40:51Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-28T00:40:51Z",
+          "last": "2026-09-28T00:40:51Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-28T00:40:51Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40000717:17090",
+      "nodeName": "Semantic DS",
+      "records": 5,
+      "history": "ingest-failed×2 · ingest-refused×3",
+      "firstAt": "2026-09-28T14:47:15Z",
+      "timeline": [
+        {
+          "kind": "ingest-failed",
+          "n": 1,
+          "first": "2026-09-28T14:47:15Z",
+          "last": "2026-09-28T14:47:15Z"
+        },
+        {
+          "kind": "ingest-refused",
+          "n": 1,
+          "first": "2026-09-28T14:48:10Z",
+          "last": "2026-09-28T14:48:10Z"
+        },
+        {
+          "kind": "ingest-failed",
+          "n": 1,
+          "first": "2026-09-28T14:48:10Z",
+          "last": "2026-09-28T14:48:10Z"
+        },
+        {
+          "kind": "ingest-refused",
+          "n": 2,
+          "first": "2026-09-28T14:48:53Z",
+          "last": "2026-09-28T14:52:20Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-28T14:52:20Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001191:6680",
+      "nodeName": "left-column-panel-container",
+      "records": 4,
+      "history": "ingested×3 · discarded×1",
+      "firstAt": "2026-09-27T22:58:27Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-27T22:58:27Z",
+          "last": "2026-09-27T22:58:27Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-27T22:59:23Z",
+          "last": "2026-09-27T22:59:23Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-09-28T00:34:13Z",
+          "last": "2026-09-28T00:35:45Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-28T00:35:45Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001191:8696",
+      "nodeName": "Frame 887023",
+      "records": 3,
+      "history": "ingested×3",
+      "firstAt": "2026-09-28T00:06:54Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 3,
+          "first": "2026-09-28T00:06:54Z",
+          "last": "2026-09-28T00:41:06Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-28T00:41:06Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001066:3888",
+      "nodeName": "center-panel-3rd-col",
+      "records": 2,
+      "history": "ingested×1 · discarded×1",
+      "firstAt": "2026-09-27T19:58:19Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-27T19:58:19Z",
+          "last": "2026-09-27T19:58:19Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-27T19:59:33Z",
+          "last": "2026-09-27T19:59:33Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-27T19:59:33Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001191:8707",
+      "nodeName": "Frame 887024",
+      "records": 2,
+      "history": "ingested×1 · discarded×1",
+      "firstAt": "2026-09-28T01:45:49Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T01:45:49Z",
+          "last": "2026-09-28T01:45:49Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-28T01:45:58Z",
+          "last": "2026-09-28T01:45:58Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-28T01:45:58Z",
+      "lastVerdict": null
+    }
+  ],
+  "ledgerNote": {
+    "records": 70,
+    "unreadable": 0,
+    "sessionRecords": 5,
+    "removalRecords": 6,
+    "path": "backend/logs/figma-ingest.jsonl"
+  }
+}

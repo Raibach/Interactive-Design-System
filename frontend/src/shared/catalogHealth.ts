@@ -11,7 +11,6 @@
  * FAIL LOUD: a 503 means the checker did not run. That is reported as an
  * incomplete check — never as a clean catalog.
  */
-import { API_BASE } from './apiHelper';
 
 export type FindingOwner = 'pipeline' | 'designer';
 export type FindingStage = 'ingest' | 'deliver' | 'gap' | 'clean';
@@ -54,24 +53,10 @@ export type CatalogHealth =
 
 /** Fetch the catalog check. Never throws; a failure is a reported state. */
 export async function fetchCatalogHealth(): Promise<CatalogHealth> {
-  try {
-    const res = await fetch(`${API_BASE}/catalog/audit`);
-    if (res.status === 503) {
-      const body = await res.json().catch(() => ({}));
-      return {
-        state: 'unavailable',
-        reason: body?.detail?.message || 'The catalog checker has not run.',
-      };
-    }
-    if (!res.ok) return { state: 'unavailable', reason: `HTTP ${res.status}` };
-    const report = (await res.json()) as CatalogAudit;
-    // Figma is an import tool, not a runtime gate: "partial" (live Figma checks
-    // skipped) still carries the findings, so it is a readable report, not a failure.
-    // 503 above is the only "did not run" — a partial report is "ran, minus Figma".
-    return { state: 'ok', report };
-  } catch (e) {
-    return { state: 'unavailable', reason: e instanceof Error ? e.message : 'unreachable' };
-  }
+  // DISABLED (owner): the catalog audit is no longer part of the application.
+  // No fetch is made. The state must NOT read as a clean catalog, so it is
+  // 'unavailable' — the badge helpers draw it as "unknown", never as a pass.
+  return { state: 'unavailable', reason: 'Catalog audit disabled.' };
 }
 
 /**
