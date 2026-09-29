@@ -851,6 +851,30 @@
     "behavior": "generated",
     "generator": "figma ingest \u2014 approve step"
   }
+},
+{
+  "figmaName": "catalog-component-node-raibach-ids",
+  "figmaNodeId": "40001207:3497",
+  "litComponent": "f-40001207-3497",
+  "file": "frontend/src/components/lit/f-40001207-3497.ts",
+  "status": "built",
+  "provenance": {
+    "litComponent": "generated",
+    "behavior": "generated",
+    "generator": "figma ingest \u2014 approve step"
+  }
+},
+{
+  "figmaName": "catalog-node-raibach-ids",
+  "figmaNodeId": "40001207:3559",
+  "litComponent": "f-40001207-3559",
+  "file": "frontend/src/components/lit/f-40001207-3559.ts",
+  "status": "built",
+  "provenance": {
+    "litComponent": "generated",
+    "behavior": "generated",
+    "generator": "figma ingest \u2014 approve step"
+  }
 }
 ]
 }

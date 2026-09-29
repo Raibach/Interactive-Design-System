@@ -7497,6 +7497,78 @@
     },
     {
       "kind": "javascript-module",
+      "path": "src/components/lit/f-40001207-3497.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "catalog-component-node-raibach-ids — measured from Figma node 40001207:3497\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.",
+          "name": "CatalogComponentNodeRaibachIds",
+          "members": [],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "f-40001207-3497",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "CatalogComponentNodeRaibachIds",
+          "declaration": {
+            "name": "CatalogComponentNodeRaibachIds",
+            "module": "src/components/lit/f-40001207-3497.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "f-40001207-3497",
+          "declaration": {
+            "name": "CatalogComponentNodeRaibachIds",
+            "module": "src/components/lit/f-40001207-3497.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/f-40001207-3559.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "catalog-node-raibach-ids — measured from Figma node 40001207:3559\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.",
+          "name": "CatalogNodeRaibachIds",
+          "members": [],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "f-40001207-3559",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "CatalogNodeRaibachIds",
+          "declaration": {
+            "name": "CatalogNodeRaibachIds",
+            "module": "src/components/lit/f-40001207-3559.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "f-40001207-3559",
+          "declaration": {
+            "name": "CatalogNodeRaibachIds",
+            "module": "src/components/lit/f-40001207-3559.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/components/lit/figma-layers-view.ts",
       "declarations": [
         {
@@ -11164,7 +11236,7 @@
                 {
                   "name": "dept",
                   "type": {
-                    "text": "typeof DEPARTMENTS[0]"
+                    "text": "(typeof DEPARTMENTS)[number]"
                   }
                 }
               ]

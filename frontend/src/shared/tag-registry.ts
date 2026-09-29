@@ -1378,6 +1378,30 @@ export const TAG_REGISTRY = {
     },
     events: [],
   },
+  // Ingested from Figma — catalog-component-node-raibach-ids (40001207:3497)
+  'f-40001207-3497': {
+    tag: 'f-40001207-3497',
+    surface: 'composer',
+    description: 'Generated from Figma node 40001207:3497 (catalog-component-node-raibach-ids). Implemented by <f-40001207-3497> in src/components/lit/f-40001207-3497.ts.',
+    props: {
+      content: { type: 'string', optional: true },
+      justify: { type: 'string', optional: true },
+      align: { type: 'string', optional: true },
+    },
+    events: [],
+  },
+  // Ingested from Figma — catalog-node-raibach-ids (40001207:3559)
+  'f-40001207-3559': {
+    tag: 'f-40001207-3559',
+    surface: 'composer',
+    description: 'Generated from Figma node 40001207:3559 (catalog-node-raibach-ids). Implemented by <f-40001207-3559> in src/components/lit/f-40001207-3559.ts.',
+    props: {
+      content: { type: 'string', optional: true },
+      justify: { type: 'string', optional: true },
+      align: { type: 'string', optional: true },
+    },
+    events: [],
+  },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1464,6 +1488,8 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   'compiled-output-viewer',
   'workspace-layout',
   'f-40001204-5752',
+  'f-40001207-3497',
+  'f-40001207-3559',
 ];
 
 /** Tags belonging to the shell — AI must never touch these */
