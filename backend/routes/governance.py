@@ -21,5 +21,5 @@ async def inspect_now():
     """
     try:
         return await run_inspection("manual")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — a failed run is SAYS so, never an empty 500
         return {"status": "error", "error": f"{type(exc).__name__}: {exc}"}

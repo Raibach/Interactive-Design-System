@@ -71,7 +71,7 @@ _run_lock = asyncio.Lock()
 def _read_json(path: Path) -> Optional[Any]:
     try:
         return json.loads(path.read_text())
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — reported, never swallowed
         print(f"⚠️  [inspection] could not read {path.name}: {exc}")
         return None
 
@@ -80,7 +80,7 @@ def _git(*args: str) -> str:
     try:
         out = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, timeout=30)
         return out.stdout.strip()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return f"(git {args[0]} failed: {exc})"
 
 
@@ -96,7 +96,7 @@ def run_catalog_check() -> Optional[dict[str, Any]]:
         )
         if done.returncode != 0:
             print(f"ℹ️  [inspection] catalog check returned {done.returncode} (the report is still read)")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         print(f"⚠️  [inspection] the catalog check could not be run: {exc}")
         return None
     return _read_json(REPORT_FILE)
@@ -156,7 +156,7 @@ def _previous_inspection(conversation_id: Optional[str]) -> Optional[dict[str, A
         return None
     try:
         rows = state.conversation_api.get_messages(conversation_id, OWNER_ID, limit=50) or []
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         print(f"⚠️  [inspection] the console conversation could not be read: {exc}")
         return None
     for m in reversed(rows):
@@ -164,7 +164,7 @@ def _previous_inspection(conversation_id: Optional[str]) -> Optional[dict[str, A
         if isinstance(meta, str):
             try:
                 meta = json.loads(meta)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 meta = {}
         if meta.get("kind") == "inspection":
             return meta
@@ -278,7 +278,7 @@ def _persona(role_id: str) -> tuple[str, str]:
 
         entry = ROLE_CAPABILITIES.get(role_id) or {}
         return entry.get("persona", ""), entry.get("driving_question", "")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         print(f"⚠️  [inspection] role_caps could not be read: {exc}")
         return "", ""
 
@@ -348,11 +348,11 @@ class _LocalTools:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — local endpoint
             return json.loads(resp.read().decode())
 
     def _get(self, path: str, timeout: int = 15) -> dict[str, Any]:
-        with urllib.request.urlopen(f"{self._root()}{path}", timeout=timeout) as resp:
+        with urllib.request.urlopen(f"{self._root()}{path}", timeout=timeout) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
 
     def load(self, model_key: str) -> Optional[str]:
@@ -379,7 +379,7 @@ class _LocalTools:
             try:
                 self._post("/api/v1/models/unload", {"model_key": key}, timeout=60)
                 out.append(key)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — said in the report, not swallowed
                 print(f"⚠️  [inspection] {key} could not be unloaded: {exc}")
                 out.append(f"{key} (failed: {exc})")
         self._loaded_by_us = []
@@ -445,7 +445,7 @@ def _extract_json_object(content: str) -> Optional[dict[str, Any]]:
     try:
         parsed = json.loads(text[start : end + 1])
         return parsed if isinstance(parsed, dict) else None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -703,7 +703,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
         if state.prompt_sessions_api:
             try:
                 console = state.prompt_sessions_api.get_or_create_console_session(user_id=OWNER_ID)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 meta["console_error"] = f"the console conversation could not be opened ({exc})"
         conversation_id = (console or {}).get("conversation_id")
 
@@ -722,7 +722,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
             query = " ".join(open_ids) or " ".join(r["id"] for r in sheet.get("rows", []))
             hits = governance_vector.search(query, k=4)
             related_refs = [f"{h.get('kind')}:{h.get('ref_id')}" for h in hits if h.get("ref_id")]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — a store that cannot answer says so
             meta["related_error"] = f"{type(exc).__name__}: {exc}"
         if related_refs:
             meta["related"] = related_refs
@@ -878,7 +878,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
         if file_message and conversation_id and state.conversation_api:
             try:
                 state.conversation_api.add_message(conversation_id, OWNER_ID, "assistant", text, metadata=meta)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 print(f"❌ [inspection] the report could not be written to the console conversation: {exc}")
                 meta["error"] = f"the report could not be filed ({exc})"
             # AND INTO POSTGRES FIRST — the relational home, where the row is counted,
@@ -890,7 +890,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
                 row = {"id": meta.get("at", ""), "at": meta.get("at", ""), "text": text}
                 governance_store.upsert_items("inspection", [row])
                 governance_vector.index_rows("inspection", [row])
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — a store failure never kills the run
                 print(f"⚠️  [inspection] the report could not be stored ({type(exc).__name__}: {exc})")
                 meta["index_error"] = f"{type(exc).__name__}: {exc}"
         elif file_message:
@@ -908,6 +908,6 @@ async def daily_loop() -> None:
             await run_inspection("scheduled")
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — the loop must not die silently
             print(f"❌ [inspection] scheduled run failed: {exc}")
         await asyncio.sleep(max(60.0, INTERVAL_HOURS * 3600))

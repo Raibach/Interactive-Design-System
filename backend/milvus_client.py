@@ -299,12 +299,12 @@ class MilvusClientWrapper:
         if self._server:
             try:
                 self._server.stop()
-            except:
+            except Exception:
                 pass
         if self.client:
             try:
                 self.client.close()
-            except:
+            except Exception:
                 pass
 
 

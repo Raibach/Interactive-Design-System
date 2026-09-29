@@ -88,7 +88,7 @@ class QueryGenerator:
         self,
         user_question: str,
         conversation_context: Optional[str] = None,
-        user_id: str = None,
+        user_id: Optional[str] = None,
         project_id: Optional[str] = None,
         detected_entities: Optional[dict] = None
     ) -> dict[str, any]:
@@ -185,7 +185,7 @@ class QueryGenerator:
         tag_filters: list[str],
         user_id: str,
         project_id: Optional[str] = None,
-        character_names: list[str] = None
+        character_names: Optional[list[str]] = None
     ) -> dict[str, any]:
         """
         Generate SQL query parameters for tag-based conversation retrieval

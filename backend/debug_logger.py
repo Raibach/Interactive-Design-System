@@ -284,7 +284,7 @@ class DebugLogger:
                     for line in lines[-limit:]:
                         try:
                             errors.append(json.loads(line.strip()))
-                        except:
+                        except Exception:
                             pass
             return errors[-limit:]
         except Exception as e:
@@ -317,7 +317,7 @@ def log_request_response(f):
             if hasattr(response, 'get_data'):
                 try:
                     response_data = json.loads(response.get_data(as_text=True))
-                except:
+                except Exception:
                     pass
             
             # Get request data

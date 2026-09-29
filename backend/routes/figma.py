@@ -18,9 +18,14 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from config import (
-    is_development,
-)
+# THE `from config import is_development` THAT STOOD HERE IS GONE, and its comment with it. It
+# was carried with `# noqa: F401 (retained for route modules that re-import *)`, so it was kept
+# on purpose and kept an unused import to satisfy a reader that no longer exists: there is no
+# star-import anywhere in `backend/`, nothing imports `is_development` from this module, and the
+# name is used in exactly two files — `config.py`, which defines it, and `figma_service.py`,
+# which imports it from `config` directly. The premise had quietly stopped being true, and an
+# import held open for a caller that is not there is the kind of thing that outlives everyone
+# who could explain it.
 from deps import (
     a2ui_catalog,
 )
@@ -153,7 +158,7 @@ async def api_figma_file(request: FigmaQueryRequest):
     try:
         data = get_file(request.file_key)
         return data or {"error": "No data returned"}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — reported through `ok`, not swallowed
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/figma/versions/{file_key}")
@@ -184,7 +189,7 @@ async def api_figma_node(file_key: str, node_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/figma/dev-resources/{file_key}")
-async def api_figma_dev_resources(file_key: str, node_id: str = None):
+async def api_figma_dev_resources(file_key: str, node_id: Optional[str] = None):
     """Get dev resources (Code Connect annotations) from a Figma file."""
     try:
         data = get_dev_resources(file_key, node_id)
@@ -1315,7 +1320,7 @@ def _asset_bytes(asset: dict[str, Any]) -> Optional[bytes]:
             return None
     if kind == "mcp-url":
         try:
-            with urllib.request.urlopen(data, timeout=10) as response:
+            with urllib.request.urlopen(data, timeout=10) as response:  # noqa: S310 — the URL is the local MCP server's, matched by _MCP_ASSET_URL_RE
                 return response.read() or None
         except Exception:
             return None

@@ -435,12 +435,12 @@ class ProjectsAPI:
                         # This shouldn't happen, but handle it
                         print("❌ [ProjectsAPI] Constraint violation but no existing project found - this is unexpected")
                         conn.rollback()  # Rollback the read transaction
-                        raise insert_error
+                        raise
                 else:
                     # Some other error - rollback and re-raise it
                     print("📝 [ProjectsAPI] Non-constraint error, rolling back transaction...")
                     conn.rollback()
-                    raise insert_error
+                    raise
             
             print("📝 [ProjectsAPI] Committing transaction...")
             conn.commit()
@@ -460,7 +460,7 @@ class ProjectsAPI:
             if conn:
                 conn.rollback()
                 print("📝 [ProjectsAPI] Transaction rolled back")
-            raise e
+            raise
         finally:
             if cursor:
                 cursor.close()
@@ -510,9 +510,9 @@ class ProjectsAPI:
 
             conn.commit()
             return cursor.rowcount > 0
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -658,5 +658,5 @@ class ProjectsAPI:
                 cursor.close()
             if conn:
                 conn.close()
-            raise e
+            raise
 

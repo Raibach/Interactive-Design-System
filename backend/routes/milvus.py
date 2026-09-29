@@ -36,7 +36,7 @@ async def api_milvus_info():
         try:
             info = client.get_collection_stats(name)
             entry["count"] = (info or {}).get("row_count", "unknown")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — a stat that cannot be read is said
             entry["error"] = str(e)
         stats.append(entry)
     return {
@@ -61,7 +61,7 @@ async def api_milvus_collections():
         try:
             desc = client.client.describe_collection(collection_name=name)
             entry["fields"] = [f.get("name") for f in (desc or {}).get("fields", [])]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             entry["error"] = str(e)
         stats.append(entry)
     return {"collections": collections, "stats": stats}

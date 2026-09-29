@@ -1211,7 +1211,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             if session.get("left_column_content"):
                 parsed = json.loads(session["left_column_content"])
                 sections = parsed.get("sections", [])
-        except:
+        except Exception:
             pass
 
         # Fetch actual conversation messages (for ChatPanel history on mount)

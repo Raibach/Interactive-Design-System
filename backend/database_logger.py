@@ -229,7 +229,7 @@ class DatabaseLogger:
                     for line in lines[-limit:]:
                         try:
                             errors.append(json.loads(line.strip()))
-                        except:
+                        except Exception:
                             pass
         except Exception as e:
             print(f"⚠️ Error reading error log: {e}")
@@ -246,7 +246,7 @@ class DatabaseLogger:
                     for line in lines[-limit:]:
                         try:
                             connections.append(json.loads(line.strip()))
-                        except:
+                        except Exception:
                             pass
         except Exception as e:
             print(f"⚠️ Error reading connection log: {e}")

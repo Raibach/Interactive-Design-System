@@ -74,7 +74,7 @@ class ConversationAPI:
         try:
             from debug_logger import debug_logger
             DEBUG_LOGGING_ENABLED = True
-        except:
+        except Exception:
             DEBUG_LOGGING_ENABLED = False
             debug_logger = None
         
@@ -173,7 +173,7 @@ class ConversationAPI:
                     "user_id": user_id[:8] + "..." if user_id else None,
                     "error_type": "ProgrammingError"
                 })
-            except:
+            except Exception:
                 pass
             
             print(f"❌ {error_msg}\n{traceback.format_exc()}")
@@ -227,7 +227,7 @@ class ConversationAPI:
                     "project_id": project_id,
                     "error_type": type(e).__name__
                 })
-            except:
+            except Exception:
                 pass
             
             print(f"❌ {error_msg}\n{traceback.format_exc()}")
@@ -309,9 +309,9 @@ class ConversationAPI:
             conversation_id = cursor.fetchone()['id']
             conn.commit()
             return str(conversation_id)
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -391,9 +391,9 @@ class ConversationAPI:
 
             conn.commit()
             return updated
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -476,9 +476,9 @@ class ConversationAPI:
 
             conn.commit()
             return deleted
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -498,9 +498,9 @@ class ConversationAPI:
 
             conn.commit()
             return cursor.rowcount > 0
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -673,7 +673,7 @@ class ConversationAPI:
             if isinstance(conv_metadata, str):
                 try:
                     conv_metadata = json.loads(conv_metadata)
-                except:
+                except Exception:
                     conv_metadata = {}
             conv_project_id = conv_metadata.get('project_id') if conv_metadata else None
 
@@ -837,9 +837,9 @@ class ConversationAPI:
                 print(f"⚠️ Tag storage trigger failed: {trigger_err}")
             
             return str(message_id)
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -1028,9 +1028,9 @@ class ConversationAPI:
 
             conn.commit()
             return cursor.rowcount > 0
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -1096,7 +1096,7 @@ class ConversationAPI:
         except Exception as e:
             conn.rollback()
             print(f"⚠️ Failed to track tag suggestion: {e}")
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
@@ -1382,7 +1382,7 @@ class ConversationAPI:
             print(f"❌ Failed to store literary tags: {e}")
             import traceback
             traceback.print_exc()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()
