@@ -7497,6 +7497,42 @@
     },
     {
       "kind": "javascript-module",
+      "path": "src/components/lit/f-40001206-2888.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "layout-id-component — measured from Figma node 40001206:2888\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.",
+          "name": "LayoutIdComponent",
+          "members": [],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "f-40001206-2888",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "LayoutIdComponent",
+          "declaration": {
+            "name": "LayoutIdComponent",
+            "module": "src/components/lit/f-40001206-2888.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "f-40001206-2888",
+          "declaration": {
+            "name": "LayoutIdComponent",
+            "module": "src/components/lit/f-40001206-2888.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/components/lit/f-40001207-3497.ts",
       "declarations": [
         {
