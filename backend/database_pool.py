@@ -53,7 +53,7 @@ class PooledConnection:
                 logger.error(f"Error returning connection to pool: {e}")
                 try:
                     self._conn.close()
-                except:
+                except Exception:
                     pass
     
     def __enter__(self):
@@ -396,11 +396,11 @@ class DatabasePoolManager:
                     # Connection is dead, close it and get a new one
                     try:
                         conn.close()
-                    except:
+                    except Exception:
                         pass
                     try:
                         self.pool.putconn(conn, close=True)
-                    except:
+                    except Exception:
                         pass
                     # Get a new connection
                     conn = self.pool.getconn()
@@ -488,12 +488,12 @@ class DatabasePoolManager:
                     # Connection is dead, close it and get a new one
                     try:
                         conn.close()
-                    except:
+                    except Exception:
                         pass
                     # Remove dead connection from pool
                     try:
                         self.pool.putconn(conn, close=True)
-                    except:
+                    except Exception:
                         pass
                     # Get a new connection
                     conn = self.pool.getconn()
@@ -512,7 +512,7 @@ class DatabasePoolManager:
                         logger.error(f"Error returning connection to pool: {e}")
                         try:
                             conn.close()
-                        except:
+                        except Exception:
                             pass
                 
                 # Success - reset error tracking
@@ -536,7 +536,7 @@ class DatabasePoolManager:
                     if attempt == retries - 2:
                         try:
                             self._initialize_pool()
-                        except:
+                        except Exception:
                             pass
                 else:
                     logger.error(f"❌ All {retries} connection attempts failed")
@@ -559,7 +559,7 @@ class DatabasePoolManager:
                 # Note: ThreadedConnectionPool doesn't expose stats directly,
                 # so we track our own
                 stats['pool_initialized'] = True
-            except:
+            except Exception:
                 stats['pool_initialized'] = False
         else:
             stats['pool_initialized'] = False

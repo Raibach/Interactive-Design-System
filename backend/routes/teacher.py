@@ -158,6 +158,21 @@ async def api_teacher_query(request: TeacherQueryRequest):
         uid = get_user_id_from_header()
         conv_id = request.conversation_id
 
+        # WHAT THE TURN COULD NOT READ OR WRITE, SAID OUT LOUD (2026-09-18). Each of these
+        # used to end in a `print` — a failure the answer was quietly missing — and the
+        # caller got a clean 200. They ride the response now; the seat draws them and the
+        # frontend logs them into the trace. check:error-suppression counts what still
+        # swallows, and this list is the fix for the ones that used to be here.
+        #
+        # IT IS DECLARED HERE, BEFORE THE FIRST HANDLER THAT APPENDS TO IT, and that is the
+        # whole point of its position: the two guards below (the closed-conversation check at
+        # the top of this function, and the package-ownership check under it) both append
+        # from an `except`, and a name that is declared further down the function body does
+        # not exist yet when those handlers run. Every one of those paths raised
+        # `NameError: name 'warnings' is not defined` and replaced the failure it was
+        # reporting with a crash of its own.
+        warnings: list[str] = []
+
         # ── A CLOSED CONVERSATION TAKES NO MORE TURNS ─────────────────────────
         #
         # A seat holds the id it adopted, and an update settles (closes) the conversation it
@@ -171,7 +186,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 if live and live.get("is_archived"):
                     print(f"ℹ️  Conversation {str(conv_id)[:8]}… is closed — starting a new one.")
                     conv_id = None
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — reported, not raised
                 warnings.append(
                     f"This conversation's status could not be checked ({e}) — a reply may be written to a closed thread."
                 )
@@ -195,7 +210,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
                     )
                     print(f"ℹ️  Conversation {str(conv_id)[:8]}… is not package {str(request.session_id)[:8]}…'s — dropped.")
                     conv_id = None
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — reported, not raised
                 persistence_error = (
                     f"The conversation could not be verified against its package ({e}), so your turn was NOT saved."
                 )
@@ -237,12 +252,10 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # have had one, and the caller saw a clean 200. The failure now refuses the write and
         # says so in the response (`persistence_error`), which the seat draws in the thread.
         persistence_error = None
-        # WHAT THE TURN COULD NOT READ OR WRITE, SAID OUT LOUD (2026-09-18). Each of these
-        # used to end in a `print` — a failure the answer was quietly missing — and the
-        # caller got a clean 200. They ride the response now; the seat draws them and the
-        # frontend logs them into the trace. check:error-suppression counts what still
-        # swallows, and this list is the fix for the ones that used to be here.
-        warnings: list[str] = []
+        # `warnings` is NOT declared here — it is declared near the top of the function, above
+        # the two guards that append to it. Declaring it a second time at this point would
+        # reset the list to empty and silently discard whatever those guards had already
+        # recorded, which is a quieter version of the same bug as using it before it existed.
         if request.mode != "chat":
             print(f"ℹ️  mode={request.mode} — not a conversation; no conversation attached or created.")
         elif not request.person_turn and not conv_id:

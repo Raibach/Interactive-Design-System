@@ -977,7 +977,7 @@ class GraceMemoryAPI:
                 memory_after = process.memory_info().rss / (1024 * 1024)
                 if memory_after > 2000:
                     print(f"⚠️ Memory after embedding: {memory_after:.0f}MB (high)")
-            except:
+            except Exception:
                 pass
 
     def get_memory(self, user_id: str, memory_id: str) -> Optional[dict]:
@@ -1303,7 +1303,7 @@ class GraceMemoryAPI:
                 if mem_dict.get('source_metadata') and isinstance(mem_dict['source_metadata'], str):
                     try:
                         mem_dict['source_metadata'] = json.loads(mem_dict['source_metadata'])
-                    except:
+                    except Exception:
                         mem_dict['source_metadata'] = {}
                 
                 # Add similarity score
@@ -1400,7 +1400,7 @@ class GraceMemoryAPI:
                 if mem_dict.get('source_metadata') and isinstance(mem_dict['source_metadata'], str):
                     try:
                         mem_dict['source_metadata'] = json.loads(mem_dict['source_metadata'])
-                    except:
+                    except Exception:
                         mem_dict['source_metadata'] = {}
                 result.append(mem_dict)
 

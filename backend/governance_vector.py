@@ -115,7 +115,7 @@ def search(query: str, k: int = 8, kind: Optional[str] = None) -> list[dict[str,
             limit=k,
             output_fields=["kind", "ref_id", "status", "owner", "check", "level", "component", "file", "at", "text"],
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — a store that cannot answer says so
         print(f"[governance_vector] search failed: {type(exc).__name__}: {exc}")
         return []
     out = []
@@ -133,5 +133,5 @@ def count(kind: Optional[str] = None) -> int:
     try:
         result = client.client.query(collection_name=COLLECTION, filter=expr, output_fields=["count(*)"])
         return int(result[0].get("count(*)", 0)) if result else 0
-    except Exception:
+    except Exception:  # noqa: BLE001
         return 0

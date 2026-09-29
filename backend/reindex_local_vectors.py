@@ -23,9 +23,9 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient  # noqa: E402
 
-from config import (
+from config import (  # noqa: E402
     EMBEDDING_DIMENSION,
     EMBEDDING_MODEL_VERSION,
     MILVUS_URI,
@@ -45,7 +45,7 @@ def _clear(client, name: str) -> None:
         if name in client.list_collections():
             client.drop_collection(name)
         client.create_collection(name, dimension=EMBEDDING_DIMENSION, metric_type="COSINE", auto_id=True)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         print(f"  could not reset {name}: {type(exc).__name__}: {exc}")
 
 
@@ -66,7 +66,7 @@ def main() -> int:
         import psycopg2
 
         from memory_embedder import get_embedder
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — a missing piece is said, not swallowed
         print(f"reindex not possible: {type(exc).__name__}: {exc}")
         return 1
 
@@ -180,7 +180,7 @@ def main() -> int:
             f"vectors register={n_reg} corrections={n_cor} findings={n_find} inspections={n_ins} "
             f"(collection now holds {governance_count()})"
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — a seeding failure is said, not hidden
         print(f"governance seeding failed: {type(exc).__name__}: {exc}")
 
     # ── receipts ────────────────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ def main() -> int:
         try:
             total = client.query(collection_name=name, filter="", output_fields=["count(*)"])
             count = total[0].get("count(*)", "?") if total else "?"
-        except Exception:
+        except Exception:  # noqa: BLE001
             count = "?"
         print(f"  {name}: {count}")
     print(f"indexed {inserted} memories ({empty} without an embedding), vector ids written back to Postgres")

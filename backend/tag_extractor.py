@@ -439,9 +439,9 @@ Your response:"""
             
             conn.commit()
             print(f"✅ Stored {len(tags_array)} tags for conversation {conversation_id}")
-        except Exception as e:
+        except Exception:
             conn.rollback()
-            raise e
+            raise
         finally:
             cursor.close()
             conn.close()

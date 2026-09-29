@@ -62,6 +62,15 @@ async def store_dictation_memory(
                 # Import query_llm from grace_gui (already imported at top)
                 from grace_gui import query_llm
 
+                # THE CLASS THIS CALLS HAD NEVER BEEN IMPORTED. The name on the line below was
+                # used and never bound, so the first request that reached it raised
+                # `NameError: name 'TagExtractor' is not defined` instead of building an
+                # extractor — and it sits on the path that reads historical context, so the
+                # failure arrived as a 500 on a memory query. `tag_extractor` imports only the
+                # standard library, so it is imported here beside `query_llm`, which is the
+                # same lazy shape this block already uses.
+                from tag_extractor import TagExtractor
+
                 state.tag_extractor = TagExtractor(query_llm)
 
             # Extract historical context
@@ -381,11 +390,11 @@ async def delete_memory(
             if conn:
                 try:
                     conn.rollback()
-                except:
+                except Exception:
                     pass
                 try:
                     conn.close()
-                except:
+                except Exception:
                     pass
             raise
         except Exception as db_error:
@@ -393,7 +402,7 @@ async def delete_memory(
             if conn:
                 try:
                     conn.rollback()
-                except:
+                except Exception:
                     pass
             import traceback
 
@@ -411,13 +420,13 @@ async def delete_memory(
             if cursor:
                 try:
                     cursor.close()
-                except:
+                except Exception:
                     pass
             # Connection will be returned to pool by close()
             if conn:
                 try:
                     conn.close()
-                except:
+                except Exception:
                     pass
 
         # Try to delete embeddings from Milvus (non-blocking)
@@ -464,7 +473,7 @@ async def delete_memory(
         if conn:
             try:
                 conn.rollback()
-            except:
+            except Exception:
                 pass
         raise
     except Exception as e:
@@ -475,7 +484,7 @@ async def delete_memory(
         if conn:
             try:
                 conn.rollback()
-            except:
+            except Exception:
                 pass
         raise HTTPException(status_code=500, detail=f"Error deleting memory: {e!s}")
     finally:
@@ -486,7 +495,7 @@ async def delete_memory(
                 # Check if connection is still open before closing
                 if not conn.closed:
                     conn.close()
-            except:
+            except Exception:
                 pass
 
 

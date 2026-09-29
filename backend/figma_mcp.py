@@ -77,7 +77,7 @@ def _post(
             f"Figma's MCP did not answer within {timeout:g}s ({url}). "
             f"It may be busy, or the file may be syncing."
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — the reason IS the payload here
         return None, None, f"Figma MCP request failed: {type(e).__name__}: {e}"
 
     session_out = r.headers.get("Mcp-Session-Id") or session
@@ -190,7 +190,7 @@ def _rest_design_block(
     """
     try:
         from figma_service import get_cached_spec, get_component_descriptions
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — degrade loudly, never silently
         return False, "", f"REST channel unavailable ({type(e).__name__}: {e})"
 
     # refresh=True on purpose. The cached rows were written by an extractor that

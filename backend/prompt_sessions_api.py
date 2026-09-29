@@ -36,7 +36,7 @@ class PromptSessionsAPI:
         self,
         user_id: str,
         title: str = "Untitled Prompt Session",
-        description: str = None,
+        description: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Create a new prompt session with associated conversation
@@ -93,9 +93,9 @@ class PromptSessionsAPI:
 
                 return dict(session) if session else None
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def get_or_create_console_tab_conversation(self, user_id: str, tab: str) -> Optional[str]:
         """The console session's conversation FOR ONE TAB — approvals has its own.
@@ -325,9 +325,9 @@ class PromptSessionsAPI:
                 conn.commit()
                 return session
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def get_sessions(
         self,
@@ -463,8 +463,8 @@ class PromptSessionsAPI:
 
                 return [dict(session) for session in sessions]
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def get_categories(self) -> list[dict[str, Any]]:
         """
@@ -478,8 +478,8 @@ class PromptSessionsAPI:
                     "SELECT name, color, title_color, text_color FROM categories ORDER BY name"
                 )
                 return [dict(row) for row in cursor.fetchall()]
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def list_evaluations(self, session_id: str) -> list[dict[str, Any]]:
         """
@@ -507,8 +507,8 @@ class PromptSessionsAPI:
                     row["trigger"] = row.pop("trigger_kind")
                     row.pop("created_at", None)
                 return rows
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def record_evaluation(
         self,
@@ -536,8 +536,8 @@ class PromptSessionsAPI:
                 row["trigger"] = row.pop("trigger_kind")
                 row.pop("created_at", None)
                 return row
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def delete_evaluation(self, session_id: str, evaluation_id: str) -> bool:
         """Remove one judged run. Returns True when a row was deleted."""
@@ -555,11 +555,11 @@ class PromptSessionsAPI:
                 row = cursor.fetchone()
                 conn.commit()
                 return row is not None
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def _log_prompt_modification_to_milvus(
-        self, suggestion: dict[str, Any], user_id: str, inserted_position: str = None
+        self, suggestion: dict[str, Any], user_id: str, inserted_position: Optional[str] = None
     ) -> bool:
         """
         Log prompt modification to Milvus as a [modified] event with timestamp
@@ -735,27 +735,27 @@ class PromptSessionsAPI:
 
                 return result
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def update_session(
         self,
         session_id: str,
         user_id: str,
-        title: str = None,
-        description: str = None,
-        left_column_content: str = None,
-        compiled_output: str = None,
-        conversation_id: str = None,
-        is_active: bool = None,
-        is_archived: bool = None,
-        metadata: dict = None,
-        category: str = None,
-        status: str = None,
-        likes: int = None,
-        model_name: str = None,
-        team_name: str = None,
-        avatar_url: str = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        left_column_content: Optional[str] = None,
+        compiled_output: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        is_archived: Optional[bool] = None,
+        metadata: Optional[dict] = None,
+        category: Optional[str] = None,
+        status: Optional[str] = None,
+        likes: Optional[int] = None,
+        model_name: Optional[str] = None,
+        team_name: Optional[str] = None,
+        avatar_url: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Update a prompt session
@@ -853,9 +853,9 @@ class PromptSessionsAPI:
                 # Return updated session
                 return self.get_session(session_id, user_id)
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def delete_session(
         self, session_id: str, user_id: str, permanent: bool = False
@@ -897,17 +897,17 @@ class PromptSessionsAPI:
 
                 return result is not None
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def save_version(
         self,
         session_id: str,
         user_id: str,
         left_column_content: str,
-        compiled_output: str = None,
-        change_description: str = None,
+        compiled_output: Optional[str] = None,
+        change_description: Optional[str] = None,
         change_type: str = "manual",
     ) -> dict[str, Any]:
         """
@@ -957,9 +957,9 @@ class PromptSessionsAPI:
 
                 return dict(version) if version else None
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def get_versions(
         self, session_id: str, user_id: str, limit: int = 20, offset: int = 0
@@ -995,8 +995,8 @@ class PromptSessionsAPI:
 
                 return [dict(version) for version in versions]
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def get_version(
         self, session_id: str, version_number: int, user_id: str
@@ -1029,8 +1029,8 @@ class PromptSessionsAPI:
 
                 return dict(version) if version else None
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def restore_version(
         self, session_id: str, version_number: int, user_id: str
@@ -1107,9 +1107,9 @@ class PromptSessionsAPI:
                 # Return the restored version
                 return self.get_version(session_id, new_version_number, user_id)
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def get_context_for_ai(self, session_id: str, user_id: str) -> str:
         """
@@ -1133,8 +1133,8 @@ class PromptSessionsAPI:
 
                 return result["context"] if result else ""
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def create_suggestion(
         self,
@@ -1142,11 +1142,11 @@ class PromptSessionsAPI:
         user_id: str,
         suggestion_type: str,
         content: str,
-        context: str = None,
-        generated_by_model: str = None,
+        context: Optional[str] = None,
+        generated_by_model: Optional[str] = None,
         confidence_score: float = 1.0,
         relevance_score: float = 1.0,
-        metadata: dict = None,
+        metadata: Optional[dict] = None,
     ) -> dict[str, Any]:
         """
         Create an AI suggestion for a prompt session
@@ -1204,16 +1204,16 @@ class PromptSessionsAPI:
 
                 return dict(suggestion) if suggestion else None
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def get_suggestions(
         self,
         session_id: str,
         user_id: str,
-        used: bool = None,
-        suggestion_type: str = None,
+        used: Optional[bool] = None,
+        suggestion_type: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -1254,11 +1254,11 @@ class PromptSessionsAPI:
 
                 return [dict(suggestion) for suggestion in suggestions]
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def mark_suggestion_used(
-        self, suggestion_id: str, user_id: str, inserted_position: str = None
+        self, suggestion_id: str, user_id: str, inserted_position: Optional[str] = None
     ) -> dict[str, Any]:
         """
         Mark an AI suggestion as used and log to Milvus as a prompt modification
@@ -1334,15 +1334,15 @@ class PromptSessionsAPI:
 
                 return suggestion_dict
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def get_context_entries(
         self,
         session_id: str,
         user_id: str,
-        context_type: str = None,
+        context_type: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -1377,8 +1377,8 @@ class PromptSessionsAPI:
 
                 return [dict(entry) for entry in entries]
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def add_context_entry(
         self,
@@ -1386,9 +1386,9 @@ class PromptSessionsAPI:
         user_id: str,
         context_type: str,
         content: str,
-        source: str = None,
+        source: Optional[str] = None,
         relevance_score: float = 1.0,
-        metadata: dict = None,
+        metadata: Optional[dict] = None,
     ) -> dict[str, Any]:
         """
         Add a context entry for a prompt session
@@ -1441,9 +1441,9 @@ class PromptSessionsAPI:
 
                 return dict(entry) if entry else None
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def delete_context_entry(self, context_id: str, user_id: str) -> bool:
         """
@@ -1474,9 +1474,9 @@ class PromptSessionsAPI:
 
                 return result is not None
 
-            except Exception as e:
+            except Exception:
                 conn.rollback()
-                raise e
+                raise
 
     def get_session_stats(self, user_id: str) -> dict[str, Any]:
         """
@@ -1529,8 +1529,8 @@ class PromptSessionsAPI:
                     }
                 )
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise
 
     def search_sessions(
         self,
@@ -1610,5 +1610,5 @@ class PromptSessionsAPI:
 
                 return [dict(session) for session in sessions]
 
-            except Exception as e:
-                raise e
+            except Exception:
+                raise

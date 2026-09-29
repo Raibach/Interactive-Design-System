@@ -78,7 +78,7 @@ async def shutdown_event():
         try:
             import asyncio as _asyncio
             await _asyncio.wait_for(_asyncio.shield(task), timeout=5)
-        except Exception:
+        except Exception:  # noqa: BLE001 — shutdown must not hang on the inspector
             pass
 
 
