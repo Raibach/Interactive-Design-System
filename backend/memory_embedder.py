@@ -11,11 +11,16 @@ Generates embeddings for conversations using sentence-transformers
 # crash loop that took the site down with it. The capability flag is now a cheap presence
 # check — no torch — and the class is imported where the model is actually loaded.
 import importlib.util
-from typing import Optional
 
 HAS_SENTENCE_TRANSFORMERS = importlib.util.find_spec("sentence_transformers") is not None
 SentenceTransformer = None  # bound on first model load; see _load_model
-from config import (
+# noqa: E402 — this import sits below the capability check ON PURPOSE. The whole point of the two
+# lines above is that nothing heavier than `importlib.util` runs before the flag is known, and the
+# comment at the top of this file records what happened when that was not true: the process was
+# SIGKILLed (exit 137) about seventy seconds into every boot, in a crash loop that took the site
+# down. The import is kept where it is rather than moved up to satisfy a rule, because the order
+# here is the fix.
+from config import (  # noqa: E402
     CHUNK_OVERLAP,
     CHUNK_SIZE,
     EMBEDDING_MODEL,
@@ -27,7 +32,7 @@ from config import (
 class MemoryEmbedder:
     """Generates embeddings for conversations with chunking support"""
     
-    def __init__(self, model_name: Optional[str] = None):
+    def __init__(self, model_name: str | None = None):
         """
         Initialize embedder with model (LAZY LOAD - model not loaded until first use)
         
@@ -284,10 +289,10 @@ class MemoryEmbedder:
 
 
 # Global embedder instance
-_embedder: Optional[MemoryEmbedder] = None
+_embedder: MemoryEmbedder | None = None
 
 
-def get_embedder() -> Optional[MemoryEmbedder]:
+def get_embedder() -> MemoryEmbedder | None:
     """Get or create global embedder instance"""
     global _embedder
     if _embedder is None:

@@ -16,7 +16,7 @@ in its system prompt — role filtering happens before the LLM is called.
 """
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Departmental roles — must match frontend/src/shared/role-caps.ts
@@ -220,7 +220,7 @@ def role_sees_decision_trace(role: str) -> bool:
 # Manifest filtering
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_filtered_manifest(user_id: str, full_manifest: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def get_filtered_manifest(user_id: str, full_manifest: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Return the AI playground manifest filtered by the user's departmental role.
 

@@ -45,7 +45,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, Optional
+from typing import Any
 
 # Long enough for a slow public endpoint, short enough that a Run is not held
 # hostage by one. Every tool here answers in under a second in practice.
@@ -194,7 +194,7 @@ def _cell(row: Any, name: str) -> Any:
         return None
 
 
-def _as_datetime(raw: str) -> Optional[datetime]:
+def _as_datetime(raw: str) -> datetime | None:
     """An RFC-822 date from a feed, or None. None is not an error — see the sort."""
     try:
         return parsedate_to_datetime(str(raw))

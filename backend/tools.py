@@ -32,7 +32,7 @@ mistake.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from database_pool import DatabasePoolManager
 
@@ -86,7 +86,7 @@ def _row_to_tool(row: dict[str, Any], with_body: bool = False) -> dict[str, Any]
     return tool
 
 
-def list_tools(section: Optional[str] = None) -> list[dict[str, Any]]:
+def list_tools(section: str | None = None) -> list[dict[str, Any]]:
     """Every tool, or only those belonging to one section of a prompt.
 
     A tool can belong to more than one section and appears in each. No section

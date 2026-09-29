@@ -1,7 +1,6 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import sys
 import traceback
-from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -19,7 +18,7 @@ router = APIRouter()
 @router.post("/api/agent/rpc")
 async def agent_rpc(
     request_body: dict,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     JSON-RPC 2.0 endpoint for agent method calls.

@@ -34,7 +34,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 PROTOCOL_FILE = REPO / "inspection.json"
@@ -68,7 +68,7 @@ _run_lock = asyncio.Lock()
 # ── the deterministic half ───────────────────────────────────────────────────
 
 
-def _read_json(path: Path) -> Optional[Any]:
+def _read_json(path: Path) -> Any | None:
     try:
         return json.loads(path.read_text())
     except Exception as exc:  # noqa: BLE001 — reported, never swallowed
@@ -84,7 +84,7 @@ def _git(*args: str) -> str:
         return f"(git {args[0]} failed: {exc})"
 
 
-def run_catalog_check() -> Optional[dict[str, Any]]:
+def run_catalog_check() -> dict[str, Any] | None:
     """Run the deterministic checker, then read its report. A RED run is a finding, not an error."""
     try:
         done = subprocess.run(
@@ -146,7 +146,7 @@ def _register_summary(register: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _previous_inspection(conversation_id: Optional[str]) -> Optional[dict[str, Any]]:
+def _previous_inspection(conversation_id: str | None) -> dict[str, Any] | None:
     """The last inspection message in the console conversation, if there is one."""
     if not conversation_id:
         return None
@@ -171,7 +171,7 @@ def _previous_inspection(conversation_id: Optional[str]) -> Optional[dict[str, A
     return None
 
 
-def build_sheet(previous: Optional[dict[str, Any]]) -> dict[str, Any]:
+def build_sheet(previous: dict[str, Any] | None) -> dict[str, Any]:
     """Everything the tools are shown. Terse on purpose — a small tool imitates what it reads."""
     report = run_catalog_check()
     register = _read_json(REGISTER_FILE) or {}
@@ -195,7 +195,7 @@ def build_sheet(previous: Optional[dict[str, Any]]) -> dict[str, Any]:
     ]
     suppressions_run = derived.get("error-suppression", 0)
     suppressions_rec = int(recorded.get("error-suppression", "0") or 0)
-    changed_files = len([l for l in _git("status", "--porcelain").splitlines() if l.strip()])
+    changed_files = len([line for line in _git("status", "--porcelain").splitlines() if line.strip()])
     prev_verdict = (previous or {}).get("verdict")
 
     # expected = what the arithmetic says. The tools' answers are held against it, and the
@@ -355,7 +355,7 @@ class _LocalTools:
         with urllib.request.urlopen(f"{self._root()}{path}", timeout=timeout) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
 
-    def load(self, model_key: str) -> Optional[str]:
+    def load(self, model_key: str) -> str | None:
         """Load a model if it is not already loaded. Returns an error string, or None."""
         try:
             models = self._get("/api/v1/models")
@@ -427,7 +427,7 @@ class _LocalTools:
         }
 
 
-def _extract_json_object(content: str) -> Optional[dict[str, Any]]:
+def _extract_json_object(content: str) -> dict[str, Any] | None:
     """Tolerant about the WRAPPER, strict about the CONTENT — the models are her tools.
 
     Any of them may fence its JSON or add a sentence; that is a formatting habit, not a wrong
@@ -598,7 +598,7 @@ def _token_totals(meta: dict[str, Any]) -> dict[str, int]:
     return {"prompt_tokens": prompt, "completion_tokens": completion}
 
 
-def _render_message(status: str, verdict: Optional[dict[str, Any]], review: Optional[dict[str, Any]],
+def _render_message(status: str, verdict: dict[str, Any] | None, review: dict[str, Any] | None,
                     facts: dict[str, Any], meta: dict[str, Any]) -> str:
     checker = facts.get("checker", {})
     lines = [
@@ -731,8 +731,8 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
                     row["evidence"] = (row["evidence"] + f" · closest filed records: {', '.join(related_refs)}")[:400]
 
         tools = _LocalTools()
-        verdict: Optional[dict[str, Any]] = None
-        review: Optional[dict[str, Any]] = None
+        verdict: dict[str, Any] | None = None
+        review: dict[str, Any] | None = None
         status = "not_done"
 
         swarm = await asyncio.to_thread(_swarm_audit_sync, tools, sheet, meta)

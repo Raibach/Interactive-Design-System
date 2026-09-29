@@ -38,7 +38,6 @@ different day.
 """
 import sys
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -76,7 +75,7 @@ class LoginRequest(BaseModel):
 class SignupRequest(BaseModel):
     email: str
     password: str
-    full_name: Optional[str] = None
+    full_name: str | None = None
     # `users.role` vocabulary, not `prompt_role`'s — the check constraint on
     # the column allows teacher/student/admin only. See SELF_SIGNUP_ROLES.
     role: str = "student"
@@ -251,7 +250,7 @@ async def login(request: LoginRequest, http_request: Request):
 @router.get("/api/auth/me")
 async def me(
     user_id: str,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Resolve a stored user id back into a person.
 
@@ -362,8 +361,8 @@ async def signup(request: SignupRequest):
 
 @router.get("/api/auth/users")
 async def list_users(
-    email: Optional[str] = None,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    email: str | None = None,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Find someone to share a package WITH — admin only.
 

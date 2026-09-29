@@ -1,6 +1,6 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import json
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -18,30 +18,30 @@ router = APIRouter()
 
 
 class CreateConversationRequest(BaseModel):
-    project_id: Optional[str] = None
-    session_id: Optional[str] = None   # required by the DB (conversations.session_id NOT NULL)
-    title: Optional[str] = None
-    metadata: Optional[dict] = None
+    project_id: str | None = None
+    session_id: str | None = None   # required by the DB (conversations.session_id NOT NULL)
+    title: str | None = None
+    metadata: dict | None = None
 
 
 class UpdateConversationRequest(BaseModel):
-    title: Optional[str] = None
-    message_count: Optional[int] = None
-    project_id: Optional[str] = None
+    title: str | None = None
+    message_count: int | None = None
+    project_id: str | None = None
 
 
 class AddMessageRequest(BaseModel):
     role: str
     content: str
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 @router.get("/api/conversations")
 async def get_conversations(
-    projectId: Optional[str] = Query(None),
-    session_id: Optional[str] = Query(None),
+    projectId: str | None = Query(None),
+    session_id: str | None = Query(None),
     include_archived: bool = Query(False),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get all conversations for a user, optionally for ONE package.
 
@@ -92,7 +92,7 @@ async def get_conversations(
 
 @router.get("/api/conversations/{conversation_id}")
 async def get_conversation(
-    conversation_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    conversation_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Get a specific conversation"""
     if not state.conversation_api:
@@ -124,7 +124,7 @@ async def get_conversation(
 @router.post("/api/conversations")
 async def create_conversation(
     request: CreateConversationRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Create a new conversation"""
     if not state.conversation_api:
@@ -174,7 +174,7 @@ async def create_conversation(
 async def update_conversation(
     conversation_id: str,
     request: UpdateConversationRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Update a conversation"""
     if not state.conversation_api:
@@ -207,7 +207,7 @@ async def update_conversation(
 
 @router.delete("/api/conversations/{conversation_id}")
 async def delete_conversation(
-    conversation_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    conversation_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Delete a conversation"""
     if not state.conversation_api:
@@ -234,7 +234,7 @@ async def delete_conversation(
 
 @router.get("/api/conversations/{conversation_id}/surface-state")
 async def get_surface_state(
-    conversation_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    conversation_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Get the A2UI surface state for a conversation"""
     if not state.conversation_api:
@@ -262,7 +262,7 @@ async def get_surface_state(
 async def save_surface_state(
     conversation_id: str,
     request: Request,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Save the A2UI surface state for a conversation"""
     if not state.conversation_api:
@@ -287,7 +287,7 @@ async def save_surface_state(
 async def archive_conversation(
     conversation_id: str,
     archived: bool = Query(True),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Archive or unarchive a conversation"""
     if not state.conversation_api:
@@ -314,8 +314,8 @@ async def archive_conversation(
 
 @router.get("/api/conversations/archived")
 async def get_archived_conversations(
-    projectId: Optional[str] = Query(None),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    projectId: str | None = Query(None),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get archived conversations"""
     if not state.conversation_api:
@@ -339,9 +339,9 @@ async def get_archived_conversations(
 @router.get("/api/conversations/{conversation_id}/messages")
 async def get_messages(
     conversation_id: str,
-    limit: Optional[int] = Query(None),
+    limit: int | None = Query(None),
     offset: int = Query(0),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get messages for a conversation"""
     if not state.conversation_api:
@@ -370,7 +370,7 @@ async def get_messages(
 async def add_message(
     conversation_id: str,
     request: AddMessageRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Add a message to a conversation"""
     if not state.conversation_api:
@@ -395,7 +395,7 @@ async def add_message(
 
 @router.delete("/api/messages/{message_id}")
 async def delete_message(
-    message_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    message_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Delete a message"""
     if not state.conversation_api:
@@ -419,7 +419,7 @@ async def delete_message(
 
 
 class ConfirmTagRequest(BaseModel):
-    confirmed_tags: Optional[list[str]] = None
+    confirmed_tags: list[str] | None = None
     detected_entities: dict[str, Any]
 
 
@@ -427,7 +427,7 @@ class ConfirmTagRequest(BaseModel):
 async def confirm_tag(
     request: ConfirmTagRequest,
     conversation_id: str = Query(...),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Confirm and store literary tags for a conversation
@@ -516,7 +516,7 @@ async def track_tag_suggestion(
     conversation_id: str = Query(...),
     suggested_tags: list[str] = Query(...),
     confirmed: bool = Query(False),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Track Grace's tag suggestions (for analytics and confirmation tracking)
@@ -562,7 +562,7 @@ async def track_tag_suggestion(
 
 @router.get("/api/conversation/tag-suggestion-stats")
 async def get_tag_suggestion_stats(
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Get tag suggestion statistics for a user

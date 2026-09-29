@@ -6,7 +6,6 @@ Extracts hierarchical tags (genre, task, specificity, literary device) from conv
 import json
 import re
 from datetime import datetime
-from typing import Optional
 
 
 class TagExtractor:
@@ -27,7 +26,7 @@ class TagExtractor:
         user_id: str,
         conversation_content: str,
         conversation_api=None,
-        emotional_context: Optional[dict] = None
+        emotional_context: dict | None = None
     ) -> dict[str, any]:
         """
         Main extraction function - extracts all tag types from conversation
@@ -216,7 +215,7 @@ Your response:"""
             print(f"⚠️ Specificity tag extraction failed: {e}")
             return []
     
-    def extract_literary_device_tags(self, content: str, emotional_context: Optional[dict] = None) -> list[str]:
+    def extract_literary_device_tags(self, content: str, emotional_context: dict | None = None) -> list[str]:
         """
         Detect literary devices (metaphor, dialogue, pacing, etc.)
         

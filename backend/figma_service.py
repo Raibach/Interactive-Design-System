@@ -5,7 +5,7 @@ Stores references in PostgreSQL for fast local access.
 import json
 import os
 import time
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -15,7 +15,7 @@ FIGMA_BASE = "https://api.figma.com/v1"
 def _headers():
     return {"X-FIGMA-TOKEN": FIGMA_TOKEN} if FIGMA_TOKEN else {}
 
-def get_file(file_key: str, depth: int = 2) -> Optional[dict]:
+def get_file(file_key: str, depth: int = 2) -> dict | None:
     """Get full Figma file data including components and styles."""
     if not FIGMA_TOKEN:
         return {"error": "FIGMA_TOKEN not configured"}
@@ -41,7 +41,7 @@ def get_file(file_key: str, depth: int = 2) -> Optional[dict]:
     except Exception as e:
         return {"error": str(e)}
 
-def get_file_versions(file_key: str) -> Optional[dict]:
+def get_file_versions(file_key: str) -> dict | None:
     """Get version history for a Figma file."""
     if not FIGMA_TOKEN:
         return {"error": "FIGMA_TOKEN not configured"}
@@ -61,7 +61,7 @@ def get_file_versions(file_key: str) -> Optional[dict]:
     except Exception as e:
         return {"error": str(e)}
 
-def get_file_comments(file_key: str) -> Optional[dict]:
+def get_file_comments(file_key: str) -> dict | None:
     """Get comments on a Figma file."""
     if not FIGMA_TOKEN:
         return {"error": "FIGMA_TOKEN not configured"}
@@ -77,7 +77,7 @@ def get_file_comments(file_key: str) -> Optional[dict]:
     except Exception as e:
         return {"error": str(e)}
 
-def get_component(file_key: str, component_id: str) -> Optional[dict]:
+def get_component(file_key: str, component_id: str) -> dict | None:
     """Fetch a specific component from a file."""
     data = get_file(file_key)
     if not data or "error" in data:
@@ -88,7 +88,7 @@ def get_component(file_key: str, component_id: str) -> Optional[dict]:
         return {"component": comp, "file_name": data.get("name"), "file_version": data.get("version")}
     return {"error": f"Component {component_id} not found", "available": list(components.keys())[:10]}
 
-def get_dev_resources(file_key: str, node_id: Optional[str] = None) -> Optional[dict]:
+def get_dev_resources(file_key: str, node_id: str | None = None) -> dict | None:
     """Get dev resources (Code Connect annotations) from a Figma file."""
     if not FIGMA_TOKEN:
         return {"error": "FIGMA_TOKEN not configured"}
@@ -159,7 +159,7 @@ def get_component_descriptions(file_key: str) -> dict[str, str]:
         return hit[1] if hit else {}
 
 
-def get_node(file_key: str, node_id: str) -> Optional[dict]:
+def get_node(file_key: str, node_id: str) -> dict | None:
     """Get a specific node from a Figma file (e.g., a frame or component instance)."""
     if not FIGMA_TOKEN:
         return {"error": "FIGMA_TOKEN not configured"}
@@ -177,7 +177,7 @@ def get_node(file_key: str, node_id: str) -> Optional[dict]:
     except Exception as e:
         return {"error": str(e)}
 
-def get_node_image(file_key: str, node_id: str, scale: float = 2.0) -> Optional[dict[str, Any]]:
+def get_node_image(file_key: str, node_id: str, scale: float = 2.0) -> dict[str, Any] | None:
     """Figma's OWN rendering of a node, as PNG bytes — the design's side of the comparison.
 
     THE GATE NEEDS THE DESIGN AS AN IMAGE, not as more numbers: the whole point is to compare what
@@ -214,7 +214,7 @@ def get_node_image(file_key: str, node_id: str, scale: float = 2.0) -> Optional[
         return {"ok": False, "error": str(e)}
 
 
-def search_file(file_key: str, query: str) -> Optional[dict]:
+def search_file(file_key: str, query: str) -> dict | None:
     """Search for nodes by name in a Figma file."""
     data = get_file(file_key, depth=3)
     if not data or "error" in data:
@@ -242,7 +242,7 @@ def search_file(file_key: str, query: str) -> Optional[dict]:
 # no dropped values — the spec carries Figma's numbers verbatim.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _figma_color(c: Optional[dict]) -> Optional[dict]:
+def _figma_color(c: dict | None) -> dict | None:
     """Figma RGBA (0-1 floats) → hex + alpha, lossless."""
     if not c:
         return None
@@ -404,7 +404,7 @@ def extract_node_spec(node: dict) -> dict:
 # render source, and it carries no guarantee to a user.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _spec_has_design_data(spec: Optional[dict]) -> bool:
+def _spec_has_design_data(spec: dict | None) -> bool:
     """A spec is usable only if it carries real design data, not just
     {id, name, type}. extract_node_spec returns the bare triple for dead/
     empty nodes — those must not satisfy a cache hit (see DEAD NODE caveat
@@ -422,7 +422,7 @@ def _spec_db_conn():
     return psycopg2.connect(os.getenv("DATABASE_URL"), cursor_factory=RealDictCursor)
 
 
-def _cache_read(file_key: str, node_id: str) -> Optional[dict]:
+def _cache_read(file_key: str, node_id: str) -> dict | None:
     """Read a cached spec row. Returns the spec dict or None on miss/absence.
     Any DB error is swallowed (caller falls through to Figma)."""
     try:
@@ -442,7 +442,7 @@ def _cache_read(file_key: str, node_id: str) -> Optional[dict]:
         return None
 
 
-def _cache_upsert(file_key: str, node_id: str, name: Optional[str], spec: dict) -> None:
+def _cache_upsert(file_key: str, node_id: str, name: str | None, spec: dict) -> None:
     """Write a spec row. Best-effort: a cache write failure never blocks the
     caller — the spec is still returned to the requester."""
     try:
@@ -464,7 +464,7 @@ def _cache_upsert(file_key: str, node_id: str, name: Optional[str], spec: dict) 
         print(f"⚠️ figma_specs cache upsert failed (spec still returned): {e}")
 
 
-def _fetch_and_cache(file_key: str, node_id: str) -> tuple[Optional[dict], Optional[str]]:
+def _fetch_and_cache(file_key: str, node_id: str) -> tuple[dict | None, str | None]:
     """Pull a node live from Figma, extract its spec, and upsert the cache.
     Returns (spec, error_detail). spec is None when the node is missing or
     returned an empty/dead spec (caller should treat as a miss)."""
@@ -495,7 +495,7 @@ def get_cached_spec(
     *,
     refresh: bool = False,
     allow_stale_fallback: bool = True,
-) -> tuple[Optional[dict], Optional[str], str]:
+) -> tuple[dict | None, str | None, str]:
     """
     Cache-first spec accessor for DESIGNER and MCP callers — never a render path.
 

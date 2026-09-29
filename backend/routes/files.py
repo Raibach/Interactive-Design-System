@@ -2,7 +2,6 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
@@ -58,7 +57,7 @@ class FileWriteRequest(BaseModel):
 @router.get("/api/files/read")
 async def read_file(
     path: str = Query(..., description="File path to read"),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Read a documentation file - restricted to specific directories"""
     try:
@@ -101,7 +100,7 @@ async def read_file(
             )
 
         # Read the file
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             content = f.read()
 
         print(f"✅ [File API] Read file: {path} ({len(content)} bytes)")
@@ -125,7 +124,7 @@ async def read_file(
 @router.post("/api/files/write")
 async def write_file(
     request: FileWriteRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Write/update a documentation file - restricted to specific directories"""
     try:
@@ -172,7 +171,7 @@ async def write_file(
         backup_path = None
         if os.path.isfile(file_path):
             backup_path = f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 backup_content = f.read()
             with open(backup_path, 'w', encoding='utf-8') as f:
                 f.write(backup_content)
@@ -205,7 +204,7 @@ async def write_file(
 async def list_files(
     directory: str = Query(".", description="Directory to list files from"),
     pattern: str = Query("*.md", description="File pattern to match"),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """List documentation files in allowed directories"""
     try:
@@ -275,7 +274,7 @@ class RepairApplyRequest(BaseModel):
 @router.get("/api/repair/read")
 async def repair_read(
     path: str = Query(..., description="The app source file a repair is about"),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """The file a repair is about, as it is now. Read half of the apply pair."""
     try:
@@ -290,7 +289,7 @@ async def repair_read(
 @router.post("/api/repair/apply")
 async def repair_apply_endpoint(
     request: RepairApplyRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Write a corrected file over its current version, keeping a backup.
 

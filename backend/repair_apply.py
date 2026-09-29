@@ -30,7 +30,6 @@ import json
 import os
 import subprocess
 from datetime import datetime
-from typing import Optional
 
 # backend/repair_apply.py -> the repository root it is allowed to work inside.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -95,7 +94,7 @@ def target_path(path: str) -> str:
     return full
 
 
-def _unbalanced(text: str) -> Optional[str]:
+def _unbalanced(text: str) -> str | None:
     """Name the bracket that is left open, if one is. A truncated answer shows up
     here first: a file cut mid-way has opened more than it closed."""
     for opener, closer, what in (("{", "}", "curly brace"), ("(", ")", "round bracket"),
@@ -121,8 +120,8 @@ def looks_complete(original: str, corrected: str, path: str = "") -> tuple[bool,
     # diff, and saving one would put its markers into source.
     head = corrected.lstrip().splitlines()
     if head and (head[0].startswith(("---", "***", "diff ")) or
-                 any(l.startswith("+++ ") for l in head[:8]) or
-                 any(l.startswith("@@") for l in head[:40])):
+                 any(line.startswith("+++ ") for line in head[:8]) or
+                 any(line.startswith("@@") for line in head[:40])):
         raise Refused(
             "the answer came back as a patch rather than the whole file, and this app "
             "replaces whole files — it cannot apply a diff"
@@ -156,7 +155,7 @@ def _with_final_newline(original: str, corrected: str) -> str:
 def read_source(path: str) -> dict:
     """The file as it is now, for the prompt that has to change it."""
     full = target_path(path)
-    with open(full, "r", encoding="utf-8") as f:
+    with open(full, encoding="utf-8") as f:
         content = f.read()
     return {
         "path": os.path.relpath(full, REPO_ROOT).replace(os.sep, "/"),
@@ -174,7 +173,7 @@ def apply_repair(path: str, content: str) -> dict:
     does, so the caller can SAY it in the chat instead of asserting it.
     """
     full = target_path(path)
-    with open(full, "r", encoding="utf-8") as f:
+    with open(full, encoding="utf-8") as f:
         original = f.read()
 
     looks_complete(original, content, path)          # raises Refused

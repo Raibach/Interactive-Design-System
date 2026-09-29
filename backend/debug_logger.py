@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from flask import g, has_request_context, request
 
@@ -64,7 +64,7 @@ class DebugLogger:
         self.logs: list[dict[str, Any]] = []
         self.max_logs = 1000  # Keep last 1000 log entries in memory
         
-    def _write_log(self, level: str, message: str, context: Optional[dict] = None, error: Optional[Exception] = None):
+    def _write_log(self, level: str, message: str, context: dict | None = None, error: Exception | None = None):
         """Write log entry to file and memory"""
         correlation_id = None
         if has_request_context() and hasattr(g, 'correlation_id'):
@@ -135,28 +135,28 @@ class DebugLogger:
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
     
-    def debug(self, message: str, context: Optional[dict] = None):
+    def debug(self, message: str, context: dict | None = None):
         """Log debug message"""
         self._write_log('DEBUG', message, context)
     
-    def info(self, message: str, context: Optional[dict] = None):
+    def info(self, message: str, context: dict | None = None):
         """Log info message"""
         self._write_log('INFO', message, context)
     
-    def warning(self, message: str, context: Optional[dict] = None):
+    def warning(self, message: str, context: dict | None = None):
         """Log warning message"""
         self._write_log('WARNING', message, context)
     
-    def error(self, message: str, error: Optional[Exception] = None, context: Optional[dict] = None):
+    def error(self, message: str, error: Exception | None = None, context: dict | None = None):
         """Log error message"""
         self._write_log('ERROR', message, context, error)
     
-    def critical(self, message: str, error: Optional[Exception] = None, context: Optional[dict] = None):
+    def critical(self, message: str, error: Exception | None = None, context: dict | None = None):
         """Log critical error"""
         self._write_log('CRITICAL', message, context, error)
     
     def log_request(self, method: str, path: str, status_code: int, duration_ms: float, 
-                   request_body: Optional[Any] = None, response_body: Optional[Any] = None):
+                   request_body: Any | None = None, response_body: Any | None = None):
         """Log API request/response"""
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -188,9 +188,9 @@ class DebugLogger:
             print(f"⚠️ Could not write to request log: {e}")
             print(json.dumps(log_entry, ensure_ascii=False))
     
-    def log_database(self, operation: str, query: Optional[str] = None, 
-                    params: Optional[dict] = None, duration_ms: Optional[float] = None,
-                    error: Optional[Exception] = None):
+    def log_database(self, operation: str, query: str | None = None, 
+                    params: dict | None = None, duration_ms: float | None = None,
+                    error: Exception | None = None):
         """Log database operation"""
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -217,8 +217,8 @@ class DebugLogger:
             print(f"⚠️ Could not write to database log: {e}")
             print(json.dumps(log_entry, ensure_ascii=False))
     
-    def log_audit(self, action: str, user_id: Optional[str] = None, 
-                 resource: Optional[str] = None, details: Optional[dict] = None):
+    def log_audit(self, action: str, user_id: str | None = None, 
+                 resource: str | None = None, details: dict | None = None):
         """Log audit event"""
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -258,8 +258,8 @@ class DebugLogger:
         else:
             return data
     
-    def get_logs(self, level: Optional[str] = None, limit: int = 100, 
-                since: Optional[datetime] = None) -> list[dict]:
+    def get_logs(self, level: str | None = None, limit: int = 100, 
+                since: datetime | None = None) -> list[dict]:
         """Get logs from memory"""
         logs = self.logs
         
@@ -279,7 +279,7 @@ class DebugLogger:
         try:
             errors = []
             if ERROR_LOG.exists():
-                with open(ERROR_LOG, 'r', encoding='utf-8') as f:
+                with open(ERROR_LOG, encoding='utf-8') as f:
                     lines = f.readlines()
                     for line in lines[-limit:]:
                         try:

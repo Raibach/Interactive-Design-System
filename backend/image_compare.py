@@ -20,7 +20,7 @@ from __future__ import annotations
 import io
 import os
 import tempfile
-from typing import Any, Optional
+from typing import Any
 
 try:
     from PIL import Image, ImageChops
@@ -41,7 +41,7 @@ DEFAULT_TOLERANCE = 0.005
 CHANNEL_TOLERANCE = 12
 
 
-def _open(data: bytes) -> Optional[Image.Image]:
+def _open(data: bytes) -> Image.Image | None:
     if Image is None or not data:
         return None
     try:
@@ -51,7 +51,7 @@ def _open(data: bytes) -> Optional[Image.Image]:
         return None
 
 
-def _differing_ratio(a: Image.Image, b: Image.Image) -> tuple[float, Optional[Image.Image]]:
+def _differing_ratio(a: Image.Image, b: Image.Image) -> tuple[float, Image.Image | None]:
     """The share of pixels that differ by more than the channel tolerance, and where they are."""
     if a.size != b.size:
         return 1.0, None
@@ -72,7 +72,7 @@ def _differing_ratio(a: Image.Image, b: Image.Image) -> tuple[float, Optional[Im
     return ratio, canvas
 
 
-def _crop(image: Image.Image, box: tuple[float, float, float, float], scale: float) -> Optional[Image.Image]:
+def _crop(image: Image.Image, box: tuple[float, float, float, float], scale: float) -> Image.Image | None:
     """One layer's box, in image pixels."""
     try:
         left = max(0, int(round(box[0] * scale)))
@@ -119,7 +119,7 @@ def compare(
     component_png: bytes,
     node_size: tuple[float, float],
     scale: float = 2.0,
-    layers: Optional[list[dict[str, Any]]] = None,
+    layers: list[dict[str, Any]] | None = None,
     tolerance: float = DEFAULT_TOLERANCE,
 ) -> dict[str, Any]:
     """Compare a rendered component with Figma's own rendering of the node.
