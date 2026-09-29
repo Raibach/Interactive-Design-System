@@ -139,6 +139,12 @@ function lineToPlainText(line: string): string {
   // Backticks are never prose punctuation — the code stays, the ticks go.
   out = out.replace(/`/g, '');
 
+  // THE CONTROL CHARACTERS ARE THE POINT. `replaceActions` writes an action out as
+  // `\u0000<n>\u0000` and puts it among the prose, so the sentinels are NUL bytes precisely
+  // because no author can type one into a prompt: a marker that cannot be forged. This reads
+  // them back. The rule is right that a control character in a regular expression is usually a
+  // mistake, and this is the case where it is the whole mechanism.
+  // eslint-disable-next-line no-control-regex -- matching the NUL sentinels is the mechanism
   out = out.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => actions[Number(i)] ?? '');
 
   return out.trimEnd();

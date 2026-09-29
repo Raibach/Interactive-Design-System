@@ -4157,7 +4157,7 @@ export default function Index({
     void (async () => {
       await assembleSurfaceThenRepairs(initialIntent);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []); // Empty deps = run only on mount
 
   const navigateAway = () => {
@@ -5054,7 +5054,7 @@ export default function Index({
       if (!applied && ++frames < 40) requestAnimationFrame(apply);
     };
     requestAnimationFrame(apply);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [currentPromptSession?.id]);
 
   const _handleDeleteProject = (projectId: string) => {

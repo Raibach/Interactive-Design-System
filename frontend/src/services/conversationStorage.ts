@@ -38,7 +38,7 @@ let _currentProjectId: string | null = null;
 let _lastModifiedProject: { projectId: string; timestamp: number } | null = null;
 let _lastModifiedChat: { conversationId: string; projectId: string; timestamp: number } | null = null;
 let _lastModifiedDraft: { draftName: string; timestamp: number } | null = null;
-let _lastActiveChats: Record<string, string> = {};
+const _lastActiveChats: Record<string, string> = {};
 
 // API Configuration - shared helper: /api in dev, /proxy.php?url=api in prod
 import { API_BASE } from "@/shared/apiHelper";

@@ -411,7 +411,7 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle }
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [open, layersKey]);
 
   /**
@@ -469,7 +469,7 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle }
     //
     // openByTag is recreated per render but only closes over setters and the api client, so the
     // first one is as good as any.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [open]);
 
   /**
@@ -796,7 +796,7 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle }
       // have worked.
       const raw = item.url.trim();
       const isTag = /^f-/i.test(raw);
-      const looksLikeNodeId = /^\d+[:\-]\d+$/.test(raw);
+      const looksLikeNodeId = /^\d+[:-]\d+$/.test(raw);
       const url =
         isTag || !looksLikeNodeId
           ? `/api/figma/component/${encodeURIComponent(tag)}`

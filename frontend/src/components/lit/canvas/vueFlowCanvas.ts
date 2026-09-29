@@ -180,6 +180,11 @@ export function mountVueFlowCanvas(box: HTMLElement, opts: { theme?: string } = 
 
   const app: App = createApp({
     setup() {
+      // `useVueFlow` is VUE Flow's composable, not a React hook. It is named `use…` because
+      // Vue's convention reaches for the same word React's does, and the rule reads the name
+      // and nothing else. This is a Vue application created with `createApp` inside a Lit
+      // element — there is no React component anywhere in this file for the rule to be about.
+      // eslint-disable-next-line react-hooks/rules-of-hooks -- Vue composable, not a React hook
       const vf = useVueFlow();
       setViewportFn = (v, o) => {
         lastView = v;
