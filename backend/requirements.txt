@@ -8,7 +8,7 @@ requests>=2.31.0
 psutil>=5.9.0
 pymilvus>=2.6.0
 tenacity==8.2.3
-sentry-sdk[fastapi]==2.3.1
+sentry-sdk[fastapi]==2.70.0
 openai>=1.0.0
 # Password verification for /api/auth/login. The `users` table has held real
 # bcrypt hashes ($2b$12$) since it was written; nothing could CHECK one until
