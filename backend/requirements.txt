@@ -19,4 +19,4 @@ bcrypt>=4.1.0,<6.0.0
 # with the Zilliz retirement; weights for BAAI/bge-small-en are cached locally, so no
 # network is needed at first use.
 milvus-lite>=2.5.0
-sentence-transformers>=3.0.0
+sentence-transformers>=6.1.0
