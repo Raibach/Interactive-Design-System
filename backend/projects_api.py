@@ -5,7 +5,6 @@ Handles user projects with offline support
 
 import time
 from datetime import datetime
-from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 import psycopg2
@@ -265,7 +264,7 @@ class ProjectsAPI:
             if conn:
                 conn.close()
 
-    def get_project(self, project_id: str, user_id: str) -> Optional[dict]:
+    def get_project(self, project_id: str, user_id: str) -> dict | None:
         """Get a specific project by ID"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -292,7 +291,7 @@ class ProjectsAPI:
         self,
         user_id: str,
         name: str,
-        description: Optional[str] = None
+        description: str | None = None
     ) -> str:
         """
         Create a new project - Top-level container for user assets
@@ -473,9 +472,9 @@ class ProjectsAPI:
         self,
         project_id: str,
         user_id: str,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        is_archived: Optional[bool] = None
+        name: str | None = None,
+        description: str | None = None,
+        is_archived: bool | None = None
     ) -> bool:
         """Update a project"""
         conn = self.get_db()
@@ -595,7 +594,7 @@ class ProjectsAPI:
         """Archive or unarchive a project"""
         return self.update_project(project_id, user_id, is_archived=archive)
     
-    def get_unassigned_chats_project(self, user_id: str) -> Optional[str]:
+    def get_unassigned_chats_project(self, user_id: str) -> str | None:
         """
         Get "Archived Unassigned Chats" project for a user if it exists.
         Does NOT create projects - only returns existing project ID.

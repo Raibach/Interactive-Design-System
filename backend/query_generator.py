@@ -4,7 +4,6 @@ Parses Grace's questions and builds semantic search queries with tag filtering
 """
 
 import re
-from typing import Optional
 
 from config import get_collection_name
 from memory_embedder import get_embedder
@@ -46,7 +45,7 @@ class QueryGenerator:
     def generate_category_boost_query(
         self,
         query_text: str,
-        preferred_categories: Optional[list[str]] = None,
+        preferred_categories: list[str] | None = None,
         boost_factor: float = 1.5
     ) -> dict:
         """
@@ -87,10 +86,10 @@ class QueryGenerator:
     def generate_query_from_context(
         self,
         user_question: str,
-        conversation_context: Optional[str] = None,
-        user_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        detected_entities: Optional[dict] = None
+        conversation_context: str | None = None,
+        user_id: str | None = None,
+        project_id: str | None = None,
+        detected_entities: dict | None = None
     ) -> dict[str, any]:
         """
         Main function - generates query structure from context
@@ -125,7 +124,7 @@ class QueryGenerator:
             'original_question': user_question
         }
     
-    def parse_grace_question(self, question: str) -> Optional[str]:
+    def parse_grace_question(self, question: str) -> str | None:
         """Extract intent from Grace's questions"""
         question_lower = question.lower()
         
@@ -148,8 +147,8 @@ class QueryGenerator:
     
     def build_tag_filters(
         self,
-        intent: Optional[str],
-        detected_entities: Optional[dict] = None
+        intent: str | None,
+        detected_entities: dict | None = None
     ) -> list[str]:
         """Build tag path filters from intent and entities"""
         tag_paths = []
@@ -184,8 +183,8 @@ class QueryGenerator:
         self,
         tag_filters: list[str],
         user_id: str,
-        project_id: Optional[str] = None,
-        character_names: Optional[list[str]] = None
+        project_id: str | None = None,
+        character_names: list[str] | None = None
     ) -> dict[str, any]:
         """
         Generate SQL query parameters for tag-based conversation retrieval
@@ -232,8 +231,8 @@ class QueryGenerator:
         self,
         user_question: str,
         user_id: str,
-        project_id: Optional[str] = None,
-        detected_entities: Optional[dict] = None
+        project_id: str | None = None,
+        detected_entities: dict | None = None
     ) -> dict[str, any]:
         """
         Generate Milvus semantic search query from natural language question
@@ -531,8 +530,8 @@ class QueryGenerator:
         self,
         user_question: str,
         user_id: str,
-        project_id: Optional[str] = None,
-        detected_entities: Optional[dict] = None
+        project_id: str | None = None,
+        detected_entities: dict | None = None
     ) -> dict[str, any]:
         """
         Generate Milvus query with enhanced emotional pattern parsing

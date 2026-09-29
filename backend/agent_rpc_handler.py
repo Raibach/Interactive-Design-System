@@ -13,7 +13,7 @@ Supported methods:
 
 import sys
 import traceback
-from typing import Any, Optional
+from typing import Any
 
 # Try to import the projects API
 try:
@@ -28,7 +28,7 @@ except ImportError:
 class AgentRpcHandler:
     """Handles JSON-RPC 2.0 method calls from AI agents."""
 
-    def __init__(self, projects_api: Optional[ProjectsAPI] = None):
+    def __init__(self, projects_api: ProjectsAPI | None = None):
         """
         Initialize the RPC handler.
         

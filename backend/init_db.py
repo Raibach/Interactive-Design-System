@@ -1427,7 +1427,7 @@ def init_database():
         for index_sql in INDEX_DEFINITIONS:
             try:
                 cur.execute(index_sql)
-            except Exception as e:
+            except Exception:
                 # Index might already exist
                 pass
 

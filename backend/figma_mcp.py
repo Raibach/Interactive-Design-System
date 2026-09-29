@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -53,9 +53,9 @@ DEFAULT_TIMEOUT = 15.0
 def _post(
     url: str,
     payload: dict[str, Any],
-    session: Optional[str],
+    session: str | None,
     timeout: float,
-) -> tuple[Optional[dict], Optional[str], Optional[str]]:
+) -> tuple[dict | None, str | None, str | None]:
     """One JSON-RPC POST to the streamable-HTTP MCP. Returns (json, session, error)."""
     headers = {
         "Content-Type": "application/json",
@@ -97,10 +97,10 @@ def _post(
 
 def call_design_context(
     node_id: str,
-    file_key: Optional[str] = None,
-    url: Optional[str] = None,
+    file_key: str | None = None,
+    url: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> tuple[bool, str, Optional[str]]:
+) -> tuple[bool, str, str | None]:
     """`get_design_context` for one node. Returns (ok, text, error)."""
     url = (url or DEFAULT_MCP_URL).rstrip("/")
     file_key = file_key or DEFAULT_FILE_KEY
@@ -171,7 +171,7 @@ def call_design_context(
 def _rest_design_block(
     node_id: str,
     file_key: str,
-) -> tuple[bool, str, Optional[str]]:
+) -> tuple[bool, str, str | None]:
     """Second channel: REST + token, through figma_service (cache-backed).
 
     This exists because the MCP cannot answer on a deployed server. The MCP is either
@@ -281,8 +281,8 @@ def _rest_design_block(
 
 
 def run_tool_calls(
-    tool_calls: Optional[list[dict[str, Any]]],
-    file_key: Optional[str] = None,
+    tool_calls: list[dict[str, Any]] | None,
+    file_key: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[list[str], list[str]]:
     """Execute a prompt's tool calls.

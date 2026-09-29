@@ -32,7 +32,7 @@ def init_services(database_url: str) -> None:
             user_id="00000000-0000-0000-0000-000000000000"
         )
         print("✅ Conversation API initialized and verified")
-    except Exception as e:
+    except Exception:
         print(
             "\n❌ CRITICAL: Conversation API failed to initialize during startup!",
             file=sys.stderr,
@@ -49,7 +49,7 @@ def init_services(database_url: str) -> None:
             user_id="00000000-0000-0000-0000-000000000000"
         )
         print("✅ Projects API initialized and verified")
-    except Exception as e:
+    except Exception:
         print(
             "\n❌ CRITICAL: Projects API failed to initialize during startup!",
             file=sys.stderr,
@@ -66,7 +66,7 @@ def init_services(database_url: str) -> None:
             user_id="00000000-0000-0000-0000-000000000000", limit=1
         )
         print("✅ Memory API initialized and verified")
-    except Exception as e:
+    except Exception:
         print(
             "\n❌ CRITICAL: Memory API failed to initialize during startup!",
             file=sys.stderr,
@@ -84,7 +84,7 @@ def init_services(database_url: str) -> None:
             user_id="00000000-0000-0000-0000-000000000000", limit=1
         )
         print("✅ Prompt Sessions API initialized and verified")
-    except Exception as e:
+    except Exception:
         print(
             "\n❌ CRITICAL: Prompt Sessions API failed to initialize during startup!",
             file=sys.stderr,

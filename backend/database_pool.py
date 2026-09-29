@@ -3,20 +3,26 @@ Database Connection Pool Manager
 Provides robust connection pooling, health checks, and retry logic for PostgreSQL
 """
 
+import logging
 import os
 import threading
 import time
+from contextlib import contextmanager
+from datetime import datetime
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from psycopg2 import DatabaseError, InterfaceError, OperationalError, pool
 from psycopg2.extras import RealDictCursor, register_uuid
 
-# Register UUID adapter so psycopg2 can handle Python UUID → PostgreSQL UUID
+# Register UUID adapter so psycopg2 can handle Python UUID → PostgreSQL UUID.
+#
+# `register_uuid()` IS A CALL, and a call at module level is what made the four imports above look
+# like they were in the wrong place: they had been written BELOW it, so the import block was split
+# in two and the second half was reported as "module level import not at top of file". They are
+# ordinary standard-library imports with nothing to do with the adapter, so they are gathered with
+# the rest and the registration stands alone — which is what it looked like it was doing already.
 register_uuid()
-import logging
-from contextlib import contextmanager
-from datetime import datetime
-from typing import Any, Optional
 
 # Import database logger for comprehensive logging
 try:
@@ -102,7 +108,7 @@ class DatabasePoolManager:
         self.database_url = database_url
         self.min_conn = min_conn
         self.max_conn = max_conn
-        self.pool: Optional[pool.ThreadedConnectionPool] = None
+        self.pool: pool.ThreadedConnectionPool | None = None
         self.last_health_check = None
         self.health_check_interval = 60  # seconds
         self.health_check_lock = threading.Lock()
@@ -173,7 +179,7 @@ class DatabasePoolManager:
         """
         conn_string = self._normalize_database_url()
         parsed = urlparse(conn_string)
-        hostname = parsed.hostname or 'localhost'
+        hostname = parsed.hostname or 'localhost'  # noqa: F841 — read here and never used; this branch decides on `conn_string`, not on the name
         is_private_url = 'railway.internal' in conn_string.lower()
         
         # Determine timeout
@@ -382,7 +388,7 @@ class DatabasePoolManager:
                 # Try to get connection with timeout
                 try:
                     conn = self.pool.getconn()
-                except Exception as pool_err:
+                except Exception:
                     # If pool.getconn() doesn't support timeout, try without
                     conn = self.pool.getconn()
                 
@@ -583,7 +589,7 @@ class DatabasePoolManager:
                 self.pool = None
     
     @classmethod
-    def get_instance(cls, database_url: Optional[str] = None) -> 'DatabasePoolManager':
+    def get_instance(cls, database_url: str | None = None) -> 'DatabasePoolManager':
         """
         Get or create a singleton instance of the pool manager.
         

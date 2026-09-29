@@ -3,7 +3,7 @@ Extracted from main.py during modularization — zero behavior change."""
 import json
 import os
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -29,7 +29,7 @@ _A2UI_CATALOG_PATH = os.path.join(
 )
 a2ui_catalog: dict[str, Any] = {}
 try:
-    with open(_A2UI_CATALOG_PATH, "r") as _catalog_file:
+    with open(_A2UI_CATALOG_PATH) as _catalog_file:
         a2ui_catalog = json.load(_catalog_file)
     print(f"✅ A2UI Catalog loaded — {len(a2ui_catalog.get('components', {}))} trusted components")
 except Exception as _catalog_error:
@@ -83,7 +83,7 @@ def user_is_admin(user_id: str) -> bool:
     return user_id in ADMIN_ROLES
 
 
-def get_user_id_from_header(x_user_id: Optional[str] = None) -> str:
+def get_user_id_from_header(x_user_id: str | None = None) -> str:
     """Get user ID from header or use default placeholder"""
     # NOTE: Auth uses X-User-ID header; falls back to DEFAULT_USER_ID env var
     if x_user_id:

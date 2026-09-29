@@ -1,6 +1,6 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -118,7 +118,7 @@ async def api_milvus_save(request: MilvusSaveRequest):
 
 
 @router.get("/api/milvus/versions")
-async def api_milvus_versions(prompt_id: Optional[str] = None):
+async def api_milvus_versions(prompt_id: str | None = None):
     """Return saved Milvus workspace versions, optionally filtered by prompt."""
     try:
         versions = milvus_get_versions(prompt_id)

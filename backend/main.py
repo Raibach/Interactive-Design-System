@@ -1,3 +1,17 @@
+# ruff: noqa: E402 — THIS FILE'S IMPORTS ARE STAGED ON PURPOSE, and the check cannot see why.
+#
+# `load_dotenv()` has to run BEFORE anything reads the environment, and several of the modules
+# imported below read it at import time: `sentry_sdk.init()` two lines down takes its DSN from
+# `os.getenv("SENTRY_DSN")`, and `grace_gui` and the routers under it resolve configuration the
+# same way. That forces a shape the linter reads as a mistake — an import placed after a call —
+# when the order IS the correctness. Moving these imports to the top would read the environment
+# before it is loaded and quietly hand the application empty values.
+#
+# Declared for the whole file rather than line by line because all eleven are the same fact, and
+# eleven repetitions of the same reason is how a reason stops being read. The cost is real and is
+# accepted knowingly: a FUTURE import in this file that lands in the wrong place for an unrelated
+# reason will not be reported either. This file is the application's entry point and its bootstrap
+# order is the whole point of it.
 import os
 import sys
 

@@ -5,7 +5,7 @@ Handles prompt sessions, versions, and AI suggestions
 
 import json
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from database_pool import DatabasePoolManager
 
@@ -36,7 +36,7 @@ class PromptSessionsAPI:
         self,
         user_id: str,
         title: str = "Untitled Prompt Session",
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a new prompt session with associated conversation
@@ -97,7 +97,7 @@ class PromptSessionsAPI:
                 conn.rollback()
                 raise
 
-    def get_or_create_console_tab_conversation(self, user_id: str, tab: str) -> Optional[str]:
+    def get_or_create_console_tab_conversation(self, user_id: str, tab: str) -> str | None:
         """The console session's conversation FOR ONE TAB — approvals has its own.
 
         The console is the ONE global seat, and its tabs are different processes: the chat
@@ -150,7 +150,7 @@ class PromptSessionsAPI:
             conn.commit()
             return str(conversation_id)
 
-    def open_console_conversation(self, user_id: str) -> Optional[str]:
+    def open_console_conversation(self, user_id: str) -> str | None:
         """A conversation for the console — created when the console has NONE, and never per landing.
 
         THE CONSOLE PACKAGE IS THE PERSON'S OWN HOME. Their history, settings and preferences live
@@ -213,7 +213,7 @@ class PromptSessionsAPI:
             conn.commit()
             return str(conversation_id)
 
-    def get_or_create_console_session(self, user_id: str) -> Optional[dict[str, Any]]:
+    def get_or_create_console_session(self, user_id: str) -> dict[str, Any] | None:
         """
         The user's CONSOLE session — the owner of the console chat's conversations.
 
@@ -514,7 +514,7 @@ class PromptSessionsAPI:
         self,
         session_id: str,
         verdict: str,
-        sentence: Optional[str] = None,
+        sentence: str | None = None,
         trigger_kind: str = "run",
     ) -> dict[str, Any]:
         """Store one judged run and return the row the caller just wrote."""
@@ -559,7 +559,7 @@ class PromptSessionsAPI:
                 raise
 
     def _log_prompt_modification_to_milvus(
-        self, suggestion: dict[str, Any], user_id: str, inserted_position: Optional[str] = None
+        self, suggestion: dict[str, Any], user_id: str, inserted_position: str | None = None
     ) -> bool:
         """
         Log prompt modification to Milvus as a [modified] event with timestamp
@@ -656,7 +656,7 @@ class PromptSessionsAPI:
             traceback.print_exc()
             return False
 
-    def get_session(self, session_id: str, user_id: str) -> Optional[dict[str, Any]]:
+    def get_session(self, session_id: str, user_id: str) -> dict[str, Any] | None:
         """
         Get a specific prompt session by ID
         """
@@ -742,20 +742,20 @@ class PromptSessionsAPI:
         self,
         session_id: str,
         user_id: str,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
-        left_column_content: Optional[str] = None,
-        compiled_output: Optional[str] = None,
-        conversation_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        is_archived: Optional[bool] = None,
-        metadata: Optional[dict] = None,
-        category: Optional[str] = None,
-        status: Optional[str] = None,
-        likes: Optional[int] = None,
-        model_name: Optional[str] = None,
-        team_name: Optional[str] = None,
-        avatar_url: Optional[str] = None,
+        title: str | None = None,
+        description: str | None = None,
+        left_column_content: str | None = None,
+        compiled_output: str | None = None,
+        conversation_id: str | None = None,
+        is_active: bool | None = None,
+        is_archived: bool | None = None,
+        metadata: dict | None = None,
+        category: str | None = None,
+        status: str | None = None,
+        likes: int | None = None,
+        model_name: str | None = None,
+        team_name: str | None = None,
+        avatar_url: str | None = None,
     ) -> dict[str, Any]:
         """
         Update a prompt session
@@ -906,8 +906,8 @@ class PromptSessionsAPI:
         session_id: str,
         user_id: str,
         left_column_content: str,
-        compiled_output: Optional[str] = None,
-        change_description: Optional[str] = None,
+        compiled_output: str | None = None,
+        change_description: str | None = None,
         change_type: str = "manual",
     ) -> dict[str, Any]:
         """
@@ -1000,7 +1000,7 @@ class PromptSessionsAPI:
 
     def get_version(
         self, session_id: str, version_number: int, user_id: str
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Get a specific version of a prompt
         """
@@ -1142,11 +1142,11 @@ class PromptSessionsAPI:
         user_id: str,
         suggestion_type: str,
         content: str,
-        context: Optional[str] = None,
-        generated_by_model: Optional[str] = None,
+        context: str | None = None,
+        generated_by_model: str | None = None,
         confidence_score: float = 1.0,
         relevance_score: float = 1.0,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> dict[str, Any]:
         """
         Create an AI suggestion for a prompt session
@@ -1212,8 +1212,8 @@ class PromptSessionsAPI:
         self,
         session_id: str,
         user_id: str,
-        used: Optional[bool] = None,
-        suggestion_type: Optional[str] = None,
+        used: bool | None = None,
+        suggestion_type: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -1258,7 +1258,7 @@ class PromptSessionsAPI:
                 raise
 
     def mark_suggestion_used(
-        self, suggestion_id: str, user_id: str, inserted_position: Optional[str] = None
+        self, suggestion_id: str, user_id: str, inserted_position: str | None = None
     ) -> dict[str, Any]:
         """
         Mark an AI suggestion as used and log to Milvus as a prompt modification
@@ -1342,7 +1342,7 @@ class PromptSessionsAPI:
         self,
         session_id: str,
         user_id: str,
-        context_type: Optional[str] = None,
+        context_type: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -1386,9 +1386,9 @@ class PromptSessionsAPI:
         user_id: str,
         context_type: str,
         content: str,
-        source: Optional[str] = None,
+        source: str | None = None,
         relevance_score: float = 1.0,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> dict[str, Any]:
         """
         Add a context entry for a prompt session

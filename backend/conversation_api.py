@@ -6,7 +6,6 @@ Handles conversations and messages with offline support
 import concurrent.futures
 import json
 import time
-from typing import Optional
 
 import psycopg2
 
@@ -65,8 +64,8 @@ class ConversationAPI:
     def get_all_conversations(
         self,
         user_id: str,
-        project_id: Optional[str] = None,
-        session_id: Optional[str] = None,
+        project_id: str | None = None,
+        session_id: str | None = None,
         include_archived: bool = False
     ) -> list[dict]:
         """Get all conversations for a user, optionally filtered by project or session"""
@@ -238,7 +237,7 @@ class ConversationAPI:
             if conn:
                 conn.close()
 
-    def get_conversation(self, conversation_id: str, user_id: str) -> Optional[dict]:
+    def get_conversation(self, conversation_id: str, user_id: str) -> dict | None:
         """Get a specific conversation by ID"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -273,10 +272,10 @@ class ConversationAPI:
     def create_conversation(
         self,
         user_id: str,
-        project_id: Optional[str] = None,
-        title: Optional[str] = None,
-        metadata: Optional[dict] = None,
-        session_id: Optional[str] = None,
+        project_id: str | None = None,
+        title: str | None = None,
+        metadata: dict | None = None,
+        session_id: str | None = None,
         tab: str = "chat",
     ) -> str:
         """Create a new conversation.
@@ -320,10 +319,10 @@ class ConversationAPI:
         self,
         conversation_id: str,
         user_id: str,
-        title: Optional[str] = None,
-        message_count: Optional[int] = None,
-        project_id: Optional[str] = None,
-        surface_state_json: Optional[str] = None,
+        title: str | None = None,
+        message_count: int | None = None,
+        project_id: str | None = None,
+        surface_state_json: str | None = None,
     ) -> bool:
         """Update a conversation (title, message_count, project_id, surface_state)"""
         conn = self.get_db()
@@ -508,7 +507,7 @@ class ConversationAPI:
     def get_archived_conversations(
         self,
         user_id: str,
-        project_id: Optional[str] = None
+        project_id: str | None = None
     ) -> list[dict]:
         """Get archived conversations for a user"""
         return self.get_all_conversations(user_id, project_id, include_archived=True)
@@ -521,7 +520,7 @@ class ConversationAPI:
         self,
         conversation_id: str,
         user_id: str,
-        limit: Optional[int] = None,
+        limit: int | None = None,
         offset: int = 0
     ) -> list[dict]:
         """Get messages for a conversation"""
@@ -615,7 +614,7 @@ class ConversationAPI:
         user_id: str,
         role: str,
         content: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
         memory_api=None,
         save_to_memory: bool = True
     ) -> str:
@@ -737,7 +736,7 @@ class ConversationAPI:
                             if tag_result and tag_result.get('tag_paths'):
                                 tag_paths = [tp for tp in tag_result['tag_paths'] if tp]
                                 has_tags = len(tag_paths) > 0
-                        except Exception as tag_error:
+                        except Exception:
                             # Non-critical - continue without tags
                             pass
 
@@ -848,7 +847,7 @@ class ConversationAPI:
         self,
         conversation_id: str,
         user_id: str,
-        project_id: Optional[str],
+        project_id: str | None,
     ) -> None:
         """
         Background worker: detect context entities and write tags + embeddings to Milvus.
@@ -901,8 +900,8 @@ class ConversationAPI:
         self,
         tag_paths: list[str],
         user_id: str,
-        project_id: Optional[str] = None,
-        character_names: Optional[list[str]] = None,
+        project_id: str | None = None,
+        character_names: list[str] | None = None,
         limit: int = 10
     ) -> list[dict]:
         """
@@ -1040,7 +1039,7 @@ class ConversationAPI:
         conversation_id: str,
         user_id: str,
         suggested_tags: list[str],
-        detected_entities: Optional[dict] = None,
+        detected_entities: dict | None = None,
         confirmed: bool = False
     ) -> str:
         """
@@ -1156,7 +1155,7 @@ class ConversationAPI:
         user_id: str,
         detected_entities: dict,
         conversation_content: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         milvus_client=None,
         memory_embedder=None
     ) -> dict[str, any]:

@@ -8,7 +8,7 @@ import os
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from psycopg2 import DatabaseError, InterfaceError, OperationalError, ProgrammingError
 
@@ -39,8 +39,8 @@ class DatabaseLogger:
     def log_connection_attempt(
         database_url: str,
         success: bool,
-        error: Optional[str] = None,
-        duration_ms: Optional[float] = None
+        error: str | None = None,
+        duration_ms: float | None = None
     ):
         """Log database connection attempts"""
         entry = {
@@ -63,8 +63,8 @@ class DatabaseLogger:
     def log_error(
         operation: str,
         error_message: str,
-        context: Optional[dict[str, Any]] = None,
-        exception: Optional[Exception] = None
+        context: dict[str, Any] | None = None,
+        exception: Exception | None = None
     ):
         """Log database errors with full context"""
         entry = {
@@ -95,12 +95,12 @@ class DatabaseLogger:
     @staticmethod
     def log_query(
         operation: str,
-        query: Optional[str] = None,
-        params: Optional[tuple] = None,
+        query: str | None = None,
+        params: tuple | None = None,
         success: bool = True,
-        duration_ms: Optional[float] = None,
-        rows_affected: Optional[int] = None,
-        error: Optional[str] = None
+        duration_ms: float | None = None,
+        rows_affected: int | None = None,
+        error: str | None = None
     ):
         """Log database queries (can be enabled/disabled)"""
         if not os.getenv('DB_QUERY_LOGGING_ENABLED', 'false').lower() == 'true':
@@ -123,7 +123,7 @@ class DatabaseLogger:
     def log_health_check(
         status: str,
         details: dict[str, Any],
-        error: Optional[str] = None
+        error: str | None = None
     ):
         """Log database health check results"""
         entry = {
@@ -138,7 +138,7 @@ class DatabaseLogger:
     @staticmethod
     def log_debug(
         message: str,
-        data: Optional[dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
         level: str = "info"  # "debug", "info", "warning", "error"
     ):
         """Log debug information"""
@@ -224,7 +224,7 @@ class DatabaseLogger:
         errors = []
         try:
             if DB_ERROR_LOG.exists():
-                with open(DB_ERROR_LOG, 'r') as f:
+                with open(DB_ERROR_LOG) as f:
                     lines = f.readlines()
                     for line in lines[-limit:]:
                         try:
@@ -241,7 +241,7 @@ class DatabaseLogger:
         connections = []
         try:
             if DB_CONNECTION_LOG.exists():
-                with open(DB_CONNECTION_LOG, 'r') as f:
+                with open(DB_CONNECTION_LOG) as f:
                     lines = f.readlines()
                     for line in lines[-limit:]:
                         try:
@@ -266,7 +266,7 @@ class DatabaseLogger:
         try:
             # Get recent health checks
             if DB_HEALTH_LOG.exists():
-                with open(DB_HEALTH_LOG, 'r') as f:
+                with open(DB_HEALTH_LOG) as f:
                     lines = f.readlines()
                     if lines:
                         last_check = json.loads(lines[-1].strip())

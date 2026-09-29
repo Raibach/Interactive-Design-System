@@ -16,8 +16,9 @@ Health Monitoring:
 import hashlib
 import json
 import uuid
+from collections.abc import Callable
 from datetime import datetime
-from typing import Optional
+from typing import Any
 
 import psycopg2
 from psycopg2 import InterfaceError, OperationalError
@@ -31,9 +32,16 @@ from milvus_client import get_milvus_client
 def detect_memory_category(
     content: str, 
     content_type: str, 
-    tag_paths: Optional[list[str]] = None,
-    source_metadata: Optional[dict] = None,
-    query_llm_func: Optional[callable] = None
+    tag_paths: list[str] | None = None,
+    source_metadata: dict | None = None,
+    # THIS READ `callable` UNTIL 2026-09-29, and `callable` is the BUILT-IN FUNCTION, not a
+    # type. Written as `Optional[callable]` that never mattered: Optional only wrapped the
+    # name, so nothing ever evaluated it as a type. Rewritten as `callable | None` it became
+    # `callable.__or__(None)`, which raised `TypeError: unsupported operand type(s) for |:
+    # 'builtin_function_or_method' and 'NoneType'` at import — and because this module is
+    # imported by `services`, which every route imports, one wrong word here took out eleven
+    # modules and the whole application. `Callable[..., Any]` is what was meant.
+    query_llm_func: Callable[..., Any] | None = None
 ) -> tuple[str, float]:
     """
     Detect memory category with optional LLM enhancement.
@@ -396,12 +404,12 @@ class GraceMemoryAPI:
         content: str,
         content_type: str,
         source_type: str,
-        title: Optional[str] = None,
-        source_url: Optional[str] = None,
-        source_metadata: Optional[dict] = None,
-        quarantine_score: Optional[float] = None,
+        title: str | None = None,
+        source_url: str | None = None,
+        source_metadata: dict | None = None,
+        quarantine_score: float | None = None,
         quarantine_status: str = 'pending',
-        quarantine_details: Optional[dict] = None,
+        quarantine_details: dict | None = None,
         generate_embedding: bool = False  # Only generate embeddings when explicitly requested
     ) -> str:
         """
@@ -631,8 +639,8 @@ class GraceMemoryAPI:
         memory_id: str,
         user_id: str,
         content: str,
-        title: Optional[str] = None,
-        source_metadata: Optional[dict] = None,
+        title: str | None = None,
+        source_metadata: dict | None = None,
         generate_embedding: bool = False
     ) -> str:
         """
@@ -695,7 +703,7 @@ class GraceMemoryAPI:
         # Regenerate embeddings if requested
         if generate_embedding:
             try:
-                project_id = source_metadata.get('project_id') if source_metadata else None
+                project_id = source_metadata.get('project_id') if source_metadata else None  # noqa: F841 — read for a re-embed path whose body is still a comment
                 # Re-embed and store in Milvus (similar to create_memory logic)
                 # This would call the embedding generation code
                 # For now, we'll skip it to avoid complexity
@@ -710,8 +718,8 @@ class GraceMemoryAPI:
         memory_id: str,
         user_id: str,
         content: str,
-        source_metadata: Optional[dict],
-        project_id: Optional[str] = None
+        source_metadata: dict | None,
+        project_id: str | None = None
     ):
         """Store embeddings in Milvus asynchronously"""
         try:
@@ -980,7 +988,7 @@ class GraceMemoryAPI:
             except Exception:
                 pass
 
-    def get_memory(self, user_id: str, memory_id: str) -> Optional[dict]:
+    def get_memory(self, user_id: str, memory_id: str) -> dict | None:
         """Get a single memory by ID"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -1018,11 +1026,11 @@ class GraceMemoryAPI:
     def list_memories(
         self,
         user_id: str,
-        quarantine_status: Optional[str] = None,
+        quarantine_status: str | None = None,
         promoted_only: bool = False,
         limit: int = 50,
         offset: int = 0,
-        project_id: Optional[str] = None
+        project_id: str | None = None
     ) -> list[dict]:
         """List user's memories with filtering"""
         conn = self.get_db()
@@ -1083,15 +1091,15 @@ class GraceMemoryAPI:
         self,
         user_id: str,
         query: str,
-        project_id: Optional[str] = None,
+        project_id: str | None = None,
         limit: int = 5,
-        tag_paths: Optional[list[str]] = None,
-        character_names: Optional[list[str]] = None,
+        tag_paths: list[str] | None = None,
+        character_names: list[str] | None = None,
         context_type: str = "general",
         promoted_only: bool = True,  # Grace can only access promoted memories (The Keeper's curation)
-        historical_periods: Optional[list[str]] = None,
-        historical_movements: Optional[list[str]] = None,
-        historical_events: Optional[list[str]] = None
+        historical_periods: list[str] | None = None,
+        historical_movements: list[str] | None = None,
+        historical_events: list[str] | None = None
     ) -> list[dict]:
         """
         Recall relevant memories using hybrid search: Milvus semantic + PostgreSQL tag filtering
@@ -1131,15 +1139,15 @@ class GraceMemoryAPI:
         self,
         user_id: str,
         query: str,
-        project_id: Optional[str],
+        project_id: str | None,
         limit: int,
-        tag_paths: Optional[list[str]],
-        character_names: Optional[list[str]],
+        tag_paths: list[str] | None,
+        character_names: list[str] | None,
         context_type: str,
         promoted_only: bool = True,
-        historical_periods: Optional[list[str]] = None,
-        historical_movements: Optional[list[str]] = None,
-        historical_events: Optional[list[str]] = None
+        historical_periods: list[str] | None = None,
+        historical_movements: list[str] | None = None,
+        historical_events: list[str] | None = None
     ) -> list[dict]:
         """Recall memories using Milvus semantic search - generates embeddings on-demand when user requests search"""
         # Get embedder and generate query embedding on-demand (only when user requests semantic search)
@@ -1322,10 +1330,10 @@ class GraceMemoryAPI:
         self,
         user_id: str,
         query: str,
-        project_id: Optional[str],
+        project_id: str | None,
         limit: int,
-        tag_paths: Optional[list[str]],
-        character_names: Optional[list[str]],
+        tag_paths: list[str] | None,
+        character_names: list[str] | None,
         promoted_only: bool = True
     ) -> list[dict]:
         """Fallback to PostgreSQL keyword search if Milvus fails"""
@@ -1417,9 +1425,9 @@ class GraceMemoryAPI:
         self,
         user_id: str,
         memory_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
         priority: str = 'normal'
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Request memory promotion to Grace context
         Enters Wikipedia-style curation queue
@@ -1469,7 +1477,7 @@ class GraceMemoryAPI:
         user_id: str,
         promotion_id: str,
         curator_id: str,
-        notes: Optional[str] = None,
+        notes: str | None = None,
         context_category: str = 'domain_knowledge',
         priority: int = 50
     ) -> bool:
@@ -1536,7 +1544,7 @@ class GraceMemoryAPI:
     def get_grace_context(
         self,
         user_id: str,
-        category: Optional[str] = None,
+        category: str | None = None,
         limit: int = 100
     ) -> list[dict]:
         """
@@ -1593,7 +1601,7 @@ class GraceMemoryAPI:
         confidence_avg: float,
         mood_state: str = 'healthy',
         refusal_count: int = 0,
-        metadata: Optional[dict] = None
+        metadata: dict | None = None
     ) -> str:
         """
         Record Grace's health snapshot (typically called hourly)
@@ -1636,7 +1644,7 @@ class GraceMemoryAPI:
 
         return metric_id
 
-    def get_grace_health(self, user_id: str) -> Optional[dict]:
+    def get_grace_health(self, user_id: str) -> dict | None:
         """
         Get Grace's current health status
 
@@ -1694,8 +1702,8 @@ class GraceMemoryAPI:
         decision: str,
         decision_reason: str,
         confidence: float,
-        reasoning_trace: Optional[str] = None,
-        memory_id: Optional[str] = None
+        reasoning_trace: str | None = None,
+        memory_id: str | None = None
     ) -> str:
         """
         Log when Grace makes a conscious decision (especially refusals)
@@ -1767,7 +1775,7 @@ class GraceMemoryAPI:
         user_id: str,
         memory_id: str,
         event_type: str,
-        usage_context: Optional[str] = None,
+        usage_context: str | None = None,
         beneficiary_type: str = 'individual_user'
     ) -> str:
         """

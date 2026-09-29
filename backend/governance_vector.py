@@ -15,7 +15,7 @@ through the same client the rest of the app uses.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 COLLECTION = "governance"
 
@@ -97,7 +97,7 @@ def index_rows(kind: str, rows: list[dict[str, Any]]) -> int:
     return len(payload)
 
 
-def search(query: str, k: int = 8, kind: Optional[str] = None) -> list[dict[str, Any]]:
+def search(query: str, k: int = 8, kind: str | None = None) -> list[dict[str, Any]]:
     """The closest governance rows to `query`, optionally one kind only."""
     client = _client()
     if COLLECTION not in client.client.list_collections():
@@ -125,7 +125,7 @@ def search(query: str, k: int = 8, kind: Optional[str] = None) -> list[dict[str,
     return out
 
 
-def count(kind: Optional[str] = None) -> int:
+def count(kind: str | None = None) -> int:
     client = _client()
     if COLLECTION not in client.client.list_collections():
         return 0

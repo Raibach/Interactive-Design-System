@@ -11,7 +11,7 @@ Anything exact is answered here. The models never see a file dump.
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -108,10 +108,10 @@ def upsert_items(kind: str, rows: list[dict[str, Any]]) -> int:
 
 
 def query(
-    kind: Optional[str] = None,
-    check: Optional[str] = None,
+    kind: str | None = None,
+    check: str | None = None,
     open_only: bool = False,
-    package_id: Optional[str] = None,
+    package_id: str | None = None,
     limit: int = 200,
 ) -> list[dict[str, Any]]:
     """Exact reads — the questions a table answers better than a similarity search."""
@@ -138,7 +138,7 @@ def query(
         return [dict(r) for r in cur.fetchall()]
 
 
-def count(kind: Optional[str] = None, open_only: bool = False) -> int:
+def count(kind: str | None = None, open_only: bool = False) -> int:
     where, params = [], []
     if kind:
         where.append("kind = %s")
@@ -154,7 +154,7 @@ def count(kind: Optional[str] = None, open_only: bool = False) -> int:
         return int(cur.fetchone()["n"])
 
 
-def link_package(item_pk: str, package_id: Optional[str]) -> None:
+def link_package(item_pk: str, package_id: str | None) -> None:
     """Attach a governance row to the package it is about — the link the global view uses
     (owner, 2026-09-19: "the governance issue needs a link to the problematic prompt
     package"), so Approvals can open the package instead of describing it)."""

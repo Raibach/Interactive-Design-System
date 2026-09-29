@@ -16,7 +16,7 @@ model cannot answer. No fake surfaces: there is no cache and no substitute of an
 import itertools
 import os
 import time
-from typing import Any, Optional
+from typing import Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -60,7 +60,7 @@ MODEL_PROVIDERS = [
 ]
 
 
-def _provider_for_mode(mode: str) -> Optional[dict[str, Any]]:
+def _provider_for_mode(mode: str) -> dict[str, Any] | None:
     """THE model this mode runs on — the only one that will ever be called.
 
     There is one entry in MODEL_PROVIDERS, so this returns it for every mode, and the name
@@ -249,10 +249,10 @@ def query_llm(
     memory_context: str = "",
     temperature: float = 0.0,
     self_reflection: bool = False,
-    editorial: Optional[dict[str, Any]] = None,
+    editorial: dict[str, Any] | None = None,
     mode: str = "writer",
     prompt_id: str = "unknown",
-    model: Optional[str] = None,
+    model: str | None = None,
 ) -> str:
     """Query the LLM. Tries all providers in priority order.
 
@@ -879,7 +879,7 @@ def _process_backend_tags(response_text: str, workspace_context: str = "", promp
 def milvus_save_version(
     prompt_id: str,
     content: str,
-    ai_metadata: Optional[dict[str, Any]] = None,
+    ai_metadata: dict[str, Any] | None = None,
 ) -> dict:
     """Save a workspace snapshot to prompt_versions via Zilliz Cloud.
 
@@ -922,7 +922,7 @@ def milvus_save_version(
     return {"version_number": count, "saved_at": now, "prompt_id": prompt_id}
 
 
-def milvus_get_versions(prompt_id: Optional[str] = None) -> list:
+def milvus_get_versions(prompt_id: str | None = None) -> list:
     """Get saved versions from Zilliz, optionally filtered by prompt_id."""
     from milvus_client import get_milvus_client
 

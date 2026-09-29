@@ -12,7 +12,7 @@ import subprocess
 import time
 import urllib.request
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -74,7 +74,7 @@ router = APIRouter()
 # COMPARISON narrows.
 
 
-def node_code_identity(node_id: Optional[str]) -> str:
+def node_code_identity(node_id: str | None) -> str:
     """The component part of a node id — everything before the LAST `;`, lowercased.
 
     `I40001206:3418;40001205:5529` → `i40001206:3418`. An instance id carries the chain of
@@ -96,7 +96,7 @@ def node_code_identity(node_id: Optional[str]) -> str:
     return raw.rpartition(";")[0]
 
 
-def node_location(node_id: Optional[str]) -> str:
+def node_location(node_id: str | None) -> str:
     """The occurrence part of a node id — what follows the LAST `;`, lowercased.
 
     Empty for a node that is not an instance: the node itself IS the component, so it has no
@@ -113,7 +113,7 @@ def node_location(node_id: Optional[str]) -> str:
     return raw.rpartition(";")[2]
 
 
-def node_ids_match(a: Optional[str], b: Optional[str]) -> bool:
+def node_ids_match(a: str | None, b: str | None) -> bool:
     """Whether two node ids name the same COMPONENT, whatever their occurrences.
 
     Used everywhere the question is identity rather than location — "does the catalogue
@@ -148,9 +148,9 @@ def _node_id_of_tag(tag: str) -> str:
 
 class FigmaQueryRequest(BaseModel):
     file_key: str
-    query: Optional[str] = None
-    node_id: Optional[str] = None
-    component_id: Optional[str] = None
+    query: str | None = None
+    node_id: str | None = None
+    component_id: str | None = None
 
 @router.post("/api/figma/file")
 async def api_figma_file(request: FigmaQueryRequest):
@@ -189,7 +189,7 @@ async def api_figma_node(file_key: str, node_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/figma/dev-resources/{file_key}")
-async def api_figma_dev_resources(file_key: str, node_id: Optional[str] = None):
+async def api_figma_dev_resources(file_key: str, node_id: str | None = None):
     """Get dev resources (Code Connect annotations) from a Figma file."""
     try:
         data = get_dev_resources(file_key, node_id)
@@ -298,10 +298,10 @@ class IngestRequest(BaseModel):
 
 class JobStatus(BaseModel):
     status: str  # queued | processing | done | error
-    result: Optional[dict[str, Any]] = None
-    error: Optional[str] = None
-    mcp_status: Optional[str] = None
-    rest_status: Optional[str] = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    mcp_status: str | None = None
+    rest_status: str | None = None
 
 # In-memory job queue (simple, sequential processing per user spec)
 ingest_jobs: dict[str, JobStatus] = {}
@@ -364,7 +364,7 @@ ingest_preview_abandoned: dict[str, float] = {}
 INGEST_PREVIEW_ABANDON_GRACE = int(os.getenv("FIGMA_PREVIEW_ABANDON_GRACE", "5"))
 
 
-def _abandon_preview() -> Optional[str]:
+def _abandon_preview() -> str | None:
     """The page said it is leaving. The entry goes with it, unless the page comes back in the grace.
 
     The grace is not a delay before anything is used — it is the room a RELOAD needs, since a
@@ -377,7 +377,7 @@ def _abandon_preview() -> Optional[str]:
     return job_id
 
 
-def _keep_preview(job_id: Optional[str] = None) -> None:
+def _keep_preview(job_id: str | None = None) -> None:
     """Somebody is looking at it: cancel any goodbye. There is no deadline to reset."""
     if not job_id:
         job_id = next(iter(ingest_drafts), None)
@@ -478,7 +478,7 @@ def _remember_drafts(
     job_id: str,
     drafts: dict[str, str],
     validation: dict[str, dict[str, Any]],
-    meta: Optional[dict[str, Any]] = None,
+    meta: dict[str, Any] | None = None,
 ) -> None:
     """Hold the PREVIEW: the one component that has been built and not yet approved or discarded.
 
@@ -628,7 +628,7 @@ def _component_contract(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _insert_before_line(text: str, start_marker: str, end_line: str, addition: str) -> Optional[str]:
+def _insert_before_line(text: str, start_marker: str, end_line: str, addition: str) -> str | None:
     """Splice ``addition`` in just before the first ``end_line`` that follows ``start_marker``.
 
     The registry files are hand-laid-out, so entries are added as text and the rest of
@@ -697,7 +697,7 @@ def _register_in_allowlist(tag: str, meta: dict[str, Any]) -> str:
     return "allowlisted"
 
 
-def _catalog_file_path() -> Optional[str]:
+def _catalog_file_path() -> str | None:
     """The catalogue file that actually exists.
 
     There have been two copies of this file — one at the repository root and one the backend
@@ -782,7 +782,7 @@ def _register_in_catalog(tag: str, meta: dict[str, Any], pipeline: str = "prompt
 REGISTRATION_FAILURE_MARKERS = ("unreadable", "could not", "no catalogue", "refusing", "not found", "failed")
 
 
-def _registration_failure(step: str, result: Any) -> Optional[str]:
+def _registration_failure(step: str, result: Any) -> str | None:
     """A registration step only counts as failed when it says so.
 
     Prefix-guessing the other way — treating anything unrecognised as a failure — refused a
@@ -876,11 +876,11 @@ def _catalog_check() -> dict[str, Any]:
         "ok": blocking == 0,
         "blocking": blocking,
         "verdict": verdict,
-        "findings": [l.strip() for l in output.splitlines() if l.strip().startswith("[")][:20],
+        "findings": [line.strip() for line in output.splitlines() if line.strip().startswith("[")][:20],
     }
 
 
-def _register_in_figma_map(tag: str, node_id: str, figma_name: str) -> Optional[str]:
+def _register_in_figma_map(tag: str, node_id: str, figma_name: str) -> str | None:
     """Record this component in the Figma map (frontend/src/components/registry.json).
 
     The map says which Figma node each component came from — the file to consult before
@@ -1306,7 +1306,7 @@ _IMAGE_EXTENSIONS = {
 }
 
 
-def _asset_bytes(asset: dict[str, Any]) -> Optional[bytes]:
+def _asset_bytes(asset: dict[str, Any]) -> bytes | None:
     """The asset's own bytes, or None when they cannot be obtained."""
     kind = str(asset.get("kind") or "")
     data = str(asset.get("data") or "")
@@ -1587,8 +1587,8 @@ def _parse_mcp_response(text: str) -> dict[str, Any]:
                 reference_code[current_node_id] = "\n".join(reference_code_buffer).strip()
                 reference_code_buffer = []
             
-            current_node_type = node_match.group(1)
-            current_node_name = node_match.group(2)
+            current_node_type = node_match.group(1)  # noqa: F841 — a regex group captured and never used
+            current_node_name = node_match.group(2)  # noqa: F841 — a regex group captured and never used
             current_node_id = node_match.group(3).replace("-", ":")  # Normalize to colon format
             in_reference_code = False
             continue
@@ -1680,7 +1680,7 @@ def _parse_mcp_response(text: str) -> dict[str, Any]:
     }
 
 
-def _fetch_figma_mcp(file_key: str, node_id: str) -> Optional[dict[str, Any]]:
+def _fetch_figma_mcp(file_key: str, node_id: str) -> dict[str, Any] | None:
     """
     Fetch design context from Figma MCP server.
     
@@ -1731,8 +1731,8 @@ def _fetch_figma_mcp(file_key: str, node_id: str) -> Optional[dict[str, Any]]:
             # Parse SSE response
             data_lines = [line[6:] for line in body.splitlines() if line.startswith("data: ")]
             if data_lines:
-                init_result = json.loads("\n".join(data_lines))
-    except urllib.error.URLError as e:
+                init_result = json.loads("\n".join(data_lines))  # noqa: F841 — the MCP init response is parsed and the result discarded
+    except urllib.error.URLError:
         # MCP not reachable (normal on server)
         return None
     except Exception as e:
@@ -1818,7 +1818,7 @@ def _fetch_figma_mcp(file_key: str, node_id: str) -> Optional[dict[str, Any]]:
     return None
 
 
-def _merge_mcp_rest(mcp_context: Optional[dict], rest_response: dict) -> dict[str, Any]:
+def _merge_mcp_rest(mcp_context: dict | None, rest_response: dict) -> dict[str, Any]:
     """
     Merge MCP context (annotations + reference code) with REST response (geometry + node tree).
     
@@ -1894,7 +1894,7 @@ def _merge_mcp_rest(mcp_context: Optional[dict], rest_response: dict) -> dict[st
     return merged
 
 
-def _figma_color(fill: dict[str, Any]) -> Optional[str]:
+def _figma_color(fill: dict[str, Any]) -> str | None:
     """A Figma paint as a CSS colour, when it is a plain solid one."""
     color = (fill or {}).get("color")
     if not color:
@@ -1908,7 +1908,7 @@ def _figma_color(fill: dict[str, Any]) -> Optional[str]:
     return f"rgba({r}, {g}, {b}, {round(float(a), 3)})"
 
 
-def _figma_gradient(fill: dict[str, Any]) -> Optional[str]:
+def _figma_gradient(fill: dict[str, Any]) -> str | None:
     """A Figma gradient paint as a CSS gradient.
 
     Figma sends gradients as stops plus handle positions, not as CSS: the stops are
@@ -1943,7 +1943,7 @@ def _figma_gradient(fill: dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _figma_paint(fill: dict[str, Any]) -> Optional[str]:
+def _figma_paint(fill: dict[str, Any]) -> str | None:
     """Any Figma paint as CSS: a flat colour, a gradient, or a noted image."""
     if not isinstance(fill, dict) or not fill.get("visible", True):
         return None
@@ -2146,7 +2146,7 @@ def _figma_read_gaps(spec: dict[str, Any], raw_nodes: Any) -> list[str]:
     ]
 
 
-def _figma_spec_for_model(node: dict[str, Any], depth: Optional[int] = None) -> dict[str, Any]:
+def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dict[str, Any]:
     """The design as the renderer needs to read it — EVERY layer, unless a depth is asked for.
 
     Geometry, auto-layout, paints, radius, effects and typography for every node in the
@@ -2411,7 +2411,7 @@ def _write_figma_layers(
     tag: str,
     node_id: str,
     spec: dict[str, Any],
-    assets: Optional[list[dict[str, Any]]] = None,
+    assets: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Persist one node's measured layer tree for the screen.
 
@@ -2631,7 +2631,7 @@ def _json_failure_detail(text: str) -> dict[str, Any]:
     }
 
 
-def _figma_map_lookup(node_id: str) -> Optional[dict[str, Any]]:
+def _figma_map_lookup(node_id: str) -> dict[str, Any] | None:
     """The Figma map's entry for a node, if the design already has a component for it."""
     try:
         with open(os.path.join(FRONTEND_DIR, "src", "components", "registry.json"), encoding="utf-8") as f:
@@ -2758,7 +2758,7 @@ def _walk_raw_nodes(nodes: Any):
     yield from walk(nodes)
 
 
-def _path_box(path: str) -> Optional[tuple]:
+def _path_box(path: str) -> tuple | None:
     """The box a path's own coordinates occupy: (min_x, min_y, width, height).
 
     Not the node's box. A vector's `path` is written in its own coordinate space — often offset
@@ -2792,7 +2792,7 @@ def _matrix_multiply(a: list[list[float]], b: list[list[float]]) -> list[list[fl
     ]
 
 
-def _absolute_transform(node: dict[str, Any], root: Optional[dict[str, Any]] = None) -> Optional[list[list[float]]]:
+def _absolute_transform(node: dict[str, Any], root: dict[str, Any] | None = None) -> list[list[float]] | None:
     """A node's full transform in the space its ancestors are drawn in.
 
     A vector's `path` is written in the VECTOR'S OWN coordinates — not the page's. What places it
@@ -2806,7 +2806,7 @@ def _absolute_transform(node: dict[str, Any], root: Optional[dict[str, Any]] = N
     top-down order so the result maps the node's coordinates into the root's.
     """
     chain: list[dict[str, Any]] = []
-    current: Optional[dict[str, Any]] = node
+    current: dict[str, Any] | None = node
     guard = 0
     while current is not None and current is not root and guard < 64:
         chain.append(current)
@@ -2818,7 +2818,7 @@ def _absolute_transform(node: dict[str, Any], root: Optional[dict[str, Any]] = N
     if not chain:
         return None
     chain.reverse()
-    matrix: Optional[list[list[float]]] = None
+    matrix: list[list[float]] | None = None
     for entry in chain:
         relative = entry.get("relativeTransform")
         if not relative or len(relative) != 2:
@@ -2827,7 +2827,7 @@ def _absolute_transform(node: dict[str, Any], root: Optional[dict[str, Any]] = N
     return matrix
 
 
-def _invert_matrix(matrix: list[list[float]]) -> Optional[list[list[float]]]:
+def _invert_matrix(matrix: list[list[float]]) -> list[list[float]] | None:
     """The inverse of a Figma 2×3 affine, or None when it is degenerate."""
     a, b, tx = matrix[0]
     c, d, ty = matrix[1]
@@ -2874,7 +2874,7 @@ def _remember_raw_nodes(nodes: Any) -> None:
                 _raw_parent_by_id[child_id] = node_id
 
 
-def _svg_for_vector(node: dict[str, Any], root: Optional[dict[str, Any]] = None) -> Optional[str]:
+def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) -> str | None:
     """A measured vector, already drawn — the exact `<svg>` the element should contain.
 
     THE WORK IS DONE HERE, ONCE, INSTEAD OF BY THE MODEL EVERY TIME. A vector arrives as a path
@@ -2977,7 +2977,7 @@ def _svg_for_vector(node: dict[str, Any], root: Optional[dict[str, Any]] = None)
             fit = "transformed"
             figma_box = {}
         else:
-            figma_box = {"width": True, "height": True}  # a degenerate matrix: refuse it below
+            figma_box = {"width": True, "height": True}  # a degenerate matrix: refuse it below  # noqa: F841 — the comment beside this says 'refuse it below' and NOTHING below reads it, so the guard never runs. Kept rather than deleted because deleting it would erase the only trace that the refusal was intended
     # EVERY PATH GOES THROUGH THE SAME TRANSFORM AND IS DRAWN, in the design's own order. A
     # composed glyph is several entries that only read as the design together — the `( )` is one
     # path per paren, and drawing one of them is a design that does not match.
@@ -3036,7 +3036,7 @@ def _svg_for_vector(node: dict[str, Any], root: Optional[dict[str, Any]] = None)
     # not land somewhere that contains the artwork, this origin is REFUSED and the path's own box
     # is used instead — the previous behaviour, visibly imperfect rather than off-canvas. That is
     # how the two wrong attempts above were caught, and it is why this one cannot repeat them.
-    origin: Optional[tuple] = None
+    origin: tuple | None = None
     if transform:
         a, b = transform[0][0], transform[0][1]
         c, d = transform[1][0], transform[1][1]
@@ -3090,7 +3090,7 @@ def _svg_for_vector(node: dict[str, Any], root: Optional[dict[str, Any]] = None)
     return "".join(parts)
 
 
-def _transform_path(path: str, matrix: list[list[float]]) -> Optional[str]:
+def _transform_path(path: str, matrix: list[list[float]]) -> str | None:
     """A path with every point carried through a transform, commands intact.
 
     The alternative — `transform="matrix(...)"` on the path — was tried and rendered wrongly: an
@@ -3490,8 +3490,8 @@ def _vector_findings(spec: dict[str, Any], code: str) -> list[str]:
 
 def _channel_report(
     merged: dict[str, Any],
-    mcp_context: Optional[dict[str, Any]],
-    component_descriptions: Optional[dict[str, str]] = None,
+    mcp_context: dict[str, Any] | None,
+    component_descriptions: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """What each channel gave, counted from where the fact actually comes from.
 
@@ -3662,7 +3662,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
 
     # Also get components from the response (Figma includes referenced components)
     components = merged.get("components", {})
-    mcp_annotations = merged.get("mcp_annotations")
+    mcp_annotations = merged.get("mcp_annotations")  # noqa: F841 — fetched and never merged, while the ingest reports the MCP channel as read
 
     # ── Step 3b: FETCH THE COMPONENTS THE DESIGN USES, which the first call does not carry ──
     # `/nodes?ids=<target>` returns the target's SUBTREE and a `components` map naming every
@@ -4164,7 +4164,7 @@ def _generate_card_template(node: dict[str, Any]) -> str:
 def _determine_component_type(node: dict[str, Any]) -> str:
     """Determine the A2UI component type from Figma node data."""
     node_type = node.get("type", "").upper()
-    name = node.get("name", "").lower()
+    name = node.get("name", "").lower()  # noqa: F841 — the node's name is read for a rule that was never written; only `node_type` and the MCP annotations decide below
     
     # Check MCP annotations for hints
     for ann in node.get("annotations", []):
@@ -4349,7 +4349,7 @@ def _extract_a2ui_events(node: dict[str, Any], component_type: str) -> list[dict
     return events
 
 
-def _extract_a2ui_actions(node: dict[str, Any], component_type: str) -> Optional[dict[str, Any]]:
+def _extract_a2ui_actions(node: dict[str, Any], component_type: str) -> dict[str, Any] | None:
     """Extract A2UI action configuration from node data."""
     # Check MCP annotations for action hints
     for ann in node.get("annotations", []):
@@ -4525,7 +4525,7 @@ def _activity_backfill() -> None:
             existing_loose = {(r["job_id"], r["kind"], r.get("tag")) for r in rows_now}
         try:
             with open(INGEST_LOG_PATH, encoding="utf-8") as f:
-                lines = [l for l in f if l.strip()]
+                lines = [line for line in f if line.strip()]
         except FileNotFoundError:
             return
         imported = 0
@@ -4557,7 +4557,7 @@ def _activity_backfill() -> None:
             pass
 
 
-def _activity_from_db(limit: int, session_id: Optional[str], outcomes: bool) -> Optional[list[dict[str, Any]]]:
+def _activity_from_db(limit: int, session_id: str | None, outcomes: bool) -> list[dict[str, Any]] | None:
     """The procession from Postgres, or None when the table cannot be read."""
     _activity_backfill()
     conn = _activity_db()
@@ -4728,11 +4728,16 @@ def _remove_from_figma_map(tag: str) -> str:
     while i < len(raw):
         ch = raw[i]
         if in_string:
-            if escaped: escaped = False
-            elif ch == "\\": escaped = True
-            elif ch == '"': in_string = False
-        elif ch == '"': in_string = True
-        elif ch in "[{": depth += 1
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "[{":
+            depth += 1
         elif ch in "]}":
             depth -= 1
             if depth == 0:
@@ -4814,7 +4819,7 @@ class RemoveRequest(BaseModel):
 
 
 @router.get("/api/figma/usage")
-async def api_figma_usage(sessionId: Optional[str] = Query(None), limit: int = Query(500, ge=1, le=2000)):
+async def api_figma_usage(sessionId: str | None = Query(None), limit: int = Query(500, ge=1, le=2000)):
     """What has been spent: tokens estimated per call, totalled.
 
     Estimates, not the provider's own count — the numbers come from the characters actually sent
@@ -5029,14 +5034,17 @@ def _template_bodies(src: str) -> list[str]:
                 i += 2
                 continue
             if ch == "$" and i + 1 < len(src) and src[i + 1] == "{":
-                depth += 1; i += 2
+                depth += 1
+                i += 2
                 continue
             if ch == "}" and depth:
-                depth -= 1; i += 1
+                depth -= 1
+                i += 1
                 continue
             if ch == "`" and depth == 0:
                 break
-            buf.append(ch); i += 1
+            buf.append(ch)
+            i += 1
         bodies.append("".join(buf))
     return bodies
 
@@ -5196,7 +5204,7 @@ async def api_figma_elements():
 
 
 @router.get("/api/figma/find")
-async def api_figma_find(q: str = Query(..., min_length=1), fileKey: Optional[str] = Query(None)):
+async def api_figma_find(q: str = Query(..., min_length=1), fileKey: str | None = Query(None)):
     """Find nodes by name, and say what each one already is.
 
     A designer often has the layer's name and not its id — "Frame 886987" is a name, not an
@@ -5325,19 +5333,19 @@ async def api_figma_node_component(node_id: str):
     mapped = _figma_map_lookup(normalised)
     if mapped and mapped.get("litComponent"):
         tag = mapped["litComponent"]
-        record = await api_figma_component(tag)
+        record = await api_figma_component_by_tag(tag)
         record["resolvedBy"] = "figma-map"
         record["nodeId"] = normalised
         return record
 
-    record = await api_figma_component(derived_tag)
+    record = await api_figma_component_by_tag(derived_tag)
     record["resolvedBy"] = "derived-tag"
     record["nodeId"] = normalised
     return record
 
 
 @router.get("/api/figma/component/{tag}")
-async def api_figma_component(tag: str):
+async def api_figma_component_by_tag(tag: str):
     """Open a component by its tag: what it is, where it is, and its whole history.
 
     The tag is the id the ingest creates (`f-<node id>`), so a designer can hand one over
@@ -5415,7 +5423,7 @@ async def api_figma_component(tag: str):
 @router.get("/api/figma/activity")
 async def api_figma_activity(
     limit: int = Query(30, ge=1, le=200),
-    sessionId: Optional[str] = Query(None),
+    sessionId: str | None = Query(None),
     outcomes: bool = Query(False),
 ):
     """The recent procession of ingest activity, newest first.
@@ -5458,7 +5466,7 @@ async def api_figma_activity(
     return {"entries": entries[:limit], "source": "file", "total": len(entries), "audit": audit}
 
 
-def _activity_timestamp(record: dict[str, Any]) -> Optional[datetime]:
+def _activity_timestamp(record: dict[str, Any]) -> datetime | None:
     """A record's own timestamp, or None when it has none that can be read.
 
     Tolerant on purpose: this line was written by whichever version of this application was
@@ -5620,14 +5628,14 @@ async def api_figma_ingest_code(job_id: str, tag: str):
 
 class CommitRequest(BaseModel):
     jobId: str
-    tags: Optional[list[str]] = None  # default: every draft the job produced
+    tags: list[str] | None = None  # default: every draft the job produced
     addToCatalogue: bool = True  # also map, allowlist and declare it
                               # (False writes the file only)
     # THE DESIGNER'S ANSWER to a name collision: this design has a layer whose NAME the design
     # system already has under a different node id, and they said overwrite it. See
     # _name_collisions for how the collision is found, and the retag below for what the answer
     # does. Unset means "no" — the copy is added as its own component.
-    overwriteTag: Optional[str] = None
+    overwriteTag: str | None = None
 
 
 class AskRequest(BaseModel):

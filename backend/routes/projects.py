@@ -1,5 +1,4 @@
 """Auto-extracted route module from main.py — zero behavior change."""
-from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
@@ -18,19 +17,19 @@ router = APIRouter()
 
 class CreateProjectRequest(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class UpdateProjectRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    is_archived: Optional[bool] = None
+    name: str | None = None
+    description: str | None = None
+    is_archived: bool | None = None
 
 
 @router.get("/api/projects")
 async def get_projects(
     include_archived: bool = Query(False),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get all projects for a user"""
     if not state.projects_api:
@@ -55,7 +54,7 @@ async def get_projects(
 
 @router.get("/api/projects/{project_id}")
 async def get_project(
-    project_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    project_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Get a specific project by ID"""
     if not state.projects_api:
@@ -85,7 +84,7 @@ async def get_project(
 @router.post("/api/projects")
 async def create_project(
     request: CreateProjectRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Create a new project"""
     if not state.projects_api:
@@ -114,7 +113,7 @@ async def create_project(
 async def update_project(
     project_id: str,
     request: UpdateProjectRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Update a project"""
     if not state.projects_api:
@@ -149,7 +148,7 @@ async def update_project(
 
 @router.delete("/api/projects/{project_id}")
 async def delete_project(
-    project_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    project_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Delete a project (soft delete by archiving)"""
     if not state.projects_api:

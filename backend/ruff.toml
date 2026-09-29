@@ -1,0 +1,80 @@
+# The standard this backend is held to.
+#
+# WHY THIS FILE EXISTS. The project was checked against ruff's DEFAULT rule set with no
+# configuration at all, and ruff's defaults are neither stable nor a decision anyone here made:
+# they have grown across releases, so the same untouched code reported more findings each time the
+# tool was upgraded, and the checker's verdict changed while the code did not. A CI workflow was
+# added that installed ruff unpinned, which meant the gate was measuring ruff's release history
+# rather than this codebase.
+#
+# So the rules are named here, once, explicitly. Nothing is inherited and nothing is implied.
+# Upgrading ruff cannot silently add a requirement to this project; adding one is an edit to this
+# file, which is a decision somebody makes and somebody reviews.
+#
+# TARGET. py311 rather than the older 3.9 the backend used to run on. Production has always been
+# 3.11 (`FROM python:3.11-slim` in the Dockerfile); the local development environment was 3.9,
+# which is why type annotations could not use `X | None` — the form is evaluated when a module is
+# imported on 3.9 and raises `TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'`.
+# The local environment was rebuilt on 3.11 to match production, and the annotations were then
+# written in the modern form. Declaring a target OLDER than the code would be a lie that hides
+# real problems; declaring this one keeps the two environments honest with each other.
+
+target-version = "py311"
+
+# WHAT IS CHECKED.
+#
+#   F    pyflakes — undefined names, unused imports and variables, redefinitions. This is the
+#        family that finds CODE THAT CANNOT RUN, and it is the reason the check is worth having:
+#        it found `warnings` used before it was declared and `TagExtractor` never imported, both
+#        live crashes on a route.
+#   E4   pycodestyle, imports — import-star usage and module-level import placement.
+#   E7   pycodestyle, statements — ambiguous names (`l`, `I`, `O`), multiple statements per line.
+#   E9   pycodestyle, runtime — syntax-level mistakes.
+#   I    import order. Already satisfied throughout; kept so it stays that way.
+#   UP   pyupgrade — modern syntax for the declared target. Already satisfied throughout.
+#
+# WHAT IS DELIBERATELY NOT CHECKED, AND WHY. Each of these was measured, not waved away. None is
+# silenced by a blanket setting; each is a position that can be argued with.
+#
+#   BLE001  blind `except Exception`. 354 sites, and the rule is often WRONG about this codebase:
+#           a top-level handler that catches everything, reports it, and returns a clean error is
+#           correct, and narrowing it wrongly converts a handled failure into a crash. This is
+#           decided per site, and where a broad catch is deliberate the reason is now written at
+#           the line — 35 of them — which is this repository's convention for a rule that is wrong
+#           about the code. Note that 30 of the 354 arrived by IMPROVING the code: a bare
+#           `except:` is reported only as E722 and `except Exception:` is reported as BLE001, so
+#           removing bare excepts (which caught KeyboardInterrupt and SystemExit) moved the finding
+#           between rules without adding a single one.
+#
+#   S110 /  `try/except/pass` and `try/except/continue` that swallow silently. Real review work,
+#   S112    done by hand; a blanket allow would hide the ones that matter.
+#
+#   DTZ005  `datetime.now()` and `datetime.utcnow()` without a timezone. Not a mechanical fix: the
+#   DTZ003  database already holds rows written in local time, so switching to UTC would put two
+#           different meanings of "when" in one column. That is a data decision, with the existing
+#           rows considered, and it is not taken here.
+#
+#   ASYNC   blocking file and HTTP calls inside async functions. Fixing these means moving the call
+#   230/210 to a thread, which changes how the endpoint behaves under load. Worth doing
+#           deliberately, endpoint by endpoint, not as a sweep.
+#
+#   B, SIM, RUF, PLW, PERF, PIE, ISC, TRY, C4, RET, ARG, PLR, S (security)
+#           Opinionated families. They contain real advice and a great deal of taste. Adopting one
+#           is a choice about house style, and it should be made by the people who read this code
+#           every day rather than by a tool's default.
+#
+#   RUF100  unused-noqa. SINGLED OUT because it CANNOT BE TRUSTED while other rules are declined,
+#           and it has already caused damage here once. It asks "does this suppression suppress
+#           anything?", and its answer depends on which rules are ENABLED for the run. Declining
+#           BLE001 makes every `# noqa: BLE001` look like a directive suppressing nothing, and a
+#           `--fix` run deleted 35 of them — reasons included — while leaving the code looking
+#           clean. A rule whose correctness depends on the rest of this file has no business
+#           auto-fixing anything.
+
+[lint]
+select = ["F", "E4", "E7", "E9", "I", "UP"]
+
+# Individual findings that are real and are NOT going to be silenced by a setting. Kept empty on
+# purpose: every exception belongs at the line it applies to, with its reason written there, so
+# that a reader of the code sees it and not only a reader of this file.
+ignore = []

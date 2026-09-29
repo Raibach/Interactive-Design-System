@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import html as _html
 import re
-from typing import Any, Optional
+from typing import Any
 
 # The spec keys this renderer knows how to place. Anything outside this set that turns up in a
 # spec is a key the two halves of the contract disagree about, and the ingest REFUSES on it — a
@@ -208,7 +208,7 @@ def _text_html(node: dict[str, Any]) -> str:
     return "".join(out)
 
 
-def _declarations(node: dict[str, Any], place: Optional[dict[str, float]] = None) -> list[str]:
+def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -> list[str]:
     """The CSS this layer's own measurements produce, in a fixed order.
 
     Fixed order matters: the same spec must produce the same bytes, or a diff between two runs of
@@ -392,7 +392,7 @@ def _px(value: Any) -> str:
     return f"{round(number, 4)}px".replace(".0px", "px")
 
 
-def _shadow(effect: dict[str, Any]) -> Optional[str]:
+def _shadow(effect: dict[str, Any]) -> str | None:
     """One measured effect as CSS. Reads the spec's own effect shape; invents nothing.
 
     `DROP_SHADOW` and `INNER_SHADOW` are box-shadows, with the spread Figma states — a spread was
@@ -414,7 +414,7 @@ def _shadow(effect: dict[str, Any]) -> Optional[str]:
     return ("inset " if kind == "INNER_SHADOW" else "") + " ".join(parts)
 
 
-def _child_offset(node: dict[str, Any], parent: Optional[dict[str, Any]]) -> Optional[dict[str, float]]:
+def _child_offset(node: dict[str, Any], parent: dict[str, Any] | None) -> dict[str, float] | None:
     """Where a child sits inside a parent that does not lay it out — the measured offset.
 
     ONE RULE, ONE PLACE. This existed twice and the two copies disagreed: the vector's copy
@@ -437,7 +437,7 @@ def _child_offset(node: dict[str, Any], parent: Optional[dict[str, Any]]) -> Opt
         "top": round(pos[1] - parent_pos[1] - inset, 2),
     }
 
-def render_spec(spec: dict[str, Any], tag: str, catalog: Optional[dict[str, str]] = None) -> str:
+def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None = None) -> str:
     """The Lit component for a measured design. Pure: same spec, same source.
 
     THE CATALOGUE IS CONSULTED FIRST — `catalog` maps a component reference (the part of a node id
@@ -466,7 +466,7 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: Optional[dict[str, str]
 
     assign(spec)
 
-    def supplied_tag(node: dict[str, Any]) -> Optional[str]:
+    def supplied_tag(node: dict[str, Any]) -> str | None:
         """The catalogue's tag for this layer, when it is an instance of one of its components."""
         if not catalog:
             return None
@@ -521,13 +521,13 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: Optional[dict[str, str]
     root_decls.append("box-sizing: border-box")
 
     rules: list[str] = []
-    markup: list[str] = []
+    markup: list[str] = []  # noqa: F841 — declared beside `rules` and never written to; likely a leftover from an earlier shape
 
     def emit_class(selector: str, declarations: list[str]) -> None:
         body = "".join(f"      {d};\n" for d in declarations)
         rules.append(f"    {selector} {{\n{body}    }}")
 
-    def emit_node(node: dict[str, Any], depth: int, parent: Optional[dict[str, Any]] = None) -> str:
+    def emit_node(node: dict[str, Any], depth: int, parent: dict[str, Any] | None = None) -> str:
         cls = class_names[id(node)]
         node_type = (node.get("type") or "").upper()
         kids = node.get("children") or []

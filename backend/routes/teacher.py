@@ -3,7 +3,7 @@ import asyncio
 import json
 import re
 import time
-from typing import Any, Optional
+from typing import Any
 
 import sentry_sdk
 from fastapi import APIRouter, File, HTTPException, UploadFile
@@ -27,12 +27,12 @@ router = APIRouter()
 
 class TeacherQueryRequest(BaseModel):
     question: str
-    context: Optional[str] = None
-    conversation_id: Optional[str] = None
+    context: str | None = None
+    conversation_id: str | None = None
     # The prompt package this chat belongs to. Conversations roll up under it
     # (conversations.session_id is NOT NULL), so it is required to persist chat.
-    session_id: Optional[str] = None
-    project_id: Optional[str] = None
+    session_id: str | None = None
+    project_id: str | None = None
     reasoning: bool = False
     # These three arrive camelCase from the browser and snake_case from everyone else,
     # and Pydantic IGNORES a name it does not know — silently, with no error and no log.
@@ -45,9 +45,9 @@ class TeacherQueryRequest(BaseModel):
     include_memory: bool = Field(False, validation_alias=AliasChoices("include_memory", "includeMemory"))
     temperature: float = 0.45
     self_reflection: bool = Field(False, validation_alias=AliasChoices("self_reflection", "selfReflection"))
-    editorial: Optional[dict[str, Any]] = None
+    editorial: dict[str, Any] | None = None
     mode: str = "chat"
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
     # ── WHO SPOKE ─────────────────────────────────────────────────────────────
     # True when a person typed this turn. False for a turn the APPLICATION asks for on
     # their behalf: the console's and the composer's own greetings, whose `question` is an
@@ -65,7 +65,7 @@ class TeacherQueryRequest(BaseModel):
     person_turn: bool = True
     # The prompt package's title, sent by the Run so its fresh conversation can be
     # named after it (see the run-conversation block below). Absent on chat turns.
-    run_title: Optional[str] = Field(None, validation_alias=AliasChoices("run_title", "runTitle"))
+    run_title: str | None = Field(None, validation_alias=AliasChoices("run_title", "runTitle"))
     # True when this turn is Grace's review of a prompt that is HELD for a Run. The
     # verdict rides in her reply as a tag (`<run_ok/>` releases it, `<run_blocked/>`
     # stops it), and a CLEAN verdict is deliberately not written into the
@@ -78,7 +78,7 @@ class TeacherQueryRequest(BaseModel):
     # prompt rather than something the model is asked to imagine. The browser
     # cannot make these calls (the desktop MCP has no CORS and needs a session
     # handshake), which is why a declared tool call becomes a real one here.
-    tool_calls: Optional[list[dict[str, Any]]] = None
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class EnsureModelRequest(BaseModel):

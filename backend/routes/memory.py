@@ -1,6 +1,5 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -20,9 +19,9 @@ router = APIRouter()
 class StoreDictationRequest(BaseModel):
     user_id: str
     content: str
-    project_id: Optional[str] = None
-    title: Optional[str] = None
-    memory_id: Optional[str] = (
+    project_id: str | None = None
+    title: str | None = None
+    memory_id: str | None = (
         None  # If provided, update existing memory instead of creating new
     )
 
@@ -30,7 +29,7 @@ class StoreDictationRequest(BaseModel):
 @router.post("/api/memory/store-dictation")
 async def store_dictation_memory(
     request: StoreDictationRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Store dictation content in memory system with historical context tags.
@@ -165,16 +164,16 @@ async def store_dictation_memory(
 
 
 class UpdateMemoryRequest(BaseModel):
-    title: Optional[str] = None
-    project_id: Optional[str] = None
-    pattern_summary: Optional[str] = None
+    title: str | None = None
+    project_id: str | None = None
+    pattern_summary: str | None = None
 
 
 @router.put("/api/memory/{memory_id}")
 async def update_memory(
     memory_id: str,
     request: UpdateMemoryRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Update a memory's title, project, or summary.
@@ -283,7 +282,7 @@ async def update_memory(
 
 @router.delete("/api/memory/{memory_id}")
 async def delete_memory(
-    memory_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    memory_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """
     Delete a memory.

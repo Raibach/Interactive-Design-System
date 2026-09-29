@@ -26,7 +26,7 @@ import os
 import re
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -47,7 +47,7 @@ RUNS_DIR = os.path.join(REPO, "governance", "figma-intake")
 def _seat():
     """The seat is declared in governance/SEAT.json — never guessed, never defaulted here."""
     try:
-        with open(SEAT_PATH, "r", encoding="utf-8") as fh:
+        with open(SEAT_PATH, encoding="utf-8") as fh:
             seat = json.load(fh).get("seat") or {}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"governance/SEAT.json is unreadable: {exc}")
@@ -126,9 +126,9 @@ async def figma_intake(payload: IntakeRequest):
     # ── 3. THE RECORD, ON ITS WAY PAST. What was handed over and what came back, kept so the
     #       handover can be read back later — and so a spec can be traced to the file it answered.
     os.makedirs(RUNS_DIR, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     record = {
-        "at": datetime.now(timezone.utc).isoformat(),
+        "at": datetime.now(UTC).isoformat(),
         "url": payload.url,
         "fileKey": file_key,
         "nodeId": node_id,
@@ -298,9 +298,9 @@ async def figma_intake_stream(payload: IntakeRequest):
             answer = "".join(answer_parts) or None
 
             os.makedirs(RUNS_DIR, exist_ok=True)
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
             record = {
-                "at": datetime.now(timezone.utc).isoformat(),
+                "at": datetime.now(UTC).isoformat(),
                 "url": payload.url, "fileKey": file_key, "nodeId": node_id,
                 "model": seat["model"], "seconds": seconds,
                 "answer": answer, "thinking": "".join(think_parts) or None,
@@ -337,7 +337,7 @@ async def figma_intake_runs():
         if not name.endswith(".json"):
             continue
         try:
-            with open(os.path.join(RUNS_DIR, name), "r", encoding="utf-8") as fh:
+            with open(os.path.join(RUNS_DIR, name), encoding="utf-8") as fh:
                 r = json.load(fh)
             out.append({
                 "record": f"governance/figma-intake/{name}",

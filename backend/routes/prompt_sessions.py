@@ -1,7 +1,7 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import json
 import traceback
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
@@ -23,57 +23,57 @@ router = APIRouter()
 
 class CreatePromptSessionRequest(BaseModel):
     title: str = "Untitled Prompt Session"
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class UpdatePromptSessionRequest(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    left_column_content: Optional[str] = None
-    compiled_output: Optional[str] = None
-    conversation_id: Optional[str] = None
-    is_active: Optional[bool] = None
-    is_archived: Optional[bool] = None
-    metadata: Optional[dict[str, Any]] = None
-    category: Optional[str] = None
+    title: str | None = None
+    description: str | None = None
+    left_column_content: str | None = None
+    compiled_output: str | None = None
+    conversation_id: str | None = None
+    is_active: bool | None = None
+    is_archived: bool | None = None
+    metadata: dict[str, Any] | None = None
+    category: str | None = None
     # Console card fields (agent-card-element, Figma 40000717:17091)
-    status: Optional[str] = None
-    likes: Optional[int] = None
-    model_name: Optional[str] = None
-    team_name: Optional[str] = None
-    avatar_url: Optional[str] = None
+    status: str | None = None
+    likes: int | None = None
+    model_name: str | None = None
+    team_name: str | None = None
+    avatar_url: str | None = None
 
 
 class SavePromptVersionRequest(BaseModel):
     left_column_content: str
-    compiled_output: Optional[str] = None
-    change_description: Optional[str] = None
+    compiled_output: str | None = None
+    change_description: str | None = None
     change_type: str = "manual"
 
 
 class CreateSuggestionRequest(BaseModel):
     suggestion_type: str
     content: str
-    context: Optional[str] = None
-    generated_by_model: Optional[str] = None
+    context: str | None = None
+    generated_by_model: str | None = None
     confidence_score: float = 1.0
     relevance_score: float = 1.0
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 class AddContextEntryRequest(BaseModel):
     context_type: str
     content: str
-    source: Optional[str] = None
+    source: str | None = None
     relevance_score: float = 1.0
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 @router.get("/api/prompts")
 async def get_prompts(
     include_archived: bool = Query(False),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get all prompt sessions formatted as prompts list (for ConsolePage)"""
     if not state.prompt_sessions_api:
@@ -166,7 +166,7 @@ async def get_prompt_sessions(
     include_archived: bool = Query(False),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get all prompt sessions for a user"""
     if not state.prompt_sessions_api:
@@ -199,7 +199,7 @@ async def get_prompt_sessions(
 
 @router.get("/api/prompt-sessions/console")
 async def get_console_session(
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     The user's CONSOLE session — the owner of the console chat's conversations.
@@ -240,7 +240,7 @@ async def get_console_session(
 
 @router.get("/api/prompt-sessions/{session_id}")
 async def get_prompt_session(
-    session_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    session_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Get a specific prompt session by ID"""
     if not state.prompt_sessions_api:
@@ -274,7 +274,7 @@ async def get_prompt_session(
 @router.post("/api/prompt-sessions")
 async def create_prompt_session(
     request: CreatePromptSessionRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Create a new prompt session"""
     if not state.prompt_sessions_api:
@@ -309,7 +309,7 @@ async def create_prompt_session(
 async def update_prompt_session(
     session_id: str,
     request: UpdatePromptSessionRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Update a prompt session"""
     if not state.prompt_sessions_api:
@@ -383,7 +383,7 @@ async def update_prompt_session(
 async def delete_prompt_session(
     session_id: str,
     permanent: bool = Query(False),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Delete a prompt session (soft delete by archiving or permanent)"""
     if not state.prompt_sessions_api:
@@ -420,7 +420,7 @@ async def delete_prompt_session(
 async def save_prompt_version(
     session_id: str,
     request: SavePromptVersionRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Save a new version of a prompt"""
     if not state.prompt_sessions_api:
@@ -462,7 +462,7 @@ async def get_prompt_versions(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     sort: str = Query("version", regex="^(version|score)$"),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get all versions for a prompt session.
 
@@ -504,7 +504,7 @@ async def get_prompt_versions(
 
 class VersionScoreRequest(BaseModel):
     overall_score: float
-    score_breakdown: Optional[dict] = None
+    score_breakdown: dict | None = None
 
 
 @router.patch("/api/prompt-sessions/{session_id}/versions/{version_number}/score")
@@ -512,7 +512,7 @@ async def patch_version_score(
     session_id: str,
     version_number: int,
     request: VersionScoreRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Write or update the quality score for a specific prompt version."""
     if not state.prompt_sessions_api:
@@ -552,7 +552,7 @@ async def patch_version_score(
 async def get_prompt_version(
     session_id: str,
     version_number: int,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get a specific version of a prompt"""
     if not state.prompt_sessions_api:
@@ -589,7 +589,7 @@ async def get_prompt_version(
 async def restore_prompt_version(
     session_id: str,
     version_number: int,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Restore a specific version as the current content"""
     if not state.prompt_sessions_api:
@@ -626,15 +626,15 @@ async def restore_prompt_version(
 
 
 class RecordEvaluationRequest(BaseModel):
-    verdict: Optional[str] = None
-    sentence: Optional[str] = None
+    verdict: str | None = None
+    sentence: str | None = None
     trigger: str = "run"
-    output: Optional[str] = None
-    ask: Optional[str] = None
+    output: str | None = None
+    ask: str | None = None
 
 
 @router.get("/api/prompt-sessions/{session_id}/evaluations")
-async def list_evaluations(session_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")):
+async def list_evaluations(session_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")):
     """The judged runs of one package, oldest first — the rail's Evals view reads this."""
     if not state.prompt_sessions_api:
         raise HTTPException(status_code=503, detail="Database not available.")
@@ -657,7 +657,7 @@ async def list_evaluations(session_id: str, x_user_id: Optional[str] = Header(No
 async def delete_evaluation(
     session_id: str,
     evaluation_id: str,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Remove one judged run. 404 when there is no such row for this package."""
     if not state.prompt_sessions_api:
@@ -683,7 +683,7 @@ async def delete_evaluation(
 async def record_evaluation(
     session_id: str,
     request: RecordEvaluationRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Judge one run and store it.
@@ -756,7 +756,7 @@ def _judge_run_output(ask: str, output: str) -> dict[str, Any]:
         mode="writer",
         prompt_id="evaluation-judge",
     ).strip()
-    lines = [l.strip() for l in answer.splitlines() if l.strip()]
+    lines = [line.strip() for line in answer.splitlines() if line.strip()]
     verdict_word = (lines[0] if lines else answer).lower()
     verdict = "cleared" if "cleared" in verdict_word else ("failed" if "failed" in verdict_word else "error")
     sentence = lines[1] if len(lines) > 1 else (answer or "The judge returned no sentence.")
@@ -765,7 +765,7 @@ def _judge_run_output(ask: str, output: str) -> dict[str, Any]:
 
 @router.get("/api/prompt-sessions/{session_id}/context-for-ai")
 async def get_prompt_context_for_ai(
-    session_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    session_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Get context for AI query (prompt history, suggestions, conversation)"""
     if not state.prompt_sessions_api:
@@ -798,7 +798,7 @@ async def get_prompt_context_for_ai(
 async def create_ai_suggestion(
     session_id: str,
     request: CreateSuggestionRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Create an AI suggestion for a prompt session"""
     if not state.prompt_sessions_api:
@@ -849,7 +849,7 @@ class TransferOwnershipRequest(BaseModel):
 @router.get("/api/prompt-sessions/{session_id}/permissions")
 async def get_session_permissions(
     session_id: str,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """List all contributors on a package (owner-only view)."""
     if not state.prompt_sessions_api:
@@ -890,7 +890,7 @@ async def get_session_permissions(
 async def grant_session_permission(
     session_id: str,
     request: GrantPermissionRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Grant a user a contributor role on the package (owner-only)."""
     if request.role not in ("owner", "editor", "viewer"):
@@ -933,7 +933,7 @@ async def grant_session_permission(
 async def revoke_session_permission(
     session_id: str,
     target_user_id: str,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Revoke a contributor's role on the package (owner-only; cannot revoke owner)."""
     if not state.prompt_sessions_api:
@@ -976,7 +976,7 @@ async def revoke_session_permission(
 async def transfer_session_ownership(
     session_id: str,
     request: TransferOwnershipRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Transfer package ownership to another user (owner-only). Previous owner keeps 'editor'."""
     if not state.prompt_sessions_api:
@@ -1027,8 +1027,8 @@ async def transfer_session_ownership(
 @router.get("/api/prompt-sessions/{session_id}/conversations")
 async def get_session_conversations(
     session_id: str,
-    tab: Optional[str] = Query(None),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    tab: str | None = Query(None),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get all conversations linked to a prompt session."""
     if not state.conversation_api:
@@ -1047,11 +1047,11 @@ async def get_session_conversations(
 @router.get("/api/prompt-sessions/{session_id}/suggestions")
 async def get_ai_suggestions(
     session_id: str,
-    used: Optional[bool] = Query(None),
-    suggestion_type: Optional[str] = Query(None),
+    used: bool | None = Query(None),
+    suggestion_type: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get AI suggestions for a prompt session"""
     if not state.prompt_sessions_api:
@@ -1090,8 +1090,8 @@ async def get_ai_suggestions(
 @router.post("/api/prompt-sessions/suggestions/{suggestion_id}/use")
 async def mark_suggestion_used(
     suggestion_id: str,
-    inserted_position: Optional[str] = Query(None),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    inserted_position: str | None = Query(None),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Mark an AI suggestion as used"""
     if not state.prompt_sessions_api:
@@ -1127,10 +1127,10 @@ async def mark_suggestion_used(
 @router.get("/api/prompt-sessions/{session_id}/context-entries")
 async def get_context_entries(
     session_id: str,
-    context_type: Optional[str] = Query(None),
+    context_type: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get context entries for a prompt session"""
     if not state.prompt_sessions_api:
@@ -1169,7 +1169,7 @@ async def get_context_entries(
 async def add_context_entry(
     session_id: str,
     request: AddContextEntryRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Add a context entry for a prompt session"""
     if not state.prompt_sessions_api:
@@ -1206,7 +1206,7 @@ async def add_context_entry(
 
 @router.delete("/api/prompt-sessions/context-entries/{context_id}")
 async def delete_context_entry(
-    context_id: str, x_user_id: Optional[str] = Header(None, alias="X-User-ID")
+    context_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
     """Delete a context entry"""
     if not state.prompt_sessions_api:
@@ -1239,7 +1239,7 @@ async def delete_context_entry(
 
 @router.get("/api/prompt-sessions/stats")
 async def get_prompt_session_stats(
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get statistics for user's prompt sessions"""
     if not state.prompt_sessions_api:
@@ -1274,7 +1274,7 @@ async def search_prompt_sessions(
     include_content: bool = Query(False),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Search prompt sessions by title, description, or content"""
     if not state.prompt_sessions_api:

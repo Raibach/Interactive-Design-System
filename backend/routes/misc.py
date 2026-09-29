@@ -2,7 +2,7 @@
 import json
 import os
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -36,8 +36,8 @@ class MemoryQuery(BaseModel):
 
 class SourceEvalRequest(BaseModel):
     url: str
-    title: Optional[str] = None
-    content: Optional[str] = None
+    title: str | None = None
+    content: str | None = None
 
 @router.get("/api/health")
 async def api_health():
@@ -70,7 +70,9 @@ async def api_health():
             from memory_embedder import get_embedder
             from milvus_client import get_milvus_client
             milvus_client = get_milvus_client()
-            embedder = get_embedder()
+            # The CALL is the point, not the binding: this is what loads the embedding model,
+            # and the handle was never read. Dropping the assignment keeps the load.
+            get_embedder()
             if milvus_client and milvus_client.client:
                 milvus_ok = True
         except Exception as e:
@@ -165,7 +167,7 @@ def _read_catalog_audit(catalog: str) -> dict:
             },
         )
     try:
-        with open(path, "r") as _f:
+        with open(path) as _f:
             return json.load(_f)
     except Exception as _e:
         raise HTTPException(
@@ -248,7 +250,7 @@ async def api_reasoning_trace():
     try:
         if not os.path.exists(REASONING_TRACE_PATH):
             return {"latest": None, "all": []}
-        with open(REASONING_TRACE_PATH, "r") as f:
+        with open(REASONING_TRACE_PATH) as f:
             data = json.load(f)
         latest = data[-1] if data else None
         return {"latest": latest, "all": data}

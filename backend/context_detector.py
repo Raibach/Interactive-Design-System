@@ -4,7 +4,6 @@ Automatically detects characters, topics, and work focus for contextual memory a
 """
 
 import re
-from typing import Optional
 
 
 class ContextDetector:
@@ -44,7 +43,7 @@ class ContextDetector:
     def detect_context_entities(
         self, 
         user_input: str, 
-        conversation_history: Optional[list[dict]] = None
+        conversation_history: list[dict] | None = None
     ) -> dict[str, list[str]]:
         """
         Main detection function - extracts all context entities
@@ -242,7 +241,7 @@ class ContextDetector:
         self, 
         entities: dict[str, list[str]], 
         user_id: str, 
-        project_id: Optional[str] = None
+        project_id: str | None = None
     ) -> dict[str, any]:
         """
         Build retrieval query from detected entities

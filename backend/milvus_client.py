@@ -5,7 +5,7 @@ Abstract client supporting Lite, Standalone, and Distributed deployments
 
 import os
 import time
-from typing import Any, Optional
+from typing import Any
 
 try:
     from pymilvus import MilvusClient
@@ -31,7 +31,10 @@ except Exception:
     # Catches ImportError, AttributeError (marshmallow version issues), etc.
     MilvusServer = None
     MilvusServerConfig = None
-from config import (
+# noqa: E402 — below the try/except on purpose. That block is what decides whether this process has
+# a real pymilvus or a `None` fallback, and it is deliberately the first thing the module does so
+# that the failure is settled before anything else is imported on the strength of it.
+from config import (  # noqa: E402
     COLLECTION_CONSISTENCY_LEVEL,
     EMBEDDING_DIMENSION,
     ENABLE_DYNAMIC_FIELDS,
@@ -157,7 +160,7 @@ class MilvusClientWrapper:
         collection_name: str,
         vectors: list[list[float]],
         metadata: list[dict[str, Any]],
-        ids: Optional[list[int]] = None
+        ids: list[int] | None = None
     ):
         """
         Insert vectors with metadata into collection
@@ -195,10 +198,10 @@ class MilvusClientWrapper:
         self,
         collection_name: str,
         query_vectors: list[list[float]],
-        filter_expr: Optional[str] = None,
+        filter_expr: str | None = None,
         limit: int = 10,
-        output_fields: Optional[list[str]] = None,
-        timeout: Optional[int] = None
+        output_fields: list[str] | None = None,
+        timeout: int | None = None
     ) -> list[dict]:
         """
         Search for similar vectors
@@ -250,7 +253,7 @@ class MilvusClientWrapper:
                 output_fields=output_fields or [],
                 timeout=timeout
             )
-            query_time = time.time() - start_time
+            query_time = time.time() - start_time  # noqa: F841 — a timing measured for a log line that is not there
             
             # Cache results
             _query_cache[cache_key] = (results, time.time())
@@ -309,10 +312,10 @@ class MilvusClientWrapper:
 
 
 # Global client instance
-_milvus_client: Optional[MilvusClientWrapper] = None
+_milvus_client: MilvusClientWrapper | None = None
 
 
-def get_milvus_client() -> Optional[MilvusClientWrapper]:
+def get_milvus_client() -> MilvusClientWrapper | None:
     """Get or create global Milvus client instance
     Returns None if Milvus is unavailable to prevent crashes"""
     global _milvus_client

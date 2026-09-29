@@ -21,7 +21,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from typing import Any, Optional
+from typing import Any
 
 # Where a browser may be, in the order worth trying. A path that does not exist is skipped; the
 # list existing is what makes this runnable on a machine that is not this one.
@@ -34,7 +34,7 @@ _BROWSER_CANDIDATES = [
 ]
 
 
-def find_browser() -> Optional[str]:
+def find_browser() -> str | None:
     """The first browser that is actually present, or None — never a guess."""
     for candidate in _BROWSER_CANDIDATES:
         if os.path.isabs(candidate):
@@ -52,8 +52,8 @@ def document_for(
     tag: str,
     width: float,
     height: float,
-    host_width: Optional[float] = None,
-    host_height: Optional[float] = None,
+    host_width: float | None = None,
+    host_height: float | None = None,
 ) -> str:
     """The component's CSS and markup as a standalone page, at the measured size.
 
@@ -95,7 +95,7 @@ def render_component(
     width: float,
     height: float,
     scale: float = 2.0,
-    window_size: Optional[tuple[float, float]] = None,
+    window_size: tuple[float, float] | None = None,
 ) -> dict[str, Any]:
     """A screenshot of the component, at the measured size, as PNG bytes.
 

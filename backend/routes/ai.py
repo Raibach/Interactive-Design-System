@@ -4,7 +4,7 @@ import json
 import os
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
@@ -268,7 +268,7 @@ def _compose_sections(sections: list[dict[str, Any]]) -> str:
 
 @router.get("/api/ai/manifest")
 async def ai_manifest(
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Serve the AI playground component manifest for system prompt injection.
@@ -287,7 +287,7 @@ async def ai_manifest(
     alt_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "src", "shared", "manifest.json")
     for path in [manifest_path, alt_path]:
         if os.path.exists(path):
-            with open(path, "r") as f:
+            with open(path) as f:
                 full_manifest = json.load(f)
             filtered = get_filtered_manifest(uid, full_manifest)
             return {
@@ -311,16 +311,16 @@ async def ai_manifest(
 
 class AISurfaceContext(BaseModel):
     """Context from the current document state."""
-    current_surface: Optional[str] = None
-    has_unsaved_changes: Optional[bool] = False
-    session_id: Optional[str] = None
-    session_title: Optional[str] = None
+    current_surface: str | None = None
+    has_unsaved_changes: bool | None = False
+    session_id: str | None = None
+    session_title: str | None = None
     # THE RUN'S OWN IDS — see the render-run branch. A Run does not replace the surface;
     # it moves the third column, so the assembly has to land on the components that are
     # on screen: the layout's root and its other slots, and the component the layout
     # currently points at for the middle. A field the model does not declare is dropped
     # in silence, which is why this is written here and not only sent by the shell.
-    run: Optional[dict] = None
+    run: dict | None = None
 
 
 class AISurfaceRequest(BaseModel):
@@ -337,8 +337,8 @@ class AISurfaceRequest(BaseModel):
     - has_unsaved_changes: If true, AI should prompt user to save/discard
     """
     intent: str
-    session_id: Optional[str] = None  # For render-session intent
-    context: Optional[AISurfaceContext] = None  # Document state for AI decisions
+    session_id: str | None = None  # For render-session intent
+    context: AISurfaceContext | None = None  # Document state for AI decisions
 
 
 @router.post("/api/ai/assemble-surface")
@@ -348,7 +348,7 @@ def ai_assemble_surface(
     # and the default was what a person actually got. The data model can carry a list this
     # size; the prompt no longer grows with it (see the console's sample).
     limit: int = Query(500, ge=1, le=1000),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     A2UI v0.9 Compliant Unified Surface Assembly.
@@ -1703,15 +1703,15 @@ Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
 class AIConfirmExitRequest(BaseModel):
     """Request body for Grace's exit confirmation."""
     has_unsaved_changes: bool = True
-    session_title: Optional[str] = None
-    content_preview: Optional[str] = None  # First ~100 chars of content
-    destination: Optional[str] = None  # Where user is trying to go
+    session_title: str | None = None
+    content_preview: str | None = None  # First ~100 chars of content
+    destination: str | None = None  # Where user is trying to go
 
 
 @router.post("/api/ai/confirm-exit")
 async def ai_confirm_exit(
     request: AIConfirmExitRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     STRICT A2UI: Grace asks the user about unsaved changes.
@@ -1790,22 +1790,22 @@ Output ONLY valid JSON:
 
 class AISaveSurfaceRequest(BaseModel):
     """Request body for AI-driven surface save."""
-    session_id: Optional[str] = None
-    title: Optional[str] = None
-    left_column: Optional[dict] = None  # sections, positions
-    middle_column: Optional[dict] = None  # compiled_output, model_used
-    right_column: Optional[dict] = None  # conversation_id, messages
-    column_widths: Optional[dict] = None  # { left: number|null, chat: number }
+    session_id: str | None = None
+    title: str | None = None
+    left_column: dict | None = None  # sections, positions
+    middle_column: dict | None = None  # compiled_output, model_used
+    right_column: dict | None = None  # conversation_id, messages
+    column_widths: dict | None = None  # { left: number|null, chat: number }
     # THE PLACE AS IT WAS LEFT — the state the ELEMENTS hold and a save reads off them:
     # { leftCollapsed, seat: {open, width}, flow: {zoom, panX, panY} }. Optional on purpose:
     # a save that does not know the arrangement must not erase one that does.
-    workspace: Optional[dict] = None
+    workspace: dict | None = None
 
 
 @router.post("/api/ai/save-surface")
 async def ai_save_surface(
     request: AISaveSurfaceRequest,
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     AI-driven Surface Save command.
@@ -2212,7 +2212,7 @@ def _tool_refusal(message: str, path: str = "/name") -> HTTPException:
 
 
 @router.get("/api/ai/tools")
-async def ai_tools(section: Optional[str] = Query(None)):
+async def ai_tools(section: str | None = Query(None)):
     """The tools on offer, optionally narrowed to one section of a prompt.
 
     Names, one line each, and the category. No bodies — a body is fetched only
@@ -2261,7 +2261,7 @@ async def ai_read_tool(request_body: dict):
 
 @router.get("/api/ai/role-capabilities")
 async def ai_role_capabilities(
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """
     Return the current user's departmental role and capability set.
@@ -2288,7 +2288,7 @@ async def ai_role_capabilities(
 async def api_admin_audit_logs(
     limit: int = Query(50),
     offset: int = Query(0),
-    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Admin-only: retrieve audit log entries."""
     uid = get_user_id_from_header(x_user_id)
