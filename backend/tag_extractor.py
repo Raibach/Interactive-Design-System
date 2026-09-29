@@ -5,8 +5,8 @@ Extracts hierarchical tags (genre, task, specificity, literary device) from conv
 
 import json
 import re
-from typing import Dict, List, Optional
 from datetime import datetime
+from typing import Optional
 
 
 class TagExtractor:
@@ -27,8 +27,8 @@ class TagExtractor:
         user_id: str,
         conversation_content: str,
         conversation_api=None,
-        emotional_context: Optional[Dict] = None
-    ) -> Dict[str, any]:
+        emotional_context: Optional[dict] = None
+    ) -> dict[str, any]:
         """
         Main extraction function - extracts all tag types from conversation
         
@@ -95,7 +95,7 @@ class TagExtractor:
         
         return result
     
-    def extract_genre_tags(self, content: str) -> List[str]:
+    def extract_genre_tags(self, content: str) -> list[str]:
         """Detect genre (novel, poetry, journalism, etc.)"""
         prompt = f"""Analyze the following writing conversation and identify the genre(s) being discussed.
 
@@ -135,7 +135,7 @@ Your response:"""
             print(f"⚠️ Genre tag extraction failed: {e}")
             return []
     
-    def extract_task_tags(self, content: str) -> List[str]:
+    def extract_task_tags(self, content: str) -> list[str]:
         """Detect task type (character development, plot, structure, etc.)"""
         prompt = f"""Analyze the following writing conversation and identify the writing task(s) being discussed.
 
@@ -178,7 +178,7 @@ Your response:"""
             print(f"⚠️ Task tag extraction failed: {e}")
             return []
     
-    def extract_specificity_tags(self, content: str) -> List[str]:
+    def extract_specificity_tags(self, content: str) -> list[str]:
         """Extract character names and specific elements"""
         prompt = f"""Analyze the following writing conversation and extract specific character names and important story elements.
 
@@ -216,7 +216,7 @@ Your response:"""
             print(f"⚠️ Specificity tag extraction failed: {e}")
             return []
     
-    def extract_literary_device_tags(self, content: str, emotional_context: Optional[Dict] = None) -> List[str]:
+    def extract_literary_device_tags(self, content: str, emotional_context: Optional[dict] = None) -> list[str]:
         """
         Detect literary devices (metaphor, dialogue, pacing, etc.)
         
@@ -242,7 +242,7 @@ Your response:"""
                 hints.append(f"High emotional intensity ({emotional_context['emotional_intensity']:.2f})")
             
             if hints:
-                emotional_hint = f"\n\nEmotional context (use as hints for device identification, not prescriptive rules):\n" + "\n".join(f"- {h}" for h in hints) + "\n"
+                emotional_hint = "\n\nEmotional context (use as hints for device identification, not prescriptive rules):\n" + "\n".join(f"- {h}" for h in hints) + "\n"
         
         prompt = f"""Analyze the following writing conversation and identify literary devices being discussed.
 
@@ -286,7 +286,7 @@ Your response:"""
             print(f"⚠️ Literary device tag extraction failed: {e}")
             return []
     
-    def extract_historical_context_tags(self, content: str) -> Dict[str, List[str]]:
+    def extract_historical_context_tags(self, content: str) -> dict[str, list[str]]:
         """
         Extract historical context tags: periods, movements, events
         Returns dict with 'periods', 'movements', 'events' lists
@@ -340,7 +340,7 @@ Your response:"""
                 'events': []
             }
     
-    def _parse_json_object(self, text: str) -> Dict[str, any]:
+    def _parse_json_object(self, text: str) -> dict[str, any]:
         """Parse JSON object from LLM response, with fallback parsing"""
         text = text.strip()
         
@@ -369,7 +369,7 @@ Your response:"""
         # Last resort: return empty dict
         return {}
     
-    def _parse_json_array(self, text: str) -> List[str]:
+    def _parse_json_array(self, text: str) -> list[str]:
         """Parse JSON array from LLM response, with fallback parsing"""
         # Try to extract JSON array from response
         text = text.strip()
@@ -407,7 +407,7 @@ Your response:"""
         self,
         conversation_id: str,
         user_id: str,
-        tags: Dict[str, any],
+        tags: dict[str, any],
         conversation_api
     ):
         """Store extracted tags in database"""

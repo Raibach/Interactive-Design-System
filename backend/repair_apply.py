@@ -242,7 +242,7 @@ def rerun_catalog_check(catalog: str = DEFAULT_CATALOG, timeout: int = CHECK_TIM
             return {"ran": False, "why": "the check left no report from this run"}
         with open(report_path, encoding="utf-8") as f:
             report = json.load(f)
-    except Exception as e:  # noqa: BLE001 — reported, never swallowed
+    except Exception as e:
         return {"ran": False, "why": f"the report could not be read: {e}"}
 
     findings = report.get("findings") or []

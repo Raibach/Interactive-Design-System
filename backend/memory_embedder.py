@@ -3,9 +3,6 @@ Memory Embedder - Embedding generation service with chunking support
 Generates embeddings for conversations using sentence-transformers
 """
 
-import os
-from typing import List, Dict, Optional, Tuple
-
 # THE CLASS IS NOT IMPORTED AT MODULE SCOPE. Importing sentence_transformers pulls torch,
 # and torch's import alone costs hundreds of megabytes; this module sits on the API's
 # STARTUP path (main.py → grace_memory_api → here), so that import decided whether the
@@ -14,16 +11,16 @@ from typing import List, Dict, Optional, Tuple
 # crash loop that took the site down with it. The capability flag is now a cheap presence
 # check — no torch — and the class is imported where the model is actually loaded.
 import importlib.util
+from typing import Optional
 
 HAS_SENTENCE_TRANSFORMERS = importlib.util.find_spec("sentence_transformers") is not None
 SentenceTransformer = None  # bound on first model load; see _load_model
 from config import (
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
     EMBEDDING_MODEL,
     EMBEDDING_MODEL_VERSION,
-    CHUNK_SIZE,
-    CHUNK_OVERLAP,
     available_memory_mb,
-    get_collection_name
 )
 
 
@@ -50,21 +47,22 @@ class MemoryEmbedder:
                 # The class is imported HERE, not at module scope (see the module header):
                 # importing it drags torch onto the API's startup path.
                 if not HAS_SENTENCE_TRANSFORMERS:
-                    print(f"⚠️ SentenceTransformer not available, embedding features disabled")
+                    print("⚠️ SentenceTransformer not available, embedding features disabled")
                     self.model = None
                     return
 
                 # MEMORY SAFETY: Check system memory before loading
                 try:
-                    import psutil
                     import os as os_module
+
+                    import psutil
                     process = psutil.Process(os_module.getpid())
                     memory_mb = process.memory_info().rss / (1024 * 1024)
                     
                     # Skip loading if memory is already high (embedding model adds ~500MB-2GB)
                     if memory_mb > 4000:  # 4GB threshold
                         print(f"⚠️ Memory too high ({memory_mb:.0f}MB), skipping embedding model load")
-                        print(f"   Embedding features will be disabled until memory usage decreases")
+                        print("   Embedding features will be disabled until memory usage decreases")
                         self.model = None
                         return
 
@@ -89,9 +87,9 @@ class MemoryEmbedder:
                 from sentence_transformers import SentenceTransformer
 
                 print(f"📦 Loading embedding model: {self.model_name}")
-                print(f"   This may take 30-60 seconds and use ~500MB-2GB memory")
+                print("   This may take 30-60 seconds and use ~500MB-2GB memory")
                 self.model = SentenceTransformer(self.model_name)
-                print(f"✅ Model loaded successfully")
+                print("✅ Model loaded successfully")
             except Exception as e:
                 print(f"❌ Failed to load embedding model: {e}")
                 import traceback
@@ -99,7 +97,7 @@ class MemoryEmbedder:
                 # Don't raise - set model to None to gracefully disable
                 self.model = None
     
-    def chunk_text(self, text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
+    def chunk_text(self, text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
         """
         Split text into chunks for embedding
         
@@ -146,7 +144,7 @@ class MemoryEmbedder:
         
         return chunks
     
-    def generate_embedding(self, text: str) -> List[float]:
+    def generate_embedding(self, text: str) -> list[float]:
         """
         Generate embedding for a single text
         MEMORY OPTIMIZED: Limits text size and cleans up after processing
@@ -180,7 +178,7 @@ class MemoryEmbedder:
             traceback.print_exc()
             raise
     
-    def generate_embeddings_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
+    def generate_embeddings_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
         """
         Generate embeddings for multiple texts (batch processing)
         MEMORY OPTIMIZED: Limits batch size and cleans up after processing
@@ -246,7 +244,7 @@ class MemoryEmbedder:
         self,
         conversation_text: str,
         chunk: bool = True
-    ) -> List[Tuple[List[float], Dict[str, any]]]:
+    ) -> list[tuple[list[float], dict[str, any]]]:
         """
         Embed a conversation with optional chunking
         
@@ -276,7 +274,7 @@ class MemoryEmbedder:
             embedding = self.generate_embedding(conversation_text)
             return [(embedding, {"chunk_index": 0, "total_chunks": 1})]
     
-    def get_model_info(self) -> Dict[str, str]:
+    def get_model_info(self) -> dict[str, str]:
         """Get model information"""
         return {
             "model_name": self.model_name,

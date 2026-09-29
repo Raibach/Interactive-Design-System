@@ -34,7 +34,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 REPO = Path(__file__).resolve().parents[1]
 PROTOCOL_FILE = REPO / "inspection.json"
@@ -71,7 +71,7 @@ _run_lock = asyncio.Lock()
 def _read_json(path: Path) -> Optional[Any]:
     try:
         return json.loads(path.read_text())
-    except Exception as exc:  # noqa: BLE001 — reported, never swallowed
+    except Exception as exc:
         print(f"⚠️  [inspection] could not read {path.name}: {exc}")
         return None
 
@@ -80,11 +80,11 @@ def _git(*args: str) -> str:
     try:
         out = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, timeout=30)
         return out.stdout.strip()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return f"(git {args[0]} failed: {exc})"
 
 
-def run_catalog_check() -> Optional[Dict[str, Any]]:
+def run_catalog_check() -> Optional[dict[str, Any]]:
     """Run the deterministic checker, then read its report. A RED run is a finding, not an error."""
     try:
         done = subprocess.run(
@@ -96,15 +96,15 @@ def run_catalog_check() -> Optional[Dict[str, Any]]:
         )
         if done.returncode != 0:
             print(f"ℹ️  [inspection] catalog check returned {done.returncode} (the report is still read)")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"⚠️  [inspection] the catalog check could not be run: {exc}")
         return None
     return _read_json(REPORT_FILE)
 
 
-def _counts_from_report(report: Dict[str, Any]) -> Dict[str, Any]:
+def _counts_from_report(report: dict[str, Any]) -> dict[str, Any]:
     findings = report.get("findings") or []
-    by_check: Dict[str, int] = {}
+    by_check: dict[str, int] = {}
     for f in findings:
         if f.get("level") == "pass":
             continue
@@ -129,7 +129,7 @@ def _counts_from_report(report: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _register_summary(register: Dict[str, Any]) -> Dict[str, Any]:
+def _register_summary(register: dict[str, Any]) -> dict[str, Any]:
     rows = register.get("rows") or []
     open_rows = [r for r in rows if r.get("status") == "open"]
     return {
@@ -146,7 +146,7 @@ def _register_summary(register: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _previous_inspection(conversation_id: Optional[str]) -> Optional[Dict[str, Any]]:
+def _previous_inspection(conversation_id: Optional[str]) -> Optional[dict[str, Any]]:
     """The last inspection message in the console conversation, if there is one."""
     if not conversation_id:
         return None
@@ -156,7 +156,7 @@ def _previous_inspection(conversation_id: Optional[str]) -> Optional[Dict[str, A
         return None
     try:
         rows = state.conversation_api.get_messages(conversation_id, OWNER_ID, limit=50) or []
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"⚠️  [inspection] the console conversation could not be read: {exc}")
         return None
     for m in reversed(rows):
@@ -164,14 +164,14 @@ def _previous_inspection(conversation_id: Optional[str]) -> Optional[Dict[str, A
         if isinstance(meta, str):
             try:
                 meta = json.loads(meta)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 meta = {}
         if meta.get("kind") == "inspection":
             return meta
     return None
 
 
-def build_sheet(previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def build_sheet(previous: Optional[dict[str, Any]]) -> dict[str, Any]:
     """Everything the tools are shown. Terse on purpose — a small tool imitates what it reads."""
     report = run_catalog_check()
     register = _read_json(REGISTER_FILE) or {}
@@ -201,7 +201,7 @@ def build_sheet(previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     # expected = what the arithmetic says. The tools' answers are held against it, and the
     # agreement (or not) is recorded — a tool that disagrees with arithmetic is a finding
     # about the tool, and the code says so rather than silently preferring either side.
-    rows: List[Dict[str, Any]] = [
+    rows: list[dict[str, Any]] = [
         {
             "id": "counts-agree",
             "evidence": f"{len(disagreements)} of {len(recorded)} recorded counts disagree: "
@@ -266,7 +266,7 @@ def build_sheet(previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 # ── the tools ────────────────────────────────────────────────────────────────
 
 
-def _persona(role_id: str) -> Tuple[str, str]:
+def _persona(role_id: str) -> tuple[str, str]:
     """The persona of a role, read from backend/role_caps.py — the ONE home for personas.
 
     The owner remembered "an old profile called the Keeper who was the governor": Keeper was
@@ -278,12 +278,12 @@ def _persona(role_id: str) -> Tuple[str, str]:
 
         entry = ROLE_CAPABILITIES.get(role_id) or {}
         return entry.get("persona", ""), entry.get("driving_question", "")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"⚠️  [inspection] role_caps could not be read: {exc}")
         return "", ""
 
 
-def _protocol_text(row_ids: List[str]) -> str:
+def _protocol_text(row_ids: list[str]) -> str:
     protocol = _read_json(PROTOCOL_FILE)
     if not protocol:
         raise RuntimeError(
@@ -325,7 +325,7 @@ class _LocalTools:
     """The local model server: load what we need, unload what WE loaded, never touch hers."""
 
     def __init__(self) -> None:
-        self._loaded_by_us: List[str] = []
+        self._loaded_by_us: list[str] = []
 
     @staticmethod
     def _root() -> str:
@@ -339,20 +339,20 @@ class _LocalTools:
         stripped for native paths, and an `error` payload is a failure, never a quiet blank.
         """
         root = INSPECTION_MODEL_URL.rstrip("/")
-        return root[: -len("/v1")] if root.endswith("/v1") else root
+        return root.removesuffix("/v1")
 
-    def _post(self, path: str, body: Dict[str, Any], timeout: int = 60) -> Dict[str, Any]:
+    def _post(self, path: str, body: dict[str, Any], timeout: int = 60) -> dict[str, Any]:
         req = urllib.request.Request(
             f"{self._root()}{path}",
             data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — local endpoint
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
 
-    def _get(self, path: str, timeout: int = 15) -> Dict[str, Any]:
-        with urllib.request.urlopen(f"{self._root()}{path}", timeout=timeout) as resp:  # noqa: S310
+    def _get(self, path: str, timeout: int = 15) -> dict[str, Any]:
+        with urllib.request.urlopen(f"{self._root()}{path}", timeout=timeout) as resp:
             return json.loads(resp.read().decode())
 
     def load(self, model_key: str) -> Optional[str]:
@@ -373,19 +373,19 @@ class _LocalTools:
             # Not fatal: LM Studio loads on demand at the chat call. Said, not hidden.
             return f"preload of {model_key} did not run ({exc})"
 
-    def unload_ours(self) -> List[str]:
-        out: List[str] = []
+    def unload_ours(self) -> list[str]:
+        out: list[str] = []
         for key in self._loaded_by_us:
             try:
                 self._post("/api/v1/models/unload", {"model_key": key}, timeout=60)
                 out.append(key)
-            except Exception as exc:  # noqa: BLE001 — said in the report, not swallowed
+            except Exception as exc:
                 print(f"⚠️  [inspection] {key} could not be unloaded: {exc}")
                 out.append(f"{key} (failed: {exc})")
         self._loaded_by_us = []
         return out
 
-    def chat(self, model_key: str, system_prompt: str, user_input: str, max_tokens: int) -> Dict[str, Any]:
+    def chat(self, model_key: str, system_prompt: str, user_input: str, max_tokens: int) -> dict[str, Any]:
         """ONE native call. Returns {ok, content, stats|error, seconds}."""
         body = {
             "model": model_key,
@@ -427,7 +427,7 @@ class _LocalTools:
         }
 
 
-def _extract_json_object(content: str) -> Optional[Dict[str, Any]]:
+def _extract_json_object(content: str) -> Optional[dict[str, Any]]:
     """Tolerant about the WRAPPER, strict about the CONTENT — the models are her tools.
 
     Any of them may fence its JSON or add a sentence; that is a formatting habit, not a wrong
@@ -445,11 +445,11 @@ def _extract_json_object(content: str) -> Optional[Dict[str, Any]]:
     try:
         parsed = json.loads(text[start : end + 1])
         return parsed if isinstance(parsed, dict) else None
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
-def _validate_answer(parsed: Dict[str, Any], sheet: Dict[str, Any]) -> Dict[str, Any]:
+def _validate_answer(parsed: dict[str, Any], sheet: dict[str, Any]) -> dict[str, Any]:
     """Strict: exactly the sheet's ids, each one of two words. The verdict is derived HERE."""
     rows = sheet["rows"]
     expected_ids = [r["id"] for r in rows]
@@ -464,7 +464,7 @@ def _validate_answer(parsed: Dict[str, Any], sheet: Dict[str, Any]) -> Dict[str,
     return {"answer": {"verdict": verdict, "rows": answered, "note": ""}}
 
 
-def _validate_review(parsed: Dict[str, Any], sheet: Dict[str, Any]) -> Dict[str, Any]:
+def _validate_review(parsed: dict[str, Any], sheet: dict[str, Any]) -> dict[str, Any]:
     if parsed.get("agree") not in (True, False):
         return {"error": "the review has no boolean agree"}
     flagged = parsed.get("flagged")
@@ -484,7 +484,7 @@ def _validate_review(parsed: Dict[str, Any], sheet: Dict[str, Any]) -> Dict[str,
     return {"review": {"agree": bool(parsed["agree"]), "flagged": flagged, "note": str(parsed.get("note") or "")[:200]}}
 
 
-def _roster(role: str) -> List[str]:
+def _roster(role: str) -> list[str]:
     """The tools assigned to a role, in order — from inspection.json, with sane defaults.
 
     The owner, 2026-09-18: "we have another one that can all be sitting and waiting to be
@@ -501,8 +501,8 @@ def _roster(role: str) -> List[str]:
 
 
 def _swarm_audit_sync(
-    tools: "_LocalTools", sheet: Dict[str, Any], meta: Dict[str, Any]
-) -> Dict[str, Any]:
+    tools: _LocalTools, sheet: dict[str, Any], meta: dict[str, Any]
+) -> dict[str, Any]:
     """THE SWARM — every roster candidate answers the same sheet, and the CODE judges.
 
     No tool is asked to be clever and none is averaged away: unanimity IS the verdict, and any
@@ -514,13 +514,13 @@ def _swarm_audit_sync(
     prompt = _protocol_text([r["id"] for r in sheet["rows"]])
     user = json.dumps({"rows": [{"id": r["id"], "evidence": r["evidence"]} for r in sheet["rows"]]})
 
-    results: Dict[str, Dict[str, Any]] = {}
+    results: dict[str, dict[str, Any]] = {}
     for key in candidates:
         note = tools.load(key)
         if note:
             meta.setdefault("load_notes", {})[key] = note
         call = tools.chat(key, prompt, user, 200)
-        entry: Dict[str, Any] = {"ok": bool(call.get("ok")), "seconds": call.get("seconds"), "stats": call.get("stats")}
+        entry: dict[str, Any] = {"ok": bool(call.get("ok")), "seconds": call.get("seconds"), "stats": call.get("stats")}
         if not call.get("ok"):
             entry["error"] = call.get("error")
         else:
@@ -538,9 +538,9 @@ def _swarm_audit_sync(
     if not answered:
         return {"verdict": None, "error": "no tool in the roster answered a valid classification"}
 
-    final: Dict[str, str] = {}
-    dissent: Dict[str, Dict[str, str]] = {}
-    divergences: Dict[str, Dict[str, str]] = {}
+    final: dict[str, str] = {}
+    dissent: dict[str, dict[str, str]] = {}
+    divergences: dict[str, dict[str, str]] = {}
     for row in sheet["rows"]:
         votes = {k: v["answers"][row["id"]] for k, v in answered.items()}
         expected = row.get("expected")
@@ -578,7 +578,7 @@ def _swarm_audit_sync(
         "divergences": divergences,
         "answered_by": list(answered),
     }
-def _token_totals(meta: Dict[str, Any]) -> Dict[str, int]:
+def _token_totals(meta: dict[str, Any]) -> dict[str, int]:
     """The run's input/output tokens, summed from what each call itself reported.
 
     The provider's usage object is the only place these numbers exist — LM Studio's native
@@ -598,8 +598,8 @@ def _token_totals(meta: Dict[str, Any]) -> Dict[str, int]:
     return {"prompt_tokens": prompt, "completion_tokens": completion}
 
 
-def _render_message(status: str, verdict: Optional[Dict[str, Any]], review: Optional[Dict[str, Any]],
-                    facts: Dict[str, Any], meta: Dict[str, Any]) -> str:
+def _render_message(status: str, verdict: Optional[dict[str, Any]], review: Optional[dict[str, Any]],
+                    facts: dict[str, Any], meta: dict[str, Any]) -> str:
     checker = facts.get("checker", {})
     lines = [
         f"INSPECTION — {status.upper()}  ·  {time.strftime('%Y-%m-%d %H:%M')}  ·  "
@@ -678,7 +678,7 @@ def _render_message(status: str, verdict: Optional[Dict[str, Any]], review: Opti
 # ── the run ──────────────────────────────────────────────────────────────────
 
 
-async def run_inspection(reason: str = "scheduled", file_message: bool = True) -> Dict[str, Any]:
+async def run_inspection(reason: str = "scheduled", file_message: bool = True) -> dict[str, Any]:
     """Sheet → auditor → skeptic → the console conversation. One run at a time.
 
     `file_message=False` is for a run asked for IN the chat: that turn is itself stored in the
@@ -692,7 +692,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
     async with _run_lock:
         import services as state
 
-        meta: Dict[str, Any] = {
+        meta: dict[str, Any] = {
             "kind": "inspection",
             "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "reason": reason,
@@ -703,7 +703,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
         if state.prompt_sessions_api:
             try:
                 console = state.prompt_sessions_api.get_or_create_console_session(user_id=OWNER_ID)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 meta["console_error"] = f"the console conversation could not be opened ({exc})"
         conversation_id = (console or {}).get("conversation_id")
 
@@ -715,14 +715,14 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
         # protocol's rule: the repository is read by code, not by the tool). This is the
         # vector store's job here: the run's history stays queryable without ever being
         # dumped into a prompt.
-        related_refs: List[str] = []
+        related_refs: list[str] = []
         try:
             import governance_vector
             open_ids = [str(r.get("id", "")) for r in (sheet.get("facts", {}).get("register", {}).get("open") or [])]
             query = " ".join(open_ids) or " ".join(r["id"] for r in sheet.get("rows", []))
             hits = governance_vector.search(query, k=4)
             related_refs = [f"{h.get('kind')}:{h.get('ref_id')}" for h in hits if h.get("ref_id")]
-        except Exception as exc:  # noqa: BLE001 — a store that cannot answer says so
+        except Exception as exc:
             meta["related_error"] = f"{type(exc).__name__}: {exc}"
         if related_refs:
             meta["related"] = related_refs
@@ -731,8 +731,8 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
                     row["evidence"] = (row["evidence"] + f" · closest filed records: {', '.join(related_refs)}")[:400]
 
         tools = _LocalTools()
-        verdict: Optional[Dict[str, Any]] = None
-        review: Optional[Dict[str, Any]] = None
+        verdict: Optional[dict[str, Any]] = None
+        review: Optional[dict[str, Any]] = None
         status = "not_done"
 
         swarm = await asyncio.to_thread(_swarm_audit_sync, tools, sheet, meta)
@@ -746,7 +746,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
 
         # ── the skeptic: a DIFFERENT model, the answer it must not take on trust ──
         if verdict is not None:
-            def _revise() -> Dict[str, Any]:
+            def _revise() -> dict[str, Any]:
                 note = tools.load(INSPECTION_REVIEWER_MODEL_ID)
                 if note:
                     meta["reviewer_load_note"] = note
@@ -804,14 +804,14 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
             primer = deep_cfg.get("primer", "")
             task = deep_cfg.get("task", "Explain what a person should look at.")
 
-            def _deep() -> Dict[str, Any]:
+            def _deep() -> dict[str, Any]:
                 """THE DEEP ROLE WEARS THE ROSTER TOO: candidates in order, first that answers
                 wins, and every attempt is recorded. Measured 2026-09-18: the 9B (a reasoning
                 model) returned no message at 700 and at 2500 tokens — its whole budget went to
                 thinking — so the pass must be able to fall to the next tool rather than report
                 nothing while a working one sits idle. Not a hidden substitution: the attempts
                 are in the record, with what each one did."""
-                attempts: List[Dict[str, Any]] = []
+                attempts: list[dict[str, Any]] = []
                 for key in _roster("deep"):
                     note = tools.load(key)
                     if note:
@@ -878,7 +878,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
         if file_message and conversation_id and state.conversation_api:
             try:
                 state.conversation_api.add_message(conversation_id, OWNER_ID, "assistant", text, metadata=meta)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 print(f"❌ [inspection] the report could not be written to the console conversation: {exc}")
                 meta["error"] = f"the report could not be filed ({exc})"
             # AND INTO POSTGRES FIRST — the relational home, where the row is counted,
@@ -890,7 +890,7 @@ async def run_inspection(reason: str = "scheduled", file_message: bool = True) -
                 row = {"id": meta.get("at", ""), "at": meta.get("at", ""), "text": text}
                 governance_store.upsert_items("inspection", [row])
                 governance_vector.index_rows("inspection", [row])
-            except Exception as exc:  # noqa: BLE001 — a store failure never kills the run
+            except Exception as exc:
                 print(f"⚠️  [inspection] the report could not be stored ({type(exc).__name__}: {exc})")
                 meta["index_error"] = f"{type(exc).__name__}: {exc}"
         elif file_message:
@@ -908,6 +908,6 @@ async def daily_loop() -> None:
             await run_inspection("scheduled")
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001 — the loop must not die silently
+        except Exception as exc:
             print(f"❌ [inspection] scheduled run failed: {exc}")
         await asyncio.sleep(max(60.0, INTERVAL_HOURS * 3600))

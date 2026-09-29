@@ -1,13 +1,9 @@
-import json
 import os
-import time
 import sys
-import traceback
+
 from dotenv import load_dotenv
+
 load_dotenv()
-import tempfile
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -24,34 +20,14 @@ sentry_sdk.init(
     ],
 )
 
-from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel
 
 from grace_gui import (
-    evaluate_source,
     load_logs_to_vectorstore,
-    query_llm,
-    retrieve_memory_context,
-    search_news,
-    summarize_pdfs,
-    milvus_save_version,
-    milvus_get_versions,
 )
-from conversation_api import ConversationAPI
-from projects_api import ProjectsAPI
-from grace_memory_api import GraceMemoryAPI
-from prompt_sessions_api import PromptSessionsAPI
-from tag_extractor import TagExtractor
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-
-
 
 app = FastAPI(title="Grace AI API", description="Backend API for Grace AI assistant")
 
@@ -89,6 +65,7 @@ async def startup_event():
     # idle TTL, and a machine without the local server records NOT RUN rather than reaching
     # for another model. Cancelled on shutdown.
     import asyncio as _asyncio
+
     from governance_inspector import daily_loop
     app.state.inspection_task = _asyncio.create_task(daily_loop())
 
@@ -101,14 +78,26 @@ async def shutdown_event():
         try:
             import asyncio as _asyncio
             await _asyncio.wait_for(_asyncio.shield(task), timeout=5)
-        except Exception:  # noqa: BLE001 — shutdown must not hang on the inspector
+        except Exception:
             pass
 
 
 # ── Route modules (extracted during modularization) ─────────────────
 from routes import (
-    misc, conversations, projects, teacher, memory,
-    prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance, figma_intake,
+    agent_rpc,
+    ai,
+    auth,
+    conversations,
+    figma,
+    figma_intake,
+    files,
+    governance,
+    memory,
+    milvus,
+    misc,
+    projects,
+    prompt_sessions,
+    teacher,
 )
 
 for _m in (misc, conversations, projects, teacher, memory,

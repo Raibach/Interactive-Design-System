@@ -1,32 +1,14 @@
 """Auto-extracted route module from main.py — zero behavior change."""
-import json
-import os
-import sys
-import time
-import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 import services as state
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
     get_user_id_from_header,
 )
-from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
-)
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -165,11 +147,11 @@ async def store_dictation_memory(
         import traceback
 
         error_detail = (
-            f"Error storing dictation memory: {str(e)}\n{traceback.format_exc()}"
+            f"Error storing dictation memory: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Store dictation error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error storing dictation memory: {str(e)}"
+            status_code=500, detail=f"Error storing dictation memory: {e!s}"
         )
 
 
@@ -285,9 +267,9 @@ async def update_memory(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error updating memory: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error updating memory: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Update memory error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error updating memory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating memory: {e!s}")
 
 
 @router.delete("/api/memory/{memory_id}")
@@ -327,7 +309,7 @@ async def delete_memory(
             )
 
         # Delete memory
-        print(f"🗑️ [DELETE MEMORY] Getting database connection...")
+        print("🗑️ [DELETE MEMORY] Getting database connection...")
         conn = state.memory_api.get_db()
         if not conn:
             raise HTTPException(
@@ -342,7 +324,7 @@ async def delete_memory(
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             state.memory_api.set_user_context(cursor, user_id)
             print(
-                f"🗑️ [DELETE MEMORY] Database connection established, checking if memory exists..."
+                "🗑️ [DELETE MEMORY] Database connection established, checking if memory exists..."
             )
 
             # First check if memory exists and belongs to user
@@ -363,7 +345,7 @@ async def delete_memory(
                 conn.close()
                 raise HTTPException(status_code=404, detail="Memory not found")
 
-            print(f"✅ [DELETE MEMORY] Memory found, proceeding with deletion...")
+            print("✅ [DELETE MEMORY] Memory found, proceeding with deletion...")
 
             # Delete memory from database
             # Note: Foreign key constraints with ON DELETE CASCADE will handle related records
@@ -390,9 +372,9 @@ async def delete_memory(
                 )
 
             # Commit the deletion
-            print(f"✅ [DELETE MEMORY] Deletion successful, committing transaction...")
+            print("✅ [DELETE MEMORY] Deletion successful, committing transaction...")
             conn.commit()
-            print(f"✅ [DELETE MEMORY] Transaction committed successfully")
+            print("✅ [DELETE MEMORY] Transaction committed successfully")
 
         except HTTPException:
             # Re-raise HTTP exceptions (they're already properly formatted)
@@ -488,14 +470,14 @@ async def delete_memory(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error deleting memory: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error deleting memory: {e!s}\n{traceback.format_exc()}"
         print(f"❌ [DELETE MEMORY] Unexpected error: {error_detail}")
         if conn:
             try:
                 conn.rollback()
             except:
                 pass
-        raise HTTPException(status_code=500, detail=f"Error deleting memory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting memory: {e!s}")
     finally:
         # Connection will be returned to pool automatically when close() is called
         # Only close if it wasn't already closed in the inner finally block

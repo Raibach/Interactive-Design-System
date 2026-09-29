@@ -6,10 +6,9 @@ import sys
 import traceback
 
 from conversation_api import ConversationAPI
-from projects_api import ProjectsAPI
 from grace_memory_api import GraceMemoryAPI
+from projects_api import ProjectsAPI
 from prompt_sessions_api import PromptSessionsAPI
-from tag_extractor import TagExtractor
 
 conversation_api = None
 projects_api = None

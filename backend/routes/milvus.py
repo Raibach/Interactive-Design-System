@@ -1,32 +1,14 @@
 """Auto-extracted route module from main.py — zero behavior change."""
-import json
-import os
 import sys
-import time
-import traceback
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import services as state
-from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
-    get_user_id_from_header,
-)
 from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
+    milvus_get_versions,
+    milvus_save_version,
 )
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -50,11 +32,11 @@ async def api_milvus_info():
     collections = client.client.list_collections()
     stats = []
     for name in collections:
-        entry: Dict[str, Any] = {"name": name}
+        entry: dict[str, Any] = {"name": name}
         try:
             info = client.get_collection_stats(name)
             entry["count"] = (info or {}).get("row_count", "unknown")
-        except Exception as e:  # noqa: BLE001 — a stat that cannot be read is said
+        except Exception as e:
             entry["error"] = str(e)
         stats.append(entry)
     return {
@@ -75,11 +57,11 @@ async def api_milvus_collections():
     collections = client.client.list_collections()
     stats = []
     for name in collections:
-        entry: Dict[str, Any] = {"name": name}
+        entry: dict[str, Any] = {"name": name}
         try:
             desc = client.client.describe_collection(collection_name=name)
             entry["fields"] = [f.get("name") for f in (desc or {}).get("fields", [])]
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             entry["error"] = str(e)
         stats.append(entry)
     return {"collections": collections, "stats": stats}

@@ -13,28 +13,28 @@ Health Monitoring:
   Grace can say "no" (Will) to protect herself
 """
 
-import os
 import hashlib
-import uuid
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2 import OperationalError, InterfaceError
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
 import json
+import uuid
+from datetime import datetime
+from typing import Optional
+
+import psycopg2
+from psycopg2 import InterfaceError, OperationalError
+from psycopg2.extras import RealDictCursor
+
+from config import get_collection_name
 from database_pool import DatabasePoolManager
 from milvus_client import get_milvus_client
-from memory_embedder import get_embedder
-from config import get_collection_name, EMBEDDING_MODEL_VERSION
 
 
 def detect_memory_category(
     content: str, 
     content_type: str, 
-    tag_paths: Optional[List[str]] = None,
-    source_metadata: Optional[Dict] = None,
+    tag_paths: Optional[list[str]] = None,
+    source_metadata: Optional[dict] = None,
     query_llm_func: Optional[callable] = None
-) -> Tuple[str, float]:
+) -> tuple[str, float]:
     """
     Detect memory category with optional LLM enhancement.
     Returns tuple of (category, confidence) where confidence is 0.0-1.0.
@@ -246,7 +246,7 @@ class GraceMemoryAPI:
     def _get_db_legacy(self):
         """Get database connection with RLS context and proper error handling"""
         try:
-            from urllib.parse import urlparse, parse_qs
+            from urllib.parse import parse_qs, urlparse
             # Parse DATABASE_URL and fix any port issues
             parsed = urlparse(self.database_url)
             
@@ -342,9 +342,9 @@ class GraceMemoryAPI:
             elif 'authentication failed' in error_msg or 'password' in error_msg:
                 raise ConnectionError("Database authentication failed. Please check your connection settings.") from e
             else:
-                raise ConnectionError(f"Database connection error: {str(e)}") from e
+                raise ConnectionError(f"Database connection error: {e!s}") from e
         except Exception as e:
-            from urllib.parse import urlparse, parse_qs
+            from urllib.parse import parse_qs, urlparse
             # Check for port-related errors
             error_msg = str(e).lower()
             if 'port' in error_msg and ('invalid' in error_msg or 'integer' in error_msg):
@@ -376,11 +376,11 @@ class GraceMemoryAPI:
                     )
                 except Exception as retry_error:
                     print(f"❌ Retry with clean URL also failed: {retry_error}")
-                    raise ConnectionError(f"Database connection error: {str(e)}") from e
+                    raise ConnectionError(f"Database connection error: {e!s}") from e
             
             # Other errors
             print(f"Database connection error: {e}")
-            raise ConnectionError(f"Database error: {str(e)}") from e
+            raise ConnectionError(f"Database error: {e!s}") from e
 
     def set_user_context(self, cursor, user_id: str):
         """Set PostgreSQL RLS context for multi-tenancy"""
@@ -398,10 +398,10 @@ class GraceMemoryAPI:
         source_type: str,
         title: Optional[str] = None,
         source_url: Optional[str] = None,
-        source_metadata: Optional[Dict] = None,
+        source_metadata: Optional[dict] = None,
         quarantine_score: Optional[float] = None,
         quarantine_status: str = 'pending',
-        quarantine_details: Optional[Dict] = None,
+        quarantine_details: Optional[dict] = None,
         generate_embedding: bool = False  # Only generate embeddings when explicitly requested
     ) -> str:
         """
@@ -580,8 +580,9 @@ class GraceMemoryAPI:
         # But should NOT be generated automatically to prevent memory leaks
         if generate_embedding:
             try:
-                import psutil
                 import os as _os_module
+
+                import psutil
                 process = psutil.Process(_os_module.getpid())
                 memory_mb = process.memory_info().rss / (1024 * 1024)
 
@@ -591,12 +592,12 @@ class GraceMemoryAPI:
                     return memory_id
 
                 # Check if embedding model is available before attempting storage
-                from memory_embedder import get_embedder, HAS_SENTENCE_TRANSFORMERS
+                from memory_embedder import HAS_SENTENCE_TRANSFORMERS, get_embedder
                 if not HAS_SENTENCE_TRANSFORMERS:
                     return memory_id
                 embedder = get_embedder()
                 if embedder is None or embedder.model is None:
-                    print(f"⚠️ Embedding model not available, skipping Milvus storage (content saved to DB)")
+                    print("⚠️ Embedding model not available, skipping Milvus storage (content saved to DB)")
                     return memory_id
 
                 # MEMORY FIX: Limit content size for embedding
@@ -631,7 +632,7 @@ class GraceMemoryAPI:
         user_id: str,
         content: str,
         title: Optional[str] = None,
-        source_metadata: Optional[Dict] = None,
+        source_metadata: Optional[dict] = None,
         generate_embedding: bool = False
     ) -> str:
         """
@@ -698,7 +699,7 @@ class GraceMemoryAPI:
                 # Re-embed and store in Milvus (similar to create_memory logic)
                 # This would call the embedding generation code
                 # For now, we'll skip it to avoid complexity
-                print(f"⚠️ Embedding regeneration requested but not implemented for updates")
+                print("⚠️ Embedding regeneration requested but not implemented for updates")
             except Exception as e:
                 print(f"⚠️ Failed to regenerate embeddings: {e}")
         
@@ -709,7 +710,7 @@ class GraceMemoryAPI:
         memory_id: str,
         user_id: str,
         content: str,
-        source_metadata: Optional[Dict],
+        source_metadata: Optional[dict],
         project_id: Optional[str] = None
     ):
         """Store embeddings in Milvus asynchronously"""
@@ -719,17 +720,18 @@ class GraceMemoryAPI:
             gc.collect()
             
             # MEMORY FIX: Check memory again before processing
-            import psutil
             import os
+
+            import psutil
             process = psutil.Process(os.getpid())
             memory_before = process.memory_info().rss / (1024 * 1024)
             
             if memory_before > 3000:  # If already over 3GB, skip
                 print(f"⚠️ Memory too high before embedding ({memory_before:.0f}MB), skipping")
                 return
-            from milvus_client import get_milvus_client
+            from config import EMBEDDING_MODEL_VERSION, get_collection_name
             from memory_embedder import get_embedder
-            from config import get_collection_name, EMBEDDING_MODEL_VERSION
+            from milvus_client import get_milvus_client
             
             # Get embedder and generate embeddings
             embedder = get_embedder()
@@ -968,8 +970,9 @@ class GraceMemoryAPI:
             
             # MEMORY FIX: Log memory usage after operation
             try:
-                import psutil
                 import os
+
+                import psutil
                 process = psutil.Process(os.getpid())
                 memory_after = process.memory_info().rss / (1024 * 1024)
                 if memory_after > 2000:
@@ -977,7 +980,7 @@ class GraceMemoryAPI:
             except:
                 pass
 
-    def get_memory(self, user_id: str, memory_id: str) -> Optional[Dict]:
+    def get_memory(self, user_id: str, memory_id: str) -> Optional[dict]:
         """Get a single memory by ID"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -1020,7 +1023,7 @@ class GraceMemoryAPI:
         limit: int = 50,
         offset: int = 0,
         project_id: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """List user's memories with filtering"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -1082,14 +1085,14 @@ class GraceMemoryAPI:
         query: str,
         project_id: Optional[str] = None,
         limit: int = 5,
-        tag_paths: Optional[List[str]] = None,
-        character_names: Optional[List[str]] = None,
+        tag_paths: Optional[list[str]] = None,
+        character_names: Optional[list[str]] = None,
         context_type: str = "general",
         promoted_only: bool = True,  # Grace can only access promoted memories (The Keeper's curation)
-        historical_periods: Optional[List[str]] = None,
-        historical_movements: Optional[List[str]] = None,
-        historical_events: Optional[List[str]] = None
-    ) -> List[Dict]:
+        historical_periods: Optional[list[str]] = None,
+        historical_movements: Optional[list[str]] = None,
+        historical_events: Optional[list[str]] = None
+    ) -> list[dict]:
         """
         Recall relevant memories using hybrid search: Milvus semantic + PostgreSQL tag filtering
         
@@ -1130,17 +1133,17 @@ class GraceMemoryAPI:
         query: str,
         project_id: Optional[str],
         limit: int,
-        tag_paths: Optional[List[str]],
-        character_names: Optional[List[str]],
+        tag_paths: Optional[list[str]],
+        character_names: Optional[list[str]],
         context_type: str,
         promoted_only: bool = True,
-        historical_periods: Optional[List[str]] = None,
-        historical_movements: Optional[List[str]] = None,
-        historical_events: Optional[List[str]] = None
-    ) -> List[Dict]:
+        historical_periods: Optional[list[str]] = None,
+        historical_movements: Optional[list[str]] = None,
+        historical_events: Optional[list[str]] = None
+    ) -> list[dict]:
         """Recall memories using Milvus semantic search - generates embeddings on-demand when user requests search"""
         # Get embedder and generate query embedding on-demand (only when user requests semantic search)
-        from memory_embedder import get_embedder, HAS_SENTENCE_TRANSFORMERS
+        from memory_embedder import HAS_SENTENCE_TRANSFORMERS, get_embedder
         if not HAS_SENTENCE_TRANSFORMERS:
             raise Exception("Embedding model not available - semantic search disabled")
         
@@ -1321,10 +1324,10 @@ class GraceMemoryAPI:
         query: str,
         project_id: Optional[str],
         limit: int,
-        tag_paths: Optional[List[str]],
-        character_names: Optional[List[str]],
+        tag_paths: Optional[list[str]],
+        character_names: Optional[list[str]],
         promoted_only: bool = True
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Fallback to PostgreSQL keyword search if Milvus fails"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -1379,7 +1382,7 @@ class GraceMemoryAPI:
                 keyword_conditions = []
                 for keyword in keywords:
                     if len(keyword) > 3:
-                        keyword_conditions.append(f"LOWER(um.content) LIKE %s")
+                        keyword_conditions.append("LOWER(um.content) LIKE %s")
                         params.append(f"%{keyword}%")
                 
                 if keyword_conditions:
@@ -1535,7 +1538,7 @@ class GraceMemoryAPI:
         user_id: str,
         category: Optional[str] = None,
         limit: int = 100
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Get Grace's current context (curated memories)
         This is what Grace can actually see and use
@@ -1590,7 +1593,7 @@ class GraceMemoryAPI:
         confidence_avg: float,
         mood_state: str = 'healthy',
         refusal_count: int = 0,
-        metadata: Optional[Dict] = None
+        metadata: Optional[dict] = None
     ) -> str:
         """
         Record Grace's health snapshot (typically called hourly)
@@ -1633,7 +1636,7 @@ class GraceMemoryAPI:
 
         return metric_id
 
-    def get_grace_health(self, user_id: str) -> Optional[Dict]:
+    def get_grace_health(self, user_id: str) -> Optional[dict]:
         """
         Get Grace's current health status
 
@@ -1655,7 +1658,7 @@ class GraceMemoryAPI:
 
         return dict(health) if health else None
 
-    def is_grace_healthy(self, user_id: str) -> Tuple[bool, str]:
+    def is_grace_healthy(self, user_id: str) -> tuple[bool, str]:
         """
         Check if Grace is healthy enough to operate
 
@@ -1735,7 +1738,7 @@ class GraceMemoryAPI:
 
         return decision_id
 
-    def get_recent_refusals(self, user_id: str, limit: int = 10) -> List[Dict]:
+    def get_recent_refusals(self, user_id: str, limit: int = 10) -> list[dict]:
         """Get recent times Grace said 'no'"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -1810,7 +1813,7 @@ class GraceMemoryAPI:
 
         return ledger_id
 
-    def get_dignity_summary(self, user_id: str) -> Dict:
+    def get_dignity_summary(self, user_id: str) -> dict:
         """Get user's data dignity compensation summary"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -1838,7 +1841,7 @@ class GraceMemoryAPI:
     # EXPORT (GDPR / Data Portability)
     # ============================================
 
-    def export_user_memories(self, user_id: str) -> Dict:
+    def export_user_memories(self, user_id: str) -> dict:
         """
         Export all user memories for data portability
         Users own their data - they can take it with them

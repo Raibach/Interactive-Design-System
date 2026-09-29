@@ -20,7 +20,7 @@ from __future__ import annotations
 import io
 import os
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 try:
     from PIL import Image, ImageChops
@@ -41,7 +41,7 @@ DEFAULT_TOLERANCE = 0.005
 CHANNEL_TOLERANCE = 12
 
 
-def _open(data: bytes) -> Optional["Image.Image"]:
+def _open(data: bytes) -> Optional[Image.Image]:
     if Image is None or not data:
         return None
     try:
@@ -51,7 +51,7 @@ def _open(data: bytes) -> Optional["Image.Image"]:
         return None
 
 
-def _differing_ratio(a: "Image.Image", b: "Image.Image") -> Tuple[float, Optional["Image.Image"]]:
+def _differing_ratio(a: Image.Image, b: Image.Image) -> tuple[float, Optional[Image.Image]]:
     """The share of pixels that differ by more than the channel tolerance, and where they are."""
     if a.size != b.size:
         return 1.0, None
@@ -72,7 +72,7 @@ def _differing_ratio(a: "Image.Image", b: "Image.Image") -> Tuple[float, Optiona
     return ratio, canvas
 
 
-def _crop(image: "Image.Image", box: Tuple[float, float, float, float], scale: float) -> Optional["Image.Image"]:
+def _crop(image: Image.Image, box: tuple[float, float, float, float], scale: float) -> Optional[Image.Image]:
     """One layer's box, in image pixels."""
     try:
         left = max(0, int(round(box[0] * scale)))
@@ -87,10 +87,10 @@ def _crop(image: "Image.Image", box: Tuple[float, float, float, float], scale: f
 
 
 def best_alignment(
-    design: "Image.Image",
-    component: "Image.Image",
+    design: Image.Image,
+    component: Image.Image,
     reach: int = 3,
-) -> Tuple[Tuple[int, int], float]:
+) -> tuple[tuple[int, int], float]:
     """The offset at which the two images agree most, and the difference left there.
 
     A PIXEL DIFFERENCE AT ZERO OFFSET IS NOT A MEASURE OF WRONGNESS. One pixel of global shift —
@@ -117,11 +117,11 @@ def best_alignment(
 def compare(
     design_png: bytes,
     component_png: bytes,
-    node_size: Tuple[float, float],
+    node_size: tuple[float, float],
     scale: float = 2.0,
-    layers: Optional[List[Dict[str, Any]]] = None,
+    layers: Optional[list[dict[str, Any]]] = None,
     tolerance: float = DEFAULT_TOLERANCE,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Compare a rendered component with Figma's own rendering of the node.
 
     `layers` is the measured layer list — `{name, box: [x, y, w, h]}` in node coordinates relative
@@ -159,7 +159,7 @@ def compare(
     # Per-layer crops: the region each measured layer occupies, in both images. A layer that is
     # missing or wrong shows up here even when the whole-node difference is inside tolerance —
     # which is exactly the case a single global number would wave through.
-    regions: List[Dict[str, Any]] = []
+    regions: list[dict[str, Any]] = []
     for layer in layers or []:
         box = layer.get("box")
         if not box or len(box) != 4:
@@ -177,7 +177,7 @@ def compare(
             })
 
     ok = aligned_difference <= tolerance and not regions
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "ok": ok,
         "compared": True,
         "difference": round(difference, 5),

@@ -4,16 +4,8 @@ Handles prompt sessions, versions, and AI suggestions
 """
 
 import json
-import os
-import time
 import uuid
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from urllib.parse import parse_qs, urlparse
-
-import psycopg2
-from psycopg2 import InterfaceError, OperationalError
-from psycopg2.extras import RealDictCursor
+from typing import Any, Optional
 
 from database_pool import DatabasePoolManager
 
@@ -45,7 +37,7 @@ class PromptSessionsAPI:
         user_id: str,
         title: str = "Untitled Prompt Session",
         description: str = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a new prompt session with associated conversation
         """
@@ -221,7 +213,7 @@ class PromptSessionsAPI:
             conn.commit()
             return str(conversation_id)
 
-    def get_or_create_console_session(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_or_create_console_session(self, user_id: str) -> Optional[dict[str, Any]]:
         """
         The user's CONSOLE session — the owner of the console chat's conversations.
 
@@ -345,7 +337,7 @@ class PromptSessionsAPI:
         offset: int = 0,
         lightweight: bool = False,
         exclude_drafts: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get all prompt sessions for a user (owned + shared via session_permissions).
         
@@ -474,7 +466,7 @@ class PromptSessionsAPI:
             except Exception as e:
                 raise e
 
-    def get_categories(self) -> List[Dict[str, Any]]:
+    def get_categories(self) -> list[dict[str, Any]]:
         """
         Get the category registry (name → card color).
         Drives the agent-card-element background tint per category.
@@ -489,7 +481,7 @@ class PromptSessionsAPI:
             except Exception as e:
                 raise e
 
-    def list_evaluations(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_evaluations(self, session_id: str) -> list[dict[str, Any]]:
         """
         One judged run per row, oldest first, numbered 1..N — the same shape n8n's
         evaluations table draws. `verdict` is cleared / failed / running / error;
@@ -524,7 +516,7 @@ class PromptSessionsAPI:
         verdict: str,
         sentence: Optional[str] = None,
         trigger_kind: str = "run",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Store one judged run and return the row the caller just wrote."""
         with self.get_db() as conn:
             cursor = conn.cursor()
@@ -567,7 +559,7 @@ class PromptSessionsAPI:
                 raise e
 
     def _log_prompt_modification_to_milvus(
-        self, suggestion: Dict[str, Any], user_id: str, inserted_position: str = None
+        self, suggestion: dict[str, Any], user_id: str, inserted_position: str = None
     ) -> bool:
         """
         Log prompt modification to Milvus as a [modified] event with timestamp
@@ -582,9 +574,9 @@ class PromptSessionsAPI:
         """
         try:
             # Import Milvus client and embedder
-            from milvus_client import get_milvus_client
-            from memory_embedder import get_embedder
             from config import get_collection_name
+            from memory_embedder import get_embedder
+            from milvus_client import get_milvus_client
             
             # Get Milvus client and embedder
             milvus_client = get_milvus_client()
@@ -664,7 +656,7 @@ class PromptSessionsAPI:
             traceback.print_exc()
             return False
 
-    def get_session(self, session_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str, user_id: str) -> Optional[dict[str, Any]]:
         """
         Get a specific prompt session by ID
         """
@@ -757,14 +749,14 @@ class PromptSessionsAPI:
         conversation_id: str = None,
         is_active: bool = None,
         is_archived: bool = None,
-        metadata: Dict = None,
+        metadata: dict = None,
         category: str = None,
         status: str = None,
         likes: int = None,
         model_name: str = None,
         team_name: str = None,
         avatar_url: str = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Update a prompt session
         """
@@ -917,7 +909,7 @@ class PromptSessionsAPI:
         compiled_output: str = None,
         change_description: str = None,
         change_type: str = "manual",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Save a new version of a prompt
         """
@@ -971,7 +963,7 @@ class PromptSessionsAPI:
 
     def get_versions(
         self, session_id: str, user_id: str, limit: int = 20, offset: int = 0
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get all versions for a prompt session
         """
@@ -1008,7 +1000,7 @@ class PromptSessionsAPI:
 
     def get_version(
         self, session_id: str, version_number: int, user_id: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Get a specific version of a prompt
         """
@@ -1042,7 +1034,7 @@ class PromptSessionsAPI:
 
     def restore_version(
         self, session_id: str, version_number: int, user_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Restore a specific version as the current content
         """
@@ -1154,8 +1146,8 @@ class PromptSessionsAPI:
         generated_by_model: str = None,
         confidence_score: float = 1.0,
         relevance_score: float = 1.0,
-        metadata: Dict = None,
-    ) -> Dict[str, Any]:
+        metadata: dict = None,
+    ) -> dict[str, Any]:
         """
         Create an AI suggestion for a prompt session
         """
@@ -1224,7 +1216,7 @@ class PromptSessionsAPI:
         suggestion_type: str = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get AI suggestions for a prompt session
         """
@@ -1267,7 +1259,7 @@ class PromptSessionsAPI:
 
     def mark_suggestion_used(
         self, suggestion_id: str, user_id: str, inserted_position: str = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Mark an AI suggestion as used and log to Milvus as a prompt modification
         """
@@ -1353,7 +1345,7 @@ class PromptSessionsAPI:
         context_type: str = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get context entries for a prompt session
         """
@@ -1396,8 +1388,8 @@ class PromptSessionsAPI:
         content: str,
         source: str = None,
         relevance_score: float = 1.0,
-        metadata: Dict = None,
-    ) -> Dict[str, Any]:
+        metadata: dict = None,
+    ) -> dict[str, Any]:
         """
         Add a context entry for a prompt session
         """
@@ -1486,7 +1478,7 @@ class PromptSessionsAPI:
                 conn.rollback()
                 raise e
 
-    def get_session_stats(self, user_id: str) -> Dict[str, Any]:
+    def get_session_stats(self, user_id: str) -> dict[str, Any]:
         """
         Get statistics for user's prompt sessions
         """
@@ -1547,7 +1539,7 @@ class PromptSessionsAPI:
         include_content: bool = False,
         limit: int = 20,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search prompt sessions by title, description, or content
         """

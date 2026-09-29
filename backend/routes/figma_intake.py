@@ -72,8 +72,7 @@ def _split_figma_url(url):
 def _ask_seat(node_document, seat):
     """Post the node to the seat's own server. The document goes as it came back from Figma."""
     base = (seat.get("url") or "").rstrip("/")
-    if base.endswith("/v1"):
-        base = base[:-3]
+    base = base.removesuffix("/v1")
     body = json.dumps({
         "model": seat["model"],
         "system_prompt": seat["prompt"],
@@ -228,7 +227,7 @@ async def figma_intake_stream(payload: IntakeRequest):
     file_key, node_id = _split_figma_url(payload.url)
 
     def line(obj):
-        return f"data: {json.dumps(obj)}\n\n".encode("utf-8")
+        return f"data: {json.dumps(obj)}\n\n".encode()
 
     async def pump():
         try:
@@ -255,8 +254,7 @@ async def figma_intake_stream(payload: IntakeRequest):
                 "payload": seat["prompt"],
             })
             base = (seat.get("url") or "").rstrip("/")
-            if base.endswith("/v1"):
-                base = base[:-3]
+            base = base.removesuffix("/v1")
             yield line({"phase": "asking", "text": f"asking {seat['model']}… nothing to do but wait for it"})
 
             body = json.dumps({

@@ -11,10 +11,9 @@ Supported methods:
   - list_projects: Get all projects for the user
 """
 
-import json
 import sys
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # Try to import the projects API
 try:
@@ -38,7 +37,7 @@ class AgentRpcHandler:
         """
         self.projects_api = projects_api
 
-    def handle_request(self, request_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    def handle_request(self, request_data: dict[str, Any], user_id: str) -> dict[str, Any]:
         """
         Process a JSON-RPC 2.0 request.
         
@@ -84,20 +83,20 @@ class AgentRpcHandler:
                 }
 
         except Exception as e:
-            print(f'❌ [AgentRpcHandler] Unexpected error: {str(e)}', file=sys.stderr)
+            print(f'❌ [AgentRpcHandler] Unexpected error: {e!s}', file=sys.stderr)
             print(traceback.format_exc(), file=sys.stderr)
             return {
                 'jsonrpc': '2.0',
                 'error': {
                     'code': -32603,
-                    'message': f'Internal server error: {str(e)}'
+                    'message': f'Internal server error: {e!s}'
                 },
                 'id': request_data.get('id')
             }
 
     def _handle_create_project(
-        self, params: Dict[str, Any], user_id: str, request_id: Any
-    ) -> Dict[str, Any]:
+        self, params: dict[str, Any], user_id: str, request_id: Any
+    ) -> dict[str, Any]:
         """Handle create_project RPC call."""
         try:
             name = params.get('name', '').strip()
@@ -155,30 +154,30 @@ class AgentRpcHandler:
             }
 
         except ValueError as e:
-            print(f'⚠️ [AgentRpcHandler] Validation error: {str(e)}', file=sys.stderr)
+            print(f'⚠️ [AgentRpcHandler] Validation error: {e!s}', file=sys.stderr)
             return {
                 'jsonrpc': '2.0',
                 'error': {
                     'code': -32602,
-                    'message': f'Invalid params: {str(e)}'
+                    'message': f'Invalid params: {e!s}'
                 },
                 'id': request_id
             }
         except Exception as e:
-            print(f'❌ [AgentRpcHandler] Error creating project: {str(e)}', file=sys.stderr)
+            print(f'❌ [AgentRpcHandler] Error creating project: {e!s}', file=sys.stderr)
             print(traceback.format_exc(), file=sys.stderr)
             return {
                 'jsonrpc': '2.0',
                 'error': {
                     'code': -32603,
-                    'message': f'Database error: {str(e)}'
+                    'message': f'Database error: {e!s}'
                 },
                 'id': request_id
             }
 
     def _handle_get_project(
-        self, params: Dict[str, Any], user_id: str, request_id: Any
-    ) -> Dict[str, Any]:
+        self, params: dict[str, Any], user_id: str, request_id: Any
+    ) -> dict[str, Any]:
         """Handle get_project RPC call."""
         try:
             project_id = params.get('id', '').strip()
@@ -229,19 +228,19 @@ class AgentRpcHandler:
             }
 
         except Exception as e:
-            print(f'❌ [AgentRpcHandler] Error fetching project: {str(e)}', file=sys.stderr)
+            print(f'❌ [AgentRpcHandler] Error fetching project: {e!s}', file=sys.stderr)
             return {
                 'jsonrpc': '2.0',
                 'error': {
                     'code': -32603,
-                    'message': f'Database error: {str(e)}'
+                    'message': f'Database error: {e!s}'
                 },
                 'id': request_id
             }
 
     def _handle_list_projects(
-        self, params: Dict[str, Any], user_id: str, request_id: Any
-    ) -> Dict[str, Any]:
+        self, params: dict[str, Any], user_id: str, request_id: Any
+    ) -> dict[str, Any]:
         """Handle list_projects RPC call."""
         try:
             include_archived = params.get('include_archived', False)
@@ -275,12 +274,12 @@ class AgentRpcHandler:
             }
 
         except Exception as e:
-            print(f'❌ [AgentRpcHandler] Error listing projects: {str(e)}', file=sys.stderr)
+            print(f'❌ [AgentRpcHandler] Error listing projects: {e!s}', file=sys.stderr)
             return {
                 'jsonrpc': '2.0',
                 'error': {
                     'code': -32603,
-                    'message': f'Database error: {str(e)}'
+                    'message': f'Database error: {e!s}'
                 },
                 'id': request_id
             }

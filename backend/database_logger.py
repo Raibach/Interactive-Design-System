@@ -3,14 +3,14 @@ Database Connection Logger & Debugger
 Comprehensive logging and debugging for all database operations
 """
 
-import os
 import json
+import os
 import traceback
 from datetime import datetime
-from typing import Optional, Dict, Any, List
 from pathlib import Path
-import psycopg2
-from psycopg2 import OperationalError, InterfaceError, ProgrammingError, DatabaseError
+from typing import Any, Optional
+
+from psycopg2 import DatabaseError, InterfaceError, OperationalError, ProgrammingError
 
 # Log directory
 LOG_DIR = Path("logs")
@@ -27,7 +27,7 @@ class DatabaseLogger:
     """Centralized database logging system"""
     
     @staticmethod
-    def _write_log(log_file: Path, entry: Dict[str, Any]):
+    def _write_log(log_file: Path, entry: dict[str, Any]):
         """Write log entry to file"""
         try:
             with open(log_file, 'a') as f:
@@ -63,7 +63,7 @@ class DatabaseLogger:
     def log_error(
         operation: str,
         error_message: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
         exception: Optional[Exception] = None
     ):
         """Log database errors with full context"""
@@ -122,7 +122,7 @@ class DatabaseLogger:
     @staticmethod
     def log_health_check(
         status: str,
-        details: Dict[str, Any],
+        details: dict[str, Any],
         error: Optional[str] = None
     ):
         """Log database health check results"""
@@ -138,7 +138,7 @@ class DatabaseLogger:
     @staticmethod
     def log_debug(
         message: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: Optional[dict[str, Any]] = None,
         level: str = "info"  # "debug", "info", "warning", "error"
     ):
         """Log debug information"""
@@ -161,7 +161,7 @@ class DatabaseLogger:
             print(f"🔵 [DB DEBUG] {message}")
 
     @staticmethod
-    def categorize_error(exception: Exception) -> Dict[str, Any]:
+    def categorize_error(exception: Exception) -> dict[str, Any]:
         """Categorize database errors for better debugging"""
         error_type = type(exception).__name__
         error_msg = str(exception).lower()
@@ -219,7 +219,7 @@ class DatabaseLogger:
         }
 
     @staticmethod
-    def get_recent_errors(limit: int = 10) -> List[Dict[str, Any]]:
+    def get_recent_errors(limit: int = 10) -> list[dict[str, Any]]:
         """Get recent database errors"""
         errors = []
         try:
@@ -236,7 +236,7 @@ class DatabaseLogger:
         return errors
     
     @staticmethod
-    def get_connection_history(limit: int = 20) -> List[Dict[str, Any]]:
+    def get_connection_history(limit: int = 20) -> list[dict[str, Any]]:
         """Get recent connection attempts"""
         connections = []
         try:
@@ -253,7 +253,7 @@ class DatabaseLogger:
         return connections
     
     @staticmethod
-    def get_health_summary() -> Dict[str, Any]:
+    def get_health_summary() -> dict[str, Any]:
         """Get database health summary"""
         summary = {
             "status": "unknown",

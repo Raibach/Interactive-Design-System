@@ -4,19 +4,19 @@ Provides robust connection pooling, health checks, and retry logic for PostgreSQ
 """
 
 import os
-import time
 import threading
-import psycopg2
-from psycopg2 import pool, OperationalError, InterfaceError, DatabaseError
+import time
+from urllib.parse import parse_qs, urlparse
+
+from psycopg2 import DatabaseError, InterfaceError, OperationalError, pool
 from psycopg2.extras import RealDictCursor, register_uuid
-from urllib.parse import urlparse, parse_qs
 
 # Register UUID adapter so psycopg2 can handle Python UUID → PostgreSQL UUID
 register_uuid()
-from contextlib import contextmanager
-from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
 import logging
+from contextlib import contextmanager
+from datetime import datetime
+from typing import Any, Optional
 
 # Import database logger for comprehensive logging
 try:
@@ -167,7 +167,7 @@ class DatabasePoolManager:
         
         return self.database_url
     
-    def _get_connection_params(self) -> Dict[str, Any]:
+    def _get_connection_params(self) -> dict[str, Any]:
         """
         Get connection parameters for psycopg2.
         """
@@ -177,9 +177,7 @@ class DatabasePoolManager:
         is_private_url = 'railway.internal' in conn_string.lower()
         
         # Determine timeout
-        if is_private_url:
-            timeout = 15
-        elif 'proxy.rlwy.net' in conn_string.lower():
+        if is_private_url or 'proxy.rlwy.net' in conn_string.lower():
             timeout = 15
         else:
             timeout = 10
@@ -546,7 +544,7 @@ class DatabasePoolManager:
         # All retries failed
         raise ConnectionError(f"Failed to get database connection after {retries} attempts: {last_exception}") from last_exception
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get pool statistics.
         

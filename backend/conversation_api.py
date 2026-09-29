@@ -3,17 +3,13 @@ Conversation API - PostgreSQL service for conversation storage
 Handles conversations and messages with offline support
 """
 
-import os
-import uuid
+import concurrent.futures
 import json
 import time
+from typing import Optional
+
 import psycopg2
-import concurrent.futures
-from psycopg2.extras import RealDictCursor
-from psycopg2 import OperationalError, InterfaceError, ProgrammingError
-from datetime import datetime
-from typing import Dict, List, Optional
-from urllib.parse import urlparse, parse_qs
+
 from database_pool import DatabasePoolManager
 
 
@@ -25,9 +21,9 @@ class ConversationAPI:
     # vanish either (2026-09-18 — each used to end in a `print`). A caller that can say it
     # (the chat route) drains this list into its response, and the frontend writes those into
     # the trace. check:error-suppression counts what still swallows.
-    _MIRROR_WARNINGS: List[str] = []
+    _MIRROR_WARNINGS: list[str] = []
 
-    def drain_mirror_warnings(self) -> List[str]:
+    def drain_mirror_warnings(self) -> list[str]:
         """Hand this turn's mirror-write failures to a caller, and reset."""
         out = list(ConversationAPI._MIRROR_WARNINGS)
         ConversationAPI._MIRROR_WARNINGS.clear()
@@ -72,7 +68,7 @@ class ConversationAPI:
         project_id: Optional[str] = None,
         session_id: Optional[str] = None,
         include_archived: bool = False
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Get all conversations for a user, optionally filtered by project or session"""
         # Try to import debug logger
         try:
@@ -149,7 +145,7 @@ class ConversationAPI:
             except (NameError, UnboundLocalError):
                 duration_ms = 0
             import traceback
-            error_msg = f"Database schema error: {str(e)}"
+            error_msg = f"Database schema error: {e!s}"
             
             # Log error with database logger
             if DB_LOGGER_AVAILABLE and DatabaseLogger:
@@ -189,7 +185,7 @@ class ConversationAPI:
                 duration_ms = (time.time() - start_time) * 1000
             except (NameError, UnboundLocalError):
                 duration_ms = 0
-            error_msg = f"Database data error: {str(e)}"
+            error_msg = f"Database data error: {e!s}"
             
             # Log error with full context - THIS IS CRITICAL FOR DEBUGGING
             try:
@@ -221,7 +217,7 @@ class ConversationAPI:
             
             # Log and re-raise other errors
             import traceback
-            error_msg = f"Database error in get_all_conversations: {str(e)}"
+            error_msg = f"Database error in get_all_conversations: {e!s}"
             
             # Log error
             try:
@@ -242,7 +238,7 @@ class ConversationAPI:
             if conn:
                 conn.close()
 
-    def get_conversation(self, conversation_id: str, user_id: str) -> Optional[Dict]:
+    def get_conversation(self, conversation_id: str, user_id: str) -> Optional[dict]:
         """Get a specific conversation by ID"""
         conn = self.get_db()
         cursor = conn.cursor()
@@ -279,7 +275,7 @@ class ConversationAPI:
         user_id: str,
         project_id: Optional[str] = None,
         title: Optional[str] = None,
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
         session_id: Optional[str] = None,
         tab: str = "chat",
     ) -> str:
@@ -513,7 +509,7 @@ class ConversationAPI:
         self,
         user_id: str,
         project_id: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Get archived conversations for a user"""
         return self.get_all_conversations(user_id, project_id, include_archived=True)
 
@@ -527,7 +523,7 @@ class ConversationAPI:
         user_id: str,
         limit: Optional[int] = None,
         offset: int = 0
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Get messages for a conversation"""
         # MEMORY SAFETY: Default limit to prevent loading entire conversation history
         # Large conversations can cause memory spikes
@@ -536,8 +532,7 @@ class ConversationAPI:
         
         # MEMORY SAFETY: Hard cap to prevent excessive memory usage
         MAX_MESSAGES = 5000
-        if limit > MAX_MESSAGES:
-            limit = MAX_MESSAGES
+        limit = min(limit, MAX_MESSAGES)
         
         conn = self.get_db()
         cursor = conn.cursor()
@@ -620,7 +615,7 @@ class ConversationAPI:
         user_id: str,
         role: str,
         content: str,
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
         memory_api=None,
         save_to_memory: bool = True
     ) -> str:
@@ -767,7 +762,9 @@ class ConversationAPI:
 
                         # Determine if embedding should be generated based on rules
                         try:
-                            from config.embedding_rules import should_embed_automatically
+                            from config.embedding_rules import (
+                                should_embed_automatically,
+                            )
                             generate_embedding = should_embed_automatically(
                                 content_type='conversation',
                                 source_type='conversation',
@@ -859,8 +856,8 @@ class ConversationAPI:
         """
         try:
             from context_detector import ContextDetector
-            from milvus_client import get_milvus_client
             from memory_embedder import get_embedder
+            from milvus_client import get_milvus_client
 
             messages = self.get_messages(conversation_id, user_id, limit=100)
             conversation_text = "\n".join([
@@ -902,12 +899,12 @@ class ConversationAPI:
 
     def get_conversations_by_tags(
         self,
-        tag_paths: List[str],
+        tag_paths: list[str],
         user_id: str,
         project_id: Optional[str] = None,
-        character_names: Optional[List[str]] = None,
+        character_names: Optional[list[str]] = None,
         limit: int = 10
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Get conversations filtered by tag paths and character names
         
@@ -1042,8 +1039,8 @@ class ConversationAPI:
         self,
         conversation_id: str,
         user_id: str,
-        suggested_tags: List[str],
-        detected_entities: Optional[Dict] = None,
+        suggested_tags: list[str],
+        detected_entities: Optional[dict] = None,
         confirmed: bool = False
     ) -> str:
         """
@@ -1104,7 +1101,7 @@ class ConversationAPI:
             cursor.close()
             conn.close()
     
-    def get_tag_suggestion_stats(self, user_id: str) -> Dict:
+    def get_tag_suggestion_stats(self, user_id: str) -> dict:
         """
         Get tag suggestion statistics for a user
         
@@ -1157,12 +1154,12 @@ class ConversationAPI:
         self,
         conversation_id: str,
         user_id: str,
-        detected_entities: Dict,
+        detected_entities: dict,
         conversation_content: str,
         project_id: Optional[str] = None,
         milvus_client=None,
         memory_embedder=None
-    ) -> Dict[str, any]:
+    ) -> dict[str, any]:
         """
         Store literary tags to both Milvus and PostgreSQL
         
@@ -1186,8 +1183,9 @@ class ConversationAPI:
                 'milvus_inserted': True/False
             }
         """
-        from query_generator import QueryGenerator
         from datetime import datetime
+
+        from query_generator import QueryGenerator
         
         conn = self.get_db()
         cursor = conn.cursor()
@@ -1423,7 +1421,7 @@ class ConversationAPI:
             conn.close()
 
     def get_conversations_by_session(self, session_id: str, user_id: str,
-                                     include_archived: bool = False) -> List[Dict]:
+                                     include_archived: bool = False) -> list[dict]:
         """
         Get all conversations OWNED by a prompt session.
 

@@ -3,7 +3,7 @@ Extracted from main.py during modularization — zero behavior change."""
 import json
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from fastapi import HTTPException
 
@@ -27,7 +27,7 @@ _A2UI_CATALOG_PATH = os.path.join(
     os.path.dirname(__file__), "..", "frontend", "src", "components", "A2UI",
     "catalogs", "prompt-composer", "catalog.json",
 )
-a2ui_catalog: Dict[str, Any] = {}
+a2ui_catalog: dict[str, Any] = {}
 try:
     with open(_A2UI_CATALOG_PATH, "r") as _catalog_file:
         a2ui_catalog = json.load(_catalog_file)
@@ -40,7 +40,7 @@ except Exception as _catalog_error:
     sys.exit(1)
 
 
-def validate_a2ui_components(components: List[Dict[str, Any]]) -> None:
+def validate_a2ui_components(components: list[dict[str, Any]]) -> None:
     """
     Zero-trust validation of an updateComponents payload against the catalog.
 

@@ -32,7 +32,7 @@ mistake.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from database_pool import DatabasePoolManager
 
@@ -64,7 +64,7 @@ def _pool() -> DatabasePoolManager:
     return DatabasePoolManager.get_instance()
 
 
-def _row_to_tool(row: Dict[str, Any], with_body: bool = False) -> Dict[str, Any]:
+def _row_to_tool(row: dict[str, Any], with_body: bool = False) -> dict[str, Any]:
     tool = {
         "name": row["name"],
         "summary": row["summary"],
@@ -86,7 +86,7 @@ def _row_to_tool(row: Dict[str, Any], with_body: bool = False) -> Dict[str, Any]
     return tool
 
 
-def list_tools(section: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_tools(section: Optional[str] = None) -> list[dict[str, Any]]:
     """Every tool, or only those belonging to one section of a prompt.
 
     A tool can belong to more than one section and appears in each. No section
@@ -118,7 +118,7 @@ def list_tools(section: Optional[str] = None) -> List[Dict[str, Any]]:
     return [_row_to_tool(r) for r in rows]
 
 
-def categories() -> List[Dict[str, Any]]:
+def categories() -> list[dict[str, Any]]:
     """The categories, each with the number of tools in it.
 
     This is what the first list shows: the shape of what is available, not
@@ -139,7 +139,7 @@ def categories() -> List[Dict[str, Any]]:
     return [{"category": r["category"], "count": r["n"]} for r in rows]
 
 
-def get_tool(name: str) -> Dict[str, Any]:
+def get_tool(name: str) -> dict[str, Any]:
     """One tool, body included. Raises when the name is not in the table."""
     try:
         with _pool().get_connection() as conn:

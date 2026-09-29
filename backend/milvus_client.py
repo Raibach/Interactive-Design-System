@@ -5,7 +5,7 @@ Abstract client supporting Lite, Standalone, and Distributed deployments
 
 import os
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any, Optional
 
 try:
     from pymilvus import MilvusClient
@@ -32,15 +32,14 @@ except Exception:
     MilvusServer = None
     MilvusServerConfig = None
 from config import (
-    MILVUS_MODE,
-    MILVUS_URI,
-    MILVUS_TOKEN,
-    available_memory_mb,
-    get_collection_name,
-    get_all_collections,
-    EMBEDDING_DIMENSION,
     COLLECTION_CONSISTENCY_LEVEL,
-    ENABLE_DYNAMIC_FIELDS
+    EMBEDDING_DIMENSION,
+    ENABLE_DYNAMIC_FIELDS,
+    MILVUS_MODE,
+    MILVUS_TOKEN,
+    MILVUS_URI,
+    available_memory_mb,
+    get_all_collections,
 )
 
 
@@ -71,7 +70,7 @@ class MilvusClientWrapper:
                         self.client = MilvusClient(uri=self.uri)
                     except Exception as e:
                         print(f"⚠️ Milvus file connection failed: {e}")
-                        print(f"⚠️ Milvus features will be disabled to prevent memory issues")
+                        print("⚠️ Milvus features will be disabled to prevent memory issues")
                         self.client = None
                         return None
                 else:
@@ -90,7 +89,7 @@ class MilvusClientWrapper:
                             self.client = MilvusClient(uri=server_uri, token=server_token)
                         except Exception as e:
                             print(f"⚠️ Milvus server startup failed: {e}")
-                            print(f"⚠️ Milvus features will be disabled to prevent memory issues")
+                            print("⚠️ Milvus features will be disabled to prevent memory issues")
                             self.client = None
                             return None
                     else:
@@ -99,7 +98,7 @@ class MilvusClientWrapper:
                             self.client = MilvusClient(uri=self.uri)
                         except Exception as e:
                             print(f"⚠️ Milvus directory connection failed: {e}")
-                            print(f"⚠️ Milvus features will be disabled to prevent memory issues")
+                            print("⚠️ Milvus features will be disabled to prevent memory issues")
                             self.client = None
                             return None
             else:
@@ -108,7 +107,7 @@ class MilvusClientWrapper:
                     self.client = MilvusClient(uri=self.uri, token=self.token)
                 except Exception as e:
                     print(f"⚠️ Milvus connection failed: {e}")
-                    print(f"⚠️ Milvus features will be disabled to prevent memory issues")
+                    print("⚠️ Milvus features will be disabled to prevent memory issues")
                     self.client = None
                     return None
             
@@ -122,7 +121,7 @@ class MilvusClientWrapper:
             return self.client
         except Exception as e:
             print(f"❌ Failed to connect to Milvus: {e}")
-            print(f"⚠️ Milvus features will be disabled to prevent crashes")
+            print("⚠️ Milvus features will be disabled to prevent crashes")
             import traceback
             traceback.print_exc()
             self.client = None
@@ -156,9 +155,9 @@ class MilvusClientWrapper:
     def insert(
         self,
         collection_name: str,
-        vectors: List[List[float]],
-        metadata: List[Dict[str, Any]],
-        ids: Optional[List[int]] = None
+        vectors: list[list[float]],
+        metadata: list[dict[str, Any]],
+        ids: Optional[list[int]] = None
     ):
         """
         Insert vectors with metadata into collection
@@ -195,12 +194,12 @@ class MilvusClientWrapper:
     def search(
         self,
         collection_name: str,
-        query_vectors: List[List[float]],
+        query_vectors: list[list[float]],
         filter_expr: Optional[str] = None,
         limit: int = 10,
-        output_fields: Optional[List[str]] = None,
+        output_fields: Optional[list[str]] = None,
         timeout: Optional[int] = None
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Search for similar vectors
         
@@ -269,7 +268,7 @@ class MilvusClientWrapper:
             # Fallback to empty results
             return []
     
-    def get_collection_stats(self, collection_name: str) -> Dict:
+    def get_collection_stats(self, collection_name: str) -> dict:
         """Get collection statistics"""
         if not self.client:
             self.connect()
@@ -339,7 +338,7 @@ def get_milvus_client() -> Optional[MilvusClientWrapper]:
                 return None
         except Exception as e:
             print(f"⚠️ Milvus initialization failed: {e}")
-            print(f"⚠️ Milvus features disabled to prevent crashes")
+            print("⚠️ Milvus features disabled to prevent crashes")
             _milvus_client = None
             return None
     return _milvus_client

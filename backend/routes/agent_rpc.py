@@ -1,32 +1,15 @@
 """Auto-extracted route module from main.py — zero behavior change."""
-import json
-import os
 import sys
-import time
 import traceback
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Header, HTTPException
 
 import services as state
-from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
-    get_user_id_from_header,
-)
-from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
-)
 from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
+from deps import (
+    DEFAULT_USER_ID,
 )
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -79,10 +62,10 @@ async def agent_rpc(
         return response
         
     except ValueError as e:
-        print(f"❌ [Agent RPC] Validation error: {str(e)}", file=sys.stderr)
+        print(f"❌ [Agent RPC] Validation error: {e!s}", file=sys.stderr)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ [Agent RPC] Error: {str(e)}", file=sys.stderr)
+        print(f"❌ [Agent RPC] Error: {e!s}", file=sys.stderr)
         print(traceback.format_exc(), file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
 

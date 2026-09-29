@@ -4,8 +4,7 @@ Automatically detects characters, topics, and work focus for contextual memory a
 """
 
 import re
-from typing import Dict, List, Optional, Set
-from datetime import datetime
+from typing import Optional
 
 
 class ContextDetector:
@@ -45,8 +44,8 @@ class ContextDetector:
     def detect_context_entities(
         self, 
         user_input: str, 
-        conversation_history: Optional[List[Dict]] = None
-    ) -> Dict[str, List[str]]:
+        conversation_history: Optional[list[dict]] = None
+    ) -> dict[str, list[str]]:
         """
         Main detection function - extracts all context entities
         
@@ -104,7 +103,7 @@ class ContextDetector:
         
         return entities
     
-    def detect_emotional_concepts(self, content: str) -> Dict[str, any]:
+    def detect_emotional_concepts(self, content: str) -> dict[str, any]:
         """
         Detect emotional concepts from content using EmotionDetector
         
@@ -121,7 +120,9 @@ class ContextDetector:
             }
         """
         try:
-            from senticnet_analysis.implementation.emotion_detector import EmotionDetector
+            from senticnet_analysis.implementation.emotion_detector import (
+                EmotionDetector,
+            )
             
             # Initialize detector (lazy loading)
             if not hasattr(self, '_emotion_detector'):
@@ -147,7 +148,7 @@ class ContextDetector:
             print(f"⚠️ Emotional concept detection failed: {e}")
             return {}
     
-    def extract_character_names(self, content: str) -> List[str]:
+    def extract_character_names(self, content: str) -> list[str]:
         """Extract character names from content"""
         names = set()
         
@@ -194,7 +195,7 @@ class ContextDetector:
         
         return True
     
-    def detect_work_focus(self, content: str) -> List[str]:
+    def detect_work_focus(self, content: str) -> list[str]:
         """Detect current work focus from keywords"""
         content_lower = content.lower()
         detected_focus = []
@@ -207,7 +208,7 @@ class ContextDetector:
         
         return detected_focus
     
-    def detect_literary_elements(self, content: str) -> List[str]:
+    def detect_literary_elements(self, content: str) -> list[str]:
         """Detect literary devices and elements"""
         content_lower = content.lower()
         detected_elements = []
@@ -218,7 +219,7 @@ class ContextDetector:
         
         return detected_elements
     
-    def extract_topics(self, content: str) -> List[str]:
+    def extract_topics(self, content: str) -> list[str]:
         """Extract important topics/concepts (simplified - can be enhanced with NLP)"""
         # Simple approach: extract important nouns and concepts
         # This is a placeholder - could be enhanced with NER or LLM-based extraction
@@ -239,10 +240,10 @@ class ContextDetector:
     
     def build_context_query(
         self, 
-        entities: Dict[str, List[str]], 
+        entities: dict[str, list[str]], 
         user_id: str, 
         project_id: Optional[str] = None
-    ) -> Dict[str, any]:
+    ) -> dict[str, any]:
         """
         Build retrieval query from detected entities
         

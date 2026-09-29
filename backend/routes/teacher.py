@@ -1,36 +1,22 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import asyncio
 import json
-import os
 import re
-import sentry_sdk
-import sys
 import time
-import traceback
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+import sentry_sdk
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import AliasChoices, BaseModel, Field
 
 import services as state
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
     get_user_id_from_header,
 )
 from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
     LAST_USAGE,
+    retrieve_memory_context,
 )
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -59,9 +45,9 @@ class TeacherQueryRequest(BaseModel):
     include_memory: bool = Field(False, validation_alias=AliasChoices("include_memory", "includeMemory"))
     temperature: float = 0.45
     self_reflection: bool = Field(False, validation_alias=AliasChoices("self_reflection", "selfReflection"))
-    editorial: Optional[Dict[str, Any]] = None
+    editorial: Optional[dict[str, Any]] = None
     mode: str = "chat"
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
     # ── WHO SPOKE ─────────────────────────────────────────────────────────────
     # True when a person typed this turn. False for a turn the APPLICATION asks for on
     # their behalf: the console's and the composer's own greetings, whose `question` is an
@@ -92,14 +78,14 @@ class TeacherQueryRequest(BaseModel):
     # prompt rather than something the model is asked to imagine. The browser
     # cannot make these calls (the desktop MCP has no CORS and needs a session
     # handshake), which is why a declared tool call becomes a real one here.
-    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_calls: Optional[list[dict[str, Any]]] = None
 
 
 class EnsureModelRequest(BaseModel):
     model_type: str = "grace"  # "grace" (Z.ai GLM-4.7), "karen", "lm_studio", or "zai"
 
 
-def _with_tool_results(context: str, blocks: List[str], warnings: List[str]) -> str:
+def _with_tool_results(context: str, blocks: list[str], warnings: list[str]) -> str:
     """Fold executed tool results into the structured prompt config.
 
     prompt_output mode hands grace_gui._assemble_prompt_output a JSON config and
@@ -150,7 +136,7 @@ def _tool_seat_text(context: str) -> str:
     except Exception:
         return ""
 
-    parts: List[str] = []
+    parts: list[str] = []
     core = payload.get("core_roles")
     if isinstance(core, dict):
         parts.extend(str(v or "") for v in core.values())
@@ -204,8 +190,8 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 )
                 if str(conv_id) not in [str(c.get("id")) for c in (package_conversations or [])]:
                     warnings.append(
-                        f"The conversation this seat named does not belong to this package; "
-                        f"the turn was filed under the package's own thread."
+                        "The conversation this seat named does not belong to this package; "
+                        "the turn was filed under the package's own thread."
                     )
                     print(f"ℹ️  Conversation {str(conv_id)[:8]}… is not package {str(request.session_id)[:8]}…'s — dropped.")
                     conv_id = None
@@ -256,7 +242,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # caller got a clean 200. They ride the response now; the seat draws them and the
         # frontend logs them into the trace. check:error-suppression counts what still
         # swallows, and this list is the fix for the ones that used to be here.
-        warnings: List[str] = []
+        warnings: list[str] = []
         if request.mode != "chat":
             print(f"ℹ️  mode={request.mode} — not a conversation; no conversation attached or created.")
         elif not request.person_turn and not conv_id:
@@ -409,8 +395,8 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # the notes had been captured, or the internet searched — is the lie this
         # warning exists to prevent. The review before a Run is what stops such a
         # prompt from being run at all; this is the second line, not the first.
-        tool_blocks: List[str] = []
-        tool_warnings: List[str] = []
+        tool_blocks: list[str] = []
+        tool_warnings: list[str] = []
         if mode == "prompt_output":
             try:
                 from tool_run import named_tools, run_named_tools
@@ -424,7 +410,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
                         f"🧰 [tool_run] the prompt names {len(declared)} tool(s) "
                         f"→ {len(reg_blocks)} answer(s), {len(reg_warnings)} warning(s)"
                     )
-            except Exception as e:  # noqa: BLE001 — reported, not raised
+            except Exception as e:
                 tool_warnings.append(f"Tool execution failed: {type(e).__name__}: {e}")
                 print(f"⚠️  [tool_run] could not execute the prompt's tools: {e}")
 
@@ -443,7 +429,7 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 tool_warnings.extend(design_warnings)
                 if design_warnings:
                     print(f"⚠️  [tool_calls] {len(design_warnings)} warning(s) — carried into the prompt")
-            except Exception as e:  # noqa: BLE001 — reported, not raised
+            except Exception as e:
                 tool_warnings.append(f"Tool execution failed: {type(e).__name__}: {e}")
                 print(f"⚠️  [tool_calls] execution failed: {e}")
 
@@ -672,9 +658,9 @@ async def api_teacher_query(request: TeacherQueryRequest):
 
     except Exception as e:
         import traceback
-        error_detail = f"Error processing teacher query: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error processing teacher query: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Teacher query error: {error_detail}")
-        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing query: {e!s}")
 
 
 @router.post("/api/teacher/ensure-model")
@@ -712,11 +698,11 @@ async def api_ensure_model(request: EnsureModelRequest):
         import traceback
 
         error_detail = (
-            f"Error ensuring model server: {str(e)}\n{traceback.format_exc()}"
+            f"Error ensuring model server: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Ensure model error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error ensuring model server: {str(e)}"
+            status_code=500, detail=f"Error ensuring model server: {e!s}"
         )
 
 

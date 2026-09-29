@@ -1,32 +1,23 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import json
 import os
-import sys
-import time
-import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 import services as state
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
-    get_user_id_from_header,
+    REASONING_TRACE_PATH,
 )
 from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
+    evaluate_source,
+    query_llm,
+    retrieve_memory_context,
+    search_news,
+    summarize_pdfs,
 )
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -78,7 +69,6 @@ async def api_health():
         try:
             from memory_embedder import get_embedder
             from milvus_client import get_milvus_client
-            from config import get_all_collections
             milvus_client = get_milvus_client()
             embedder = get_embedder()
             if milvus_client and milvus_client.client:
@@ -211,7 +201,7 @@ async def api_search_news(query: NewsQuery):
 
 @router.post("/api/pdf/summarize")
 async def api_summarize_pdfs(
-    files: List[UploadFile] = File(...), reasoning: bool = False
+    files: list[UploadFile] = File(...), reasoning: bool = False
 ):
     # Save uploaded files temporarily
     temp_files = []

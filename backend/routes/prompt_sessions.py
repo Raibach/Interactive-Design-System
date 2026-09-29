@@ -1,32 +1,18 @@
 """Auto-extracted route module from main.py — zero behavior change."""
 import json
-import os
-import sys
-import time
 import traceback
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 import services as state
 from deps import (
-    DEFAULT_USER_ID, REASONING_TRACE_PATH, A2UI_CATALOG_ID,
-    a2ui_catalog, validate_a2ui_components, user_is_admin,
     get_user_id_from_header,
 )
 from grace_gui import (
-    evaluate_source, query_llm, retrieve_memory_context, search_news,
-    summarize_pdfs, milvus_save_version, milvus_get_versions,
+    query_llm,
 )
-from agent_rpc_handler import AgentRpcHandler
-from figma_service import (
-    get_file, get_file_versions, get_component, get_node,
-    get_dev_resources, search_file,
-)
-from milvus_rest import MilvusREST
 
 router = APIRouter()
 
@@ -48,7 +34,7 @@ class UpdatePromptSessionRequest(BaseModel):
     conversation_id: Optional[str] = None
     is_active: Optional[bool] = None
     is_archived: Optional[bool] = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
     category: Optional[str] = None
     # Console card fields (agent-card-element, Figma 40000717:17091)
     status: Optional[str] = None
@@ -72,7 +58,7 @@ class CreateSuggestionRequest(BaseModel):
     generated_by_model: Optional[str] = None
     confidence_score: float = 1.0
     relevance_score: float = 1.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 class AddContextEntryRequest(BaseModel):
@@ -80,7 +66,7 @@ class AddContextEntryRequest(BaseModel):
     content: str
     source: Optional[str] = None
     relevance_score: float = 1.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
 @router.get("/api/prompts")
 async def get_prompts(
@@ -150,11 +136,11 @@ async def get_prompts(
         import traceback
 
         error_detail = (
-            f"Error getting prompts: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting prompts: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get prompts error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting prompts: {str(e)}"
+            status_code=500, detail=f"Error getting prompts: {e!s}"
         )
 
 
@@ -171,7 +157,7 @@ async def get_categories():
         return {"categories": categories, "error": None}
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error getting categories: {str(e)}"
+            status_code=500, detail=f"Error getting categories: {e!s}"
         )
 
 
@@ -203,11 +189,11 @@ async def get_prompt_sessions(
         import traceback
 
         error_detail = (
-            f"Error getting prompt sessions: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting prompt sessions: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get prompt sessions error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting prompt sessions: {str(e)}"
+            status_code=500, detail=f"Error getting prompt sessions: {e!s}"
         )
 
 
@@ -244,11 +230,11 @@ async def get_console_session(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         error_detail = (
-            f"Error resolving the console session: {str(e)}\n{traceback.format_exc()}"
+            f"Error resolving the console session: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Console session error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error resolving the console session: {str(e)}"
+            status_code=500, detail=f"Error resolving the console session: {e!s}"
         )
 
 
@@ -277,11 +263,11 @@ async def get_prompt_session(
         import traceback
 
         error_detail = (
-            f"Error getting prompt session: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting prompt session: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get prompt session error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting prompt session: {str(e)}"
+            status_code=500, detail=f"Error getting prompt session: {e!s}"
         )
 
 
@@ -311,11 +297,11 @@ async def create_prompt_session(
         import traceback
 
         error_detail = (
-            f"Error creating prompt session: {str(e)}\n{traceback.format_exc()}"
+            f"Error creating prompt session: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Create prompt session error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error creating prompt session: {str(e)}"
+            status_code=500, detail=f"Error creating prompt session: {e!s}"
         )
 
 
@@ -385,11 +371,11 @@ async def update_prompt_session(
         import traceback
 
         error_detail = (
-            f"Error updating prompt session: {str(e)}\n{traceback.format_exc()}"
+            f"Error updating prompt session: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Update prompt session error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error updating prompt session: {str(e)}"
+            status_code=500, detail=f"Error updating prompt session: {e!s}"
         )
 
 
@@ -422,11 +408,11 @@ async def delete_prompt_session(
         import traceback
 
         error_detail = (
-            f"Error deleting prompt session: {str(e)}\n{traceback.format_exc()}"
+            f"Error deleting prompt session: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Delete prompt session error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error deleting prompt session: {str(e)}"
+            status_code=500, detail=f"Error deleting prompt session: {e!s}"
         )
 
 
@@ -462,11 +448,11 @@ async def save_prompt_version(
         import traceback
 
         error_detail = (
-            f"Error saving prompt version: {str(e)}\n{traceback.format_exc()}"
+            f"Error saving prompt version: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Save prompt version error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error saving prompt version: {str(e)}"
+            status_code=500, detail=f"Error saving prompt version: {e!s}"
         )
 
 
@@ -508,11 +494,11 @@ async def get_prompt_versions(
         import traceback
 
         error_detail = (
-            f"Error getting prompt versions: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting prompt versions: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get prompt versions error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting prompt versions: {str(e)}"
+            status_code=500, detail=f"Error getting prompt versions: {e!s}"
         )
 
 
@@ -559,7 +545,7 @@ async def patch_version_score(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating score: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating score: {e!s}")
 
 
 @router.get("/api/prompt-sessions/{session_id}/versions/{version_number}")
@@ -591,11 +577,11 @@ async def get_prompt_version(
         import traceback
 
         error_detail = (
-            f"Error getting prompt version: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting prompt version: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get prompt version error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting prompt version: {str(e)}"
+            status_code=500, detail=f"Error getting prompt version: {e!s}"
         )
 
 
@@ -631,11 +617,11 @@ async def restore_prompt_version(
         import traceback
 
         error_detail = (
-            f"Error restoring prompt version: {str(e)}\n{traceback.format_exc()}"
+            f"Error restoring prompt version: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Restore prompt version error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error restoring prompt version: {str(e)}"
+            status_code=500, detail=f"Error restoring prompt version: {e!s}"
         )
 
 
@@ -663,8 +649,8 @@ async def list_evaluations(session_id: str, x_user_id: Optional[str] = Header(No
     except Exception as e:
         import traceback
 
-        print(f"❌ List evaluations error: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Error listing evaluations: {str(e)}")
+        print(f"❌ List evaluations error: {e!s}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error listing evaluations: {e!s}")
 
 
 @router.delete("/api/prompt-sessions/{session_id}/evaluations/{evaluation_id}")
@@ -689,8 +675,8 @@ async def delete_evaluation(
     except Exception as e:
         import traceback
 
-        print(f"❌ Delete evaluation error: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Error deleting evaluation: {str(e)}")
+        print(f"❌ Delete evaluation error: {e!s}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error deleting evaluation: {e!s}")
 
 
 @router.post("/api/prompt-sessions/{session_id}/evaluations")
@@ -725,7 +711,7 @@ async def record_evaluation(
         try:
             judged = _judge_run_output(request.ask or "", request.output or "")
         except Exception as e:
-            judged = {"verdict": "error", "sentence": f"The judge could not be asked: {str(e)}"}
+            judged = {"verdict": "error", "sentence": f"The judge could not be asked: {e!s}"}
         row = state.prompt_sessions_api.record_evaluation(
             session_id, judged["verdict"], judged.get("sentence"), request.trigger
         )
@@ -737,11 +723,11 @@ async def record_evaluation(
     except Exception as e:
         import traceback
 
-        print(f"❌ Record evaluation error: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Error recording evaluation: {str(e)}")
+        print(f"❌ Record evaluation error: {e!s}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error recording evaluation: {e!s}")
 
 
-def _judge_run_output(ask: str, output: str) -> Dict[str, Any]:
+def _judge_run_output(ask: str, output: str) -> dict[str, Any]:
     """
     Ask Qwen to judge a run's answer against what it was asked to do. The verdict is two
     words the app already speaks — cleared, failed — and one sentence of plain English. No
@@ -800,11 +786,11 @@ async def get_prompt_context_for_ai(
         import traceback
 
         error_detail = (
-            f"Error getting prompt context for AI: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting prompt context for AI: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get prompt context for AI error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting prompt context for AI: {str(e)}"
+            status_code=500, detail=f"Error getting prompt context for AI: {e!s}"
         )
 
 
@@ -843,11 +829,11 @@ async def create_ai_suggestion(
         import traceback
 
         error_detail = (
-            f"Error creating AI suggestion: {str(e)}\n{traceback.format_exc()}"
+            f"Error creating AI suggestion: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Create AI suggestion error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error creating AI suggestion: {str(e)}"
+            status_code=500, detail=f"Error creating AI suggestion: {e!s}"
         )
 
 
@@ -1093,11 +1079,11 @@ async def get_ai_suggestions(
         import traceback
 
         error_detail = (
-            f"Error getting AI suggestions: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting AI suggestions: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get AI suggestions error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting AI suggestions: {str(e)}"
+            status_code=500, detail=f"Error getting AI suggestions: {e!s}"
         )
 
 
@@ -1130,11 +1116,11 @@ async def mark_suggestion_used(
         import traceback
 
         error_detail = (
-            f"Error marking suggestion as used: {str(e)}\n{traceback.format_exc()}"
+            f"Error marking suggestion as used: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Mark suggestion used error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error marking suggestion as used: {str(e)}"
+            status_code=500, detail=f"Error marking suggestion as used: {e!s}"
         )
 
 
@@ -1171,11 +1157,11 @@ async def get_context_entries(
         import traceback
 
         error_detail = (
-            f"Error getting context entries: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting context entries: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get context entries error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting context entries: {str(e)}"
+            status_code=500, detail=f"Error getting context entries: {e!s}"
         )
 
 
@@ -1211,10 +1197,10 @@ async def add_context_entry(
     except Exception as e:
         import traceback
 
-        error_detail = f"Error adding context entry: {str(e)}\n{traceback.format_exc()}"
+        error_detail = f"Error adding context entry: {e!s}\n{traceback.format_exc()}"
         print(f"❌ Add context entry error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error adding context entry: {str(e)}"
+            status_code=500, detail=f"Error adding context entry: {e!s}"
         )
 
 
@@ -1243,11 +1229,11 @@ async def delete_context_entry(
         import traceback
 
         error_detail = (
-            f"Error deleting context entry: {str(e)}\n{traceback.format_exc()}"
+            f"Error deleting context entry: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Delete context entry error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error deleting context entry: {str(e)}"
+            status_code=500, detail=f"Error deleting context entry: {e!s}"
         )
 
 
@@ -1274,11 +1260,11 @@ async def get_prompt_session_stats(
         import traceback
 
         error_detail = (
-            f"Error getting prompt session stats: {str(e)}\n{traceback.format_exc()}"
+            f"Error getting prompt session stats: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Get prompt session stats error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error getting prompt session stats: {str(e)}"
+            status_code=500, detail=f"Error getting prompt session stats: {e!s}"
         )
 
 
@@ -1315,11 +1301,11 @@ async def search_prompt_sessions(
         import traceback
 
         error_detail = (
-            f"Error searching prompt sessions: {str(e)}\n{traceback.format_exc()}"
+            f"Error searching prompt sessions: {e!s}\n{traceback.format_exc()}"
         )
         print(f"❌ Search prompt sessions error: {error_detail}")
         raise HTTPException(
-            status_code=500, detail=f"Error searching prompt sessions: {str(e)}"
+            status_code=500, detail=f"Error searching prompt sessions: {e!s}"
         )
 
 

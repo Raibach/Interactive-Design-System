@@ -4,10 +4,10 @@ Parses Grace's questions and builds semantic search queries with tag filtering
 """
 
 import re
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime
-from memory_embedder import get_embedder
+from typing import Optional
+
 from config import get_collection_name
+from memory_embedder import get_embedder
 
 
 class QueryGenerator:
@@ -46,9 +46,9 @@ class QueryGenerator:
     def generate_category_boost_query(
         self,
         query_text: str,
-        preferred_categories: Optional[List[str]] = None,
+        preferred_categories: Optional[list[str]] = None,
         boost_factor: float = 1.5
-    ) -> Dict:
+    ) -> dict:
         """
         Generate search query with category boosting.
         Boosts results matching preferred categories.
@@ -90,8 +90,8 @@ class QueryGenerator:
         conversation_context: Optional[str] = None,
         user_id: str = None,
         project_id: Optional[str] = None,
-        detected_entities: Optional[Dict] = None
-    ) -> Dict[str, any]:
+        detected_entities: Optional[dict] = None
+    ) -> dict[str, any]:
         """
         Main function - generates query structure from context
         
@@ -149,8 +149,8 @@ class QueryGenerator:
     def build_tag_filters(
         self,
         intent: Optional[str],
-        detected_entities: Optional[Dict] = None
-    ) -> List[str]:
+        detected_entities: Optional[dict] = None
+    ) -> list[str]:
         """Build tag path filters from intent and entities"""
         tag_paths = []
         
@@ -182,11 +182,11 @@ class QueryGenerator:
     
     def build_sql_from_tags(
         self,
-        tag_filters: List[str],
+        tag_filters: list[str],
         user_id: str,
         project_id: Optional[str] = None,
-        character_names: List[str] = None
-    ) -> Dict[str, any]:
+        character_names: list[str] = None
+    ) -> dict[str, any]:
         """
         Generate SQL query parameters for tag-based conversation retrieval
         
@@ -204,9 +204,9 @@ class QueryGenerator:
     
     def execute_tagged_conversation_query(
         self,
-        sql_params: Dict[str, any],
+        sql_params: dict[str, any],
         conversation_api
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Execute tag-based conversation query using conversation_api
         
@@ -233,8 +233,8 @@ class QueryGenerator:
         user_question: str,
         user_id: str,
         project_id: Optional[str] = None,
-        detected_entities: Optional[Dict] = None
-    ) -> Dict[str, any]:
+        detected_entities: Optional[dict] = None
+    ) -> dict[str, any]:
         """
         Generate Milvus semantic search query from natural language question
         
@@ -402,7 +402,7 @@ class QueryGenerator:
         
         return False
     
-    def parse_emotional_query(self, question: str) -> Dict[str, any]:
+    def parse_emotional_query(self, question: str) -> dict[str, any]:
         """
         Parse emotional patterns from natural language queries
         
@@ -486,7 +486,7 @@ class QueryGenerator:
         
         return result
     
-    def build_emotional_filters(self, emotional_query: Dict[str, any]) -> List[str]:
+    def build_emotional_filters(self, emotional_query: dict[str, any]) -> list[str]:
         """
         Build Milvus filter expressions from emotional query parsing
         
@@ -532,8 +532,8 @@ class QueryGenerator:
         user_question: str,
         user_id: str,
         project_id: Optional[str] = None,
-        detected_entities: Optional[Dict] = None
-    ) -> Dict[str, any]:
+        detected_entities: Optional[dict] = None
+    ) -> dict[str, any]:
         """
         Generate Milvus query with enhanced emotional pattern parsing
         

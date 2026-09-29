@@ -44,7 +44,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
 import services as state
-from deps import get_user_id_from_header, user_is_admin, DEFAULT_USER_ID
+from deps import DEFAULT_USER_ID, get_user_id_from_header, user_is_admin
 
 router = APIRouter()
 

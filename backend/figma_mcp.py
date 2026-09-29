@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import requests
 
@@ -52,10 +52,10 @@ DEFAULT_TIMEOUT = 15.0
 
 def _post(
     url: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     session: Optional[str],
     timeout: float,
-) -> Tuple[Optional[dict], Optional[str], Optional[str]]:
+) -> tuple[Optional[dict], Optional[str], Optional[str]]:
     """One JSON-RPC POST to the streamable-HTTP MCP. Returns (json, session, error)."""
     headers = {
         "Content-Type": "application/json",
@@ -77,7 +77,7 @@ def _post(
             f"Figma's MCP did not answer within {timeout:g}s ({url}). "
             f"It may be busy, or the file may be syncing."
         )
-    except Exception as e:  # noqa: BLE001 — the reason IS the payload here
+    except Exception as e:
         return None, None, f"Figma MCP request failed: {type(e).__name__}: {e}"
 
     session_out = r.headers.get("Mcp-Session-Id") or session
@@ -100,7 +100,7 @@ def call_design_context(
     file_key: Optional[str] = None,
     url: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Tuple[bool, str, Optional[str]]:
+) -> tuple[bool, str, Optional[str]]:
     """`get_design_context` for one node. Returns (ok, text, error)."""
     url = (url or DEFAULT_MCP_URL).rstrip("/")
     file_key = file_key or DEFAULT_FILE_KEY
@@ -171,7 +171,7 @@ def call_design_context(
 def _rest_design_block(
     node_id: str,
     file_key: str,
-) -> Tuple[bool, str, Optional[str]]:
+) -> tuple[bool, str, Optional[str]]:
     """Second channel: REST + token, through figma_service (cache-backed).
 
     This exists because the MCP cannot answer on a deployed server. The MCP is either
@@ -190,7 +190,7 @@ def _rest_design_block(
     """
     try:
         from figma_service import get_cached_spec, get_component_descriptions
-    except Exception as e:  # noqa: BLE001 — degrade loudly, never silently
+    except Exception as e:
         return False, "", f"REST channel unavailable ({type(e).__name__}: {e})"
 
     # refresh=True on purpose. The cached rows were written by an extractor that
@@ -211,7 +211,7 @@ def _rest_design_block(
     except Exception:
         descriptions = {}
 
-    def _hexes(paints: List[Dict[str, Any]]) -> str:
+    def _hexes(paints: list[dict[str, Any]]) -> str:
         out = []
         for p in paints:
             c = (p.get("color") or {}) if isinstance(p, dict) else {}
@@ -220,9 +220,9 @@ def _rest_design_block(
             out.append(f"{hexv}{'' if op in (None, 1) else f' @{op}'}")
         return ", ".join(out)
 
-    lines: List[str] = []
+    lines: list[str] = []
 
-    def walk(n: Dict[str, Any], depth: int = 0) -> None:
+    def walk(n: dict[str, Any], depth: int = 0) -> None:
         pad = "  " * depth
         b = n.get("bounds") or {}
         size = f"  {b['width']:g}×{b['height']:g}" if b.get("width") else ""
@@ -281,10 +281,10 @@ def _rest_design_block(
 
 
 def run_tool_calls(
-    tool_calls: Optional[List[Dict[str, Any]]],
+    tool_calls: Optional[list[dict[str, Any]]],
     file_key: Optional[str] = None,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Tuple[List[str], List[str]]:
+) -> tuple[list[str], list[str]]:
     """Execute a prompt's tool calls.
 
     Returns (blocks, warnings):
@@ -294,8 +294,8 @@ def run_tool_calls(
     Both are always returned. A caller that reads only `blocks` cannot tell a tool
     that returned nothing from one that never ran, so it must read both.
     """
-    blocks: List[str] = []
-    warnings: List[str] = []
+    blocks: list[str] = []
+    warnings: list[str] = []
 
     for call in tool_calls or []:
         name = (call or {}).get("name")
