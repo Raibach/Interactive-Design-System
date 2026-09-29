@@ -1,6 +1,6 @@
 # Multi-stage production image: frontend is compiled inside the build stage,
 # so no build artifacts need to be committed to the repository.
-FROM node:20-alpine AS frontend-build
+FROM node:26-alpine AS frontend-build
 
 # git is what vite reads to stamp the release hash (`git rev-parse`); without it
 # the build says "unknown".
