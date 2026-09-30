@@ -75,7 +75,7 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
      * protocol declares in tag-registry.ts. A stale id falls back to the intent the caller
      * passed, which is what a first visit gets.
      */
-    const KNOWN_TABS = ['console', 'composer', 'design-artifacts', 'development-artifacts', 'governance'];
+    const KNOWN_TABS = ['console', 'composer', 'design', 'product', 'development', 'governance'];
     const saved = localStorage.getItem("activeHeaderTab");
     if (saved && KNOWN_TABS.includes(saved)) return saved;
     return initialTab || "console";

@@ -299,9 +299,27 @@ interface IngestModalProps {
   sessionId?: string | null;
   /** Its title, so the outcome reads as the work it was, not an id. */
   sessionTitle?: string | null;
+  /**
+   * WHERE THIS RENDERS, WHICH IS A DIFFERENT QUESTION FROM WHAT IT DOES.
+   *
+   * `modal` (default) — a full-screen panel over everything, with a Close control. This is what
+   * the left menu's own "Ingest Design" item opens, and it is unchanged.
+   *
+   * `section` — the same interface as a REGION of the surface, seated under the navigation the
+   * way the Composer is rather than floating over it. The owner, 2026-09-30: "the overlay now is
+   * not an overlay. It's actually built-in… It's not gonna be closed like a modal. So it should
+   * seat itself underneath the navigation just like the composer does… make it a section now."
+   *
+   * So in `section` there is NO overlay positioning, NO z-index and NO Close — there is nothing
+   * to close, because it is the tab's content and leaving the tab is how you leave it. Reset
+   * stays: it clears what is held, which is a thing this tool does, not a way out of it.
+   *
+   * THE BODY IS SHARED. Only the frame differs, so the two can never drift into two tools.
+   */
+  variant?: 'modal' | 'section';
 }
 
-export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle }: IngestModalProps) {
+export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, variant = 'modal' }: IngestModalProps) {
   const [url, setUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
@@ -1479,7 +1497,15 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle }
   if (!open) return null;
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-50 flex flex-col bg-white" onKeyDown={handleKeyDown}>
+    <div
+      ref={rootRef}
+      className={
+        variant === 'section'
+          ? 'relative flex h-full w-full flex-col bg-white'
+          : 'fixed inset-0 z-50 flex flex-col bg-white'
+      }
+      onKeyDown={handleKeyDown}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
         <div className="min-w-0">
@@ -1496,12 +1522,17 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle }
           >
             Reset
           </button>
-          <button
-            onClick={onClose}
-            className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-          >
-            Close
-          </button>
+          {/* NO CLOSE IN A SECTION. There is nothing to close: the section IS the tab's content,
+              so leaving the tab is how you leave it. Drawn only for the modal, which is the
+              left menu's own door and still dismisses. */}
+          {variant === 'modal' && (
+            <button
+              onClick={onClose}
+              className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
 
