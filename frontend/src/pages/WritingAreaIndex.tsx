@@ -43,6 +43,8 @@ import { useAiOrchestrator, extractCommands } from "@/shared/ai-orchestrator";
 import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
+import { apiFetch } from "@/shared/apiFetch";
+import { IngestModal } from "@/components/IngestModal";
 import { markArrival } from "@/shared/arrival";
 import { CORE_ROLE_LABELS, seatIdOf } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
@@ -4079,25 +4081,25 @@ export default function Index({
     }
 
     /*
-     * DESIGN ARTIFACTS OPENS THE INGEST INTERFACE — and this is the entire implementation of
-     * that tab.
+     * DESIGN IS A SECTION, NOT A DOOR — it changes tab and nothing else.
      *
-     * The owner, 2026-09-30: "design artifacts tab will open up exactly what we have now on
-     * ingestion… You can just add a link to that actually you don't even have to change it.
-     * You don't have to move it. You don't have to do anything."
+     * It was a door for an afternoon: the tab dispatched `open-ingest` and the menu opened the
+     * ingest interface as a modal over everything. The owner, 2026-09-30: "the overlay now is
+     * not an overlay. It's actually built-in… It's not gonna be closed like a modal. So it
+     * should seat itself underneath the navigation just like the composer does… make it a
+     * section now."
      *
-     * So no surface is assembled, on purpose. The ingest interface is a modal the shell already
-     * owns, not an A2UI surface — asking the model to assemble one here would be a model call
-     * that draws nothing. The header indicator moves, and the modal opens through the same
-     * window-event convention the rest of this shell uses (`navigate-console`,
-     * `start-new-prompt`); the listener lives in LeftVerticalMenu, which owns the modal.
+     * So there is no event and no modal here. The section is rendered by the `workspace` slot
+     * below, which is the same region the Composer occupies — the sandbox projects `workspace`
+     * for every non-console tab, so Design lands there by the existing routing and needs no new
+     * slot. Leaving the tab is how you leave the section.
      *
-     * The tab is blind to the Composer and the Composer is blind to it: this branch assembles
-     * nothing, touches no session, and reads no package. That isolation is the requirement.
+     * The left menu's own "Ingest Design" item still opens it as a modal, by the owner's earlier
+     * instruction that the item stay separate. One body, two frames — see `variant` on
+     * IngestModal.
      */
-    if (tabId === 'design-artifacts') {
-      handleHeaderTabChange('design-artifacts');
-      window.dispatchEvent(new CustomEvent('open-ingest'));
+    if (tabId === 'design') {
+      handleHeaderTabChange('design');
       return;
     }
 
@@ -6639,7 +6641,28 @@ export default function Index({
                     Slots are the loading contract. AI fills them with prompt blocks.
                     When assembly FAILS, show the error — no hiding. */}
                 <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
-                  {aiAssemblyFailed ? (
+                  {/* ── DESIGN: THE INGEST INTERFACE AS A SECTION ──────────────────────
+                      It sits in this slot because that is where the Composer sits — the sandbox
+                      projects `workspace` for every non-console tab, so Design is seated under
+                      the navigation by the existing routing and needs no slot of its own.
+
+                      THE BODY IS THE SAME TOOL the left menu opens as a modal; only the frame
+                      differs (`variant="section"`: no overlay, no z-index, no Close). Nothing is
+                      assembled for this tab — asking the model for a surface here would be a
+                      model call that draws nothing, because this content is not a surface.
+
+                      The Composer is untouched by this and blind to it: no session is read, no
+                      package is opened, and the section holds no surface state. */}
+                  {headerTab === 'design' ? (
+                    <IngestModal
+                      variant="section"
+                      open
+                      onClose={() => {}}
+                      apiFetch={apiFetch}
+                      sessionId={currentPromptSession?.id ?? null}
+                      sessionTitle={currentPromptSession?.title ?? null}
+                    />
+                  ) : aiAssemblyFailed ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
                       {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc
                           <pre>, while <error-banner> sat in the catalog, granted to every role,

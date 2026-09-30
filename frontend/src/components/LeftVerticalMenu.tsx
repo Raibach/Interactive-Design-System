@@ -1,6 +1,6 @@
 import { API_BASE } from "@/shared/apiHelper";
+import { apiFetch } from "@/shared/apiFetch";
 import { useState, useEffect } from "react";
-import { getStoredUserId } from "@/services/authService";
 import raibachLogo from "../assets/raibach-logo.jpg";
 import { IngestModal } from "./IngestModal";
 
@@ -103,25 +103,8 @@ const IngestIcon = () => (
 
 // Helper to make authenticated API calls with required X-User-ID header
 // Uses the stored user ID via getStoredUserId() — same pattern as every other file
-const apiFetch = (url: string, options?: RequestInit): Promise<Response> => {
-  const userId = getStoredUserId();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-User-ID': userId,
-  };
-  if (options?.headers) {
-    const existingHeaders = options.headers as Record<string, string>;
-    Object.assign(headers, existingHeaders);
-  }
-  // NO CACHE, ON EVERY READ. The owner's rule for this application: *"the whole application has to
-  // be honest. Caching stuff is not allowed."* The server already sends `Cache-Control: no-store`
-  // (see main.py), and this says the same thing from the request side — so a proxy, an interposed
-  // cache or the browser's own store cannot answer a read with something older than the write that
-  // preceded it. The reads this carries are exactly the ones where that matters: a component's
-  // record, a design's layers, the activity. (A2UI's own contract is not the issue — its structure
-  // is cacheable by design; the transport and the reads here are what must not be.)
-  return fetch(url, { cache: "no-store", ...options, headers });
-};
+// MOVED to `@/shared/apiFetch` (2026-09-30): the Design tab renders the ingest interface as a
+// section of the surface, so this is no longer the menu's own helper. Imported, not redefined.
 
 export default function LeftVerticalMenu({
   onNewChat,
@@ -596,27 +579,29 @@ const LogoutIcon = () => (
               {/*
                 * LABELS, NOT IDS. This list used to be bare ids rendered through CSS
                 * `capitalize`, which worked while every tab was one word and cannot produce
-                * "Design Artifacts". The five ids are the header's own (LeftColumnHeader
-                * navTabDefs) and the protocol's (tag-registry.ts:201, :920).
+                * "Design". The six ids are the header's own (LeftColumnHeader navTabDefs) and the
+                * protocol's (tag-registry.ts:201, :920).
                 *
-                * ONLY DESIGN ARTIFACTS DOES ANYTHING HERE. The header's tabs go through
+                * ONLY DESIGN DOES ANYTHING HERE. The header's tabs go through
                 * `handleTabChangeWithGate`, which this component is not given — it receives
-                * `currentTab` and no callback — so the other four close the drawer and stop,
-                * exactly as they did before. Design Artifacts dispatches the same window event
-                * the header tab does, so both doors reach the same modal.
+                * `currentTab` and no callback — so the others close the drawer and stop, exactly
+                * as they did before. Design opens the ingest tool through the same window event
+                * the left menu's own "Ingest Design" item uses, because a drawer that cannot
+                * switch tabs can still hand over the tool.
                 */}
               {[
                 { id: "console", label: "Console" },
                 { id: "composer", label: "Composer" },
-                { id: "design-artifacts", label: "Design Artifacts" },
-                { id: "development-artifacts", label: "Development Artifacts" },
+                { id: "design", label: "Design" },
+                { id: "product", label: "Product" },
+                { id: "development", label: "Development" },
                 { id: "governance", label: "Governance" },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    if (tab.id === "design-artifacts") {
+                    if (tab.id === "design") {
                       window.dispatchEvent(new CustomEvent("open-ingest"));
                     }
                   }}

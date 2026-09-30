@@ -73,26 +73,28 @@ export default function LeftColumnHeader({
   /*
    * THE ROW IS THE APPLICATION'S COMPARTMENTS (owner, 2026-09-30).
    *
-   * Evaluation, Variables and Metadata are GONE — not disabled, removed. They were drawn and
-   * inert (Evaluation carried `disabled: true` since 2026-09-18 and the other two switched a
-   * header indicator that nothing was behind), and the two new headings are the real thing:
-   * Design Artifacts is where designs are ingested, Development Artifacts is where they are
-   * built out, Governance holds the findings.
+   * Evaluation, Variables and Metadata are GONE — not disabled, removed. The row reads Console,
+   * Composer, Design, Product, Development, Governance: the word "artifact" came off the headings
+   * and Product was added after Design, in the owner's words — "let's remove the 'artifact' from
+   * the tabs and add an additional tab after design called Product".
    *
-   * THE IDS AND THE LABELS MUST STAY EQUAL IN NUMBER AND ORDER, and the same five ids are
+   * THE IDS AND THE LABELS MUST STAY EQUAL IN NUMBER AND ORDER, and the same six ids are
    * declared in two more places that the protocol reads — `tag-registry.ts` lines 201 and 920,
    * the zod enum and the catalogue's declared values. The header draws a value the sandbox
    * validates, so a tab present here and absent there is refused as off-protocol. The mobile
-   * drawer's own list is in `LeftVerticalMenu.tsx`.
+   * drawer's own list is in `LeftVerticalMenu.tsx`, and the persisted-tab guard is in
+   * `useNotificationGate.ts`.
    *
-   * Design Artifacts takes no slot of its own: it opens the ingest interface, which is a modal
-   * this shell already owns. See `handleTabChangeWithGate` in WritingAreaIndex.
+   * DESIGN RENDERS THE INGEST INTERFACE AS A SECTION of the surface, seated under this row the
+   * way the Composer is — not as a modal. See the `workspace` slot in WritingAreaIndex and the
+   * `variant` prop on IngestModal.
    */
   const navTabDefs = [
     { id: 'console', label: 'Console' },
     { id: 'composer', label: 'Composer' },
-    { id: 'design-artifacts', label: 'Design Artifacts' },
-    { id: 'development-artifacts', label: 'Development Artifacts' },
+    { id: 'design', label: 'Design' },
+    { id: 'product', label: 'Product' },
+    { id: 'development', label: 'Development' },
     { id: 'governance', label: 'Governance' },
   ];
 
