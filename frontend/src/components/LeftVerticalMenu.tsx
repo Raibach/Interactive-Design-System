@@ -155,6 +155,29 @@ export default function LeftVerticalMenu({
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  /*
+   * THE DESIGN ARTIFACTS TAB OPENS THIS MODAL, and this listener is the whole of that wiring.
+   *
+   * The header tab dispatches `open-ingest` from the shell (WritingAreaIndex,
+   * `handleTabChangeWithGate`); the component that ALREADY owns the ingest modal answers it.
+   * Nothing moved, and IngestModal itself was not touched — the owner, 2026-09-30: "design
+   * artifacts tab will open up exactly what we have now on ingestion… You can just add a link
+   * to that actually you don't even have to change it. You don't have to move it."
+   *
+   * The event convention is this shell's own (`start-new-prompt`, `navigate-console`), and the
+   * three lines are the same three the "Ingest Design" menu item runs in handleItemClick — so
+   * the tab and the menu item produce identical state rather than two similar ones.
+   */
+  useEffect(() => {
+    const onOpenIngest = () => {
+      setIngestModalOpen(true);
+      setIsNavOpen(false);
+      handleCollapse();
+    };
+    window.addEventListener("open-ingest", onOpenIngest);
+    return () => window.removeEventListener("open-ingest", onOpenIngest);
+  }, []);
+
   // Hamburger icon
   const HamburgerIcon = () => (
     <svg viewBox="0 0 20 20" fill="none" className="w-5 h-5">
@@ -570,14 +593,37 @@ const LogoutIcon = () => (
             {/* Nav tabs */}
             <div className="p-3 flex flex-col gap-0.5">
               <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest px-2 mb-1">Navigate</p>
-              {["console","composer","evaluation","variables","metadata"].map((tab) => (
+              {/*
+                * LABELS, NOT IDS. This list used to be bare ids rendered through CSS
+                * `capitalize`, which worked while every tab was one word and cannot produce
+                * "Design Artifacts". The five ids are the header's own (LeftColumnHeader
+                * navTabDefs) and the protocol's (tag-registry.ts:201, :920).
+                *
+                * ONLY DESIGN ARTIFACTS DOES ANYTHING HERE. The header's tabs go through
+                * `handleTabChangeWithGate`, which this component is not given — it receives
+                * `currentTab` and no callback — so the other four close the drawer and stop,
+                * exactly as they did before. Design Artifacts dispatches the same window event
+                * the header tab does, so both doors reach the same modal.
+                */}
+              {[
+                { id: "console", label: "Console" },
+                { id: "composer", label: "Composer" },
+                { id: "design-artifacts", label: "Design Artifacts" },
+                { id: "development-artifacts", label: "Development Artifacts" },
+                { id: "governance", label: "Governance" },
+              ].map((tab) => (
                 <button
-                  key={tab}
-                  onClick={() => { setMobileMenuOpen(false); }}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left capitalize"
+                  key={tab.id}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    if (tab.id === "design-artifacts") {
+                      window.dispatchEvent(new CustomEvent("open-ingest"));
+                    }
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
-                  {tab}
+                  {tab.label}
                 </button>
               ))}
             </div>

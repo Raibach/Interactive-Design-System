@@ -198,7 +198,7 @@ export const AiSurfaceSandboxSchema = z.object({
   tag: z.literal('ai-surface-sandbox'),
   props: z.object({
     'is-ai-assembling': z.boolean().default(false),
-    'header-tab': z.enum(['console', 'composer', 'evaluation', 'variables', 'metadata']).default('console'),
+    'header-tab': z.enum(['console', 'composer', 'design-artifacts', 'development-artifacts', 'governance']).default('console'),
   }),
   events: z.tuple([]),
   surface: z.literal('both'),
@@ -917,7 +917,7 @@ export const TAG_REGISTRY = {
     description: 'Shadow DOM-isolated A2UI rendering sandbox. Structural viewport that wraps console/composer content. AI must NOT render child components outside the named slots.',
     props: {
       'is-ai-assembling': { type: 'boolean', default: false },
-      'header-tab': { type: 'enum', values: ['console', 'composer', 'evaluation', 'variables', 'metadata'], default: 'console' },
+      'header-tab': { type: 'enum', values: ['console', 'composer', 'design-artifacts', 'development-artifacts', 'governance'], default: 'console' },
     },
     events: [],
     constraints: [
