@@ -94,6 +94,12 @@ import "@/components/lit/error-banner";
 import "@/components/lit/a2ui-renderer";
 import "@/components/lit/output-header";
 import "@/components/lit/output-footer-area";
+// The components APPROVED THROUGH INGESTION. They were declared in the allowlist, in the
+// catalogue and in the Figma map, and defined by NOTHING — so each of them drew the renderer's
+// "resolved to <f-…>, which no element defines" block instead of itself. This import is the
+// definition; the file it points at explains the measurement and why a glob rather than an
+// entry above.
+import "@/components/lit/ingested";
 
 // ── Production Sentry guard ──────────────────────────────────────────────────
 if (import.meta.env.PROD && !isSentryReady()) {
