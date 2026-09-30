@@ -61,8 +61,24 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
      * every change.
      */
     if (initialTab === "console") return "console";
+    /*
+     * A SAVED TAB IS A CLAIM ABOUT THE PRESENT, AND IT CAN GO STALE.
+     *
+     * `localStorage.activeHeaderTab` is never cleared, so anyone whose browser holds a tab id
+     * that no longer exists — `evaluation`, `variables` and `metadata` were removed from the
+     * header on 2026-09-30 — would be restored onto a tab the row does not draw. The failure was
+     * transient and self-correcting (the header highlights nothing, the sandbox projects the
+     * workspace slot, and the next tab change overwrites the value), but "transient" is not a
+     * reason to keep a value the application no longer recognises.
+     *
+     * The list is the header's own, from LeftColumnHeader's navTabDefs — the same five the
+     * protocol declares in tag-registry.ts. A stale id falls back to the intent the caller
+     * passed, which is what a first visit gets.
+     */
+    const KNOWN_TABS = ['console', 'composer', 'design-artifacts', 'development-artifacts', 'governance'];
     const saved = localStorage.getItem("activeHeaderTab");
-    return saved || initialTab || "console";
+    if (saved && KNOWN_TABS.includes(saved)) return saved;
+    return initialTab || "console";
   });
   const [tabLoading, setTabLoading] = useState(false);
   const [approvalMode, setApprovalMode] = useState(false);

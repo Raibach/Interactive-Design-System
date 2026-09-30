@@ -4078,6 +4078,29 @@ export default function Index({
       return;
     }
 
+    /*
+     * DESIGN ARTIFACTS OPENS THE INGEST INTERFACE — and this is the entire implementation of
+     * that tab.
+     *
+     * The owner, 2026-09-30: "design artifacts tab will open up exactly what we have now on
+     * ingestion… You can just add a link to that actually you don't even have to change it.
+     * You don't have to move it. You don't have to do anything."
+     *
+     * So no surface is assembled, on purpose. The ingest interface is a modal the shell already
+     * owns, not an A2UI surface — asking the model to assemble one here would be a model call
+     * that draws nothing. The header indicator moves, and the modal opens through the same
+     * window-event convention the rest of this shell uses (`navigate-console`,
+     * `start-new-prompt`); the listener lives in LeftVerticalMenu, which owns the modal.
+     *
+     * The tab is blind to the Composer and the Composer is blind to it: this branch assembles
+     * nothing, touches no session, and reads no package. That isolation is the requirement.
+     */
+    if (tabId === 'design-artifacts') {
+      handleHeaderTabChange('design-artifacts');
+      window.dispatchEvent(new CustomEvent('open-ingest'));
+      return;
+    }
+
     // Other tabs - just switch for now (TODO: wire to AI assembly)
     handleHeaderTabChange(tabId);
   }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab]);
