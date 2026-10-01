@@ -4392,7 +4392,37 @@ export default function Index({
         components: reading.components as any[],
         dataModel: reading.dataModel as Record<string, any>,
       });
-      setCurrentDesignSession((reading.dataModel as Record<string, any>)?.session ?? null);
+      const designSession = (reading.dataModel as Record<string, any>)?.session ?? null;
+      setCurrentDesignSession(designSession);
+      /*
+       * ── AND THE ROOM'S ARRIVAL IS ANNOUNCED WITH IT (2026-10-01) ─────────────────────────────
+       * THE DESIGN ROOM'S SEAT WAS NEVER TOLD ANYBODY HAD ARRIVED, so it never greeted. Measured
+       * on the live site in the Design room, with every other gate already open:
+       *
+       *     sessionId 5c1212c9…   conversationId 3b191a7e…   _conversationsRead: true
+       *     _hasResultTurns: false   _historyChecked: true   _historyError: ""
+       *     _greeted: false          _wantsGreeting: ""      ← this, and only this
+       *
+       * `_greetIfArriving` returns at its first gate — `if (!kind || this._greeted || …) return` —
+       * and `kind` is `_wantsGreeting`, which only `_takeArrival` sets. The seat's own automatic
+       * arrival does not cover this case either, and correctly so: it fires only for a package with
+       * NO conversation and an EMPTY list, and this package has a conversation (empty, but a real
+       * thread). So the room drew a silent seat while every condition the owner expected was met —
+       * his words: *"whenever you load design, I expect to see the thinking spinner turning and her
+       * getting ready to say something like hi I'm the design system assistant."*
+       *
+       * `markArrival` is called where a package is OPENED — the composer's open, a blank one, and
+       * the console — and Design opens a package too. The id must be the DESIGN package's own, since
+       * `arrivalIsFor` matches on it: with this seat's session it answers, and the console's seat
+       * refuses it and leaves the record where it is, which is the rule that keeps one seat's arrival
+       * from being eaten by another.
+       *
+       * ANNOUNCED HERE AND NOT AT THE CLICK: `currentDesignSession` is read from THIS assembly, so at
+       * the click the id is not yet known and an arrival sent then would carry nothing to match on.
+       * This runs once per open — `assembleDesignSurface` is the tab's own door — so the arrival is
+       * one per arrival, which is what C7 asks for and what a greeting per frame would violate.
+       */
+      markArrival(designSession?.id ? 'resume' : 'blank', designSession?.id ?? null);
     } finally {
       setIsAIAssembling(false);
     }
