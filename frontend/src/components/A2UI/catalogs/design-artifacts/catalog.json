@@ -1194,7 +1194,12 @@
           "type": "string"
         },
         "instructions": {
-          "type": "string"
+          "type": "object",
+          "description": "WHO SHE IS IN THIS ROOM — a BINDING, {path: /session/grace_instructions}, to the script the surface assembled for this room, never a sentence written in the tree. The seat sends it as the context of every turn, so it decides her voice: the console's script is CONSOLE_GRACE_INSTRUCTIONS, a package's is COMPOSER_GRACE_INSTRUCTIONS, Design's is composed from the database on every assembly. Written by the assembly (routes/ai.py `_seat_grace`) on every seat it emits, so a room that states nothing cannot be answered in another room's voice."
+        },
+        "graceLiveContext": {
+          "type": "boolean",
+          "description": "Whether the seat appends its LIVE WORKSPACE to those words — the package, its prompt seats and the tool register, or the console's cards. FALSE where the room's script already carries its live facts, as Design's does. Never sent by a model: a surface that omits it is refused by the seat rather than defaulted. Written by routes/ai.py `_seat_grace`."
         }
       },
       "required": [
