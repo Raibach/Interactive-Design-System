@@ -4421,8 +4421,26 @@ export default function Index({
        * the click the id is not yet known and an arrival sent then would carry nothing to match on.
        * This runs once per open — `assembleDesignSurface` is the tab's own door — so the arrival is
        * one per arrival, which is what C7 asks for and what a greeting per frame would violate.
+       *
+       * ── AND ONE FRAME LATER, BECAUSE SHE WAS GREETING BEFORE SHE HAD HER WORDS (2026-10-01) ──
+       * `setDesignTree` above is the write that carries THIS ROOM'S SCRIPT to the seat — the design
+       * assembly puts 423 characters at `/session/grace_instructions` ("You built the Lit components
+       * of this design system from Figma…"), and the seat is bound to them. Recording the arrival in
+       * the same tick meant the seat answered it on the render BEFORE those props landed, found
+       * `instructions` empty, and fell back to the script a COMPOSER room is given. Measured on the
+       * live site: her greeting read *"Hi — I'm your prompt engineer. I'll take your rough ideas and
+       * build the actual prompt…"* — the composer's voice, in the design room — and the same seat read
+       * back a moment later carried the design script in full. The owner noticed the wrongness before
+       * the mechanism did: *"seems fake — did she say this?"*
+       *
+       * A FRAME IS THE UNIT BECAUSE THAT IS WHAT IS BEING WAITED FOR: React commits the tree, the seat
+       * receives its props, and the greeting then runs against the room it is actually in. This is not
+       * a delay for its own sake — nothing else is being timed — and it is deliberately not a fixed
+       * millisecond count, which would be a number nobody's system states.
        */
-      markArrival(designSession?.id ? 'resume' : 'blank', designSession?.id ?? null);
+      window.requestAnimationFrame(() => {
+        markArrival(designSession?.id ? 'resume' : 'blank', designSession?.id ?? null);
+      });
     } finally {
       setIsAIAssembling(false);
     }
