@@ -49,25 +49,24 @@ from design_renderer import _class_name, _lines_in_box, render_spec
 # browser was observed ignoring it.
 INERT_DECLARATIONS: dict[str, dict[str, str]] = {
     "truncation": {
-        "declaration": "none — the clamp was removed, and NOTHING in this engine draws a multi-line ellipsis",
+        "declaration": "`line-clamp: N` inside `@supports (block-ellipsis: auto)`, plus the fallback clip",
         "measured": "2026-09-30",
         "engine": "Chrome 146.0.7680.80 / Electron 41.0.3 (the desktop in-app browser)",
         "finding": (
-            "The design says ENDING and the renderer can draw everything about the layer EXCEPT the "
-            "ellipsis. A clamp was there and was removed on measurement: `-webkit-line-clamp` is "
-            "accepted and computes to the stated count, the engine rewrites the box's display from "
-            "'-webkit-box' to 'flow-root', and NOTHING is clamped — three lines at 14.5227px line "
-            "height in a 43px box, no ellipsis. The longhands that perform the clipping are absent "
-            "(`CSS.supports('block-ellipsis','auto')` and `CSS.supports('line-clamp','2')` are both "
-            "false), and six spellings of the same intent were tried on a live page — -webkit-box, "
-            "flow-root, block, block-ellipsis, and the declaration order reversed — every one of "
-            "which drew three lines with no ellipsis. The rewrite also cost the design's own "
-            "textAlignVertical: text started at -1px from the box top where the design's own "
-            "centring rule measures +4px (owner, 2026-09-30: *\"We're not using clamps. Remove the "
-            "clamps. We have to find a different solution.\"*). So the box, its type, its measured "
-            "height, the wrapping and the clip ARE drawn, the design's own alignment IS drawn, and "
-            "the ellipsis is the one stated fact that is missing — reported here by layer, never "
-            "faked and never refused."
+            "The design says ENDING. The renderer draws the box, its type, its measured height, the "
+            "wrapping, the clip and the design's own alignment, and it REQUESTS the ellipsis from any "
+            "engine that has one — the wrapper carries `line-clamp: N` inside "
+            "`@supports (block-ellipsis: auto)`, so a capable engine draws `…` as Figma does and an "
+            "incapable one never sees the declaration. IN THE ENGINE THIS WAS MEASURED IN THERE IS NO "
+            "ELLIPSIS: `block-ellipsis` and `line-clamp` are both absent, and `-webkit-line-clamp` "
+            "PARSES, computes, draws nothing and rewrites the box's display to `-webkit-box` — which "
+            "cost the design's own textAlignVertical (text at -1px from the box top where the design's "
+            "centring measures +4px). Six spellings were tried and none drew, which is why the "
+            "prefixed form is never emitted. The clip is verified to hold in that engine: the wrapper "
+            "is `display: block`, `max-height` 29.0455px, `overflow: hidden`, clientHeight 29 against "
+            "scrollHeight 73. WHERE THE ELLIPSIS IS ABSENT THE TEXT IS THEREFORE CUT WITHOUT A MARK, "
+            "and that is a real difference from Figma — counted per layer and stated in the ingest's "
+            "own answer (`missingEllipses`)."
         ),
     },
 }
@@ -629,9 +628,10 @@ def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
             ""
             if not ellipses
             else (
-                f"{ellipses} text layer(s) truncate and this engine cannot draw a multi-line "
-                "ellipsis; the whole lines that fit are drawn and the ellipsis itself is absent. "
-                "Named per layer in `fidelity.reported`."
+                f"{ellipses} text layer(s) truncate: the whole lines that fit are drawn and clipped, "
+                "and the ellipsis is requested from any engine that supports one. It is absent in the "
+                "engine this was verified in (Chrome 146 / Electron 41), where the text ends without "
+                "it. Named per layer in `fidelity.reported`."
             )
         ),
     }

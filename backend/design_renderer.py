@@ -91,16 +91,20 @@ ACCEPTED_UNRENDERED = {
                    "pattern without a drawn path.",
     "textAutoResize": "Figma's name for whether a text box hugs its words; the measured size is "
                       "already the result of that rule.",
-    "truncation": "the design ends its text in an ellipsis and THIS ENGINE CANNOT DRAW ONE. Measured "
-                  "2026-09-30 in the desktop browser: `-webkit-line-clamp` is accepted, computes to "
-                  "the stated count, and draws nothing — the engine rewrites the box's display to "
-                  "`flow-root` and renders every line (three lines at 14.5227px in a 43px box, no "
-                  "ellipsis), and the longhands that clip are absent (`CSS.supports("
-                  "'block-ellipsis','auto')` and `CSS.supports('line-clamp','2')` are both false). "
-                  "Six spellings were tried; none drew. So the box, its type, its measured height, "
-                  "the wrapping and the clip ARE drawn, and the ellipsis is reported here as the one "
-                  "fact that is missing and why. No clamp is used (owner, 2026-09-30) and no "
-                  "run-time text cutting either — both were tried and both were wrong.",
+    "truncation": "the design ends its text in an ellipsis, AND THE ELLIPSIS IS ASKED FOR WHERE THE "
+                  "ENGINE CAN DRAW IT, NOT ASSUMED IMPOSSIBLE. The wrapper that holds the lines that "
+                  "fit carries `line-clamp: N` inside `@supports (block-ellipsis: auto)`, so an "
+                  "engine with the standard ellipsis draws `…` exactly as Figma does, and an engine "
+                  "without it never sees the declaration. Measured 2026-09-30 in the desktop browser "
+                  "(Chrome 146 / Electron 41): `block-ellipsis` and `line-clamp` are BOTH absent, so "
+                  "the block is inert there and the `max-height` clip is all that applies — the whole "
+                  "lines that fit are drawn and the rest is cut, with no ellipsis. Six spellings were "
+                  "tried in that engine and none drew; `-webkit-line-clamp` PARSES there and does "
+                  "nothing while rewriting the box's display to `-webkit-box`, which is why the "
+                  "prefixed form is deliberately never emitted: it costs the design's own "
+                  "textAlignVertical and buys nothing. So this entry is reported only as far as the "
+                  "measurement reaches: it is true of the engine it was measured in, and the "
+                  "declaration it describes is not the one a capable engine receives.",
     "maxLines": "how many lines the design keeps before its ellipsis. The count is measured and "
                 "reported with `truncation`, and it is what the box's own measured height already "
                 "expresses once the ellipsis cannot be drawn.",
@@ -425,8 +429,7 @@ def _truncation_frame(node: dict[str, Any]) -> list[str] | None:
 
     Nothing here invents a number: both factors are measurements, and the multiplication is what
     "show the lines that fit" means. It is NOT a clamp, NOT a runtime pass, and it draws no
-    ellipsis — the design's ellipsis stays a reported defect (ACCEPTED_UNRENDERED) because no
-    mechanism in this engine can draw one.
+    ellipsis of its own — where the engine can draw one, `_truncation_support` asks it to.
     """
     if node.get("truncation") != "ENDING":
         return None
@@ -441,6 +444,41 @@ def _truncation_frame(node: dict[str, Any]) -> list[str] | None:
     if height <= 0:
         return None
     return ["display: block", f"max-height: {_px(height)}", "overflow: hidden"]
+
+
+def _truncation_support(selector: str, lines: int) -> str:
+    """The ellipsis, emitted for engines that can draw one — and for nobody else.
+
+    ── THE RULE THAT WAS HERE, AND WHY IT HAD TO GO ────────────────────────────────────────────
+    Until now this renderer asserted, as a constant, that no engine can draw a multi-line ellipsis
+    — because the browser this was measured in cannot. That measurement is real (`block-ellipsis`
+    and `line-clamp` are both absent from Chrome 146 / Electron 41; six spellings drawn and none
+    drew), but writing it down as a permanent rule made a fact about ONE BROWSER into a fact about
+    every browser, and a rule that is wrong anywhere is worse than no rule: it prevents a correct
+    render in exactly the engine that could have produced one (owner, 2026-10-01: *"you may have
+    hardcoded some rule in there that's preventing yours… look at truncation and see if there's
+    something hanging in there that shouldn't be there"*).
+
+    SO THE ENGINE ANSWERS FOR ITSELF, in CSS, at render time, with `@supports`. Where the standard
+    ellipsis exists the wrapper gets `line-clamp`, and the text ends in `…` exactly as Figma draws
+    it; where it does not, this block does not apply, the `max-height` clip above is all there is,
+    and the reader sees the whole lines with the rest cut — which is this renderer's honest
+    fallback and never a broken one. The generator emits the same bytes either way, so determinism
+    is untouched: the DECISION moves from this file to the browser that knows the answer.
+
+    `line-clamp` IS THE STANDARD LONGHAND AND IT PAIRS WITH `display: block`, which the wrapper
+    already is. The vendor-prefixed clamp is deliberately NOT emitted here: in an engine that
+    parses the prefix without implementing it, that declaration rewrites the box's `display` to
+    `-webkit-box` and does nothing else — which is what destroyed the design's own CENTER
+    alignment when it was last tried, and is the single reason this file has no clamp in it.
+    """
+    return (
+        f"    @supports (block-ellipsis: auto) {{\n"
+        f"      {selector} {{\n"
+        f"        line-clamp: {int(lines)};\n"
+        f"      }}\n"
+        f"    }}"
+    )
 
 
 def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -> list[str]:
@@ -904,6 +942,10 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None =
                 # (ACCEPTED_UNRENDERED), because no mechanism in this engine draws a multi-line
                 # ellipsis — six spellings were measured and none drew one.
                 emit_class(f".{cls}-lines", truncated)
+                # AND THE ELLIPSIS, WHERE THE ENGINE CAN DRAW ONE — the capability test is CSS's,
+                # not this file's. See `_truncation_support` for why the old hardcoded rule had to
+                # go: it was a measurement of one browser written as a rule for all of them.
+                rules.append(_truncation_support(f".{cls}-lines", _lines_in_box(node) or 0))
                 return (
                     f'<div class="{cls}"{click_attr(node)}>'
                     f'<span class="{cls}-lines">{_text_html(node)}</span>{inner}</div>'
