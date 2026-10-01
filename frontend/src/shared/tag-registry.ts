@@ -1667,8 +1667,11 @@ export const TAG_REGISTRY = {
     props: {
       isThirdOpen: { type: 'boolean', optional: true },
     },
-    events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
-    constraints: ['must contain prompt-section-editor (left), compiled-output-viewer (middle), chat-panel (right)'],
+      events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
+      constraints: [
+        'must contain prompt-section-editor (left), compiled-output-viewer (middle), chat-panel (right)',
+        'IT DOCKS HER FOR THE DESIGN ROOM\'S RUNS AND FOR NOTHING ELSE (2026-10-01). `ingest-submit` (the form) and `open-component` (a catalogue row) close the right column to its rail, because in that room the output is a drawing that wants the width (owner: *"dock the chat when someone clicks submit or tries to view one of our components… dock Grace to give the user full view"*). A COMPOSER Run does NOT dock her, and that is deliberate: the owner reversed exactly that on 2026-09-24, because the prompt contents, the tool results and the run\'s answer all land in her column, so docking at the click hid the output the Run produces. Verified in a page: `open-component` and `ingest-submit` take her 637 → 104; `flow-view-ready` leaves her open at 610. Only the layout on screen obeys — a hidden composer must not have her shut behind the operator\'s back — and nothing re-closes her on render, so an operator who reopens her keeps her open',
+      ],
   },
   // Ingested from Figma — System_Role (40001204:5752)
   'f-40001204-5752': {

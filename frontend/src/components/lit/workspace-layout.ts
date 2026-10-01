@@ -445,6 +445,31 @@ export class WorkspaceLayout extends LitElement {
      */
     window.addEventListener('a2ui:run-held', this._onRunHeld);
     /*
+     * ── THE DESIGN ROOM'S TWO RUNS DOCK HER, AND ONLY THE DESIGN ROOM'S (2026-10-01) ─────────────
+     * The owner: *"Can we dock the chat when someone clicks submit or tries to view one of our
+     * components… when the third column launches the output column I would like to just dock Grace
+     * to give the user full view."*
+     *
+     * THESE ARE THE DESIGN ROOM'S TWO RUN TRIGGERS — `ingest-submit` from the form, and
+     * `open-component` from a row in the catalogue tree — which its own record names as the two
+     * doors that start a run there. In that room the output is a DRAWING that wants the width, and
+     * her column holds nothing about it, so she stands down.
+     *
+     * ── AND THIS DOES NOT REVERSE THE 2026-09-24 DECISION, WHICH IS WHY IT IS NOT IN `_dockNow` ──
+     * A COMPOSER Run used to close her too, and the owner reversed it on 2026-09-24 for a reason
+     * that has not changed: the prompt's contents, what the tools brought back and the run's answer
+     * all land in HER column, so closing it at the click hid the very output the Run produces. That
+     * is why `_dockNow` still says "her column stays where it is" and why nothing here touches
+     * `flow-view-ready`: the composer's Run is a different act with a different answer, and this
+     * listens to neither of its events.
+     *
+     * ONLY THE ROOM ON SCREEN OBEYS. Both layouts can be mounted at once and these are window
+     * events, so a hidden composer would otherwise have her column shut behind the operator's back
+     * and it would still be shut when they went back to it.
+     */
+    window.addEventListener('ingest-submit', this._onDesignRun);
+    window.addEventListener('open-component', this._onDesignRun);
+    /*
      * AND `flow-select` IS NOT LISTENED FOR HERE ANY MORE.
      *
      * It was, to bring her column back when a person picked a node — at her width, taking the
@@ -474,6 +499,8 @@ export class WorkspaceLayout extends LitElement {
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);
     window.removeEventListener('a2ui:run-held', this._onRunHeld);
+    window.removeEventListener('ingest-submit', this._onDesignRun);
+    window.removeEventListener('open-component', this._onDesignRun);
     window.removeEventListener('flow-view-ready', this._onFlowViewReady);
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
     /*
@@ -851,10 +878,31 @@ export class WorkspaceLayout extends LitElement {
    * own dock (which this signal also carries) still lands. One handler, because both are statements
    * about the same moment.
    */
-  private _onFlowViewReady = (): void => {
-    this._runInFlight = false;
-    this._dockNow();
-  };
+    private _onFlowViewReady = (): void => {
+      this._runInFlight = false;
+      this._dockNow();
+    };
+
+    /**
+     * THE DESIGN ROOM HAS STARTED A RUN: the output is coming, so she gets out of its way.
+     *
+     * A DOCK, NOT A DISMISSAL. Her column closes to its rail exactly as it does when the operator
+     * shuts it by hand, so the Chat tab is still there, one click brings her back at her own width,
+     * and nothing about her seat — the conversation, the thread, the bindings — is touched. What
+     * she gives up is the width, which is what "full view" asked for.
+     *
+     * AND NOTHING RE-CLOSES HER. This runs on the two events and nowhere else — no render asserts
+     * it — so an operator who opens her again while a design is on screen keeps her open. The
+     * earlier revision that was removed from the shell failed on exactly that: it wrote the flag
+     * from outside on every pass and shut a column the operator had just sized by hand.
+     */
+    private _onDesignRun = (): void => {
+      // THE ROOM ON SCREEN, AND ONLY IT — see the note where these are registered.
+      if (this.getBoundingClientRect().width <= 0) return;
+      if (!this.isThirdOpen) return; // already on her rail: nothing to fold
+      this._setThirdOpen(false);
+      this._syncRightPanel();
+    };
 
   /**
    * IS HER COLUMN A LAYER OVER A DRAWING, OR A PANE BESIDE THE PROMPT? The rule and its history
