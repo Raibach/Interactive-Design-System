@@ -398,7 +398,7 @@ export class WorkspaceLayout extends LitElement {
      * width is this element's to lay out. The names are the design's, not invented.
      */
     this.addEventListener('input-resize-start', this._onGripStart as EventListener);
-    this.addEventListener('input-resize-move', this._onGripStart as EventListener);
+    this.addEventListener('input-resize-move', this._onGripMove as EventListener);
     this.addEventListener('input-resize-end', this._onGripEnd as EventListener);
     this.addEventListener('tab-change', this._onTabChange as EventListener);
     /*
@@ -709,6 +709,32 @@ export class WorkspaceLayout extends LitElement {
     } as MouseEvent);
   };
 
+  /**
+   * A MOVE IS NOT A GRAB. The strip inside her panel raises `input-resize-move` for every pointer
+   * move of a gesture it owns — and a move that arrives with NO gesture in flight must move
+   * nothing, let alone take hold of the column.
+   *
+   * This ran through `_onGripStart`, whose whole job is to BEGIN a drag when the event is not a
+   * move. So one stray move was enough: the strip's release had been lost (a panel replaced
+   * mid-gesture, an event stopped on its way up), it went on dispatching from a host with no
+   * gesture, and every one of those moves took the column — `_onGripDown` sizes her to the
+   * pointer, marks her OPERATOR-OWNED so no payload may place her again, and opens her if she was
+   * shut. With no mousedown behind it there was no mouseup to end it either, so the column
+   * followed a bare hover: the owner's "it grabs my mouse" (2026-09-30).
+   *
+   * The empty-hand rule in `_onMouseMove` is the other half: it ends a gesture whose release was
+   * lost, and this stops one from being started by the moves that arrive afterwards.
+   */
+  private _onGripMove = (e: Event): void => {
+    const detail = ((e as CustomEvent).detail || {}) as { clientX?: unknown; clientY?: unknown };
+    if (typeof detail.clientX !== 'number') return;
+    if (!this._dragging) return;
+    this._onMouseMove({
+      clientX: detail.clientX,
+      clientY: Number(detail.clientY ?? 0),
+    } as MouseEvent);
+  };
+
   /** The spacer reports the gesture over — the same finish as this element's own. */
   private _onGripEnd = (): void => {
     this._onMouseUp();
@@ -1012,6 +1038,25 @@ export class WorkspaceLayout extends LitElement {
 
   private _onMouseMove = (e: MouseEvent): void => {
     if (!this._dragging) return;
+    /*
+     * A MOVE WITH AN EMPTY HAND ENDS THE GESTURE — the release that never arrived.
+     *
+     * Every release channel this element has (mouseup, pointerup, pointercancel, blur, the page
+     * boundary) is a way of learning ONE fact, and each one can be lost: an event stopped on its
+     * way to the document by something between the strip and it, a panel replaced mid-gesture, a
+     * frame that took the mouseup with it. The move event carries the fact itself — `buttons` is
+     * the state of the mouse RIGHT NOW — so the first move after a lost release is what says the
+     * hand is empty, whether or not any of those channels fired. Measured 2026-09-30, the owner,
+     * of the column's grip: "I clicked the gripper to expand it and it will not let me release it…
+     * I can't even move my mouse over the window and it grabs it."
+     *
+     * The synthetic moves `_onGripStart` builds carry no `buttons` at all (undefined, not 0), so
+     * this can only ever fire on a real move from the document.
+     */
+    if (e.buttons === 0) {
+      this._onMouseUp();
+      return;
+    }
     const w = Math.max(1, this.clientWidth);
     /*
      * The space the grips take, so the panes' content width is honest. These are the widths the
@@ -1183,6 +1228,27 @@ export class WorkspaceLayout extends LitElement {
    * A width that cannot fit the room is not restored as-is — `_columnWidth` clamps it — so an
    * adjustment made in a wide window still opens sanely in a narrow one.
    */
+  /**
+   * THE COLUMNS SHARE THE ROOM EQUALLY — the owner, 2026-09-30: *"the design panels should load
+   * equal… they should be equal on both sides… let's just do percentages and then let the user expand
+   * it where needed."*
+   *
+   * IT IS NOT A WIDTH, AND THAT IS THE POINT. A pixel width is a decision made on the operator's
+   * behalf; this is the absence of one — the operator's claim is released and the element's own equal
+   * shares stand: two panes equal while her column sits beside the prompt, three while the middle one
+   * is open. A drag claims a width again afterwards, exactly as it does on a fresh package, so
+   * "expand it where needed" is the same gesture it always was and nothing here fights it.
+   *
+   * It is the same release `_openPrompt` performs for a new package (`_rightIsOperatorSet = false`),
+   * made callable: one home for "the split starts over".
+   */
+  splitEqually(): void {
+    this._rightIsOperatorSet = false;
+    this._left = 1;
+    this._middle = 1;
+    this.requestUpdate();
+  }
+
   setColumnWidths(saved: { left?: number | null; chat?: number | null } | null | undefined): void {
     const chat = saved?.chat;
     if (typeof chat === 'number' && Number.isFinite(chat) && chat > 0) {

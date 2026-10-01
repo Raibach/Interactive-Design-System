@@ -5692,6 +5692,17 @@
               "description": "ASK THE SERVER WHAT TOOLS THERE ARE, once, for the workspace context.\n\nThe same endpoint the composer's menu reads, so the list she is given and the list\na person can pick from are one list. A failure leaves it undefined and the context\nsays nothing about tools rather than claiming there are none."
             },
             {
+              "kind": "field",
+              "name": "instructions",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE ROOM'S INSTRUCTIONS, WHEN THE ROOM HAS ANY.\n\nWHAT WAS WRONG (found 2026-09-30, the owner: *\"she's not talking, she's not thinking, because\nsome dumb ass AI has put a hardcoded mess in there to trick me\"*): the script below was sent as\nthe context of EVERY turn in EVERY room, so in Design she introduced herself as the Agentic\nFlow Architect and reasoned about prompt pipelines while the room's left column held a\ncomponent tree. The seat is shared; the room decides who she is.\n\nA ROOM THAT BINDS THIS OWNS HER INSTRUCTIONS. The Composer's surface binds nothing, so its\nscript stands there unchanged; Design binds the design-system assistant she already is in the\ningest.",
+              "default": "''",
+              "attribute": "instructions"
+            },
+            {
               "kind": "method",
               "name": "_graceInstructions",
               "privacy": "private",
@@ -5784,6 +5795,12 @@
                   }
                 }
               ]
+            },
+            {
+              "kind": "field",
+              "name": "_onComposerKey",
+              "privacy": "private",
+              "description": "ENTER SENDS — the same act as the Send button, given to the keyboard.\n\nWHAT WAS MISSING, measured 2026-09-30: nothing in this repository DISPATCHES `message-sent`.\nThis seat listens for it (the handler above) and the renderer forwards it (`a2ui-renderer`),\nso the event was wired at both ends and raised by nobody: a typed question went into `_draft`\nand no turn was ever sent — the owner, on exactly this: *\"no matter what I say, not a single\nturn.\"* The path that works is the Send button's (`chat-action-send`).\n\nSO THE KEYBOARD TAKES THAT PATH, not a second one of its own: same `_send`, same gates, same\nconversation. The ingest's own ask box already takes Enter this way (`onKeyDown … Enter →\naskGrace()`), which is the behaviour being translated here.\n\nShift+Enter is left alone — a newline inside a long question is a person typing, not asking —\nand `isComposing` so an IME's Enter does not fire a turn mid-word."
             },
             {
               "kind": "method",
@@ -6088,6 +6105,17 @@
             },
             {
               "kind": "method",
+              "name": "_releaseGrip",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "description": "LET THE PAGE GO — the strip's three document channels off, once. The same discipline the\ncomposer's input grip already keeps (`_endDrag` in chat-action-bar, which is called by its\nrelease AND by `disconnectedCallback`), applied to the column's strip.\n\nWHY IT HAS TO RUN WHERE THE ELEMENT GOES, not only where the mouse does: this element is\nREPLACED by the renderer whenever the surface re-renders — an assembly landing, a data-model\nwrite — and a panel replaced mid-gesture used to leave its `mousemove` listener on the\ndocument. That listener went on raising `input-resize-move` at a host that no longer had a\ngesture, and the layout answered a stray move by STARTING one: the column took hold with no\nbutton down, and nothing could release it because the listeners behind it were gone."
+            },
+            {
+              "kind": "method",
               "name": "_onCollapseToggle",
               "privacy": "private",
               "return": {
@@ -6165,6 +6193,15 @@
               },
               "description": "The package's conversation. Bound from /session/right_column/conversation_id.",
               "fieldName": "conversationId"
+            },
+            {
+              "name": "instructions",
+              "type": {
+                "text": "string"
+              },
+              "description": "THE ROOM'S INSTRUCTIONS, WHEN THE ROOM HAS ANY.\n\nWHAT WAS WRONG (found 2026-09-30, the owner: *\"she's not talking, she's not thinking, because\nsome dumb ass AI has put a hardcoded mess in there to trick me\"*): the script below was sent as\nthe context of EVERY turn in EVERY room, so in Design she introduced herself as the Agentic\nFlow Architect and reasoned about prompt pipelines while the room's left column held a\ncomponent tree. The seat is shared; the room decides who she is.\n\nA ROOM THAT BINDS THIS OWNS HER INSTRUCTIONS. The Composer's surface binds nothing, so its\nscript stands there unchanged; Design binds the design-system assistant she already is in the\ningest.",
+              "default": "''",
+              "fieldName": "instructions"
             },
             {
               "name": "messages",
@@ -7122,6 +7159,188 @@
     },
     {
       "kind": "javascript-module",
+      "path": "src/components/lit/component-preview.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "",
+          "name": "ComponentPreview",
+          "members": [
+            {
+              "kind": "field",
+              "name": "preview",
+              "privacy": "public",
+              "type": {
+                "text": "PreviewState | undefined"
+              },
+              "default": "undefined",
+              "attribute": "preview"
+            },
+            {
+              "kind": "field",
+              "name": "busy",
+              "privacy": "public",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "attribute": "busy"
+            },
+            {
+              "kind": "field",
+              "name": "message",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "default": "''",
+              "attribute": "message"
+            },
+            {
+              "kind": "field",
+              "name": "_confirmingRemove",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "private",
+              "default": "false",
+              "description": "Whether the Remove button is armed. Deliberately NOT a reactive property: it is a state of the\nbutton, not a fact about the component, and nothing outside this element has any business\nreading or setting it. A render is asked for by hand when it changes."
+            },
+            {
+              "kind": "method",
+              "name": "_act",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "kind",
+                  "type": {
+                    "text": "'preview-approve' | 'preview-discard' | 'preview-remove'"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "method",
+              "name": "_remove",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "description": "REMOVING TAKES TWO CLICKS, because it is the one action here that destroys work.\n\nThe first click ARMS it and the second does it, and the label changes between them to name the\ntag — so the person confirms the component they think they are confirming rather than the one\nthey clicked past. That is why it is not a single button like Approve: approving writes a file\nthat the next approve replaces, while removing deletes the component, its registrations, its\nlayer record and its artwork, and there is nothing left on screen to undo it from (owner,\n2026-09-30: *\"add a delete option at the top whenever the user selects a component in the lit\ncatalogue and I can remove it\"*)."
+            },
+            {
+              "kind": "method",
+              "name": "_collisionQuestion",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "p",
+                  "type": {
+                    "text": "PreviewState"
+                  }
+                }
+              ],
+              "description": "THE QUESTION THE DESIGNER HAS TO ANSWER, and the sentence for the case that is not one.\n\nCARRIED FROM THE INGEST TOOL, WORD FOR WORD (IngestModal.tsx, \"Name already in the design\nsystem\"): a layer whose NAME the design system already has on a DIFFERENT component means\napproving this adds a SECOND component under a name that exists — so it is asked here rather\nthan decided quietly, and \"No\" is not a refusal: it is the answer \"add it as its own\ncomponent\", which is what an unanswered question commits as. The last line always states which\nof the two approving will actually do, so the choice is never carried out silently.\n\nIT IS A QUESTION, SO IT CARRIES THE ANSWER. The two answers are events\n(`preview-collision-answer`), because a view never writes to the catalogue: the shell records\nthe answer and sends it with the approve. The answer itself is state — the shell writes it\nback into the preview the same way it writes everything else — so this element can draw which\nanswer is standing without keeping a copy of its own.\n\nAND A LAYER THAT IS THE SAME COMPONENT ELSEWHERE IS NOT A QUESTION. The design reusing its own\ndesign system is stated and left alone: nothing is written for it, and nothing is asked."
+            },
+            {
+              "kind": "method",
+              "name": "_binding",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "p",
+                  "type": {
+                    "text": "PreviewState"
+                  }
+                }
+              ],
+              "description": "THE VALUES THE COMPONENT WILL BE GIVEN — drawn beside the drawing, named as what they are.\n\nIT IS A LIST AND NOT A SUBSTITUTION, and the difference is the whole point: the drawing above\nshows the design as it is (its own sample words, because a preview instantiates the element bare\n— see `draft-preview`), and this block shows the data the component will receive in the room. A\nreader who saw the values painted into the drawing could not tell a bound component from one\nwhose design happens to contain those words.\n\nNOTHING HERE IS INVENTED: the values come from the application's rows, and a component with no\nrow yet carries none — which is a component being created, said by the absence of the block."
+            },
+            {
+              "kind": "method",
+              "name": "_answer",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "overwriteTag",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ]
+            }
+          ],
+          "events": [
+            {
+              "name": "kind",
+              "type": {
+                "text": "CustomEvent"
+              }
+            },
+            {
+              "name": "preview-collision-answer",
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "preview",
+              "type": {
+                "text": "PreviewState | undefined"
+              },
+              "default": "undefined",
+              "fieldName": "preview"
+            },
+            {
+              "name": "busy",
+              "type": {
+                "text": "boolean"
+              },
+              "default": "false",
+              "fieldName": "busy"
+            },
+            {
+              "name": "message",
+              "type": {
+                "text": "string"
+              },
+              "default": "''",
+              "fieldName": "message"
+            }
+          ],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "component-preview",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "ComponentPreview",
+          "declaration": {
+            "name": "ComponentPreview",
+            "module": "src/components/lit/component-preview.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "component-preview",
+          "declaration": {
+            "name": "ComponentPreview",
+            "module": "src/components/lit/component-preview.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/components/lit/control-bar.ts",
       "declarations": [
         {
@@ -7262,6 +7481,178 @@
           "declaration": {
             "name": "ControlBar",
             "module": "src/components/lit/control-bar.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/design-left-panel.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "",
+          "name": "DesignLeftPanel",
+          "members": [
+            {
+              "kind": "field",
+              "name": "formatLabel",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "Passed straight through to the frame's format rail, which shows both verbatim.\n\nBOTH DEFAULT TO EMPTY, AND THAT IS DELIBERATE. The rail's two texts are the design's\nlabels for the panel it drew — \"Agent Prompt\" and the token/cost readout — and neither is\ntrue of this column: Design's left column holds the ingest's component tree, not a prompt,\nand there is no spend to report. The rail draws no text at all while they are empty\n(prompt-container skips an empty label), so nothing here says something untrue. The\ntext these should carry is the owner's to put there, and the props are how he would.",
+              "default": "''",
+              "attribute": "format-label"
+            },
+            {
+              "kind": "field",
+              "name": "tokensLabel",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "default": "''",
+              "attribute": "tokens-label"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "format-label",
+              "type": {
+                "text": "string"
+              },
+              "description": "Passed straight through to the frame's format rail, which shows both verbatim.\n\nBOTH DEFAULT TO EMPTY, AND THAT IS DELIBERATE. The rail's two texts are the design's\nlabels for the panel it drew — \"Agent Prompt\" and the token/cost readout — and neither is\ntrue of this column: Design's left column holds the ingest's component tree, not a prompt,\nand there is no spend to report. The rail draws no text at all while they are empty\n(prompt-container skips an empty label), so nothing here says something untrue. The\ntext these should carry is the owner's to put there, and the props are how he would.",
+              "default": "''",
+              "fieldName": "formatLabel"
+            },
+            {
+              "name": "tokens-label",
+              "type": {
+                "text": "string"
+              },
+              "default": "''",
+              "fieldName": "tokensLabel"
+            }
+          ],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "design-left-panel",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "DesignLeftPanel",
+          "declaration": {
+            "name": "DesignLeftPanel",
+            "module": "src/components/lit/design-left-panel.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "design-left-panel",
+          "declaration": {
+            "name": "DesignLeftPanel",
+            "module": "src/components/lit/design-left-panel.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/design-middle-container.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "",
+          "name": "DesignMiddleContainer",
+          "members": [],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "design-middle-container",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "DesignMiddleContainer",
+          "declaration": {
+            "name": "DesignMiddleContainer",
+            "module": "src/components/lit/design-middle-container.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "design-middle-container",
+          "declaration": {
+            "name": "DesignMiddleContainer",
+            "module": "src/components/lit/design-middle-container.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/draft-preview.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "",
+          "name": "DraftPreview",
+          "members": [
+            {
+              "kind": "field",
+              "name": "draft",
+              "privacy": "public",
+              "type": {
+                "text": "DraftPreviewState | undefined"
+              },
+              "description": "The draft to draw, bound by the shell to `/session/preview/draft`.",
+              "default": "undefined",
+              "attribute": "draft"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "draft",
+              "type": {
+                "text": "DraftPreviewState | undefined"
+              },
+              "description": "The draft to draw, bound by the shell to `/session/preview/draft`.",
+              "default": "undefined",
+              "fieldName": "draft"
+            }
+          ],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "draft-preview",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "DraftPreview",
+          "declaration": {
+            "name": "DraftPreview",
+            "module": "src/components/lit/draft-preview.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "draft-preview",
+          "declaration": {
+            "name": "DraftPreview",
+            "module": "src/components/lit/draft-preview.ts"
           }
         }
       ]
@@ -7533,11 +7924,47 @@
     },
     {
       "kind": "javascript-module",
+      "path": "src/components/lit/f-40001206-3423.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "Catalog_node — measured from Figma node 40001206:3423\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.\n\nTHE ONE THING HERE THAT IS NOT THE DESIGN'S is the seam: `behaviourProperties` on the line above\nthe styles, and the two lifecycle calls under it. They are the same bytes in every generated\nelement, and they hand this instance to the behaviour written for `f-40001206-3423` — a hand-written file no\ningest can write. Everything that is not a drawing lives there: extra props, listeners,\ndispatched events, slot fills. This file holds the drawing and the opening.",
+          "name": "CatalogNode",
+          "members": [],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "f-40001206-3423",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "CatalogNode",
+          "declaration": {
+            "name": "CatalogNode",
+            "module": "src/components/lit/f-40001206-3423.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "f-40001206-3423",
+          "declaration": {
+            "name": "CatalogNode",
+            "module": "src/components/lit/f-40001206-3423.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
       "path": "src/components/lit/f-40001207-3497.ts",
       "declarations": [
         {
           "kind": "class",
-          "description": "catalog-component-node-raibach-ids — measured from Figma node 40001207:3497\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.",
+          "description": "catalog-component-node-raibach-ids — measured from Figma node 40001207:3497\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.\n\nTHE ONE THING HERE THAT IS NOT THE DESIGN'S is the seam: `behaviourProperties` on the line above\nthe styles, and the two lifecycle calls under it. They are the same bytes in every generated\nelement, and they hand this instance to the behaviour written for `f-40001207-3497` — a hand-written file no\ningest can write. Everything that is not a drawing lives there: extra props, listeners,\ndispatched events, slot fills. This file holds the drawing and the opening.",
           "name": "CatalogComponentNodeRaibachIds",
           "members": [],
           "superclass": {
@@ -7575,7 +8002,90 @@
           "kind": "class",
           "description": "catalog-node-raibach-ids — measured from Figma node 40001207:3559\nand rendered from the measurements. Every declaration below comes from the design; there is no\ninterpretation in this file, and re-ingesting the same node produces this same file.",
           "name": "CatalogNodeRaibachIds",
-          "members": [],
+          "members": [
+            {
+              "kind": "field",
+              "name": "name",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "The catalogue's name, where the drawing reads \"Components (prompt-composer)\".",
+              "default": "'Components (prompt-composer)'",
+              "attribute": "name"
+            },
+            {
+              "kind": "field",
+              "name": "count",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "How many components it declares, where the drawing reads \"catalogue reads 58\".",
+              "default": "'catalogue reads 58'",
+              "attribute": "count"
+            },
+            {
+              "kind": "field",
+              "name": "catalogId",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "The catalogId to draw under the name — the URL the catalogue is published at.",
+              "default": "''",
+              "attribute": "catalog-id"
+            },
+            {
+              "kind": "field",
+              "name": "description",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "The line in the trailing block, where the drawing reads \"FigmaNode: …\".",
+              "default": "'FigmaNode: 40001185-2176\\nSystem Role Dropdown used in prompt area'",
+              "attribute": "description"
+            }
+          ],
+          "attributes": [
+            {
+              "name": "name",
+              "type": {
+                "text": "string"
+              },
+              "description": "The catalogue's name, where the drawing reads \"Components (prompt-composer)\".",
+              "default": "'Components (prompt-composer)'",
+              "fieldName": "name"
+            },
+            {
+              "name": "count",
+              "type": {
+                "text": "string"
+              },
+              "description": "How many components it declares, where the drawing reads \"catalogue reads 58\".",
+              "default": "'catalogue reads 58'",
+              "fieldName": "count"
+            },
+            {
+              "name": "catalog-id",
+              "type": {
+                "text": "string"
+              },
+              "description": "The catalogId to draw under the name — the URL the catalogue is published at.",
+              "default": "''",
+              "fieldName": "catalogId"
+            },
+            {
+              "name": "description",
+              "type": {
+                "text": "string"
+              },
+              "description": "The line in the trailing block, where the drawing reads \"FigmaNode: …\".",
+              "default": "'FigmaNode: 40001185-2176\\nSystem Role Dropdown used in prompt area'",
+              "fieldName": "description"
+            }
+          ],
           "superclass": {
             "name": "LitElement",
             "package": "lit"
@@ -7599,6 +8109,146 @@
           "declaration": {
             "name": "CatalogNodeRaibachIds",
             "module": "src/components/lit/f-40001207-3559.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/figma-ingest-form.ts",
+      "declarations": [
+        {
+          "kind": "class",
+          "description": "",
+          "name": "FigmaIngestForm",
+          "members": [
+            {
+              "kind": "field",
+              "name": "url",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "Prefilled URL, when the host has one. The field stays editable either way.",
+              "default": "''",
+              "attribute": "url"
+            },
+            {
+              "kind": "field",
+              "name": "notes",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "Prefilled notes.",
+              "default": "''",
+              "attribute": "notes"
+            },
+            {
+              "kind": "field",
+              "name": "busy",
+              "privacy": "public",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "True while an ingest is in flight; set by the host that made the call.",
+              "default": "false",
+              "attribute": "busy"
+            },
+            {
+              "kind": "field",
+              "name": "message",
+              "privacy": "public",
+              "type": {
+                "text": "string"
+              },
+              "description": "A message to draw under the fields — a refusal, or why Submit is blocked.",
+              "default": "''",
+              "attribute": "message"
+            },
+            {
+              "kind": "method",
+              "name": "_onSubmit",
+              "privacy": "private",
+              "parameters": [
+                {
+                  "name": "e",
+                  "type": {
+                    "text": "Event"
+                  }
+                }
+              ]
+            }
+          ],
+          "events": [
+            {
+              "name": "ingest-submit",
+              "type": {
+                "text": "CustomEvent"
+              }
+            }
+          ],
+          "attributes": [
+            {
+              "name": "url",
+              "type": {
+                "text": "string"
+              },
+              "description": "Prefilled URL, when the host has one. The field stays editable either way.",
+              "default": "''",
+              "fieldName": "url"
+            },
+            {
+              "name": "notes",
+              "type": {
+                "text": "string"
+              },
+              "description": "Prefilled notes.",
+              "default": "''",
+              "fieldName": "notes"
+            },
+            {
+              "name": "busy",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "True while an ingest is in flight; set by the host that made the call.",
+              "default": "false",
+              "fieldName": "busy"
+            },
+            {
+              "name": "message",
+              "type": {
+                "text": "string"
+              },
+              "description": "A message to draw under the fields — a refusal, or why Submit is blocked.",
+              "default": "''",
+              "fieldName": "message"
+            }
+          ],
+          "superclass": {
+            "name": "LitElement",
+            "package": "lit"
+          },
+          "tagName": "figma-ingest-form",
+          "customElement": true
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "FigmaIngestForm",
+          "declaration": {
+            "name": "FigmaIngestForm",
+            "module": "src/components/lit/figma-ingest-form.ts"
+          }
+        },
+        {
+          "kind": "custom-element-definition",
+          "name": "figma-ingest-form",
+          "declaration": {
+            "name": "FigmaIngestForm",
+            "module": "src/components/lit/figma-ingest-form.ts"
           }
         }
       ]
@@ -7686,6 +8336,17 @@
               },
               "default": "false",
               "attribute": "open"
+            },
+            {
+              "kind": "field",
+              "name": "showHead",
+              "privacy": "public",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Whether the CATALOGUE HEAD (its name, its component count and its catalogId) is drawn above\nthe declared rows. TRUE by default — the ingest form's rail has no separate head element and\nreads it here.\n\nTHE DESIGN ROOM SETS IT FALSE, and the reason is the owner's first translation (2026-09-30):\n*\"take the catalog name and give it this container from the lit catalog that I just\nadded — f-40001207-3559.\"* In the design that row IS that component, so the room draws the\nhead with the ingested element, bound from the data model, and the tree must not draw a\nsecond copy of the same three facts underneath it.",
+              "default": "true",
+              "attribute": "showHead"
             },
             {
               "kind": "field",
@@ -8329,9 +8990,88 @@
                   "type": {
                     "text": "string"
                   }
+                },
+                {
+                  "name": "facts",
+                  "default": "[]",
+                  "type": {
+                    "text": "Array<{ label: string; value: string }>"
+                  }
+                },
+                {
+                  "name": "description",
+                  "default": "''"
                 }
               ],
               "description": "Tell the host to open this component in its preview.\n\nTHE TREE IS A NAVIGATION — the most ordinary one there is. It lists what the catalogue\nholds, one row per component, and clicking a row is how you get to that component. A tree\nwhose rows only expand is a list of names you cannot go anywhere from.\n\nThe chevron keeps the expanding, with its own handler and `stopPropagation`, so one click\ndoes one thing: the row goes there, the chevron opens it up. Both were the row before."
+            },
+            {
+              "kind": "method",
+              "name": "_setDeclaredOpen",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "key",
+                  "type": {
+                    "text": "string"
+                  }
+                },
+                {
+                  "name": "open",
+                  "type": {
+                    "text": "boolean"
+                  }
+                }
+              ],
+              "description": "Record the chevron's own answer, rather than toggling again.\n\nThe tile's chevron is a button that flips ITSELF and reports the result (`chevron-toggle` with\n`{open}`). Toggling here as well would flip it a second time — the two states would then\ndisagree, and the row would draw a chevron pointing the other way from the rows it opened. So\nthe tree records what it was told."
+            },
+            {
+              "kind": "method",
+              "name": "_rowFacts",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "Array<{ label: string; value: string }>"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "comp",
+                  "type": {
+                    "text": "DeclaredComponent"
+                  }
+                },
+                {
+                  "name": "drawn",
+                  "type": {
+                    "text": "DrawnBy"
+                  }
+                },
+                {
+                  "name": "origin",
+                  "type": {
+                    "text": "{ text: string; title: string } | null"
+                  }
+                },
+                {
+                  "name": "usage",
+                  "type": {
+                    "text": "{ text: string; title: string; tone: string } | null"
+                  }
+                },
+                {
+                  "name": "health",
+                  "type": {
+                    "text": "{ tone: string; title: string }"
+                  }
+                }
+              ],
+              "description": "THE ROW'S OTHER FACTS, IN THE WORDS THE ROW USED TO WEAR THEM.\n\nEvery value here was a badge on this row a moment ago (the shape, the drawn-by chip, the in-use\nchip, the property count, the audit dot's sentence, the Figma node chip). Nothing is newly\nderived and nothing is guessed: where the row said nothing — an unmeasured component, a\ncomponent the Figma map does not record — the fact says THAT, because a fact left out and a\nfact that is fine look the same in a list."
             },
             {
               "kind": "method",
@@ -8589,6 +9329,15 @@
               },
               "default": "false",
               "fieldName": "open"
+            },
+            {
+              "name": "showHead",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Whether the CATALOGUE HEAD (its name, its component count and its catalogId) is drawn above\nthe declared rows. TRUE by default — the ingest form's rail has no separate head element and\nreads it here.\n\nTHE DESIGN ROOM SETS IT FALSE, and the reason is the owner's first translation (2026-09-30):\n*\"take the catalog name and give it this container from the lit catalog that I just\nadded — f-40001207-3559.\"* In the design that row IS that component, so the room draws the\nhead with the ingested element, bound from the data model, and the tree must not draw a\nsecond copy of the same three facts underneath it.",
+              "default": "true",
+              "fieldName": "showHead"
             }
           ],
           "superclass": {
@@ -8617,6 +9366,12 @@
           }
         }
       ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/ingested.ts",
+      "declarations": [],
+      "exports": []
     },
     {
       "kind": "javascript-module",
@@ -8671,6 +9426,17 @@
               "default": "false",
               "attribute": "editing",
               "reflects": true
+            },
+            {
+              "kind": "field",
+              "name": "showMeta",
+              "privacy": "public",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Whether the Tags / Author / Score / Flip group is drawn at all. TRUE by default — the\npackage surface draws all four as placeholders and says so.\n\nTHE DESIGN SURFACE SETS IT FALSE, on the owner's instruction (2026-09-30): *\"We don't need a\nscore. There's no score for the design system. There's no flip for the design system.\"* He is\nright and it is not a styling preference: a version score is a fact about a PROMPT PACKAGE\n(how well it performed), and this column is a CATALOGUE — there is nothing to score, and the\nflip control swaps the prompt package's columns, which a catalogue does not have. Drawing\nboth, inert, is the same offence as drawing text that is not true: it says a fact exists\nwhere none does. The title and the version label are unaffected; the surface that has no such\nfacts simply does not declare them.",
+              "default": "true",
+              "attribute": "showMeta"
             },
             {
               "kind": "field",
@@ -8763,6 +9529,15 @@
               "description": "True while the title field is open. Local, but declared so the host can see it.",
               "default": "false",
               "fieldName": "editing"
+            },
+            {
+              "name": "showMeta",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Whether the Tags / Author / Score / Flip group is drawn at all. TRUE by default — the\npackage surface draws all four as placeholders and says so.\n\nTHE DESIGN SURFACE SETS IT FALSE, on the owner's instruction (2026-09-30): *\"We don't need a\nscore. There's no score for the design system. There's no flip for the design system.\"* He is\nright and it is not a styling preference: a version score is a fact about a PROMPT PACKAGE\n(how well it performed), and this column is a CATALOGUE — there is nothing to score, and the\nflip control swaps the prompt package's columns, which a catalogue does not have. Drawing\nboth, inert, is the same offence as drawing text that is not true: it says a fact exists\nwhere none does. The title and the version label are unaffected; the surface that has no such\nfacts simply does not declare them.",
+              "default": "true",
+              "fieldName": "showMeta"
             }
           ],
           "superclass": {
@@ -10460,6 +11235,12 @@
             },
             {
               "kind": "field",
+              "name": "_onGripMove",
+              "privacy": "private",
+              "description": "A MOVE IS NOT A GRAB. The strip inside her panel raises `input-resize-move` for every pointer\nmove of a gesture it owns — and a move that arrives with NO gesture in flight must move\nnothing, let alone take hold of the column.\n\nThis ran through `_onGripStart`, whose whole job is to BEGIN a drag when the event is not a\nmove. So one stray move was enough: the strip's release had been lost (a panel replaced\nmid-gesture, an event stopped on its way up), it went on dispatching from a host with no\ngesture, and every one of those moves took the column — `_onGripDown` sizes her to the\npointer, marks her OPERATOR-OWNED so no payload may place her again, and opens her if she was\nshut. With no mousedown behind it there was no mouseup to end it either, so the column\nfollowed a bare hover: the owner's \"it grabs my mouse\" (2026-09-30).\n\nThe empty-hand rule in `_onMouseMove` is the other half: it ends a gesture whose release was\nlost, and this stops one from being started by the moves that arrive afterwards."
+            },
+            {
+              "kind": "field",
               "name": "_onGripEnd",
               "privacy": "private",
               "description": "The spacer reports the gesture over — the same finish as this element's own."
@@ -10641,6 +11422,16 @@
             },
             {
               "kind": "method",
+              "name": "splitEqually",
+              "return": {
+                "type": {
+                  "text": "void"
+                }
+              },
+              "description": "THE COLUMNS SHARE THE ROOM EQUALLY — the owner, 2026-09-30: *\"the design panels should load\nequal… they should be equal on both sides… let's just do percentages and then let the user expand\nit where needed.\"*\n\nIT IS NOT A WIDTH, AND THAT IS THE POINT. A pixel width is a decision made on the operator's\nbehalf; this is the absence of one — the operator's claim is released and the element's own equal\nshares stand: two panes equal while her column sits beside the prompt, three while the middle one\nis open. A drag claims a width again afterwards, exactly as it does on a fresh package, so\n\"expand it where needed\" is the same gesture it always was and nothing here fights it.\n\nIt is the same release `_openPrompt` performs for a new package (`_rightIsOperatorSet = false`),\nmade callable: one home for \"the split starts over\"."
+            },
+            {
+              "kind": "method",
               "name": "setColumnWidths",
               "return": {
                 "type": {
@@ -10654,8 +11445,7 @@
                     "text": "{ left?: number | null; chat?: number | null } | null | undefined"
                   }
                 }
-              ],
-              "description": "THE WIDTHS A PACKAGE WAS SAVED WITH, PUT BACK — the other half of `widths()` below.\n\nA COMPOSER LOADS EQUAL, AND A SAVED ADJUSTMENT WINS. The owner, 2026-09-23: \"each column for\na package is equal width … until the user makes adjustments, and then it must remember the\nuser's adjustment. Only on save — it only has to remember that state on save.\"\n\nThe save has recorded `column_widths` all along (`widths()` below reads the panes) and NOTHING\nHAS EVER READ IT BACK: the value went into the package's metadata and stayed there, so a\nperson who widened her column and saved found it back at its default the next time. This is\nthe reader. It is called on open, after `openPrompt`, so the saved number is applied to the\nequal split rather than being overwritten by it.\n\nA width that cannot fit the room is not restored as-is — `_columnWidth` clamps it — so an\nadjustment made in a wide window still opens sanely in a narrow one."
+              ]
             },
             {
               "kind": "method",
@@ -10721,6 +11511,449 @@
           "declaration": {
             "name": "WorkspaceLayout",
             "module": "src/components/lit/workspace-layout.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/behaviour/attach.ts",
+      "declarations": [
+        {
+          "kind": "function",
+          "name": "behaviourProperties",
+          "return": {
+            "type": {
+              "text": "PropertyDeclarations"
+            }
+          },
+          "parameters": [
+            {
+              "name": "tag",
+              "type": {
+                "text": "string"
+              }
+            }
+          ],
+          "description": "The props a companion declares, spread into the element's own `static properties` by the\ngenerated file. A tag with no companion returns `{}`, so the spread costs nothing and declares\nnothing — an absent feature is absent, never a stand-in."
+        },
+        {
+          "kind": "function",
+          "name": "attachBehaviour",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "LitElement"
+              }
+            },
+            {
+              "name": "tag",
+              "type": {
+                "text": "string"
+              }
+            }
+          ],
+          "description": "Attach the companion for `tag`, once. Called from the generated element's `connectedCallback`.\n\nIDEMPOTENT ON PURPOSE: an element can be connected, disconnected and connected again (moved in\nthe DOM), and a companion that added its listener twice would dispatch its event twice per click.\nThe mark lives on the instance, so it dies with it."
+        },
+        {
+          "kind": "function",
+          "name": "detachBehaviour",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "LitElement"
+              }
+            },
+            {
+              "name": "tag",
+              "type": {
+                "text": "string"
+              }
+            }
+          ],
+          "description": "Release the companion for `tag`. Called from the generated element's `disconnectedCallback`."
+        },
+        {
+          "kind": "variable",
+          "name": "COMPANION_TAGS",
+          "type": {
+            "text": "string[]"
+          },
+          "description": "Every tag this loader has a companion for — read by the catalog check, never by a component."
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "behaviourProperties",
+          "declaration": {
+            "name": "behaviourProperties",
+            "module": "src/components/lit/behaviour/attach.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "attachBehaviour",
+          "declaration": {
+            "name": "attachBehaviour",
+            "module": "src/components/lit/behaviour/attach.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "detachBehaviour",
+          "declaration": {
+            "name": "detachBehaviour",
+            "module": "src/components/lit/behaviour/attach.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "COMPANION_TAGS",
+          "declaration": {
+            "name": "COMPANION_TAGS",
+            "module": "src/components/lit/behaviour/attach.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/behaviour/boxes.ts",
+      "declarations": [
+        {
+          "kind": "function",
+          "name": "reapplyAfterRender",
+          "return": {
+            "type": {
+              "text": "() => void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "LitElement"
+              }
+            },
+            {
+              "name": "work",
+              "type": {
+                "text": "(el: LitElement) => void"
+              }
+            }
+          ],
+          "description": "Run `work` after this element's first render and after every later one, and return the unbinding.\n\nTHIS IS DONE BY TAKING THE INSTANCE'S `updated`, which is the only hook a file outside the class\ncan reach: a companion runs from `connectedCallback`, before the first render, so reading the\nelement's boxes there would find nothing — and a prop assigned later changes nothing in the DOM\nunless something re-runs after the render it triggered. Lit calls `this.updated(…)`, so an own\nproperty on the instance shadows the (empty) prototype method; the instance's own is restored\nwhen the companion detaches, so nothing this module did outlives the attachment."
+        },
+        {
+          "kind": "function",
+          "name": "writeText",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "HTMLElement"
+              }
+            },
+            {
+              "name": "className",
+              "type": {
+                "text": "string"
+              }
+            },
+            {
+              "name": "value",
+              "type": {
+                "text": "string | undefined | null"
+              }
+            }
+          ],
+          "description": "One text box: the value when it was handed over, the design's own words when it was not."
+        },
+        {
+          "kind": "function",
+          "name": "writeSpans",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "HTMLElement"
+              }
+            },
+            {
+              "name": "className",
+              "type": {
+                "text": "string"
+              }
+            },
+            {
+              "name": "values",
+              "type": {
+                "text": "Array<string | undefined | null>"
+              }
+            }
+          ],
+          "description": "A box the design draws as several lines: the first span is the first value, the second the\nsecond — which is the shape a two-line text layer has in the generated markup."
+        },
+        {
+          "kind": "function",
+          "name": "ensureSlot",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "HTMLElement"
+              }
+            },
+            {
+              "name": "className",
+              "type": {
+                "text": "string"
+              }
+            },
+            {
+              "name": "slotName",
+              "type": {
+                "text": "string"
+              }
+            }
+          ],
+          "description": "Put a slot inside a box the design drew, once.\n\nA SLOT IS NOT SOMETHING THIS REPOSITORY'S GRAMMAR LETS A DESIGN STATE (the fields are Data / On\nclick / State / A11y), so a companion owns it and the consumer fills it. The guard is here because\na slot that has to exist is not a slot to add twice."
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "reapplyAfterRender",
+          "declaration": {
+            "name": "reapplyAfterRender",
+            "module": "src/components/lit/behaviour/boxes.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "writeText",
+          "declaration": {
+            "name": "writeText",
+            "module": "src/components/lit/behaviour/boxes.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "writeSpans",
+          "declaration": {
+            "name": "writeSpans",
+            "module": "src/components/lit/behaviour/boxes.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "ensureSlot",
+          "declaration": {
+            "name": "ensureSlot",
+            "module": "src/components/lit/behaviour/boxes.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/behaviour/f-40001207-3497.behaviour.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "tag",
+          "default": "TAG"
+        },
+        {
+          "kind": "variable",
+          "name": "properties",
+          "type": {
+            "text": "PropertyDeclarations"
+          },
+          "default": "{ /** What the catalogue calls this component — see the header for why these three are here. */ name: { type: String }, /** The address the row shows under the name: the Figma node, or the element's own tag. */ code: { type: String }, /** What it is, in the catalogue's words. */ description: { type: String }, /** Whether the row is expanded. The companion holds it, flips it on the chevron, reports it. */ open: { type: Boolean }, }"
+        },
+        {
+          "kind": "function",
+          "name": "attach",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "LitElement"
+              }
+            }
+          ],
+          "description": "Attach the row's behaviour.\n\nONE CLICK, ONE THING. The chevron sits inside a row that is itself a button, so the click is\nstopped before it reaches the row: without that, clicking the chevron would both expand the row\nAND navigate to the component's preview, which is the one-click-two-actions fault the tree's own\ncomment records.\n\nTHE VALUES ARE RE-PLACED AFTER EVERY RENDER, through `boxes.ts` — the companion runs from\n`connectedCallback`, before the first render, so the boxes do not exist yet at that moment, and a\nprop assigned later changes nothing in the DOM unless something re-runs after the render it\ntriggered. `reapplyAfterRender` is that something, and its undo is called on detach."
+        },
+        {
+          "kind": "function",
+          "name": "detach",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "LitElement"
+              }
+            }
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "tag",
+          "declaration": {
+            "name": "tag",
+            "module": "src/components/lit/behaviour/f-40001207-3497.behaviour.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "properties",
+          "declaration": {
+            "name": "properties",
+            "module": "src/components/lit/behaviour/f-40001207-3497.behaviour.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "attach",
+          "declaration": {
+            "name": "attach",
+            "module": "src/components/lit/behaviour/f-40001207-3497.behaviour.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "detach",
+          "declaration": {
+            "name": "detach",
+            "module": "src/components/lit/behaviour/f-40001207-3497.behaviour.ts"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/behaviour/f-40001207-3559.behaviour.ts",
+      "declarations": [
+        {
+          "kind": "variable",
+          "name": "tag",
+          "default": "TAG"
+        },
+        {
+          "kind": "variable",
+          "name": "properties",
+          "type": {
+            "text": "PropertyDeclarations"
+          },
+          "default": "{ /** The catalogue's title, where the design drew its own sample name. */ name: { type: String }, /** How many components it declares, on the line under the name. */ count: { type: String }, /** The catalogId it is published at — the third box. */ catalogId: { type: String, attribute: 'catalog-id' }, /** Kept because the element's own file declared it: the fallback for the third box. */ description: { type: String }, }"
+        },
+        {
+          "kind": "function",
+          "name": "attach",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "LitElement"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "function",
+          "name": "detach",
+          "return": {
+            "type": {
+              "text": "void"
+            }
+          },
+          "parameters": [
+            {
+              "name": "el",
+              "type": {
+                "text": "LitElement"
+              }
+            }
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "kind": "js",
+          "name": "tag",
+          "declaration": {
+            "name": "tag",
+            "module": "src/components/lit/behaviour/f-40001207-3559.behaviour.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "properties",
+          "declaration": {
+            "name": "properties",
+            "module": "src/components/lit/behaviour/f-40001207-3559.behaviour.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "attach",
+          "declaration": {
+            "name": "attach",
+            "module": "src/components/lit/behaviour/f-40001207-3559.behaviour.ts"
+          }
+        },
+        {
+          "kind": "js",
+          "name": "detach",
+          "declaration": {
+            "name": "detach",
+            "module": "src/components/lit/behaviour/f-40001207-3559.behaviour.ts"
           }
         }
       ]

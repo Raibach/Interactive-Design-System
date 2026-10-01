@@ -13,8 +13,10 @@ import services as state
 from deps import (
     A2UI_CATALOG_ID,
     a2ui_catalog,
+    a2ui_catalog_id,
     get_user_id_from_header,
     user_is_admin,
+    a2ui_catalog_for,
     validate_a2ui_components,
 )
 from grace_gui import (
@@ -67,12 +69,109 @@ PACKAGE_TABS = "chat,trace,tools,executions,eval,settings"
 # button is drawn unwired (see chat-navigation-bar: TODO(behavior), node 40001119:6600).
 CONSOLE_TABS = "chat,eval,tools,approvals,settings"
 
+# THE DESIGN ROOM'S RAIL. The model's own list for this seat plus the one button without which
+# the check view cannot be reached: "repair". `chat-panel` draws the checker's findings in its
+# "view" hole only on the tabs that hole is drawn for, and maps BOTH `repair` and `approvals` to
+# `chat-repair-actions` (`_wantedViewTag`) — while the rail only draws a button for a tab the
+# seat's list names ("a typo on the server is not an error anywhere — it is a button that quietly
+# is not there"). So the list is stated here rather than left to the model: an answer that omits
+# the tab would leave the check row in the tree and unreachable on screen, which is the hole this
+# constant closes. `trace` stays because Design's seat is given a trace view; `approvals` does
+# not, because approvals are the console's job.
+DESIGN_TABS = "chat,trace,tools,executions,eval,repair,settings"
+
 
 def _seat_tabs(components: list, tabs: str) -> None:
     """Set every chat seat's allowed-tabs. Idempotent, and it never adds a component."""
     for c in components:
         if isinstance(c, dict) and c.get("component") == "chat-panel":
             c["allowedTabs"] = tabs
+
+
+def _design_surface_components() -> list[dict[str, Any]]:
+    """The Design room's frame — AUTHORED here, not taken from a model's answer.
+
+    WHY THIS IS AUTHORED AND NOT DERIVED. The Design experience wore the Composer's container and
+    got its tree by SUBTRACTING from the Composer's: `render-design` took the model's Composer
+    tree and filtered out `control-bar`. Measured on screen 2026-09-30, with the ingest injected
+    into the same slots, that left EVERY PANE HOLDING TWO THINGS and the second one off the
+    bottom of the room:
+
+        left   | prompt-section-editor, then the injected rail | panel ended y=382;
+                 the rail started at 382 and ran 1672px, past a 664px-tall room
+        middle | the injected Preview                         | y=75, h=207
+        right  | chat-panel, then the ingest's Grace column   | the panel spanned 56→720
+                 with Grace's column starting at 720 — off-screen
+
+    The slot assignment was correct the whole time; the tree was wrong. A frame built by
+    subtraction still carries the Composer's content, and content the Composer owns is not a fact
+    about Design. (The same mistake is why "remove control-bar and seed no sections" was not
+    enough earlier: `prompt-section-editor` draws System/User/Agent as ITS OWN defaults, so an
+    empty list still painted three roles. Absence is the only thing that removes a component.)
+
+    SO DESIGN'S FRAME IS A CONTRACT WRITTEN DOWN, which is also what the owner asked for —
+    *"the same architectural structure that we currently use for composer"*, with the ingest
+    ported in: *"you don't replace, you inject."* A fixed frame does not need a model to guess it,
+    and a guess is exactly what made each pane hold two things. The container is the Composer's
+    element, unmodified, so its behaviour is the Composer's by construction.
+
+    WHAT THE PANES ARE FOR — THE INJECTION, NOT THIS TREE:
+
+      left   (slot="left")    the ingest's rail, which arrives afterwards as a React portal
+      middle (nothing loose)  the ingest's Preview, seated INSIDE `design-middle-container`
+      right  (slot="right")   the ingest's Grace column
+
+    The two panes therefore name NO child here. Their content is not a component the server
+    assembles: it is the tool, injected after this container has rendered — *"the assembly
+    happens. The render of this container happens and then the injection happens. It's in an
+    order."* A tree that named something for those slots is the bug this function removes.
+
+    WHAT IS DELIBERATELY NOT HERE, and each one is a component the Composer's tree carried:
+    `prompt-section-editor` (the Composer's panel, and it has no `<slot>`, so its contents can
+    never be anything but the Composer's), `compiled-output-viewer` (no slot either — that is why
+    Design has `design-middle-container`), `chat-panel` (Design's Grace is the ingest's own
+    column, which answers about what the left column is doing), and `control-bar` (undo, Save
+    Template, RUN — Design runs nothing).
+
+    THE MIDDLE COLUMN IS EMITTED, and it is the one element here that is Design's own:
+    `design-middle-container` is the Composer's middle column WITH A HOLE (`<slot name="middle">`),
+    and it is in `design-artifacts` and not in the Composer's catalogue, so no Composer surface
+    can name it. It has to exist before the Preview can be seated inside it, which is why it is
+    part of the frame rather than part of the injection.
+    """
+    return [
+        {
+            "id": "root",
+            "component": "workspace-layout",
+            # STATED, NOT LEFT OUT. A prop an assembly omits is not reset: the renderer re-assigns
+            # what the tree carries and the element keeps everything else. The console — and a
+            # Run's flow view — sets `isThirdOpen: false`, so a design tree that said nothing
+            # would inherit a CLOSED column. Measured on the Composer 2026-09-18, the owner: "I'm
+            # not sure why the chat's loading collapsed."
+            "isThirdOpen": True,
+            # THE PANES ARE NAMED SLOTS, so children is an OBJECT keyed by slot name — the array
+            # form carries no slot and fills nothing. Only two slots are named; see the note on
+            # the panes above.
+            "children": {"left-header": "left-header", "middle": "design-middle"},
+        },
+        {
+            "id": "left-header",
+            "component": "left-column-header",
+            # THE CATALOGUE, NOT "Design". The room's own name is in the page header and never
+            # leaves it (the owner, 2026-09-30: *"I already know I'm in design because the header
+            # at the top of the page tells me where I am"*), so this bar carries the catalogue you
+            # are working in. That value arrives at /session/title from the resolved catalogue row
+            # — one read, and the bar is not told a second time.
+            "title": {"path": "/session/title"},
+        },
+        {
+            "id": "design-middle",
+            "component": "design-middle-container",
+            # The header row's own drawn value — the design's example, as that element says of
+            # its own `outputType`.
+            "outputType": "Agent Flow",
+        },
+    ]
 
 
 def _catalog_component_vocabulary() -> str:
@@ -177,6 +276,29 @@ def _repair_rows(catalog: str = "prompt-composer") -> list[dict[str, Any]]:
     rows.sort(key=lambda r: (r["level"] != "blocking", str(r["id"])))
     return rows
 
+
+
+def _activity_at_ms(at: Any) -> float:
+    """An activity row's `at` as epoch milliseconds, for the trace feed's entry shape.
+
+    The table hands it back as 'YYYY-MM-DDTHH:MM:SSZ' (see `_activity_from_db`) and the feed's
+    entries carry `timestamp` as a NUMBER, so the conversion happens once, here. An unparseable
+    value is 0 — the feed's own "unknown" — and never the current time, which would be a claim
+    about when it happened that nothing measured.
+    """
+    from datetime import datetime, timezone
+
+    if isinstance(at, (int, float)):
+        return float(at)
+    try:
+        return (
+            datetime.strptime(str(at), "%Y-%m-%dT%H:%M:%SZ")
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+            * 1000
+        )
+    except Exception:
+        return 0.0
 
 
 def _extract_json_payload(response_text: str) -> Any:
@@ -929,9 +1051,25 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
         ]
 
     # ═══════════════════════════════════════════════════════════════
-    # INTENT: render-composer (blank workspace)
+    # INTENT: render-composer, and render-section:<id>
+    #
+    # A SECTION IS A SURFACE LIKE EVERY SURFACE, and it wears the Composer's container. The
+    # owner, 2026-09-30: *"No, no it's a surface. It's a surface just like every surface. I'm
+    # not seeing assembly happening… why doesn't it feel like it's assembling to me?"* — and, on
+    # what it should hold: *"I need you to reuse the same architectural structure that we
+    # currently use for composer."*
+    #
+    # So a section assembles THE SAME TREE the Composer does — the same LAYOUT CONTRACT, the
+    # same five slots, the same components — and adds no second prompt to keep in step. What
+    # makes Design different from Product is what its slots HOLD, which is the part the owner
+    # replaces; it is not a different container and must not become a second assembly path.
+    #
+    # BEFORE THIS the four section tabs hit the handler's fallback ("Other tabs - just switch
+    # for now (TODO: wire to AI assembly)") and assembled NOTHING: no request, no spinner, no
+    # surface — just a React re-render, which is why it read as a web page changing rather than
+    # as a surface arriving.
     # ═══════════════════════════════════════════════════════════════
-    elif intent == "render-composer":
+    elif intent == "render-composer" or intent.startswith(("render-section", "render-design")):
         # ── HONEST STATUS (2026-08-04): ──
         # FIGMA DISABLED — was causing 10s timeouts when the cached spec
         # was empty/stale (node 40000717:17091 deleted in Figma). The LLM
@@ -939,6 +1077,33 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
         # Assembly now proceeds WITHOUT Figma. The model derives the
         # surface layout from its own knowledge of the A2UI catalog.
         ms_a = 0.0
+
+        # ── A SECTION IS THE SAME CONTAINER WITH AN EMPTY LEFT COLUMN ────────────────
+        # The owner, 2026-09-30, looking at the Composer's System/User/Agent roles showing up
+        # inside Design: *"now you can remove this information from the left column"*. Those
+        # roles are the Composer's STARTER SECTIONS — three prompt sections it seeds a new
+        # prompt with — and a section seeds nothing. Its slots ARE the container, and what
+        # fills them is the section's own business.
+        #
+        # THE ONE PROMPT BELOW SERVES BOTH, and this is the single line that differs. That is
+        # deliberate: two prompts would be two contracts to keep in step, and the owner asked
+        # for the Composer's architecture REUSED — *"I need you to reuse the same architectural
+        # structure that we currently use for composer."* A container that drifts from the
+        # Composer's is not the same architecture.
+        #
+        # Everything else about a section's assembly is the Composer's: the same root, the same
+        # five slots, the same components, the same isThirdOpen rule — because the design is
+        # meant to match before anything is put in it.
+        is_section = intent.startswith("render-section") or intent.startswith("render-design")
+        sections_requirement = (
+            "[] — AN EMPTY CONTAINER, AND THIS IS THE ONE THING A SECTION DOES DIFFERENTLY. "
+            "A section seeds NO prompt sections: System, User and Agent are the Composer's "
+            "starter content and they do not belong in this container. Emit the empty list, so "
+            "the left column is the container and nothing else."
+            if is_section
+            else 'exactly 3 starter prompt sections — System, User, Agent — each an object '
+                 '{"name", "type", "content"} with short real content (User and Agent may be empty).'
+        )
 
         llm_prompt = f"""You are Grace, the A2UI surface assembler for the Composer.
 {render_tools_block()}
@@ -964,12 +1129,26 @@ LAYOUT CONTRACT — the container's NAMED slots, which you fill:
   Emit it with NO props: the master carries three controls (undo, Save Template, RUN)
   and no version line, so there is no value to bind.
 - middle: compiled-output-viewer, content ""
-- right: chat-panel, conversationId bound to {{"path": "/session/right_column/conversation_id"}}
+- right: chat-panel — HER SEAT, ASSEMBLED WITH ALL OF ITS BINDING, not just the conversation. The
+  owner, 2026-09-30: *"This is an entire surface. Why are you not referencing the composer and the
+  console to understand what this surface is? It's not different. This is runtime assembly."* The
+  console's seat and the composer's seat are the same element assembled with the same wiring; a
+  seat emitted with a conversation id alone cannot load her thread, her history or her trace, and
+  draws no turn at all — measured in the running room. BIND ALL OF THESE, as the shape below shows:
+    "conversationId"  {{"path": "/session/right_column/conversation_id"}}
+    "conversations"   {{"path": "/session/right_column/conversations"}}
+    "sessionId"       {{"path": "/session/id"}}
+    "packageTitle"    {{"path": "/session/title"}}
+    "packageDescription" {{"path": "/session/description"}}
+    "leftColumnContent"  {{"path": "/session/left_column/sections"}}
+    "compiledOutput"     {{"path": "/session/middle_column/compiled_output"}}
+    "instructions"       {{"path": "/session/grace_instructions"}}
+  "instructions" IS WHO SHE IS IN THIS ROOM — the surface assembles her words, so a seat in another
+  room is not handed this room's script. Bind it; never write her a sentence inline.
   It carries one child in its "view" slot — "trace-view", a TraceFeed bound to
-  /trace/entries and /trace/breadcrumbCount — because that slot is the design's
-  content hole for every non-chat tab and a panel emitted without it shows the
-  Trace tab loading forever. Both paths are written by the client; do not invent
-  values for them.
+  /trace/entries and /trace/breadcrumbCount — because that slot is the room's content hole for
+  every non-chat tab, and a panel emitted without it shows the Trace tab loading forever.
+  Both paths are written by the client; do not invent values for them.
 
 "root" IS "workspace-layout" — do not put a Column above it. Its panes are NAMED
 slots, so its "children" is an OBJECT keyed by slot name ({{"left": ...,
@@ -979,7 +1158,7 @@ fills nothing.
 REQUIREMENTS:
 1. Component objects use key "component" (NOT "type"). Every object needs "id".
 2. id "root", component "workspace-layout", children keyed by slot name.
-3. initial_sections: exactly 3 starter prompt sections — System, User, Agent — each an object {{"name", "type", "content"}} with short real content (User and Agent may be empty).
+3. initial_sections: {sections_requirement}
 4. One short friendly ai_message and one short suggested_title.
    "isThirdOpen": true IS STATED, NOT LEFT OUT — and that is load-bearing. A prop an assembly
    OMITS is not reset: the renderer re-assigns what the tree carries, and the element keeps
@@ -1100,7 +1279,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
 
         # ── PERFORMANCE TRACE: LOG BREAKDOWN ──
         print(f"\n{'='*60}")
-        print(f"[PERF TRACE] POST /api/ai/assemble-surface | intent=render-composer | total={elapsed_ms}ms")
+        print(f"[PERF TRACE] POST /api/ai/assemble-surface | intent={intent} | total={elapsed_ms}ms")
         print(f"  Milestone A (Database - draft create):      {ms_a:8.1f}ms")
         print(f"  Milestone B (Network/LLM - query_llm):     {ms_b:8.1f}ms")
         print(f"  Milestone C (Validation - JSON parse):      {ms_c:8.1f}ms")
@@ -1119,15 +1298,850 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
         #     Scaling features = slot them in. No visible styling yet.
         # ═══════════════════════════════════════════════════════════════
         
-        # Validate AI-generated components against catalog
-        validate_a2ui_components(components)
-        
+        # ── WHICH CATALOGUE GATES THIS ASSEMBLY ─────────────────────────────────────────
+        # The Composer's, as it always was — except for Design, whose surface is not the
+        # model's tree: the branch below builds it and gates it THERE, against
+        # `design-artifacts`. This call runs before that branch, so on a design intent it
+        # would gate the model's answer — a tree this assembly does not draw — and fail a
+        # Design surface over a name nobody renders.
+        #
+        # WHAT THAT GAP ACTUALLY COST, measured 2026-09-30: `design-middle-container` and
+        # `design-left-panel` are in `design-artifacts` and in NO other catalogue, and they
+        # are appended after this line — so the only two components that are Design's own
+        # were the only two nothing checked. The gate below is what closes it, and it is
+        # the owner's own rule that says so: a name has to be *"entered in composer, and
+        # then ... re-entered into the design"* — which is only a rule if the design's
+        # catalogue is the one that rejects it.
+        if not intent.startswith("render-design"):
+            validate_a2ui_components(components)
+
+        # ── WHOSE SESSION IS THIS SURFACE FOR? ─────────────────────────────────────────────
+        #
+        # THE COMPOSER'S ASSEMBLY DRAFTS A PACKAGE: `id: None` and `is_unsaved: True`, saved
+        # later by an explicit Save. That is right for the Composer and it is WRONG for the
+        # Design experience — a section that adopts that draft is working on a prompt package,
+        # which is the "connected to the wrong database" the owner measured on 2026-09-30:
+        # *"every time you try to inject, you're just creating a prompt package."*
+        #
+        # A DESIGN ASSEMBLY NAMES ITS OWN CONTAINER. One per user, created on first use and made
+        # race-safe by a partial unique index (`init_db.py`), with Grace's conversation hanging
+        # off it (`prompt_sessions_api.py`). So the surface's data model is keyed to the Design
+        # row from the first byte: no draft, no unsaved package, and no path by which a click in
+        # Design can write one.
+        #
+        # The TREE is the same one the Composer's contract builds — that sharing is deliberate,
+        # because the two experiences are meant to look alike. What differs here is the DATA.
+        if intent.startswith("render-design"):
+            # ── THE COMPOSER'S WORK IS NOT IN DESIGN'S SURFACE ───────────────────────────
+            #
+            # The owner, 2026-09-30, with the left column's contents marked out: the three role
+            # sections (System, User, Agent) and the bar at its foot — the undo button, "Save
+            # Template ⌘ S" and "RUN". *"These exact elements should not be rendering in design…
+            # if you have indeed built a separate renderer for design, then you can remove these
+            # from that renderer and it should not affect anything else. Then you'll have an empty
+            # container in the renderer that you can then plug in your component catalog."*
+            #
+            # WHAT MAKES THIS SAFE NOW, AND DID NOT BEFORE: Design has its own renderer — its own
+            # `<a2ui-renderer>` instance, drawing this tree, while the Composer's draws its own
+            # (`WritingAreaIndex.tsx`, `designRendererRef`). So removing a component here changes
+            # DESIGN'S SURFACE AND NOTHING ELSE. The same removal made against the shared renderer
+            # was a change to the Composer's frame, which is why it was wrong then and is right now.
+            #
+            # SEEDING NO SECTIONS IS NOT ENOUGH, and that is why this is a filter and not a data
+            # change: `prompt-section-editor` draws System/User/Agent as ITS OWN defaults, so an
+            # empty list still paints three roles. The component has to be absent from the tree.
+            #
+            # AND ITS REFERENCE HAS TO GO WITH IT. A removed component whose id is still named by a
+            # parent is a hole the renderer reports by name — correctly:
+            #     left-column ?: No component with id "left-column". Referenced by root.
+            # The owner on that report: *"we want errors. I like errors. Errors I can fix; error
+            # suppression I cannot."* So the reference is removed with the component; the report is
+            # never silenced.
+            #
+            # What fills the empty slot is the component catalogue and the Figma URL input, and
+            # that is injected AFTER this container has rendered — the order: assembly, then the
+            # container's render, then the injection.
+            # ── THE LEFT COLUMN IS THE PANEL, WITH THE COMPOSER'S PROMPT TAKEN OUT OF IT ──
+            #
+            # THE PANEL STAYS; WHAT IT HELD DOES NOT. The owner, 2026-09-30, looking at the
+            # running room: the Agent Role tile, the "Functions | Tools" button and the empty
+            # textarea were drawn in Design's left column ABOVE the ingest's rail. Those are
+            # `prompt-input-section` rows — what `prompt-section-editor` draws — and the panel
+            # they sit in is the design's own "center-panel-3rd-col" (40001066:3888), which the
+            # owner calls the left column's panel and which is part of the frame: *"it's the same
+            # panel that we have the prompt / agent prompt inputs, and it's called left column."*
+            #
+            # SO THE FRAME IS KEPT AND ITS CONTENTS ARE REPLACED, which is the owner's own rule
+            # for this whole exercise: *"I will just reuse the lit components for the composer. I
+            # will just replace what they hold."* The frame is kept BY REUSING IT — the panel is
+            # `prompt-container`, the Composer's own element (its 1px #C0BDCF border, its rounded
+            # top-left 10px and its 40px format rail carrying the vertical "Agent Prompt" label
+            # are the drawing's numbers, reused rather than restated here).
+            #
+            # WHAT THE REPLACEMENT NEEDS IS A HOLE, AND `prompt-container` HAS ONLY ITS DEFAULT
+            # ONE. Content assigned to a slot is rendered by a slot of that NAME and by nothing
+            # else — a light child whose `slot` attribute matches no slot in its host's shadow
+            # tree is not rendered at all — and the ingest's left region carries `slot="left"`.
+            # So Design's panel is its own element, `design-left-panel`: the Composer's frame
+            # with a `<slot name="left">` inside it, which is the ONE thing `prompt-container`
+            # cannot be asked for without changing the Composer's own panel. That element is why
+            # the component is absent from this tree while the panel is not.
+            #
+            # AND ITS REFERENCE GOES WITH IT. A removed component whose id is still named by a
+            # parent is a hole the renderer reports by name — correctly:
+            #     left-column ?: No component with id "left-column". Referenced by root.
+            # The owner on that report: *"we want errors. I like errors. Errors I can fix; error
+            # suppression I cannot."* So the reference goes with the component and Design's own
+            # panel takes that slot; the report is never silenced.
+            #
+            # The footer bar comes out for the reason it always did: it is the Composer's controls
+            # (undo, Save Template, RUN) and Design runs nothing.
+            # AND THE BAR ABOVE THE COLUMN GOES WITH IT (2026-09-30). The owner, on the title
+            # reading "Raibach IDS" over Tags / Author / Score / Flip: *"you've got the wrong name
+            # at the top. It says Raibach IDS — that's not the name of it, it's supposed to be the
+            # catalog… There's a score up there and Flip, none of that. I gave you an image; I told
+            # you this is what should be there."* The image is the ingest form, and its left column
+            # starts at the Figma URL — no title bar, no tags, no score, no flip control. Those are
+            # the composer's package chrome (a package has a version, a score and a flip; this
+            # column is a catalogue), so `left-column-header` comes off this surface like the
+            # composer's controls above it. The catalogue's NAME is not lost: it is drawn where the
+            # ingest draws it, at the head of the tree block ("Raibach Prompt Composer Catalog").
+            # AND THE COMPOSER'S OWN MIDDLE COLUMN GOES WITH THEM (2026-09-30). `middle-column` →
+            # `compiled-output-viewer` came in on the model's Composer tree and belongs to a
+            # prompt package's output. This room's middle column is `design-middle-container`
+            # and its content is the preview, so the Composer's viewer is a component this
+            # room does not name — and the owner's rule is one for one: what is not in the map
+            # is not in the room.
+            design_omits = {"control-bar", "prompt-section-editor", "compiled-output-viewer"}
+            removed_ids = {c.get("id") for c in components if c.get("component") in design_omits}
+            components = [c for c in components if c.get("component") not in design_omits]
+            if removed_ids:
+                for c in components:
+                    kids = c.get("children")
+                    if not isinstance(kids, dict):
+                        continue
+                    for slot, target in list(kids.items()):
+                        if isinstance(target, str) and target in removed_ids:
+                            del kids[slot]
+                        elif isinstance(target, list):
+                            kids[slot] = [t for t in target if t not in removed_ids]
+
+            # ── AND THE PANEL DESIGN FILLS THAT SLOT WITH ───────────────────────────────
+            #
+            # Emitted only when the model did not name one itself, the same rule the middle
+            # column follows below: a model that emits `design-left-panel` is left exactly as it
+            # is. The ingest's rail is the ONLY thing that goes in it, and it arrives after this
+            # container has rendered — assembly, then the render, then the injection — because
+            # the rail is React and this surface is not.
+            if not any(c.get("component") == "design-left-panel" for c in components):
+                components.append({
+                    "id": "design-left",
+                    "component": "design-left-panel",
+                })
+                for c in components:
+                    if c.get("id") != "root":
+                        continue
+                    kids = c.get("children")
+                    if isinstance(kids, dict) and "left" not in kids:
+                        kids["left"] = "design-left"
+                    break
+
+            # ── THE MIDDLE COLUMN, AND WHY IT IS THE DESIGN'S OWN ELEMENT ────────────────
+            #
+            # THE MIDDLE COLUMN IS PART OF THIS SURFACE. The Composer's root has NO "middle" child
+            # at rest — a prompt that has not been run shows two columns, and the third is what a
+            # Run draws (see the assembly prompt's requirement 5). Design's third column is the
+            # ingest's output, so the column and its container belong to Design's surface from the
+            # first byte. Nothing is removed to make room for it: the model's tree carries no
+            # middle child at all, so this is an ADDITION to Design's surface and the Composer's
+            # tree is not touched by it.
+            #
+            # WHY NOT `compiled-output-viewer`. The ingest's Preview has to be loaded INSIDE the
+            # column, and the Composer's viewer owns its whole body with no slot: measured
+            # 2026-09-30, no `<slot>` appears anywhere in that element, so nothing can be loaded
+            # into it. The owner ruled on exactly this case: *"If you have to make a different
+            # component because you can't figure out how to load something inside of it, then build
+            # a different lit component for the design section."* So Design names its own container
+            # — the Composer's own header row over a real slot named "middle" — and the ingest's
+            # middle region (which already declares `slot="middle"`) lands in the hole.
+            #
+            # THE CONTAINER IS EMITTED ONLY WHEN THE MODEL DID NOT. A model that emits its own
+            # middle child is left exactly as it is; its id is what the reference below would
+            # otherwise overwrite.
+            # ── THE CONTAINER IS DECLARED; WHETHER THE COLUMN IS DRAWN IS THE HOST'S ─────
+            #
+            # THE COMPONENT IS EMITTED AND THE LAYOUT DOES NOT REFERENCE IT, which is the
+            # Composer's own contract for its middle column, word for word: "middle-column is
+            # still EMITTED below — the shell moves the flow view into it at Run time — it is
+            # simply not in the layout's children yet, so the layout does not draw it."
+            #
+            # WHY, IN THE OWNER'S WORDS (2026-09-30): *"the center column should be collapsed
+            # until the user enters a link and click submit and then it opens and shows the
+            # preview. If you need reference to that look at the composer."* Which panes exist is
+            # the SURFACE's tree — `workspace-layout` draws a middle column when something is in
+            # its middle slot and takes no width when nothing is — so a column that must start
+            # collapsed is a column the tree does not reference yet, and opening it is the host
+            # putting the reference in when the ingest reports its first draft.
+            #
+            # AND THE COMPONENT STAYS, not just the reference: the shell needs the element to
+            # exist before it can be drawn, and an unreferenced entry in `components` is inert to
+            # the renderer (the Composer ships one on every assembly).
+            if not any(c.get("component") == "design-middle-container" for c in components):
+                components.append({
+                    "id": "design-middle",
+                    "component": "design-middle-container",
+                    # NO `outputType`: the column draws no header row of its own. It drew the
+                    # Composer's `<output-controls>` — "Agent Flow" and a Models button — and the
+                    # owner asked why a control that is not in the ingest pane is in this column
+                    # (one for one). The column's head is the preview's own: "Preview", the
+                    # component's name, its tag, and the two actions.
+                })
+
+            # ── WHAT A RUN LOADS, AND WHERE IT LANDS ────────────────────────────────────
+            #
+            # THE OWNER, 2026-09-30: *"the run function is supposed to launch the third column and
+            # show the preview… submit is run, selecting one of those components in that list is a
+            # run function. It's supposed to display it. It's basically a left navigation — you're
+            # loading those components and all of their meta-data just like you are on the react
+            # application for ingest."*
+            #
+            # So the middle column gets a component that DRAWS a run's result — the ingest's answer
+            # for a Submit, or the row a person clicked. It is emitted here, referenced BY THE
+            # CONTAINER below, and the column itself stays collapsed until the HOST references
+            # `design-middle` in the layout — the Composer's own contract, word for word: "the shell
+            # moves the flow view into it at Run time… it is simply not in the layout's children
+            # yet, so the layout does not draw it."
+            #
+            # THE STATE IS THE SHELL'S AND TRAVELS AS BINDINGS. `preview` is written when a run
+            # produces something (`/session/preview`), and `busy`/`message` ride the same channel the
+            # ingest form uses, because it is the same fact: the room is working, or it refused.
+            components.append({
+                "id": "preview",
+                "component": "component-preview",
+                "preview": {"path": "/session/preview"},
+                "busy": {"path": "/session/ingest/busy"},
+                "message": {"path": "/session/ingest/message"},
+            })
+            for _c in components:
+                if _c.get("id") != "design-middle":
+                    continue
+                _kids = _c.get("children")
+                if not isinstance(_kids, dict):
+                    _kids = {}
+                    _c["children"] = _kids
+                _kids["middle"] = "preview"
+                break
+
+            # ── THE CHECK, DRAWN IN HER CHAT OUTPUT — THE CONSOLE'S OWN FUNCTION ─────────
+            #
+            # THE OWNER, 2026-09-30: *"put it inside of the goddamn chat output… It already lives
+            # there. It already existed."* The checker's list exists and renders two ways already:
+            # the ingest shows a component's Catalog Check, and the CONSOLE draws the checker's
+            # findings inside its seat's output hole. This is the console's function, matched: the
+            # same element (`chat-repair-actions`), the same slot (the seat's "view"), the same
+            # reader for the rows (`_repair_rows`, which composes them from the report the checker
+            # wrote — never a model's paraphrase), and the catalogue this room announces.
+            #
+            # IT IS A SURFACE CHILD, NOT AN INJECTION. The component is in the components list and
+            # the SEAT NAMES IT by id, which is the adjacency rule this repository runs on: the
+            # renderer draws what the envelope references and nothing else is allowed in the room.
+            # The rows ride in the data model (`/session/checks`) — structure in the components,
+            # content in the data model, referenced as a path.
+            #
+            # THE SAME SOURCE THE INGEST ALREADY READS. The ingest's "Catalog Check" is
+            # `npm run catalog:check` and the report it writes (`routes/figma.py`, `_catalog_check`);
+            # the Console's list is composed from that same report. So this is `_repair_rows()`
+            # with no catalogue named — the one report this repository produces — rather than a
+            # second reader that could disagree with the first.
+            #
+            # A CHECK THAT DID NOT RUN IS NOT AN EMPTY LIST, and `_repair_rows` is where that rule
+            # lives: with no readable report it returns one row saying so rather than nothing,
+            # because an empty list would read as a clean catalogue.
+            design_check_rows = _repair_rows()
+            components.append({
+                "id": "design-checks",
+                "component": "chat-repair-actions",
+                "findings": {"path": "/session/checks"},
+            })
+            for _c in components:
+                if _c.get("component") != "chat-panel":
+                    continue
+                _kids = _c.get("children")
+                if not isinstance(_kids, dict):
+                    _kids = {}
+                    _c["children"] = _kids
+                _view = _kids.get("view")
+                # The slot takes one child or a list of them (the Composer ships a list), so the
+                # check is ADDED to whatever the seat already holds rather than replacing it.
+                if isinstance(_view, list):
+                    if "design-checks" not in _view:
+                        _view.append("design-checks")
+                elif isinstance(_view, str):
+                    if _view != "design-checks":
+                        _kids["view"] = [_view, "design-checks"]
+                else:
+                    _kids["view"] = "design-checks"
+                break
+
+            # ── AND THE RAIL MUST OFFER THE BUTTON THAT OPENS IT ────────────────────────
+            #
+            # "A view with no rail button would be a hole nothing can reach" — the rule the
+            # console's own note states, and half of this change. The check child above rides in
+            # the seat's "view" hole, and that hole is drawn on the tabs the seat OFFERS; the
+            # element maps `repair` to the findings view and draws it there
+            # (`.view-slot.tab-repair ::slotted(chat-repair-actions) { display: block }`), so the
+            # list appears the moment the seat offers Repairs and a person clicks it.
+            #
+            # State the list rather than inherit it: an assembly that omitted the tab would put
+            # the rows in the tree and leave them unreachable on screen, which is a silent hole of
+            # exactly the kind this repository refuses. See `DESIGN_TABS`.
+            _seat_tabs(components, DESIGN_TABS)
+
+            # AND THE TRACE TAB DOES NOT ASK HER A QUESTION. The console's seat carries
+            # `tracePrompt: false` for a measured reason (routes/ai.py, render-console): the
+            # automatic prompt asks for tokens, cost, latency and evaluation — properties of a
+            # prompt PACKAGE's run — so every Trace click wrote a canned question and a canned
+            # refusal into that conversation, which ended up holding nothing else. The same thing
+            # happened here the moment this room got a trace to look at: measured 2026-09-30, one
+            # click on Design's Trace wrote "Load the latest activity and report tokens, cost,
+            # latency and evaluation for this prompt." and her refusal, both as rows in the Design
+            # conversation. THIS ROOM'S TRACE IS THE INGEST'S RECORD — there is no package run
+            # behind it to report on — so the question is not asked and the view still switches.
+            for _c in components:
+                if _c.get("component") == "chat-panel":
+                    _c["tracePrompt"] = False
+
+            # ── THE BAR ABOVE THE COLUMN: THE CATALOGUE'S NAME, AND NO PACKAGE CHROME ────
+            #
+            # The owner, with the ingest form as the map: *"The catalog name goes in the top where we
+            # put the prompt name. We don't need a score. There's no score for the design system.
+            # There's no flip for the design system."* So the header stays and two of its fields are
+            # re-pointed at this surface's facts: the title reads the CATALOGUE's name rather than
+            # the container's, and the package chrome (tags, author, score, flip) is not drawn —
+            # `showMeta` false — because a catalogue has no performance to score and no columns to
+            # flip. The version label is left as it is: it reads "Editing Version —" here, which is
+            # true (a catalogue is not versioned).
+            for _c in components:
+                if _c.get("component") != "left-column-header":
+                    continue
+                _c["title"] = {"path": "/session/catalogue/name"}
+                _c["showMeta"] = False
+                break
+
+            # ── THE INGESTION RAIL'S OWN TREE, IN THE LEFT PANE — REUSED, NOT REBUILT ─────
+            #
+            # THE OWNER, 2026-09-30: *"why is there nothing? Why is the component data tree not
+            # there? I want to see the data called from the database… just bring anything from the
+            # lit catalog."* And then, having said it for hours: *"I've been telling you all
+            # morning long… you will not build it."*
+            #
+            # WHY IT WAS EMPTY. The left pane's content was the ingestion tool's rail, mounted
+            # into `design-left-panel` by React — and that mount is gone, because a host mount
+            # inside a surface is not allowed and it drew BENEATH the room. What replaces it is the
+            # same information through the only door a surface has: a component named in the
+            # envelope.
+            #
+            # ── AND IT IS THE INGESTION RAIL'S OWN ELEMENT, NOT A NEW ONE ────────────────
+            #
+            # A session went by that produced a new list component, and a pane of cards before it,
+            # and both were wrong for the same reason: THE INGESTION APPLICATION IS THE TEMPLATE.
+            # Its left column already draws this — the Figma URL and Notes over the catalogue
+            # strip, the catalogue's head, and one row per declared component carrying its shape
+            # (`allOf(3)` / `flat`), its Figma node, the file that DRAWS it, and a status dot from
+            # the checker's audit (`IngestModal.tsx`, the `<figma-layers-view>` at the foot of the
+            # rail). That element is `figma-layers-view`, it is built, and it needed exactly two
+            # registrations to be legal in a surface — a catalogue entry and an allowlist entry.
+            # Neither is a drawing: the element already exists, so NO COMPONENT WAS AUTHORED for
+            # this column.
+            #
+            # `pipeline` IS A CATALOGUE FOLDER, NOT THE SESSION. The room's data model carries
+            # `/session/catalogue/system`, and that value is `raibach-ids` — a design SYSTEM, not a
+            # catalogue — so binding this prop to that path would name a catalogue that does not
+            # exist and the tree would draw its "no catalogue named …" failure. `prompt-composer` is
+            # the element's own default, it is what the ingest form shows, and it is the catalogue
+            # the section's 58 rows are declared in (the rows at `/session/elements`, one
+            # `design_master` row per component, written by `sync_design_elements.py`). The strip at
+            # the top of the element switches catalogues from inside the element itself, so this is
+            # a starting point and not a lock.
+            #
+            # WHAT IT DOES NOT YET DO, stated rather than implied: the tree DISPATCHES
+            # `open-component`, `open-layer` and `open-function`, and nothing in this room answers
+            # them — opening a component for review is the ingest tool's behaviour and it is not
+            # wired here. It draws and it marks; it does not yet open.
+            # ── THE RAIL'S TOP HALF: THE LINK AND THE NOTES ────────────────────────────
+            #
+            # THE OWNER, 2026-09-30, on a pane that held only the tree: *"where is the Figma input?
+            # Why would you leave out the most important part the input field for the link and the
+            # notes?"* The ingest rail is a FORM over a TREE, and only the tree was there. So the
+            # form is emitted too — `figma-ingest-form`: the Figma URL field, the Notes field and
+            # Submit, with the ingest's own words.
+            #
+            # IT IS A TRANSLATION, NOT A REBUILD, and the division is the repository's own: the
+            # element draws the two fields and dispatches `ingest-submit` with the raw text; the
+            # PARSING (`@/utils/figmaUrl`) and the CALL (`POST /api/figma/ingest`) already exist in
+            # this application and are not reimplemented in an element. The shell answers the event
+            # and runs the ingest.
+            #
+            # THE SLOT TAKES BOTH, IN THE RAIL'S OWN ORDER — the form above, the tree below — which
+            # is how the ingest form stacks them in its own left column.
+            components.append({
+                "id": "left-form",
+                "component": "figma-ingest-form",
+                # ── THE HOST'S TWO VALUES TRAVEL IN THE DATA MODEL, NOT IN THE COMPONENTS ──
+                #
+                # THIS IS NOT DECORATION AND IT IS NOT A STYLE CHOICE — it is the only channel that
+                # reaches an element that already exists. The renderer re-applies props on a
+                # DATA-MODEL change and returns early on a COMPONENTS change
+                # (`a2ui-renderer.ts` `updated()`: `if (!changed.has('dataModel') || changed.has(
+                # 'components')) return`), so a shell that patches the emitted component to set
+                # `busy` writes into a channel nothing reads: the form sat there with an empty
+                # message while an ingest ran, which is exactly what the owner saw when he pressed
+                # Submit. Bound paths are the channel that works, and they are this repository's own
+                # rule anyway — structure in the components, content in the data model.
+                "busy": {"path": "/session/ingest/busy"},
+                "message": {"path": "/session/ingest/message"},
+            })
+            # ── THE FIRST TRANSLATION: THE CATALOGUE'S NAME, IN THE INGESTED CONTAINER ────
+            #
+            # THE OWNER, 2026-09-30: *"I want you to do your first transition — I want you to take
+            # the catalog name and I want you to give it this container from the lit catalog that I
+            # just added: f-40001207-3559."* It is the header row he ingested from Figma (node
+            # 40001207:3559, "catalog-node-raibach-ids"): a caution mark, the catalogue icon, the
+            # name over a second line, a chevron, and a description block. In the design that row IS
+            # this component — so the name, the count and the catalogId are loaded into ITS slots
+            # rather than drawn by a heading written in code. That is the whole exercise in one
+            # place: the drawing comes from the catalogue, the values come from the data model, and
+            # nothing here invents either.
+            # (THE HEAD IS NOT EMITTED HERE — the tree draws it, because the tabs it must sit under
+            # are drawn by the tree. See `_renderCatalog` in figma-layers-view: the element the owner
+            # ingested from Figma is instantiated there, as the catalogue's own head. Emitting it
+            # again from here would be a second copy of one fact.)
+            components.append({
+                "id": "left-rail",
+                "component": "figma-layers-view",
+                "inline": True,
+                "pipeline": "prompt-composer",
+                # The head above the rows IS the ingested element — drawn by this element's own
+                # template, so `showHead` keeps its default (true) and the order is tabs, head, rows.
+
+                # The re-read trigger, on the same channel and for the same reason: the shell bumps
+                # this number after an ingest lands and the tree reads the layers back.
+                "refresh": {"path": "/session/ingest/refresh"},
+            })
+            for _c in components:
+                if _c.get("id") != "design-left":
+                    continue
+                _kids = _c.get("children")
+                if not isinstance(_kids, dict):
+                    _kids = {}
+                    _c["children"] = _kids
+                # A slot takes one child OR a list of them (the Composer ships a list), so both
+                # halves are named rather than one replacing the other.
+                _kids["left"] = ["left-form", "left-rail"]
+                break
+
+            # ── AND THE GATE IS THIS SURFACE'S OWN ──────────────────────────────────────
+            #
+            # THE WHOLE TREE, AFTER EVERY COMPONENT IS IN IT, checked against the catalogue
+            # DESIGN validates against (`design-artifacts`) — not the Composer's, and not
+            # before the design's own elements have been added. Both halves of that matter:
+            # `design-left-panel` and `design-middle-container` exist in `design-artifacts`
+            # and in no other catalogue, so a gate that ran any earlier never saw them (see
+            # the note where the shared call is skipped above), and a COMPOSER gate would
+            # reject them by name the moment it did.
+            #
+            # The catalogue carries the Composer's names too — the owner's *"entered in
+            # composer, and then ... re-entered into the design"* — which is why one gate is
+            # enough for a surface that wears the Composer's container and holds Design's
+            # own columns.
+            validate_a2ui_components(components, "design-artifacts")
+
+            design_container = state.prompt_sessions_api.get_or_create_design_container(
+                user_id=uid,
+                kind="design",
+                title="Design",
+                description="The Design experience's own session — a division, not a prompt package.",
+            )
+            design_conversation = state.prompt_sessions_api.get_or_create_design_conversation(user_id=uid)
+
+            # ── THE CONVERSATIONS THAT HANG OFF THE DESIGN CONTAINER, READ ON ASSEMBLY ────
+            #
+            # Read the one way this codebase reads conversations (`conversations.session_id`),
+            # never from a copy on a session row. This is the list her seat is given — and the
+            # beginning of the metadata the assembly pulls from the database rather than guessing.
+            design_conversations_list = []
+            if state.conversation_api and design_container:
+                try:
+                    design_conversations_list = state.conversation_api.get_conversations_by_session(
+                        str(design_container["id"]), uid
+                    )
+                except Exception as e:
+                    _warn(f"the design section's conversation list could not be read: {e}")
+
+            # ── WHO SHE IS IN THIS ROOM, GIVEN BY THE ROOM ───────────────────────────────
+            #
+            # The seat's script is the Composer's ("You are Grace, the Agentic Flow Architect…") and
+            # it was sent as the context of every turn in every room — so in Design she reasoned
+            # about prompt pipelines over a component tree. The owner, 2026-09-30: *"she's not
+            # talking, she's not thinking, because some dumb ass AI has put a hardcoded mess in
+            # there."* Her instructions belong to the ROOM, and the room is this surface.
+            #
+            # WHAT SHE IS HERE, in the ingest's own terms: she is the design-system assistant, the
+            # one who answers about the component under review and the checks that did not pass —
+            # the same job the ingest's ask endpoint already gives her.
+            # HER WORDS ARE THE INGESTION'S OWN, VERBATIM IN SUBSTANCE — not a persona written
+            # here. The owner, 2026-09-30: *"No, it should match ingestion. I've said it now four
+            # times — look at your ingestion application. What does she say there?"* The ingest
+            # tells her: *"You built the Lit component <tag> from Figma node … Its source is below,
+            # followed by what the design measured and the checks that did not pass. Answer the
+            # designer's question about it directly, in a few sentences, and say plainly what to
+            # change when something is wrong."* That is who she is in this room; the component, its
+            # source, the measured design and the failed checks arrive with the question.
+            design_grace_instructions = (
+                "You built the Lit components of this design system from Figma. The left column "
+                "holds the catalogue and the ingest tool — what has been measured, what was "
+                "written, and the checks that did not pass. The middle column shows the component "
+                "being reviewed. Answer the designer's question about it directly, in a few "
+                "sentences, and say plainly what to change when something is wrong."
+            )
+            # ── THE BAR'S TITLE IS THE CATALOGUE, NOT "Design" ───────────────────────────
+            #
+            # The owner, 2026-09-30: *"I already know I'm in design because the header at the top
+            # of the page tells me where I am. It never goes away… when you take away navigation
+            # or change navigation on a user they lose context, so in my designs you never lose
+            # context because the navigation never goes anywhere."*
+            #
+            # So the section's own bar must not repeat the room's name — the room is already
+            # on screen, permanently, in the header. Its title is THE CATALOGUE YOU ARE WORKING
+            # IN, and the rest of that bar carries catalogue-level facts: its version, a
+            # notification bell, whatever the customer needs to see. (Those fields are still the
+            # Composer's package placeholders — version, tags, author, score, flip — and are the
+            # next thing to replace; the owner: *"it might be anything."*)
+            # ── WHICH CATALOGUE: THE INTENT CARRIES IT ───────────────────────────────────
+            #
+            # `render-design` works in the default catalogue; `render-design:<system>` works in
+            # the one named — so the drop-down in the component tree can select a catalogue and
+            # the room loads THAT one. The owner, 2026-09-30: *"you're gonna dynamically call the
+            # catalogue when it's selected from the drop-down list… the exact same information I
+            # want to see it here."*
+            #
+            # THE CATALOGUE IS A ROW, so "loading" it is resolving it: the same get-or-create the
+            # container uses, one per user per design system, made race-safe by a partial unique
+            # index. Nothing is copied and nothing is cached — the row IS the catalogue's record,
+            # and the drawing still comes from its file.
+            design_system = "raibach-ids"
+            if ":" in intent:
+                named = intent.split(":", 1)[1].strip()
+                if named:
+                    design_system = named
+            catalogue_titles = {"raibach-ids": "Raibach IDS"}
+            design_catalogue = state.prompt_sessions_api.get_or_create_design_container(
+                user_id=uid,
+                kind="design_catalogue",
+                title=catalogue_titles.get(design_system, design_system.replace("-", " ").title()),
+                description="The catalogue this design system's components are drawn from.",
+                keys={"design_system": design_system},
+            )
+            design_title = (design_catalogue or {}).get("title") or "Design"
+            # The room is told WHICH catalogue it is in, by id and by system name, so anything
+            # that wants to show the same thing the component tree shows reads it from here
+            # rather than knowing the default.
+            design_catalogue_facts = {
+                "system": design_system,
+                "id": str(design_catalogue["id"]) if design_catalogue else None,
+                "title": design_title,
+                # ── AND THE CATALOGUE'S OWN NAME, WHICH IS NOT THE CONTAINER'S TITLE ─────────
+                #
+                # The owner, 2026-09-30, on the bar at the top of the room: *"The catalog name goes
+                # in the top where we put the prompt name."* The container's title is "Raibach IDS"
+                # (the design SYSTEM), and the label he wants is the catalogue's own `title` field,
+                # read from the file that declares it — "Raibach Prompt Composer Catalog" — which is
+                # the same string the tree block below draws at its head. One source, two readers.
+                "name": (a2ui_catalog_for("prompt-composer") or {}).get("title") or "Catalog",
+                # ── AND THE TWO NUMBERS THE HEAD'S OWN DRAWING HAS PLACES FOR ──────────────
+                #
+                # The head element (f-40001207-3559, measured from Figma node 40001207:3559)
+                # draws a name line, a second line under it, and a description block. Those are the
+                # fields the DESIGN has, so these are the facts that load into them: how many
+                # components the catalogue declares, and the catalogId it is published at. Read from
+                # the catalogue document itself — the same source the tree below reads — so the
+                # number on screen and the number in the file cannot disagree.
+                "count": f"{len((a2ui_catalog_for('prompt-composer') or {}).get('components') or {})} components",
+                "catalogId": (a2ui_catalog_for("prompt-composer") or {}).get("catalogId") or "",
+            }
+
+            # ── THE COMPONENTS, READ ON ASSEMBLY AND DELIVERED IN THE TREE ───────────────
+            #
+            # The owner, 2026-09-30: *"the individual line items in the component data tree would be
+            # delivered as metadata from the database… every single component in that list needs to
+            # have a representation in the database, it needs to be related to its meta-data."* So
+            # the assembly reads them and puts them IN THE DATA MODEL, where a surface can bind to
+            # them — the list the room is about. There is no UI for it yet and none is invented
+            # here: the items are delivered, with what we measured about each.
+            design_elements_list = []
+            if state.prompt_sessions_api:
+                try:
+                    with state.prompt_sessions_api.get_db() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """
+                            SELECT title, description, is_archived, metadata
+                              FROM prompt_sessions
+                             WHERE user_id = %s AND metadata->>'session_type' = 'design_master'
+                             ORDER BY metadata->>'element_key'
+                            """,
+                            (uid,),
+                        )
+                        for row in cursor.fetchall():
+                            if isinstance(row, dict):
+                                title, desc, archived, meta = (row.get("title"), row.get("description"),
+                                                               row.get("is_archived"), row.get("metadata"))
+                            else:
+                                title, desc, archived, meta = row
+                            if isinstance(meta, str):
+                                meta = json.loads(meta) if meta.strip() else {}
+                            meta = meta or {}
+                            design_elements_list.append({
+                                "key": meta.get("element_key"),
+                                "name": title,
+                                "description": desc or "",
+                                "catalogs": meta.get("catalogs") or "",
+                                "removed": bool(archived),
+                                "figma": meta.get("figma") or {},
+                                "last_ingest": meta.get("last_ingest") or {},
+                                # ── AND THE SAME ROW IN THE SHAPE A CATALOG ELEMENT DRAWS ──
+                                #
+                                # The owner, 2026-09-30: *"I want to see the data called from the
+                                # database. That's how that list should be assembled. The AI should
+                                # be calling the fields from the database and injecting [them] into
+                                # something… anything from the lit catalog."*
+                                #
+                                # So the row carries the fields the catalogue's own list element
+                                # reads (`ConsoleCardGrid` → `agent-card`: id, title, description,
+                                # status), composed HERE from the row the database holds — not
+                                # re-worded by whoever draws it, and not a second list: the raw
+                                # facts above stay exactly as they were for every other reader.
+                                # The status is the ingestion workflow's own state — removed from
+                                # the catalogue, or the verdict the last ingest recorded, or that
+                                # nothing has been ingested yet — never a colour invented here.
+                                "id": meta.get("element_key"),
+                                "title": title,
+                                "status": (
+                                    "Removed" if archived
+                                    else (meta.get("last_ingest") or {}).get("verdict")
+                                    or ("Ingested" if meta.get("last_ingest") else "Not ingested")
+                                ),
+                            })
+                        cursor.close()
+                except Exception as e:
+                    _warn(f"the design section's component list could not be read: {e}")
+
+            # ── WHAT SHE KNOWS WHEN SHE SPEAKS: THE SECTION'S OWN RECORD ────────────────
+            #
+            # The owner, 2026-09-30: *"she's not talking about anything because she doesn't know
+            # what the fuck is going on. She manages all of this — she can remove things, add
+            # things, edit that list on the left-hand side — she has to be able to go through that
+            # database to understand what the metadata is."*
+            #
+            # The Composer's seat fills her context from the package's workspace, built from the
+            # values the surface bound. Design's metadata is not in a workspace: it is in the
+            # elements, the sessions and the conversations, so THAT is what is handed to her —
+            # assembled here, from the database, on every assembly. She is not told to guess.
+            design_grace_context = design_grace_instructions
+            if design_elements_list:
+                lines = []
+                for e in design_elements_list:
+                    last = e.get("last_ingest") or {}
+                    fig = e.get("figma") or {}
+                    facts = [f"catalogs {e['catalogs']}"]
+                    if fig.get("node_id"):
+                        facts.append(f"figma node {fig['node_id']}")
+                    if last.get("kind"):
+                        facts.append(f"last {last['kind']}")
+                    if last.get("verdict"):
+                        facts.append(f"verdict {last['verdict']}")
+                    if e.get("removed"):
+                        facts.append("REMOVED from the catalogue")
+                    lines.append(f"- {e['key']}: " + "; ".join(facts))
+                design_grace_context += (
+                    "\n\nTHE COMPONENTS IN THIS SECTION'S CATALOGUE (" + str(len(design_elements_list)) +
+                    "), as the database holds them right now:\n" + "\n".join(lines[:60])
+                )
+            if design_conversations_list:
+                design_grace_context += (
+                    "\n\nTHE CONVERSATIONS IN THIS SECTION ("
+                    + str(len(design_conversations_list)) + "): "
+                    + ", ".join(str(c.get("title") or c.get("id")) for c in design_conversations_list[:20])
+                )
+
+
+            # ── THE PROCESSION, IN HER CHAT OUTPUT — FROM THE DATABASE, NOT FROM REACT ───
+            #
+            # THE INGEST'S OWN NOTE SAYS WHERE IT BELONGS. In its Grace column the record of what
+            # this session did is drawn above her under a "Added in this session" toggle, and the
+            # file says of itself: *"Eventually a slot in the chat output as part of the trace; for
+            # now a section at the top of this column."* The owner, 2026-09-30: *"that is supposed
+            # to be in the chat output."*
+            #
+            # SO IT GOES WHERE THE TRACE ALREADY GOES. The seat emitted in this tree already
+            # carries `trace-view` — a TraceFeed bound to `/trace/entries` and
+            # `/trace/breadcrumbCount` — and that slot is drawn in her chat output on the rail's
+            # Trace tab. The ONE thing missing was that this room's model never carried `/trace`:
+            # the shell writes that path for the console's and the composer's models only, and a
+            # feed bound to a path that is not there shows its waiting state.
+            #
+            # AND THE ROWS COME FROM THE DATABASE. Not from the client, and not from a second
+            # reader: `_activity_from_db` is the same source the ingest's own procession reads
+            # (the activity table first, the log only as its fallback), and each row is put in the
+            # feed's own entry shape here rather than by whoever draws it. One source, one author
+            # of the sentence — the rule this repository states for every list it renders.
+            #
+            # A READ THAT FAILS IS REPORTED, NOT SWALLOWED: the warning goes to the backend log and
+            # the feed draws its waiting state, which is the truth about a trace nobody could read.
+            design_trace_entries: list[dict[str, Any]] = []
+            try:
+                from routes.figma import _activity_from_db
+
+                _activity_rows = _activity_from_db(
+                    # ── SCOPED TO THIS DESIGN TAB, NOT THE WHOLE TOOL ──────────────────────────
+                    #
+                    # THE OWNER, 2026-09-30: *"the database — remember that activity needs to be
+                    # tied to this design tab, it's not global."* He is right, and it is now
+                    # possible: the writer records the container.
+                    #
+                    # IT WAS NOT ALWAYS. A first cut of this scoped to the Design container and
+                    # found nothing, because the rows carried an empty `session_id` — measured then:
+                    # 255 of 318 rows, the most recent that afternoon. Scoping it was "inventing a
+                    # relation the writer does not yet record", so the read was left unscoped and
+                    # the comment said why.
+                    #
+                    # THE WRITER HAS SINCE BEEN FIXED, AND THE FIX IS THE FORM IN THIS ROOM. An
+                    # ingest launched from the rail's own Submit sends `sessionId` — the Design
+                    # CONTAINER — and the activity table stores it (`routes/figma.py`, the insert
+                    # carries `session_id`/`session_title`). Measured again just now, the five most
+                    # recent rows:
+                    #
+                    #   14:21:30  ingested  1d61cd4c-178d-4a53-b833-4b2f42959369  Raibach  40001207:3559
+                    #   14:19:47  ingested  1d61cd4c-178d-4a53-b833-4b2f42959369  Raibach  40001207:3559
+                    #   …
+                    #
+                    # and `1d61cd4c-178d-4a53-b833-4b2f42959369` is the `prompt_sessions` row whose
+                    # title is `Design` — this tab's own container. The 299 rows that are still
+                    # empty are the MODAL's history, written before that and belonging to no
+                    # container: they are another tool's record, and this room no longer shows them.
+                    #
+                    # SO THE READ IS THE CONTAINER'S. A tab that has ingested nothing shows a trace
+                    # of nothing — which is a true statement about that tab, and the honest
+                    # alternative to showing it every other tab's work.
+                    #
+                    # ── AND THE PROCESSION, NOT ONLY ITS OUTCOMES ──────────────────────────────
+                    #
+                    # `outcomes=True` is the filter for a DIFFERENT question: "what was approved,
+                    # what failed, what was rejected" — three kinds of event, and NOT the ingest
+                    # itself. Measured with it set: the Design container has 5 rows and the read
+                    # returned ZERO, because all five are plain `ingested` rows. That is the wrong
+                    # list for a trace: this room's procession IS the ingesting, and a tab whose
+                    # every ingest is filtered out shows an empty trace after doing real work.
+                    # `outcomes=False` asks the container for everything it has, which is what a
+                    # trace of this tab means.
+                    50, str(design_container["id"]) if design_container else None, False
+                ) or []
+                for _i, _r in enumerate(_activity_rows):
+                    _kind = str(_r.get("kind") or "ingested")
+                    _subject = _r.get("tag") or _r.get("nodeName") or _r.get("nodeId") or "component"
+                    _error = _r.get("error")
+                    design_trace_entries.append({
+                        "id": f"{_r.get('jobId') or _subject}:{_r.get('at')}:{_i}",
+                        "timestamp": _activity_at_ms(_r.get("at")),
+                        # An audit line: the feed's own kind for a record of what happened, and the
+                        # level the checker's words carry when something went wrong.
+                        "kind": "audit",
+                        "level": "error" if _error else "info",
+                        "message": f"{_kind} — {_subject}",
+                        "detail": str(_error or _r.get("reason") or _r.get("note") or "")[:400],
+                    })
+            except Exception as e:
+                _warn(f"the design room's activity could not be read for the trace: {e}")
+
+            session_value = {
+                "id": str(design_container["id"]) if design_container else None,
+                "title": design_title,
+                "catalogue": design_catalogue_facts,
+                # A container is not a draft and has nothing to describe yet. Stated, rather than
+                # left out, so the seat reads "none" from the value instead of guessing at a
+                # missing key.
+                "description": "",
+                "is_unsaved": False,
+                "left_column": {
+                    "saving": False,
+                    "sections": initial_sections,
+                    "raw_content": json.dumps({"sections": initial_sections}),
+                },
+                "middle_column": {"compiled_output": "", "running": False},
+                "grace_instructions": design_grace_context,
+                "elements": design_elements_list,
+                # THE CHECKER'S OWN ROWS, at the path the seat's check view binds — composed
+                # above with the console's reader, so the list on screen and the list in the
+                # report are the same list. Content lives in the data model; the component
+                # references it as `/session/checks` and holds no rows of its own.
+                "checks": design_check_rows,
+                # ── THE INGEST FORM'S OWN STATE, WHICH THE HOST OWNS ────────────────────────
+                #
+                # `figma-ingest-form` refuses to decide two things — whether an ingest is running
+                # and why Submit is blocked — because only the caller that made the call knows. The
+                # host writes them HERE, and they reach the form because a bound path is re-applied
+                # on every data-model change (see the note where the form is emitted: a COMPONENTS
+                # change does not re-apply props, so patching the component is a write nothing
+                # reads). `refresh` is the tree's re-read trigger, bumped after an ingest lands.
+                "ingest": {"busy": False, "message": "", "refresh": 0},
+                "right_column": {"conversation_id": design_conversation,
+                                 "conversations": design_conversations_list},
+            }
+        else:
+            session_value = {
+                "id": None,  # in-memory only until explicit Save
+                "title": suggested_title,  # AI-generated
+                # A package being drafted has no description until someone writes
+                # one; stated, so the seat reads "none" from the model rather than
+                # from a missing key it has to interpret.
+                "description": "",
+                "is_unsaved": True,
+                "left_column": {
+                    "saving": False,
+                    "sections": initial_sections,  # slot contract (fixed), sections are AI-generated
+                    # The seat beside this column reads the workspace from
+                    # raw_content (chat-panel.leftColumnContent). A fresh
+                    # package has no row yet, so the writer supplies the same
+                    # JSON shape the database stores — without it Grace is
+                    # handed nothing and answers "the workspace is empty".
+                    "raw_content": json.dumps({"sections": initial_sections}),
+                },
+                "middle_column": {"compiled_output": "", "running": False},  # slot contract (fixed)
+                "right_column": {"conversation_id": None, "conversations": []},      # slot contract (fixed), chat is mostly static
+            }
+
+        # ── WHICH CATALOGUE THE SURFACE SAYS IT IS DRAWN FROM ───────────────────────────
+        #
+        # A DESIGN SURFACE ANNOUNCES DESIGN'S CATALOGUE. This announced the Composer's for
+        # every surface the branch builds, which was true while Design's tree came from the
+        # Composer's contract — and stopped being true the moment the branch above started
+        # emitting `design-left-panel` and `design-middle-container`, neither of which is in
+        # that catalogue. Announcing a catalogue that does not contain the surface's own
+        # components is a lie about where its names come from, and since the client resolves
+        # names against its own tables (`tag-registry.ts`), the announcement is exactly how
+        # the two halves are kept honest — see `a2ui_catalog_id` in deps.py.
+        surface_catalog_id = (
+            a2ui_catalog_id("design-artifacts")
+            if intent.startswith("render-design")
+            else A2UI_CATALOG_ID
+        )
+
         return [
             {
                 "version": "v0.9.1",
                 "createSurface": {
                     "surfaceId": "main",
-                    "catalogId": A2UI_CATALOG_ID
+                    "catalogId": surface_catalog_id
                 }
             },
             {
@@ -1143,27 +2157,18 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                     "surfaceId": "main",
                     "path": "/",
                     "value": {
-                        "session": {
-                            "id": None,  # in-memory only until explicit Save
-                            "title": suggested_title,  # AI-generated
-                            # A package being drafted has no description until someone writes
-                            # one; stated, so the seat reads "none" from the model rather than
-                            # from a missing key it has to interpret.
-                            "description": "",
-                            "is_unsaved": True,
-                            "left_column": {
-                                "saving": False,
-                                "sections": initial_sections,  # slot contract (fixed), sections are AI-generated
-                                # The seat beside this column reads the workspace from
-                                # raw_content (chat-panel.leftColumnContent). A fresh
-                                # package has no row yet, so the writer supplies the same
-                                # JSON shape the database stores — without it Grace is
-                                # handed nothing and answers "the workspace is empty".
-                                "raw_content": json.dumps({"sections": initial_sections}),
-                            },
-                            "middle_column": {"compiled_output": "", "running": False},  # slot contract (fixed)
-                            "right_column": {"conversation_id": None, "conversations": []},      # slot contract (fixed), chat is mostly static
-                        },
+                        "session": session_value,
+                        # THE ROOM'S OWN TRACE, FOR THE ROOM WHOSE TRACE IS THE INGEST'S RECORD.
+                        # Console and composer models get this path from the shell (the app's own
+                        # logger); Design's procession is what the ingest did to this catalogue, so
+                        # it is composed above, from the database, and carried here — which is why
+                        # nothing on the client writes it. Absent for every other intent, where the
+                        # name is never evaluated (the conditional is lazy).
+                        **(
+                            {"trace": {"entries": design_trace_entries, "breadcrumbCount": 0}}
+                            if intent.startswith("render-design")
+                            else {}
+                        ),
                         "ai_message": ai_message,  # AI-generated
                         "grace_greeting": True,
                         "suggested_title": suggested_title,  # AI-generated
@@ -1695,7 +2700,7 @@ Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
             status_code=400,
             detail=(
                 f"Unknown intent: {intent}. Valid intents: render-console, render-composer, "
-                f"render-session:{{id}}, render-run[:{{id}}]"
+                f"render-design, render-section:{{id}}, render-session:{{id}}, render-run[:{{id}}]"
             )
         )
 

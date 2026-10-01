@@ -50,12 +50,27 @@ export class LeftColumnHeader extends LitElement {
     promptId: { type: String, attribute: 'prompt-id' },
     /** True while the title field is open. Local, but declared so the host can see it. */
     editing: { type: Boolean, reflect: true },
+    /**
+     * Whether the Tags / Author / Score / Flip group is drawn at all. TRUE by default — the
+     * package surface draws all four as placeholders and says so.
+     *
+     * THE DESIGN SURFACE SETS IT FALSE, on the owner's instruction (2026-09-30): *"We don't need a
+     * score. There's no score for the design system. There's no flip for the design system."* He is
+     * right and it is not a styling preference: a version score is a fact about a PROMPT PACKAGE
+     * (how well it performed), and this column is a CATALOGUE — there is nothing to score, and the
+     * flip control swaps the prompt package's columns, which a catalogue does not have. Drawing
+     * both, inert, is the same offence as drawing text that is not true: it says a fact exists
+     * where none does. The title and the version label are unaffected; the surface that has no such
+     * facts simply does not declare them.
+     */
+    showMeta: { type: Boolean },
   };
 
   declare title: string;
   declare version: number;
   declare promptId: string;
   declare editing: boolean;
+  declare showMeta: boolean;
 
   /** What the person is typing, before it is committed. */
   private _draft = '';
@@ -186,6 +201,7 @@ export class LeftColumnHeader extends LitElement {
     super();
     this.title = '';
     this.version = 0;
+    this.showMeta = true; // the package surface's own behaviour, unchanged
     this.promptId = '';
     this.editing = false;
   }
@@ -249,33 +265,34 @@ export class LeftColumnHeader extends LitElement {
             ${this.version ? `Editing Version v${this.version}` : 'Editing Version —'}
           </span>
 
-          ${placeholder('Tags', html`<svg viewBox="0 0 16 16" fill="none"><path d="M8 3L14 13H2L8 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 7v3M8 11.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>No tags +`, 'tag inert')}
-
           ${/*
-             * NO ID DRAWS NOTHING AT ALL. There is no such thing as a package that is
-             * "missing" an id: it is a draft, and a draft is a normal thing to have —
-             * people try something out and choose not to keep it, which is their call and
-             * not a state worth flagging. The owner, 2026-09-28: "unsaved package needs
-             * nothing... a lot of unsaved packages. It's actually a user choice."
-             *
-             * When there IS an id it is TRUNCATED TO FIVE CHARACTERS, with the whole one on
-             * hover. A UUID is 36 characters that pushed the title out of the way, which is
-             * the opposite of what a header is for; five is enough to tell two packages
-             * apart at a glance and the full value is one hover away for the testing it
-             * exists for.
-             */ ''}
-          ${this.promptId
-            ? html`<span class="meta" title="Full id: ${this.promptId}"
-                  >ID: ${this.promptId.slice(0, 5)}…</span>`
+            * THE PACKAGE CHROME, DRAWN ONLY WHERE THE FACTS EXIST (owner, 2026-09-30: *"We don't
+            * need a score. There's no score for the design system. There's no flip for the design
+            * system."*). Tags, author, score and the flip control are things a PROMPT PACKAGE has:
+            * a package is scored on how it performed and its columns can be flipped. A catalogue is
+            * none of those, so the Design surface sets `showMeta` false and the group is not drawn
+            * at all — an inert control for a fact that does not exist is a claim, and this
+            * repository does not draw claims. The title and the version label above are unaffected.
+            */ ''}
+          ${this.showMeta
+            ? html`
+                ${placeholder('Tags', html`<svg viewBox="0 0 16 16" fill="none"><path d="M8 3L14 13H2L8 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 7v3M8 11.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>No tags +`, 'tag inert')}
+
+                ${this.promptId
+                  ? html`<span class="meta" title="Full id: ${this.promptId}"
+                        >ID: ${this.promptId.slice(0, 5)}…</span>`
+                  : nothing}
+
+                ${placeholder('Author', 'Author: —', 'meta inert')}
+
+                ${placeholder('Score', html`Score N/A<svg viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`, 'score inert')}
+
+                <span class="flip" title="Column flip — not wired up yet">Flip</span>
+              `
             : nothing}
-
-          ${placeholder('Author', 'Author: —', 'meta inert')}
-
-          ${placeholder('Score', html`Score N/A<svg viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`, 'score inert')}
-
-          <span class="flip" title="Column flip — not wired up yet">Flip</span>
         </div>
-      </div>
+
+        </div>
     `;
   }
 }
@@ -287,5 +304,30 @@ if (!customElements.get('left-column-header')) {
 declare global {
   interface HTMLElementTagNameMap {
     'left-column-header': LeftColumnHeader;
+  }
+}
+
+/*
+ * THE REACT DECLARATION. The element registers itself and React renders it from JSX in the
+ * section containers (WritingAreaIndex mounts the Composer's five components into
+ * <workspace-layout>'s slots), and without this TypeScript refuses the tag: "Property
+ * 'left-column-header' does not exist on type 'JSX.IntrinsicElements'". Every element that
+ * appears in JSX in this repository carries one; this one was only ever emitted by the A2UI
+ * renderer, which builds its tags from strings and needs no declaration.
+ *
+ * `title` is the only prop the contract binds (backend/routes/ai.py, LAYOUT CONTRACT): the
+ * version and the id come from the host, and the tags, author and score are drawn placeholders
+ * that take no props.
+ */
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'left-column-header': React.DetailedHTMLProps<
+        React.HTMLAttributes<LeftColumnHeader> & {
+          title?: string;
+        },
+        LeftColumnHeader
+      >;
+    }
   }
 }

@@ -74,6 +74,14 @@ def _provider_for_mode(mode: str) -> dict[str, Any] | None:
     surface nobody can account for. An outage that says so is survivable; an outage that
     looks like a success is not.
 
+    WHY IT IS WORTH STATING AGAIN, because the wire does fail transiently (measured
+    2026-09-29/30: bursts of `Connection error` on this provider, four in a row, then success
+    on the next call with nothing changed). Those bursts are real and they cost a person their
+    surface. What is NOT the answer is retrying here: the companion rule at `query_llm`'s
+    client explains that a second attempt spends the budget twice, so the surface's declared
+    contract stops being the one that ran. A spontaneous failure that says so, and a person who
+    can ask again, is the behaviour this file chose on purpose.
+
     `mode` is taken and unused, and stays in the signature on purpose: per-mode settings are
     real and decided in query_llm() (assembly at temperature 0.0 with reasoning off, chat at
     CHAT_TEMPERATURE), and a second model for one job would be selected here rather than

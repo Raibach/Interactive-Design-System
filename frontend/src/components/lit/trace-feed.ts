@@ -338,3 +338,22 @@ export class TraceFeed extends LitElement {
 if (!customElements.get('trace-feed')) {
   customElements.define('trace-feed', TraceFeed);
 }
+
+/*
+ * THE REACT DECLARATION, for the same reason as `left-column-header`'s above: the section
+ * containers mount this element from JSX, and a tag React does not know is a type error. It was
+ * only ever emitted by the A2UI renderer before, which builds its tags from strings.
+ */
+declare global {
+  interface HTMLElementTagNameMap {
+    'trace-feed': TraceFeed;
+  }
+}
+
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'trace-feed': React.DetailedHTMLProps<React.HTMLAttributes<TraceFeed>, TraceFeed>;
+    }
+  }
+}

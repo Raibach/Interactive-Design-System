@@ -34,6 +34,7 @@
  */
 
 import { LitElement, html, css, nothing } from 'lit';
+import './f-40001207-3559';
 import type { TemplateResult } from 'lit';
 import { loadDrawn, drawnBy, tagFor, type DrawnBy, type DrawnIndex } from '@/shared/component-drawn-by';
 import { contractFor } from '@/shared/component-contract';
@@ -60,16 +61,31 @@ interface DeclaredComponent {
   shape: string;
   props: string[];
   required: string[];
+  /**
+   * What it is, in the catalogue's own words, cut to its first sentence (see `descriptionOf`).
+   * The row shows this much; the whole text travels with the click for the metadata panel.
+   */
+  description: string;
 }
 
-/** The catalogue's own head, as catalog.json declares it. */
-interface CatalogHead {
-  id: string;
-  title: string;
-  catalogId: string;
-  components: number;
-  /** Every name the catalogue allows, in file order. */
-  declared: DeclaredComponent[];
+/**
+ * WHAT THE COMPONENT IS, IN ONE SENTENCE — the catalogue's description, stopped at its first stop.
+ *
+ * A catalogue `description` is prose written for a reader already inside the entry, so after the
+ * first sentence it turns to the build: "Implemented by <trace-feed> in
+ * src/components/lit/trace-feed.ts", "It is a VIEW and fetches nothing: the app logger and Sentry's
+ * global-scope breadcrumbs are read by lib/trace-source.ts…". The row's description line is the
+ * design's ONE-LINE block, and the owner's rule for this row is that the build's facts are read in
+ * the metadata panel rather than in the tile — so the first sentence is what the row says, and the
+ * rest is not dropped: it goes with the click, where the panel shows the whole of it.
+ *
+ * A description with no full stop is returned whole: cutting a sentence that was never ended would
+ * lose the end of it, and a row that says less than the catalogue does is worse than a long line.
+ */
+function descriptionOf(text: unknown): string {
+  const s = String(text ?? '').trim();
+  const firstStop = s.search(/\.(\s|$)/);
+  return firstStop === -1 ? s : s.slice(0, firstStop + 1);
 }
 
 /**
@@ -86,7 +102,23 @@ function readComponent(name: string, entry: any): DeclaredComponent {
   const block = allOf && allOf.length ? allOf[allOf.length - 1] ?? {} : entry ?? {};
   const props = Object.keys(block?.properties ?? {});
   const required = Array.isArray(block?.required) ? block.required : [];
-  return { name, shape: allOf ? `allOf(${allOf.length})` : 'flat', props, required };
+  return {
+    name,
+    shape: allOf ? `allOf(${allOf.length})` : 'flat',
+    props,
+    required,
+    description: descriptionOf(block?.description),
+  };
+}
+
+/** The catalogue's own head, as catalog.json declares it. */
+interface CatalogHead {
+  id: string;
+  title: string;
+  catalogId: string;
+  components: number;
+  /** Every name the catalogue allows, in file order. */
+  declared: DeclaredComponent[];
 }
 
 /** A catalogue's head and its declared components, from the file itself. */
@@ -210,6 +242,18 @@ export class FigmaLayersView extends LitElement {
     /** The catalogue name of the component the host has open in the preview. */
     selected: { type: String },
     open: { type: Boolean },
+    /**
+     * Whether the CATALOGUE HEAD (its name, its component count and its catalogId) is drawn above
+     * the declared rows. TRUE by default — the ingest form's rail has no separate head element and
+     * reads it here.
+     *
+     * THE DESIGN ROOM SETS IT FALSE, and the reason is the owner's first translation (2026-09-30):
+     * *"take the catalog name and give it this container from the lit catalog that I just
+     * added — f-40001207-3559."* In the design that row IS that component, so the room draws the
+     * head with the ingested element, bound from the data model, and the tree must not draw a
+     * second copy of the same three facts underneath it.
+     */
+    showHead: { type: Boolean },
   };
 
   declare pipeline: string;
@@ -219,6 +263,7 @@ export class FigmaLayersView extends LitElement {
   declare reset: number;
   declare selected: string;
   declare open: boolean;
+  declare showHead: boolean;
 
   private _state: 'loading' | 'ready' | 'absent' | 'failed' = 'loading';
   private _reason = '';
@@ -360,6 +405,7 @@ export class FigmaLayersView extends LitElement {
     // As an overlay, closed: an overlay that opens itself over the app is a thing nobody
     // asked to see. In a form, open: there the tree IS the thing being read.
     this.open = false;
+    this.showHead = true; // the ingest rail's own behaviour, unchanged
   }
 
   /** The re-read attached to focus and visibility. See connectedCallback. */
@@ -1166,14 +1212,77 @@ export class FigmaLayersView extends LitElement {
    * The chevron keeps the expanding, with its own handler and `stopPropagation`, so one click
    * does one thing: the row goes there, the chevron opens it up. Both were the row before.
    */
-  private _openComponent(tag: string): void {
+  private _openComponent(
+    tag: string,
+    facts: Array<{ label: string; value: string }> = [],
+    description = ''
+  ): void {
     this.dispatchEvent(
       new CustomEvent('open-component', {
-        detail: { tag },
+        // THE ROW'S FACTS TRAVEL WITH THE CLICK (owner, 2026-09-30). A component row shows three
+        // things now — the name, the code and the description — and everything else it used to
+        // carry (the shape, what draws it, whether the app sends it, how many properties it takes,
+        // the audit's verdict, the node it came from) is read in the metadata panel beside the
+        // preview. The tree is where those facts are measured, so the tree is where they come from:
+        // the panel does not re-derive them, and the two can never disagree. A caller with nothing
+        // to add passes none, and the panel keeps whatever else it knows about the tag.
+        detail: { tag, facts, description },
         bubbles: true,
         composed: true,
       })
     );
+  }
+
+  /**
+   * Record the chevron's own answer, rather than toggling again.
+   *
+   * The tile's chevron is a button that flips ITSELF and reports the result (`chevron-toggle` with
+   * `{open}`). Toggling here as well would flip it a second time — the two states would then
+   * disagree, and the row would draw a chevron pointing the other way from the rows it opened. So
+   * the tree records what it was told.
+   */
+  private _setDeclaredOpen(key: string, open: boolean): void {
+    if (open) this._expandedDeclared.add(key);
+    else this._expandedDeclared.delete(key);
+    this.requestUpdate();
+  }
+
+  /**
+   * THE ROW'S OTHER FACTS, IN THE WORDS THE ROW USED TO WEAR THEM.
+   *
+   * Every value here was a badge on this row a moment ago (the shape, the drawn-by chip, the in-use
+   * chip, the property count, the audit dot's sentence, the Figma node chip). Nothing is newly
+   * derived and nothing is guessed: where the row said nothing — an unmeasured component, a
+   * component the Figma map does not record — the fact says THAT, because a fact left out and a
+   * fact that is fine look the same in a list.
+   */
+  private _rowFacts(
+    comp: DeclaredComponent,
+    drawn: DrawnBy,
+    origin: { text: string; title: string } | null,
+    usage: { text: string; title: string; tone: string } | null,
+    health: { tone: string; title: string }
+  ): Array<{ label: string; value: string }> {
+    const module = String(drawn.module ?? '');
+    return [
+      { label: 'Shape', value: comp.shape },
+      {
+        label: 'Drawn by',
+        value:
+          drawn.kind === 'element'
+            ? module.replace(/^src\/components\//, '')
+            : String(drawn.note || 'nothing draws it'),
+      },
+      { label: 'In use', value: usage ? usage.text : 'not measured by the audit' },
+      {
+        label: 'Properties',
+        value: `${comp.props.length}${comp.required.length ? ` (${comp.required.length} required)` : ''}`,
+      },
+      // The audit's own sentence, without the name it prefixes it with: the panel already shows
+      // which component is open, and a value that repeats the subject is noise in a two-column list.
+      { label: 'Audit', value: health.title.replace(/^[^:]*:\s*/, '') },
+      { label: 'Figma node', value: origin ? origin.text : 'not in the Figma map' },
+    ];
   }
 
   /**
@@ -1320,26 +1429,27 @@ export class FigmaLayersView extends LitElement {
 
     const count = catalog.components;
     return html`<div class="sect">
-      <div class="secthead">Declared in this catalogue — ${count} component${count === 1 ? '' : 's'}</div>
-      <div class="sectnote">
-        from <code>catalog.json</code>: every name this catalogue allows, the shape its entry is
-        written in, and the values it accepts. The chip beside a name is what <em>draws</em> it —
-        the renderer's own resolution and the element manifest's answer, not a guess from the
-        name — the blue chip says whether anything <em>uses</em> it, and the quiet one is the
-        Figma layer it came from.
-        ${this._usageError
-          ? html` Whether anything uses a component could not be read (${this._usageError}), so no
-              row says.`
-          : nothing}
-        ${this._figmaNamesError
-          ? html` Figma layer names could not be read from the map (${this._figmaNamesError}),
-              so generated components below are shown under their ids.`
-          : nothing}
-        ${this._lastApprovedNote
-          ? html` The record of what was approved could not be read (${this._lastApprovedNote}),
-              so nothing here is marked as just added.`
-          : nothing}
-      </div>
+      ${/* THE SUB-HEADER AND THE PARAGRAPH ARE GONE (owner, 2026-09-30: *"you've got a bunch of sub
+            headers. None of that's necessary… This is not a styling exercise."*). The heading said
+            "Declared in this catalogue — N components" and the paragraph explained what a catalogue
+            entry is and what each chip means; above them the catalogue block already carries the
+            name, the count and the catalogId, and the rows below say the rest. What is NOT removed
+            is the failure reports: a read that did not happen is a fact about the list, and this
+            repository reports those rather than drawing a shorter list that looks complete. They are
+            drawn only when something actually failed. */ ''}
+      ${this._usageError || this._figmaNamesError || this._lastApprovedNote
+        ? html`<div class="setbad">
+            ${this._usageError
+              ? html` Whether anything uses a component could not be read (${this._usageError}), so no
+                  row says. `
+              : nothing}${this._figmaNamesError
+              ? html` Figma layer names could not be read from the map (${this._figmaNamesError}), so
+                  generated components below are shown under their ids. `
+              : nothing}${this._lastApprovedNote
+              ? html` The record of what was approved could not be read (${this._lastApprovedNote}). `
+              : nothing}
+          </div>`
+        : nothing}
 
       ${/* THE UPDATE, MADE VISIBLE. An approve or a removal changes this list, and the change
             has to be announced rather than just happen — the spinner is what says "the list is
@@ -1361,72 +1471,101 @@ export class FigmaLayersView extends LitElement {
         const origin = this._originFor(comp.name);
         const usage = this._usageMark(comp.name);
         const health = this._healthMark(comp.name);
+        /*
+         * ONE DOT, WHERE THE DESIGN PUT IT (owner, 2026-09-30): *"just add the green dot or purple,
+         * or amber not both. the icon status slot indicates its location on the component."*
+         *
+         * There were two dots — the audit's verdict AND the purple in-use mark — and the owner's
+         * answer is one mark in the tile's status well. What it says, in the order that decides
+         * what a person does first: a finding (amber advice, red blocking, or nothing draws it)
+         * outranks everything, because it is the thing to act on; then a component the application
+         * actually uses is worth noticing; then clean. The colours are the tree's own — the same
+         * .ldot tones the two dots used, so nothing new had to be invented for one of them.
+         *
+         * NOTHING IS LOST BY SHOWING ONE. The dot's title carries both sentences — the audit's and
+         * the in-use mark's — so hovering still answers the question the second dot answered, and
+         * the metadata panel carries both in full.
+         */
+        const dotTone =
+          health.tone === 'bad' || health.tone === 'warn'
+            ? health.tone
+            : usage?.tone === 'live'
+              ? 'used'
+              : health.tone;
+        const dotTitle = usage ? `${health.title} · ${usage.title}` : health.title;
+        /*
+         * ── THE ROW'S CODE, WHICH IS NOT ITS NAME ───────────────────────────────────────────────
+         *
+         * The tile has three slots, and filling the second one with `comp.name` made the row say the
+         * same words twice: 56 of the 60 declared components have a catalogue KEY that is the same
+         * string as the name the row shows (measured 2026-09-30 — `TraceFeed`, `trace-feed`,
+         * `EvalFeed`…), so the row read *"TraceFeed … TraceFeed"*. The owner, looking at it:
+         * *"you've got trace feed and then you've got a chevron and then you've got trace feed again
+         * and then you have a description. Why that's not right."*
+         *
+         * WHAT BELONGS THERE IS THE ADDRESS, and the design says which one: its own code line reads
+         * "FigmaNode: 40001185-2176" — the node the component was drawn from — and that is the fact
+         * the old row carried too (the chip that sat right after the name). The Figma map holds one
+         * for 24 of the 60. Where it holds none, the ELEMENT TAG is the address that is left — for
+         * `TraceFeed` that is `trace-feed`, the tag the catalogue and the renderer both use — and it
+         * is shown only when it says something the name does not. Where neither differs (`trace-feed`
+         * beside `trace-feed`, one entry per name), the line is left to the description rather than
+         * repeating the name back at the reader.
+         *
+         * MEASURED AFTER THE FIRST ATTEMPT (2026-09-30): the catalogue's KEY was used as that
+         * fallback and it resolved nothing — the key IS the name for 56 of the 60 rows, and 41 rows
+         * ended up with no second line at all. The tag is the address; the key was just the name
+         * again.
+         */
+        const elementTag = tagFor(comp.name);
+        const codeLine = origin
+          ? `FigmaNode: ${origin.text}`
+          : elementTag !== this._label(comp.name)
+            ? elementTag
+            : '';
+        /*
+         * AND A DESCRIPTION THE CATALOGUE DOES NOT CARRY IS SAID, NOT LEFT BLANK. Four entries
+         * declare none — the A2UI primitives (`Text`, `Image`, `Card`, `Button`) — and their rows
+         * came up with an empty description line, which reads exactly like a row that failed to
+         * load: *"Some of these don't even load."* The row is not the place to invent a description,
+         * and it is the place to say that this catalogue has none for that component.
+         */
+        const descriptionLine =
+          comp.description || 'No description is declared for this component in this catalogue.';
         return html`
           <div
             class="lrow branch ${isSelected ? 'on' : ''}"
             style="--d:0"
             role="button"
             tabindex="0"
-            aria-expanded=${String(isOpen)}
             title="Open ${this._label(comp.name)} in the preview"
-            @click=${() => this._openComponent(comp.name)}
+            @click=${() =>
+              this._openComponent(comp.name, this._rowFacts(comp, drawn, origin, usage, health), comp.description)}
             @keydown=${(e: KeyboardEvent) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                this._openComponent(comp.name);
+                this._openComponent(comp.name, this._rowFacts(comp, drawn, origin, usage, health), comp.description);
               }
             }}
           >
-            ${/* TWO DOTS, TWO QUESTIONS, LEFT OF THE CHEVRON. The first is the audit's verdict —
-                  green clean, amber advisory, red blocking or undrawable, grey unmeasured. The
-                  second is only ever the one colour, and only when it is true: the purple says
-                  the application's own interface uses this component today. A dot you have to
-                  hunt for is a dot nobody reads, so both sit where the eye already goes. */ ''}
-            <span class="ldot ${health.tone}" title=${health.title}></span>
-            ${usage?.tone === 'live'
-              ? html`<span class="ldot used" title=${usage.title}></span>`
-              : nothing}
-            <span
-              class="lchev"
-              role="button"
-              tabindex="0"
-              aria-label=${isOpen ? 'collapse' : 'expand'}
-              @click=${(e: Event) => {
+            ${/* THE ROW IS THE DESIGN'S OWN TILE. `f-40001207-3497` is the component-node row the
+                  catalogue holds — the one that was ingested for exactly this: a catalogue component
+                  drawn as a row. Its props are the three facts the owner asked this row to carry
+                  (the name, the code, the description), it draws its own chevron, and the dot goes
+                  in the status well it reserves. Nothing about the row is rebuilt here: the tree
+                  supplies the data and answers the two events. */ ''}
+            <f-40001207-3497
+              class="lrow-tile"
+              .name=${this._label(comp.name)}
+              .code=${codeLine}
+              .description=${descriptionLine}
+              .open=${isOpen}
+              @chevron-toggle=${(e: CustomEvent) => {
                 e.stopPropagation();
-                this._toggleDeclared(key);
+                this._setDeclaredOpen(key, !!e.detail?.open);
               }}
-              @keydown=${(e: KeyboardEvent) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  this._toggleDeclared(key);
-                }
-              }}
-              >${isOpen ? '▾' : '▸'}</span
-            >
-            ${/* BOTH NAMES, NOT ONE. The LABEL is what the designer calls it — the Figma layer —
-                  and the TAG is what the tool addresses. Replacing one with the other lost
-                  whichever was dropped: `f-40001204-5752` alone is unreadable, and `System_Role`
-                  alone cannot be found in the catalogue. Beside each other they cross-reference,
-                  which is the only way to tell that they are one thing. */ ''}
-            <span class="lname">${this._label(comp.name)}</span>
-            ${isSelected
-              ? html`<span class="lonmark" title="this is the component the preview is showing"
-                  >open in the preview</span
-                >`
-              : nothing}
-            ${this._label(comp.name) !== comp.name
-              ? html`<span class="ltag" title="the catalogue's own key for it">${comp.name}</span>`
-              : nothing}
-            ${origin ? html`<span class="lorigin" title=${origin.title}>${origin.text}</span>` : nothing}
-            <span class="shape">${comp.shape}</span>
-            ${/* WHETHER IT IS THERE, ON THE ROW. One click used to be the only way to find out,
-                  and the answer on the other side was about the Figma map rather than the
-                  file. This is the file's answer, and it is the same resolution the preview
-                  loads from — so the row and the pane cannot disagree. */ ''}
-            <span class="ldrawn ${drawn.kind}" title=${drawn.note}>${markFor(drawn)}</span>
-            ${usage ? html`<span class="luse ${usage.tone}" title=${usage.title}>${usage.text}</span>` : nothing}
-            <span class="lid">${comp.props.length} propert${comp.props.length === 1 ? 'y' : 'ies'}</span>
+              ><span slot="status" class="ldot ${dotTone}" title=${dotTitle}></span
+            ></f-40001207-3497>
           </div>
           ${isOpen
             ? html`
@@ -1475,12 +1614,19 @@ export class FigmaLayersView extends LitElement {
    * and one could not be read".
    */
   private _renderCatalogueSet(): TemplateResult {
+    /*
+     * THE TABS, AND NOTHING ABOVE THEM (owner, 2026-09-30: *"you've got the catalogue. You've got a
+     * bunch of sub headers. None of that's necessary… Yes move the tabs up right just move them up.
+     * This is not a styling exercise."*).
+     *
+     * IT DREW THREE THINGS AND NEEDS ONE. Above the tabs were a title ("Raibach IDS Catalogs") and a
+     * paragraph explaining what a catalogue is — a heading and a definition, stacked over the only
+     * row that does anything. The tabs say which catalogue is open and switch it; the catalogue's
+     * own block below already carries its name, its component count and its catalogId. So the title
+     * and the paragraph are gone and the tabs move to the top of the column, which is where the
+     * owner wants them.
+     */
     return html`<div class="set">
-      <div class="settitle">Raibach IDS Catalogs</div>
-      <div class="setmeta">
-        the catalogues in this repository — no file holds them; three documents side by side,
-        each carrying its own <code>$schema</code>, <code>$id</code> and <code>catalogId</code>
-      </div>
       <div class="setlist">
         ${this._catalogues.map(
           (c) => html`<button
@@ -1570,54 +1716,50 @@ export class FigmaLayersView extends LitElement {
         <div class="catmeta">${this._catalogError || 'no reason recorded'}</div>
       </div>`;
     }
-    return html`<div class="cat">
-      <div class="cattitle">${this._catalog.title}</div>
-      <div class="catmeta">
-        <span class="catcount">${this._catalog.components} components</span>
-        <code>${this._catalog.catalogId}</code>
-      </div>
-    </div>`;
+    /*
+     * THE HEAD IS THE INGESTED ELEMENT, DRAWN FROM HERE — and that is the only way the order the
+     * owner asked for exists (2026-09-30: *"Those tabs should be above what you just added"*).
+     *
+     * The tabs, the head and the rows are three parts of ONE column, and the tabs are drawn by this
+     * element; a head emitted as a SEPARATE sibling in the slot could only ever come before the tabs
+     * or after every row. Drawn HERE, the column reads tabs, head, rows — the ingest form's own
+     * order — and the head is still the component the owner ingested from Figma rather than markup
+     * written in code, which is what he asked for first. This is the recorded-nesting pattern the
+     * catalogue already uses for ConsoleCardGrid and agent-card-element: a component instantiating
+     * its own sub-piece from its template.
+     */
+    const head = html`<f-40001207-3559
+      .name=${this._catalog.title}
+      .count=${`${this._catalog.components} components`}
+      .catalogId=${this._catalog.catalogId}
+    ></f-40001207-3559>`;
+    return html`<div class="cat">${head}</div>`;
   }
 
   render() {
     const doc = this._doc;
+    // A form reads the node it just ingested; the overlay reads everything recorded. (The fold
+    // header that used to count these is gone — see the note in the template.)
     const recorded = Object.keys(doc?.nodes ?? {});
-    // A form reads the node it just ingested; the overlay reads everything recorded.
-    const nodeIds = this.nodeId ? recorded.filter((id) => id === this.nodeId) : recorded;
 
     return html`
       <div class="wrap ${this.open ? 'open' : ''} ${this.inline ? 'inline' : ''}">
-        <button
-          type="button"
-          class="head"
-          @click=${() => {
-            this._toggled = true;
-            this.open = !this.open;
-          }}
-        >
-          <span class="htitle">Figma layers${this.nodeId ? '' : ` — ${this.pipeline}`}</span>
-          <span class="hstate">
-            ${this._state === 'loading'
-              ? html`<span class="spin" aria-hidden="true"></span> reading…`
-              : this._state === 'ready'
-                ? `${nodeIds.length} node${nodeIds.length === 1 ? '' : 's'}`
-                : this._state === 'absent'
-                  ? 'no record yet'
-                  : 'could not read'}
-          </span>
-          <span class="chev">${this.open ? '▾' : '▸'}</span>
-        </button>
+        ${/* THE HEADER BUTTON — THE DROPDOWN — IS GONE (owner, 2026-09-30: *"Get rid of the drop-down
+              Figma layers, prompt composer, drop-down… that's not necessary."*). It was a fold
+              control whose title repeated the catalogue's name, whose state line read "N nodes", and
+              whose chevron collapsed everything under it. In this column there is one catalogue and
+              one tree, so the control had nothing to choose between and its three facts were
+              restated below it by the catalogue block and by the rows. The BODY IS ALWAYS DRAWN now,
+              which is what "the tabs move up" means: the tabs are the first thing in the column,
+              directly under the search form. Nothing else about the element changed — this is
+              content removed, not a restyle. */ ''}
 
-        ${this.open
-          ? html`
-              <div class="body">
-                ${this._renderCatalogueSet()}
-                ${this._renderCatalog()}
-                ${this._renderDeclared()}
-                ${this._renderRecord()}
-              </div>
-            `
-          : nothing}
+        <div class="body">
+          ${this._renderCatalogueSet()}
+          ${this.showHead ? this._renderCatalog() : nothing}
+          ${this._renderDeclared()}
+          ${this._renderRecord()}
+        </div>
       </div>
     `;
   }
@@ -2011,6 +2153,21 @@ export class FigmaLayersView extends LitElement {
       font-size: 11.5px;
       line-height: 1.6;
       white-space: nowrap;
+    }
+    /*
+     * THE COMPONENT ROW'S TILE — the design's own node row, element f-40001207-3497, filling the row.
+     *
+     * IT CARRIES ITS OWN TYPE AND GEOMETRY, so the row around it stops being a line of text: the
+     * inherited monospace font and the row's baseline alignment belong to the badges that used to
+     * be here, and neither should reach into a catalogue element. An align-self of center is what
+     * seats a 40px band in a row laid out on a text baseline, and a min-width of zero is what lets
+     * the name and the description truncate inside it instead of pushing the row wider than the
+     * column.
+     */
+    .lrow-tile {
+      flex: 1 1 auto;
+      min-width: 0;
+      align-self: center;
     }
     .lrow.dup { background: #fffdf3; }
 

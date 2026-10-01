@@ -1456,6 +1456,166 @@
         "component"
       ]
     },
+    "figma-layers-view": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE INGESTION LEFT RAIL'S OWN COMPONENT TREE \u2014 the one the ingest form draws in its left column (`IngestModal.tsx`, above the Preview), reused here unchanged and never restyled. Implemented by <figma-layers-view> in src/components/lit/figma-layers-view.ts. What it draws, top to bottom: the catalogue strip (every catalogue the build knows \u2014 design-artifacts, prompt-composer, ecommerce, primitives \u2014 with its entry count), the selected catalogue's head and catalogId, and then `Declared in this catalogue`: one row per component with its shape (`allOf(3)` / `flat`), its Figma node, the file that DRAWS it (`drawn by lit/<file>`), and a status dot from the checker's own audit. IT READS THE CATALOGUES OFF THE BUILD (`import.meta.glob` of `catalogs/*/catalog.json`) and the audit from `/api/catalog/audit/<pipeline>` \u2014 it takes no data-model binding for those, and it is not a second copy of the catalogue: the files are the source. THE STRIP IS LIVE INSIDE THE ELEMENT: clicking a catalogue at the top sets its own `pipeline` and re-reads, so switching catalogues needs no host. It dispatches `catalog-change`, `open-component`, `open-layer` and `open-function`.",
+          "properties": {
+            "component": {
+              "const": "figma-layers-view"
+            },
+            "pipeline": {
+              "type": "string",
+              "description": "WHICH CATALOGUE'S COMPONENTS ARE LISTED \u2014 a catalogue FOLDER NAME under `src/components/A2UI/catalogs/` (prompt-composer, design-artifacts, ecommerce, primitives), not a design system's name and not a session title. Defaults to the element's own default, prompt-composer, which is what the ingest form shows and the catalogue the section's 58 rows are declared in. Binding this to `/session/catalogue/system` would be WRONG: that value is `raibach-ids`, a design system, and no catalogue is named that."
+            },
+            "nodeId": {
+              "type": "string",
+              "description": "Show one node's tree instead of every node recorded for the catalogue. Unset draws the whole catalogue's declared list, which is what the rail shows before anything is selected."
+            },
+            "inline": {
+              "type": "boolean",
+              "description": "Sit in the flow of a column rather than float over the screen. True in the ingest rail and true here \u2014 the tree is the column's content."
+            },
+            "refresh": {
+              "type": "number",
+              "description": "Bumped by the host to force a re-read \u2014 after an ingest lands, or after a commit. Unset reads once on connect."
+            },
+            "reset": {
+              "type": "number",
+              "description": "Bumped by the host to fold the tree back to its opening state \u2014 a Reset."
+            },
+            "selected": {
+              "type": "string",
+              "description": "The catalogue name of the component the host has open in the preview, so the tree can mark it. Unset marks nothing."
+            },
+            "open": {
+              "type": "boolean",
+              "description": "Whether the tree is drawn open."
+            },
+            "showHead": {
+              "type": "boolean",
+              "description": "Whether the catalogue head (name, count, catalogId) is drawn above the declared rows. True by default; the Design room sets false because the head is drawn there by the ingested element f-40001207-3559."
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "figma-ingest-form": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE INGEST RAIL\u2019S TOP HALF \u2014 the Figma URL field, the Notes field and Submit, as a catalogue element (src/components/lit/figma-ingest-form.ts). The ingestion application is the template and its left column is this form over the catalogue tree; the tree half is `figma-layers-view`, reused, and this is the half the catalogue had no element for. It is a TRANSLATION, not a second design: the same two fields with the same words, and on Submit the same `POST /api/figma/ingest` the modal runs \u2014 the parsing (`@/utils/figmaUrl`) and the endpoint already exist and neither is reimplemented in the element. IT DRAWS AND DISPATCHES ONLY: it fetches nothing, ingests nothing, and decides nothing about what a typed string means. `ingest-submit` carries `{url, notes}` verbatim and the SHELL runs the ingest.",
+          "properties": {
+            "component": {
+              "const": "figma-ingest-form"
+            },
+            "url": {
+              "type": "string",
+              "description": "Prefilled URL, when the host has one. The field stays editable either way \u2014 it is a text input, not a label."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Prefilled notes. Optional in the form and optional in the ingest."
+            },
+            "busy": {
+              "type": "boolean",
+              "description": "True while an ingest is in flight. SET BY THE HOST, never by the element: the fields lock and Submit reads 'Ingesting\u2026', and only the caller that made the call knows when it finished."
+            },
+            "message": {
+              "type": "string",
+              "description": "A line drawn under the fields \u2014 a refusal, or why Submit is blocked. The host\u2019s words, never the element\u2019s."
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "component-preview": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE MIDDLE COLUMN\u2019S PREVIEW \u2014 what a RUN loaded, drawn in the column beside the rail. Implemented by <component-preview> in src/components/lit/component-preview.ts. The Design room has TWO run triggers \u2014 Submit in the ingest form, and clicking a row in the catalogue tree \u2014 and this is the destination both of them write to, exactly as RUN on the Composer moves its view into the middle column (owner, 2026-09-30: *\"submit is run, selecting one of those components in that list is a run function. It\u2019s supposed to display it.\"*). IT DRAWS AND DISPATCHES ONLY: it fetches nothing, parses nothing and decides nothing about what a component is \u2014 the state arrives from `/session/preview`, written by the shell from the answer the ingest already returned or from the row the tree already lists. Its actions are events, never calls: `preview-approve`, `preview-discard` and `preview-collision-answer`, and the shell runs them. IT ALSO ASKS THE ONE QUESTION THE INGEST MEASURES: a layer whose NAME the design system already has on a DIFFERENT component means approving would add a second component under a name that exists, so the panel states the collision and the two answers (add it as its own, or overwrite that tag) and the answer travels back on the same data path the rest of the preview does - a view never writes to the catalogue.",
+          "properties": {
+            "component": {
+              "const": "component-preview"
+            },
+            "preview": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "description": "What a run loaded, bound as {\"path\": \"/session/preview\"}: {source, tag, name, nodeId, alreadyInCatalogue, jobId, facts[], note}. UNSET IS NOT EMPTY: with no path written it draws \"nothing loaded yet\", because an empty preview pane and a preview of nothing are different claims and only one of them is true."
+            },
+            "busy": {
+              "type": "boolean",
+              "description": "True while the approve or a re-read is in flight. Set by the HOST that made the call."
+            },
+            "message": {
+              "type": "string",
+              "description": "A line under the actions \u2014 a refusal, or why the approve did not go through. The host\u2019s words, never the element\u2019s."
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "draft-preview": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The Design room's third column when the run was an INGEST: the draft, drawn. Implemented by <draft-preview> in src/components/lit/draft-preview.ts. It loads the temporary file the ingest wrote (`.preview/<jobId>/<tag>.ts`, carried on the ingest result as `moduleUrl`) inside the same sandboxed document the ingest form's Preview pane builds - the same CSP, the same import map, the same single-module load - and draws nothing else. THE TAG IS NOT AN ADDRESS: a draft and an approved component can share a name, so a client given the NAME resolves it through the catalogue and draws the APPROVED element after the designer edited Figma (owner, 2026-09-30: 'when I go to preview a change, I'm not seeing a change. I'm seeing the old lit component because it has the same name. It's just reloading it from the lit catalog. I want to use the temporary folder.'). Given the FILE, it can only draw the draft. It fetches nothing, decides nothing, and never reaches for a catalogue element by name: the blindness is structural - the sandboxed document and its CSP, not a promise.",
+          "properties": {
+            "component": {
+              "const": "draft-preview"
+            },
+            "draft": {
+              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+              "description": "The draft to draw, bound as {\"path\": \"/session/preview/draft\"}: {jobId, tag, modulePath, moduleUrl}, written by the shell from the answer the ingest already returned. moduleUrl is the temporary file under .preview/<jobId>/ and it is what the document loads - never a name resolved through the catalogue. UNSET IS NOT EMPTY: with no draft written it draws 'no draft to preview' in words, because a blank frame and a draft that draws nothing are different claims."
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
     "CanvasFooter": {
       "type": "object",
       "allOf": [
@@ -1887,15 +2047,6 @@
           "properties": {
             "component": {
               "const": "f-40001207-3497"
-            },
-            "content": {
-              "type": "string"
-            },
-            "justify": {
-              "type": "string"
-            },
-            "align": {
-              "type": "string"
             }
           },
           "required": [
@@ -1929,6 +2080,22 @@
             },
             "align": {
               "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "description": "The catalogue's name, drawn where the Figma node's sample text read \"Components (prompt-composer)\"."
+            },
+            "count": {
+              "type": "string",
+              "description": "How many components the catalogue declares, drawn on the second line (\"59 components\"). Supplied by the writer; the measured sample text is the element's own default."
+            },
+            "catalogId": {
+              "type": "string",
+              "description": "The catalogId the catalogue is published at, drawn under the name."
+            },
+            "description": {
+              "type": "string",
+              "description": "The line in the trailing block, where the node's sample text read \"FigmaNode: \u2026\"."
             }
           },
           "required": [
@@ -2153,6 +2320,18 @@
         },
         {
           "$ref": "#/components/LeftColumnHeader"
+        },
+        {
+          "$ref": "#/components/figma-layers-view"
+        },
+        {
+          "$ref": "#/components/figma-ingest-form"
+        },
+        {
+          "$ref": "#/components/component-preview"
+        },
+        {
+          "$ref": "#/components/draft-preview"
         },
         {
           "$ref": "#/components/f-40001204-5752"

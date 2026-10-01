@@ -102,7 +102,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-56 trusted components — 17 A2UI Basic Catalog primitives + 39 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 56 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+60 trusted components — 17 A2UI Basic Catalog primitives + 43 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 60 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
@@ -119,6 +119,8 @@ Workspace:      workspace-layout · prompt-section-editor · compiled-output-vie
                 prompt-input-section · gripper-prompt-input · role-dropdown
                 role-tile · status-bar-prompt-input · prompt-textarea
                 model-selector-button · user-response-bubble
+Design room:    design-left-panel · design-middle-container · component-preview · draft-preview
+                figma-ingest-form · figma-layers-view
 ```
 
 ---

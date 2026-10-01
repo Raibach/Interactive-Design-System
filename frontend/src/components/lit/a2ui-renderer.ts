@@ -246,6 +246,10 @@ const COMPOSITE_MAP: Record<string, string> = {
   OutputControls: 'output-controls',  // the middle column's header row, drawn in every view of it
   CanvasFooter: 'canvas-footer',      // the canvas column's foot: the host's controls and the tone switch
   LeftColumnHeader: 'left-column-header', // the prompt's own bar — title, version, and what is known about it
+  // THE DESIGN ROOM'S LEFT COLUMN is `figma-layers-view` — the ingestion rail's own component tree,
+  // REUSED. It needs no line here: the name is already kebab, so `pascalToKebab` is the identity and
+  // step 5 below finds it in the allowlist. It was entered in the catalogue and the allowlist; no
+  // component was authored for that column, which is the owner's instruction and the point of it.
   // THE CATALOGUE NAME THE ELEMENT WAS NEVER GIVEN. `agent-card` is declared as its own tag in
   // the allowlist, and nothing defines a tag by that name — so the entry resolved to nothing and
   // its row read "nothing draws this" while the console drew cards all day. The element is
