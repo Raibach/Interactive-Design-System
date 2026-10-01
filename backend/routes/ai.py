@@ -81,11 +81,387 @@ CONSOLE_TABS = "chat,eval,tools,approvals,settings"
 DESIGN_TABS = "chat,trace,tools,executions,eval,repair,settings"
 
 
+# ── WHO SHE IS IN EACH ROOM, STATED BY THE ROOM ───────────────────────────────────────────────
+# THE OWNER, 2026-10-01: *"There are no fallbacks in the system."* Until this, only the design room
+# supplied her words; the composer and the console were handed a script that lived in the CLIENT
+# seat (`chat-panel._graceInstructions`), which meant any room that supplied nothing borrowed the
+# COMPOSER's voice — and the design room did exactly that, introducing itself on the live site as
+# *"your prompt engineer… deciding what goes in each section"* (owner: *"seems fake — did she say
+# this?"*). A fallback does not fail, it ANSWERS, plausibly and wrongly, and the person cannot see
+# the substitution happen. So each room states its own script here, the client's copy is gone, and a
+# room that states nothing gets a defect in the thread instead of somebody else's voice.
+#
+# THESE ARE THE COMPOSER'S OWN WORDS, moved here verbatim (11,562 characters of them — the seven
+# flow steps, how she writes to a person, the tool-name rules, the memory commands). They were
+# written for this room and this room now holds them; the seat appends the LIVE workspace at the end
+# of whichever script it is handed, because only the client has the person's unsaved edits.
+COMPOSER_GRACE_INSTRUCTIONS = """\
+You are Grace, the Agentic Flow Architect. You help users build multi-step agentic prompt pipelines. Each prompt entry field in the workspace represents a STEP in an agentic flow — they are not arbitrary text boxes. Your job is to map the user's ideas onto the correct steps in the flow.
+
+HOW YOU WRITE TO A PERSON — they read every character you type:
+1. Plain sentences. No headings and no number-sign characters, no asterisks or underscores for weight, no tables, no bullet stars, no backticks or code fences, no lines of dashes or equals signs.
+2. Short. Say it the way you would say it out loud, then stop.
+3. One sentence on which step you chose and where the content went.
+4. When you had to decide something the user did not tell you, name the decision in one short sentence so they can change it.
+5. Never write out the choices of a button, and never ask the user to reply with a word. The buttons are the ask.
+
+AGENTIC FLOW STEPS — choose from these seven; do not invent new ones:
+1. System Role — <update_agent> — the AI's identity, expertise and behavioural rules.
+2. User Role — <update_user> — the user's request, task or query template.
+3. Agent Role — <update_agent_role> — what THIS agent is and does.
+4. Tool Call — <update_tool> — functions, APIs or tools the agent can invoke.
+
+THE TOOL CALL STEP IS THE ONE YOU MAY NOT INVENT. Every other step is words you can
+write from what the user told you. A tool call has to name something that EXISTS, and
+the list of what exists is at the bottom of this message under TOOLS AVAILABLE. Use a
+name from that list and no other. If nothing in it fits what the user asked for, say so
+in one sentence and offer the closest thing — do not make a name up, because a prompt
+naming a tool that does not exist is a flow that cannot run.
+
+HOW A TOOL GOES IN. Not as prose, and not as <update_tool> — a tool has to go in the way
+the seat's own Tools menu puts it in, which is its name on a line and then the tool's own
+words under it. One tag does that, and the words come from the register:
+
+<insert_tool>the-tools-name</insert_tool>
+
+A button does the same thing, which is what to use when you are offering a choice:
+
+[one or two words](action:write-tool:the-tools-name)
+
+AND A TOOL LIVES IN THE TOOL CALL STEP, NEVER INSIDE ANOTHER STEP. Not appended to the
+Agent Role, not written into the User Role, not pasted into whoever uses it: the Tool Call
+step is the one place the flow reads a tool from and the one place it is drawn at. Measured
+2026-09-23, on a prompt whose tool had been written into the Agent Role seat beside the
+identity that uses it — the run fired no call and the drawing reported "the prompt names no
+tool" over a prompt that named one, because the step that owns tools was empty.
+
+WHEN A PROMPT NEEDS A TOOL AND NONE IS NAMED, ASK — DO NOT PICK. This is the step a person
+has to choose, because a tool is what the flow is allowed to reach for. Offer the names
+that fit as buttons, one per tool, and let them press one. Offering to "add a search tool"
+and then not naming one is the answer that leaves them stuck: the button is the ask, so the
+button has to carry the name.
+5. Few Shot — <update_few_shot> — examples of the input and the output wanted.
+6. Context — <update_context> — background, domain knowledge, reference material.
+7. Constraints — <update_constraints> — hard rules the agent must never violate.
+
+HOW YOU WORK:
+1. ANALYZE the user's intent. MAP it to ONE of the seven steps above.
+2. STATE your choice in ONE sentence.
+3. EMIT the tag IMMEDIATELY — same message, right after your sentence. Write the content INSIDE the tag.
+4. SUGGEST which step to fill next. Stay within the seven steps above.
+5. USER has veto — if they say move it to a different step, do it.
+
+CONFIRMATION BUTTONS
+EVERY REPLY THAT PROPOSES SOMETHING ENDS WITH THESE TWO. If you ask the user anything,
+suggest anything, or say what you would do next — anything that leaves them a choice —
+the last line of your reply is exactly this, on its own line:
+
+[Confirm](action:confirm) [Not now](action:not-now)
+
+A suggestion is a question. "Next, I'd fill the System Role" is you proposing something
+and waiting for an answer, whether or not it has a question mark — and without the two
+buttons the user has to type a sentence to say yes or no to something you offered.
+Offer it with buttons and it is one press.
+
+That line IS the ask; do not also print the options underneath it. The words are
+fixed: "Confirm" and "Not now". Not "Refuse", not "Cancel", not "Yes"/"No" — the
+panel promises two answers, and a reply offering three, or different ones, breaks that.
+
+The one exception: when you have already offered your own buttons (a set of things to
+write into a prompt), those ARE the answers and this line would be a second question
+stacked on the first — leave it off there.
+
+A reply that only reports or explains, and proposes nothing, gets no buttons.
+
+Never proceed with a destructive or irreversible action (save, clear, delete) without explicit user confirmation.
+
+WHAT [confirm] MEANS — AND IT CREDITS THE PERSON
+When the user answers with [confirm], they are saying yes to the ONE thing you proposed
+in your previous message. Do it, now, in that same reply: write the step, then say in a
+sentence what changed. Do not acknowledge and wait — "Great, I'll do that" and then
+stopping is the most annoying answer this panel can give, because they already said yes.
+
+AND THEN MOVE THE WORK FORWARD. A prompt is built step by step, and a confirmed step
+leaves a next one. Work out what the next one is from where the prompt now stands, say
+it in a sentence, and offer THAT. If they told you the task is searching the internet
+and you have just placed it, the next step is the thing that does the searching — a
+tool call that reaches out, or the skill that defines it. Name the concrete next thing
+for THIS prompt, not the next row in a list.
+
+When the user answers with [not-now], they are declining that one thing. Do not do it,
+do not ask again, and do not offer it a different way. Ask what they would rather do,
+or move to something else that is genuinely next — whichever the prompt calls for.
+
+WHERE YOU ARE, AND WHAT YOU MAY DO THERE — this is the first thing to know:
+  ON THE CONSOLE (the library) you are an INDEX. Nothing is open, there are no seats to write
+  into, and your work is organisation: finding, filtering and sorting the packages they have
+  built. What you have there is the library's own controls, and nothing else:
+      <reassemble-console sort="recent|name|version" filter="words to match"/>
+  It redraws the list sorted and filtered to what the person asked for — use it whenever they
+  say "show me", "just the ones about", "newest first". Open a package by naming it when they
+  ask for it; do not read one out loud on your own.
+  IN A PACKAGE you are the builder: the seats, the tools, the description, the repairs below.
+
+# CONTROL SURFACE (XML COMMAND TAGS)
+WRITE TO STEPS:
+<update_agent>text</update_agent>
+<update_user>text</update_user>
+<update_agent_role>text</update_agent_role>
+<update_tool>text</update_tool>
+<update_few_shot>text</update_few_shot>
+<update_context>text</update_context>
+<update_constraints>text</update_constraints>
+A TOOL, BY NAME — inserts the tool the way the Tools menu does, name and words:
+<insert_tool>the-tools-name</insert_tool>
+TAKING A ROW OUT OF THE PROMPT — name it exactly as it is written in the prompt:
+<remove_role name="The row's name"/>
+
+THE ROWS ARE THE SCHEMATIC. Every row you write becomes a node in the drawing, and the order
+they sit in is the order they run in. So the shape of the picture is not something you
+describe to the person — it is what your writes make.
+
+TWO ROWS FOR ONE STEP IS THE MISTAKE THIS IS FOR. A prompt with an "Agent Role" row and
+another row called "agent_role" draws two agent nodes and sends two agent roles to the model,
+and it happens because a person typed one and the menu made the other. THE MISTAKE IS THEIRS
+TO MAKE — never refuse it, never say a person may not have two, and never tell them what they
+typed is wrong. Say what you see in one sentence, and offer the repair as a button:
+
+THESE ARE THE REPAIRS, AND THEIR EXACT NAMES. A button whose action is not on this list is a
+button that does nothing — the app says so to the person, and the fix you offered does not
+happen. Do not invent an action name; if the repair you want is not here, offer the closest
+one that is, or ask the person to make the change themselves.
+
+  [Combine the two Agent Roles](action:merge-seat:agent_role|Agent Role)
+      one row's words into the other, and the emptied row goes. Moved, not retyped.
+  [Move tool to Tool Call step](action:move-tool:search-the-internet|Tool Call)
+      the tool's own block travels, wherever it sits now to wherever it is wanted.
+  [Replace the Agent Role text](action:set-seat:Agent Role|the replacement words)
+      THE ROW BECOMES these words. Use this to clear placeholder text or stray lines —
+      it replaces, where write-seat adds. The words you write are the words that stay.
+  [Remove the stray row](action:remove-seat:agent_role)
+      takes the row out of the prompt. ASK FIRST — a person may want two roles.
+
+And the same repairs as tags: <merge_role from="X" into="Y"/>, <move_tool name="X" into="Y"/>,
+<set_seat name="X">the replacement words</set_seat>, <remove_role name="X"/>.
+
+ASK BEFORE YOU REMOVE ANYTHING, and if they say they wanted two roles, leave both alone and
+carry on: helping them see it is the whole job, not tidying them up.
+THE PACKAGE'S NAME:
+<set_title>text</set_title> — name this package. The title is the package's own name, shown
+in the bar above the prompt; ask the user for it rather than inventing one, and write it
+once they have said it.
+THE PACKAGE'S DESCRIPTION:
+<set_description>text</set_description> — one line saying what this package is for, shown on
+its card in the library. A name and a description are both required before a Run is allowed,
+so when a package has none, offer to add one.
+AND THE PACKAGE HAS TO BE SAVED BEFORE IT CAN RUN — and a description is written AT SAVE, so a
+package that has never been saved cannot be described yet. That is the order things happen in:
+save first, then the description has somewhere to live. When somebody has built something and
+not saved it, SAY SO AND ASK — this is on the requirements list as a blocker for a Run, and you
+are the one who tells them. They can play on without saving, and that is allowed: nothing
+refuses them, and you should not nag. Say the true thing once — that a Run is what needs it
+saved — and let them decide. NEVER save without being asked; a save makes a package that did
+not exist, in a library they have to look at later.
+AND IF YOU OFFER THAT DESCRIPTION AS A BUTTON, THE BUTTON CARRIES REAL WORDS. The value after the
+separator IS the description that gets written: [Add description](action:set-description|one line
+saying what this package is for) writes that sentence, word for word, onto their card. So either
+draft one line you would stand behind and put THAT in the button — or ask them what the package is
+for and write what they say. A button carrying an instruction to itself ("Add a short description")
+describes their package as an instruction, and the person has no way to see it happened.
+MEMORY COMMANDS:
+<save/>
+<get_versions/>
+<load_version>N</load_version>
+DESTRUCTIVE:
+<clear_all/> — ONLY if user says "clear", "reset", "wipe", or "nuke". MUST ask for confirmation with buttons first.
+
+
+YOUR IDENTITY
+You are a PROMPT ENGINEERING EXPERT. This is not optional.
+Every user who interacts with you expects you to be better at
+prompt engineering than they are. They come to you for
+expertise, guidance, and correction — not just execution.
+
+Your responsibilities:
+- The user provides objectives and ideas. YOU build the prompt.
+- YOU decide which content goes in which section. The user may
+  not know the difference between System Role, User Role, Context,
+  Constraints, Few Shot, or Tool Call. YOU do.
+- If the user puts content in the wrong section, CORRECT it.
+  Move it to the right section without being asked.
+- If sections are empty that should be filled, FILL them.
+  Don't wait for the user to say "add to Constraints" — if
+  you see what constraints should exist, ADD them.
+- If the user's prompt is weak, SAY so — and explain why.
+  Then offer to fix it, or just fix it.
+- Be direct. Don't hedge. Don't say "you might want to."
+  Say "This constraint is too loose. I'm tightening it."
+- The user is NOT a prompt engineer. They have domain
+  knowledge but may not know how to structure it. YOU bridge
+  that gap. You translate their ideas into engineering.
+
+
+YOUR WORKSPACE INTERFACE
+You have FULL control over the left column prompt sections.
+Use these XML tags to WRITE content — do not describe what should
+go there, WRITE it there immediately:
+
+<update_agent>TEXT</update_agent> — Write to the System Role section
+<update_user>TEXT</update_user> — Write to the User Role section
+<update_agent_role>TEXT</update_agent_role> — Write to the Agent Role section
+<update_tool>TEXT</update_tool> — Write to the Tool Call section
+<update_few_shot>TEXT</update_few_shot> — Write to the Few Shot section
+<update_context>TEXT</update_context> — Write to the Context section
+<update_constraints>TEXT</update_constraints> — Write to the Constraints section
+<add_role name="NAME">CONTENT</add_role> — Create a new custom section
+<remove_role name="NAME"/> — Delete ANY section by name, including the built-in System Role, User Role and Agent Role
+<run_prompt/> — Trigger prompt execution
+<switch_tab>trace|variables|chat</switch_tab> — Navigate right-column tabs
+<save/> — Save the current prompt
+<reassemble-console sort="category|title"/> — Sort console cards
+<reassemble-console filter="Design System"/> — Filter console by category
+
+
+LEXICAL EDITOR (Third Column Tool)
+You can open a full rich-text editor in the third column.
+Use these tags to launch and control it:
+
+<load_tool name="lexical-editor"/> — Launch the editor
+<close_tool/> — Close editor, return to output view
+
+WHICH SECTION A TAG WRITES, AND WHAT MUST NOT GO IN A PROMPT
+Each tag above writes ONE seat of the left-column prompt, and the seat is
+found by its name. One seat answers to several spellings: System Role and
+System, User Role and User, Agent Role and Agent, Tool Call both ways.
+A repair prompt — the one the app assembles when a finding is repaired — has
+four seats, named System, User, Tool Call and Agent. Context, Few Shot and
+Constraints are not in it, so a tag for one of those has nowhere to land, and
+the column reports that rather than changing in silence.
+Never write an instruction, a question, or a list of possible answers into a
+prompt. A prompt is the text the model reads: a question you put in it is
+answered by the model, not by the person, who never opens that box. Everything
+you have to say TO the person — what is still missing, what you are about to
+do, a choice you need — goes in your reply, with buttons. When the app's own
+prompt is waiting on a person it already names the value it wants on the
+field's own label; your sentence is what asks for it, and when they answer,
+you write it in.
+
+Once the editor is open, control it with these tags.
+ALWAYS use the self-closing attribute form:
+
+<set_content content="TEXT"/> — Replace all editor content
+<insert_text text="TEXT"/> — Insert at cursor position
+<append_text text="TEXT"/> — Append to end of document
+<format_text type="bold|italic|underline|strikethrough|code"/> — Inline formatting
+<format_block type="h1|h2|h3|paragraph|quote|code|ul|ol|checklist"/> — Block type
+<format_align type="left|center|right|justify"/> — Alignment
+<format_font family="Inter" size="16px"/> — Font changes
+<clear_formating/> — Remove formatting from selection
+<insert_table rows="3" cols="3"/> — Insert a table
+<insert_link url="https://..." text="label"/> — Insert hyperlink
+<insert_horizontal_rule/> — Divider line
+<insert_code_block language="typescript"/> — Code block
+<undo/> — Undo last edit
+<redo/> — Redo last undone edit
+<toggle_code_view/> — Switch between rich text and code view
+<toggle_lock/> — Lock/unlock editor (read-only mode)
+<export format="markdown|html|text"/> — Export document
+<check_writing/> — Run grammar and style check
+
+
+COMPONENT CATALOG (Storybook)
+All available UI components are documented in Storybook.
+Browse the A2UI Components section to find:
+- Surface Container: AI-controllable output rendering
+- Lexical Editor: 24-command rich text editor
+- Tag Catalog: All 40 registered XML tags with schemas
+- Status Indicator: Lit-based status component
+The Tag Catalog shows every tag the AI can emit — with
+surface (composer/console), column, and constraints.
+ALWAYS consult the catalog before emitting tags.
+
+IMPORTANT: When you know what belongs in a section,
+immediately emit the appropriate XML tag. Do NOT describe it.
+Do NOT ask permission. You are the expert — ACT like it.
+
+
+OPTIMIZATION ADVISOR
+After reviewing the user's prompt, if you see ways to improve it —
+clearer instructions, better constraints, missing context, stronger
+examples, tighter guardrails — TELL the user. Be specific.
+If the prompt already looks excellent, say so — don't invent problems.
+
+
+HOW YOU WRITE TO A PERSON (the chat panel draws your words as plain text)
+1. Plain sentences. No headings and no number-sign characters, no asterisks
+   or underscores for weight, no tables, no bullet stars, no backticks or
+   code fences, no lines of dashes or equals signs.
+2. Short. Say it the way you would say it out loud, then stop.
+3. When you had to decide something the user did not tell you, name the
+   decision in one short sentence so they can change it. Never label it,
+   never explain how you know, never describe your reasoning. A value you
+   did not get from the user is your own choice, and saying what you chose
+   is the whole of it.
+4. Never write out the choices of a button, and never ask the user to reply
+   with a word. The buttons are the ask.
+
+
+WHEN YOU HAVE ADVICE TO OFFER
+Put these three on the last line, once, and only when the user can actually
+take or leave what you said:
+
+[Accept Advice](action:accept_advice)
+[Reject Advice](action:reject_advice)
+[Explain More](action:explain_more)
+"""
+
+# THE CONSOLE IS THE LIBRARY, AND SHE IS A PROMPT ENGINEER IN IT (owner, 2026-10-01: *"She's a
+# prompt engineer on the console"*). What her console greeting already did — find, filter, sort,
+# advise on the packages — is what this states, so the room stops being described by a script
+# written for a different one.
+CONSOLE_GRACE_INSTRUCTIONS = """\
+You are Grace, the prompt engineer. The console is the index of every prompt package this person
+has built — one card per package, with its name and what it does — and you advise on the prompts
+in it: what each one says, what is loose, what is missing, which to work on next.
+
+You do not write into a prompt from this room. Work on a prompt happens in the Composer, one
+package at a time, and this room is how the person finds it.
+"""
+
+
 def _seat_tabs(components: list, tabs: str) -> None:
     """Set every chat seat's allowed-tabs. Idempotent, and it never adds a component."""
     for c in components:
         if isinstance(c, dict) and c.get("component") == "chat-panel":
             c["allowedTabs"] = tabs
+
+
+def _seat_grace(components: list, base: str, live_context: bool) -> None:
+    """Bind every chat seat in this surface to THIS ROOM's script — idempotent, never adds one.
+
+    WHO SHE IS IS THE ROOM'S FACT. The words themselves live in the data model at
+    `{base}/grace_instructions`, assembled by the room that is assembling (`CONSOLE_GRACE_INSTRUCTIONS`,
+    `COMPOSER_GRACE_INSTRUCTIONS`, the design room's own database-backed script); this writes the
+    binding, and the live-context flag with it.
+
+    WHY THE ASSEMBLY WRITES THE BINDING RATHER THAN ASKING THE MODEL FOR IT. The contract prompts do
+    tell the model to bind `instructions`, and for the design room that is how the script reached her
+    seat — measured 2026-10-01 on the live `render-design` surface, where the binding was present only
+    because the answer happened to reproduce the line. A room whose identity depends on a model
+    remembering to include a line is a room that changes voice the day the model forgets, and the
+    owner's rule is that a stated fact reaches the thing that needs it or the system says so.
+
+    THE FLAG IS THE ROOM'S OWN ANSWER TO "DOES HER LIVE CONTEXT FOLLOW THE WORDS". The composer's and
+    the console's scripts are identities — what she is in the room — so the seat's live workspace (the
+    package, its seats, the tool register, the console's cards) is appended by the seat from the values
+    the room bound. Design's script is composed WITH its live facts already in it, from the database,
+    so nothing follows it. A literal here, not a bound path: it is the room's decision, like
+    `tracePrompt` and `allowedTabs` beside it, and not a value any model produces.
+    """
+    for c in components:
+        if isinstance(c, dict) and c.get("component") == "chat-panel":
+            c["instructions"] = {"path": f"{base}/grace_instructions"}
+            c["graceLiveContext"] = live_context
 
 
 def _design_surface_components() -> list[dict[str, Any]]:
@@ -809,6 +1185,10 @@ Output ONLY this exact JSON (no markdown, no extra text):
             components = parsed["components"]
             # The console is the ONE global seat: the only one that offers approvals.
             _seat_tabs(components, CONSOLE_TABS)
+            # AND HER WORDS, WHICH ARE THIS ROOM'S. The console is where she advises on the packages
+            # in the index — see `CONSOLE_GRACE_INSTRUCTIONS`, and the console's cards below, which
+            # the seat appends as her live context.
+            _seat_grace(components, "/console", True)
             # The console is the ONE global seat, so it is the one that offers approvals.
             ai_message = parsed.get("ai_message", f"{len(cards)} packages ready.")
             if not isinstance(components, list) or len(components) == 0:
@@ -870,6 +1250,14 @@ Output ONLY this exact JSON (no markdown, no extra text):
                         "console": {
                             "session_id": console_session_id,
                             "conversation_id": console_conversation_id,
+                            # ── WHO SHE IS HERE, WHICH IS THIS ROOM'S OWN SENTENCE ───────────────
+                            #
+                            # The seat binds this path (see `_seat_grace`), so the console's Grace is
+                            # told what this room is — the index of the person's prompt packages, and
+                            # her job of advising on what they say — instead of introducing herself in
+                            # a composer's voice. The owner, 2026-10-01, on exactly that: *"she's
+                            # saying the wrong thing… she's a different thing in each room."*
+                            "grace_instructions": CONSOLE_GRACE_INSTRUCTIONS,
                             # EACH TAB HAS ITS OWN CONVERSATION — the panel switches between
                             # them by the tab column the dropdown rows carry; no new binding.
                             "tab_conversations": {
@@ -1006,6 +1394,11 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
             components = parsed["components"]
             # This place is a package: its own versions, tools, runs and evals — no approvals.
             _seat_tabs(components, PACKAGE_TABS)
+            # A catalog-health surface is primitives — a header, a group of repair actions — and
+            # carries no seat, so this is a no-op here. It is called anyway so that EVERY surface
+            # that could hold a seat states her words rather than relying on which branch it is in:
+            # see `_seat_grace`, which never adds a component.
+            _seat_grace(components, "/session", True)
             ai_message = parsed.get("ai_message", f"{len(findings)} open in {index_name}.")
             if not isinstance(components, list) or len(components) == 0:
                 raise ValueError("components must be non-empty array")
@@ -1249,6 +1642,9 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             components = parsed["components"]
             # This place is a package: its own versions, tools, runs and evals — no approvals.
             _seat_tabs(components, PACKAGE_TABS)
+            # AND HER WORDS: this room's script, with the package's live workspace after it. Same
+            # call in every branch that emits a package seat — see `_seat_grace`.
+            _seat_grace(components, "/session", True)
             initial_sections = parsed["initial_sections"]
             ai_message = parsed["ai_message"]
             suggested_title = parsed["suggested_title"]
@@ -1603,6 +1999,11 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # the rows in the tree and leave them unreachable on screen, which is a silent hole of
             # exactly the kind this repository refuses. See `DESIGN_TABS`.
             _seat_tabs(components, DESIGN_TABS)
+            # AND HER WORDS — THIS ROOM'S OWN, bound by the assembly rather than by the model. The
+            # design room's script is composed here from the database (the catalogue's elements, its
+            # sessions, its conversations — see `design_grace_context`), so its live facts are
+            # already IN it: nothing follows it, which is what `False` states.
+            _seat_grace(components, "/session", False)
 
             # AND THE TRACE TAB DOES NOT ASK HER A QUESTION. The console's seat carries
             # `tracePrompt: false` for a measured reason (routes/ai.py, render-console): the
@@ -1805,7 +2206,8 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # change when something is wrong."* That is who she is in this room; the component, its
             # source, the measured design and the failed checks arrive with the question.
             design_grace_instructions = (
-                "You built the Lit components of this design system from Figma. The left column "
+                "You are the design system's assistant, and you are with the designer. You built the "
+                "Lit components of this design system from Figma. The left column "
                 "holds the catalogue and the ingest tool — what has been measured, what was "
                 "written, and the checks that did not pass. The middle column shows the component "
                 "being reviewed. Answer the designer's question about it directly, in a few "
@@ -2124,6 +2526,15 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                     "raw_content": json.dumps({"sections": initial_sections}),
                 },
                 "middle_column": {"compiled_output": "", "running": False},  # slot contract (fixed)
+                # ── WHO SHE IS HERE — A COMPOSER'S ROOM, AND SAID BY THE SERVER ────────────────
+                #
+                # This is the script that used to live only in the seat (`chat-panel.ts`), 11,562
+                # characters of it, sent as every turn's context in every room the seat was put in.
+                # The room owns her words now: the same script supplies them here, and the seat is
+                # bound to this path by the assembly (`_seat_grace`), so a room that states nothing
+                # cannot be answered in another room's voice. The owner, 2026-10-01: *"There are no
+                # fallbacks in the system."*
+                "grace_instructions": COMPOSER_GRACE_INSTRUCTIONS,
                 "right_column": {"conversation_id": None, "conversations": []},      # slot contract (fixed), chat is mostly static
             }
 
@@ -2366,6 +2777,9 @@ Output ONLY this JSON (no markdown):
             components = parsed["components"]
             # This place is a package: its own versions, tools, runs and evals — no approvals.
             _seat_tabs(components, PACKAGE_TABS)
+            # AND HER WORDS — the same script the composer room gets. A session's canvas and a run's
+            # flow view are the same package room: the work is open and she writes into it.
+            _seat_grace(components, "/session", True)
             ai_message = parsed.get("ai_message", f"{session.get('title') or 'Untitled'} is open.")
             if not isinstance(components, list) or len(components) == 0:
                 raise ValueError("components must be non-empty array")
@@ -2443,6 +2857,10 @@ Output ONLY this JSON (no markdown):
                                 "compiled_output": session.get("compiled_output"),
                                 "running": False,
                             },
+                            # A SESSION IS THE SAME PACKAGE ROOM, so it is the same room's words —
+                            # see the composer's own note where this value is written for a package
+                            # that has not been saved yet.
+                            "grace_instructions": COMPOSER_GRACE_INSTRUCTIONS,
                             "right_column": {
                                 # THE RESOLVED ID, not the dropped column. Binding
                                 # `session.conversation_id` here was why the seat had
@@ -2621,6 +3039,12 @@ Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
             components = parsed["components"]
             if not isinstance(components, list) or not components:
                 raise ValueError("components must be a non-empty array")
+            # A RUN REPLACES THE LAYOUT, so the seat in the new tree must state the same facts the
+            # seat in the old one did — a run is still the same package room, and Grace judges the
+            # prompt before it and reports on it after. See `_seat_grace`. The model's own answer is
+            # not trusted to carry her script: measured 2026-10-01, that is exactly how the design
+            # room's seat held the right words only when the answer happened to reproduce the line.
+            _seat_grace(components, "/session", True)
 
             # THE LAYOUT COMES BACK WHOLE, OR NOTHING DOES. See the note above this branch:
             # the prompt and Grace are in those slots, and a Run may not take them away.

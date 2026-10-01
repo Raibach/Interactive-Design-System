@@ -821,12 +821,24 @@ export const TAG_REGISTRY = {
       state: { type: 'enum', values: ['idle', 'streaming', 'error'], default: 'idle' },
       /**
        * WHO SHE IS IN THE ROOM THAT BINDS THIS. A surface that binds it owns her instructions for
-       * its own turns; a surface that does not gets the Composer's script, unchanged. Design binds
-       * it so that she answers as the design system assistant instead of reasoning about prompt
-       * pipelines over a component tree — the fault the owner found on 2026-09-30: *"she's not
-       * talking, she's not thinking, because some dumb ass AI has put a hardcoded mess in there."*
+       * its own turns; a surface that binds none is REFUSED rather than answered in another room's
+       * voice — a seat that borrowed the Composer's script for every room was the fault the owner
+       * found on 2026-09-30: *"she's not talking, she's not thinking, because some dumb ass AI has
+       * put a hardcoded mess in there."* Design binds its own so she answers as the design system
+       * assistant instead of reasoning about prompt pipelines over a component tree; the console
+       * and a package each bind a script of their own. See `_seat_grace` in routes/ai.py, and
+       * `_gracePrompt` in the element for the refusal.
        */
       instructions: { type: 'string', optional: true },
+      /**
+       * WHETHER THIS SEAT'S LIVE WORKSPACE FOLLOWS THE ROOM'S WORDS. The room states it, like
+       * `tracePrompt`, because nothing in the payload distinguishes one seat from another: a
+       * composer's script is an identity and the package on screen is her material, so its live
+       * facts follow; the design room's script already carries its live facts, read from the
+       * database on every assembly. Absent is NOT false — the seat refuses the turn and says the
+       * surface never stated it.
+       */
+      graceLiveContext: { type: 'boolean', optional: true },
     },
     events: ['message-sent', 'command-received'],
     constraints: [],

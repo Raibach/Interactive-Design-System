@@ -227,6 +227,22 @@ export class ChatPanel extends LitElement {
      * two seats — both carry a conversationId and a sessionId.
      */
     tracePrompt: { type: Boolean, attribute: 'trace-prompt' },
+    /**
+     * WHETHER THIS SEAT'S LIVE WORKSPACE FOLLOWS THE ROOM'S WORDS.
+     *
+     * The room states it, like `tracePrompt` above and for the same reason: nothing in the payload
+     * distinguishes one seat from another, so the surface is the only thing that knows what the words
+     * it bound are FOR. A composer's script is an identity — she is a prompt engineer and the package
+     * on screen is her material — so its live facts (the package, its seats, the tool register) ride
+     * after it. The design room's script is composed with its live facts already inside it, read from
+     * the database on every assembly, so nothing follows it; appending the package shape there would
+     * put "name: <catalogue>" over a room that has no package.
+     *
+     * UNDEFINED IS NOT FALSE, and it is not "false by default" either: a surface that does not state
+     * this has not been examined, and `_gracePrompt` refuses the turn and says so rather than deciding
+     * for it — see there. Set by `_seat_grace` in routes/ai.py, never by a model.
+     */
+    graceLiveContext: { type: Boolean, attribute: 'grace-live-context' },
   };
 
   // `declare` — NOT a class field. With `useDefineForClassFields` true, a plain field
@@ -472,6 +488,25 @@ export class ChatPanel extends LitElement {
   declare allowedTabs: string;
   /** Whether the rail's Trace tab sends its prompt. See the property above. */
   declare tracePrompt: boolean;
+  /**
+   * Whether the seat appends its live workspace after the room's words — `undefined` when the
+   * surface never said, which `_gracePrompt` treats as a defect rather than as a default. See the
+   * property declaration for why undefined is a distinct third state.
+   */
+  declare graceLiveContext: boolean | undefined;
+  /**
+   * THIS ROOM'S WORDS, bound by the assembly that drew the surface — her identity here, stated by
+   * the room and never by this element. See `_gracePrompt` for where they come from, what follows
+   * them, and what happens when a room states none.
+   *
+   * DECLARED AND NEVER INITIALIZED — a `declare` is erased at compile time, so Lit's own accessor
+   * (from `static properties`) is the only thing that owns this name. It was a plain class field
+   * with an empty-string initializer when this file still carried a script of its own, and under
+   * `useDefineForClassFields` that field SHADOWED the accessor: the surface's words landed on a
+   * property nobody read, and the seat fell back to the compiler's copy instead. The note on the
+   * property declaration above says the same thing about the same name.
+   */
+  declare instructions: string;
 
   constructor() {
     super();
@@ -2929,208 +2964,63 @@ export class ChatPanel extends LitElement {
   }
 
   /**
-   * THE ROOM'S INSTRUCTIONS, WHEN THE ROOM HAS ANY.
+   * HER INSTRUCTIONS, FROM THE ROOM, OR A REFUSAL THAT NAMES WHY THERE ARE NONE.
    *
-   * WHAT WAS WRONG (found 2026-09-30, the owner: *"she's not talking, she's not thinking, because
-   * some dumb ass AI has put a hardcoded mess in there to trick me"*): the script below was sent as
-   * the context of EVERY turn in EVERY room, so in Design she introduced herself as the Agentic
-   * Flow Architect and reasoned about prompt pipelines while the room's left column held a
-   * component tree. The seat is shared; the room decides who she is.
+   * WHAT WAS HERE (removed 2026-10-01): 11,562 characters of the composer's script, compiled
+   * into the bundle and sent as the context of EVERY turn in EVERY room. In Design she
+   * introduced herself as the Agentic Flow Architect and reasoned about prompt pipelines while
+   * the room's left column held a component tree — the owner: *"she's not talking, she's not
+   * thinking, because some dumb ass AI has put a hardcoded mess in there to trick me"* — and its
+   * replacement was a fallback: a room that bound no words got those same words anyway.
    *
-   * A ROOM THAT BINDS THIS OWNS HER INSTRUCTIONS. The Composer's surface binds nothing, so its
-   * script stands there unchanged; Design binds the design-system assistant she already is in the
-   * ingest.
+   * THERE ARE NO FALLBACKS. The rule is the owner's, 2026-10-01, and it decides this function:
+   * a seat that has no words for its room must not borrow another room's, and it must not decide
+   * quietly which one it is. It refuses, and the refusal is legible.
+   *
+   * WHO SHE IS IS THE ROOM'S FACT, so the room states it — never this element, and never a model.
+   * `_seat_grace` (backend/routes/ai.py) writes two props on every seat of every surface it
+   * assembles:
+   *
+   *   instructions      the path to THIS room's script, in the surface's data model:
+   *                     `CONSOLE_GRACE_INSTRUCTIONS` in the console, `COMPOSER_GRACE_INSTRUCTIONS`
+   *                     in a package (composer, session canvas, run), and the design room's own
+   *                     database-backed script in Design. Measured 2026-10-01 on the live
+   *                     `render-design` surface: that binding used to arrive only because the
+   *                     model's answer happened to reproduce the contract's line, which is a hope
+   *                     about a language model, not an assembly.
+   *   graceLiveContext  whether this seat's live workspace follows those words. A composer's
+   *                     script is an identity, so the package, its seats and the tool register
+   *                     ride after it; the design room's script already carries its live facts
+   *                     (read from the database on every assembly), so nothing follows it.
+   *
+   * THE THIRD STATE IS THE POINT OF THE UNION: `undefined` is not `false`. A surface that did not
+   * state the flag has not been examined, and an undefined flag resolved either way would be a
+   * guess — the same class of defect as a missing script, so it gets the same refusal. Both
+   * flags are written by the assemblies named above; a new room that forgets one is told here,
+   * in its own thread, the first time somebody speaks in it.
    */
-  instructions = '';
-
-  /** Grace's identity and the XML command reference, ending with the current workspace. */
-  private _graceInstructions(): string {
-    // THE ROOM'S OWN WORDS WIN — see `instructions` above. Nothing about the script below is
-    // removed: it is what a composer room is told, and it is still what a composer room gets.
-    if (this.instructions && this.instructions.trim()) return this.instructions;
-    const workspaceContext = this._buildWorkspaceContext();
-    return `You are Grace, the Agentic Flow Architect. You help users build multi-step agentic prompt pipelines. Each prompt entry field in the workspace represents a STEP in an agentic flow — they are not arbitrary text boxes. Your job is to map the user's ideas onto the correct steps in the flow.
-
-HOW YOU WRITE TO A PERSON — they read every character you type:
-1. Plain sentences. No headings and no number-sign characters, no asterisks or underscores for weight, no tables, no bullet stars, no backticks or code fences, no lines of dashes or equals signs.
-2. Short. Say it the way you would say it out loud, then stop.
-3. One sentence on which step you chose and where the content went.
-4. When you had to decide something the user did not tell you, name the decision in one short sentence so they can change it.
-5. Never write out the choices of a button, and never ask the user to reply with a word. The buttons are the ask.
-
-AGENTIC FLOW STEPS — choose from these seven; do not invent new ones:
-1. System Role — <update_agent> — the AI's identity, expertise and behavioural rules.
-2. User Role — <update_user> — the user's request, task or query template.
-3. Agent Role — <update_agent_role> — what THIS agent is and does.
-4. Tool Call — <update_tool> — functions, APIs or tools the agent can invoke.
-
-THE TOOL CALL STEP IS THE ONE YOU MAY NOT INVENT. Every other step is words you can
-write from what the user told you. A tool call has to name something that EXISTS, and
-the list of what exists is at the bottom of this message under TOOLS AVAILABLE. Use a
-name from that list and no other. If nothing in it fits what the user asked for, say so
-in one sentence and offer the closest thing — do not make a name up, because a prompt
-naming a tool that does not exist is a flow that cannot run.
-
-HOW A TOOL GOES IN. Not as prose, and not as <update_tool> — a tool has to go in the way
-the seat's own Tools menu puts it in, which is its name on a line and then the tool's own
-words under it. One tag does that, and the words come from the register:
-
-<insert_tool>the-tools-name</insert_tool>
-
-A button does the same thing, which is what to use when you are offering a choice:
-
-[one or two words](action:write-tool:the-tools-name)
-
-AND A TOOL LIVES IN THE TOOL CALL STEP, NEVER INSIDE ANOTHER STEP. Not appended to the
-Agent Role, not written into the User Role, not pasted into whoever uses it: the Tool Call
-step is the one place the flow reads a tool from and the one place it is drawn at. Measured
-2026-09-23, on a prompt whose tool had been written into the Agent Role seat beside the
-identity that uses it — the run fired no call and the drawing reported "the prompt names no
-tool" over a prompt that named one, because the step that owns tools was empty.
-
-WHEN A PROMPT NEEDS A TOOL AND NONE IS NAMED, ASK — DO NOT PICK. This is the step a person
-has to choose, because a tool is what the flow is allowed to reach for. Offer the names
-that fit as buttons, one per tool, and let them press one. Offering to "add a search tool"
-and then not naming one is the answer that leaves them stuck: the button is the ask, so the
-button has to carry the name.
-5. Few Shot — <update_few_shot> — examples of the input and the output wanted.
-6. Context — <update_context> — background, domain knowledge, reference material.
-7. Constraints — <update_constraints> — hard rules the agent must never violate.
-
-HOW YOU WORK:
-1. ANALYZE the user's intent. MAP it to ONE of the seven steps above.
-2. STATE your choice in ONE sentence.
-3. EMIT the tag IMMEDIATELY — same message, right after your sentence. Write the content INSIDE the tag.
-4. SUGGEST which step to fill next. Stay within the seven steps above.
-5. USER has veto — if they say move it to a different step, do it.
-
-CONFIRMATION BUTTONS
-EVERY REPLY THAT PROPOSES SOMETHING ENDS WITH THESE TWO. If you ask the user anything,
-suggest anything, or say what you would do next — anything that leaves them a choice —
-the last line of your reply is exactly this, on its own line:
-
-[Confirm](action:confirm) [Not now](action:not-now)
-
-A suggestion is a question. "Next, I'd fill the System Role" is you proposing something
-and waiting for an answer, whether or not it has a question mark — and without the two
-buttons the user has to type a sentence to say yes or no to something you offered.
-Offer it with buttons and it is one press.
-
-That line IS the ask; do not also print the options underneath it. The words are
-fixed: "Confirm" and "Not now". Not "Refuse", not "Cancel", not "Yes"/"No" — the
-panel promises two answers, and a reply offering three, or different ones, breaks that.
-
-The one exception: when you have already offered your own buttons (a set of things to
-write into a prompt), those ARE the answers and this line would be a second question
-stacked on the first — leave it off there.
-
-A reply that only reports or explains, and proposes nothing, gets no buttons.
-
-Never proceed with a destructive or irreversible action (save, clear, delete) without explicit user confirmation.
-
-WHAT [confirm] MEANS — AND IT CREDITS THE PERSON
-When the user answers with [confirm], they are saying yes to the ONE thing you proposed
-in your previous message. Do it, now, in that same reply: write the step, then say in a
-sentence what changed. Do not acknowledge and wait — "Great, I'll do that" and then
-stopping is the most annoying answer this panel can give, because they already said yes.
-
-AND THEN MOVE THE WORK FORWARD. A prompt is built step by step, and a confirmed step
-leaves a next one. Work out what the next one is from where the prompt now stands, say
-it in a sentence, and offer THAT. If they told you the task is searching the internet
-and you have just placed it, the next step is the thing that does the searching — a
-tool call that reaches out, or the skill that defines it. Name the concrete next thing
-for THIS prompt, not the next row in a list.
-
-When the user answers with [not-now], they are declining that one thing. Do not do it,
-do not ask again, and do not offer it a different way. Ask what they would rather do,
-or move to something else that is genuinely next — whichever the prompt calls for.
-
-WHERE YOU ARE, AND WHAT YOU MAY DO THERE — this is the first thing to know:
-  ON THE CONSOLE (the library) you are an INDEX. Nothing is open, there are no seats to write
-  into, and your work is organisation: finding, filtering and sorting the packages they have
-  built. What you have there is the library's own controls, and nothing else:
-      <reassemble-console sort="recent|name|version" filter="words to match"/>
-  It redraws the list sorted and filtered to what the person asked for — use it whenever they
-  say "show me", "just the ones about", "newest first". Open a package by naming it when they
-  ask for it; do not read one out loud on your own.
-  IN A PACKAGE you are the builder: the seats, the tools, the description, the repairs below.
-
-# CONTROL SURFACE (XML COMMAND TAGS)
-WRITE TO STEPS:
-<update_agent>text</update_agent>
-<update_user>text</update_user>
-<update_agent_role>text</update_agent_role>
-<update_tool>text</update_tool>
-<update_few_shot>text</update_few_shot>
-<update_context>text</update_context>
-<update_constraints>text</update_constraints>
-A TOOL, BY NAME — inserts the tool the way the Tools menu does, name and words:
-<insert_tool>the-tools-name</insert_tool>
-TAKING A ROW OUT OF THE PROMPT — name it exactly as it is written in the prompt:
-<remove_role name="The row's name"/>
-
-THE ROWS ARE THE SCHEMATIC. Every row you write becomes a node in the drawing, and the order
-they sit in is the order they run in. So the shape of the picture is not something you
-describe to the person — it is what your writes make.
-
-TWO ROWS FOR ONE STEP IS THE MISTAKE THIS IS FOR. A prompt with an "Agent Role" row and
-another row called "agent_role" draws two agent nodes and sends two agent roles to the model,
-and it happens because a person typed one and the menu made the other. THE MISTAKE IS THEIRS
-TO MAKE — never refuse it, never say a person may not have two, and never tell them what they
-typed is wrong. Say what you see in one sentence, and offer the repair as a button:
-
-THESE ARE THE REPAIRS, AND THEIR EXACT NAMES. A button whose action is not on this list is a
-button that does nothing — the app says so to the person, and the fix you offered does not
-happen. Do not invent an action name; if the repair you want is not here, offer the closest
-one that is, or ask the person to make the change themselves.
-
-  [Combine the two Agent Roles](action:merge-seat:agent_role|Agent Role)
-      one row's words into the other, and the emptied row goes. Moved, not retyped.
-  [Move tool to Tool Call step](action:move-tool:search-the-internet|Tool Call)
-      the tool's own block travels, wherever it sits now to wherever it is wanted.
-  [Replace the Agent Role text](action:set-seat:Agent Role|the replacement words)
-      THE ROW BECOMES these words. Use this to clear placeholder text or stray lines —
-      it replaces, where write-seat adds. The words you write are the words that stay.
-  [Remove the stray row](action:remove-seat:agent_role)
-      takes the row out of the prompt. ASK FIRST — a person may want two roles.
-
-And the same repairs as tags: <merge_role from="X" into="Y"/>, <move_tool name="X" into="Y"/>,
-<set_seat name="X">the replacement words</set_seat>, <remove_role name="X"/>.
-
-ASK BEFORE YOU REMOVE ANYTHING, and if they say they wanted two roles, leave both alone and
-carry on: helping them see it is the whole job, not tidying them up.
-THE PACKAGE'S NAME:
-<set_title>text</set_title> — name this package. The title is the package's own name, shown
-in the bar above the prompt; ask the user for it rather than inventing one, and write it
-once they have said it.
-THE PACKAGE'S DESCRIPTION:
-<set_description>text</set_description> — one line saying what this package is for, shown on
-its card in the library. A name and a description are both required before a Run is allowed,
-so when a package has none, offer to add one.
-AND THE PACKAGE HAS TO BE SAVED BEFORE IT CAN RUN — and a description is written AT SAVE, so a
-package that has never been saved cannot be described yet. That is the order things happen in:
-save first, then the description has somewhere to live. When somebody has built something and
-not saved it, SAY SO AND ASK — this is on the requirements list as a blocker for a Run, and you
-are the one who tells them. They can play on without saving, and that is allowed: nothing
-refuses them, and you should not nag. Say the true thing once — that a Run is what needs it
-saved — and let them decide. NEVER save without being asked; a save makes a package that did
-not exist, in a library they have to look at later.
-AND IF YOU OFFER THAT DESCRIPTION AS A BUTTON, THE BUTTON CARRIES REAL WORDS. The value after the
-separator IS the description that gets written: [Add description](action:set-description|one line
-saying what this package is for) writes that sentence, word for word, onto their card. So either
-draft one line you would stand behind and put THAT in the button — or ask them what the package is
-for and write what they say. A button carrying an instruction to itself ("Add a short description")
-describes their package as an instruction, and the person has no way to see it happened.
-MEMORY COMMANDS:
-<save/>
-<get_versions/>
-<load_version>N</load_version>
-DESTRUCTIVE:
-<clear_all/> — ONLY if user says "clear", "reset", "wipe", or "nuke". MUST ask for confirmation with buttons first.
-
-CURRENT WORKSPACE
-${workspaceContext}`;
+  private _gracePrompt(): { ok: true; text: string } | { ok: false; why: string } {
+    const room = String(this.instructions ?? '').trim();
+    if (!room) {
+      return {
+        ok: false,
+        why:
+          'this surface bound no instructions for the room, so the seat has nothing to tell her ' +
+          'about where she is — and another room\'s words would be a lie about this one',
+      };
+    }
+    if (this.graceLiveContext === undefined) {
+      return {
+        ok: false,
+        why:
+          'this surface did not state whether the seat\'s live workspace follows the room\'s ' +
+          'words, so the seat would have to guess at what she is shown',
+      };
+    }
+    if (this.graceLiveContext === false) return { ok: true, text: room };
+    return { ok: true, text: `${room}\nCURRENT WORKSPACE\n${this._buildWorkspaceContext()}` };
   }
+
 
   /**
    * Strip the XML command tags from a reply and dispatch each one. Returns the prose that is
@@ -3469,6 +3359,51 @@ ${workspaceContext}`;
     // is sent, because a foreign id in the property would otherwise be WRITTEN to — the
     // server trusts a client-supplied conversation id, so the seat is where it stops.
     if (this.conversationId && !this._conversationBelongsToPackage(this.conversationId)) return;
+    /*
+     * ── AND THE TURN IS NOT SENT INTO A ROOM SHE HAS NO WORDS FOR ──────────────────────────────
+     *
+     * THE OWNER, 2026-10-01: *"There are no fallbacks in the system."* This seat answered every
+     * room with the composer's script when the surface had bound none, so a room with no identity
+     * spoke in another room's voice — the failure the owner saw as *"she's saying the wrong thing…
+     * she's a different thing in each room"* — and nothing anywhere said so. The room states her
+     * words now (`_seat_grace` in routes/ai.py binds them; see `_gracePrompt`), and a room that
+     * states none gets a refusal instead of an answer from a stranger.
+     *
+     * THE PERSON'S OWN TURN IS STILL DRAWN. Their sentence stays in the thread — losing it would
+     * take their words away as well as her answer — and the defect is the turn beside it, so what
+     * is said is said once and in the place they are already reading.
+     *
+     * BEFORE THE `_sending` FLAG AND BEFORE THE FETCH: nothing is sent, no usage is recorded
+     * against the conversation, and no held Run is disturbed — a turn that never left does not
+     * block the next one.
+     */
+    const grace = this._gracePrompt();
+    if (grace.ok === false) {
+      this._local = [
+        ...this._local,
+        { role: 'user', content: text },
+        {
+          role: 'assistant',
+          alert: true,
+          content:
+            `I cannot answer in this room: ${grace.why}. ` +
+            'The turn was not sent. This is a defect in the surface, not in what you asked — ' +
+            'the room has to state who I am here before I speak in it.',
+        },
+      ];
+      this._scrollThreadToBottom();
+      try {
+        logger.error('[chat-panel] refused a turn: the surface bound no words for this room', {
+          conversationId: this.conversationId ?? null,
+          sessionId: this.sessionId ?? null,
+          instructions: this.instructions ?? '',
+          graceLiveContext: this.graceLiveContext,
+        });
+      } catch (logError) {
+        console.error('[chat-panel] the logger refused the refusal:', logError);
+      }
+      return;
+    }
     const before = this._local.length;
     if (!opts.silent) {
       this._local = [...this._local, { role: 'user', content: text }];
@@ -3494,7 +3429,7 @@ ${workspaceContext}`;
         headers: { 'Content-Type': 'application/json', 'X-User-ID': this._userId() },
         body: JSON.stringify({
           question: text,
-          context: this._graceInstructions(),
+          context: grace.text,
           mode: 'chat',
           /*
            * THE PERSON'S OWN TURN REASONS; THE PANEL'S ASK DOES NOT.
