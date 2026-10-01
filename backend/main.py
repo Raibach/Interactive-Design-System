@@ -123,14 +123,38 @@ for _m in (misc, conversations, projects, teacher, memory,
 # ── Serve production frontend (SPA) ────────────────────────────────────
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(frontend_dist):
-    # DEV PHASE: hard no-cache everywhere — index, hashed assets, API, manifest.
-    # Long loads are expected; stale bytes are never acceptable.
+    # ── THE SHELL IS NEVER CACHED; THE HASHED ASSETS ARE CACHED FOREVER ──────────────
+    #
+    # This said "DEV PHASE: hard no-cache everywhere — index, hashed assets, API,
+    # manifest", and it was wrong in both directions:
+    #
+    #   * A deploy must take effect on the next load. The shell (index.html) names the
+    #     build's own asset files, so it is the one document that must always be
+    #     re-read; `no-store` keeps it honest, and a browser that reloads gets the new
+    #     build with no hard refresh and no cache-buster.
+    #   * `no-store` ON THE HASHED ASSETS makes every visit re-download the whole
+    #     application. Vite puts a content hash in every build output's name, so those
+    #     files are immutable BY CONSTRUCTION: a new build writes NEW names and the
+    #     shell points at them. Caching them for a year is not a risk, it is the
+    #     reason the hash exists.
+    #
+    # MEASURED (2026-10-01, production): index.html and index-*.js both carried
+    # `no-cache, no-store, must-revalidate`, so a returning tab re-fetched ~1MB every
+    # load — and the owner, reading a tab that had been open across a deploy, saw the
+    # previous build and reported the work as not shipped.
+    #
+    # `/assets/*` is the public directory's own files plus the build's outputs, and both
+    # are content-addressed (measured: figma-3cbad9fb…svg, index-Cfy58q23.js). Anything
+    # that is NOT under /assets keeps the revalidate-every-time policy.
     @app.middleware("http")
-    async def no_cache_headers(request: Request, call_next):
+    async def frontend_cache_headers(request: Request, call_next):
         response = await call_next(request)
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
+        if request.url.path.startswith("/assets/") and response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
         return response
 
     # Serve static assets (JS, CSS, images)
