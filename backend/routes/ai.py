@@ -249,7 +249,14 @@ def _repair_rows(catalog: str = "prompt-composer") -> list[dict[str, Any]]:
         audit = _read_catalog_audit(catalog)
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {}
-        remedy = detail.get("remedy") or "The catalog checker was removed from this project; no report is produced."
+        # THE FALLBACK HERE SAID THE CHECKER HAD BEEN REMOVED, AND THE CHECKER IS PRESENT. It runs
+        # and writes a report; what is missing is a report for THIS pipeline, because the checker's
+        # `CATALOG_NAME` names one and a deployed image builds only that one. `_read_catalog_audit`
+        # carries the true remedy, so this is reached only if a detail arrives without one — and it
+        # says the same thing rather than naming a deletion that never happened.
+        remedy = detail.get("remedy") or (
+            "No report has been produced for this pipeline; reports come from `npm run catalog:check`."
+        )
         print(
             f"[A2UI Console] no catalog report for '{catalog}' — the repair list states that "
             f"rather than showing nothing. Remedy: {remedy}"

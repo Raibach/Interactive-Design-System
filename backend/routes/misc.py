@@ -152,6 +152,31 @@ _CATALOG_AUDIT_DIR = os.path.abspath(
 )
 DEFAULT_CATALOG = "prompt-composer"
 
+# ── WHAT TO DO WHEN THERE IS NO REPORT, IN WORDS THAT ARE TRUE ────────────────────────────────
+# This said "The catalog checker was removed from this project; no report is produced." — and that
+# was FALSE. `frontend/scripts/catalog-check.mjs` is present, runs, and produces a 44KB report; the
+# checker was never removed (owner, 2026-10-01: an error on the live site, "Whether anything uses a
+# component could not be read (HTTP 503)"). Two real reasons produce this 503 and neither is a
+# removed checker:
+#
+#   * THE CHECKER COVERS ONE PIPELINE. Its `CATALOG_NAME` is `prompt-composer`, so the other three
+#     pipelines the shell offers (`design-artifacts`, `ecommerce`, `primitives`) have never had a
+#     report. Measured 2026-10-01: 200 for prompt-composer, 503 for the other three, locally, where
+#     the report file exists.
+#   * THE REPORT IS NOT IN A DEPLOYED IMAGE unless the build makes it. It lives in
+#     `frontend/catalog-audit/`, which is gitignored, so it is absent from a clone's build context —
+#     production answered 503 for EVERY pipeline while the same call answered 200 on a developer's
+#     disk. The Dockerfile now generates it in the build stage and copies it in.
+#
+# A remedy that names the wrong cause sends a reader to look for a deletion that never happened —
+# which is the failure this repository keeps finding, arriving this time in an error message.
+_AUDIT_REMEDY = (
+    "No report has been produced for this pipeline. Reports are produced by `npm run catalog:check` "
+    "(`frontend/scripts/catalog-check.mjs`), whose CATALOG_NAME names the ONE pipeline it audits — "
+    "measured 2026-10-01 that is `prompt-composer`, so the others have never had one. In a deployed "
+    "image the report is generated during the build; locally it appears after the checker is run."
+)
+
 
 def _read_catalog_audit(catalog: str) -> dict:
     """Read one pipeline's audit report. 503 when no report is present."""
@@ -162,7 +187,7 @@ def _read_catalog_audit(catalog: str) -> dict:
             detail={
                 "error": "CATALOG_AUDIT_UNAVAILABLE",
                 "message": f"No audit report for pipeline '{catalog}'. This is NOT a clean result.",
-                "remedy": "The catalog checker was removed from this project; no report is produced.",
+                "remedy": _AUDIT_REMEDY,
                 "expected_at": path,
             },
         )
@@ -175,7 +200,7 @@ def _read_catalog_audit(catalog: str) -> dict:
             detail={
                 "error": "CATALOG_AUDIT_UNREADABLE",
                 "message": f"{type(_e).__name__}: {_e}",
-                "remedy": "The catalog checker was removed from this project; no report is produced.",
+                "remedy": _AUDIT_REMEDY,
                 "expected_at": path,
             },
         )
