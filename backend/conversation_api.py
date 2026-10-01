@@ -306,6 +306,31 @@ class ConversationAPI:
             ))
 
             conversation_id = cursor.fetchone()['id']
+
+            # ── AND THE PACKAGE KEEPS ITS OWNER'S ROW (2026-10-01) ──────────────────────────────
+            # §7: access derives from the PACKAGE, and `session_permissions` holds one row per
+            # person per package — that row is what every share and every write check reads. A
+            # conversation created for a package that has no row leaves the package without its own
+            # owner in that table, and the path that makes conversations is this one, so this is
+            # where the absence is filled.
+            #
+            # MEASURED, WHICH IS WHY IT IS HERE. Of the conversations in Postgres, every one whose
+            # package has a permission row was fine, and the three whose package had none were the
+            # ones created through this method: `50e0a193` with two conversations and `1d61cd4c`
+            # with one, `perms 0` each. Nothing refuses them today — the read predicate also accepts
+            # plain ownership — but §7 says the row belongs there, the handoff's own open question
+            # was to count exactly this, and a check that demands the row is a change away.
+            #
+            # ON CONFLICT DO NOTHING, AND `granted_by` RECORDED AS THE OWNER THEMSELVES. This fills
+            # an absence and can never overwrite a role somebody was given: a package shared as
+            # `editor` with its creator by a later grant keeps that grant, because the conflict is
+            # on the pair and nothing here updates.
+            cursor.execute("""
+                INSERT INTO session_permissions (session_id, user_id, role, granted_by)
+                VALUES (%s, %s, 'owner', %s)
+                ON CONFLICT (session_id, user_id) DO NOTHING
+            """, (session_id, user_id, user_id))
+
             conn.commit()
             return str(conversation_id)
         except Exception:

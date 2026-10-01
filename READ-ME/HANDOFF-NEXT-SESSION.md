@@ -52,10 +52,16 @@ Two live errors, both reproduced:
   is NOT possible (file must exist in container); instead write a small script and pipe it:
   `northflank exec service ... --cmd 'python -c "import psycopg2,os; conn=psycopg2.connect(os.environ[\"DATABASE_URL\"]); ..."'`
   on ONE line, or use the `northflank forward` port-forward to reach the RDS directly.
-- Next concrete steps: (1) in production DB, check the two counts — conversations whose session
-  lacks an `owner` row in `session_permissions`, and the `user_id` on `c6109276…`; (2) find who
-  writes `grace_user_id` in localStorage (`grep -rn grace_user_id frontend/src`); (3) apply the
-  one-reader fix; (4) verify live: save a template, post a chat turn.
+- Next concrete steps: (1) **ANSWERED AND REPAIRED 2026-10-01** — the count was **3 of 12**
+  conversations whose package lacked an `owner` row for its own user (`50e0a193` with two,
+  `1d61cd4c` with one; every other package had exactly one). The cause was
+  `conversation_api.create_conversation`, which inserted the conversation and never the row;
+  it now fills the absence on the way out (`ON CONFLICT DO NOTHING`, so a role somebody was given
+  is never overwritten), and `backend/backfill_session_permissions.py` repairs rows that already
+  exist — dry by default, `--apply` to write. Run on both databases: 2 rows inserted each, and the
+  same query now answers **0**. The remaining half of the item, the `user_id` on `c6109276…`, is
+  untouched; (2) find who writes `grace_user_id` in localStorage (`grep -rn grace_user_id frontend/src`);
+  (3) apply the one-reader fix; (4) verify live: save a template, post a chat turn.
 
 ## Everything else — DONE, committed, pushed, live
 
