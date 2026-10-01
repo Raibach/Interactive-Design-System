@@ -64,6 +64,14 @@ export class LeftColumnHeader extends LitElement {
      * facts simply does not declare them.
      */
     showMeta: { type: Boolean },
+    /**
+     * Whether the title is a FIELD (click to edit) or a plain header. TRUE by default, so the
+     * package surface and the design room's left column are unchanged. The Design room's output
+     * column sets it false: the owner, 2026-10-01, pointing at this bar as the example for the
+     * third column — *"You can remove the input function. It's not an input, just make it
+     * header"* — the styles match, the field does not.
+     */
+    editable: { type: Boolean },
   };
 
   declare title: string;
@@ -71,6 +79,7 @@ export class LeftColumnHeader extends LitElement {
   declare promptId: string;
   declare editing: boolean;
   declare showMeta: boolean;
+  declare editable: boolean;
 
   /** What the person is typing, before it is committed. */
   private _draft = '';
@@ -89,8 +98,12 @@ export class LeftColumnHeader extends LitElement {
          * React wrapper (#left-column-header, boxShadow 0 8px 24px rgba(0,0,0,0.25))
          * and it is what lifts the bar off the prompt below it — the bar and the sections
          * are both white, so without it they read as one surface with a seam.
+         *
+         * AND IT IS 20% LIGHTER NOW (owner, 2026-10-01): *"reduce the drop shadow on the left
+         * column in the same location by the same percentage"* — the same reduction the output
+         * column's bar was given, so the two bars read as one system: 0.25 → 0.20.
          */
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
         position: relative;
         z-index: 1;
       }
@@ -122,6 +135,21 @@ export class LeftColumnHeader extends LitElement {
         white-space: nowrap;
       }
       .title-btn:hover { border-color: #d1d5db; }
+      /* The title as a HEADER: the same type and colour as .title-btn, none of the field —
+         no pointer, no hover edge, because there is no click behind it (editable=false). */
+      .title-static {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+        padding: 4px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .title-empty { color: #6b7280; font-style: italic; font-weight: 500; }
       .title-input {
         width: 100%;
@@ -204,6 +232,7 @@ export class LeftColumnHeader extends LitElement {
     this.showMeta = true; // the package surface's own behaviour, unchanged
     this.promptId = '';
     this.editing = false;
+    this.editable = true; // the title is a field everywhere until a surface says otherwise
   }
 
   /** Enter commits, Escape abandons — the React bar's own keys, kept. */
@@ -254,10 +283,12 @@ export class LeftColumnHeader extends LitElement {
                           @input=${(e: Event) => { this._draft = (e.target as HTMLInputElement).value; }}
                           @keydown=${this._onKey}
                           @blur=${() => this._commit()}>`
-            : html`<button class="title-btn" type="button" title="Click to edit title"
-                           @click=${() => this._beginEdit()}>
-                     ${title || html`<span class="title-empty">Untitled prompt — give it a name</span>`}
-                   </button>`}
+            : this.editable
+              ? html`<button class="title-btn" type="button" title="Click to edit title"
+                             @click=${() => this._beginEdit()}>
+                       ${title || html`<span class="title-empty">Untitled prompt — give it a name</span>`}
+                     </button>`
+              : html`<span class="title-static">${title}</span>`}
         </div>
 
         <div class="controls">

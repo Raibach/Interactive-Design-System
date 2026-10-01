@@ -82,6 +82,8 @@ export class FigmaIngestForm extends LitElement {
         flex-direction: column;
         gap: 8px;
         padding: 4px 12px 12px;
+        /* Owner, 2026-10-01: a 30px top margin on the form, and 10px under the Notes field. */
+        margin: 30px 0 10px;
       }
       label {
         display: block;
@@ -96,7 +98,9 @@ export class FigmaIngestForm extends LitElement {
         min-width: 0;
         box-sizing: border-box;
         padding: 7px 10px;
-        border: 1px solid var(--ds-rule);
+        /* The stroke was --ds-rule (#e3e8ec) and read as too faint on screen (owner, 2026-10-01);
+           it is the muted ink now, the lightest grey this system lets a line be seen at. */
+        border: 1px solid var(--ds-muted);
         border-radius: var(--ds-radius);
         background: #fff;
         color: var(--ds-text);
@@ -104,6 +108,11 @@ export class FigmaIngestForm extends LitElement {
         font-size: var(--ds-fs-sm);
       }
       input::placeholder { color: var(--ds-muted); }
+      /* Owner, 2026-10-01: the Notes field matches the form's width and stands twice as tall as
+         the URL field (a text input's own width is its content's, and it was drawn that narrow). */
+      /* The text sits TOP-LEFT (owner, 2026-10-01): an input centres its line vertically, so the
+         headroom is taken back as bottom padding — 7 + 43 + borders + one line = the same 72px. */
+      input.notes { width: 100%; height: 72px; padding: 7px 10px 43px; }
       input:focus-visible { outline: 2px solid var(--ds-navy); outline-offset: -1px; }
       input:disabled { background: var(--ds-grey-tint); }
       button {
@@ -174,6 +183,7 @@ export class FigmaIngestForm extends LitElement {
         </div>
         <div>
           <input
+            class="notes"
             type="text"
             placeholder="Notes (optional)"
             .value=${this.notes}
