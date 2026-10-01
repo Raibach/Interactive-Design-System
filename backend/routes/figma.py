@@ -31,6 +31,10 @@ from deps import (
 )
 from design_renderer import accepted_unrendered, render_spec
 from design_renderer import unrendered_keys as unrendered_spec_keys
+# THE PROOF, AND THE GATE BUILT ON IT. `figma_fidelity` reads this module's own measurement
+# (`_figma_spec_for_model`) and its renderer, so it is imported here rather than beside them —
+# and it imports THIS module only inside functions, which is what keeps the two from cycling.
+from figma_fidelity import fidelity_gate, fidelity_report
 from figma_service import (
     get_cached_spec,
     get_component,
@@ -96,9 +100,35 @@ def node_code_identity(node_id: str | None) -> str:
     return raw.rpartition(";")[0]
 
 
+def _instance_component_ids(node: dict[str, Any], found: list[str] | None = None) -> list[str]:
+    """Every component this subtree instantiates, by id — read from the TREE, in tree order.
+
+    THIS EXISTS BECAUSE THE RESPONSE DOES NOT CARRY THEM. The ingest took its list of components
+    to fetch from the REST response's `components` map, and `/v1/files/<key>/nodes` does not
+    return that key at all — measured 2026-09-30 on this repository's own two catalogue nodes, the
+    response's top-level keys are `editorType, lastModified, linkAccess, name, nodes, role,
+    thumbnailUrl, version`, with `components: null` and `componentSets: null`. So that list was
+    ALWAYS EMPTY, no master was ever fetched, and no INSTANCE was ever composed or drafted — the
+    instance's own subtree is drawn (Figma sends it), which is why the geometry was right while
+    the master stayed unmeasured and nothing anywhere said so.
+
+    AN INSTANCE STATES ITS OWN COMPONENT. Every INSTANCE node carries `componentId` — a plain node
+    id — and every instance is in the subtree, so the answer was in the tree all along. First
+    occurrence wins, so a design that instances one component five times asks for it once, and the
+    id goes through `node_code_identity`, which leaves a plain id unchanged.
+    """
+    found = [] if found is None else found
+    if (node.get("type") or "").upper() == "INSTANCE":
+        identity = node_code_identity(node.get("componentId"))
+        if identity and identity not in found:
+            found.append(identity)
+    for child in node.get("children") or []:
+        _instance_component_ids(child, found)
+    return found
+
+
 def node_location(node_id: str | None) -> str:
     """The occurrence part of a node id — what follows the LAST `;`, lowercased.
-
     Empty for a node that is not an instance: the node itself IS the component, so it has no
     location to be told apart by. This is the half that distinguishes children in different
     areas, and it is never a reason to call two things different components.
@@ -409,6 +439,27 @@ def _drop_preview(job_id: str) -> None:
 # .TS file to present it in a folder outside of any relationship to our actual lit catalog."*).
 PREVIEW_DIR = os.path.join(FRONTEND_DIR, ".preview")
 
+# AND THE DRAFT'S ADDRESS TRAVELS WITH THE INGEST, in the one form that can be loaded.
+# The client that draws a preview must load EXACTLY the file this preview was written to, and it
+# must not work that path out for itself: a second derivation is a second answer, and the answer
+# that drifts is the one nobody measured. `/@figma-preview/` is not a second path — it is how the
+# dev server serves this folder and nothing else (`frontend/vite-plugin-figma-preview.ts`, whose
+# PREFIX is this string and whose `load` reads `PREVIEW_DIR/<jobId>/<tag>.ts`).
+PREVIEW_URL_PREFIX = "/@figma-preview/"
+
+
+def _preview_module(job_id: str, tag: str) -> dict[str, str]:
+    """Where one preview lives, named in both forms its two readers need.
+
+    `path` is the file under PREVIEW_DIR — what `_write_preview_files` wrote and what
+    `_drop_preview_files` will delete, derived from PREVIEW_DIR so it cannot name a folder that
+    is not the one the deletion rules act on. `url` is the same file as the page loads it.
+    """
+    return {
+        "modulePath": os.path.relpath(os.path.join(PREVIEW_DIR, job_id, f"{tag}.ts"), FRONTEND_DIR),
+        "moduleUrl": f"{PREVIEW_URL_PREFIX}{job_id}/{tag}.ts",
+    }
+
 
 def _drop_preview_files(job_id: str = "") -> None:
     """Delete the preview folder — one job's, or all of it.
@@ -425,12 +476,36 @@ def _drop_preview_files(job_id: str = "") -> None:
         print(f"⚠️ [figma-ingest] the preview folder {target} could not be removed: {e}")
 
 
+# ── THE PREVIEW'S OWN SEAM, AND WHY IT IS A STUB ───────────────────────────────
+# A drafted element's first line imports `./behaviour/attach` — the hand-written loader that owns
+# everything about it that is not a drawing (frontend/src/components/lit/behaviour/attach.ts). In the
+# catalogue that resolves to the real loader. In a PREVIEW it must not: a preview is blind to the
+# catalogue, and the owner restated the rule on 2026-09-30 — *"whenever it's in the preview it should
+# be blind to the lit catalogue… It shouldn't have any idea."* So the ingest writes this beside the
+# draft, and the preview resolves ITS OWN: three exports that do nothing, so a preview draws the
+# design as measured, with nothing bound and no behaviour — which is what a preview is for.
+#
+# IT IS DELIBERATELY NOT THE REAL LOADER UNDER ANOTHER PATH: copying the catalogue's loader in would
+# drag the catalogue's companions — and their props — into the preview, which is the same fault with
+# more steps. The draft file itself stays BYTE-IDENTICAL to the file that will be committed.
+PREVIEW_SEAM = """// THE PREVIEW'S SEAM — the application's binding, and not the catalogue's element.
+// The drawing above this file comes from the temporary draft, so the catalogue's element is never
+// loaded here. What IS called is the binding: the owner's rule, 2026-09-30 — *"it does not have to be
+// blind to the data binding. It can load the data binding as part of the preview"* — so the boxes in
+// a preview hold the component's real values, from the database, exactly as they will in the list.
+export { attachBehaviour, detachBehaviour, behaviourProperties } from '@/components/lit/behaviour/attach';
+"""
+
+
 def _write_preview_files(job_id: str, drafts: dict[str, str]) -> list[str]:
     """Write this ingest's drafts into the preview folder, replacing whatever was there.
 
     THE FOLDER HOLDS ONE PREVIEW, so it is emptied before the new one is written: a component
     asked for a minute ago cannot be read out of it afterwards. That is the difference between a
     temporary file and a store, and it is why the folder is emptied rather than added to.
+
+    THE SEAM'S COPY GOES WITH THE DRAFTS. Each draft imports `./behaviour/attach`, and beside the
+    draft that path must be the preview's inert stub and never the catalogue's loader — PREVIEW_SEAM.
     """
     _drop_preview_files()
     written: list[str] = []
@@ -438,7 +513,9 @@ def _write_preview_files(job_id: str, drafts: dict[str, str]) -> list[str]:
         return written
     root = os.path.join(PREVIEW_DIR, job_id)
     try:
-        os.makedirs(root, exist_ok=True)
+        os.makedirs(os.path.join(root, "behaviour"), exist_ok=True)
+        with open(os.path.join(root, "behaviour", "attach.ts"), "w", encoding="utf-8") as f:
+            f.write(PREVIEW_SEAM)
         for tag, source in drafts.items():
             if not _SAFE_TAG_RE.match(tag or ""):
                 continue
@@ -2146,6 +2223,61 @@ def _figma_read_gaps(spec: dict[str, Any], raw_nodes: Any) -> list[str]:
     ]
 
 
+# ── EVERY KEY FIGMA STATED IS CARRIED, INCLUDING THE ONES NOBODY PLACES YET ───────────────────
+# This is the list of keys `_figma_spec_for_model` READS AND PLACES — the ones whose value becomes
+# a named fact in the spec (`size`, `layout`, `fill`, `type_style`, `paths`, `runs`, …). Every other
+# key Figma sent travels into the spec under `stated`, unread by the renderer and NOT DROPPED.
+#
+# WHY THIS EXISTS. The spec used to be a hand-written list of the keys the ingest was willing to
+# notice, and everything outside it was discarded at measurement with nothing said — measured
+# 2026-09-30 on one design: 18 keys Figma states on essentially every node never reached the spec at
+# all, including `interactions` (the design's prototype actions), `overrides` (an instance's own
+# values), `lineTypes` and `lineIndentations` (line-level text overrides on both text layers),
+# `primaryAxisSizingMode`/`counterAxisSizingMode` (HUG vs FIXED along each axis), `cornerSmoothing`,
+# `blendMode`, `strokesIncludedInLayout`, `scrollBehavior`, `absoluteRenderBounds` and
+# `relativeTransform`. A hardcoded whitelist is exactly how a silent skip happens, and this file's
+# whole doctrine is that an omission must be visible (owner, 2026-09-30: *"you cannot code in rules…
+# every single spec must match exactly"*).
+#
+# IT IS CARRIED, NOT FAKED. Nothing here invents a mapping for these keys, and nothing pretends
+# they are drawn: the spec gains a faithful record of what the design stated, and
+# `backend/figma_fidelity.py` reports each one by name as stated-and-placed-by-nothing. Teaching the
+# renderer to PLACE one of them is then a separate, visible change.
+_CONSUMED_KEYS = {
+    # identity and structure
+    "id", "name", "type", "children", "absoluteBoundingBox", "componentId",
+    # auto-layout and its spacing
+    "layoutMode", "itemSpacing", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom",
+    "primaryAxisAlignItems", "counterAxisAlignItems", "layoutWrap", "counterAxisSpacing",
+    # paints, strokes, corners
+    "fills", "strokes", "strokeWeight", "strokeAlign", "individualStrokeWeights", "strokeCap",
+    "strokeJoin", "dashPattern", "cornerRadius", "rectangleCornerRadii",
+    # what the layer does to its space and to what it draws
+    "effects", "opacity", "visible", "clipsContent", "rotation", "constraints",
+    "layoutSizingHorizontal", "layoutSizingVertical", "layoutGrow", "layoutAlign",
+    "layoutPositioning",
+    # type, and the designer's own writing on the layer
+    "characters", "style", "textTruncation", "maxLines", "textAutoResize", "annotations",
+    # the run-level overrides `_text_runs` turns into `runs` — a per-range style is the whole
+    # reason a bold title over a grey subtitle in one text layer used to render in one style
+    "characterStyleOverrides", "styleOverrideTable",
+    # artwork — `fillGeometry`/`strokeGeometry` become `paths` and the fitted `svg`, and
+    # `relativeTransform` is the matrix `_svg_for_vector` composes to place that artwork
+    "fillGeometry", "strokeGeometry", "relativeTransform",
+    # the MCP channel's own additions
+    "mcp_reference_code", "mcp_description",
+}
+
+# Keys Figma puts in every node that are not measurements of the DESIGN — document bookkeeping and
+# plugin state. They are not carried into `stated`, because `stated` is a record of what a drawing
+# could state and this is not that: a designer cannot see `layoutVersion` or change it.
+_NOT_A_FACT_KEYS = {
+    "layoutVersion", "pluginData", "sharedPluginData", "devStatus", "exportSettings",
+    "measurements", "componentPropertyDefinitions", "componentPropertyReferences",
+    "isMask", "maskType", "stickConstraints", "scrollBehaviorVersion", "explicitVariableModes",
+}
+
+
 def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dict[str, Any]:
     """The design as the renderer needs to read it — EVERY layer, unless a depth is asked for.
 
@@ -2373,6 +2505,18 @@ def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dic
     if children and (depth is None or depth > 0):
         below = None if depth is None else depth - 1
         spec["children"] = [_figma_spec_for_model(c, below) for c in children]
+
+    # ── EVERYTHING ELSE FIGMA STATED, CARRIED VERBATIM (see _CONSUMED_KEYS) ────────────────────
+    # The keys above are the ones this function PLACES: their values became named facts the renderer
+    # reads. Every remaining key is a statement the design made that no part of this pipeline has a
+    # mapping for, and it travels here rather than disappearing. Nothing is interpreted on the way
+    # in — the value is Figma's own — and nothing about it claims to be drawn: it is recorded so
+    # that the omission is countable, nameable and reportable instead of silent.
+    stated = {
+        k: v for k, v in node.items() if k not in _CONSUMED_KEYS and k not in _NOT_A_FACT_KEYS
+    }
+    if stated:
+        spec["stated"] = stated
 
     return spec
 
@@ -2726,6 +2870,33 @@ def _walk_spec(spec: dict[str, Any]):
     yield spec
     for child in spec.get("children", []) or []:
         yield from _walk_spec(child)
+
+
+def _renderable_spec_chars(spec: dict[str, Any]) -> int:
+    """The spec's characters WITHOUT the stated-but-unplaced facts — what the renderer reads.
+
+    The ingest carries every key Figma states that no renderer mapping exists for, under `stated`
+    (`_CONSUMED_KEYS`). That bucket is a report: nothing draws it, so it is not a rendering cost,
+    and the size gate must not refuse a design because of it. Measured 2026-09-30, the carried
+    keys are 48–53% of a spec's characters — enough that counting them would have halved the
+    gate's headroom and started refusing designs that render perfectly well.
+
+    IT IS NOT A WAY OF HIDING SIZE. The `children` tree, every measured fact and the node count are
+    all still counted, and the carried characters are reported separately in the refusal message so
+    a reader sees both numbers. This removes one bucket from one limit; it removes nothing from the
+    record.
+    """
+    import copy as _copy
+
+    stripped = _copy.deepcopy(spec)
+
+    def drop(node: dict[str, Any]) -> None:
+        node.pop("stated", None)
+        for child in node.get("children") or []:
+            drop(child)
+
+    drop(stripped)
+    return len(json.dumps(stripped, ensure_ascii=False))
 
 
 def _walk_raw_nodes(nodes: Any):
@@ -3664,19 +3835,19 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     components = merged.get("components", {})
     mcp_annotations = merged.get("mcp_annotations")  # noqa: F841 — fetched and never merged, while the ingest reports the MCP channel as read
 
-    # ── Step 3b: FETCH THE COMPONENTS THE DESIGN USES, which the first call does not carry ──
-    # `/nodes?ids=<target>` returns the target's SUBTREE and a `components` map naming every
-    # component referenced inside it — but NOT those components' own definitions, which live
-    # elsewhere in the file. Pass 1 below looks each one up in `nodes` and quietly finds nothing,
-    # so a design assembled from five elements produced ONE draft: the five were never made, had
-    # no file, no entry, and nothing to approve — and every child of the thing you just ingested
-    # stayed a bare layer in the tree with no preview. (Owner, 2026-09-29: *"I can see every other
-    # child and it's listed in the data tree but when I click on it, I don't see a preview."*)
+    # ── Step 3b: FETCH THE COMPONENTS THE DESIGN USES, TAKEN FROM THE TREE ─────────────────────
+    # THIS STEP ASKED A SOURCE THAT DOES NOT ANSWER. It waited on `components` — the map the note
+    # below used to claim `/nodes?ids=<target>` returns — and that endpoint does not return it
+    # (`_instance_component_ids` records the measurement). So `referenced` was ALWAYS EMPTY,
+    # nothing was ever fetched, and every INSTANCE in every design stayed a layer whose master was
+    # never measured: Pass 1 looked each id up in `nodes`, found nothing, and drafted none of them,
+    # silently, because an empty list has nothing to warn about.
     #
-    # So they are asked for by id in the same call shape and merged in. The cap is deliberate and
-    # what it leaves out is SAID: a design referencing thirty components is a catalogue, not an
+    # The ids are in the tree — every INSTANCE states its own `componentId`. They are read from
+    # there now and asked for by id in the same call shape, and merged in. The cap is deliberate
+    # and what it leaves out is SAID: a design referencing thirty components is a catalogue, not an
     # element, and drafting all of them from one ingest would be a surprise rather than a service.
-    referenced = [str(cid) for cid in components if str(cid) not in nodes]
+    referenced = [cid for cid in _instance_component_ids(target_node) if cid not in nodes]
     INGEST_COMPONENT_DRAFTS_MAX = 12
     if referenced:
         wanted = referenced[:INGEST_COMPONENT_DRAFTS_MAX]
@@ -3706,8 +3877,13 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     #
     # It used to call the template generator, which produced a stand-in that was not the design.
     # One builder, one measurement, no stand-ins.
+    #
+    # AND IT ITERATES THE IDS THE TREE NAMED, not the response's `components` map, which this
+    # endpoint does not send — see `_instance_component_ids`. `components` is still consulted for
+    # the name when it happens to be present, and nothing depends on it being present.
     component_tags = []
-    for comp_id, comp_meta in components.items():
+    for comp_id in [cid for cid in referenced if (nodes.get(cid) or {}).get("document")]:
+        comp_meta = (components or {}).get(comp_id, {})  # noqa: F841 — the name is read below from the node
         comp_node_data = nodes.get(comp_id)
         if comp_node_data and comp_node_data.get("document"):
             comp_node = comp_node_data["document"]
@@ -3733,13 +3909,28 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # This bounds what is measured and rendered, and reports the refusal in the terms the owner
     # asked for. (It used to bound a model's prompt and therefore its spend; the bound is kept
     # because a design nobody can render usefully is still worth refusing early.)
+    #
+    # ── AND IT MEASURES THE RENDERABLE PART, NOT THE REPORT (2026-09-30) ────────────────────────
+    # Every key Figma states that no renderer mapping exists for is now CARRIED in the spec under
+    # `stated`, and on the two components measured that is 48–53% of the spec's characters. Left in
+    # the count, the carry would have eaten half this gate's headroom and started refusing designs
+    # that render perfectly well — a refusal caused by a REPORT, which is the opposite of what the
+    # gate is for. So the gate measures the spec with the `stated` buckets removed: what the
+    # renderer reads and draws. The carried characters are still reported, in the refusal message
+    # and in the fidelity ledger, because they are a real fact about the design — they are simply
+    # not a cost this gate is about.
     spec_for_model = _figma_spec_for_model(target_node)
     spec_chars = len(json.dumps(spec_for_model, ensure_ascii=False))
+    renderable_chars = _renderable_spec_chars(spec_for_model)
     node_count = sum(1 for _ in _walk_spec(spec_for_model))
-    token_estimate = spec_chars // 4
+    token_estimate = renderable_chars // 4
     too_big = []
-    if spec_chars > INGEST_MAX_SPEC_CHARS:
-        too_big.append(f"the measured design is {spec_chars:,} characters (limit {INGEST_MAX_SPEC_CHARS:,})")
+    if renderable_chars > INGEST_MAX_SPEC_CHARS:
+        too_big.append(
+            f"the measured design is {renderable_chars:,} characters (limit "
+            f"{INGEST_MAX_SPEC_CHARS:,}); it also carries {spec_chars - renderable_chars:,} "
+            f"characters of stated-but-unplaced facts, which do not count against this limit"
+        )
     if node_count > INGEST_MAX_NODES:
         too_big.append(f"it contains {node_count:,} nodes (limit {INGEST_MAX_NODES:,})")
     if too_big:
@@ -3810,12 +4001,12 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         raise HTTPException(
             status_code=422,
             detail=(
-                "Nothing was written: the renderer has no rule for "
+                "Nothing was written: this design states "
                 + ", ".join(f"`{k}`" for k in unplaceable)
-                + " — measured on this design but not something it knows how to place. "
-                "The measurement is complete; the renderer is missing a rule. This is a refusal "
-                "on purpose: rendering it without that rule would produce a component that "
-                "differs from the design in a way nobody chose."
+                + " and the renderer has no translation for it yet. Nothing was interpreted and "
+                "nothing was decided: the measurement is complete and faithful, and what is missing "
+                "is the code that draws this. Refused on purpose — drawing it with a stand-in would "
+                "produce a component that differs from the design in a way nobody chose."
             ),
         )
 
@@ -3945,6 +4136,32 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         + (f" · composed: {'; '.join(m['tag'] for m in child_matches)}" if child_matches else "")
     )
 
+    # ── THE FIDELITY GATE, AND THE ONE GAP THAT GOES IN THE ANSWER ITSELF ───────────────────────
+    # The proof runs on every ingest and there are exactly two outcomes. UNEXAMINED VARIANCE — a
+    # Figma key no examination covers, a stated fact that never reached the spec, a declaration with
+    # no measurement behind it — is a REFUSAL, raised here with the facts named, because a design
+    # whose measurement contains something nobody has looked at must not be written. A defect whose
+    # measurement IS recorded (the ellipsis this engine cannot draw) is REPORTED, per layer, counted
+    # at the root of this answer, and does not stop the work — the owner's ruling is that the Figma
+    # file is the authority and the burden is the renderer's, not the design's, and a gate that
+    # refuses every design protected by it is a wall in front of the door.
+    #
+    # IT RUNS BEFORE THE RECORD IS WRITTEN. The record carries the same proof, and a record written
+    # before the refusal would describe work that did not happen.
+    fidelity = await asyncio.to_thread(fidelity_report, target_node, target_tag)
+    gate = await asyncio.to_thread(fidelity_gate, fidelity)
+    if gate["blocks"]:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Nothing was written: this design states something the pipeline cannot account for, "
+                "and a fact nobody has examined must not pass. "
+                + " · ".join(gate["blocking"])
+                + " — nothing was interpreted and nothing was guessed: the measurement is complete, "
+                "and what is missing is that someone must look at it."
+            ),
+        )
+
     _log_ingest({
         "kind": "ingested",
         "sessionId": session_id,
@@ -3970,6 +4187,20 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         # not carry — named, with reasons. Empty means everything measured reached
         # the component.
         "renderGaps": render_gaps,
+        # ── THE PROOF, AT THE ROOT OF THIS ANSWER ────────────────────────────────────────────────
+        # Every fact the design stated, and what became of it: how many are drawn, how many are
+        # measured-not-drawn with a reason, how many are defects — and, in `missingEllipses` and its
+        # sentence, the one gap a designer has to know about WITHOUT opening anything. A gap that
+        # lives only in a ledger file is a gap nobody reads.
+        "fidelity": {
+            "counts": gate["counts"],
+            "missingEllipses": gate["missing_ellipses"],
+            "sentence": gate["sentence"],
+            "reported": gate["reported"],
+            "examined": fidelity["key_coverage"]["examined"],
+            "omissions": fidelity["key_coverage"]["omissions"],
+            "interactions": fidelity["interactions"],
+        },
         # THE CHILDREN THIS DESIGN USES THAT THE CATALOGUE ALREADY HAS — one entry per child, with
         # the question it raises: use the existing component, or overwrite it. The scan runs on
         # every ingest (owner: *"It has to scan the lit catalog on every ingest to see if what's
@@ -3991,10 +4222,35 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # which both this result and the record use, so the two can never disagree.
     return {
         "tag": target_tag,
+        # ── AND WHERE THE DRAFT ITSELF IS ────────────────────────────────────────
+        # The tag alone is NOT an address. A re-ingest of a node the catalogue already holds
+        # builds a fresh draft under the same tag as the approved element, so a client left to
+        # guess draws the catalogue's element and the designer sees no change after editing Figma
+        # — which is the report this field answers. The preview's identity therefore travels with
+        # the result: the job, the tag, and the temporary file the ingest just wrote, so the
+        # surface can load exactly that file and nothing else. It is the same folder the deletion
+        # rules already act on; nothing new is stored and nothing is registered by it.
+        "preview": {"jobId": job_id, "tag": target_tag, **_preview_module(job_id, target_tag)},
         "components": component_tags,
         "drafts": drafts,
         "validation": validation,
         "alreadyInCatalogue": already_in_catalogue,
+        # ── THE PROOF, AT THE ROOT OF THE DESIGNER'S OWN ANSWER ──────────────────────────────────
+        # Every fact the design stated and what became of it: drawn, measured-not-drawn with a
+        # reason, or a defect. `missingEllipses` and its sentence are the one gap a designer has to
+        # know about WITHOUT opening anything — the whole lines that fit are drawn, and the ellipsis
+        # this engine cannot draw is counted and named per layer. The gate has already refused this
+        # ingest if any fact was unexamined, so what is here is a known, recorded gap and not a
+        # surprise. A gap that lives only in a ledger file is a gap nobody reads.
+        "fidelity": {
+            "counts": gate["counts"],
+            "missingEllipses": gate["missing_ellipses"],
+            "sentence": gate["sentence"],
+            "reported": gate["reported"],
+            "examined": fidelity["key_coverage"]["examined"],
+            "omissions": fidelity["key_coverage"]["omissions"],
+            "interactions": fidelity["interactions"],
+        },
         # What the model was actually given. The preview exists to show that both
         # channels were read — REST always, MCP when Figma Desktop has the file open.
         "channels": _channel_report(merged, mcp_context, component_descriptions),
@@ -4208,112 +4464,49 @@ def _determine_component_type(node: dict[str, Any]) -> str:
 
 
 def _extract_a2ui_properties(node: dict[str, Any], component_type: str) -> list[dict[str, Any]]:
-    """Extract A2UI-compatible Lit properties from node data."""
-    props = []
-    
-    # All components get a content property for data binding
-    props.append({
-        "name": "content",
-        "type": "String",
-        "attr": "content",
-        "default": '""',
-    })
-    
-    # Disabled state (common pattern for interactive components)
-    if component_type in ("button", "textfield", "generic"):
-        props.append({
-            "name": "disabled",
-            "type": "Boolean",
-            "attr": "disabled",
-            "reflect": True,
-            "default": "false",
-        })
-    
-    # Variant from MCP annotations or component name
-    variant_added = False
-    for ann in node.get("annotations", []):
-        if ann.get("source") == "mcp":
-            label = (ann.get("labelMarkdown") or ann.get("label", "")).lower()
-            if "variant" in label or "type" in label:
-                props.append({
-                    "name": "variant",
-                    "type": "String",
-                    "attr": "variant",
-                    "default": '""',
-                })
-                variant_added = True
-                break
-    
-    # Component-specific properties
-    if component_type == "button":
-        if not variant_added:
-            props.append({
-                "name": "variant",
-                "type": "String",
-                "attr": "variant",
-                "default": '"primary"',
-            })
-        # Button child (label) - will be set via slot or content
-        props.append({
-            "name": "label",
-            "type": "String",
-            "attr": "label",
-            "default": '""',
-        })
-    
-    elif component_type == "textfield":
-        props.append({
-            "name": "placeholder",
-            "type": "String",
-            "attr": "placeholder",
-            "default": '""',
-        })
-        props.append({
-            "name": "value",
-            "type": "String",
-            "attr": "value",
-            "default": '""',
-        })
-        props.append({
-            "name": "type",
-            "type": "String",
-            "attr": "type",
-            "default": '"text"',
-        })
-    
-    elif component_type == "text":
-        props.append({
-            "name": "variant",
-            "type": "String",
-            "attr": "variant",
-            "default": '"body"',
-        })
-    
-    elif component_type in ("row", "column"):
-        props.append({
-            "name": "justify",
-            "type": "String",
-            "attr": "justify",
-            "default": '"start"',
-        })
-        props.append({
-            "name": "align",
-            "type": "String",
-            "attr": "align",
-            "default": '"stretch"',
-        })
-        # Children handled via slot in template
-    
-    elif component_type == "card":
-        props.append({
-            "name": "elevated",
-            "type": "Boolean",
-            "attr": "elevated",
-            "reflect": True,
-            "default": "false",
-        })
-    
-    return props
+    """The props a generated element declares — DERIVED FROM THE DESIGN, NOT INVENTED.
+
+    WHAT THIS USED TO DO, AND WHY IT WAS A LIE (measured 2026-09-30). It declared `content` on every
+    component, `disabled` on buttons and text fields, `variant`/`label`/`placeholder`/`value`/`type`
+    from the node's type and annotations, and three of those were registered in the allowlist and the
+    catalogue for the component this session is about — while the element the renderer emitted had
+    `static properties = {}`. Nothing read them. They were props of a generator that no longer runs
+    (`_generate_button_template`, `_generate_textfield_template`, `_generate_text_template`: zero
+    callers between them), describing templates that are not the ones the application uses.
+
+    SO THE PROPS ARE THE LAYERS THE DESIGNER ANNOTATED AS DATA, and nothing else:
+    `Data: name` on a text layer means that layer is the component's name, which makes `name` a prop
+    the element implements (`${this.name}` in place of the placeholder's words). A component with no
+    such annotation declares no props, because it takes none — the element draws what the design
+    draws. The rule this keeps is the owner's own: the Figma component is read, not interpreted, and
+    what is declared in the allowlist is what the element actually has.
+
+    THE TWO READERS MUST AGREE ABOUT THE GRAMMAR: this one reads the raw node's annotations
+    (objects with a label, the form Figma sends over REST), and `_data_field` in
+    backend/design_renderer.py reads the spec's form of the same annotation (`spec["annotation"]`,
+    the texts built a few hundred lines above). The pattern is written out in both places on purpose
+    — the pairing is visible rather than implied — and the field name is validated in both, because
+    a name that cannot be a JavaScript property would be refused by the renderer anyway.
+    """
+    fields: list[str] = []
+
+    def walk(current: dict[str, Any]) -> None:
+        for ann in current.get("annotations") or []:
+            if not isinstance(ann, dict):
+                continue
+            label = ann.get("labelMarkdown") or ann.get("label") or ""
+            match = re.match(r"^\s*Data\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$", str(label))
+            if match and match.group(1) not in fields:
+                fields.append(match.group(1))
+        for child in current.get("children") or []:
+            if isinstance(child, dict):
+                walk(child)
+
+    walk(node)
+    return [
+        {"name": f, "type": "String", "attr": f, "default": '""'}
+        for f in fields
+    ]
 
 
 def _extract_a2ui_events(node: dict[str, Any], component_type: str) -> list[dict[str, Any]]:
@@ -4464,19 +4657,25 @@ async def api_figma_ingest_status(job_id: str):
 
 @router.post("/api/figma/preview/abandon")
 async def api_figma_preview_abandon():
-    """The page is going away — the second eviction rule, sent by the browser as the tab closes.
+    """The page is going away — and the preview goes with it, at once.
 
-    Sent with `navigator.sendBeacon`, the one request shape a browser guarantees to deliver while
-    a page is unloading. It carries no body and needs no answer: the cache entry is marked
-    abandoned and evicted after the grace, unless the page comes back and beats again (a reload).
-    Nothing here can fail loudly — a page that is leaving cannot read a response — so the unused
-    rule covers every case where this never arrives.
+    THE OWNER'S RULE, 2026-09-30: *"There is no draft queue. There is no holding of anything for any
+    period of time. It disappears immediately if it's discarded."* So leaving the screen drops the
+    entry NOW — the drafts held in memory and the temporary file on disk, in the same call — rather
+    than marking it abandoned for a grace period. There is nothing to come back to: a reload that
+    wants the preview asks for it again, which is one ingest.
+
+    Sent with `navigator.sendBeacon`, the one request shape a browser guarantees to deliver while a
+    page is unloading. It carries no body and needs no answer. Nothing here can fail loudly — a page
+    that is leaving cannot read a response — so the sweep below remains as the cover for a page that
+    died without saying goodbye at all.
     """
     job_id = _abandon_preview()
     if not job_id:
         return {"held": False, "note": "the cache is empty — no entry to evict"}
-    print(f"👋 [figma-ingest] the screen left — {job_id} will be dropped in {INGEST_PREVIEW_ABANDON_GRACE}s unless it comes back")
-    return {"held": True, "jobId": job_id, "graceSeconds": INGEST_PREVIEW_ABANDON_GRACE}
+    _drop_preview(job_id)
+    print(f"👋 [figma-ingest] the screen left — {job_id} dropped immediately, nothing held")
+    return {"held": False, "jobId": job_id, "dropped": True}
 
 
 @router.post("/api/figma/preview/heartbeat")
@@ -4920,6 +5119,100 @@ async def api_figma_unresolved(limit: int = Query(50, ge=1, le=200)):
     return {"count": len(outstanding), "outstanding": outstanding[:limit], "totalRecords": len(rows)}
 
 
+# ── A COMPONENT THE APPLICATION ITSELF NAMES CANNOT BE REMOVED ────────────────────────────────
+# The removal clears everything the CATALOGUE knows about a tag: the file, the Figma map, the
+# allowlist, the catalogue declaration, the layer record and the artwork. That is complete for a
+# component whose only life is its catalogue entry. It is NOT complete for one the application
+# names in its own code — `figma-layers-view.ts` instantiates `<f-40001207-3497>` as the tile every
+# catalogue row is drawn with, so deleting that file would leave an undefined element behind every
+# row in the left column, and the removal would report success while doing it.
+#
+# THIS GUARD EXISTED AND WAS LOST. Two `removal-refused` records sit in the activity log from
+# 2026-09-29 — a probe (`reason: "probe: does the guard hold?"`) and a real attempt on `trace-feed`
+# — each carrying `namedBy`, a `ruling` and a `nextStep`. The code that wrote them is in NO COMMIT
+# in this repository (`git log -S namedBy` is empty), so both removal paths have been unguarded
+# since: the ingest form's button and the preview panel's. The records outlived the guard, which is
+# the reverse of what should happen to a rule.
+#
+# IT IS ENFORCED ON THE SERVER, because it is the FILE DELETION that has to be stopped and a
+# client-side check only stops the client that remembers to ask.
+#
+# AND IT STRIPS COMMENTS BEFORE IT LOOKS, which is not a refinement — it is the difference between
+# a guard and a wall. Measured on `f-40001207-3497`: a plain substring scan finds six files, and
+# three of them (`behaviour/attach.ts`, the 3559 companion, `draft-preview.ts`) name the tag only in
+# PROSE. A guard that refuses because a docstring says a name is a guard that refuses every removal
+# anybody ever attempts.
+_LIVENESS_SKIP_DIRS = {
+    "node_modules", ".preview", "dist", "logs", "__pycache__", ".venv", "catalog-audit", ".git",
+    "resources", "canvas-lab", "n8n",
+}
+
+
+def _liveness_references(tag: str) -> list[str]:
+    """Hand-written sources that NAME this tag — the application holding it, not the catalogue.
+
+    What is deliberately NOT a reference, and why each one had to be excluded for the guard to be
+    usable rather than absolute:
+
+      * the generated element itself, `ingested.ts` (a glob — it needs no edit), the allowlist, the
+        registry, the manifest and the catalogues: these are the catalogue's own registrations, and
+        clearing them is what a removal IS;
+      * `public/catalog-figma/<pipeline>.json`: the layer record, written by
+        `_mark_removed_in_figma_layers` in the same pass;
+      * `behaviour/<tag>.behaviour.ts`: a per-tag satellite, not application code. It is reported as
+        orphaned by the removal instead of blocking it — otherwise a tag could never be removed at
+        all, since its own companion would always name it.
+    """
+    skip_files = {
+        os.path.join(FRONTEND_DIR, "src", "shared", "tag-registry.ts"),
+        os.path.join(FRONTEND_DIR, "src", "components", "registry.json"),
+        os.path.join(FRONTEND_DIR, "custom-elements.json"),
+        os.path.join(FRONTEND_COMPONENTS_DIR, f"{tag}.ts"),
+        os.path.join(FRONTEND_COMPONENTS_DIR, "ingested.ts"),
+        os.path.join(FRONTEND_COMPONENTS_DIR, "behaviour", f"{tag}.behaviour.ts"),
+        os.path.join(FRONTEND_DIR, "public", "catalog-figma", f"{INGEST_CATALOG_PIPELINE}.json"),
+        # THIS MODULE, WHICH IS THE CATALOGUE'S OWN MACHINERY. A tag named in the code that
+        # implements ingest, approval and removal is not the application USING the component — it is
+        # the catalogue talking about it, and this file names several in prose. Measured the hard
+        # way: with this module scanned, `f-40001207-3497` reported a "reference" in
+        # `backend/routes/figma.py` that was the paragraph you are reading. A guard whose own
+        # documentation trips it refuses every removal in the repository.
+        os.path.abspath(__file__),
+    }
+    # THE CATALOGUES ARE REGISTRATIONS — `_remove_from_catalog` clears the tag from them, so a name
+    # in one is not a reference. This path is `src/components/A2UI/catalogs`, NOT under `lit/`; the
+    # first version of this guard pointed it at `lit/A2UI/catalogs`, skipped nothing, and reported
+    # both catalogues as applications of the component.
+    catalogue_dir = os.path.join(FRONTEND_DIR, "src", "components", "A2UI", "catalogs")
+    roots = [os.path.join(FRONTEND_DIR, "src"), os.path.join(FRONTEND_DIR, "public"), os.path.join(REPO_ROOT, "backend")]
+    sources = (".ts", ".tsx", ".js", ".json", ".py", ".html", ".css")
+    found: list[str] = []
+
+    for root in roots:
+        for base, dirs, files in os.walk(root):
+            dirs[:] = [d for d in dirs if d not in _LIVENESS_SKIP_DIRS]
+            for name in files:
+                path = os.path.join(base, name)
+                if path in skip_files or path.startswith(catalogue_dir):
+                    continue
+                if not name.endswith(sources):
+                    continue
+                try:
+                    with open(path, encoding="utf-8", errors="ignore") as handle:
+                        body = handle.read()
+                except OSError:
+                    continue
+                # JSON has no comments and Python's `#` cannot be stripped safely inside strings, so
+                # both are searched as they are. For the rest, a mention in prose is not a reference.
+                if not name.endswith((".json", ".py")):
+                    body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+                    body = re.sub(r"(?m)//.*$", "", body)
+                    body = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+                if tag in body:
+                    found.append(os.path.relpath(path, REPO_ROOT))
+    return sorted(set(found))
+
+
 @router.post("/api/figma/remove")
 async def api_figma_remove(request: RemoveRequest, http_request: Request):
     """Take a component out of the catalogue, and take its file with it.
@@ -4953,14 +5246,71 @@ async def api_figma_remove(request: RemoveRequest, http_request: Request):
 
 async def _remove_component(tag: str, reason: str, http_request: Request):
     actor = _resolve_actor(http_request)
+
+    # ── THE LIVENESS CHECK, BEFORE ANYTHING IS TOUCHED ──────────────────────────────────────────
+    # A component the application's own code names is not a catalogue entry any more; it is part of
+    # the application, and deleting its file breaks whatever names it. `figma-layers-view.ts` draws
+    # every catalogue row with `<f-40001207-3497>`, so removing that one would empty the left column
+    # while reporting success. The refusal NAMES the files, so the next step is a real one: stop
+    # naming it, and then it can be removed.
+    live_in = await asyncio.to_thread(_liveness_references, tag)
+    if live_in:
+        note = (
+            f"{tag} is live in the application's own code, so removing it would break what names it. "
+            f"It is named by {', '.join(live_in)}. A component that is live cannot be removed by a "
+            "click, and this is deliberately not a warning: the file deletion is what has to be "
+            "stopped, and it is stopped here rather than in a view that might not ask."
+        )
+        _log_ingest({
+            "kind": "removal-refused",
+            "actor": actor,
+            "tag": tag,
+            "reason": reason,
+            "ruling": "live",
+            "namedBy": live_in,
+            "note": note,
+            "nextStep": (
+                "Stop naming it: the name leaving " + ", ".join(live_in) + " is what makes " + tag +
+                " removable — a click cannot."
+            ),
+        })
+        print(f"[!] [figma-ingest] {tag} was NOT removed — live in {', '.join(live_in)}")
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "tag": tag,
+                "ruling": "live",
+                "namedBy": live_in,
+                "note": note,
+                "nextStep": (
+                    "Replace it, or stop naming it: the name leaving " + ", ".join(live_in) +
+                    " is what makes it removable — a click cannot."
+                ),
+            },
+        )
+
     file_path = os.path.join(FRONTEND_COMPONENTS_DIR, f"{tag}.ts")
     file_outcome = "no file found"
     if os.path.exists(file_path):
         os.remove(file_path)
         file_outcome = f"deleted {os.path.relpath(file_path, REPO_ROOT)}"
 
+    # THE COMPANION IS NOT DELETED, AND IT MUST NOT BE. `behaviour/<tag>.behaviour.ts` is
+    # HAND-WRITTEN — the props, the listeners, the slot fills, everything about the component that
+    # is not a drawing — and no re-ingest can rebuild it, so a removal that took it would destroy
+    # work that no other step in this pipeline can restore. What is left behind is DEAD, though:
+    # nothing attaches it once the element is gone, and the loader simply never finds the tag. So it
+    # is reported rather than removed or ignored.
+    companion = os.path.join(FRONTEND_COMPONENTS_DIR, "behaviour", f"{tag}.behaviour.ts")
+
     outcome = {
         "file": file_outcome,
+        "companion": (
+            "left in place and now attached by nothing — it is hand-written and a re-ingest cannot "
+            f"rebuild it: {os.path.relpath(companion, REPO_ROOT)}"
+            if os.path.exists(companion)
+            else "none"
+        ),
         "figmaMap": await asyncio.to_thread(_remove_from_figma_map, tag),
         "allowlist": await asyncio.to_thread(_remove_from_allowlist, tag),
         "catalog": await asyncio.to_thread(_remove_from_catalog, tag),

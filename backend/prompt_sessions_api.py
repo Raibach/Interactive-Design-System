@@ -329,6 +329,152 @@ class PromptSessionsAPI:
                 conn.rollback()
                 raise
 
+    # ══════════════════════════════════════════════════════════════════════════════════
+    # THE DESIGN SIDE — a division, not a package.
+    # ══════════════════════════════════════════════════════════════════════════════════
+    #
+    # The owner, 2026-09-30: *"you do not take out that design, you're going to have to repurpose
+    # it and that means we need a DIVISION. It needs to be blind to the composer. It's a
+    # completely different experience."*
+    #
+    # WHAT WAS WRONG. A section's assembly carried the shell's session context, and
+    # `conversations.session_id` is NOT NULL with an FK to `prompt_sessions` — so Design had
+    # nowhere of its own to be, and its work landed on a PROMPT PACKAGE. That is what "connected
+    # to the wrong database" means: every attempt to put something in Design created a package,
+    # because a package was the only container that existed.
+    #
+    # WHAT THIS IS. The console's own solution — used for the experience, and then again for each
+    # level beneath it. The levels are told apart by the same `metadata.session_type` marker the
+    # console uses, and their uniqueness is enforced by partial unique indexes in `init_db.py`:
+    #
+    #     'design'            the experience's own container — one per user
+    #     'design_catalogue'  one per design system (ours, Carbon, Lion, …)
+    #     'design_master'     one per element of a catalogue
+    #     'design_child'      one per element inside a master
+    #
+    # BLINDNESS IS STRUCTURAL, NOT DISCIPLINED. A Design row is found by its own id and its own
+    # level's keys; nothing here reads a package to find it. There is therefore no path by which a
+    # write of Design's can reach a package the Composer is using — the two are separate because
+    # they are separate rows with separate conversations, not because a check forbids mixing.
+    #
+    # CONTAINERS AND COLOURS GET NOTHING. They have no row and are named nowhere here; they live
+    # in the catalogue file and the registry, where they already are.
+    def get_or_create_design_container(
+        self,
+        user_id: str,
+        kind: str,
+        title: str,
+        description: str,
+        keys: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        """The Design row for one level — created on first use, exactly once.
+
+        `kind` is the level ('design', 'design_catalogue', 'design_master', 'design_child'), and
+        `keys` identify the row WITHIN its parent: `{"design_system": "carbon"}` for a catalogue,
+        `{"catalogue_id": …, "element_key": …}` for a master, `{"master_id": …,
+        "element_key": …}` for a child.
+
+        GET-OR-CREATE, AND THE DATABASE HOLDS THE RULE — not the SELECT. Each level's partial
+        unique index lives in `init_db.py`; `ON CONFLICT DO NOTHING` is what makes a second tab
+        landing at the same moment lose instead of splitting the row in two. The read that follows
+        is a read.
+        """
+        keys = keys or {}
+        metadata = {"session_type": kind, "is_prompt_package": False, **keys}
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    """
+                    INSERT INTO prompt_sessions (user_id, title, description, metadata)
+                    VALUES (%s, %s, %s, %s::jsonb)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (user_id, title, description, json.dumps(metadata)),
+                )
+                cursor.execute(
+                    """
+                    SELECT ps.id, ps.user_id, ps.title, ps.metadata, ps.created_at,
+                           c.id AS conversation_id
+                    FROM prompt_sessions ps
+                    -- THE POINTER IS CHECKED, exactly as `get_session` and the console's own read
+                    -- check it: `conversation_id` is a legacy pointer column and may name a
+                    -- conversation belonging to another row. A pointer that is not this row's own
+                    -- reads as NO conversation rather than as this row's.
+                    LEFT JOIN conversations c ON ps.conversation_id = c.id AND c.session_id = ps.id
+                    WHERE ps.user_id = %s
+                      AND ps.metadata->>'session_type' = %s
+                      AND ps.metadata @> %s::jsonb
+                    """,
+                    (user_id, kind, json.dumps(keys)),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    conn.rollback()
+                    return None
+                conn.commit()
+                return dict(row)
+            except Exception:
+                conn.rollback()
+                raise
+
+    def get_or_create_design_conversation(self, user_id: str, tab: str = "design") -> str | None:
+        """Grace's conversation for the Design experience — hers, under the Design container.
+
+        The console's `get_or_create_console_tab_conversation` in every particular: the tab is the
+        `conversations.tab` column that has been in the schema all along, and the row hangs off the
+        DESIGN container's id — never a package's. What she says in Design is therefore absent
+        from the Composer's threads and from the console's because of WHERE THE ROW LIVES, not
+        because something remembers to exclude it.
+        """
+        container = self.get_or_create_design_container(
+            user_id=user_id,
+            kind="design",
+            title="Design",
+            description="The Design experience's own session — a division, not a prompt package.",
+        )
+        if not container:
+            return None
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id FROM conversations
+                WHERE session_id = %s AND tab = %s AND (is_archived IS NOT TRUE)
+                ORDER BY updated_at DESC LIMIT 1
+                """,
+                (container["id"], tab),
+            )
+            row = cursor.fetchone()
+            if row:
+                return str(row["id"])
+            cursor.execute(
+                """
+                INSERT INTO conversations (session_id, user_id, created_by, title, message_count, metadata, tab)
+                VALUES (%s, %s, %s, %s, 0, %s::jsonb, %s)
+                RETURNING id
+                """,
+                (
+                    container["id"],
+                    user_id,
+                    user_id,
+                    "Design",
+                    json.dumps(
+                        {
+                            "session_type": "design",
+                            "is_prompt_package": False,
+                            "tab": tab,
+                            "prompt_session_id": str(container["id"]),
+                        }
+                    ),
+                    tab,
+                ),
+            )
+            conversation_id = cursor.fetchone()["id"]
+            conn.commit()
+            return str(conversation_id)
+
     def get_sessions(
         self,
         user_id: str,
@@ -390,6 +536,14 @@ class PromptSessionsAPI:
                           -- is not a prompt package and must never be listed as one.
                           -- Without this it appears as a card beside the real packages.
                           AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') <> 'console'
+                          -- AND THE DESIGN LEVELS, for exactly the same reason. The Design
+                          -- room's container, its catalogues, its masters and its children are
+                          -- rows so that their conversations have somewhere to live — they are
+                          -- not prompt packages and must never appear as cards. Measured
+                          -- 2026-09-30, the owner: *"you're loading cards inside of the console.
+                          -- The console should remain untouched."* The rows were there and the
+                          -- list had no reason to exclude them; this is that reason.
+                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
                     """
                 else:
                     query = """
@@ -422,6 +576,10 @@ class PromptSessionsAPI:
                           -- session owns the console chat's conversations, but it is
                           -- not a prompt package and is not listed as one.
                           AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') <> 'console'
+                          -- And the same for the DESIGN levels — the room's container, its
+                          -- catalogues, its masters and its children are containers for their
+                          -- conversations, never cards in the console.
+                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
                     """
 
                 params = [user_uuid, user_uuid]

@@ -6,7 +6,44 @@ import { LitElement, html, css } from 'lit';
  * interpretation in this file, and re-ingesting the same node produces this same file.
  */
 export class CatalogNodeRaibachIds extends LitElement {
-  static properties = {};
+  /**
+   * THE FACTS THAT LOAD INTO THE MEASURED DRAWING.
+   *
+   * The template below is the design as measured — the caution mark, the catalogue icon, the name
+   * with its count line, the chevron and the node description — and the strings in it are the SAMPLE
+   * text the Figma node carried ("Components (prompt-composer)", "catalogue reads 58",
+   * "FigmaNode: 40001185-2176"). The owner, 2026-09-30, on this element as the first translation:
+   * *"take the catalog name and give it this container… figure out what aspects of that information
+   * we need to load there."* So the fields the drawing has a place for are declared here and are
+   * BOUND by the surface that places it. Unbound, the measured sample text still draws — the drawing
+   * is the design's, and it does not become empty because nothing has been loaded yet.
+   */
+  static properties = {
+    /** The catalogue's name, where the drawing reads "Components (prompt-composer)". */
+    name: { type: String },
+    /** How many components it declares, where the drawing reads "catalogue reads 58". */
+    count: { type: String },
+    /** The catalogId to draw under the name — the URL the catalogue is published at. */
+    catalogId: { type: String, attribute: 'catalog-id' },
+    /** The line in the trailing block, where the drawing reads "FigmaNode: …". */
+    description: { type: String },
+  };
+
+  declare name: string;
+  declare count: string;
+  declare catalogId: string;
+  declare description: string;
+
+  constructor() {
+    super();
+    // THE MEASURED TEXT IS THE DEFAULT — the strings the Figma node carries, in the places it drew
+    // them. A host that binds nothing gets the design as drawn; a host that binds gets the room's
+    // own facts in the same places.
+    this.name = 'Components (prompt-composer)';
+    this.count = 'catalogue reads 58';
+    this.catalogId = '';
+    this.description = 'FigmaNode: 40001185-2176\nSystem Role Dropdown used in prompt area';
+  }
 
   static styles = css`
     :host {
@@ -164,7 +201,7 @@ export class CatalogNodeRaibachIds extends LitElement {
 
   render() {
     return html`
-      <div class="frame-887052"><div class="status-component-caution"><svg width="22.31" height="20.4" viewBox="166.36 435.46 22.31 20.4" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M 176.25 436.83 C 177.02 435.46 178.98 435.46 179.75 436.83 L 188.9 453.22 C 189.64 454.56 188.68 456.2 187.15 456.2 L 168.85 456.2 C 167.32 456.2 166.36 454.56 167.1 453.22 L 176.25 436.83 Z" fill="#e4d48e" stroke="#d29207" stroke-width="1.0"/></svg></div></div><div class="frame-887025"><div class="data-tree-catalog"><div class="catalog-icon"><div class="layer"><svg width="11.02" height="19.67" viewBox="207.49 436.17 11.02 19.67" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M 218.51 436.55 L 210.87 455.83 L 207.49 455.45 L 215.13 436.17 L 218.51 436.55 Z" fill="#fccd3d"/></svg></div></div><div class="catalog-name"><span style="font-family: 'Inter', sans-serif; font-weight: 600">Components (prompt-composer)<br/></span><span style="color: #767676">catalogue reads 58</span></div></div><div class="chevron-blue-closed"><div class="arrow-drop-down"><svg width="10.0" height="6.0" viewBox="556.0 443.0 10.0 6.0" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M 560.81 448.77 L 557.09 444.31 C 556.66 443.79 557.03 443.0 557.71 443.0 L 564.29 443.0 C 564.97 443.0 565.34 443.79 564.91 444.31 L 561.19 448.77 C 561.09 448.89 560.91 448.89 560.81 448.77 Z" fill="#4e68d2"/></svg></div></div></div><div class="catalog-description-dt"><div class="id-label"><div class="functions-label">FigmaNode: 40001185-2176<br/>System Role Dropdown used in prompt area</div></div></div>
+      <div class="frame-887052"><div class="status-component-caution"><svg width="22.31" height="20.4" viewBox="166.36 435.46 22.31 20.4" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M 176.25 436.83 C 177.02 435.46 178.98 435.46 179.75 436.83 L 188.9 453.22 C 189.64 454.56 188.68 456.2 187.15 456.2 L 168.85 456.2 C 167.32 456.2 166.36 454.56 167.1 453.22 L 176.25 436.83 Z" fill="#e4d48e" stroke="#d29207" stroke-width="1.0"/></svg></div></div><div class="frame-887025"><div class="data-tree-catalog"><div class="catalog-icon"><div class="layer"><svg width="11.02" height="19.67" viewBox="207.49 436.17 11.02 19.67" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M 218.51 436.55 L 210.87 455.83 L 207.49 455.45 L 215.13 436.17 L 218.51 436.55 Z" fill="#fccd3d"/></svg></div></div><div class="catalog-name"><span style="font-family: 'Inter', sans-serif; font-weight: 600">${this.name}<br/></span><span style="color: #767676">${this.count}</span></div></div><div class="chevron-blue-closed"><div class="arrow-drop-down"><svg width="10.0" height="6.0" viewBox="556.0 443.0 10.0 6.0" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M 560.81 448.77 L 557.09 444.31 C 556.66 443.79 557.03 443.0 557.71 443.0 L 564.29 443.0 C 564.97 443.0 565.34 443.79 564.91 444.31 L 561.19 448.77 C 561.09 448.89 560.91 448.89 560.81 448.77 Z" fill="#4e68d2"/></svg></div></div></div><div class="catalog-description-dt"><div class="id-label"><div class="functions-label">${this.catalogId || this.description}</div></div></div>
     `;
   }
 }

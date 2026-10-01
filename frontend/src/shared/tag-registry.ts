@@ -31,7 +31,13 @@ import { z } from 'zod';
 // ── Base schema shared by all registry entries ────────────────────────────────
 export const RegistryMetaSchema = z.object({
   tag: z.string(),
-  surface: z.enum(['console', 'composer', 'both']),
+  // FOUR SURFACES, not three (2026-09-30). `design` is the Design room's own catalogue
+  // (`catalogs/design-artifacts/catalog.json`, loaded per surface by `backend/deps.py`).
+  // The same name may appear in more than one surface — the owner: *"they have to be entered
+  // in composer, and then they have to be re-entered into the design"* — so an entry that
+  // exists ONLY for Design says `design` here, and one that exists only for the Composer says
+  // `composer`. `both` keeps the meaning it always had: console AND composer.
+  surface: z.enum(['console', 'composer', 'design', 'both']),
   column: z.enum(['left', 'middle', 'right', 'console']).optional(),
   description: z.string(),
   constraints: z.array(z.string()).optional(),
@@ -813,6 +819,14 @@ export const TAG_REGISTRY = {
       conversationId: { type: 'string', format: 'uuid', optional: true },
       sessionId: { type: 'string', format: 'uuid', optional: true },
       state: { type: 'enum', values: ['idle', 'streaming', 'error'], default: 'idle' },
+      /**
+       * WHO SHE IS IN THE ROOM THAT BINDS THIS. A surface that binds it owns her instructions for
+       * its own turns; a surface that does not gets the Composer's script, unchanged. Design binds
+       * it so that she answers as the design system assistant instead of reasoning about prompt
+       * pipelines over a component tree — the fault the owner found on 2026-09-30: *"she's not
+       * talking, she's not thinking, because some dumb ass AI has put a hardcoded mess in there."*
+       */
+      instructions: { type: 'string', optional: true },
     },
     events: ['message-sent', 'command-received'],
     constraints: [],
@@ -1351,6 +1365,295 @@ export const TAG_REGISTRY = {
       'ASSEMBLED ON RUN (2026-09-23): the model emits this as the canvas\'s "header" slot (render-run), which is the point of it being its own element. It used to be written by WritingAreaIndex.setOutputColumn by hand.',
     ],
   },
+  /**
+   * THE DESIGN ROOM'S MIDDLE COLUMN — the Composer's middle column with a hole in it.
+   *
+   * WHY IT EXISTS. Design's columns hold the ingest tool's regions, and content has to be loaded
+   * INSIDE a column rather than beside it. The Composer's middle column is
+   * `compiled-output-viewer`, which owns its whole body and has NO slot — nothing can be loaded
+   * inside it. The owner ruled on exactly this case (2026-09-30): *"If you have to make a
+   * different component because you can't figure out how to load something inside of it, then
+   * build a different lit component for the design section."*
+   *
+   * WHAT IT IS: `<output-controls>` — the entry above, the Composer's own header row, instantiated
+   * unchanged — over a real slot named `middle`. The ingest's middle region already declares
+   * `slot="middle"`, so it lands in the hole with no change to the tool. The frame's geometry is
+   * the column's; no colour, radius or shadow is invented.
+   *
+   * DESIGN ONLY. The Composer's surface never names it and the Composer's renderer never draws it,
+   * which is what makes this an addition rather than a change to the Composer's column.
+   */
+  'design-middle-container': {
+    tag: 'design-middle-container',
+    surface: 'design',
+    column: 'middle',
+    description: 'The Design room\'s middle column: the Composer\'s own <output-controls> header row over a MOUNT inside its shadow tree (`data-ingest-mount`), where the ingest\'s Preview is rendered. It exists because the Composer\'s column body (<compiled-output-viewer>) has no slot, so nothing can be loaded inside it. Design only: the Composer never draws it.',
+    props: {
+      outputType: { type: 'string', optional: true },
+    },
+    events: [],
+    constraints: [
+      'the hole is the point: content is loaded INTO this element, never beside it',
+      'LOOSE CONTENT IN THE ROOM IS THE BUG THIS FIXES (measured 2026-09-30): nodes React appends to the room container\'s light DOM are unmanaged by lit-html, which owns that same child list, and every change in the slot\'s assignment makes workspace-layout re-baseline its split — the owner: "I can\'t close the container. I can\'t grab a hold of the grippers. It\'s jerking away from me"',
+      'the mount is inside the shadow tree ON PURPOSE: a slot would leave the content in its own tree, where the tool\'s Tailwind classes cannot match (no document sheet reaches into the renderer\'s root), and the preview would arrive unformatted',
+      'the header row is the Composer\'s <output-controls>, instantiated unchanged — never a second copy of that row',
+      'the output container is a separate element and belongs in this element\'s hole',
+      'THE COLUMN IS DRAWN ONLY WHEN THE TREE REFERENCES IT: render-design declares this component and does not put it in the layout\'s children, so the third column is collapsed until the ingest reports its first draft — the Composer\'s own contract for its middle column ("the shell moves the flow view into it at Run time")',
+    ],
+  },
+  /**
+   * THE DESIGN ROOM'S LEFT COLUMN — the Composer's panel frame with a hole in it.
+   *
+   * WHY IT EXISTS. The owner, 2026-09-30, on the running room: *"it is loading underneath the
+   * container the design renderer has to render it inside of the container."* Design's left
+   * column drew the Composer's prompt editor (the Agent Role tile, "Functions | Tools", the empty
+   * textarea) and the ingest's rail sat BELOW it, loose in the pane. The panel itself is part of
+   * the frame — *"it's the same panel that we have the prompt / agent prompt inputs, and it's
+   * called left column"* — so the frame stays and its contents are replaced, which is the owner's
+   * rule for the whole exercise: *"I will just replace what they hold."*
+   *
+   * WHAT IT IS: `<prompt-container>` — the Composer's own panel, instantiated unchanged and never
+   * restyled — over a `<slot name="left">`, and the SURFACE fills that slot: `render-design` names a
+   * child in this component's `children.left` and the renderer instantiates it there (today
+   * `<figma-layers-view>`, the ingestion rail's own component tree).
+   *
+   * WHY A SLOT, AND WHY THE MOUNT THAT PRECEDED IT IS GONE (measured 2026-09-30). The mount was a
+   * div inside this element's shadow tree (`data-ingest-mount`) holding the ingestion tool's React
+   * rail, because a slot projects a light child and leaves it in ITS OWN tree, where the tool's
+   * Tailwind utility classes — selectors in a DOCUMENT stylesheet — cannot match inside this
+   * renderer's shadow root. The tool arrived unformatted (the rail measured `display: block`,
+   * `overflow-y: visible`, its URL field 153px wide) and its component list could not be scrolled.
+   * The tool is now not loaded into this room at all — a React tree inside a surface is forbidden,
+   * and measured on the live page, it drew BENEATH the room and pushed the layout to y = −129 — so
+   * the mount has nothing left to hold. A catalogue element needs none: it carries its styles in its
+   * own shadow root, and only its box comes from this frame (`::slotted(*)`).
+   *
+   * DESIGN ONLY. The Composer's surface never names it and the Composer's renderer never draws it.
+   */
+  'design-left-panel': {
+    tag: 'design-left-panel',
+    surface: 'design',
+    column: 'left',
+    description: 'The Design room\'s left column: the Composer\'s own <prompt-container> panel frame with a `<slot name="left">` in it, and the surface fills that slot — render-design names its child in this component\'s `children.left` and the renderer instantiates it there. It exists because the panel is part of the frame while the Composer\'s prompt editor is not. Design only: the Composer never draws it.',
+    props: {
+      formatLabel: { type: 'string', optional: true },
+      tokensLabel: { type: 'string', optional: true },
+    },
+    events: [],
+    constraints: [
+      'THE PANE IS FILLED BY THE SURFACE, BY ID: content is projected into the panel by `<slot name="left">`, and the envelope names it in `children.left` — nothing mounts itself in, and no host appends a node',
+      'the frame is the Composer\'s <prompt-container>, instantiated unchanged — never a second copy of that panel',
+      'the hole is a SLOT and the mount it once carried is gone: the mount existed for the ingestion tool\'s React rail, which no longer loads into this room (it drew beneath the room, layout measured at y = −129), and a catalogue element carries its own styles so it needs none',
+      'the frame gives the projected child its BOX and nothing else (`::slotted(*)` — fill the hole, min-height: 0): whether the child scrolls, and what it scrolls, is the child\'s own business',
+      'both rail labels default to empty on purpose: "Agent Prompt" and a token/cost readout are the labels for a prompt panel, and this column holds the section\'s components — the rail draws no text rather than text that is not true',
+    ],
+  },
+  /**
+   * THE MIDDLE COLUMN'S PREVIEW — what a RUN loaded.
+   *
+   * THE DESTINATION THE ROOM WAS MISSING. It has two run triggers — Submit in the rail, and a row
+   * clicked in the catalogue tree — and neither had anywhere to display: the ingest's Preview is
+   * React inside the modal, and the column's container had a mount for it and no content. The
+   * owner, 2026-09-30: *"the run function is supposed to launch the third column and show the
+   * preview… submit is run, selecting one of those components in that list is a run function."*
+   *
+   * IT DRAWS AND DISPATCHES. `preview` arrives from `/session/preview`, written by the shell from
+   * the answer the ingest already returned or from the row the tree already lists — so there is no
+   * second reader of the ingest here — and its two actions are events the shell answers
+   * (`preview-approve` → the same `POST /api/figma/commit` the modal's green button makes,
+   * `preview-discard`). A view never writes to the catalogue.
+   *
+   * AND A THIRD ACTION, `preview-remove`, WHICH DESTROYS RATHER THAN WRITES: it takes the component
+   * out of everything the catalogue holds it in, so the button that fires it takes two clicks and
+   * its arm is released whenever the preview changes. The call it runs is the one the ingest form
+   * already makes (`POST /api/figma/remove`).
+   */
+  'component-preview': {
+    tag: 'component-preview',
+    surface: 'design',
+    column: 'middle',
+    description: 'The Design room\'s middle column: what a RUN loaded — the component a Submit ingested, or the row a person clicked in the catalogue tree. Draws the identity, the facts the run returned, and the two actions; fetches nothing and decides nothing, because the shell owns the state and the calls.',
+    props: {
+      /** Bound to /session/preview. Undefined = no run yet, which is said in words. */
+      preview: { type: 'object', optional: true },
+      /** Set by the HOST while an approve or a re-read is in flight. */
+      busy: { type: 'boolean', optional: true },
+      /** A line under the actions — a refusal, or why the approve did not go through. */
+      message: { type: 'string', optional: true },
+    },
+    events: ['preview-approve', 'preview-discard', 'preview-remove', 'preview-collision-answer'],
+    constraints: [
+      'IT DRAWS AND DISPATCHES ONLY: no fetch, no parse, no decision about what a component is — a second reader of the ingest would be a second answer',
+      'the state arrives from `/session/preview`, written by the shell: the ingest answer for a Submit, the catalogue row for a click. It is the same shape either way, which is what makes one column serve two run triggers',
+      'UNSET IS NOT EMPTY: no preview bound draws "nothing loaded yet" in words, because an empty pane and a preview of nothing are different claims',
+      'it never writes to the catalogue: `preview-approve` is an EVENT, and the shell runs `POST /api/figma/commit` — approving writes files and rows, which is not a view\'s job',
+      'THE COLUMN IS OPENED BY THE HOST, like the Composer\'s: `design-middle` is declared and the layout does not reference it until a run has something to show (the shell adds the reference). An unreferenced column is collapsed — that is workspace-layout\'s own contract, not a style',
+    ],
+  },
+  /**
+   * THE DRAFT ITSELF, DRAWN — the component an ingest just built, loaded from its temporary file.
+   *
+   * WHY IT EXISTS. The frame above DESCRIBES a run; this one DRAWS one, and it exists because the
+   * room was drawing the wrong thing. On Submit the shell named the draft's TAG as the component to
+   * draw, and the renderer resolved that name through the catalogue — so a re-ingest of a node the
+   * catalogue already holds (the ordinary case: the designer edited Figma and submitted the same
+   * node again) drew the APPROVED element while the fresh draft sat in the server untouched. The
+   * owner, 2026-09-30: *"when I go to preview a change, I'm not seeing a change. I'm seeing the old
+   * lit component because it has the same name. It's just reloading it from the lit catalog. I want
+   * to use the temporary folder."*
+   *
+   * THE TAG IS NOT AN ADDRESS. A draft and an approved component can share a name, so a client given
+   * the NAME has to guess; this element is given the FILE — `moduleUrl` on the ingest result, which
+   * is the file the backend wrote into `.preview/<jobId>/` — and it loads exactly that. No catalogue
+   * element is reached for by name here, and none can be: the tag drawn is the draft's own, taken
+   * verbatim, and the module is the one the server named.
+   *
+   * THE BLINDNESS IS THE MECHANISM. It owns the same sandboxed document the ingest form's Preview
+   * pane builds — the same CSP, the same import map, the same one attempt at the same single module
+   * — and that CSP is what makes a preview unable to impersonate the catalogue: `img-src data:
+   * blob:` means an image can only be bytes the ingest put in the draft, and `connect-src 'none'`
+   * means the document cannot fetch the catalogue, the record or the backend. The catalogue is
+   * surfaced only when the designer approves.
+   *
+   * DESIGN ONLY. It is this room's third column; the Composer's RUN moves its own view into its own
+   * column, and this element is never drawn there.
+   */
+  'draft-preview': {
+    tag: 'draft-preview',
+    surface: 'design',
+    column: 'middle',
+    description: 'The Design room\'s third column when the run was an INGEST: the draft, drawn. It loads the temporary file the ingest wrote (`.preview/<jobId>/<tag>.ts`, carried on the ingest result as `moduleUrl`) inside the same sandboxed document the ingest form\'s Preview pane builds — the same CSP, the same import map, the same single-module load — and it draws nothing else. It fetches nothing, decides nothing, and never reaches for a catalogue element by name: a draft and an approved component can share a name, and the FILE is what tells them apart.',
+    props: {
+      /**
+       * Bound to /session/preview/draft as {"path": "/session/preview/draft"}: {jobId, tag,
+       * modulePath, moduleUrl}, written by the shell from the ingest result — the identity travels
+       * on the same channel as everything else, never as a prop the element works out itself.
+       * Unset = no ingest has produced a draft, which is said in words.
+       */
+      draft: { type: 'object', optional: true },
+    },
+    events: [],
+    constraints: [
+      'THE FILE, NOT THE NAME: it draws `moduleUrl` — the temporary file under `.preview/<jobId>/` — so a re-ingest of a component the catalogue already holds shows the DRAFT, not the approved element. Given the tag alone, the renderer resolves it through the catalogue, and that resolution is the defect this element removes',
+      'IT NEVER REACHES FOR A CATALOGUE ELEMENT BY NAME: the element tag it instantiates is the draft\'s own, verbatim (and a tag that is not a custom element name is refused in words), and the module is the one the server named. It imports no resolver and reads no manifest',
+      'THE BLINDNESS IS STRUCTURAL, not a promise: the sandboxed document and its CSP are the mechanism — `img-src data: blob:` (an image can only be bytes the ingest put in the draft, never `/assets/…` or a path that shares a name with the repository), `connect-src \'none\'` (it cannot fetch the catalogue, the manifest, the record or the backend), `script-src \'self\'` kept only for Lit, which is the framework and not the catalogue',
+      'IT DRAWS AND DECIDES NOTHING ELSE: no facts, no buttons, no fetching — the identity and the two actions belong to <component-preview>, the frame it sits inside, and the state arrives from `/session/preview/draft`, written by the shell from the answer the ingest already returned',
+      'THE DOCUMENT IS A PURE FUNCTION OF WHAT IS LOADED, so a re-render (an approve, a note that changed) does not reload the frame: Lit skips an attribute binding whose value is unchanged, and what the designer is looking at stays the thing they were looking at',
+      'NOTHING IS SUBSTITUTED FOR THE BREAK: no retry, no sample props, no blank page — a module that cannot be loaded says so in the pane, where the designer is looking',
+    ],
+  },
+  /**
+   * THE INGEST RAIL'S TOP HALF — the Figma URL field, the Notes field and Submit.
+   *
+   * THE HALF THAT WAS MISSING, and the owner asked for it twice before it existed: *"where is the
+   * Figma input? … why would you leave out the most important part the input field for the link and
+   * the notes?"* The rail's bottom half is `figma-layers-view` (the tree, reused). The catalogues
+   * had NO element that draws a text field of this kind — `prompt-textarea` is the composer's own
+   * section field, and `role-dropdown` and `model-selector-button` take no text — so the input could
+   * not be named by any surface until something drew it. This is that element, and it is a
+   * TRANSLATION of the ingest form's own fields rather than a second design: the same two fields
+   * with the same words.
+   *
+   * IT DRAWS AND DISPATCHES, AND NOTHING ELSE. It fetches nothing and ingests nothing: the parsing
+   * (`@/utils/figmaUrl`) and the endpoint (`POST /api/figma/ingest`) already exist, and a view that
+   * fetched would be a second implementation of the ingest. On Submit it dispatches `ingest-submit`
+   * with `{url, notes}` VERBATIM, because deciding whether a typed string is a Figma URL, a node tag
+   * (`f-1234-5678`) or a layer's name is `handleIngest`'s logic and not the element's.
+   *
+   * `busy` AND `message` ARE THE HOST'S. Only the caller that made the call knows when it finished,
+   * and only it knows why Submit is blocked — so the element decides neither.
+   */
+  'figma-ingest-form': {
+    tag: 'figma-ingest-form',
+    surface: 'design',
+    column: 'left',
+    description: 'The ingest rail\'s top half: the Figma URL field, the Notes field and Submit, translated from the ingestion form. Draws and dispatches only — on Submit it emits `ingest-submit` with `{url, notes}` verbatim, and the shell runs `POST /api/figma/ingest`, the same call the modal makes.',
+    props: {
+      /** Prefilled URL. The field stays editable either way. */
+      url: { type: 'string', optional: true },
+      /** Prefilled notes — optional in the form and optional in the ingest. */
+      notes: { type: 'string', optional: true },
+      /** Set by the HOST while an ingest is in flight; locks the fields and reads "Ingesting…". */
+      busy: { type: 'boolean', optional: true },
+      /** A line under the fields — a refusal, or why Submit is blocked. The host's words. */
+      message: { type: 'string', optional: true },
+    },
+    events: ['ingest-submit'],
+    constraints: [
+      'IT DRAWS AND DISPATCHES ONLY: it never fetches, never parses the typed string, and never calls the ingest — the parsing and the endpoint already exist and are not reimplemented in an element',
+      '`ingest-submit` carries the RAW TEXT ({url, notes}) because what a typed string MEANS — a Figma URL, a node tag (f-1234-5678), or a layer\'s name — is `IngestModal.handleIngest`\'s logic, and one place decides it',
+      '`busy` and `message` are the HOST\'S to set: only the caller that made the call knows when it finished, and only it knows why Submit is blocked',
+      'the fields are the ingest form\'s own two, with the ingest\'s own words — a TRANSLATION of that form, not a second design and not a restyle',
+      'it is the TOP of the left column and the tree is the bottom: the slot takes both, in that order',
+    ],
+  },
+  /**
+   * THE INGESTION LEFT RAIL'S OWN COMPONENT TREE — the element the ingest form draws in its left
+   * column, reused here. NOTHING NEW IS BUILT FOR THIS COLUMN, and that is the whole point: the
+   * owner, 2026-09-30, after a session went and authored a list component instead —
+   * *"I've been telling you all morning long... you will not build it."* The rail already had the
+   * element; what it did not have was the two registrations that let a SURFACE name it. It has them
+   * now, and this entry is one of the two.
+   *
+   * WHAT IT DRAWS (the ingest form's left column, above the Preview): the catalogue strip — every
+   * catalogue the build knows (`design-artifacts`, `prompt-composer`, `ecommerce`, `primitives`)
+   * with its entry count; the selected catalogue's head and `catalogId`; then "Declared in this
+   * catalogue" — one row per component carrying its shape (`allOf(3)` / `flat`), its Figma node, the
+   * file that DRAWS it (`drawn by lit/<file>`), and a status dot from the checker's own audit. It is
+   * the same element, instantiated unchanged and never restyled.
+   *
+   * IT READS THE BUILD, AND THAT IS ITS NATURE, NOT AN OVERSIGHT: the catalogues come from
+   * `import.meta.glob` over `catalogs/*​/catalog.json` and the audit from
+   * `/api/catalog/audit/<pipeline>`. There is no data-model binding for those and none should be
+   * invented — the files ARE the source, and a copy of them in the data model would be a second
+   * catalogue that could disagree with the first.
+   *
+   * WHY `pipeline` IS A CATALOGUE NAME AND NOT THE SESSION'S. It selects a FOLDER under
+   * `src/components/A2UI/catalogs/`. The room's data model carries `/session/catalogue/system`,
+   * whose value is `raibach-ids` — a design SYSTEM, not a catalogue — so binding this prop to that
+   * path would name a catalogue that does not exist and the tree would draw its "no catalogue"
+   * failure. `render-design` sends `prompt-composer`: it is the element's own default, it is what
+   * the ingest form shows, and it is the catalogue the section's 58 rows are declared in.
+   *
+   * THE STRIP IS LIVE INSIDE THE ELEMENT. Clicking a catalogue at the top sets this element's own
+   * `pipeline` and re-reads, so switching catalogues needs no host and no event round trip.
+   *
+   * BOTH PLACES. In `design-artifacts` (this room's own catalogue) and in `prompt-composer`, because
+   * the catalog audit validates the names `routes/ai.py` emits against prompt-composer — the owner's
+   * *"entered in composer, and then ... re-entered into the design"*, enforced rather than advised.
+   *
+   * DESIGN ONLY at present: the Composer's surface never names it.
+   */
+  'figma-layers-view': {
+    tag: 'figma-layers-view',
+    surface: 'design',
+    column: 'left',
+    description: 'The ingestion left rail\'s own component tree, reused unchanged: the catalogue strip, the selected catalogue\'s head, and one row per declared component carrying its shape (`allOf(3)` / `flat`), its Figma node, the file that draws it (`drawn by lit/<file>`), and a status dot from the checker\'s audit. Reads the catalogues off the build (`import.meta.glob`) and the audit from `/api/catalog/audit/<pipeline>` — it takes no binding for those, and the strip switches catalogues inside the element itself.',
+    props: {
+      /** A catalogue FOLDER name (prompt-composer, design-artifacts, ecommerce, primitives). */
+      pipeline: { type: 'string', optional: true },
+      /** Show one node's tree instead of the whole declared list. */
+      nodeId: { type: 'string', optional: true },
+      /** Sit in the flow of the column rather than float over the screen. */
+      inline: { type: 'boolean', optional: true },
+      /** Bumped by the host to force a re-read — after an ingest lands, or a commit. */
+      refresh: { type: 'number', optional: true },
+      /** Bumped by the host to fold the tree back to its opening state. */
+      reset: { type: 'number', optional: true },
+      /** The component the host has open, so the tree can mark it. */
+      selected: { type: 'string', optional: true },
+      /** Whether the tree is drawn open. */
+      open: { type: 'boolean', optional: true },
+    },
+    events: ['catalog-change', 'open-component', 'open-layer', 'open-function'],
+    constraints: [
+      'REUSED, NOT REBUILT: this is the ingest form\'s own element, instantiated unchanged and never restyled. It was entered in the catalogue precisely so that nothing new had to be authored for this column',
+      '`pipeline` is a CATALOGUE FOLDER name, never a design system or a session title. Binding it to `/session/catalogue/system` names a catalogue that does not exist (`raibach-ids` is a design system) and the tree reports it rather than drawing',
+      'IT READS THE BUILD ON PURPOSE: catalogues from `import.meta.glob` over `catalogs/*​/catalog.json`, audit from `/api/catalog/audit/<pipeline>`. No data-model binding for those exists or should be invented — the files are the source, and a copy in the model would be a second catalogue that can disagree',
+      'the catalogue strip is live INSIDE the element: a click sets its own `pipeline` and re-reads, so no host and no event round trip are needed to switch catalogues',
+      'it DISPATCHES `open-component`, `open-layer` and `open-function` to open what it is showing. Nothing in the Design room answers them yet: opening a component for review is the ingest tool\'s job and it is NOT wired here — the tree draws and marks, it does not yet open',
+    ],
+  },
   'workspace-layout': {
     tag: 'workspace-layout',
     surface: 'composer',
@@ -1379,16 +1682,47 @@ export const TAG_REGISTRY = {
     events: [],
   },
   // Ingested from Figma — catalog-component-node-raibach-ids (40001207:3497)
+  /**
+   * THE CATALOGUE'S COMPONENT ROW — one component of the catalogue, drawn as the row the list shows.
+   *
+   * WHY IT IS DECLARED THIS WAY (owner, 2026-09-30): *"I need you to use this lit element for the
+   * component level in the list on the left column: f-40001207-3497 … I do not need to see anything
+   * but the name and the f-code and the description in these tiles. The other data should be in the
+   * metadata in the preview panel."* So the four props below are the row's three facts plus the
+   * chevron's state, and `figma-layers-view` instantiates this element once per declared component —
+   * it does not draw a row of its own beside it. The facts the row no longer shows (the shape, what
+   * draws it, whether the app sends it, its property count, the audit's verdict, the Figma node)
+   * travel with the click instead, into the preview panel.
+   *
+   * THE PROPS IT DECLARED BEFORE (`content`, `justify`, `align`) WERE NEVER IMPLEMENTED — the
+   * element's own `static properties` was empty, so this allowlist described three things that did
+   * not exist anywhere. They are REPLACED rather than kept beside the real ones: the manifest the
+   * model is handed is built from this file, and a prop that is not real is the class of untruth
+   * this registry exists to prevent.
+   *
+   * ITS STATUS WELL IS A SLOT, filled by the tree (`status`), and it is the design's own box: the
+   * node the generator measured named it `slot-status-icon-container`. One mark goes in it — the
+   * audit's verdict, or the purple in-use mark when the verdict is clean (owner: *"just add the
+   * green dot or purple, or amber not both"*) — and the dot's colour is the tree's, not this
+   * element's, because whether a component is used and whether the audit is happy are facts about
+   * the build rather than about the row.
+   */
   'f-40001207-3497': {
     tag: 'f-40001207-3497',
     surface: 'composer',
-    description: 'Generated from Figma node 40001207:3497 (catalog-component-node-raibach-ids). Implemented by <f-40001207-3497> in src/components/lit/f-40001207-3497.ts.',
+    description:
+      'THE CATALOGUE\'S COMPONENT ROW: one component, drawn as the row the left column lists — the name, the code it is addressed by, and the catalogue\'s own description of it, with a chevron that expands the row and a status well the host fills with one mark. Implemented by <f-40001207-3497> in src/components/lit/f-40001207-3497.ts, generated from Figma node 40001207:3497 and now driven by the tree that lists the catalogue.',
     props: {
-      content: { type: 'string', optional: true },
-      justify: { type: 'string', optional: true },
-      align: { type: 'string', optional: true },
+      /** What the catalogue calls it — the Figma layer\'s name for a generated component. */
+      name: { type: 'string', optional: true },
+      /** The catalogue\'s own key for it: `f-40001207-3497`, or a kebab name like `trace-feed`. */
+      code: { type: 'string', optional: true },
+      /** What it is, in the catalogue\'s words, cut to its first sentence by the row that passes it. */
+      description: { type: 'string', optional: true },
+      /** Whether the row is expanded — the chevron\'s state, reported back as `chevron-toggle`. */
+      open: { type: 'boolean', optional: true },
     },
-    events: [],
+    events: ['chevron-toggle'],
   },
   // Ingested from Figma — catalog-node-raibach-ids (40001207:3559)
   'f-40001207-3559': {
@@ -1435,6 +1769,11 @@ export type TagEntry = (typeof TAG_REGISTRY)[TagName];
  *                     it from all of them at the same time.
  *   prompt-composer    theme one
  *   console            theme two (the console homepage surface)
+ *   design-artifacts   theme three — the Design room's own catalogue
+ *                      (catalogs/design-artifacts/catalog.json, loaded per surface by
+ *                      backend/deps.py). A name can belong to this tier AND the Composer's:
+ *                      the two files are the "both places" the owner asked for, and a name
+ *                      that exists only for Design is listed here and nowhere else.
  *
  * Membership is NOT permission. The tier says which catalog OWNS a component;
  * roles say who may SEE it. Those are deliberately separate questions — some
@@ -1447,6 +1786,7 @@ export const CATALOG_TIERS = {
   primitives: TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'both'),
   'prompt-composer': TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'composer'),
   console: TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'console'),
+  'design-artifacts': TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'design'),
 } as const;
 
 export type CatalogTier = keyof typeof CATALOG_TIERS;

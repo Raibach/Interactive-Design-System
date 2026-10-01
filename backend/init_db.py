@@ -706,6 +706,105 @@ TABLE_DEFINITIONS = {
             created_at TIMESTAMP DEFAULT now()
         )
     """,
+
+    # ── THE DESIGN ROOM'S ELEMENTS — the record ABOUT a component, not the component ────────
+    #
+    # WHAT AN ELEMENT IS, AND WHY THERE IS NO `design_components` TABLE HERE.
+    #
+    # The element itself is already recorded, one row each, in `prompt_sessions` — the levels
+    # documented with the indexes below: 'design_master' is one row per element of a catalogue and
+    # 'design_child' is one row per element inside a master, keyed (catalogue_id, element_key) and
+    # (master_id, element_key) by partial unique indexes. A component's IDENTITY is its tag in a
+    # catalogue plus its entry in the registry, so a table that also claimed to define it would be
+    # a second answer to "what is this component" — the drift that lets two halves of an
+    # application disagree about the same thing. The owner, 2026-09-30: *"it's just a data tree…
+    # I can look at the individual children. I may even search for an individual child and yes, it
+    # needs to show me its relationships."*
+    #
+    # WHAT WAS MISSING IS EVERYTHING ABOUT IT: what happened to it, what has been said about it,
+    # how it changed and how it performs. Those are the four tables below, and each hangs off
+    # `element_id` — the element's own row in `prompt_sessions`, which is its package. The owner,
+    # the same day: *"each one of those components has got to be tracked, it's got to have its own
+    # governance layer, especially if it's interactive… the best I can do is to create individual
+    # packages for each component."*
+    #
+    # THE THREE SCALES ARE THREE PROBLEMS, so they are three tables and never one. A container has
+    # two or three things said about it; one front-end experience has a few hundred; quantitative
+    # interaction tracking is millions, and it belongs in `design_element_metrics` — the activity
+    # trail is read row by row and the metrics are not, so mixing them makes the trail slow for
+    # data nobody reads that way.
+    #
+    # CONTAINERS AND COLOURS GET NO ROW, here as above: they live in the catalogue file and the
+    # registry, and none of their behaviour is worth recording. The owner's own priority, the same
+    # day: *"I may search for a container. Maybe it's not as important because it's not
+    # interactive… we have priorities here."*
+    #
+    # GOVERNANCE IS NOT A NEW TABLE EITHER. `governance_items` already carries `component`,
+    # `node_id`, `file_path`, `catalog` and `package_id` on its findings — the shape works, and it
+    # joins to these elements on the component tag. The vector index comes last, as a derived
+    # table, and is deliberately not created here.
+    'design_element_activity': """
+        CREATE TABLE IF NOT EXISTS design_element_activity (
+            id BIGSERIAL PRIMARY KEY,
+            element_id UUID NOT NULL REFERENCES prompt_sessions(id) ON DELETE CASCADE,
+            user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            package_id UUID,
+            actor VARCHAR(32) DEFAULT 'user',
+            action VARCHAR(64) NOT NULL,
+            detail JSONB DEFAULT '{}',
+            at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """,
+
+    # Notes, annotations, styling references, decisions and questions — ONE table with a `kind`,
+    # the way `governance_items` uses kind rather than three tables for three wordings of the same
+    # thing. `target` is what makes it attach to a PART of an element rather than to the whole
+    # thing: the slot, the property, the layer. Without it, "the padding on the status icon is
+    # wrong" has nowhere to go, which is the requirement in the owner's own words.
+    'design_element_annotations': """
+        CREATE TABLE IF NOT EXISTS design_element_annotations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            element_id UUID NOT NULL REFERENCES prompt_sessions(id) ON DELETE CASCADE,
+            kind VARCHAR(32) NOT NULL DEFAULT 'note',
+            target TEXT,
+            body TEXT NOT NULL,
+            author_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            metadata JSONB DEFAULT '{}',
+            resolved_at TIMESTAMPTZ,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """,
+
+    # THE INTENT, NOT THE CODE. Git already holds every version of the file that draws an element,
+    # so a copy of the code here would be a copy that drifts. This records WHY it changed and
+    # POINTS at the commit — the shape `prompt_versions` already proves for prompts.
+    'design_element_versions': """
+        CREATE TABLE IF NOT EXISTS design_element_versions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            element_id UUID NOT NULL REFERENCES prompt_sessions(id) ON DELETE CASCADE,
+            version_number INTEGER NOT NULL,
+            change_type VARCHAR(50),
+            change_description TEXT,
+            commit_hash VARCHAR(64),
+            snapshot JSONB DEFAULT '{}',
+            created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """,
+
+    # THE MILLIONS CASE, SEPARATE ON PURPOSE — see the note above. Partition by month and index
+    # (element_id, at) when it earns it; do not build that shape before it is needed.
+    'design_element_metrics': """
+        CREATE TABLE IF NOT EXISTS design_element_metrics (
+            id BIGSERIAL PRIMARY KEY,
+            element_id UUID NOT NULL REFERENCES prompt_sessions(id) ON DELETE CASCADE,
+            metric VARCHAR(64) NOT NULL,
+            value NUMERIC,
+            dimensions JSONB DEFAULT '{}',
+            at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """,
 }
 
 # Safe column migrations - adds column if missing, never drops
@@ -895,6 +994,64 @@ INDEX_DEFINITIONS = [
     # second insert lose instead.
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_console_per_user "
     "ON prompt_sessions(user_id) WHERE (metadata->>'session_type') = 'console'",
+
+    # ── THE DESIGN SIDE, THE SAME FOUR SHAPES ─────────────────────────────────────────
+    #
+    # Design is a division, not a package: the owner, 2026-09-30 — "you do not take out that
+    # design, you're going to have to repurpose it and that means we need a DIVISION. It needs
+    # to be blind to the composer. It's a completely different experience."
+    #
+    # Its levels are the console's pattern one above and below, in the SAME table, told apart by
+    # the same `session_type` marker the console uses:
+    #
+    #   'design'            the experience's own container — one per user
+    #   'design_catalogue'  one per design system (ours, Carbon, Lion, …) — one per user each
+    #   'design_master'     one per element of a catalogue
+    #   'design_child'      one per element inside a master
+    #
+    # CONTAINERS AND COLOURS GET NO ROW AT ALL. They live in the catalogue file and the registry
+    # (`frontend/src/components/A2UI/catalogs/<id>/catalog.json`, `components/registry.json`) and
+    # are never represented here — only the things a person interacts with and that carry
+    # behaviour worth recording.
+    #
+    # WHY PARTIAL UNIQUE INDEXES, exactly as the console's above: the rule is "exactly one of
+    # these per parent", and a check-then-insert cannot hold it — two tabs landing together both
+    # find nothing and both insert. The index makes the loser's insert a no-op, which is what
+    # makes `ON CONFLICT DO NOTHING` in `prompt_sessions_api.py` safe rather than decorative.
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_design_per_user "
+    "ON prompt_sessions(user_id) WHERE (metadata->>'session_type') = 'design'",
+
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_design_catalogue_per_system "
+    "ON prompt_sessions(user_id, (metadata->>'design_system')) "
+    "WHERE (metadata->>'session_type') = 'design_catalogue'",
+
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_design_master_per_element "
+    "ON prompt_sessions((metadata->>'catalogue_id'), (metadata->>'element_key')) "
+    "WHERE (metadata->>'session_type') = 'design_master'",
+
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_design_child_per_element "
+    "ON prompt_sessions((metadata->>'master_id'), (metadata->>'element_key')) "
+    "WHERE (metadata->>'session_type') = 'design_child'",
+
+    # The design elements' own record — see the four tables in TABLE_DEFINITIONS above.
+    #
+    # EVERY ONE IS (element_id, time) OR (element_id, version), because that is the only way these
+    # are ever read: one element's trail, newest first, and its versions in order. An index on the
+    # element alone would be half of it; an index on time alone would serve a question nobody asks.
+    # The activity trail carries `user_id` as a second index because "what has this person done
+    # across the elements they can see" is the governance question, and it is asked by user.
+    "CREATE INDEX IF NOT EXISTS idx_design_element_activity_element "
+    "ON design_element_activity(element_id, at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_design_element_activity_user "
+    "ON design_element_activity(user_id, at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_design_element_annotations_element "
+    "ON design_element_annotations(element_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_design_element_annotations_unresolved "
+    "ON design_element_annotations(element_id) WHERE resolved_at IS NULL",
+    "CREATE INDEX IF NOT EXISTS idx_design_element_versions_element "
+    "ON design_element_versions(element_id, version_number)",
+    "CREATE INDEX IF NOT EXISTS idx_design_element_metrics_element "
+    "ON design_element_metrics(element_id, at DESC)",
 ]
 
 
@@ -1382,6 +1539,14 @@ def init_database():
             'governance_items',
             # the judged runs, one row per Run — the rail's Evals view reads this
             'run_evaluations',
+            # THE DESIGN ROOM'S ELEMENTS — what happened to a component, what was said about it,
+            # how it changed, how it performs. All four reference `prompt_sessions` (the element's
+            # own row is there, at the design_master / design_child levels) and `users`, so they
+            # come after both. THEY HAD TO BE ADDED TO THIS LIST, and that is the trap this file
+            # already documents for `tools`: the DDL above is inert until a name is here, and a
+            # table that was written and never created looks exactly like a table that works.
+            'design_element_activity', 'design_element_annotations',
+            'design_element_versions', 'design_element_metrics',
             # THE TOOLS THE SYSTEM CAN USE, and the reason it was missing: the DDL was written
             # and this list was not, so `CREATE TABLE IF NOT EXISTS tools` never ran on any
             # database this file created. A fresh install came up with no register at all — no

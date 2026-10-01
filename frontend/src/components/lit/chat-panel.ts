@@ -143,6 +143,15 @@ const NEW_PROMPT_HELLO =
 export class ChatPanel extends LitElement {
   static properties = {
     conversationId: { type: String, attribute: 'conversation-id' },
+    /**
+     * WHO SHE IS IN THE ROOM THAT BINDS THIS — declared as a Lit property, and that is load-bearing:
+     * the renderer sets its props BEFORE the element upgrades, and Lit only carries an assigned value
+     * across the upgrade for a property it has been TOLD about. As a plain class field the
+     * initializer overwrote the surface's value on upgrade, so the seat fell back to the composer's
+     * script — measured: `instructions` read empty in the running room while the binding was present
+     * in the tree.
+     */
+    instructions: { type: String },
     messages: { type: Array },
     sessionId: { type: String, attribute: 'session-id' },
     /**
@@ -800,6 +809,9 @@ export class ChatPanel extends LitElement {
       clearTimeout(this._deleteTimer);
       this._deleteTimer = null;
     }
+    // A GESTURE CANNOT OUTLIVE THE ELEMENT — the strip's document listeners come off here as
+    // well as on the release. See `_releaseGrip` for what a survivor does to the layout.
+    this._releaseGrip();
     super.disconnectedCallback();
   }
 
@@ -2916,8 +2928,26 @@ export class ChatPanel extends LitElement {
     }
   }
 
+  /**
+   * THE ROOM'S INSTRUCTIONS, WHEN THE ROOM HAS ANY.
+   *
+   * WHAT WAS WRONG (found 2026-09-30, the owner: *"she's not talking, she's not thinking, because
+   * some dumb ass AI has put a hardcoded mess in there to trick me"*): the script below was sent as
+   * the context of EVERY turn in EVERY room, so in Design she introduced herself as the Agentic
+   * Flow Architect and reasoned about prompt pipelines while the room's left column held a
+   * component tree. The seat is shared; the room decides who she is.
+   *
+   * A ROOM THAT BINDS THIS OWNS HER INSTRUCTIONS. The Composer's surface binds nothing, so its
+   * script stands there unchanged; Design binds the design-system assistant she already is in the
+   * ingest.
+   */
+  instructions = '';
+
   /** Grace's identity and the XML command reference, ending with the current workspace. */
   private _graceInstructions(): string {
+    // THE ROOM'S OWN WORDS WIN — see `instructions` above. Nothing about the script below is
+    // removed: it is what a composer room is told, and it is still what a composer room gets.
+    if (this.instructions && this.instructions.trim()) return this.instructions;
     const workspaceContext = this._buildWorkspaceContext();
     return `You are Grace, the Agentic Flow Architect. You help users build multi-step agentic prompt pipelines. Each prompt entry field in the workspace represents a STEP in an agentic flow — they are not arbitrary text boxes. Your job is to map the user's ideas onto the correct steps in the flow.
 
@@ -3719,6 +3749,30 @@ ${workspaceContext}`;
   }
 
   /**
+   * ENTER SENDS — the same act as the Send button, given to the keyboard.
+   *
+   * WHAT WAS MISSING, measured 2026-09-30: nothing in this repository DISPATCHES `message-sent`.
+   * This seat listens for it (the handler above) and the renderer forwards it (`a2ui-renderer`),
+   * so the event was wired at both ends and raised by nobody: a typed question went into `_draft`
+   * and no turn was ever sent — the owner, on exactly this: *"no matter what I say, not a single
+   * turn."* The path that works is the Send button's (`chat-action-send`).
+   *
+   * SO THE KEYBOARD TAKES THAT PATH, not a second one of its own: same `_send`, same gates, same
+   * conversation. The ingest's own ask box already takes Enter this way (`onKeyDown … Enter →
+   * askGrace()`), which is the behaviour being translated here.
+   *
+   * Shift+Enter is left alone — a newline inside a long question is a person typing, not asking —
+   * and `isComposing` so an IME's Enter does not fire a turn mid-word.
+   */
+  private _onComposerKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    const text = String(this._draft ?? '').trim();
+    if (!text) return;
+    e.preventDefault();
+    void this._send(text);
+  }
+
+  /**
    * START THIS SEAT OVER — an empty thread, ready for the next run.
    *
    * The owner, 2026-09-18: "every time I create a new one by clicking composer, it should clear
@@ -4434,7 +4488,30 @@ ${workspaceContext}`;
    * just left after letting go.
    */
   private _onGripDown(e: MouseEvent): void {
+    // A PRESS DURING A LIVE GESTURE REPLACES IT rather than stacking a second set of document
+    // listeners on the first — the rule the sibling grip already states ("a press during a live
+    // gesture REPLACES it rather than stacking", chat-action-bar `_startDrag`), and the other way
+    // this gesture ends up unable to let go. Without it the old listeners are unreachable (the
+    // fields that named them are overwritten) and no release can ever remove them.
+    this._releaseGrip();
     this._gripMove = (ev: MouseEvent) => {
+      /*
+       * THE MOVE THAT SAYS THE HAND IS EMPTY IS THE RELEASE.
+       *
+       * Every channel below is a way of hearing about the release, and each can be lost: an
+       * event stopped on its way up to the document, a focused frame that ate the mouseup, a
+       * panel replaced mid-gesture. The move event carries the fact itself — `buttons` is the
+       * state of the mouse RIGHT NOW — so the first move after a lost release says the hand is
+       * empty whether or not any listener heard the release. Without this the gesture outlives
+       * the hand and the strip goes on raising `input-resize-move` — which the layout used to
+       * answer by STARTING a drag (see `_onGripMove` in workspace-layout), so the column
+       * followed a bare hover with no button held anywhere. Measured 2026-09-30, the owner:
+       * "it will not let me release it… I can't even move my mouse over the window and it grabs it."
+       */
+      if (ev.buttons === 0) {
+        this._gripUp?.();
+        return;
+      }
       this.dispatchEvent(
         new CustomEvent('input-resize-move', {
           bubbles: true,
@@ -4445,17 +4522,7 @@ ${workspaceContext}`;
     };
     this._gripUp = () => {
       this.dispatchEvent(new CustomEvent('input-resize-end', { bubbles: true, composed: true }));
-      if (this._gripMove) document.removeEventListener('mousemove', this._gripMove);
-      if (this._gripUp) {
-        document.removeEventListener('mouseup', this._gripUp);
-        document.removeEventListener('pointerup', this._gripUp);
-        document.removeEventListener('pointercancel', this._gripUp);
-        document.removeEventListener('mouseout', this._gripBoundary);
-        document.removeEventListener('mouseover', this._gripBoundary);
-      }
-      this._gripMove = null;
-      this._gripUp = null;
-      this._gripBoundary = null;
+      this._releaseGrip();
     };
     /*
      * AND THE HAND THAT LETS GO OUTSIDE THE WINDOW. A release beyond the page fires no mouseup
@@ -4482,6 +4549,34 @@ ${workspaceContext}`;
       }),
     );
     e.preventDefault();
+  }
+
+  /**
+   * LET THE PAGE GO — the strip's three document channels off, once. The same discipline the
+   * composer's input grip already keeps (`_endDrag` in chat-action-bar, which is called by its
+   * release AND by `disconnectedCallback`), applied to the column's strip.
+   *
+   * WHY IT HAS TO RUN WHERE THE ELEMENT GOES, not only where the mouse does: this element is
+   * REPLACED by the renderer whenever the surface re-renders — an assembly landing, a data-model
+   * write — and a panel replaced mid-gesture used to leave its `mousemove` listener on the
+   * document. That listener went on raising `input-resize-move` at a host that no longer had a
+   * gesture, and the layout answered a stray move by STARTING one: the column took hold with no
+   * button down, and nothing could release it because the listeners behind it were gone.
+   */
+  private _releaseGrip(): void {
+    if (this._gripMove) document.removeEventListener('mousemove', this._gripMove);
+    if (this._gripUp) {
+      document.removeEventListener('mouseup', this._gripUp);
+      document.removeEventListener('pointerup', this._gripUp);
+      document.removeEventListener('pointercancel', this._gripUp);
+    }
+    if (this._gripBoundary) {
+      document.removeEventListener('mouseout', this._gripBoundary);
+      document.removeEventListener('mouseover', this._gripBoundary);
+    }
+    this._gripMove = null;
+    this._gripUp = null;
+    this._gripBoundary = null;
   }
 
   /** The rail's `collapse-toggle` — chat-button state=Selected, clicked again. */
@@ -4853,6 +4948,7 @@ ${workspaceContext}`;
                 <chat-input
                   .height=${this.inputHeight}
                   @message-sent=${this._onMessageSent}
+                  @keydown=${this._onComposerKey}
                 >
                   <prompt-textarea
                     placeholder="chat input"

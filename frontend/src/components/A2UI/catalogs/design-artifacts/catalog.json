@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
-  "title": "Raibach Prompt Composer Catalog",
-  "whatThisFileIs": "THE SCHEMA. What the server validates an A2UI payload against \u2014 an unknown component fails loud with HTTP 503. Three files in this repository are called some version of 'registry' \u2014 this is the validation schema, NOT the allowlist the AI reads and NOT the Figma map. The allowlist is frontend/src/shared/tag-registry.ts; the design relationship is frontend/src/components/registry.json.",
+  "$id": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
+  "title": "Design Artifacts",
+  "whatThisFileIs": "THE DESIGN ROOM'S OWN CATALOGUE. Same components as the composer's — entered a second time, deliberately (owner, 2026-09-30: \"they have to be entered in both places, they have to be entered in composer and then they have to be re-entered into design… later we can rename them. It doesn't matter, they can share the same name.\"). The entries are the components the Design room may name; they are a copy on purpose, so that a change made for Design cannot alter what the Composer accepts and vice versa.",
   "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. Agent can only render components from this allowlist.",
-  "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
+  "catalogId": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
   "components": {
     "TraceFeed": {
       "type": "object",
@@ -27,7 +27,7 @@
               "description": "Data-bound list of trace entries, newest first. Object form: {\"path\": \"/trace/entries\"}. Unset is NOT empty: the feed draws its waiting state until the path has been written, because an empty list is a claim that the app has logged nothing."
             },
             "breadcrumbCount": {
-              "description": "How many breadcrumbs Sentry's global scope is holding, bound as {\"path\": \"/trace/breadcrumbCount\"}. Written on the same channel as entries. Both forms are spelled out here because common_types.json has no DynamicNumber and the bound form is an object, not a number \u2014 a bare \"type\": \"number\" would describe a payload this catalog refuses.",
+              "description": "How many breadcrumbs Sentry's global scope is holding, bound as {\"path\": \"/trace/breadcrumbCount\"}. Written on the same channel as entries. Both forms are spelled out here because common_types.json has no DynamicNumber and the bound form is an object, not a number — a bare \"type\": \"number\" would describe a payload this catalog refuses.",
               "oneOf": [
                 {
                   "type": "number"
@@ -54,7 +54,7 @@
     },
     "user-response-bubble": {
       "type": "object",
-      "description": "The response row inside the chat output card \u2014 the design's \"user-response-bubble\", Figma node 40001119:6352 (file 20UPR2KQMsbAxlo5NJb1se), implemented by <user-response-bubble> in src/components/lit/user-response-bubble.ts. A 6px-radius #CBE6E3 row \u2014 or the seat's own --chat-user-bg when it sets one \u2014 holding a 19\u00d719 mark and one line of Inter 500 13/20 in #171717. It is a DRAWING: the Figma node carries no annotation, so the element declares no events and nothing about it is invented; the host supplies the line.",
+      "description": "The response row inside the chat output card — the design's \"user-response-bubble\", Figma node 40001119:6352 (file 20UPR2KQMsbAxlo5NJb1se), implemented by <user-response-bubble> in src/components/lit/user-response-bubble.ts. A 6px-radius #CBE6E3 row — or the seat's own --chat-user-bg when it sets one — holding a 19×19 mark and one line of Inter 500 13/20 in #171717. It is a DRAWING: the Figma node carries no annotation, so the element declares no events and nothing about it is invented; the host supplies the line.",
       "properties": {
         "component": {
           "const": "user-response-bubble"
@@ -64,7 +64,7 @@
         },
         "text": {
           "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-          "description": "The line to draw, e.g. {\"path\": \"/session/right_column/last_response\"}. Optional \u2014 the wireframe's own copy is sample text, not a default."
+          "description": "The line to draw, e.g. {\"path\": \"/session/right_column/last_response\"}. Optional — the wireframe's own copy is sample text, not a default."
         }
       },
       "required": [
@@ -100,7 +100,7 @@
     },
     "eval-feed": {
       "type": "object",
-      "description": "The same component as EvalFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps EvalFeed to <eval-feed>), while the allowlist and the catalog audit name the TAG \u2014 so a payload or a client validating by tag has to find it here as well. The binding is described on the EvalFeed entry.",
+      "description": "The same component as EvalFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps EvalFeed to <eval-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the EvalFeed entry.",
       "properties": {
         "component": {
           "const": "eval-feed"
@@ -115,7 +115,7 @@
     },
     "trace-feed": {
       "type": "object",
-      "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG \u2014 so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",
+      "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",
       "properties": {
         "component": {
           "const": "trace-feed"
@@ -139,18 +139,18 @@
         },
         {
           "type": "object",
-          "description": "The flow, drawn \u2014 the output column's canvas, implemented by <agent-flow> in src/components/lit/agent-flow.ts. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph from facts the app already holds (the prompt's own seats, the finding, and the run's own responses) and the shell writes it into the data model. One binding carries the whole graph, so there is exactly one path to keep true.",
+          "description": "The flow, drawn — the output column's canvas, implemented by <agent-flow> in src/components/lit/agent-flow.ts. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph from facts the app already holds (the prompt's own seats, the finding, and the run's own responses) and the shell writes it into the data model. One binding carries the whole graph, so there is exactly one path to keep true.",
           "properties": {
             "component": {
               "const": "AgentFlow"
             },
             "flow": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` \u2014 the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note \u2014 never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
+              "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` — the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note — never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
             },
             "theme": {
               "type": "string",
-              "description": "The drawing\u2019s tone, sent by the assembly that puts the canvas in the middle column on a Run: \"dark\" is the reference\u2019s near-black surface, which is the tone a Run is shown in, and unset draws the mid-tone this design was drawn in (the tone switch in <canvas-footer> writes it afterwards). Declared 2026-09-23 because the element has always taken this property and the catalog did not say so, while the Run\u2019s assembly sends it every time \u2014 the catalog-check reported it as an under-described property, which is the declaration drifting from the surface rather than the surface from the declaration."
+              "description": "The drawing’s tone, sent by the assembly that puts the canvas in the middle column on a Run: \"dark\" is the reference’s near-black surface, which is the tone a Run is shown in, and unset draws the mid-tone this design was drawn in (the tone switch in <canvas-footer> writes it afterwards). Declared 2026-09-23 because the element has always taken this property and the catalog did not say so, while the Run’s assembly sends it every time — the catalog-check reported it as an under-described property, which is the declaration drifting from the surface rather than the surface from the declaration."
             },
             "id": {
               "type": "string"
@@ -164,7 +164,7 @@
     },
     "agent-flow": {
       "type": "object",
-      "description": "The same component as AgentFlow, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentFlow to <agent-flow>), while the allowlist and the catalog audit name the TAG \u2014 so a payload or a client validating by tag has to find it here as well. The binding is described on the AgentFlow entry.",
+      "description": "The same component as AgentFlow, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentFlow to <agent-flow>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the AgentFlow entry.",
       "properties": {
         "component": {
           "const": "agent-flow"
@@ -188,7 +188,7 @@
         },
         {
           "type": "object",
-          "description": "THE PLUG-IN \u2014 the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" \u2014 the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings \u2014 those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
+          "description": "THE PLUG-IN — the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings — those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
           "properties": {
             "component": {
               "const": "AgentCanvas"
@@ -206,7 +206,7 @@
             },
             "children": {
               "type": "object",
-              "description": "The two slots, filled BY NAME from the envelope: {\"flow\": <id of the drawing>, \"seat\": <id of her chat panel>}. Each child carries its own bindings \u2014 the drawing its graph, her seat its conversation, session and readouts \u2014 so nothing is forwarded through this element.",
+              "description": "The two slots, filled BY NAME from the envelope: {\"flow\": <id of the drawing>, \"seat\": <id of her chat panel>}. Each child carries its own bindings — the drawing its graph, her seat its conversation, session and readouts — so nothing is forwarded through this element.",
               "properties": {
                 "flow": {
                   "type": "string"
@@ -251,7 +251,7 @@
         },
         {
           "type": "object",
-          "description": "The catalog checker's open findings, drawn in the chat panel's \"view\" slot. Implemented by <chat-repair-actions> in src/components/lit/chat-repair-actions.ts. A VIEW: it fetches nothing and composes no sentence about a finding \u2014 the writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them here, so the list cannot disagree with the check that produced it.",
+          "description": "The catalog checker's open findings, drawn in the chat panel's \"view\" slot. Implemented by <chat-repair-actions> in src/components/lit/chat-repair-actions.ts. A VIEW: it fetches nothing and composes no sentence about a finding — the writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them here, so the list cannot disagree with the check that produced it.",
           "properties": {
             "component": {
               "const": "chat-repair-actions"
@@ -598,7 +598,7 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <agent-card-element>. Console prompt card (262x251px) per Figma node 40001114:5813 \"console-card-design-system\". Renders header (molecule logo, function line, category line), title + description body (with the ##PROMPT## lead), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM \u2014 never invented or renamed. Registered as custom element: agent-card-element.",
+          "description": "Lit web component <agent-card-element>. Console prompt card (262x251px) per Figma node 40001114:5813 \"console-card-design-system\". Renders header (molecule logo, function line, category line), title + description body (with the ##PROMPT## lead), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM — never invented or renamed. Registered as custom element: agent-card-element.",
           "properties": {
             "component": {
               "const": "agent-card"
@@ -614,7 +614,7 @@
             },
             "function": {
               "type": "string",
-              "description": "The function level \u2014 the line ABOVE the category in the card header (14px bold #F6C031). Falls back to the design's own sample line 'Function like Repair' until the data supplies it."
+              "description": "The function level — the line ABOVE the category in the card header (14px bold #F6C031). Falls back to the design's own sample line 'Function like Repair' until the data supplies it."
             },
             "category": {
               "type": "string",
@@ -631,7 +631,7 @@
             },
             "category_color": {
               "type": "string",
-              "description": "Hex color tinting the card background, from the categories table (name \u2192 color). Fallback '#1C2F4E' (the design's own fill) when the category is unregistered.",
+              "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#1C2F4E' (the design's own fill) when the category is unregistered.",
               "default": "#1C2F4E"
             },
             "category_title_color": {
@@ -682,7 +682,7 @@
         "fileKey": "20UPR2KQMsbAxlo5NJb1se",
         "nodeId": "40001010:25768",
         "nodeName": "chat-button",
-        "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] \u2014 the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
+        "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] — the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
       },
       "allOf": [
         {
@@ -693,14 +693,14 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <chat-navigation-bar>. Right-column tab rail \u2014 chat, trace, tools, evaluation, variables, metadata \u2014 filtered by the user's departmental role, carrying the catalog-health marker on the chat tab. Renders the designed buttons (Figma chat-button 40001010:25768, trace-button 40001011:26266). Replaces React SidebarNavigation + NavigationButton.",
+          "description": "Lit web component <chat-navigation-bar>. Right-column tab rail — chat, trace, tools, evaluation, variables, metadata — filtered by the user's departmental role, carrying the catalog-health marker on the chat tab. Renders the designed buttons (Figma chat-button 40001010:25768, trace-button 40001011:26266). Replaces React SidebarNavigation + NavigationButton.",
           "properties": {
             "component": {
               "const": "chat-navigation-bar"
             },
             "activeTab": {
               "type": "string",
-              "description": "The currently active tab. Matches the element's TabId union \u2014 'approval' was listed here and is not one.",
+              "description": "The currently active tab. Matches the element's TabId union — 'approval' was listed here and is not one.",
               "enum": [
                 "chat",
                 "trace",
@@ -755,7 +755,7 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <error-banner>. The system's error channel \u2014 the tag the runtime model is already instructed to report failures through (backend/grace_gui.py: 'Use <error-banner message=\"...\"/> only'). Rendered LOUD on purpose: it also carries the case where a component is generated WITHOUT its annotation, which means behaviour is being invented downstream on every surface that places it. Alert, don't block \u2014 the surface still renders underneath.",
+          "description": "Lit web component <error-banner>. The system's error channel — the tag the runtime model is already instructed to report failures through (backend/grace_gui.py: 'Use <error-banner message=\"...\"/> only'). Rendered LOUD on purpose: it also carries the case where a component is generated WITHOUT its annotation, which means behaviour is being invented downstream on every surface that places it. Alert, don't block — the surface still renders underneath.",
           "properties": {
             "component": {
               "const": "error-banner"
@@ -783,7 +783,7 @@
       "unevaluatedProperties": false
     },
     "ConsoleCardGrid": {
-      "x-internal-instantiation": "renders <agent-card-element> from its own template \u2014 an internal sub-piece (recorded nesting, 2026-09-18); the card is never emitted as a component by the model, the grid composes it from /cards",
+      "x-internal-instantiation": "renders <agent-card-element> from its own template — an internal sub-piece (recorded nesting, 2026-09-18); the card is never emitted as a component by the model, the grid composes it from /cards",
       "type": "object",
       "allOf": [
         {
@@ -794,7 +794,7 @@
         },
         {
           "type": "object",
-          "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Implemented by a2ui-console-card-grid in src/components/lit/a2ui-primitives.ts, and it is the only renderer of this component \u2014 nothing in the React shell draws a second copy, so /cards is the single list of packages in play.",
+          "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Implemented by a2ui-console-card-grid in src/components/lit/a2ui-primitives.ts, and it is the only renderer of this component — nothing in the React shell draws a second copy, so /cards is the single list of packages in play.",
           "properties": {
             "component": {
               "const": "ConsoleCardGrid"
@@ -823,7 +823,7 @@
         },
         {
           "type": "object",
-          "description": "AI decision surface \u2014 shown when the agent needs user confirmation before proceeding (e.g. unsaved changes). Contains a Text message and an ActionGroup of choices.",
+          "description": "AI decision surface — shown when the agent needs user confirmation before proceeding (e.g. unsaved changes). Contains a Text message and an ActionGroup of choices.",
           "properties": {
             "component": {
               "const": "DecisionDialog"
@@ -939,7 +939,7 @@
         },
         {
           "type": "object",
-          "description": "Right-column chat panel \u2014 the surface command interface. Conversation scoped to the bound conversation id. Backed by InteractiveChatInterface.",
+          "description": "Right-column chat panel — the surface command interface. Conversation scoped to the bound conversation id. Backed by InteractiveChatInterface.",
           "properties": {
             "component": {
               "const": "ChatPanel"
@@ -984,11 +984,11 @@
             },
             "saveShortcut": {
               "type": "string",
-              "default": "\u2318 S"
+              "default": "⌘ S"
             },
             "runShortcut": {
               "type": "string",
-              "default": "\u2318 \u23ce"
+              "default": "⌘ ⏎"
             }
           },
           "required": [
@@ -1061,11 +1061,11 @@
             },
             "userId": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Active user UUID, displayed truncated, e.g. u:00000000\u20260001."
+              "description": "Active user UUID, displayed truncated, e.g. u:00000000…0001."
             },
             "message": {
               "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Transient status line, e.g. Saved, Compiling\u2026, Error text."
+              "description": "Transient status line, e.g. Saved, Compiling…, Error text."
             },
             "level": {
               "type": "string",
@@ -1188,9 +1188,12 @@
         },
         "conversations": {
           "type": "object",
-          "description": "The Conversations dropdown's rows \u2014 the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
+          "description": "The Conversations dropdown's rows — the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
         },
         "id": {
+          "type": "string"
+        },
+        "instructions": {
           "type": "string"
         }
       },
@@ -1224,7 +1227,7 @@
       "required": [
         "component"
       ],
-      "annotation": "Data: formatLabel \u2014 the vertical rail's format line; tokensLabel \u2014 the vertical tokens/cost readout line.\nState: expanded \u2014 the container is always drawn; the rail is its right edge.\nA11y: no role of its own \u2014 a container."
+      "annotation": "Data: formatLabel — the vertical rail's format line; tokensLabel — the vertical tokens/cost readout line.\nState: expanded — the container is always drawn; the rail is its right edge.\nA11y: no role of its own — a container."
     },
     "prompt-input-section": {
       "type": "object",
@@ -1256,11 +1259,11 @@
         "component",
         "name"
       ],
-      "annotation": "Data: name, type, content, sticky, minHeight.\nOn click: section-menu-select { role } when a role is chosen from the tile's menu; section-collapse-toggle { collapsed } on the tile's chevron.\nOn change: section-content-input { value } as the textarea is typed in.\nState: collapsed | expanded.\nDisabled: the System Role section is sticky \u2014 first, no menu, not draggable, not deletable.\nA11y: group, labelled by the role tile's text."
+      "annotation": "Data: name, type, content, sticky, minHeight.\nOn click: section-menu-select { role } when a role is chosen from the tile's menu; section-collapse-toggle { collapsed } on the tile's chevron.\nOn change: section-content-input { value } as the textarea is typed in.\nState: collapsed | expanded.\nDisabled: the System Role section is sticky — first, no menu, not draggable, not deletable.\nA11y: group, labelled by the role tile's text."
     },
     "gripper-prompt-input": {
       "type": "object",
-      "description": "Meatballs drag handle (49x37) \u2014 the only drag anchor of a prompt-input-section (Figma 40000746-94).",
+      "description": "Meatballs drag handle (49x37) — the only drag anchor of a prompt-input-section (Figma 40000746-94).",
       "properties": {
         "component": {
           "const": "gripper-prompt-input"
@@ -1313,7 +1316,7 @@
     },
     "status-bar-prompt-input": {
       "type": "object",
-      "description": "Vertical activity rail (40px) \u2014 Database_fill + lightning_alt_fill_light icons grow with prompt activity (Figma 40000954-23865).",
+      "description": "Vertical activity rail (40px) — Database_fill + lightning_alt_fill_light icons grow with prompt activity (Figma 40000954-23865).",
       "properties": {
         "component": {
           "const": "status-bar-prompt-input"
@@ -1328,7 +1331,7 @@
       "required": [
         "component"
       ],
-      "annotation": "Data: icons \u2014 the activity icons drawn in the rail.\nState: idle | active \u2014 the icons grow with prompt activity.\nA11y: decorative; no label."
+      "annotation": "Data: icons — the activity icons drawn in the rail.\nState: idle | active — the icons grow with prompt activity.\nA11y: decorative; no label."
     },
     "prompt-textarea": {
       "type": "object",
@@ -1372,7 +1375,7 @@
       "required": [
         "component"
       ],
-      "annotation": "Data: label \u2014 the current model's name, or \"Models\" when none is chosen.\nOn click: model-selector-toggle { open }.\nState: idle | open.\nA11y: button, labelled by its own text."
+      "annotation": "Data: label — the current model's name, or \"Models\" when none is chosen.\nOn click: model-selector-toggle { open }.\nState: idle | open.\nA11y: button, labelled by its own text."
     },
     "control-bar": {
       "type": "object",
@@ -1385,7 +1388,7 @@
         },
         {
           "type": "object",
-          "description": "The left column's bottom bar: undo, Save Template, RUN \u2014 and nothing else. Figma \"Left-column-ControlBar\" #40000761:261, placed as the last child of the left column container #40000954:23865. Implemented by <control-bar> in src/components/lit/control-bar.ts; the shell listens for its undo-click / save-click / run-click.",
+          "description": "The left column's bottom bar: undo, Save Template, RUN — and nothing else. Figma \"Left-column-ControlBar\" #40000761:261, placed as the last child of the left column container #40000954:23865. Implemented by <control-bar> in src/components/lit/control-bar.ts; the shell listens for its undo-click / save-click / run-click.",
           "properties": {
             "component": {
               "const": "control-bar"
@@ -1422,14 +1425,14 @@
         },
         {
           "type": "object",
-          "description": "The middle column's header row \u2014 the design's \"output-vontrols\" (node 40001034:1186): the selector tile (40001034:1187, text run 40001034:1190) and the published <model-selector-button>. Implemented by <output-controls> in src/components/lit/output-controls.ts, which draws it in every view of the middle column. The selector is a PLACEHOLDER by the owner's instruction (2026-09-18) \u2014 it renders with its design tag and role and opens no menu, because no menu contents exist in the Figma pull and the entries are the owner's specification rather than a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.",
+          "description": "The middle column's header row — the design's \"output-vontrols\" (node 40001034:1186): the selector tile (40001034:1187, text run 40001034:1190) and the published <model-selector-button>. Implemented by <output-controls> in src/components/lit/output-controls.ts, which draws it in every view of the middle column. The selector is a PLACEHOLDER by the owner's instruction (2026-09-18) — it renders with its design tag and role and opens no menu, because no menu contents exist in the Figma pull and the entries are the owner's specification rather than a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.",
           "properties": {
             "component": {
               "const": "OutputControls"
             },
             "outputType": {
               "type": "string",
-              "description": "What the selector tile reads \u2014 the view this column is showing. The design's drawn value is \"Agent Flow\" (40001034:1190); it is a property because this tile is the reader's choice at the top of the column, and the drawn value is the example, not the only value."
+              "description": "What the selector tile reads — the view this column is showing. The design's drawn value is \"Agent Flow\" (40001034:1190); it is a property because this tile is the reader's choice at the top of the column, and the drawn value is the example, not the only value."
             },
             "id": {
               "type": "string"
@@ -1456,6 +1459,55 @@
         "component"
       ]
     },
+    "design-middle-container": {
+      "type": "object",
+      "description": "The Design room's middle column: the composer's own <output-controls> header row over a MOUNT inside its shadow tree (data-ingest-mount), where the ingest's Preview is rendered. It exists because the composer's column body (<compiled-output-viewer>) owns its whole area and has no slot, so nothing can be loaded inside it (the owner's ruling: \"If you have to make a different component because you can't figure out how to load something inside of it, then build a different lit component for the design section.\"). Content is loaded INTO this element, never beside it: loose React nodes in the room container's light DOM fight lit's own child list and re-baseline the container's split. The hole is a MOUNT rather than a slot for a measured reason — a slot leaves the content in its own tree, where the tool's Tailwind classes cannot match (no document stylesheet reaches into the renderer's shadow root), so the preview would arrive unformatted; rendering the region into this element's shadow tree makes the application's own sheet, adopted here, reach it. THE COLUMN IS DRAWN ONLY WHEN THE TREE REFERENCES IT: render-design declares this component and leaves it out of the layout's children, so the third column is collapsed until the ingest reports its first draft — the composer's own contract for its middle column ('the shell moves the flow view into it at Run time'). Design only — the composer's surface never names it.",
+      "properties": {
+        "component": {
+          "const": "design-middle-container"
+        },
+        "id": {
+          "type": "string"
+        },
+        "outputType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "design-left-panel": {
+      "type": "object",
+      "description": "The Design room's left column: the composer's own <prompt-container> panel frame with a SLOT named \"left\" in it, and the SURFACE fills that slot — render-design names its child in this component's `children.left` and the renderer instantiates it there, so what stands in the column is the envelope's child and nothing else. Today that child is <figma-layers-view> — the ingestion rail's own component tree, reused unchanged. It exists because the panel is part of the drawing — the owner: \"it's the same panel that we have the prompt / agent prompt inputs, and it's called left column\" — while the composer's prompt sections are NOT: those are the Agent Role tile, the Functions | Tools button and the empty textarea the owner saw loading in Design, and they are removed from this surface. IT IS A SLOT AND NOT A MOUNT, which is a change worth recording: the mount (a div inside this element's shadow tree, `data-ingest-mount`) existed for the ingestion tool's React rail, and a slot left that content in its own tree where its Tailwind classes — selectors in a document stylesheet — could not match, so the rail arrived unformatted with a 153px URL field and an unscrollable component list. The tool is no longer loaded into this room at all (a React tree inside a surface is forbidden, and measured: it drew beneath the room and pushed the layout to y = −129), so the mount has nothing left to hold. A catalogue element needs none: it carries its own styles inside its own shadow root, and only its box comes from this frame (`::slotted(*)` gives it the hole's height and lets it be smaller than its content). The room's container still frames it: the panel's border, its rounded corner and its format rail are the drawing's. Design only — the composer's surface never names it.",
+      "properties": {
+        "component": {
+          "const": "design-left-panel"
+        },
+        "id": {
+          "type": "string"
+        },
+        "formatLabel": {
+          "type": "string"
+        },
+        "tokensLabel": {
+          "type": "string"
+        },
+        "children": {
+          "type": "object",
+          "description": "The panel's one hole, filled BY NAME from the envelope: {\"left\": <id of the component that stands in this column>}. Today render-design names `<figma-layers-view>` there — the ingestion rail's own tree. Declared because the element renders `<slot name=\"left\">` and the surface fills it — a slot the schema does not name is a hole nobody can legally address.",
+          "properties": {
+            "left": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
     "figma-layers-view": {
       "type": "object",
       "allOf": [
@@ -1467,14 +1519,14 @@
         },
         {
           "type": "object",
-          "description": "THE INGESTION LEFT RAIL'S OWN COMPONENT TREE \u2014 the one the ingest form draws in its left column (`IngestModal.tsx`, above the Preview), reused here unchanged and never restyled. Implemented by <figma-layers-view> in src/components/lit/figma-layers-view.ts. What it draws, top to bottom: the catalogue strip (every catalogue the build knows \u2014 design-artifacts, prompt-composer, ecommerce, primitives \u2014 with its entry count), the selected catalogue's head and catalogId, and then `Declared in this catalogue`: one row per component with its shape (`allOf(3)` / `flat`), its Figma node, the file that DRAWS it (`drawn by lit/<file>`), and a status dot from the checker's own audit. IT READS THE CATALOGUES OFF THE BUILD (`import.meta.glob` of `catalogs/*/catalog.json`) and the audit from `/api/catalog/audit/<pipeline>` \u2014 it takes no data-model binding for those, and it is not a second copy of the catalogue: the files are the source. THE STRIP IS LIVE INSIDE THE ELEMENT: clicking a catalogue at the top sets its own `pipeline` and re-reads, so switching catalogues needs no host. It dispatches `catalog-change`, `open-component`, `open-layer` and `open-function`.",
+          "description": "THE INGESTION LEFT RAIL'S OWN COMPONENT TREE — the one the ingest form draws in its left column (`IngestModal.tsx`, above the Preview), reused here unchanged and never restyled. Implemented by <figma-layers-view> in src/components/lit/figma-layers-view.ts. What it draws, top to bottom: the catalogue strip (every catalogue the build knows — design-artifacts, prompt-composer, ecommerce, primitives — with its entry count), the selected catalogue's head and catalogId, and then `Declared in this catalogue`: one row per component with its shape (`allOf(3)` / `flat`), its Figma node, the file that DRAWS it (`drawn by lit/<file>`), and a status dot from the checker's own audit. IT READS THE CATALOGUES OFF THE BUILD (`import.meta.glob` of `catalogs/*/catalog.json`) and the audit from `/api/catalog/audit/<pipeline>` — it takes no data-model binding for those, and it is not a second copy of the catalogue: the files are the source. THE STRIP IS LIVE INSIDE THE ELEMENT: clicking a catalogue at the top sets its own `pipeline` and re-reads, so switching catalogues needs no host. It dispatches `catalog-change`, `open-component`, `open-layer` and `open-function`.",
           "properties": {
             "component": {
               "const": "figma-layers-view"
             },
             "pipeline": {
               "type": "string",
-              "description": "WHICH CATALOGUE'S COMPONENTS ARE LISTED \u2014 a catalogue FOLDER NAME under `src/components/A2UI/catalogs/` (prompt-composer, design-artifacts, ecommerce, primitives), not a design system's name and not a session title. Defaults to the element's own default, prompt-composer, which is what the ingest form shows and the catalogue the section's 58 rows are declared in. Binding this to `/session/catalogue/system` would be WRONG: that value is `raibach-ids`, a design system, and no catalogue is named that."
+              "description": "WHICH CATALOGUE'S COMPONENTS ARE LISTED — a catalogue FOLDER NAME under `src/components/A2UI/catalogs/` (prompt-composer, design-artifacts, ecommerce, primitives), not a design system's name and not a session title. Defaults to the element's own default, prompt-composer, which is what the ingest form shows and the catalogue the section's 58 rows are declared in. Binding this to `/session/catalogue/system` would be WRONG: that value is `raibach-ids`, a design system, and no catalogue is named that."
             },
             "nodeId": {
               "type": "string",
@@ -1482,15 +1534,15 @@
             },
             "inline": {
               "type": "boolean",
-              "description": "Sit in the flow of a column rather than float over the screen. True in the ingest rail and true here \u2014 the tree is the column's content."
+              "description": "Sit in the flow of a column rather than float over the screen. True in the ingest rail and true here — the tree is the column's content."
             },
             "refresh": {
               "type": "number",
-              "description": "Bumped by the host to force a re-read \u2014 after an ingest lands, or after a commit. Unset reads once on connect."
+              "description": "Bumped by the host to force a re-read — after an ingest lands, or after a commit. Unset reads once on connect."
             },
             "reset": {
               "type": "number",
-              "description": "Bumped by the host to fold the tree back to its opening state \u2014 a Reset."
+              "description": "Bumped by the host to fold the tree back to its opening state — a Reset."
             },
             "selected": {
               "type": "string",
@@ -1523,14 +1575,14 @@
         },
         {
           "type": "object",
-          "description": "THE INGEST RAIL\u2019S TOP HALF \u2014 the Figma URL field, the Notes field and Submit, as a catalogue element (src/components/lit/figma-ingest-form.ts). The ingestion application is the template and its left column is this form over the catalogue tree; the tree half is `figma-layers-view`, reused, and this is the half the catalogue had no element for. It is a TRANSLATION, not a second design: the same two fields with the same words, and on Submit the same `POST /api/figma/ingest` the modal runs \u2014 the parsing (`@/utils/figmaUrl`) and the endpoint already exist and neither is reimplemented in the element. IT DRAWS AND DISPATCHES ONLY: it fetches nothing, ingests nothing, and decides nothing about what a typed string means. `ingest-submit` carries `{url, notes}` verbatim and the SHELL runs the ingest.",
+          "description": "THE INGEST RAIL’S TOP HALF — the Figma URL field, the Notes field and Submit, as a catalogue element (src/components/lit/figma-ingest-form.ts). The ingestion application is the template and its left column is this form over the catalogue tree; the tree half is `figma-layers-view`, reused, and this is the half the catalogue had no element for. It is a TRANSLATION, not a second design: the same two fields with the same words, and on Submit the same `POST /api/figma/ingest` the modal runs — the parsing (`@/utils/figmaUrl`) and the endpoint already exist and neither is reimplemented in the element. IT DRAWS AND DISPATCHES ONLY: it fetches nothing, ingests nothing, and decides nothing about what a typed string means. `ingest-submit` carries `{url, notes}` verbatim and the SHELL runs the ingest.",
           "properties": {
             "component": {
               "const": "figma-ingest-form"
             },
             "url": {
               "type": "string",
-              "description": "Prefilled URL, when the host has one. The field stays editable either way \u2014 it is a text input, not a label."
+              "description": "Prefilled URL, when the host has one. The field stays editable either way — it is a text input, not a label."
             },
             "notes": {
               "type": "string",
@@ -1538,11 +1590,11 @@
             },
             "busy": {
               "type": "boolean",
-              "description": "True while an ingest is in flight. SET BY THE HOST, never by the element: the fields lock and Submit reads 'Ingesting\u2026', and only the caller that made the call knows when it finished."
+              "description": "True while an ingest is in flight. SET BY THE HOST, never by the element: the fields lock and Submit reads 'Ingesting…', and only the caller that made the call knows when it finished."
             },
             "message": {
               "type": "string",
-              "description": "A line drawn under the fields \u2014 a refusal, or why Submit is blocked. The host\u2019s words, never the element\u2019s."
+              "description": "A line drawn under the fields — a refusal, or why Submit is blocked. The host’s words, never the element’s."
             }
           },
           "required": [
@@ -1563,7 +1615,7 @@
         },
         {
           "type": "object",
-          "description": "THE MIDDLE COLUMN\u2019S PREVIEW \u2014 what a RUN loaded, drawn in the column beside the rail. Implemented by <component-preview> in src/components/lit/component-preview.ts. The Design room has TWO run triggers \u2014 Submit in the ingest form, and clicking a row in the catalogue tree \u2014 and this is the destination both of them write to, exactly as RUN on the Composer moves its view into the middle column (owner, 2026-09-30: *\"submit is run, selecting one of those components in that list is a run function. It\u2019s supposed to display it.\"*). IT DRAWS AND DISPATCHES ONLY: it fetches nothing, parses nothing and decides nothing about what a component is \u2014 the state arrives from `/session/preview`, written by the shell from the answer the ingest already returned or from the row the tree already lists. Its actions are events, never calls: `preview-approve`, `preview-discard` and `preview-collision-answer`, and the shell runs them. IT ALSO ASKS THE ONE QUESTION THE INGEST MEASURES: a layer whose NAME the design system already has on a DIFFERENT component means approving would add a second component under a name that exists, so the panel states the collision and the two answers (add it as its own, or overwrite that tag) and the answer travels back on the same data path the rest of the preview does - a view never writes to the catalogue.",
+          "description": "THE MIDDLE COLUMN’S PREVIEW — what a RUN loaded, drawn in the column beside the rail. Implemented by <component-preview> in src/components/lit/component-preview.ts. The Design room has TWO run triggers — Submit in the ingest form, and clicking a row in the catalogue tree — and this is the destination both of them write to, exactly as RUN on the Composer moves its view into the middle column (owner, 2026-09-30: *\"submit is run, selecting one of those components in that list is a run function. It’s supposed to display it.\"*). IT DRAWS AND DISPATCHES ONLY: it fetches nothing, parses nothing and decides nothing about what a component is — the state arrives from `/session/preview`, written by the shell from the answer the ingest already returned or from the row the tree already lists. Its actions are events, never calls: `preview-approve`, `preview-discard` and `preview-collision-answer`, and the shell runs them. IT ALSO ASKS THE ONE QUESTION THE INGEST MEASURES: a layer whose NAME the design system already has on a DIFFERENT component means approving would add a second component under a name that exists, so the panel states the collision and the two answers (add it as its own, or overwrite that tag) and the answer travels back on the same data path the rest of the preview does - a view never writes to the catalogue.",
           "properties": {
             "component": {
               "const": "component-preview"
@@ -1578,7 +1630,7 @@
             },
             "message": {
               "type": "string",
-              "description": "A line under the actions \u2014 a refusal, or why the approve did not go through. The host\u2019s words, never the element\u2019s."
+              "description": "A line under the actions — a refusal, or why the approve did not go through. The host’s words, never the element’s."
             }
           },
           "required": [
@@ -1634,7 +1686,7 @@
             },
             "theme": {
               "type": "string",
-              "description": "The tone the drawing is currently in \u2014 '' is the mid-tone this design is drawn in, \"dark\" is the reference's near-black surface. Set by the host AFTER the footer asks for a change; the footer never writes it itself."
+              "description": "The tone the drawing is currently in — '' is the mid-tone this design is drawn in, \"dark\" is the reference's near-black surface. Set by the host AFTER the footer asks for a change; the footer never writes it itself."
             },
             "id": {
               "type": "string"
@@ -1721,7 +1773,7 @@
     },
     "output-header": {
       "type": "object",
-      "description": "The readout block \u2014 Figma 40001119-6308, drawn above the conversations bar.",
+      "description": "The readout block — Figma 40001119-6308, drawn above the conversations bar.",
       "properties": {
         "component": {
           "const": "output-header"
@@ -1750,91 +1802,91 @@
           "nodeId": "40001119:6308",
           "name": "output-header",
           "type": "FRAME",
-          "size": "540 \u00d7 83"
+          "size": "540 × 83"
         },
         {
           "nodeId": "40001119:6309",
           "name": "chat-output-readout-area",
           "type": "FRAME",
-          "size": "500 \u00d7 55"
+          "size": "500 × 55"
         },
         {
           "nodeId": "40001123:6763",
           "name": "textarea",
           "type": "FRAME",
-          "size": "450 \u00d7 40"
+          "size": "450 × 40"
         },
         {
           "nodeId": "40001123:6750",
           "name": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text",
           "type": "TEXT",
-          "size": "450 \u00d7 43"
+          "size": "450 × 43"
         },
         {
           "nodeId": "40001124:7096",
           "name": "model-readout-tokens-etc",
           "type": "IMAGE-SVG",
-          "size": "20 \u00d7 20"
+          "size": "20 × 20"
         },
         {
           "nodeId": "40001124:7442",
           "name": "model-icon",
           "type": "FRAME",
-          "size": "18.75 \u00d7 17.5  (carried by export)"
+          "size": "18.75 × 17.5  (carried by export)"
         },
         {
           "nodeId": "40001124:7097",
           "name": "Vector",
           "type": "VECTOR",
-          "size": "18.75 \u00d7 17.5  (carried by export)"
+          "size": "18.75 × 17.5  (carried by export)"
         },
         {
           "nodeId": "40001123:6773",
           "name": "gripper-prompt-input-chat-menu",
           "type": "FRAME",
-          "size": "500 \u00d7 7"
+          "size": "500 × 7"
         },
         {
           "nodeId": "40001123:6774",
           "name": "Meatballs",
           "type": "FRAME",
-          "size": "480 \u00d7 4.05"
+          "size": "480 × 4.05"
         },
         {
           "nodeId": "40001123:6775",
           "name": "Ellipse 209",
           "type": "ELLIPSE",
-          "size": "2.16 \u00d7 2.05"
+          "size": "2.16 × 2.05"
         },
         {
           "nodeId": "40001123:6776",
           "name": "Ellipse 210",
           "type": "ELLIPSE",
-          "size": "2.16 \u00d7 2.05"
+          "size": "2.16 × 2.05"
         },
         {
           "nodeId": "40001123:6777",
           "name": "Ellipse 207",
           "type": "ELLIPSE",
-          "size": "2.16 \u00d7 2.05"
+          "size": "2.16 × 2.05"
         },
         {
           "nodeId": "40001123:6778",
           "name": "Ellipse 206",
           "type": "ELLIPSE",
-          "size": "2.16 \u00d7 2.05"
+          "size": "2.16 × 2.05"
         },
         {
           "nodeId": "40001123:6779",
           "name": "Ellipse 208",
           "type": "ELLIPSE",
-          "size": "2.16 \u00d7 2.05"
+          "size": "2.16 × 2.05"
         }
       ]
     },
     "output-footer-area": {
       "type": "object",
-      "description": "The footer block of the chat column output area \u2014 Figma 40001123-6689, imported via the Figma Dev Mode MCP server (get_design_context). The output column's closing shell: the Active/Plugins control, the four 32x32 panel marks (forum, chat history, add-new-conversation, user feedback), the credit line in its own button, and the block's own gripper. This is where the plug-in tool bar loads \u2014 the drawing's default view shows the first five tools.",
+      "description": "The footer block of the chat column output area — Figma 40001123-6689, imported via the Figma Dev Mode MCP server (get_design_context). The output column's closing shell: the Active/Plugins control, the four 32x32 panel marks (forum, chat history, add-new-conversation, user feedback), the credit line in its own button, and the block's own gripper. This is where the plug-in tool bar loads — the drawing's default view shows the first five tools.",
       "properties": {
         "component": {
           "const": "output-footer-area"
@@ -1863,73 +1915,73 @@
           "nodeId": "40001123:6689",
           "name": "output-footer-area",
           "type": "FRAME",
-          "size": "col \u00b7 gap 7 \u00b7 pad 10/20/20/20"
+          "size": "col · gap 7 · pad 10/20/20/20"
         },
         {
           "nodeId": "40001123:6692",
           "name": "gripper-prompt-input-chat-menu",
           "type": "FRAME",
-          "size": "7 tall \u00b7 pad 0/10"
+          "size": "7 tall · pad 0/10"
         },
         {
           "nodeId": "40001123:6693",
           "name": "Meatballs",
           "type": "IMAGE-SVG",
-          "size": "24.649 \u00d7 4.051 \u00b7 rotate 180"
+          "size": "24.649 × 4.051 · rotate 180"
         },
         {
           "nodeId": "40001124:7035",
           "name": "forum 1",
           "type": "IMAGE-SVG",
-          "size": "32 \u00d7 32 \u00b7 fill #3D515B"
+          "size": "32 × 32 · fill #3D515B"
         },
         {
           "nodeId": "40001123:6728",
           "name": "chat history",
           "type": "IMAGE-SVG",
-          "size": "32 \u00d7 32 \u00b7 fill #507274"
+          "size": "32 × 32 · fill #507274"
         },
         {
           "nodeId": "40001123:6732",
           "name": "add-new-conversation",
           "type": "IMAGE-SVG",
-          "size": "32 \u00d7 32 \u00b7 fill #3D515B"
+          "size": "32 × 32 · fill #3D515B"
         },
         {
           "nodeId": "40001123:6724",
           "name": "user--feedback 1",
           "type": "IMAGE-SVG",
-          "size": "32 \u00d7 32 \u00b7 fill #3D515B"
+          "size": "32 × 32 · fill #3D515B"
         },
         {
           "nodeId": "40001123:6690",
           "name": "chat-output-footer",
           "type": "FRAME",
-          "size": "500 \u00b7 radius 8 \u00b7 2 inset shadows"
+          "size": "500 · radius 8 · 2 inset shadows"
         },
         {
           "nodeId": "40001123:6722",
           "name": "",
           "type": "FRAME",
-          "size": "row \u00b7 gap 9"
+          "size": "row · gap 9"
         },
         {
           "nodeId": "40001123:6723",
           "name": "",
           "type": "FRAME",
-          "size": "307 \u00b7 row \u00b7 gap 20"
+          "size": "307 · row · gap 20"
         },
         {
           "nodeId": "40001123:6829",
           "name": "",
           "type": "FRAME",
-          "size": "54 \u00b7 row"
+          "size": "54 · row"
         },
         {
           "nodeId": "40001123:6830",
           "name": "Function - loads cards form console in prompt area",
           "type": "FRAME",
-          "size": "54 \u00b7 radius 6 \u00b7 2 drop shadows"
+          "size": "54 · radius 6 · 2 drop shadows"
         },
         {
           "nodeId": "40001123:6831",
@@ -1941,23 +1993,23 @@
           "nodeId": "40001123:6832",
           "name": "Active / Plugins",
           "type": "TEXT",
-          "size": "58 \u00b7 Arial Rounded MT Bold 12px #3D515B"
+          "size": "58 · Arial Rounded MT Bold 12px #3D515B"
         },
         {
           "nodeId": "40001123:6738",
           "name": "Function - loads cards form console in prompt area",
           "type": "FRAME",
-          "size": "156 \u00b7 radius 6 \u00b7 2 drop shadows"
+          "size": "156 · radius 6 · 2 drop shadows"
         },
         {
           "nodeId": "40001123:6739",
           "name": "btn-label",
           "type": "FRAME",
-          "size": "156 \u00d7 35"
+          "size": "156 × 35"
         },
         {
           "nodeId": "40001123:6740",
-          "name": "Created by John Travis Holt / Raibach.net \u00a9 2026 Raibach IDS",
+          "name": "Created by John Travis Holt / Raibach.net © 2026 Raibach IDS",
           "type": "TEXT",
           "size": "Arial Rounded MT Bold 9px / 12px #3D515B right-bottom"
         }
@@ -2043,10 +2095,26 @@
         },
         {
           "type": "object",
-          "description": "Lit web component <f-40001207-3497>, generated from Figma node 40001207:3497 (catalog-component-node-raibach-ids) and rendered from src/components/lit/f-40001207-3497.ts. Ingested, then approved into the catalogue.",
+          "description": "THE CATALOGUE'S COMPONENT ROW, implemented by <f-40001207-3497> in src/components/lit/f-40001207-3497.ts and generated from Figma node 40001207:3497 (catalog-component-node-raibach-ids). It draws ONE component of the catalogue as the row the left column lists: the name, the code, and the catalogue's own description of it, plus a chevron that expands the row and a status well the host fills with one mark (owner, 2026-09-30: 'I do not need to see anything but the name and the f-code and the discription in these tiles. The other data should be in the metadata in the preview panel.'). The facts the row no longer shows travel with the click instead: the tree that lists the catalogue sends them, and the preview panel reads them. It is instantiated by that tree (figma-layers-view), not by an envelope.",
           "properties": {
             "component": {
               "const": "f-40001207-3497"
+            },
+            "name": {
+              "type": "string",
+              "description": "What the catalogue calls it - the Figma layer's name for a generated component."
+            },
+            "code": {
+              "type": "string",
+              "description": "The catalogue's own key for it: f-40001207-3497, or a kebab name like trace-feed."
+            },
+            "description": {
+              "type": "string",
+              "description": "What it is, in the catalogue's words, cut to its first sentence by the row that passes it. The whole text goes to the preview panel."
+            },
+            "open": {
+              "type": "boolean",
+              "description": "Whether the row is expanded - the chevron's state. The element reports the change back as chevron-toggle; the tree records it."
             }
           },
           "required": [
@@ -2095,7 +2163,7 @@
             },
             "description": {
               "type": "string",
-              "description": "The line in the trailing block, where the node's sample text read \"FigmaNode: \u2026\"."
+              "description": "The line in the trailing block, where the node's sample text read \"FigmaNode: …\"."
             }
           },
           "required": [
@@ -2320,6 +2388,9 @@
         },
         {
           "$ref": "#/components/LeftColumnHeader"
+        },
+        {
+          "$ref": "#/components/design-left-panel"
         },
         {
           "$ref": "#/components/figma-layers-view"

@@ -18,29 +18,98 @@ REASONING_TRACE_PATH = os.getenv(
     os.path.join(os.path.dirname(__file__), "logs", "reasoning_trace.json"),
 )
 
-# ── A2UI v0.9.1 Trusted Component Catalog ──────────────────────────────
+# ── A2UI v0.9.1 Trusted Component Catalogs — ONE PER SURFACE ───────────
 # Zero-trust: every updateComponents payload emitted by this server is
 # validated against the catalog BEFORE reaching the client. A component
 # that is not in the catalog is a server bug and fails loud (503).
-A2UI_CATALOG_ID = "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json"
-_A2UI_CATALOG_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "frontend", "src", "components", "A2UI",
-    "catalogs", "prompt-composer", "catalog.json",
+#
+# ONE CATALOGUE PER SURFACE, since 2026-09-30. The Composer and the Design
+# experience are two experiences in one shell, and a component valid in one is
+# not automatically valid in the other — so the gate is chosen BY THE SURFACE
+# the payload is for, and either catalogue can gain or lose a name without
+# touching the other's gate. The owner: *"they have to be entered in both
+# places… they have to be entered in composer, and then they have to be
+# re-entered into the design."*
+#
+# THE COMPOSER'S STAYS THE DEFAULT, so every pre-existing call site keeps the
+# gate it always had: `validate_a2ui_components(components)` behaves exactly as
+# before, and a caller that wants another surface's gate NAMES that surface.
+# The two files carry the same 56 names today, and that is not redundancy to be
+# tidied away — it is the point of the second place. They are expected to
+# diverge as Design gets its own components.
+_A2UI_CATALOGS_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "frontend", "src", "components", "A2UI", "catalogs",
 )
-a2ui_catalog: dict[str, Any] = {}
-try:
-    with open(_A2UI_CATALOG_PATH) as _catalog_file:
-        a2ui_catalog = json.load(_catalog_file)
-    print(f"✅ A2UI Catalog loaded — {len(a2ui_catalog.get('components', {}))} trusted components")
-except Exception as _catalog_error:
+
+# The surfaces that have a catalogue, by the name the surface is known by.
+A2UI_CATALOG_SURFACES = ("prompt-composer", "design-artifacts")
+DEFAULT_A2UI_SURFACE = "prompt-composer"
+
+a2ui_catalogs: dict[str, dict[str, Any]] = {}
+
+
+def _load_a2ui_catalog(surface: str) -> dict[str, Any]:
+    """One catalogue, loaded from its file. A missing file is fatal, not a warning.
+
+    The gate cannot be optional: a server that validates against nothing passes
+    everything, which is how an unreadable catalogue becomes a silently
+    permissive one.
+    """
+    path = os.path.join(_A2UI_CATALOGS_DIR, surface, "catalog.json")
+    try:
+        with open(path) as catalog_file:
+            catalog = json.load(catalog_file)
+    except Exception as catalog_error:
+        print(
+            f"❌ CRITICAL: A2UI component catalog failed to load from {path}: {catalog_error}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     print(
-        f"❌ CRITICAL: A2UI component catalog failed to load from {_A2UI_CATALOG_PATH}: {_catalog_error}",
-        file=sys.stderr,
+        f"✅ A2UI Catalog [{surface}] loaded — "
+        f"{len(catalog.get('components', {}))} trusted components"
     )
-    sys.exit(1)
+    return catalog
 
 
-def validate_a2ui_components(components: list[dict[str, Any]]) -> None:
+for _surface in A2UI_CATALOG_SURFACES:
+    a2ui_catalogs[_surface] = _load_a2ui_catalog(_surface)
+
+# The default catalogue, under the two names the rest of the server already
+# reads. Unchanged values — this is the Composer's, exactly as before.
+a2ui_catalog: dict[str, Any] = a2ui_catalogs[DEFAULT_A2UI_SURFACE]
+A2UI_CATALOG_ID = (
+    a2ui_catalog.get("catalogId")
+    or "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json"
+)
+
+
+def a2ui_catalog_for(surface: str | None = None) -> dict[str, Any]:
+    """The catalogue a surface validates against.
+
+    An unknown surface FALLS BACK rather than raising: the surface is named by
+    an intent string that arrived over HTTP, and a 503 about an unknown
+    CATALOGUE would be indistinguishable to a client from a 503 about an
+    unknown COMPONENT — two different repairs behind one status code. The
+    fallback is the Composer's, which is the gate that was always there.
+    """
+    return a2ui_catalogs.get(surface or DEFAULT_A2UI_SURFACE, a2ui_catalog)
+
+
+def a2ui_catalog_id(surface: str | None = None) -> str:
+    """The `catalogId` a surface's createSurface declares — read from ITS catalogue.
+
+    A surface that drew its frame from one catalogue and announced another would
+    be lying about where its names come from, and the client resolves names
+    against its own tables (`tag-registry.ts`), so the announcement is how the
+    two halves are kept honest.
+    """
+    return a2ui_catalog_for(surface).get("catalogId", A2UI_CATALOG_ID)
+
+
+def validate_a2ui_components(
+    components: list[dict[str, Any]], surface: str | None = None
+) -> None:
     """
     Zero-trust validation of an updateComponents payload against the catalog.
 
@@ -49,8 +118,13 @@ def validate_a2ui_components(components: list[dict[str, Any]]) -> None:
     any component whose type is not registered in the trusted catalog is rejected
     with VALIDATION_FAILED.
     Raises HTTPException(503) — never passes invalid UI to the client.
+
+    `surface` selects WHICH catalogue gates this payload (A2UI_CATALOG_SURFACES
+    above). Omitted or unknown, it is the Composer's.
     """
-    allowed = set(a2ui_catalog.get("components", {}).keys())
+    catalog = a2ui_catalog_for(surface)
+    catalog_name = catalog.get("title") or surface or DEFAULT_A2UI_SURFACE
+    allowed = set(catalog.get("components", {}).keys())
     for index, comp in enumerate(components):
         if not comp.get("id"):
             detail = {
@@ -70,7 +144,11 @@ def validate_a2ui_components(components: list[dict[str, Any]]) -> None:
                     "code": "VALIDATION_FAILED",
                     "surfaceId": "main",
                     "path": f"/components/{index}/component",
-                    "message": f"Component '{name}' is not in the trusted catalog",
+                    "message": (
+                        f"Component '{name}' is not in the trusted catalog ({catalog_name}). "
+                        f"If it belongs to this surface, add it there — the catalog is the gate, "
+                        f"so a name that is not in it is a server bug and not a client problem."
+                    ),
                 }
             }
             print(f"❌ [A2UI VALIDATION FAILED] {detail}", file=sys.stderr)

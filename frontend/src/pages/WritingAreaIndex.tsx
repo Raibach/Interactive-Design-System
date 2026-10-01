@@ -1,5 +1,18 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, useBlocker } from "react-router-dom";
+// THE ONE WAY THROUGH THE BOUNDARY. The design room's container is drawn by the design
+// renderer INSIDE ITS SHADOW ROOT, and the ingest's three regions are React elements the
+// renderer cannot instantiate — it builds elements from the catalogue by tag name, and the
+// ingest is not a catalogue entry (it is the tool that WRITES the catalogue). So the injection
+// below goes through a portal, whose target is a DOM node React did not create and does not
+// own. It is the only mechanism in this file that reaches into the shadow tree, and it reaches
+// exactly one element — the container the design assembler named.
+// NO `createPortal` HERE, AND THAT IS LOAD-BEARING (2026-09-30). The design room is assembled —
+// a surface is an adjacency list, and a React region appended to a shadow root's child list is
+// not a child of anything that projects it: measured on the live page, the injected block drew
+// beneath the room and pushed the whole design up by 129px. The ingest is the TEMPLATE for what
+// this room must do; its functionality is translated into the catalogue's own elements, bound to
+// the data model, drawn by the renderer. Nothing else may be mounted in there.
 // pdfService import removed — PDF processing is retired
 // import { quarantineService } from "@/services/quarantineService"; // Excluded from production
 import {
@@ -25,10 +38,45 @@ import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
 import consoleVideo from "@/assets/No-Copyright-waves.mp4";
 import composerBackground from "@/assets/composer-image-bg.jpg";
+// THE DESIGN SECTION'S OWN CANVAS — the artwork behind the room's columns. Same import
+// mechanism as the Composer's, so it is bundled and hashed like every other asset.
+// The artwork is the owner's second pass at it (`images/design-section2-bkg.png`, 2026-09-30); the
+// first file is still in the assets directory and is referenced by nothing.
+import designSectionBackground from "@/assets/design-section2-bkg.png";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/agent-canvas-art.jpg";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
+
+/**
+ * THE VALUES THE COMPONENT WILL BE GIVEN — the data binding, for the preview to show.
+ *
+ * THE OWNER, 2026-09-30: *"it does not have to be blind to the data binding. It can load the data
+ * binding as part of the preview… I think that creates a very clear picture of what it's doing at the
+ * preview level."* So the preview carries the values, not only the drawing — and they come from THE
+ * DATABASE ROWS the room already holds (`session/elements`, one `design_master` row per component),
+ * never from the catalogue's declaration of itself and never invented: the names a component exists
+ * under live in the database, which is the rule the room was built on.
+ *
+ * WHAT A PREVIEW MAY AND MAY NOT KNOW, stated because the two were one rule before this: it must not
+ * resolve, import or read anything the application SHIPS (the catalogue's elements and behaviour —
+ * `vite-plugin-figma-preview.ts`), and it MAY know the DATA its component will be given. Values are
+ * data; the loader and the companions are code.
+ *
+ * A TAG WITH NO ROW YIELDS NOTHING — a component being created for the first time has no data yet,
+ * and an empty list is that fact. Nothing is substituted for it.
+ */
+function previewValues(rows: any[], tag: string): Array<{ field: string; value: string }> {
+  const row = rows.find((r) => r?.id === tag || r?.name === tag || r?.key === tag);
+  if (!row) return [];
+  const values: Array<{ field: string; value: string }> = [];
+  if (row.name) values.push({ field: "name", value: String(row.name) });
+  if (row.description) values.push({ field: "description", value: String(row.description) });
+  // The address the row is known by, when it says something the name does not (the tree's own rule
+  // for its second line): the catalogue key, which is `f-<node id>` for a generated component.
+  if (row.key && row.key !== row.name) values.push({ field: "code", value: String(row.key) });
+  return values;
+}
 // InteractiveChatInterface is RETIRED — archived, not deleted, at
 // retired-files/console-seat-20260917/InteractiveChatInterface.tsx. The console's
 // chat is the same Lit <chat-panel> the composer loads, assembled in the console's
@@ -45,6 +93,12 @@ import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
 import { IngestModal } from "@/components/IngestModal";
+// The ingest's own URL parser, imported rather than re-written: the form in the room and the form in
+// the modal must read a Figma link the same way, and this is the one place that does.
+import { parseFigmaUrl } from "@/utils/figmaUrl";
+// The renderer's own resolver, imported rather than re-implemented: the shell asks the same
+// authority the renderer will use, so "what can be drawn" has one answer.
+import { resolveTag } from "@/components/lit/a2ui-renderer";
 import { markArrival } from "@/shared/arrival";
 import { CORE_ROLE_LABELS, seatIdOf } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
@@ -140,6 +194,18 @@ interface WritingAreaIndexProps {
  * column where it was (the caller says why — see the Run's own catch).
  */
 let canvasElements: Promise<void> | null = null;
+
+/**
+ * NO WIDTH IS ASKED FOR HERE ANY MORE, AND THAT IS THE DECISION. The room used to name two pixel
+ * widths (380 at rest, 650 while the preview was open) and hand them to the layout, which meant the
+ * surface was choosing a number the operator could not see the reasoning for. The owner, 2026-09-30:
+ * *"the design panels should load equal… they should be equal on both sides… I think we set a number
+ * of 650 before — let's just do percentages and then let the user expand it where needed."*
+ *
+ * So the room asks for the element's OWN EQUAL SHARES — two panes equal while her column sits beside
+ * the prompt, three while the middle one is open — and a drag still claims a width for the operator
+ * afterwards, exactly as it does on a fresh package. See `splitEqually` in `workspace-layout.ts`.
+ */
 
 function loadCanvasElements(): Promise<void> {
   if (canvasElements) return canvasElements;
@@ -345,6 +411,128 @@ export default function Index({
   const [workspaceTree, setWorkspaceTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
     { components: [], dataModel: {} },
   );
+  /*
+   * DESIGN'S OWN TREE AND ITS OWN SESSION — the client half of the boundary.
+   *
+   * The owner, 2026-09-30: *"I told you it's a separate experience and you just didn't admit that
+   * it runs through the composer's machinery. So if the composer has its own machinery, then you
+   * need to create a rendering process for design."*
+   *
+   * So Design does not assemble through `assembleSurfaceThenRepairs` — that function is the
+   * Composer's and it does four Composer things (the unsaved-changes gate, the repair pass, the
+   * tab forcing, and the adoption of the package the response names). None of those is gated off
+   * for Design; they are simply not in its path, because a click on Design calls
+   * `assembleDesignSurface` below and writes these two values and nothing else.
+   *
+   * `currentDesignSession` is Design's "what am I on". It is bound to the Design CONTAINER the
+   * server resolves — never a prompt package — and `currentPromptSession` stays the Composer's
+   * alone: no path from Design writes it, which is what makes the blindness structural.
+   */
+  const [designTree, setDesignTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
+    { components: [], dataModel: {} },
+  );
+  const [currentDesignSession, setCurrentDesignSession] = useState<Record<string, any> | null>(null);
+
+  /*
+   * THE ROOM'S CONTAINER, ONCE IT EXISTS — THE TARGET OF THE INJECTION.
+   *
+   * The design surface is a CONTAINER: `workspace-layout`, with `left`, `middle` and `right`
+   * among its slots, drawn by the design renderer into the design renderer's shadow root.
+   * Nothing outside that shadow root can put anything into it — and the ingest's three regions
+   * are React, so the renderer cannot build them either (it instantiates catalogue tags by
+   * name, and the ingest is not in the catalogue: it is what WRITES it).
+   *
+   * So the injection is a portal into this element. Each region arrives carrying its own
+   * `slot` attribute (`IngestModal`, `variant="section"`) and lands in the column it was named
+   * for — left rail, output column, Grace — with the container supplying the frame and the
+   * theme, exactly as the owner described: *"you don't replace, you inject… what you've got is
+   * unstyled, it has no theme — it's just the application the way you built it. And we're just
+   * gonna port that into the slots."*
+   *
+   * `null` until the renderer has drawn. That is the ORDER, and it is load-bearing: *"the
+   * assembly happens. The render of this container happens and then the injection happens."*
+   */
+  const [designRoomEl, setDesignRoomEl] = useState<HTMLElement | null>(null);
+
+  /*
+   * THE MIDDLE COLUMN'S CONTAINER — THE SEAT THE PREVIEW IS LOADED INTO.
+   *
+   * The room's `<workspace-layout>` has PANES, and a pane is not a container: content left loose
+   * in a pane sits in the container's light DOM, which lit-html owns and React does not, so lit's
+   * re-renders displace it and every change in the slot's assignment makes the container
+   * re-baseline its split. The owner felt exactly that (2026-09-30): *"I can't close the
+   * container. I can't grab a hold of the grippers. It's jerking away from me."*
+   *
+   * The design's middle column is therefore its own element with a hole in it
+   * (`design-middle-container`, emitted by `render-design`), and the ingest's Preview is rendered
+   * INTO that hole: the element's light DOM stays empty, and lit never writes a child there.
+   *
+   * THE RIGHT COLUMN IS LEFT EXACTLY AS IT IS, and that is the owner's instruction rather than an
+   * omission (2026-09-30): *"I have not decided what I want her navigation to be so none of that
+   * navigation wiring needs to be taken apart. It just needs to be ignored."* Whatever the
+   * Composer put in that slot stays in it until something we are bringing across from the ingest
+   * conflicts with it — so what that region is seated in is not decided here, and this shell does
+   * not touch it.
+   */
+  const [designMiddleSeat, setDesignMiddleSeat] = useState<HTMLElement | null>(null);
+
+
+  /*
+   * THE LEFT COLUMN'S CONTAINER — THE SEAT THE RAIL IS LOADED INTO.
+   *
+   * The same seat as the middle one, one column over, and this is what the owner was looking at
+   * when he said it (2026-09-30): *"it is loading underneath the container the design renderer has
+   * to render it inside of the container."* Design's left column drew the Composer's prompt
+   * editor and the ingest's rail sat BELOW it, loose in the pane.
+   *
+   * The panel is part of the frame and stays, but it has to arrive EMPTY and own a hole: the
+   * design's left column is its own element (`design-left-panel`, emitted by `render-design`) —
+   * the Composer's own `<prompt-container>` frame with a mount inside its shadow tree — and the
+   * rail is rendered INTO that mount. The mount (rather than a slot) is what lets the tool keep
+   * its own styling: see that element, and `@/shared/app-stylesheet`.
+   */
+  const [designLeftSeat, setDesignLeftSeat] = useState<HTMLElement | null>(null);
+
+  /*
+   * IS THE THIRD COLUMN DRAWN YET? — no, until there is something to put in it.
+   *
+   * The owner, 2026-09-30: *"whenever I click on Preview or submit that operates, just like run on
+   * the composer. It's the same behavior when I select one of the components in the component tree
+   * that operates just like run in the composer. if the Preview window is already open then there's
+   * no reason to reopen it right, because it's open."* The Composer's rule is the same rule, and
+   * this is its mechanism: which panes exist IS the surface's tree — `workspace-layout` draws a
+   * middle column when something is in its middle slot and takes no width when nothing is — and at
+   * rest the Composer's root carries no middle child at all ("the shell moves the flow view into it
+   * at Run time").
+   *
+   * So the server DECLARES the container and does not reference it, the tool reports that the
+   * Preview is drawing something (`onPreviewChange`), and this flag is where the two meet: while it
+   * is false the tree is handed to the renderer exactly as assembled, and the moment the Preview has
+   * a component the reference is added and the column is drawn. The seat is read again in the same
+   * effect, so the Preview is portaled into the container the instant it exists.
+   *
+   * ONE WRITER, AND IT ONLY EVER OPENS. Selecting a second component, or the same one again, is not
+   * a reason to rebuild the column — so nothing here closes it and nothing re-creates it: the
+   * reference is added once, and later selections are just the tool re-rendering inside a column
+   * that is already there.
+   *
+   * THE RIGHT COLUMN IS NOT PART OF THIS, DELIBERATELY. The owner, 2026-09-30: *"I have not decided
+   * what I want her navigation to be so none of that navigation wiring needs to be taken apart. It
+   * just needs to be ignored. You don't need to remove anything until it's in conflict with
+   * something we're adding from the ingestion application."* So the Composer's chat seat stays where
+   * it is and this shell does not touch it.
+   */
+  const [designPreviewOpen, setDesignPreviewOpen] = useState(false);
+
+  /** The tool's report — see `onPreviewChange` on the ingest. Stable, so the tool's effect is not
+   *  re-run by a new function identity on every render of this shell. */
+  const onDesignPreviewChange = useCallback((hasPreview: boolean) => {
+    // THE FALSE HALF IS IGNORED, deliberately: deselecting a component while the column is open is
+    // not a request to take the column away, and the owner's rule is about OPENING it —
+    // *"if the Preview window is already open then there's no reason to reopen it right, because
+    // it's open."* One writer, and it only ever opens.
+    if (hasPreview) setDesignPreviewOpen(true);
+  }, []);
 
   /**
    * THE LIVE TREE, READABLE FROM A LISTENER REGISTERED IN AN EARLIER RENDER.
@@ -364,8 +552,57 @@ export default function Index({
   // console — this has to read the same way, or the values below would describe a
   // slot that is not on screen.
   const isConsoleView = (headerTab || 'console') === 'console';
+  // The Design room is not the console and not the composer: it wears its own canvas.
+  const isDesignView = (headerTab || '') === 'design';
   const surfaceComponents = isConsoleView ? consoleTree.components : workspaceTree.components;
   const surfaceDataModel = isConsoleView ? consoleTree.dataModel : workspaceTree.dataModel;
+
+  /*
+   * THE SECTIONS THAT WEAR THE COMPOSER'S CONTAINER.
+   *
+   * Console is its own surface and the Composer is assembled — those two are unchanged. Product,
+   * Development and Governance are the owner's compartments, and they get the Composer's
+   * container ASSEMBLED, with the Composer's own components in its five slots, so the design
+   * matches before anything is put in them.
+   *
+   * The owner, 2026-09-30: *"go ahead and build your containers for each section and match the
+   * design"* — and, on how: *"You're gonna have to use the same lit components in the same
+   * behavior inside of design… I want to just reuse the lit components for the composer. I will
+   * just replace what they hold."* And on the fourth: *"you can do governance — they're all
+   * exactly the same, the containers, just column containers, and their behaviour the sliding,
+   * the docking to the right, docking to the left, the chat interface is exactly the same for
+   * all of those."*
+   *
+   * DESIGN IS NOT IN THIS LIST, because its slots are already spoken for: the ingest lives in
+   * them. *"when I ingest a file it opens up a third column and displays the output just like we
+   * do now, the left column left rail… Grace follows along like she does now on ingest.
+   * Everything's exactly the same, just wired up into the column."* It wears the SAME container
+   * — `IngestModal variant="section"` renders a `<workspace-layout>` and fills `left`, `middle`
+   * and `right` with the rail, the output and Grace — so the architecture is reused and the
+   * contents are the ingest's rather than the Composer's.
+   */
+  const SECTION_TABS = ['product', 'development', 'governance'];
+  const isSectionShell = SECTION_TABS.includes(headerTab || '');
+
+  /*
+   * DEAD TABS — Product, Development and Governance are STUBS, and they are dead on purpose.
+   *
+   * The owner, 2026-09-30: *"I want to just disable. We don't have to un-wire it. We just need to
+   * make it not display. Just make them dead… product, development and governance should not load
+   * anything. Just make them dead tabs, whatever you call them, stubs."*
+   *
+   * SO NOTHING IS UNWIRED AND NOTHING IS DELETED. The server still answers `render-section:<id>`
+   * with a surface, and the three entries stay in the header navigation, because a tab that
+   * disappears is a tab a person cannot find again. What changes is only what a click DOES: the
+   * indicator moves and no assembly is asked for, so nothing loads, nothing is written, and no
+   * composer surface is drawn into a room that has not been designed yet.
+   *
+   * THE SAME LIST AS SECTION_TABS TODAY, and deliberately a second name rather than a rename: the
+   * sections are the tabs that will one day hold their own content and these three are the ones
+   * waiting for it, so the day one of them is designed it leaves this list and nothing else moves.
+   */
+  const DEAD_TABS = SECTION_TABS;
+  const isDeadTab = DEAD_TABS.includes(headerTab || '');
 
   /**
    * THE SURFACE'S MODEL, READ THROUGH A REF BY LONG-LIVED LISTENERS.
@@ -701,6 +938,8 @@ export default function Index({
   // console slot existed at 1224px with an empty tree and no error to explain it.
   const consoleRendererRef = useRef<any>(null);
   const composerRendererRef = useRef<any>(null);
+  /* DESIGN'S OWN RENDERER — a separate instance, never the Composer's with a swapped tree. */
+  const designRendererRef = useRef<any>(null);
 
   // Preload the composer background at mount so a transition never paints a
   // half-decoded image in sections. The browser fetches and decodes it eagerly
@@ -730,11 +969,118 @@ export default function Index({
   }, [consoleTree]);
 
   useEffect(() => {
+    // THE COMPOSER'S RENDERER, AND ONLY THE COMPOSER'S TREE.
     const el = composerRendererRef.current;
     if (!el) return;
     el.components = workspaceTree.components;
     el.dataModel = workspaceTree.dataModel;
   }, [workspaceTree]);
+
+  /*
+   * DESIGN'S OWN RENDERER — a separate instance, not the Composer's with a different tree.
+   *
+   * The owner, 2026-09-30: *"build a rendering process that is similar and operates like composer,
+   * but it has to be specific to design and it has to load the exact same lit components but
+   * empty… you need to load a separate version of Grace just like we load a separate version of
+   * Grace for the console, and Grace gets a separate version for composer. She gets her own seat
+   * for design, but she is assembled in a different render."*
+   *
+   * SO THIS IS A SECOND ELEMENT, with its own ref, drawing its own tree through the same
+   * catalogue and the same resolver. Swapping ONE renderer's tree underneath it — what this was
+   * before — is not a boundary: the two rooms would share the drawing, so one room's assembly
+   * would write over the other's surface, and neither could hold a surface while the other held
+   * one.
+   *
+   * WHAT IS SHARED is the catalogue, the resolver and the components — the reasons the two rooms
+   * look alike. What is not shared is the INSTANCE, because the instance is the state.
+   *
+   * AND SO DESIGN GETS ITS OWN GRACE. Each render builds its own elements, so the `chat-panel` in
+   * this tree is an instance of its own, bound to Design's own conversation id — exactly as the
+   * console has its own and the Composer has its own. Grace the component is unchanged; she is
+   * assembled here, in this render, with her own seat.
+   */
+  useEffect(() => {
+    const el = designRendererRef.current;
+    if (!el) return;
+    /*
+     * THE TREE THIS ROOM DRAWS, with the third column added once there is something for it —
+     * see `designPreviewOpen` for the rule and the owner's words. An UNREFERENCED component in
+     * the list is inert to the renderer, which is why the server can declare
+     * `design-middle-container` without drawing it: the reference below is what draws the column,
+     * and nothing else about the assembly changes.
+     */
+    const comps = designTree.components as any[];
+    const openOutput =
+      designPreviewOpen && comps.some((c) => c?.component === "design-middle-container");
+    el.components = openOutput
+      ? comps.map((c) =>
+          c?.id === "root" && c.children && !c.children.middle
+            ? { ...c, children: { ...c.children, middle: "design-middle" } }
+            : c,
+        )
+      : comps;
+    el.dataModel = designTree.dataModel;
+    /*
+     * ── AND THEN THE INJECTION — AFTER THE RENDER, NEVER BEFORE ────────────────────────
+     *
+     * THE ORDER IS THE OWNER'S, and it is the whole mechanism (2026-09-30): *"the assembly
+     * happens. The render of this container happens and then the injection happens. It's in
+     * an order."*
+     *
+     *   1. `components` and `dataModel` are assigned above — that is the ASSEMBLY.
+     *   2. `await el.updateComplete` waits for the container to have been DRAWN — that is the
+     *      RENDER. Awaiting is not politeness: assigning `components` only SCHEDULES Lit's
+     *      update, so a query made in the same tick finds an empty shadow root, reports "no
+     *      container", and the room then draws empty with nothing to explain it.
+     *   3. The container is found and handed to React as a portal target — the INJECTION. It
+     *      can only happen here, because before the render there is no element to inject into.
+     *
+     * WHAT IS FOUND is the room's own `<workspace-layout>`, read from THIS renderer's shadow
+     * root — `el.shadowRoot`, never `document`: the element is drawn inside the shadow tree,
+     * where no document-level query can see it. That boundary is the same one that made Save
+     * write nothing until the model was read instead of the DOM.
+     */
+    let cancelled = false;
+    void (async () => {
+      try {
+        await el.updateComplete;
+      } catch {
+        // `updateComplete` does not reject in Lit. If it ever does, the query still runs and
+        // reports no container rather than taking the effect — and the room — down with it.
+      }
+      if (cancelled) return;
+      // Passing the element itself, not a copy of it: on a re-assembly that keeps the same
+      // container, React bails out of the state update and the injected regions are NOT
+      // remounted — the ingest keeps what it holds across a data-model-only change.
+      setDesignRoomEl((el.shadowRoot?.querySelector('workspace-layout') as HTMLElement | null) ?? null);
+      // AND THE MIDDLE COLUMN'S CONTAINER, read in the same pass for the same reason: it does not
+      // exist until the tree has been drawn. It is the element that OWNS the hole — the ingest's
+      // Preview is loaded inside it rather than left loose beside it in the pane (see the seat's
+      // note below, and `seats` on IngestModal).
+      setDesignMiddleSeat(
+        (el.shadowRoot?.querySelector('design-middle-container') as HTMLElement | null) ?? null,
+      );
+      // AND THE LEFT COLUMN'S PANEL, read in the same pass and for the same reason: it does not
+      // exist until the tree has been drawn. It OWNS the hole the rail is loaded into — the panel
+      // frame with a mount inside its shadow tree, which is where the region is rendered so the
+      // tool keeps its own styles (see `design-left-panel`).
+      //
+      // ITS OWN RENDER IS WAITED FOR, which the middle container does not need: the target here is
+      // a div INSIDE that element's shadow tree, so a portal made before it renders has nowhere to
+      // go. `updateComplete` on the child is the fact that says the div exists.
+      const panelEl = (el.shadowRoot?.querySelector('design-left-panel') as HTMLElement | null) ?? null;
+      if (panelEl) {
+        try {
+          await (panelEl as HTMLElement & { updateComplete?: Promise<unknown> }).updateComplete;
+        } catch {
+          // The same courtesy as above: a child that never settles must not take the effect down.
+        }
+      }
+      if (cancelled) return;
+      setDesignLeftSeat(panelEl);
+    })();
+    return () => { cancelled = true; };
+  }, [designTree, designPreviewOpen]);
   /*
    * THE BAR'S ID AND VERSION ARE SET, NOT BOUND — see the effect below the session state,
    * where both `currentPromptSession` and its ref exist to be read.
@@ -4007,6 +4353,907 @@ export default function Index({
   // everything else→slot="workspace". AI cannot create new surface types
   // or reorganize which slots exist. See assembly audit above.
   // ══════════════════════════════════════════════════════════════════════════
+  /*
+   * DESIGN'S OWN ASSEMBLY — a rendering process of its own, not the Composer's.
+   *
+   * WHAT WAS WRONG, in the owner's words (2026-09-30): *"it runs through the composer's machinery
+   * — so if the composer has its own machinery, then you need to create a rendering process for
+   * design."* A click on Design called `assembleSurfaceThenRepairs`, which is the Composer's
+   * function and does four Composer things along the way: it forces the header tab to Composer
+   * (`setHeaderTab('composer')`), it adopts the package the response names
+   * (`setCurrentPromptSession`), it runs the repair pass, and it consults the unsaved-changes
+   * gate. That is why a click on Design moved the header and left Design working on a prompt
+   * package.
+   *
+   * THIS FUNCTION DOES NONE OF THE FOUR. It asks the server for `render-design`, which resolves
+   * the DESIGN CONTAINER and emits a surface keyed to it, and it writes exactly two values:
+   * `designTree` and `currentDesignSession`. `currentPromptSession` is not in its body, so no
+   * path from Design can write the Composer's state — blindness by construction rather than by a
+   * guard somebody has to remember.
+   *
+   * THE DEVICE IS SHARED — the same renderer draws this tree, because the two experiences are
+   * meant to look alike. A renderer holds no state, so sharing it costs nothing and leaks nothing.
+   */
+  const assembleDesignSurface = useCallback(async () => {
+    setIsAIAssembling(true);
+    try {
+      const response = await apiFetch(`${API_BASE}/ai/assemble-surface`, {
+        method: "POST",
+        body: JSON.stringify({ intent: "render-design" }),
+      });
+      const rawData = await response.json();
+      const read = readA2UIEnvelope(rawData);
+      if (read.ok === false) {
+        console.error(`🤖 [A2UI] ENVELOPE REFUSED for render-design — ${read.refusal.code}: ${read.refusal.message}`);
+        throw envelopeRefusalError(read.refusal);
+      }
+      const reading = read.reading;
+      setDesignTree({
+        components: reading.components as any[],
+        dataModel: reading.dataModel as Record<string, any>,
+      });
+      setCurrentDesignSession((reading.dataModel as Record<string, any>)?.session ?? null);
+    } finally {
+      setIsAIAssembling(false);
+    }
+  }, []);
+
+  /*
+   * ══ THE INGEST FORM IN THE ROOM, ANSWERED HERE ══════════════════════════════════════════════
+   *
+   * The room's left column holds the ingestion rail: `figma-ingest-form` (the Figma URL, the Notes
+   * and Submit) over `figma-layers-view` (the catalogue tree). The tree needs nothing from this
+   * shell. The FORM does: its Submit dispatches `ingest-submit` with the raw text and NOTHING ELSE,
+   * because deciding what a typed string means — a Figma URL, a node tag (f-1234-5678), a layer's
+   * name — is `IngestModal.handleIngest`'s logic, and one place decides it.
+   *
+   * SO THIS IS THE HALF THAT KNOWS: it takes the text, parses it with the SAME parser the modal
+   * uses (`@/utils/figmaUrl`, imported, never re-written), and runs the SAME call the modal runs —
+   * `POST /api/figma/ingest` with `{jobId, fileKey, nodeId, notes, sessionId, sessionTitle}`. A
+   * second implementation of the ingest living in the shell is exactly what this avoids: there is
+   * one endpoint and one body shape, and both callers send it.
+   *
+   * THE TWO PROPS THE ELEMENT REFUSES TO DECIDE ARE SET HERE. `busy` is true from the moment the
+   * call leaves until it answers, and `message` carries whatever refused — the host's words, because
+   * only the caller that made the call knows. They are written by patching the emitted component,
+   * since the form is drawn by the renderer inside the surface and not by React: the surface's
+   * components ARE its props.
+   *
+   * WHAT IS NOT HERE, SAID PLAINLY: the modal's other two paths. A typed node tag opens an existing
+   * component (`openByTag`) and a typed name searches the file (`findByName`); both need the
+   * modal's selection machinery and neither is wired into the room yet. A tag or a name sent from
+   * this form reports that it cannot be opened here rather than failing silently.
+   */
+  const [designIngestBusy, setDesignIngestBusy] = useState(false);
+
+  /*
+   * THE CHANNEL THAT ACTUALLY REACHES THE ELEMENT — AND THE ONE THAT DOES NOT.
+   *
+   * Learned the hard way, measured on the running room: patching the emitted COMPONENT does not
+   * reach anything. `a2ui-renderer.updated()` re-applies props when the DATA MODEL changes and
+   * returns early when the COMPONENTS change (`if (!changed.has('dataModel') ||
+   * changed.has('components')) return`), so a shell that sets `busy` on the component writes into
+   * a channel nothing reads — the owner pressed Submit and the form sat there with no message
+   * while the work happened behind it.
+   *
+   * So the state goes where this repository puts content: the data model, under `/session/ingest`,
+   * which the form's `busy`/`message` and the tree's `refresh` are bound to. One write, and the
+   * renderer re-hands every bound prop.
+   */
+  const setDesignIngest = useCallback(
+    (patch: { busy?: boolean; message?: string; refresh?: number }) => {
+      setDesignTree((prev) => {
+        const session = (prev.dataModel as Record<string, any>)?.session ?? {};
+        const ingest = { busy: false, message: "", refresh: 0, ...(session.ingest ?? {}), ...patch };
+        return {
+          ...prev,
+          dataModel: {
+            ...prev.dataModel,
+            session: { ...session, ingest },
+          },
+        };
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const onIngestSubmit = async (event: Event) => {
+      const detail = (event as CustomEvent<{ url?: string; notes?: string }>).detail ?? {};
+      const typed = String(detail.url ?? "").trim();
+      if (!typed || designIngestBusy) return;
+
+      setDesignIngestBusy(true);
+      setDesignIngest({ busy: true, message: "" });
+      try {
+        /*
+         * THE INGEST'S OWN WORDS, VERBATIM — NOT A PARAPHRASE. The owner, on the messages in the
+         * ingest form: *"we worked very hard on that react component for ingest figma file to make
+         * sure that the messages and the feedback were all accurate."* So these strings are copied
+         * from `IngestModal.handleIngest` EXACTLY, and they must stay identical:
+         *   "That is neither a Figma URL nor a component id (f-1234-5678)."   — IngestModal.tsx:969
+         *   "The URL needs a node — add ?node-id=… (a file link has no single component to ingest)."
+         *                                                                     — IngestModal.tsx:974
+         * A second wording for one refusal is a second answer to the same question, and the two
+         * would drift. (Better still would be to lift them into one shared module and have both
+         * files read them; the modal is the ingest's own component and this shell is not the place
+         * to move its text, so they are copied here with the source named.)
+         */
+        const neitherUrlNorTag = "That is neither a Figma URL nor a component id (f-1234-5678).";
+        const needsANode =
+          "The URL needs a node — add ?node-id=… (a file link has no single component to ingest).";
+
+        // A LAYER'S NAME IS NOT AN ERROR — it is the search path, and the modal runs it. Not wired
+        // here yet, and said plainly rather than dressed up as a broken link.
+        // A NODE TAG IS ITS OWN PATH AND IT IS NOT WIRED — measured, from the audit: the guard
+        // below used to let `f-1234-5678` through to `parseFigmaUrl`, whose `new URL(...)` throws on
+        // a non-URL, so the person saw "Invalid URL" — a message about a link they did not type.
+        // The tag path is `openByTag` in the modal and it is not carried yet; saying that is the
+        // truth, and it is not the same sentence as "that is not a Figma URL".
+        if (/^f-\d/.test(typed)) {
+          setDesignIngest({
+            busy: false,
+            message: `Opening a component by tag (${typed}) is not wired into this room yet — paste the Figma link with ?node-id=… to ingest, or pick the component in the list.`,
+          });
+          return;
+        }
+        if (!/^https?:\/\//i.test(typed)) {
+          setDesignIngest({
+            busy: false,
+            message: `${neitherUrlNorTag} Searching by layer name is not wired into this room yet.`,
+          });
+          return;
+        }
+        const { fileKey, nodeId } = parseFigmaUrl(typed);
+        if (!fileKey || !nodeId) {
+          setDesignIngest({ busy: false, message: needsANode });
+          return;
+        }
+        const jobId = crypto.randomUUID();
+        const res = await apiFetch(`${API_BASE}/figma/ingest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            // One id for the job, held here because the preview carries it: an approve resolves
+            // this job, so the value that goes out is the value the preview must hand back.
+            jobId,
+            fileKey,
+            nodeId,
+            notes: String(detail.notes ?? ""),
+            sessionId: currentDesignSession?.id ?? "",
+            sessionTitle: currentDesignSession?.title ?? "",
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.detail || "Failed to ingest");
+        // ── RUN ONE LANDS HERE: THE INGEST'S ANSWER BECOMES THE PREVIEW ────────────────────────
+        // Read exactly as the modal reads it (`data?.result ?? data`), because it is the same
+        // response: the tag it built, the node it measured, and whether the catalogue already held
+        // that tag — which is what makes the approve button say REPLACE instead of add.
+        const result = (data?.result ?? data ?? {}) as Record<string, any>;
+        const details = (result.details ?? {}) as Record<string, any>;
+        /*
+         * ── THE DRAFT'S OWN ADDRESS, TAKEN FROM THE ANSWER AND NOT WORKED OUT HERE ────────────
+         *
+         * The backend writes the draft to a temporary file (`.preview/<jobId>/<tag>.ts`, outside
+         * `src/` and unrelated to the catalogue) and returns where it put it (`result.preview`,
+         * see `_preview_module` in backend/routes/figma.py). That address is what the third column
+         * loads, because THE TAG ALONE IS NOT AN ADDRESS: a re-ingest of a node the catalogue
+         * already holds builds a draft under the same tag as the approved element, so a client left
+         * to derive the path from the name draws the approved component instead of the change. The
+         * shell therefore derives nothing and passes the answer's own two fields through.
+         *
+         * IT IS ALSO WHY NO `component` IS NAMED FOR THE DRAWING. Naming a component here means the
+         * renderer resolves that name through the catalogue — the exact resolution that showed the
+         * owner the old element after he edited Figma.
+         */
+        const draft = (result.preview ?? null) as
+          | { jobId?: string; tag?: string; modulePath?: string; moduleUrl?: string }
+          | null;
+        const hasAddress = !!draft?.moduleUrl;
+        /*
+         * ── THE COMPILE VERDICT, CARRIED FROM THE INGEST FORM (one for one) ──────────────────────
+         *
+         * The form states it above the draft's facts — "Generated code does not compile — approval
+         * will be refused:" with the compiler's own message per tag (IngestModal.tsx, DraftDetails)
+         * — and the room drew a draft without saying whether it builds, so the designer's first
+         * hint was the preview failing to load. `validation` is the ingest's own esbuild verdict on
+         * each draft and it travels on the result; a tag with no entry is not a failure (the commit
+         * reads a missing verdict as "ok", and this reads it the same way).
+         */
+        const validation = (result.validation ?? {}) as Record<string, { ok?: boolean; error?: string }>;
+        const builtTag = String(result.tag ?? details.target_tag ?? "");
+        /*
+         * ── THE QUESTION THE DESIGNER HAS TO ANSWER, CARRIED WITH THE PREVIEW ────────────────────
+         *
+         * The ingest answers with the layers whose NAME the design system already has on a DIFFERENT
+         * component (`nameCollisions`) and the layers that ARE a component it already ships drawn
+         * elsewhere (`nameInstances`) — the same two lists the ingest tool shows above its preview
+         * (IngestModal.tsx). They ride in the preview state so the panel can ask, and the ANSWER
+         * rides back the same way, which is what makes the collide case a decision instead of a
+         * default: an unanswered question commits as "add it as its own component", exactly as the
+         * tool's does.
+         */
+        const collisions = Array.isArray(result.nameCollisions) ? result.nameCollisions : [];
+        const instances = Array.isArray(result.nameInstances) ? result.nameInstances : [];
+        const compile = validation[builtTag];
+        const compileFailed = compile?.ok === false;
+        const compileLine = compileFailed
+          ? `Generated code does not compile — approval will be refused: ${builtTag}: ${
+              compile?.error || "the compiler gave no message"
+            }.`
+          : "Built from the Figma node you submitted. Approving writes it into the catalogue.";
+        setDesignPreview({
+          source: "ingest",
+          tag: builtTag,
+          name: details.target_node_name ?? "",
+          nodeId: details.target_node_id ?? nodeId,
+          alreadyInCatalogue: !!result.alreadyInCatalogue,
+          jobId,
+          draft,
+          collisions,
+          instances,
+          // THE DATA BINDING, IN THE PREVIEW — what this component will be given, from the rows the
+          // database holds (see `previewValues`). A tag with no row yet carries an empty list, which
+          // is a component being created rather than a value being hidden.
+          values: previewValues(
+            ((designTree.dataModel as Record<string, any>)?.session?.elements ?? []) as any[],
+            builtTag,
+          ),
+          // THE ANSWER STARTS UNSET, and unset means "add it as its own component" — the same
+          // default the tool commits as, stated in the panel's own consequence line.
+          collisionAnswer: null,
+          // THE FORM'S OWN WORDS, in the form's own order: the compile verdict first, because it is
+          // the one that changes what the next click does — then the no-address refusal, which is
+          // the form's pane-level sentence ("...a preview does not ask the catalogue what could
+          // draw it") extended with the one diagnostic the room has no other place for.
+          note: [
+            compileLine,
+            hasAddress
+              ? ""
+              : `Nothing to render — the ingest produced no element to draw, and a preview does not ask the catalogue what could draw it. (No draft address came back for job ${jobId}; the record is in backend/logs/figma-ingest.jsonl.)`,
+          ]
+            .filter(Boolean)
+            .join(" "),
+          facts: [
+            // STATED EITHER WAY. "It compiles" is a fact the form reports, and a fact left out when
+            // it is fine, and out when it is not, is silence in both directions.
+            { label: "Compiles", value: compileFailed ? "no — the approval will be refused" : "yes" },
+            { label: "Figma node", value: String(details.target_node_id ?? nodeId) },
+            details.target_node_name ? { label: "Layer", value: String(details.target_node_name) } : null,
+            details.target_node_type ? { label: "Type", value: String(details.target_node_type) } : null,
+            details.target_node_size ? { label: "Size", value: String(details.target_node_size) } : null,
+          ].filter(Boolean) as Array<{ label: string; value: string }>,
+        });
+        // The ingest also recorded this design's layers — read them back so the tree shows the node
+        // it just wrote, which is what the modal does with its own `layersKey`.
+        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
+      } catch (err) {
+        setDesignIngest({
+          busy: false,
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
+      } finally {
+        setDesignIngestBusy(false);
+      }
+    };
+    window.addEventListener("ingest-submit", onIngestSubmit);
+    return () => window.removeEventListener("ingest-submit", onIngestSubmit);
+  }, [designIngestBusy, setDesignIngest, currentDesignSession]);
+
+  /*
+   * ══ THE TWO RUN TRIGGERS, AND THE COLUMN THEY LAUNCH ═════════════════════════════════════════
+   *
+   * The owner's correlation, 2026-09-30: *"submit is run, selecting one of those components in that
+   * list is a run function. It's supposed to display it… It's basically a left navigation — you're
+   * loading those components and all of their meta-data just like you are on the react application
+   * for ingest."*
+   *
+   * On the Composer, RUN moves a view into the middle column and `workspace-layout` draws it. Here
+   * the same two facts are needed: something to draw (the preview state) and the layout REFERENCING
+   * the middle column — a column the tree does not reference is collapsed, which is
+   * workspace-layout's own contract and not a style. This function is both halves at once, because
+   * they are one act: a run produces something, and the column that shows it opens.
+   *
+   * Clearing it (null) closes the column again — a Discard leaves the room as it was before the run.
+   */
+  const setDesignPreview = useCallback((preview: Record<string, any> | null) => {
+    setDesignTree((prev) => {
+      const session = (prev.dataModel as Record<string, any>)?.session ?? {};
+      const tag = preview?.tag ? String(preview.tag) : "";
+
+      /*
+       * WHAT THIS SURFACE CAN DRAW, DECIDED BEFORE THE TREE IS WALKED.
+       *
+       * A REFERENCE TO AN ELEMENT THAT DOES NOT EXIST IS NOT DRAWN. The renderer reports it
+       * faithfully ("Resolved to <agent-flow>, which no element defines — nothing was drawn"), and
+       * that report is correct but it is not what this room should say: this room draws the design
+       * system's components, and what has no element here is named in words on the preview instead
+       * of drawn as a hole. `resolveTag` is the renderer's OWN resolver — imported, not
+       * re-implemented — so this can never disagree with what would be drawn.
+       *
+       * AND IT IS COMPUTED HERE, ABOVE THE MAP, FOR A MEASURED REASON: the callback below reads it,
+       * and the callback runs while the chain is being built. Declared after the chain it was in its
+       * temporal dead zone — `Cannot access 'drawable' before initialization` — which threw inside
+       * this element's effect and took the whole page down through the error boundary. The crash the
+       * owner saw was mine, and it was a `const` in the wrong place, not a leftover React callback.
+       */
+      const resolved = preview && tag ? resolveTag(tag) : null;
+      const drawable = !!resolved && !!customElements.get(resolved);
+
+      /*
+       * ── AND WHICH RUN PRODUCED THIS, BECAUSE THE TWO ARE DRAWN DIFFERENTLY ──────────────────
+       *
+       * A SUBMIT PRODUCES A DRAFT; A CLICK PRODUCES A COMPONENT. The two are NOT interchangeable
+       * even when they carry the same name — and that is the ordinary case here: a designer edits
+       * Figma and submits a node the catalogue already holds, so the draft's tag and the approved
+       * component's tag are the same string. Drawing that string means asking the renderer to
+       * resolve it, and the renderer resolves a name through the CATALOGUE — so the room drew the
+       * approved component and the fresh draft was never on screen at all. The owner, 2026-09-30:
+       * *"when I go to preview a change, I'm not seeing a change. I'm seeing the old lit component
+       * because it has the same name. It's just reloading it from the lit catalog. I want to use the
+       * temporary folder and it should be blind to whatever is in the lit catalog until I click
+       * approve."*
+       *
+       * SO A DRAFT IS DRAWN BY ITS FILE AND A CLICK BY ITS NAME. The draft's address travels on the
+       * ingest result (`preview.draft`: jobId, tag, modulePath, moduleUrl — the temporary file the
+       * backend wrote under `.preview/<jobId>/`), and `<draft-preview>` loads exactly that file
+       * inside a sandboxed document that cannot read the catalogue at all. A ROW CLICK KEEPS ITS
+       * CURRENT PATH: that component IS in the catalogue, so resolving its name is not a guess —
+       * it is the answer, and its bindings come with it.
+       */
+      const draft = preview?.source === "ingest" ? preview?.draft ?? null : null;
+      const drawsDraft = !!draft?.moduleUrl;
+
+      /*
+       * ── AND WHEN AN INGEST ANSWERS WITHOUT AN ADDRESS, NOTHING IS DRAWN. IT IS NOT FALLEN BACK.
+       *
+       * The tempting line here is "no address, so draw the catalogue's element under the tag" — and
+       * that line IS the defect this column was fixed to remove: it is how a designer who had just
+       * changed the design was shown the approved component instead. A missing address means the
+       * answer cannot say WHICH file it built, so the honest drawing is none, with the reason on the
+       * preview where the designer is looking. Substituting the catalogue's element would put a
+       * component on screen under a name that has two candidates — the exact ambiguity that started
+       * this (owner, 2026-09-30: *"I'm not seeing a change. I'm seeing the old lit component because
+       * it has the same name."*). A row clicked in the tree keeps the catalogue path, because there
+       * the component IS the catalogue's and the name is not ambiguous.
+       */
+      const drawsCatalogue = preview?.source !== "ingest" && !!preview && !!tag && drawable;
+
+      const components = prev.components
+        .filter((c: any) => {
+          // ONE RUN DRAWS ONE THING, so whichever drawing this run did not produce is REMOVED
+          // rather than left in the list — a stale entry kept behind is an entry a reference could
+          // still point at.
+          if (c.id === "preview-draw") return drawsDraft;
+          if (c.id === "preview-target") return drawsCatalogue;
+          return true;
+        })
+        .map((c: any) => {
+          // THE LAYOUT REFERENCES THE COLUMN — a column nothing references is not drawn.
+          if (c.id === "root") {
+            if (!c.children || typeof c.children !== "object") return c;
+            const children = { ...c.children };
+            if (preview) children.middle = "design-middle";
+            else delete children.middle;
+            return { ...c, children };
+          }
+          // THE PREVIEW NAMES ITS OWN DRAWING, by id, per the adjacency rule. The renderer
+          // instantiates it into the frame's slot — the frame component-preview renders — so the
+          // component a run loaded is DRAWN, not only described. A tag the resolver cannot claim is
+          // reported inside that frame by the renderer itself, never silently skipped.
+          if (c.id === "preview") {
+            return {
+              ...c,
+              children: drawsDraft
+                ? { draw: "preview-draw" }
+                : drawsCatalogue
+                  ? { draw: "preview-target" }
+                  : {},
+            };
+          }
+          // THE DRAFT, DRAWN FROM ITS OWN FILE. The element is bound to `/session/preview/draft` —
+          // the address the ingest returned — and it loads that module in a sandboxed document. No
+          // catalogue name is resolved for this drawing, which is the whole point of it.
+          if (c.id === "preview-draw") {
+            return { ...c, component: "draft-preview", draft: { path: "/session/preview/draft" } };
+          }
+          if (c.id === "preview-target") return { ...c, component: tag || c.component };
+          return c;
+        });
+
+      // The entry the reference points at. Emitted by the SHELL because WHICH component to draw is
+      // the run's answer and not the assembly's — the same reason the Composer's RUN moves a view
+      // into its middle column instead of the assembly guessing what was run.
+      if (drawsDraft) {
+        if (!components.some((c: any) => c.id === "preview-draw")) {
+          components.push({
+            id: "preview-draw",
+            component: "draft-preview",
+            draft: { path: "/session/preview/draft" },
+          });
+        }
+      } else if (drawsCatalogue && !components.some((c: any) => c.id === "preview-target")) {
+        /*
+         * PUSHED ONLY WHEN IT IS NOT THERE, and the guard is the whole of a bug the surface reported
+         * on itself (measured 2026-09-30): *"Surface has 1 problem — these were NOT rendered as
+         * written. preview-target ai-surface-sandbox: Duplicate id "preview-target" — ids are the
+         * join key for children, so the later entry replaced the earlier one."*
+         *
+         * The filter above KEEPS this entry while a catalogue component is being drawn, so pushing it
+         * again on every row click made two entries under one id — and the renderer's report is
+         * exactly right about the consequence: one of them was thrown away, silently, at render
+         * time. The entry's `component` is kept current by the map above (`component: tag ||
+         * c.component`), so this push exists for the FIRST row and nothing else.
+         */
+        // AND IT CARRIES THE COMPONENT'S OWN BINDINGS. Measured on the first build of this: the
+        // entry named the tag and nothing else, so the preview drew a real <trace-feed> whose
+        // `entries` prop was unset — the component rendered, in its frame, saying "waiting for the
+        // surface to bind /trace/entries". That is not that component's empty state; it is THIS
+        // ROOM holding the rows and not handing them over, and the owner read it on screen exactly
+        // as the failure it is (2026-09-30: *"I need to see failures. It should fail loud. Waiting
+        // for the surface to bind /trace/entries."*). So the room's OWN entry for the same
+        // component is cloned when there is one (the room already names TraceFeed as `trace-view`,
+        // bound to `/trace/entries`), and its paths come with it. Where the room holds no entry for
+        // that component, the bare name is all there is — and that component's own empty state is
+        // then the truth, not a defect.
+        //
+        // THE TWIN IS FOUND BY THE ELEMENT, NOT BY THE SPELLING. Comparing `c.component === tag`
+        // missed the pairing that matters: the room's entry says `TraceFeed` and the tree's row says
+        // `trace-feed`, and those are two names for one element — `resolveTag` is the app's own
+        // answer to "which element does this name draw", so it is the answer used here. Two names
+        // for one element matched by string equality is how an element came to be drawn without the
+        // data that was sitting in the model beside it.
+        const twin = prev.components.find(
+          (c: any) =>
+            c.id !== "preview-target" &&
+            c.id !== "preview-draw" &&
+            typeof c.component === "string" &&
+            resolveTag(c.component) === resolved,
+        );
+        components.push({ ...(twin ? { ...twin } : {}), id: "preview-target", component: tag });
+      }
+
+      return {
+        ...prev,
+        components,
+        dataModel: {
+          ...prev.dataModel,
+          session: {
+            ...session,
+            /*
+             * `/session/preview` IS WHAT THE FRAME DRAWS (component-preview: identity, facts, the two
+             * actions) AND `/session/preview/draft` IS WHAT THE DRAWING LOADS — the last ingest's
+             * address, read by <draft-preview> for the frame's "draw" slot. One run, one write, and
+             * the two readers take the half that is theirs; nothing derives the other's half.
+             */
+            preview: preview ?? undefined,
+          },
+        },
+      };
+    });
+  }, []);
+
+  /*
+   * ══ HER COLUMN'S WIDTH — ONE PLACE THAT DECIDES IT, AT THE TWO MOMENTS THAT DECIDE IT ═════════
+   *
+   * TWO NUMBERS, BECAUSE THE ROOM HAS TWO STATES.
+   *
+   * AT REST the design surface asks for `DESIGN_CHAT_PX` — the owner, 2026-09-30: *"You need to
+   * make the chat push further to the right, it's not closing enough. You don't have to collapse it
+   * all the way, but you should reduce it. It's too wide as there's no room for anything to load."*
+   * The element's own default is the Composer's `OPEN_CHAT_PX` (650px), which is right for a package
+   * whose middle column is read at a glance and wrong for a room whose middle column is a PREVIEW.
+   *
+   * WITH THE PREVIEW OPEN her column takes `PREVIEW_CHAT_PX` — the owner's next instruction, in this
+   * file's words at that constant: *"Make the chat panel reduced to 650 pixels that should be its
+   * target whenever the internal column appears on submit or when selecting a component."*
+   *
+   * BOTH ARE ASKED FOR THROUGH THE ELEMENT'S OWN `setColumnWidths` — the public call the save and
+   * restore use, never a private field and never a style override — and the Composer's own default
+   * is untouched, because this runs only for the design renderer.
+   *
+   * ── WHY THE TWO ARE ONE EFFECT ───────────────────────────────────────────────────────────────
+   * They write the same field, and two effects writing one field are two answers to one question.
+   * Kept apart they also had to agree about an edge each tracked privately; here the precedence is
+   * one `if`: the preview's width wins while the column is open, the room's width is for the room at
+   * rest, and neither is applied twice.
+   *
+   * ── AND WHY IT FIRES ON AN EDGE RATHER THAN ON EVERY RENDER ──────────────────────────────────
+   * THE WIDTHS BELONG TO WHOEVER DRAGS THEM. `setColumnWidths` records a width as the operator's
+   * decision, and an effect keyed on the whole tree fights that decision on every re-render — after
+   * an approve, after a second selection, over a width just set by hand. That fight was measured in
+   * the running room on 2026-09-30: a run put her column at 650, the next row selection put it back
+   * to 380, and a width set by hand to 500 became 380 one selection later. It is the owner's own
+   * complaint from the column beside it: *"It's jerking away from me."* So each width is applied at
+   * the one moment it is the room's business — the room drawing, and the preview column appearing —
+   * and whatever happens to the width afterwards stands.
+   *
+   * ── AND "APPLIED" MEANS THE CALL ACTUALLY LANDED ─────────────────────────────────────────────
+   * The first tree that arrives has no `workspace-layout` in the renderer to speak to yet, so an
+   * attempt made then does nothing — and treating it as done left the room on the element's own
+   * equal split: 950px of her column in a 1900px room, the exact width the owner asked to be rid of.
+   * The wait is the one this file already makes when a package opens against the same race
+   * (`openThePrompt` below, "the layout arrives with the surface"): retry frame by frame, and give
+   * up quietly — an element that never appears is a room that is not drawn.
+   */
+  const roomShapeSetRef = useRef(false);
+  const previewWidthSetRef = useRef(false);
+  useEffect(() => {
+    if (!isDesignView) {
+      // Leaving the room forgets both, so coming back establishes them again.
+      roomShapeSetRef.current = false;
+      previewWidthSetRef.current = false;
+      return;
+    }
+    if (!designTree.components.length) return;
+
+    // WHETHER THE COLUMN IS OPEN IS THE TREE'S FACT, not the layout element's: the reference lives
+    // in `components.children.middle` — the one line `setDesignPreview` writes for a Submit and for
+    // a selected row alike — and reading it back off the DOM would be a second answer to it.
+    const root = designTree.components.find((c: any) => c.id === "root") as
+      | { children?: Record<string, unknown> }
+      | undefined;
+    const previewOpen = !!root?.children?.middle;
+    if (!previewOpen) previewWidthSetRef.current = false;
+
+    let equalise = false;
+    if (previewOpen && !previewWidthSetRef.current) equalise = true;
+    else if (!previewOpen && !roomShapeSetRef.current) equalise = true;
+    if (!equalise) return;
+
+    let frames = 0;
+    let cancelled = false;
+    const apply = () => {
+      if (cancelled) return;
+      const ws = (designRendererRef.current as any)?.shadowRoot?.querySelector("workspace-layout");
+      if (ws?.splitEqually) {
+        ws.splitEqually();
+        if (previewOpen) previewWidthSetRef.current = true;
+        else roomShapeSetRef.current = true;
+        return;
+      }
+      if (++frames >= 40) return;
+      requestAnimationFrame(apply);
+    };
+    apply();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDesignView, designTree]);
+
+  useEffect(() => {
+    /** The room's own rows, read fresh — the rows a row-click resolves against. */
+    const rowsOf = () => ((designTree.dataModel as Record<string, any>)?.session?.elements ?? []) as any[];
+
+    // ── RUN ONE: A ROW CLICKED IN THE TREE ──────────────────────────────────────────────────────
+    // `figma-layers-view` is a NAVIGATION and says so in its own words ("clicking a row is how you
+    // get to that component… a tree whose rows only expand is a list of names you cannot go anywhere
+    // from"). It dispatches `open-component` and nothing had ever answered it.
+    const onOpenComponent = async (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          tag?: string;
+          facts?: Array<{ label: string; value: string }>;
+          description?: string;
+        }>
+      ).detail;
+      const tag = String(detail?.tag ?? "");
+      if (!tag) return;
+      /*
+       * ── THE ROW'S OTHER FACTS ARRIVE WITH THE CLICK (owner, 2026-09-30) ─────────────────────
+       *
+       * A component row in the list shows three things now — the name, the code and the description
+       * — and the owner's rule for what it no longer shows is *"the other data should be in the
+       * metadata in the preview panel."* That data is measured by the TREE (it read the catalogue
+       * and the audit), so the tree sends it with the click and this writes it down; re-deriving it
+       * here — fetching the audit again, resolving the drawn-by index again — would be a second
+       * reader of the same facts, and the two would eventually disagree about the row the designer
+       * is looking at.
+       *
+       * THE ROOM'S OWN MODEL STILL CONTRIBUTES what the catalogue cannot know: which catalogues
+       * declared the tag, whether it was ingested, when, and the last verdict. Labels already
+       * carried by the click are skipped, so the panel never shows one fact twice.
+       */
+      const carried = Array.isArray(detail?.facts) ? detail.facts : [];
+      const carriedLabels = new Set(carried.map((f) => f.label));
+      /*
+       * AND THE CANVAS IS NOT LOADED FOR THIS ROOM. An earlier pass called the Composer's
+       * `loadCanvasElements()` here so that a preview of the AgentFlow row would draw. The owner,
+       * 2026-09-30: *"Make sure you've got — we don't need canvas elements. This thing is
+       * completely different from the composer, it's just using the same. … This is not agent flow."*
+       * He is right: the canvas is the COMPOSER's drawing surface, and this room draws components of
+       * the design system. Pulling the Composer's canvas, its artwork and its code into this column
+       * to satisfy one row would be exactly the conflation he is warning against. What a row whose
+       * element is not part of this surface gets instead is said in words, below.
+       */
+      const row = rowsOf().find((r) => r.id === tag || r.name === tag || r.key === tag);
+      // WHAT THIS SURFACE CAN DRAW, SAID RATHER THAN LEFT AS A HOLE. The Composer's canvas pair
+      // (`AgentFlow` / `AgentCanvas`) are catalogue entries of the design system but not elements
+      // of this interface — its drawings belong to the Composer's run view and are not loaded here
+      // on purpose. A row like that gets its facts and one sentence, which is the truth about it;
+      // an empty frame would read as a failure and a renderer error would read as a bug.
+      const resolvedTag = resolveTag(tag);
+      const drawableHere = !!resolvedTag && !!customElements.get(resolvedTag);
+      setDesignPreview({
+        source: "open",
+        tag,
+        name: row?.name ?? tag,
+        // THE SAME DATA BINDING A DRAFT CARRIES (see `previewValues`): a row opened from the list is
+        // the component the catalogue holds, and these are the values it is given in the room.
+        values: previewValues(rowsOf(), tag),
+        note: drawableHere
+          ? /*
+             * THE DESCRIPTION IN FULL, FROM THE ROW THAT CARRIED IT. The tile shows the catalogue's
+             * first sentence (the design's line is one line); the whole text is what belongs in the
+             * panel, and it is also what a row with no model row behind it has. Where neither the
+             * tree nor the model has one, that absence is said rather than left blank — a blank line
+             * under a drawn component reads as "there is nothing to know about this one", a claim
+             * nobody made.
+             */
+            detail?.description ||
+            row?.description ||
+            `No description is recorded for "${tag}" on this surface — the element is drawn, and what is known about it is not.`
+          : `${row?.name ?? tag} is declared in the catalogue but has no element on this surface${resolvedTag ? ` (${resolvedTag})` : ""} — its drawing belongs to the Composer's run view, and this column draws the design system's components.`, 
+        alreadyInCatalogue: row ? !row.removed : true,
+        facts: (() => {
+          /*
+           * THE ROW'S OWN FACTS FIRST — they are about the component itself (its shape, what draws
+           * it, whether the app uses it, what it accepts, the audit's verdict, the node it came
+           * from). The room's model follows with what only it knows.
+           *
+           * AND NOTHING IS SAID TWICE. Two labels carrying one sentence is not two facts: the
+           * model's `status` and its last verdict are often the same catalog-check string, so
+           * TraceFeed's panel read "Ingestion: catalog-check: …" and "Last verdict: catalog-check:
+           * …" one line apart (measured 2026-09-30). A LABEL already carried by the click is
+           * skipped, and so is a VALUE already shown — whichever label reached it first keeps it,
+           * because the second telling adds nothing a reader can use.
+           */
+          const said = new Set(carried.map((f) => f.value));
+          const add = (f: { label: string; value: string } | null) => {
+            if (!f || said.has(f.value)) return null;
+            said.add(f.value);
+            return f;
+          };
+          /*
+           * THE VERDICT IS LISTED BEFORE THE STATUS, so that a row whose status IS the verdict —
+           * which is most of these rows, the catalog-check string — shows it once, under the label
+           * that names it: "Last verdict". A row whose status is a status ("Not ingested",
+           * "ingested") is untouched, because the two values differ and both are kept.
+           */
+          return [
+            ...carried,
+            add(row?.catalogs ? { label: "Catalogues", value: String(row.catalogs) } : null),
+            add(row?.last_ingest?.verdict ? { label: "Last verdict", value: String(row.last_ingest.verdict) } : null),
+            add(
+              row?.figma?.node_id && !carriedLabels.has("Figma node")
+                ? { label: "Figma node", value: String(row.figma.node_id) }
+                : null,
+            ),
+            add(row?.status ? { label: "Ingestion", value: String(row.status) } : null),
+          ].filter(Boolean) as Array<{ label: string; value: string }>;
+        })(),
+      });
+    };
+
+    // ── THE PREVIEW'S TWO ACTS ─────────────────────────────────────────────────────────────────
+    const onPreviewApprove = async (event: Event) => {
+      const preview = (event as CustomEvent<{ preview?: Record<string, any> }>).detail?.preview;
+      const jobId = preview?.jobId;
+      // A row opened from the list has no job behind it: that component is already in the
+      // catalogue, and approving it is not a thing this room can do. Said plainly rather than
+      // firing a call that cannot succeed.
+      if (!jobId) {
+        setDesignIngest({ busy: false, message: "That component is already in the catalogue — there is nothing to approve. Approve is for a component an ingest just built." });
+        return;
+      }
+      setDesignIngest({ busy: true, message: "" });
+      try {
+        const res = await apiFetch(`${API_BASE}/figma/commit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobId,
+            /*
+             * THE DESIGNER'S ANSWER OUTRANKS THE TAG'S OWN HISTORY. A collision answer names the
+             * component this draft is to be written UNDER, replacing it — that is the one thing the
+             * question exists for. With no answer, the room keeps the behaviour it had: a tag the
+             * catalogue already holds is replaced by this draft (the re-ingest case), and a new one
+             * is added. An unanswered collision commits the same way the tool's does — as its own
+             * component — which is the default the panel states in words.
+             */
+            overwriteTag: preview?.collisionAnswer || (preview?.alreadyInCatalogue ? preview?.tag : undefined),
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.detail || "Approve failed");
+        const written = Array.isArray(data?.written) ? data.written.length : 0;
+        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
+        /*
+         * THE DRAWING DOES NOT MOVE. The component is in the catalogue now, and the tempting next
+         * step — re-point the column at the catalogue's element, since it holds these bytes — is
+         * exactly the resolution this column was fixed to stop doing: it would re-render the
+         * drawing through the catalogue, and for a re-ingest of an existing node that is where the
+         * room already showed the owner the wrong element once. What was approved stays what is
+         * drawn, from the draft's own file, and the note says what happened.
+         *
+         * `jobId` IS DROPPED so the approve is spent: the server dropped the draft with the commit
+         * (`_drop_preview`), so a second press has nothing behind it. With no job on the preview,
+         * the press answers with the sentence for "already in the catalogue" instead of firing a
+         * call that can only 404.
+         */
+          /*
+           * AND THEN THE PAGE RELOADS, BECAUSE NOTHING ELSE CAN SHOW WHAT WAS APPROVED.
+           *
+           * The file is on disk — measured, the catalogue's `f-40001207-3497.ts` carries the mtime
+           * of its approve to the second — and the temporary draft is DELETED by the same call
+           * (`_drop_preview`), so there is nothing left in the preview folder and nothing left to
+           * lose by reloading.
+           *
+           * BUT THE REST OF THE PAGE CANNOT SEE THE NEW FILE. A custom element is defined once per
+           * document — `customElements.define` is a no-op the second time — so every place the
+           * catalogue is drawn BY NAME keeps painting the version this page loaded: every row in the
+           * left list, and every click that opens one in this column. Measured 2026-09-30: the owner
+           * approved a replacement four times and each time concluded the pipeline had not replaced
+           * it, because the list — drawn by `<f-40001207-3497>` itself — still showed the old
+           * component. That is not a stale file and not a cache: the file is new and the page cannot
+           * see it.
+           *
+           * SO THE APPROVE RELOADS, which is the only mechanism there is, and the sentence is
+           * painted first — a reload with no reason is the same unexplained behaviour this room has
+           * spent the night removing. The delay is what makes the sentence readable; it is a UI
+           * affordance and not a measurement, and nothing depends on its exact length.
+           */
+          setDesignIngest({ busy: false, message: "", refresh: Date.now() });
+          setDesignPreview({
+            ...preview,
+            jobId: undefined,
+            alreadyInCatalogue: true,
+            note:
+              `Approved into the catalogue${written ? ` — ${written} file${written === 1 ? "" : "s"} written` : ""}. ` +
+              `Reloading so the list draws what was approved — a page holds the component version it loaded, ` +
+              `so without this the row you click would still be the old one.`,
+          });
+          window.setTimeout(() => window.location.reload(), 900);
+      } catch (err) {
+        setDesignIngest({ busy: false, message: err instanceof Error ? err.message : "Approve failed" });
+      }
+    };
+
+    /*
+     * DISCARD, AND THE TEMPORARY FILE GOES WITH IT (2026-09-30). This cleared the pane and told the
+     * server nothing, so the draft stayed held and `frontend/.preview/<jobId>/` stayed on disk after
+     * a discard — the pane said the work was thrown away while the folder said it was not. Discard
+     * is a decision the designer made, and the server has one call for it (`POST /api/figma/discard`
+     * — the same call the modal's own discard makes), which goes through `_drop_preview` with every
+     * other destruction trigger. So it is made, and it is made for the DRAFT's job: a row opened
+     * from the list has no draft and nothing to discard.
+     */
+    /*
+     * ── THE DESIGNER'S ANSWER TO THE COLLISION QUESTION ─────────────────────────────────────────
+     *
+     * The panel asks (component-preview's question block) and dispatches the answer; this records
+     * it on the preview so the approve can send it and so the panel draws which answer is standing.
+     * It writes the ROOM's state and never the catalogue: approving is what writes, and the answer
+     * is one of the things that approve carries (`overwriteTag`).
+     *
+     * THE ANSWER IS READ BACK OFF THE PREVIEW rather than kept in a second variable: the preview is
+     * where every other fact about this run lives, and a copy beside it would be a second place that
+     * can disagree about what was chosen.
+     */
+    const onCollisionAnswer = (event: Event) => {
+      const overwriteTag = (event as CustomEvent<{ overwriteTag?: string | null }>).detail?.overwriteTag ?? null;
+      const current = (designTree.dataModel as Record<string, any>)?.session?.preview;
+      if (!current) return;
+      setDesignPreview({ ...current, collisionAnswer: overwriteTag });
+    };
+
+    const onPreviewDiscard = async (event: Event) => {      const preview = (event as CustomEvent<{ preview?: Record<string, any> }>).detail?.preview;
+      const jobId = preview?.draft?.jobId ?? preview?.jobId;
+      setDesignPreview(null);
+      if (!jobId) {
+        setDesignIngest({ busy: false, message: "" });
+        return;
+      }
+      try {
+        const res = await apiFetch(`${API_BASE}/figma/discard`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId }),
+        });
+        if (!res.ok) throw new Error(`the server answered ${res.status}`);
+        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
+      } catch (err) {
+        // THE PANE IS CLEARED EITHER WAY, AND THE FAILURE IS SAID RATHER THAN SWALLOWED. The draft
+        // lives in the server's memory, so a server that cannot be reached has already lost it —
+        // holding the pane open would hold the designer hostage to a backend that is down. But a
+        // discard that never arrived is a fact, and this sentence is the same one the ingest form
+        // shows for the same failure, so the two panes cannot disagree about what happened.
+        setDesignIngest({
+          busy: false,
+          message:
+            `A draft was cleared here but the server was not told: ${err instanceof Error ? err.message : String(err)}. ` +
+            `Nothing was written to the catalogue, so nothing is left behind — the temporary file stays in frontend/.preview until a new ingest replaces it or the screen leaves.`,
+          refresh: Date.now(),
+        });
+      }
+    };
+
+    /*
+     * REMOVE, AND IT IS THE CALL THE INGEST FORM ALREADY MAKES.
+     *
+     * `POST /api/figma/remove` takes a component out of everything the catalogue holds it in — its
+     * file, the Figma map, the allowlist, the catalogue, the layer record and the artwork it was
+     * written with (`_remove_component`, backend/routes/figma.py) — so this runs that call and
+     * nothing else. A view never writes to the catalogue: the panel asks, and this is the asking.
+     *
+     * THE CONFIRMATION IS THE PANEL'S, NOT THIS ONE'S. `component-preview` makes it two clicks and
+     * disarms when the preview changes, so by the time this runs the person has named the component
+     * twice. Asking again here would be the same question in two places, and the second one is the
+     * one that would drift.
+     *
+     * A FAILURE IS SAID RATHER THAN SWALLOWED, in the panel where the click was made — and the
+     * wording is deliberate: "nothing was removed" is the only thing that can be promised when the
+     * server could not be reached, because the server may have removed it and failed on the reply.
+     */
+    const onPreviewRemove = async (event: Event) => {
+      const preview = (event as CustomEvent<{ preview?: Record<string, any> }>).detail?.preview;
+      const tag = String(preview?.tag ?? "");
+      if (!tag) return;
+      setDesignIngest({ busy: true, message: "" });
+      try {
+        const res = await apiFetch(`${API_BASE}/figma/remove`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tag, reason: "removed from the catalogue preview" }),
+        });
+        if (!res.ok) {
+          /*
+           * A REFUSAL IS NOT A FAILURE, AND IT CARRIES ITS REASON. `409` is the liveness guard at
+           * work: the component is named by the application's own code and removing it would break
+           * what names it. The server sends `{note, namedBy, nextStep}` — the files that name it and
+           * what to do — so this shows THAT rather than "the server answered 409", which would leave
+           * the person with a number and no next step. Any other status has no such body and falls
+           * back to the status, which is the honest thing to show when nothing else is known.
+           */
+          const body = await res.json().catch(() => null);
+          const detail = body?.detail;
+          if (detail && typeof detail === "object" && detail.note) {
+            throw new Error(`${detail.note} ${detail.nextStep ?? ""}`.trim());
+          }
+          throw new Error(
+            typeof detail === "string" ? detail : `the server answered ${res.status}`,
+          );
+        }
+        setDesignPreview(null);
+        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
+      } catch (err) {
+        setDesignIngest({
+          busy: false,
+          message:
+            `Nothing was removed from here, and the server was not told: ${err instanceof Error ? err.message : String(err)}. ` +
+            `The catalogue still holds ${tag} until a removal actually lands.`,
+          refresh: Date.now(),
+        });
+      }
+    };
+
+    window.addEventListener("open-component", onOpenComponent);
+    window.addEventListener("preview-approve", onPreviewApprove);
+    window.addEventListener("preview-discard", onPreviewDiscard);
+    window.addEventListener("preview-remove", onPreviewRemove);
+    window.addEventListener("preview-collision-answer", onCollisionAnswer);
+    return () => {
+      window.removeEventListener("open-component", onOpenComponent);
+      window.removeEventListener("preview-approve", onPreviewApprove);
+      window.removeEventListener("preview-discard", onPreviewDiscard);
+      window.removeEventListener("preview-remove", onPreviewRemove);
+      // THE ONE THAT WAS NEVER BEING REMOVED. It was added above and left behind on every re-run of
+      // this effect, so each pass stacked another listener that answered the collision question.
+      window.removeEventListener("preview-collision-answer", onCollisionAnswer);
+    };
+  }, [designTree, setDesignIngest, setDesignPreview]);
+
   const handleTabChangeWithGate = useCallback(async (tabId: string | null) => {
     // ══════════════════════════════════════════════════════════════════════
     // A2UI v0.9: Tab clicks are AI commands
@@ -4081,25 +5328,83 @@ export default function Index({
     }
 
     /*
-     * DESIGN IS A SECTION, NOT A DOOR — it changes tab and nothing else.
+     * A SECTION IS A SURFACE LIKE EVERY SURFACE — so it ASSEMBLES, and this branch asks.
      *
-     * It was a door for an afternoon: the tab dispatched `open-ingest` and the menu opened the
-     * ingest interface as a modal over everything. The owner, 2026-09-30: "the overlay now is
-     * not an overlay. It's actually built-in… It's not gonna be closed like a modal. So it
-     * should seat itself underneath the navigation just like the composer does… make it a
-     * section now."
+     * The owner, 2026-09-30, on finding that Design did not: *"No, no it's a surface. It's a
+     * surface just like every surface. I'm not seeing assembly happening. I see a section
+     * loading, but I'm getting a jarring jerk when I click on design — I'm not getting the
+     * assembly process that we have on composer."* He was right, and this is what he was seeing:
      *
-     * So there is no event and no modal here. The section is rendered by the `workspace` slot
-     * below, which is the same region the Composer occupies — the sandbox projects `workspace`
-     * for every non-console tab, so Design lands there by the existing routing and needs no new
-     * slot. Leaving the tab is how you leave the section.
+     * THIS BRANCH USED TO RETURN WITHOUT ASKING. It moved the header indicator and stopped, so
+     * no `assemble-surface` request was ever made — and because that request is what sets the
+     * assembling flag, the sandbox never projected its `spinner` slot either. The React tree in
+     * the slot simply swapped its content in one paint, which is what a web page does and
+     * nothing like a surface arriving. The model was never asked anything.
      *
-     * The left menu's own "Ingest Design" item still opens it as a modal, by the owner's earlier
-     * instruction that the item stay separate. One body, two frames — see `variant` on
-     * IngestModal.
+     * `render-section:<id>` is new on the server for the same reason: `assemble-surface` accepted
+     * only render-console, render-composer, render-session and render-run, so asking for a section
+     * would have been a 400. A section assembles the Composer's own tree — the same LAYOUT
+     * CONTRACT, the same five slots — because the owner asked for that architecture reused:
+     * *"I need you to reuse the same architectural structure that we currently use for composer."*
+     *
+     * Product, Development and Governance come through here too. They inherited the same defect
+     * from the line below, which has read "Other tabs - just switch for now (TODO: wire to AI
+     * assembly)" since before this work began — so no unbuilt tab in this shell has ever
+     * assembled.
+     *
+     * The left menu's own "Ingest Design" item still opens the ingest as a modal, unchanged.
      */
     if (tabId === 'design') {
+      // DESIGN GOES THROUGH ITS OWN PROCESS. Moving the indicator and asking Design's own
+      // assembly — nothing of the Composer's is called, so nothing of the Composer's can happen:
+      // the tab stays where the person put it, and no package is adopted.
       handleHeaderTabChange('design');
+      console.log('🤖 [A2UI] Design clicked → intent: render-design (its own process)');
+      void assembleDesignSurface();
+      return;
+    }
+
+    if (SECTION_TABS.includes(tabId || '')) {
+      /*
+       * A SECTION ASSEMBLES, AND IT TOUCHES NOTHING OF THE COMPOSER'S.
+       *
+       * THIS BRANCH HELD TWO LINES IT SHOULD NEVER HAVE HAD, and they did real damage on
+       * 2026-09-30: the owner clicked a section tab and came back to an empty Composer, reading
+       * it as every package being gone. Nothing was lost — 226 rows, 18 conversations, 0 deleted,
+       * verified — but the UI had cleared WHICH PACKAGE WAS OPEN, and these two lines are why:
+       *
+       *   `seat?.clearThread?.()`  Lifted from the Composer's branch, where it exists to empty the
+       *                            seat for a FRESH package. A section has no business clearing
+       *                            the Composer's seat.
+       *
+       *   `session_id: null`       The Composer's "there is no current package" argument. Copied
+       *   `session_title: ''`      here it told the app the open package was gone — and the
+       *                            assembly's failure path runs `setCurrentPromptSession(null)`,
+       *                            which then made it true.
+       *
+       * Both are gone. And the two fields that replace them are the CONSOLE's own precedent, not
+       * a new idea: `current_surface` names the tab being opened rather than the one being left
+       * (so the server cannot read this as a Composer navigation), and `has_unsaved_changes:
+       * false` says the same thing the console says — *"read-only navigation; unsaved changes in
+       * the composer do not block it"* — because a section cannot discard somebody's work.
+       */
+      handleHeaderTabChange(tabId);
+      /*
+       * AND A DEAD TAB LOADS NOTHING — see DEAD_TABS above for the owner's instruction and for why
+       * the server keeps its `render-section:<id>` path. The indicator moves, no request is made,
+       * no surface is adopted and no package is touched, so clicking Product, Development or
+       * Governance leaves the room exactly as it was.
+       */
+      if (isDeadTab) {
+        console.log(`🤖 [A2UI] ${tabId} clicked → a stub tab: nothing is loaded`);
+        return;
+      }
+      console.log(`🤖 [A2UI] ${tabId} clicked → intent: render-section:${tabId}`);
+      await assembleSurfaceThenRepairs(`render-section:${tabId}`, {
+        ...context,
+        current_surface: tabId,
+        has_unsaved_changes: false,
+      });
       return;
     }
 
@@ -6564,7 +7869,7 @@ export default function Index({
                      BEHIND this slot and outside the viewport's fade — so the waves run
                      unbroken from the spinner through to the assembled console instead of
                      fading out and back in mid-transition. The composer keeps its image. */}
-                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? 'transparent' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? 'none' : `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? 'transparent' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? 'none' : `url(${isDesignView ? designSectionBackground : composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
                   <div className="w-8 h-8 border-4 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
                   <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
@@ -6640,29 +7945,8 @@ export default function Index({
                 {/* slot="workspace" — AI-driven Lit tree (A2UI v0.9.1).
                     Slots are the loading contract. AI fills them with prompt blocks.
                     When assembly FAILS, show the error — no hiding. */}
-                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `url(${composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
-                  {/* ── DESIGN: THE INGEST INTERFACE AS A SECTION ──────────────────────
-                      It sits in this slot because that is where the Composer sits — the sandbox
-                      projects `workspace` for every non-console tab, so Design is seated under
-                      the navigation by the existing routing and needs no slot of its own.
-
-                      THE BODY IS THE SAME TOOL the left menu opens as a modal; only the frame
-                      differs (`variant="section"`: no overlay, no z-index, no Close). Nothing is
-                      assembled for this tab — asking the model for a surface here would be a
-                      model call that draws nothing, because this content is not a surface.
-
-                      The Composer is untouched by this and blind to it: no session is read, no
-                      package is opened, and the section holds no surface state. */}
-                  {headerTab === 'design' ? (
-                    <IngestModal
-                      variant="section"
-                      open
-                      onClose={() => {}}
-                      apiFetch={apiFetch}
-                      sessionId={currentPromptSession?.id ?? null}
-                      sessionTitle={currentPromptSession?.title ?? null}
-                    />
-                  ) : aiAssemblyFailed ? (
+                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `url(${isDesignView ? designSectionBackground : composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                  {aiAssemblyFailed ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
                       {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc
                           <pre>, while <error-banner> sat in the catalog, granted to every role,
@@ -6714,8 +7998,85 @@ export default function Index({
                       )}
                     </div>
                   ) : (
-                    !isConsoleView && <a2ui-renderer ref={composerRendererRef} />
-                  )}                </div>
+                    /* TWO RENDERERS, ONE CATALOGUE. Design mounts its OWN instance — its own
+                       Grace, its own container, its own everything — drawing the same components
+                       from the same catalogue as the Composer's. The `key` is what makes them
+                       two mounts rather than one element whose props changed: without it React
+                       reuses the element and the second room would inherit the first's drawn
+                       surface.
+
+                       AND NOTHING AT ALL FOR A DEAD TAB — see DEAD_TABS. Without this branch the
+                       three stubs fell through to the COMPOSER's renderer, which would have drawn
+                       whatever composer surface happened to be in it: a room showing another
+                       room's contents, which is the opposite of "should not load anything". */
+                    !isConsoleView && (isDeadTab
+                      ? null
+                      : headerTab === 'design'
+                        ? <a2ui-renderer key="design-render" ref={designRendererRef} />
+                        : <a2ui-renderer key="composer-render" ref={composerRendererRef} />)
+                  )}
+                  {/*
+                    ══ THE INJECTION ═══════════════════════════════════════════════════════
+                    THE INGEST, PORTED INTO THE ROOM'S SLOTS.
+
+                    The owner, 2026-09-30: *"you don't replace, you inject — you're just
+                    putting that… what you've got is unstyled, it has no theme, it's just the
+                    application the way you built it. And we're just gonna port that into the
+                    slots."* And on what does the porting: *"Grace will have to assemble it or
+                    the AI assembler will have to call it through the design assembly
+                    renderer."*
+
+                    So the assembler emits the CONTAINER (`render-design`), the design renderer
+                    draws it, and this portal puts the ingest's three regions INSIDE it — the
+                    frame and the theme come from the container, the content comes from the
+                    tool. `variant="section"` is what makes that a hand-over and not a copy:
+                    it returns the three regions as a React fragment, with no wrapper element
+                    of its own, so each one lands as a DIRECT CHILD of the room's
+                    `<workspace-layout>` and is projected by its own `slot` attribute —
+                    `left` (the rail: Figma URL, catalogues, the component tree), `middle`
+                    (the output column: the preview) and `right` (Grace). A container inside a
+                    container is what made the first attempt look like a copy of the modal.
+
+                    WHY A PORTAL AND NOT COMPONENTS IN THE SURFACE. The regions are React and
+                    the room is Lit, drawn in a shadow root from a component tree whose entries
+                    are catalogue TAGS. React elements are not tags and the ingest is not in
+                    the catalogue — it is what writes it — so the surface cannot carry them.
+                    The portal is the join: React renders them, the DOM places them, the
+                    container's slots project them. And it is rendered ONLY for the design room
+                    and ONLY once the container exists, so the Composer's surface — which draws
+                    its own tree with the same catalogue — is untouched by any of this.
+
+                    THE INGEST IS NOT A PACKAGE AND IS HANDED NO SESSION. Design's own
+                    container is the record (`currentDesignSession`), and no id from it is
+                    passed as a prompt session: a click in Design writes nothing the Composer
+                    owns, and this is where that would otherwise leak in.
+
+                    `onClose` does nothing, deliberately: in `section` there is no overlay and
+                    no Close — leaving the tab is how you leave it.
+                  */}
+                  {/*
+                    ══ NOTHING IS MOUNTED INTO THIS ROOM FROM HERE ══════════════════════════
+                    It was here: a portal that put the ingestion tool's React regions
+                    (`IngestModal variant="section"`) inside the room's own `<workspace-layout>`.
+                    Removed for good on the owner's instruction, 2026-09-30: *"stop building
+                    react… finish the goddamn task."*
+
+                    WHY IT CANNOT COME BACK. The rules this repository runs on say a surface is
+                    an ADJACENCY LIST — "children come from the envelope's ID references, NEVER
+                    from markup inside a component's own template" — and that the two kinds of
+                    chat seat are never interchangeable: a HOST seat is mounted by the shell
+                    outside a surface, a SURFACE seat is emitted inside the assembly and must
+                    carry a conversation id. React regions appended to a shadow root's own child
+                    list are neither: their `slot` attributes project nothing there (a shadow
+                    root projects its LIGHT DOM, and those nodes were not it), so they were drawn
+                    loose BENEATH the room. Measured on the live page: the layout at y = −129
+                    with a 202px React block at y = 535 pushing the whole design up. The room's
+                    panes are the assembled surface's and nothing else's.
+
+                    The ingest tool itself is untouched and still opens from the left menu, which
+                    is what a host mount is for.
+                  */}
+                </div>
             </ai-surface-sandbox>
           </SentryErrorBoundary>
 

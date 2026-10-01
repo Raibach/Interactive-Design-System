@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef, type ReactNode } from "react";
+// A region whose seat is elsewhere is rendered THROUGH React into that element (see the `seats`
+// prop): it becomes a child of the element that owns the hole, instead of a loose node in the room
+// container's light DOM.
+import { createPortal } from "react-dom";
 import { parseFigmaUrl } from "@/utils/figmaUrl";
 import { loadDrawn, drawnBy, tagFor, type DrawnIndex } from "@/shared/component-drawn-by";
 import { contractFor, catalogEntryFacts } from "@/shared/component-contract";
@@ -6,6 +10,20 @@ import { nodeIdentity, nodeLocation } from "@/shared/node-id";
 // Side-effect import: registration is what makes the tag draw. An element that is never
 // imported is never defined, and the layer tree below the drafts would be an empty box.
 import "@/components/lit/figma-layers-view";
+// The Design section's three columns are the Composer's own element. It is IMPORTED here rather
+// than in main.tsx for the same reason the view above is: this section is what uses it, and the
+// element already registers itself on import.
+//
+// THIS WAS A COPY FOR AN HOUR AND IS NOT ONE. The owner, 2026-09-30, reversing that call:
+// *"I'm not gonna be able to copy. We're not gonna be able to copy. You're gonna have to use the
+// same lit components in the same behavior inside of design… I want to just reuse the lit
+// components for the composer. I will just replace what they hold."*
+//
+// So there is no `design-workspace-layout`. The same element serves every section, and what a
+// section IS comes from what it puts in the slots — which is the part he intends to replace.
+// The name of the copy went with it: a second tag would have been a second thing to maintain
+// while both still had to behave the same.
+import "@/components/lit/workspace-layout";
 
 /**
  * Ingest Figma Design — the designer's end of the ingest pipeline.
@@ -317,9 +335,63 @@ interface IngestModalProps {
    * THE BODY IS SHARED. Only the frame differs, so the two can never drift into two tools.
    */
   variant?: 'modal' | 'section';
+
+  /**
+   * THE SEATS — WHERE EACH REGION IS LOADED, WHEN THE HOST HAS CONTAINERS FOR THE COLUMNS.
+   *
+   * A section's three regions carry `slot="left" | "middle" | "right"` and are handed to the room's
+   * `<workspace-layout>`, which projects each into its named pane. That is the default and needs no
+   * prop: the container's slots ARE the projection.
+   *
+   * A PANE IS NOT A CONTAINER, THOUGH. The design's middle column is its own element with a HOLE
+   * (`design-middle-container`), and its content belongs INSIDE it. There is a measured second
+   * reason as well (2026-09-30): nodes React appends to the room container's light DOM are
+   * unmanaged by lit-html, which owns that same child list, so they are displaced when lit
+   * re-renders — and every change in a slot's assignment makes workspace-layout re-baseline its
+   * split. The owner felt both: *"I can't close the container. I can't grab a hold of the
+   * grippers. It's jerking away from me."*
+   *
+   * So a host that HAS a container passes it here and the region is portaled INTO it: ONE instance
+   * of this tool, ONE state, and each region seated in the element that owns its hole. A region
+   * whose seat is absent is returned where it stands, exactly as before this prop existed.
+   */
+  seats?: Partial<Record<'left' | 'middle' | 'right', HTMLElement | null>>;
+
+  /**
+   * IS THE OUTPUT COLUMN DRAWING SOMETHING — the same fact a Run is for the Composer.
+   *
+   * The design's third column is collapsed until there is something to put in it — the owner,
+   * 2026-09-30: *"whenever I click on Preview or submit that operates, just like run on the
+   * composer. It's the same behavior when I select one of the components in the component tree
+   * that operates just like run in the composer. if the Preview window is already open then
+   * there's no reason to reopen it right, because it's open."* The Composer's rule is the same
+   * rule by the same mechanism: its root carries no middle child at rest, and the column is drawn
+   * when the surface puts something in it.
+   *
+   * WHICH COLUMN EXISTS IS THE HOST'S FACT, NOT THIS TOOL'S — the host owns the surface's tree, so
+   * this tool only reports the fact the decision is made from: whether the Preview is drawing a
+   * component. That is exactly the selection (`selected` — the item `preview` renders), so a
+   * submitted node opens the column and so does picking a component, and they are one fact because
+   * they are one thing on screen.
+   *
+   * IT IS NEVER LOWERED BY THIS TOOL. Deselecting is not a request to take the column away from
+   * someone reading it, and a column that shuts itself under a person is the fault this layout
+   * keeps having to fix (see the middle pane's `_onMiddleSlotChange`). The host ignores the
+   * false half for the same reason.
+   */
+  onPreviewChange?: (hasPreview: boolean) => void;
+
+  /**
+   * A COMPONENT WAS PICKED — the host's cue to ASK THE ASSEMBLER FOR IT.
+   *
+   * The owner, 2026-09-30: *"when I click on something I'm sending a command to the AI assembler,
+   * the rendering application — load that component — and it has to pull it from the catalog and it
+   * has to grab its metadata."* The tool knows which component a person picked; the ROOM is
+   * assembled from that, so the fact is reported rather than the tool drawing the room itself.
+   */
 }
 
-export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, variant = 'modal' }: IngestModalProps) {
+export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, variant = 'modal', seats, onPreviewChange }: IngestModalProps) {
   const [url, setUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
@@ -377,6 +449,17 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
    * and only one of them is a reason to stop looking for a file.
    */
   const [drawn, setDrawn] = useState<DrawnIndex | null>(null);
+  /**
+   * WHAT THE OUTPUT COLUMN IS FOR, SAID ONCE — see `onPreviewChange` on the props for the rule and
+   * the owner's words. One place, derived from the one fact: the Preview is drawing the selected
+   * item. (Derived here rather than from `selected`, which is declared further down this component:
+   * a dependency array is evaluated during the render that calls the hook, and reading a `const`
+   * before its declaration is a throw.)
+   */
+  useEffect(() => {
+    onPreviewChange?.(items.some((item) => item.id === selectedId));
+  }, [items, selectedId, onPreviewChange]);
+
   useEffect(() => {
     if (!open) return;
     // A WRITE REGENERATES THE MANIFEST — every approve and every removal runs the element
@@ -1496,47 +1579,64 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
 
   if (!open) return null;
 
-  return (
-    <div
-      ref={rootRef}
-      className={
-        variant === 'section'
-          ? 'relative flex h-full w-full flex-col bg-white'
-          : 'fixed inset-0 z-50 flex flex-col bg-white'
-      }
-      onKeyDown={handleKeyDown}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-gray-900">Ingest Figma Design</h2>
-          <p className="text-xs text-gray-500">
-            {sessionTitle ? <span className="text-gray-700">{sessionTitle} · </span> : null}
-            ingest a node, see what it built, then approve it into the catalogue or leave it
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={resetAll}
-            className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-          >
-            Reset
-          </button>
-          {/* NO CLOSE IN A SECTION. There is nothing to close: the section IS the tab's content,
-              so leaving the tab is how you leave it. Drawn only for the modal, which is the
-              left menu's own door and still dismisses. */}
-          {variant === 'modal' && (
-            <button
-              onClick={onClose}
-              className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
-            >
-              Close
-            </button>
-          )}
-        </div>
-      </div>
+  /*
+   * THE THREE REGIONS ARE HANDED OVER, NOT WRAPPED (owner, 2026-09-30: "We're not replacing,
+   * we're injecting").
+   *
+   * In `section` this component returns ITS THREE REGIONS AND NOTHING ELSE — a React
+   * fragment, which creates no element of its own, so each region lands as a DIRECT CHILD of
+   * the `<workspace-layout>` the ROOM renders. Slotting needs direct children, which is
+   * exactly why the ingest must not bring a container of its own: a container inside a
+   * container is the thing that made this look like a copy.
+   *
+   * NO PANEL, NO TITLE BAR, NO CLOSE IN A SECTION. Those are the MEDAL's chrome — the modal
+   * is opened from the left menu and is unchanged, and it still wraps these same regions in
+   * its own frame and its own container below.
+   *
+   * AND A REGION MAY BE SEATED IN A CONTAINER RATHER THAN IN A PANE (see the `seats` prop). The
+   * default is no seats at all: the three regions are handed over exactly as they are, and the
+   * host's `<workspace-layout>` projects each by its slot name. When the host has built an
+   * element that owns the hole — the design's `design-middle-container` — it passes that element
+   * as the region's seat, and React renders the region INTO it.
+   */
+  const seat = (name: 'left' | 'middle' | 'right', region: ReactNode): ReactNode => {
+    /*
+     * A HOST THAT NAMES A SEAT OWNS WHETHER THAT COLUMN IS DRAWN.
+     *
+     * Three cases, and the difference between the second and the third is the whole of the
+     * output column's behaviour:
+     *
+     *   no `seats` at all          the default. The region is returned where it stands and the
+     *                              host's own container projects it by its slot name.
+     *   a seat is absent           this host has no container for that region, so the region is
+     *                              handed over as always — unchanged behaviour for any host that
+     *                              seats only some of its columns.
+     *   a seat is present, NULL    THE COLUMN IS NOT DRAWN (yet). The region renders NOTHING.
+     *                              This is the output column before there is anything to output:
+     *                              the design's third column is collapsed until a draft exists,
+     *                              and a region returned loose in the pane would open the column
+     *                              it was supposed to wait for — its `slot="middle"` is on the
+     *                              room container's own light DOM, which is exactly what makes
+     *                              workspace-layout draw the pane.
+     */
+    if (!seats || !Object.prototype.hasOwnProperty.call(seats, name)) return region;
+    const target = seats[name];
+    if (!target) return null;
+    /*
+     * AND A SEAT MAY CARRY THE SHEET THE CONTENT IS STYLED BY, IN WHICH CASE THE CONTENT GOES
+     * INSIDE IT RATHER THAN BESIDE IT. A container that adopts a stylesheet (the design's left
+     * panel, `design-left-panel`) hosts the region in a plain div INSIDE its shadow tree, because
+     * that is the only place a stylesheet it owns can reach the tool — the tool is styled with
+     * Tailwind utilities, and a utility class cannot match inside a shadow tree it has no sheet in.
+     * The seat says where that div is; a seat without one is a plain slot host and takes the
+     * content as its light child, which is what the middle column still does.
+     */
+    const mount = target.shadowRoot?.querySelector<HTMLElement>('[data-ingest-mount]');
+    return createPortal(region, mount ?? target);
+  };
 
-      <div className="flex-1 flex min-h-0">
+  const regions = (
+    <>
         {/* LEFT RAIL — what to ingest, what is held, what it was generated from.
             IT SCALES. It carries the URL field, the drafts and the layer tree — and
             the tree is deeper and wider than anything else in this modal, so a fixed 360px was
@@ -1544,7 +1644,8 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
             to spare. A share of the viewport, bounded at both ends: the min stops it collapsing
             into a column the tree cannot be read in, the max stops it eating the preview on a
             very wide screen. The right column is deliberately left fixed — it is prose. */}
-        <div className="w-[30%] min-w-[320px] max-w-[620px] shrink-0 border-r border-gray-100 overflow-y-auto p-4 flex flex-col gap-5">
+        {seat('left', (
+        <div slot="left" className="w-full h-full border-r border-gray-100 overflow-y-auto p-4 flex flex-col gap-5">
           <div className="space-y-3">
             <label className="block text-sm font-medium text-gray-700">Figma URL</label>
             <div className="flex gap-2">
@@ -1620,10 +1721,11 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
             />
           </div>
 
-        </div>
+        </div>))}
 
         {/* PREVIEW — the component at its own size, whole */}
-        <div className="flex-1 min-w-0 flex flex-col bg-gray-50">
+        {seat('middle', (
+        <div slot="middle" className="w-full h-full min-w-0 flex flex-col bg-gray-50">
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-white shrink-0 gap-4">
             <div className="min-w-0">
               <h3 className="text-sm font-medium text-gray-700">Preview</h3>
@@ -2280,11 +2382,12 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
             )}
           </div>
 
-        </div>
+        </div>))}
 
         {/* RIGHT COLUMN — Grace. Errors, compliance and her answers live here, so the
             preview column stays what it is: the element. */}
-        <div className="w-[340px] shrink-0 border-l border-gray-100 bg-white flex flex-col min-h-0">
+        {seat('right', (
+        <div slot="right" className="w-full h-full border-l border-gray-100 bg-white flex flex-col min-h-0">
           {/* THE PROCESSION — moved out of the left column and put ABOVE her, where it
               belongs: what was added is part of what she did. Eventually a slot in the chat
               output as part of the trace; for now a section at the top of this column. */}
@@ -2637,10 +2740,81 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
               </button>
             </div>
           )}
-        </div>
+        </div>))}
 
         {/* END COLUMNS */}
+    </>
+  );
+
+  if (variant === 'section') return regions;
+
+  return (
+    <div
+      ref={rootRef}
+      className={
+        // A SECTION BRINGS NO PANEL AND NO GROUND. The container the section renders IS the
+        // THE ROOT IS THE MODAL'S ALONE. A section returned above — its three regions, handed
+        // straight to the room's container — so everything from here down is the modal: the
+        // white full-height panel, the "Ingest Figma Design" bar, and its own container holding
+        // those same regions. The section branch that used to be in this expression is gone with
+        // the section's return, which is why the comparison it made is gone too.
+        'fixed inset-0 z-50 flex flex-col bg-white'
+      }
+      onKeyDown={handleKeyDown}
+    >
+      {/* THE TITLE BAR IS THE MODAL'S OWN — "Ingest Figma Design" and this row are the
+          overlay's chrome, and a section's columns are the design's columns, so a section
+          brings no title bar with it. The rail keeps its own Reset because Reset is the
+          rail's control, not the frame's; Close is already modal-only below. */}
+      {variant === 'modal' && (
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-gray-900">Ingest Figma Design</h2>
+          <p className="text-xs text-gray-500">
+            {sessionTitle ? <span className="text-gray-700">{sessionTitle} · </span> : null}
+            ingest a node, see what it built, then approve it into the catalogue or leave it
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={resetAll}
+            className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+          >
+            Reset
+          </button>
+          {/* NO CLOSE IN A SECTION. There is nothing to close: the section IS the tab's content,
+              so leaving the tab is how you leave it. Drawn only for the modal, which is the
+              left menu's own door and still dismisses. */}
+          {variant === 'modal' && (
+            <button
+              onClick={onClose}
+              className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              Close
+            </button>
+          )}
+        </div>
       </div>
+      )}
+
+      {/*
+        * THE THREE COLUMNS ARE THE COMPOSER'S OWN ELEMENT — the same tag, not a copy of it.
+        *
+        * The owner, 2026-09-30: *"capture the same three columns that we already have for
+        * composer and seat our sections for the ingest process in the same architecture as the
+        * composer… the container, the behavior of the movement, the flex columns, the
+        * drag-to-resize — all of that is the same."* And then, on how: *"You're gonna have to use
+        * the same lit components in the same behavior inside of design… I want to just reuse the
+        * lit components for the composer. I will just replace what they hold."*
+        *
+        * So one element serves this section and the Composer, and the difference between them is
+        * WHAT IS IN THE SLOTS — which is the part he will replace. The flex shares, the grippers,
+        * the drag-to-resize, the collapse floors and the 3rd-column flip are shared by
+        * construction rather than by two files agreeing.
+        *
+        * The three parts are the ones the ingest already had: the rail, the preview, Grace.
+        */}
+      <workspace-layout className="flex-1 min-h-0">{regions}</workspace-layout>
     </div>
   );
 }

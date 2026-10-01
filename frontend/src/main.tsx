@@ -20,6 +20,33 @@ import "@/components/lit/prompt-section-editor";
 // Same rule as every import below: a tag nothing defines draws nothing and says nothing.
 import "@/components/lit/prompt-input/role-dropdown";
 import "@/components/lit/compiled-output-viewer";
+// The Design room's middle column — the Composer's middle column with a HOLE in it. It exists
+// because `compiled-output-viewer` (the line above) owns its whole body and has no slot, so the
+// ingest's Preview could not be loaded inside the column. Only the design surface names it
+// (`render-design`); the Composer's own column is untouched by its existence.
+import "@/components/lit/design-middle-container";
+// The Design room's left column — the same idea one column over, and the fix for what the owner
+// saw on screen: the ingest's rail was loading UNDERNEATH the Composer's panel, loose in the pane.
+// The panel is the design's own "center-panel-3rd-col" and it stays (reused as <prompt-container>,
+// never restyled); this element is that frame with a `<slot name="left">` inside it, because
+// `prompt-container` has only its default slot and the ingest's left region carries `slot="left"`.
+import "@/components/lit/design-left-panel";
+// THE INGEST RAIL'S TOP HALF — the Figma URL field, the Notes field and Submit, as a catalogue
+// element. It is the one part of that rail nothing drew: the tree half is `figma-layers-view`
+// (reused, imported through IngestModal), but no catalogue element existed for a text field, so the
+// input the owner asked for could not be named by any surface until this existed. Same registration
+// rule as every import here — a tag nothing defines draws an empty box and says nothing.
+import "@/components/lit/figma-ingest-form";
+// THE MIDDLE COLUMN'S PREVIEW — what a RUN loaded. Same registration rule: without this import
+// the surface names a tag nothing defines and the column draws an empty pane with no error.
+import "@/components/lit/component-preview";
+// AND THE DRAWING ITSELF WHEN THE RUN WAS AN INGEST. The frame above says what a run loaded; this
+// element DRAWS a draft — from the temporary file the ingest wrote (`.preview/<jobId>/`), inside
+// the same sandboxed, catalogue-blind document the ingest form's Preview pane builds. It exists
+// because a draft and an approved component can share a NAME: given the name, the renderer resolves
+// it through the catalogue, so re-ingesting a node the catalogue already holds drew the approved
+// component while the fresh draft sat untouched. Given the FILE, it can only draw the draft.
+import "@/components/lit/draft-preview";
 import "@/components/lit/workspace-layout";
 // The prompt's own bar — title, version label and package id, above the sections in the
 // left column. It used to be row 2 of the React `LeftColumnHeader`, which meant the TITLE

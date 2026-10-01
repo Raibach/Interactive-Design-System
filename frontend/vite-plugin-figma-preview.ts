@@ -42,7 +42,20 @@ export default function figmaPreviewPlugin(): Plugin {
       projectRoot = config.root;
     },
 
-    resolveId(source) {
+    resolveId(source, importer) {
+      // ── A PREVIEW'S OWN SEAM, RESOLVED INSIDE THE PREVIEW'S NAMESPACE ──────────────────────────
+      // The drafted element's first line is `import … from './behaviour/attach'` — a RELATIVE path,
+      // so it resolves beside whatever file is read, which is the whole point: the catalogue reaches
+      // the real loader beside it and a preview reaches its own inert copy. Vite cannot make that
+      // resolution itself, because the importer is a virtual id and there is no such folder on disk:
+      // measured 2026-09-30, the draft failed with `Failed to resolve import "./behaviour/attach"`
+      // while the copy it should have found served fine at its own URL. So this ONE specifier, from a
+      // preview module and nowhere else, is claimed and named in the namespace. Nothing else relative
+      // is touched, and the fs is never consulted for it.
+      if (source === './behaviour/attach' && importer && importer.startsWith(PREFIX)) {
+        const job = importer.slice(PREFIX.length).split('/')[0];
+        return PREFIX + job + '/behaviour/attach.ts';
+      }
       return source.startsWith(PREFIX) ? source : null;
     },
 
@@ -57,14 +70,26 @@ export default function figmaPreviewPlugin(): Plugin {
       const file = rest.slice(slash + 1);
       if (!file.endsWith('.ts')) return null;
       const tag = file.slice(0, -'.ts'.length);
-      // A PREVIEW IS A FILE IN A FOLDER, so the two names that reach a path are checked first.
-      if (!SAFE_JOB.test(jobId) || !SAFE_TAG.test(tag)) return null;
+      // ── THE SEAM'S COPY IS THE ONE NESTED FILE A PREVIEW SERVES ────────────────────────────────
+      // A drafted element's first line imports `./behaviour/attach`, which in the catalogue is the
+      // hand-written loader and here must be the preview's OWN inert copy — a preview resolves
+      // nothing the application ships (`PREVIEW_SEAM`, backend/routes/figma.py). It is named
+      // LITERALLY and it is the only path allowed below the job's root, so nothing about this can
+      // walk anywhere; every other request is still `f-<node id>.ts` and nothing else.
+      const isSeam = file === 'behaviour/attach.ts';
+      // A PREVIEW IS A FILE IN A FOLDER, so the names that reach a path are checked first.
+      if (!SAFE_JOB.test(jobId) || !(isSeam || SAFE_TAG.test(tag))) return null;
 
-      const previewFile = join(projectRoot, '.preview', jobId, `${tag}.ts`);
+      const previewFile = join(projectRoot, '.preview', jobId, file);
       let source: string;
       try {
         source = await readFile(previewFile, 'utf-8');
       } catch {
+        if (isSeam) {
+          return moduleThatFails(
+            'This preview was written without its own seam copy, so the drafted element cannot open. Ingest it again.',
+          );
+        }
         // A preview is deleted when it is discarded, approved, replaced by the next ingest, or
         // when the screen that asked for it left — so a request for one that is gone is ordinary,
         // not an error. It is drawn in the pane, where the designer is looking.
