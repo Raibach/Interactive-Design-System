@@ -93,9 +93,23 @@ export default function LeftColumnHeader({
     { id: 'console', label: 'Console' },
     { id: 'composer', label: 'Composer' },
     { id: 'design', label: 'Design' },
-    { id: 'product', label: 'Product' },
-    { id: 'development', label: 'Development' },
-    { id: 'governance', label: 'Governance' },
+    /*
+     * THREE STUBS, AND THEY NOW SAY SO.
+     *
+     * Product, Development and Governance are compartments of the shell with nothing behind them
+     * yet: selecting one changed the tab and drew no section, so the person landed on an empty
+     * column and could not tell an unbuilt compartment from a broken one. `disabled` is the
+     * mechanism this row already had for exactly that — `title="Not wired up yet"`,
+     * `aria-disabled`, `cursor-default`, and no click effect — and it was here, unused.
+     *
+     * THE OWNER'S WORD, 2026-10-01: *"these items on the navigation and our shell at the top should
+     * be stubs. They shouldn't do anything at this time."* They stay VISIBLE and in their order,
+     * because the shell is the compartments and a reader should see what is coming; what stops is
+     * the pretence that the click opens something.
+     */
+    { id: 'product', label: 'Product', disabled: true },
+    { id: 'development', label: 'Development', disabled: true },
+    { id: 'governance', label: 'Governance', disabled: true },
   ];
 
   // ── Embla carousel for nav tabs — no dragFree so tabs stay
