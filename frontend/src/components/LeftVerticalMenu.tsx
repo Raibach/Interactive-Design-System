@@ -83,23 +83,8 @@ const FolderIcon = () => (
   </svg>
 );
 
-// Document / Upload icon
-const UploadIcon = () => (
-  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
-    <path
-      d="M4 16v1a1 1 0 001 1h10a1 1 0 001-1v-1M12 8l-2-2m0 0L8 8m2-2v8"
-      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-    />
-  </svg>
-);
-
-// Ingest / Import icon (down arrow into box)
-const IngestIcon = () => (
-  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5">
-    <path d="M10 4v12M4 14l6 6 6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
-  </svg>
-);
+// (The Ingest and Upload icons went with their menu items — owner, 2026-10-01: *"remove it
+// completely"*, then *"remove upload document"*.)
 
 // Helper to make authenticated API calls with required X-User-ID header
 // Uses the stored user ID via getStoredUserId() — same pattern as every other file
@@ -147,9 +132,9 @@ export default function LeftVerticalMenu({
    * artifacts tab will open up exactly what we have now on ingestion… You can just add a link
    * to that actually you don't even have to change it. You don't have to move it."
    *
-   * The event convention is this shell's own (`start-new-prompt`, `navigate-console`), and the
-   * three lines are the same three the "Ingest Design" menu item runs in handleItemClick — so
-   * the tab and the menu item produce identical state rather than two similar ones.
+   * The event convention is this shell's own (`start-new-prompt`, `navigate-console`). The
+   * "Ingest Design" menu item that ran these same three lines is gone (owner, 2026-10-01), so the
+   * header's tab is this modal's one remaining entry point.
    */
   useEffect(() => {
     const onOpenIngest = () => {
@@ -169,12 +154,9 @@ export default function LeftVerticalMenu({
   );
 
   const handleItemClick = (id: string, callback?: () => void) => {
-    if (id === "ingest") {
-      setIngestModalOpen(true);
-      setIsNavOpen(false);
-      handleCollapse();
-      return;
-    }
+    /* THE "ingest" BRANCH IS GONE WITH ITS MENU ITEM (owner, 2026-10-01: *"remove it
+       completely"*). The modal is still reachable: the header's ingest tab dispatches
+       `open-ingest`, which the listener below answers. */
     if (expandedItem === id) {
       setExpandedItem(null);
       setIsExpanded(false);
@@ -266,17 +248,13 @@ const LogoutIcon = () => (
       icon: <ComponentIcon />,
       label: "Plugins",
     },
-    {
-      id: "ingest",
-      icon: <IngestIcon />,
-      label: "Ingest Design",
-    },
-    {
-      id: "upload",
-      icon: <UploadIcon />,
-      label: "Upload Document",
-      onClick: onUploadDocument,
-    },
+    /*
+     * "INGEST DESIGN" AND "UPLOAD DOCUMENT" ARE GONE (owner, 2026-10-01: *"You should remove it
+     * completely"*, then *"remove upload document"*). Ingest's home is the Design room's own rail
+     * — the Figma URL field, Notes and Submit, drawn by `figma-ingest-form` — and this item was a
+     * second entry point to the same modal. Nothing is left greyed here: a menu that keeps a
+     * deactivated control is a menu that has to explain itself.
+     */
   ].filter((item) => {
     // Saved Prompts and Plugins are console-only: on the composer they cover the
     // header, so they come off the floating strip and the flyout there.
@@ -313,7 +291,7 @@ const LogoutIcon = () => (
           className="absolute left-0 top-14 w-14 flex flex-col items-center gap-1 py-2 cursor-pointer"
         >
           {menuItems
-            .filter((item) => item.id !== "new-chat" && item.id !== "upload")
+            .filter((item) => item.id !== "new-chat")
             .map((item) => (
             <button
               key={item.id}
@@ -585,9 +563,9 @@ const LogoutIcon = () => (
                 * ONLY DESIGN DOES ANYTHING HERE. The header's tabs go through
                 * `handleTabChangeWithGate`, which this component is not given — it receives
                 * `currentTab` and no callback — so the others close the drawer and stop, exactly
-                * as they did before. Design opens the ingest tool through the same window event
-                * the left menu's own "Ingest Design" item uses, because a drawer that cannot
-                * switch tabs can still hand over the tool.
+                * as they did before. Design opens the ingest tool through the `open-ingest`
+                * window event the header's ingest tab uses, because a drawer that cannot switch
+                * tabs can still hand over the tool.
                 */}
               {[
                 { id: "console", label: "Console" },

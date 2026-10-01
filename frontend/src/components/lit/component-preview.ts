@@ -123,7 +123,7 @@ export class ComponentPreview extends LitElement {
         flex-wrap: wrap;
         gap: 8px;
         padding: 10px 16px;
-        border-bottom: 1px solid var(--ds-rule);
+        border-top: 1px solid var(--ds-rule);
       }
       .title {
         font-size: var(--ds-fs-md);
@@ -177,7 +177,7 @@ export class ComponentPreview extends LitElement {
        * draws wider than the column scrolls inside the frame instead of pushing the room.
        */
       .frame {
-        margin: 12px 16px 0;
+        margin: 50px 16px 0;
         padding: 12px;
         border: 1px solid var(--ds-rule);
         border-radius: var(--ds-radius);
@@ -602,17 +602,42 @@ export class ComponentPreview extends LitElement {
     const p = this.preview;
     const facts = p.facts ?? [];
     return html`
+      ${this.message ? html`<p class="message">${this.message}</p>` : nothing}
+      ${this._collisionQuestion(p)}
+      <!--
+        THE DRAWING, IN A FRAME THAT CANNOT BE INVISIBLE.
+        The React preview put a visible outline around the component, and its reason is the reason
+        this frame exists: a component can be white on white, and then a preview of it is a blank
+        pane that looks like a failure. So the component is drawn inside a bordered box, on the
+        design system's own surface token, with the box's edge doing the work the background
+        cannot. What is drawn is a CHILD OF THE SURFACE, named by the shell and instantiated by the
+        renderer — the element never reaches for a tag of its own, because a surface's children come
+        from the envelope and from nothing else.
+      -->
+      <div class="frame ${p.source === "open" ? "element-in-frame" : ""}">
+        <slot name="draw"></slot>
+      </div>
+      ${this._binding(p)}
+      <div class="body">
+        ${p.note ? html`<p class="note">${p.note}</p>` : nothing}
+        ${facts.length
+          ? html`
+              <dl>
+                ${facts.map((f) => html`<dt>${f.label}</dt><dd>${f.value}</dd>`)}
+              </dl>
+            `
+          : nothing}
+      </div>
       <div class="head">
         <span class="title">Preview</span>
         ${p.name || p.tag ? html`<span class="subject">${p.name || p.tag}</span>` : nothing}
         ${p.tag ? html`<span class="tag">${p.tag}</span>` : nothing}
         ${/*
-          THE ACTIONS SIT AT THE TOP, WHERE THE INGEST FORM PUTS THEM. The React preview pane's
-          header carries the identity on the left and its buttons on the right — Approve, Close,
-          Remove — and the owner's rule for this whole translation is that it is ONE FOR ONE
-          (*"there's no reinterpretation, there's no moving stuff around… That's your map"*).
-          Below the drawing they also fell off the bottom of the column, which is what he saw:
-          *"the button seems to be underneath."*
+          THE HEAD SITS AT THE BOTTOM NOW (owner, 2026-10-01): *"move it to the bottom of that
+          column instead of at the top… I want it underneath the last readout on that page."*
+          It sat at the top — where the React ingest pane puts its header and buttons — from the
+          one-for-one translation until this instruction. The identity and the three actions read
+          under the facts now, and the bar carries a top edge instead of a bottom one.
         */ ''}
         <span class="actions">
           <button
@@ -651,32 +676,6 @@ export class ComponentPreview extends LitElement {
               </button>`
             : nothing}
         </span>
-      </div>
-      ${this.message ? html`<p class="message">${this.message}</p>` : nothing}
-      ${this._collisionQuestion(p)}
-      <!--
-        THE DRAWING, IN A FRAME THAT CANNOT BE INVISIBLE.
-        The React preview put a visible outline around the component, and its reason is the reason
-        this frame exists: a component can be white on white, and then a preview of it is a blank
-        pane that looks like a failure. So the component is drawn inside a bordered box, on the
-        design system's own surface token, with the box's edge doing the work the background
-        cannot. What is drawn is a CHILD OF THE SURFACE, named by the shell and instantiated by the
-        renderer — the element never reaches for a tag of its own, because a surface's children come
-        from the envelope and from nothing else.
-      -->
-      <div class="frame ${p.source === "open" ? "element-in-frame" : ""}">
-        <slot name="draw"></slot>
-      </div>
-      ${this._binding(p)}
-      <div class="body">
-        ${p.note ? html`<p class="note">${p.note}</p>` : nothing}
-        ${facts.length
-          ? html`
-              <dl>
-                ${facts.map((f) => html`<dt>${f.label}</dt><dd>${f.value}</dd>`)}
-              </dl>
-            `
-          : nothing}
       </div>
     `;
   }

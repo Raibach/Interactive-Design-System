@@ -40,7 +40,8 @@
  * the content, and into whose shadow lit never writes a child, is what removes the fight.
  */
 import { LitElement, html, css } from 'lit';
-// (The Composer's header row is NOT imported: this column has no such row — see render.)
+// THE COLUMN'S HEADER IS THE LEFT COLUMN'S OWN BAR, in its non-editable mode (owner, 2026-10-01).
+import '@/components/lit/left-column-header';
 // The application's own sheet, so the preview loaded into the hole keeps the look it has in the
 // document. See that file for why a shadow root needs its own copy of it.
 import { appStylesheet } from '@/shared/app-stylesheet';
@@ -53,20 +54,27 @@ export class DesignMiddleContainer extends LitElement {
 
   render() {
     /*
-     * NO HEADER ROW OF ITS OWN, AND THAT IS THE POINT (owner, 2026-09-30, looking at the column:
-     * *"I don't understand why I'm seeing an agent flow and functions tool at the top of the third
-     * column for output that doesn't exist in your react component, so why is it here? … It's one
-     * for one."*
+     * THE COLUMN OPENS WITH A HEADER, AND IT IS THE LEFT COLUMN'S OWN BAR (owner, 2026-10-01).
      *
-     * It IS here because this element was built as "the Composer's middle column with a hole in
-     * it", and it drew the Composer's own `<output-controls>` — the view selector reading "Agent
-     * Flow" and the Models button. The ingest pane has NO such row: its column opens with "Preview"
-     * and the component's name and tag, which is what `<component-preview>` draws as its own head.
-     * So the Composer's row is gone and the column is chrome plus the preview — one for one with
-     * the build this room is a translation of.
+     * The owner pointed at the left column's header as the example — *"I want this at the top
+     * now… I'm not asking you to change the first column, I'm just giving you that as an example
+     * of what I want to match"* — and named its text: *"change it … to Component Output"*, with
+     * the edit turned off (*"it's not an input, just make it header"*) and the version label kept
+     * (*"you can leave that, because each one of these components are gonna have their own version
+     * history"*). So it is the same element, `<left-column-header>`, instantiated in its
+     * non-editable mode with `showMeta` false — the styles match because it IS the bar, not a copy.
+     *
+     * WHAT THIS REPLACES. The Composer's own `<output-controls>` stood here first and the owner
+     * asked why a control that does not exist in the ingest pane was in this column; the row was
+     * removed outright. A header with the column's own name is what belongs here.
      */
     return html`
       <div class="column">
+        <left-column-header
+          .editable=${false}
+          .showMeta=${false}
+          title="Component Output"
+        ></left-column-header>
         <div class="body"><div class="hole"><slot name="middle"></slot></div></div>
       </div>
     `;
@@ -115,7 +123,7 @@ export class DesignMiddleContainer extends LitElement {
        * opacity of a background that belongs to an ancestor, and painting the same texture at 25%
        * here would only stack it on the 100% one behind it — so the column lays a white veil over
        * its own area instead, and the canvas behind it reads at the strength the owner asked for:
-       * 0.75 white leaves 25% of what is underneath. The veil is on the COLUMN, not on the frame:
+       * 0.5 white leaves 50% of what is underneath. The veil is on the COLUMN, not on the frame:
        * component-preview's frame stays transparent (background: transparent) for the reason it
        * states, so a white component on this ground still has its 1px edge to be seen against.
        *
@@ -127,7 +135,7 @@ export class DesignMiddleContainer extends LitElement {
         height: 100%;
         min-height: 0;
         min-width: 0;
-        background: rgba(255, 255, 255, 0.75);
+        background: rgba(255, 255, 255, 0.5);
       }
       /* The hole. min-height:0 + overflow:hidden is what makes a tall child scroll inside the
          column instead of pushing the column past the room's height — the same reason
@@ -138,6 +146,19 @@ export class DesignMiddleContainer extends LitElement {
         min-width: 0;
         overflow: hidden;
         display: flex;
+      }
+      /*
+       * THE HEADER'S CORNER AND ITS SHADOW, ON THE OWNER'S INSTRUCTION (2026-10-01): *"put a 10
+       * pixel rounded corner on the bottom right corner of what you just placed … and reduce the
+       * drop shadow by 20%"*. SCOPE: this column only. The bar is the left column's own element,
+       * and the left column is not this instruction's to change (owner: *"I'm not asking you to
+       * change the first column"*), so the override lives here, where only this instance is
+       * matched. The 20% reduction is on the shadow's alpha — 0.25 → 0.20 — with reach and offset
+       * left exactly as the bar draws them.
+       */
+      left-column-header {
+        border-bottom-right-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
       }
       /*
        * THE HOLE, AND WHY IT IS A SLOT NOW (2026-09-30). It was a MOUNT — a div the ingest's React
