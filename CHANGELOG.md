@@ -1,6 +1,6 @@
 # Changelog — Design System Lifecycle Management
 
-Built by **John Holt, Raibach Interactive Design Studio** <sub>{impromptu}</sub>
+Built by **John Holt, Raibach Interactive Design System** <sub>{impromptu}</sub>
 
 
 **[2026-10-01] — Grace's words belong to the room, and a room that states none is refused**
