@@ -593,19 +593,33 @@ const LogoutIcon = () => (
                 { id: "console", label: "Console" },
                 { id: "composer", label: "Composer" },
                 { id: "design", label: "Design" },
-                { id: "product", label: "Product" },
-                { id: "development", label: "Development" },
-                { id: "governance", label: "Governance" },
+                /*
+                 * THE SAME THREE STUBS THE HEADER DRAWS, AND THE SAME FLAG. Product, Development
+                 * and Governance have nothing behind them yet, so the drawer must not switch to
+                 * them either — and the FLAG is read, not the label, so the two lists cannot drift
+                 * into disagreeing about which tabs exist.
+                 */
+                { id: "product", label: "Product", disabled: true },
+                { id: "development", label: "Development", disabled: true },
+                { id: "governance", label: "Governance", disabled: true },
               ].map((tab) => (
                 <button
                   key={tab.id}
+                  disabled={(tab as { disabled?: boolean }).disabled === true}
+                  aria-disabled={(tab as { disabled?: boolean }).disabled === true || undefined}
+                  title={(tab as { disabled?: boolean }).disabled ? 'Not wired up yet' : undefined}
                   onClick={() => {
+                    if ((tab as { disabled?: boolean }).disabled === true) return;
                     setMobileMenuOpen(false);
                     if (tab.id === "design") {
                       window.dispatchEvent(new CustomEvent("open-ingest"));
                     }
                   }}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left"
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                    (tab as { disabled?: boolean }).disabled
+                      ? 'text-gray-500 cursor-default'
+                      : 'text-gray-200 hover:bg-white/10 hover:text-white'
+                  }`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
                   {tab.label}
