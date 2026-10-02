@@ -1,19 +1,33 @@
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import WritingAreaIndex from "@/pages/WritingAreaIndex";
 import PinGate from "@/components/PinGate";
-import CommandCenter from "@/pages/CommandCenter";
+import GateSplash from "@/components/GateSplash";
+import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
+import { demoModeReady, isDemoMode } from "@/shared/demoMode";
+import "./global.css";
+
+/*
+ * ── THE PAGES ARE LAZY, ON PURPOSE (2026-10-02) ────────────────────────────────
+ * The gate is the entry bundle's job and nothing else's. The application — the
+ * surface, the workspace, the forty component registrations the surface's own page
+ * imports (components/lit/register) — must not sit in front of the first paint.
+ * Measured on the deployed demo before this split: 2.25 MB of JavaScript, about
+ * 2.5 s, before the gate could be typed into. Whatever these names now import
+ * arrives behind the pin — or behind the GateSplash card for a session that is
+ * already signed in, which is the same card the static twin in index.html draws,
+ * so the whole boot reads as one slow gate that becomes typeable, never a blank
+ * page and never a bare spinner.
+ */
+const WritingAreaIndex = lazy(() => import("@/pages/WritingAreaIndex"));
+const CommandCenter = lazy(() => import("@/pages/CommandCenter"));
 // The catalogue inspector — the real structure of catalog.json on screen, read-only. Its own
 // route because it is a reader of the catalogue, not a surface the AI assembles: no catalog
 // entry names it, and nothing on `/` links to it except this route's own path.
-import CatalogInspector from "@/pages/CatalogInspector";
-import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
-import { isDemoMode } from "@/shared/demoMode";
-import "./global.css";
+const CatalogInspector = lazy(() => import("@/pages/CatalogInspector"));
 
 const queryClient = new QueryClient();
 
@@ -21,6 +35,19 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem("grace_is_authenticated") === "true";
   });
+  // WHICH BUILD THIS IS, BEFORE THE TREE DRAWS. The read was STARTED by the entry
+  // (main.tsx, not awaited — see there); this only waits for its answer, which for an
+  // already-signed-in session is the only thing between the first frame and the app.
+  const [demoSettled, setDemoSettled] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void demoModeReady().then(() => {
+      if (alive) setDemoSettled(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleLoginSuccess = () => {
     localStorage.setItem("grace_is_authenticated", "true");
@@ -85,34 +112,40 @@ function App() {
                   console.error("App-level error:", error.message);
                 }}
               >
-                <Routes>
-                  {/* A2UI: Single root route - AI assembles all surfaces dynamically */}
-                  <Route
-                    path="/"
-                    element={<WritingAreaIndex isAuthenticated={true} />}
-                  />
-                  {/* The debug centre and the catalogue inspector read infrastructure
-                      and server files, and the demo refuses both at the gate
-                      (demo_policy.py: /api/debug/, /api/files/) — so the demo does not
-                      route to them either. Nothing on `/` links to them; a visitor
-                      only meets them by typing the URL. */}
-                  {!isDemoMode() && (
-                    <Route
-                      path="/debug/command-center"
-                      element={<CommandCenter />}
-                    />
-                  )}
-                  {/* The catalogue inspector. A fixed route rather than a redirect, and
-                      additive: `/` and the debug route are untouched. */}
-                  {!isDemoMode() && (
-                    <Route
-                      path="/catalogs"
-                      element={<CatalogInspector />}
-                    />
-                  )}
-                  {/* All other paths redirect to root - AI controls navigation */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+                {!demoSettled ? (
+                  <GateSplash />
+                ) : (
+                  <Suspense fallback={<GateSplash />}>
+                    <Routes>
+                      {/* A2UI: Single root route - AI assembles all surfaces dynamically */}
+                      <Route
+                        path="/"
+                        element={<WritingAreaIndex isAuthenticated={true} />}
+                      />
+                      {/* The debug centre and the catalogue inspector read infrastructure
+                          and server files, and the demo refuses both at the gate
+                          (demo_policy.py: /api/debug/, /api/files/) — so the demo does not
+                          route to them either. Nothing on `/` links to them; a visitor
+                          only meets them by typing the URL. */}
+                      {!isDemoMode() && (
+                        <Route
+                          path="/debug/command-center"
+                          element={<CommandCenter />}
+                        />
+                      )}
+                      {/* The catalogue inspector. A fixed route rather than a redirect, and
+                          additive: `/` and the debug route are untouched. */}
+                      {!isDemoMode() && (
+                        <Route
+                          path="/catalogs"
+                          element={<CatalogInspector />}
+                        />
+                      )}
+                      {/* All other paths redirect to root - AI controls navigation */}
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Suspense>
+                )}
               </SentryErrorBoundary>
             </div>
           </TooltipProvider>
@@ -130,4 +163,4 @@ function App() {
 }
 
 export { App };
-// Force rebuild 1763609400
+export default App;

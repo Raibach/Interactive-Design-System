@@ -1,134 +1,26 @@
 /**
  * Application Entry Point
+ *
+ * ── THE ENTRY IS THE GATE, NOT THE APP (2026-10-02) ────────────────────────────
+ * Measured on the deployed demo: the entry bundle carried the whole application —
+ * every Lit registration, the surface, the pages — so the sign-in gate could not be
+ * typed into until ~2.5 s of JavaScript had arrived (a 1.0 MB entry plus a 1.25 MB
+ * vendor chunk, with the composer's 413 KB ground starting at the same moment on
+ * the same pipe). The gate needs React and a card; it does not need the design room.
+ *
+ * So the app moved behind the pin: the registrations live in
+ * `components/lit/register` (imported by the app's own page, still before any
+ * surface assembles), the pages are lazy (App), and the composer's ground starts
+ * with them. This file's whole job is Sentry, the first render, the demo flag
+ * started without blocking, and the static twin's exit.
  */
 import "@/lib/sentry";
 import { isSentryReady } from "@/lib/sentry";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { loadDemoMode } from "@/shared/demoMode";
+import { demoModeReady } from "@/shared/demoMode";
 import "./index.css";
-// The composer's ground, preloaded below — before React renders, which is the point (see
-// THE TWO GROUNDS). The drawing's ground is NOT preloaded here: it belongs to a column that
-// does not exist until a Run, so it starts loading with the canvas code instead (below).
-import composerBackground from "@/assets/composer-image-bg.jpg";
-
-/** A2UI v0.9.1 Lit workspace components (model-driven composer) */
-import "@/components/lit/prompt-section-editor";
-// The role selector inside a prompt-input-section. Catalogued and allowlisted, and
-// imported by NOTHING — so its guarded define never ran, the tag `role-dropdown` did
-// not exist, and the surface's name for it resolved to an empty box with no error.
-// Same rule as every import below: a tag nothing defines draws nothing and says nothing.
-import "@/components/lit/prompt-input/role-dropdown";
-import "@/components/lit/compiled-output-viewer";
-// The Design room's middle column — the Composer's middle column with a HOLE in it. It exists
-// because `compiled-output-viewer` (the line above) owns its whole body and has no slot, so the
-// ingest's Preview could not be loaded inside the column. Only the design surface names it
-// (`render-design`); the Composer's own column is untouched by its existence.
-import "@/components/lit/design-middle-container";
-// The Design room's left column — the same idea one column over, and the fix for what the owner
-// saw on screen: the ingest's rail was loading UNDERNEATH the Composer's panel, loose in the pane.
-// The panel is the design's own "center-panel-3rd-col" and it stays (reused as <prompt-container>,
-// never restyled); this element is that frame with a `<slot name="left">` inside it, because
-// `prompt-container` has only its default slot and the ingest's left region carries `slot="left"`.
-import "@/components/lit/design-left-panel";
-// THE INGEST RAIL'S TOP HALF — the Figma URL field, the Notes field and Submit, as a catalogue
-// element. It is the one part of that rail nothing drew: the tree half is `figma-layers-view`
-// (reused, imported through IngestModal), but no catalogue element existed for a text field, so the
-// input the owner asked for could not be named by any surface until this existed. Same registration
-// rule as every import here — a tag nothing defines draws an empty box and says nothing.
-import "@/components/lit/figma-ingest-form";
-import "@/components/lit/catalog-ingest-form";
-// THE MIDDLE COLUMN'S PREVIEW — what a RUN loaded. Same registration rule: without this import
-// the surface names a tag nothing defines and the column draws an empty pane with no error.
-import "@/components/lit/component-preview";
-// AND THE DRAWING ITSELF WHEN THE RUN WAS AN INGEST. The frame above says what a run loaded; this
-// element DRAWS a draft — from the temporary file the ingest wrote (`.preview/<jobId>/`), inside
-// the same sandboxed, catalogue-blind document the ingest form's Preview pane builds. It exists
-// because a draft and an approved component can share a NAME: given the name, the renderer resolves
-// it through the catalogue, so re-ingesting a node the catalogue already holds drew the approved
-// component while the fresh draft sat untouched. Given the FILE, it can only draw the draft.
-import "@/components/lit/draft-preview";
-import "@/components/lit/workspace-layout";
-// The prompt's own bar — title, version label and package id, above the sections in the
-// left column. It used to be row 2 of the React `LeftColumnHeader`, which meant the TITLE
-// had no data path at all: it could only be changed through a callback the shell handed
-// down, so nothing the AI could reach could read it or set it. Imported here for the same
-// reason as every element below — a tag nothing defines draws an empty box and says
-// nothing. (Row 1 of that file, the Console/Composer/Evaluation/Variables/Metadata tabs,
-// is SHELL NAVIGATION and stays in the shell.)
-import "@/components/lit/left-column-header";
-// The right column's seat. Registration is a side effect of this import, and no
-// other element imports it transitively — without it <chat-panel> is an
-// unregistered tag and the right column renders as an empty box.
-import "@/components/lit/chat-panel";
-// The response row inside the panel's output card — v.4b's "user-response-bubble"
-// (#40001119:6352). <chat-messages> imports it for the user's turns, but it is
-// allowlisted and map'd, which means the surface can name it too; the import here is
-// the one that guarantees the tag exists whether or not the thread ever draws one.
-import "@/components/lit/user-response-bubble";
-import "@/components/lit/trace-feed";
-// The judged runs of one package, for the rail's Evals view. Same registration rule as the two
-// above: an element that is never imported is never defined, and the surface would emit the name
-// into an empty slot, silently.
-//
-// REMOVED ONCE, AND RESTORED — 2026-09-28. This line was deleted when <eval-feed> was removed
-// from the catalogue, and the package assembly still names EvalFeed (backend/routes/ai.py), so
-// the surface went on asking for a component nothing could draw. The component is back; the
-// prompt never changed. If the Evals view is ever retired for real, it comes out of the prompt
-// first — removing the component while the prompt names it is a 503, not a cleanup.
-import "@/components/lit/eval-feed";
-// The repair list the console's chat panel draws in its "view" slot. It used to be
-// registered as a side effect of chat-panel's own import; the panel no longer draws it,
-// and an element that is never imported is never defined — the surface would emit the
-// name and the slot would stay empty, silently.
-import "@/components/lit/chat-repair-actions";
-/*
- * <agent-flow> AND <agent-canvas> ARE NOT IMPORTED HERE, ON PURPOSE — and this is the one
- * place above that breaks the rule the comments state. They were imported here, and it cost
- * every page load the drawing's code and its artwork for a column that is not on screen: a
- * person opening a package sees two columns, the prompt and her, and the third appears when
- * a Run asks for it. The owner, 2026-09-23: "When the user opens a package, prompt package
- * or clicks composer, we don't need to load all of the code for the canvas at that same
- * time. We only load that once the run is clicked."
- *
- * The Run path fetches them BEFORE it swaps the column (loadCanvasElements, in
- * WritingAreaIndex), which is what keeps the rule the deleted comment was about: the surface
- * names AgentCanvas, and a tag nothing defines draws an empty middle column with no error
- * anywhere. The drawing's own ground is fetched at the same moment, so the image is
- * decoded before a person sees the pane (the anti-flash fix, kept — see below).
- */
-// The middle column's HEADER — the view selector and the model selector. It is its own
-// element because the header belongs to the column, not to whatever body is under it: the
-// flow view takes the column on Run, and the header has to survive the swap.
-import "@/components/lit/output-controls";
-// The canvas column's FOOT — the ControlBar master's bar, carried by any surface that
-// draws the canvas. It was the playground's own chrome until the app needed it: a row of
-// markup on one page is a row no other page can have, and the tone switch went with it.
-import "@/components/lit/canvas-footer";
-
-// ── Lit web component registry — side-effect imports auto-register custom elements ──
-import "@/components/lit/agent-card-element";
-import "@/components/lit/chat-navigation-bar";
-import "@/components/lit/ai-surface-sandbox";
-import "@/components/lit/control-bar";
-// The error channel. Its tag was in the allowlist, granted to every role, and the
-// backend's own prompt tells the model to report failures through it — with no
-// element behind it, that envelope rendered as an empty box. Now it renders.
-import "@/components/lit/error-banner";
-// The A2UI surface renderer. Registration is a side effect of the import, the
-// same as every element above. It is what turns Grace's updateComponents payload
-// into DOM — without this import the <a2ui-renderer> tag in WritingAreaIndex is
-// an unknown element and renders as an empty inline box, silently.
-import "@/components/lit/a2ui-renderer";
-import "@/components/lit/output-header";
-import "@/components/lit/output-footer-area";
-// The components APPROVED THROUGH INGESTION. They were declared in the allowlist, in the
-// catalogue and in the Figma map, and defined by NOTHING — so each of them drew the renderer's
-// "resolved to <f-…>, which no element defines" block instead of itself. This import is the
-// definition; the file it points at explains the measurement and why a glob rather than an
-// entry above.
-import "@/components/lit/ingested";
 
 // ── Production Sentry guard ──────────────────────────────────────────────────
 if (import.meta.env.PROD && !isSentryReady()) {
@@ -141,60 +33,24 @@ if (import.meta.env.PROD && !isSentryReady()) {
 }
 
 /*
- * ── THE COMPOSER'S GROUND, FETCHED BEFORE ANYTHING IS DRAWN ────────────────────
+ * ── FIRST RENDER, AND THE READ THAT NO LONGER BLOCKS IT ────────────────────────
  *
- * It is large (413 KB) and it is what a person sees the moment a section of the app that has
- * never been open becomes visible — Console to composer on the first card.
- *
- * FETCHED AT MODULE SCOPE, ON PURPOSE, and that is the whole of the fix. This used to run in
- * an effect inside WritingAreaIndex, which is after React has mounted and painted — measured
- * against the deployed site, 2026-09-23, where a person opening a card for the first time saw
- * the composer's fallback colour for as long as the image took to arrive, and called it "a very
- * ugly purple paint". On localhost the same image is a disk read and the flash never happens,
- * which is why it looked like a deployment difference and was really a network one. Here it
- * starts as soon as this bundle is parsed: before the app renders, in parallel with everything
- * else the first load does.
- *
- * `decode()` is what makes it ready rather than merely fetched, and it is deliberately not
- * awaited: a decode that fails is not a reason to hold up the app, and the worth of this is in
- * the fetch having started, not in a promise nobody is waiting on.
- *
- * THE DRAWING'S GROUND IS NOT HERE, and that is the same reasoning applied the other way: it
- * belongs to a column that does not exist until a Run, so 591 KB of texture would be paid for
- * by every person who opens a package and never runs one. It is fetched by the Run — see
- * `loadCanvasElements` in WritingAreaIndex, which starts it beside the code it belongs to and
- * well before the pane is drawn.
+ * `demoModeReady()` STARTS the /api/config read here and is deliberately not awaited:
+ * the gate does not depend on the flag, so waiting for it before the first paint was
+ * paying a round-trip (measured 0.47 s on the deployed demo) for nothing. App awaits
+ * the same promise before it draws the authenticated tree — by pin time, long
+ * resolved.
  */
-{
-  const img = new Image();
-  img.src = composerBackground;
-  if (img.decode) img.decode().catch(() => {});
-}
-
+void demoModeReady();
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
 /*
- * ── WHICH BUILD THIS IS, ASKED BEFORE ANYTHING IS DRAWN ───────────────────────
- *
- * /api/config answers `demo_mode`, and the shell hides destructive affordances on
- * the demo so nobody is offered a button the server will refuse (shared/demoMode.ts).
- *
- * AWAITED, ON PURPOSE: the flag is read once at render time by plain components, not
- * through a reactive store, so mounting first and asking after would draw Delete
- * buttons on the demo and never take them back. `loadDemoMode` cannot throw and times
- * out in 3 s — a server that never answers leaves the flag false, which is the local,
- * full-power default, and the gate still refuses the action.
+ * THE STATIC GATE TWIN'S EXIT. index.html draws the gate before this bundle exists, and
+ * its job ends the frame after React commits — one frame later so the swap happens out
+ * of sight, and safe whenever it lands: the page behind it is the same #1a1625, so even
+ * an early removal is a dark frame, never a white one.
  */
-void (async () => {
-  await loadDemoMode();
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  );
-  /*
-   * THE STATIC GATE TWIN'S EXIT. index.html draws the gate before this bundle exists, and
-   * its job ends the frame after React commits — one frame later so the swap happens out of
-   * sight, and safe whenever it lands: the page behind it is the same #1a1625, so even an
-   * early removal is a dark frame, never a white one.
-   */
-  requestAnimationFrame(() => document.getElementById("splash")?.remove());
-})();
+requestAnimationFrame(() => document.getElementById("splash")?.remove());

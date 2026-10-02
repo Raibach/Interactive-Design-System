@@ -1,3 +1,8 @@
+// THE APP'S COMPONENT REGISTRATIONS — every tag the surface can name, defined before any
+// surface assembles. It rides with this page, not with the entry, so the sign-in gate never
+// waits for forty elements it cannot draw yet (2026-10-02; the rule it protects — a tag
+// nothing defines draws nothing — is documented in components/lit/register.ts).
+import "@/components/lit/register";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, useBlocker } from "react-router-dom";
 // THE ONE WAY THROUGH THE BOUNDARY. The design room's container is drawn by the design
