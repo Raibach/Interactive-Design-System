@@ -17,7 +17,7 @@ import sys
 
 from fastapi.routing import APIRoute
 
-from demo_policy import ALLOWED_MUTATIONS, GET_DENYLIST_PREFIXES, PASS_LIST
+from demo_policy import ALLOWED_MUTATIONS, GET_DENYLIST_PREFIXES, GET_DENY_EXCEPTIONS, PASS_LIST
 from main import app
 
 MUTATING_METHODS = ("POST", "PUT", "PATCH", "DELETE")
@@ -49,6 +49,13 @@ def main() -> int:
 
     for method, path in sorted(set(PASS_LIST) - route_pairs):
         problems.append(f"pass-list entry {method} {path} matches no route")
+
+    # The exceptions are exact endpoints carved out of the denylist — an entry with
+    # no GET route behind it is either a typo or a route that moved, and both mean
+    # the carve-out no longer carves what it names.
+    for path in GET_DENY_EXCEPTIONS:
+        if path not in get_paths:
+            problems.append(f"GET deny exception {path!r} matches no real GET route")
 
     # An unbacked denylist prefix is a NOTE, not drift: it denies a route that does
     # not exist yet, which is the future-proofing it is there for (see the comment

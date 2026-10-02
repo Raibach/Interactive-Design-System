@@ -163,6 +163,25 @@ GET_DENYLIST_PREFIXES = (
     "/api/governance/",
 )
 
+# ── THE FEW READS THE DENY ABOVE KEEPS ─────────────────────────────────────
+# 2026-10-02, measured on the live demo: the design rail reads /api/figma/activity
+# to say what was last approved and drew "The record of what was approved could
+# not be read (HTTP 403)" where the trail belongs — a refusal that reads as a
+# breakage. These three are kept because none of them dials api.figma.com, none
+# writes a file, and none carries another user's content: `activity` is the
+# design-element trail (rows this database holds, read-only), `catalog` is the
+# LOCAL catalogue state (a file read), and `config` is connection booleans plus
+# the default file key — a key that already sits in this repository's own
+# component descriptions. Everything else under /api/figma/ (the endpoints that
+# call Figma, write source, or report cross-session usage) stays denied, and
+# mutations are unaffected: activity/purge is a POST and the allowlist refuses it
+# as before.
+GET_DENY_EXCEPTIONS = (
+    "/api/figma/activity",
+    "/api/figma/catalog",
+    "/api/figma/config",
+)
+
 # ── THE MUTATION ALLOWLIST ─────────────────────────────────────────────────
 # The demo's own sandbox, and nothing else: create/edit its own packages, save
 # and restore their versions, chat, and assemble surfaces. Every entry is an
@@ -187,6 +206,13 @@ ALLOWED_MUTATIONS = (
     ("POST", "/api/conversations/{conversation_id}/messages"),
     ("POST", "/api/conversation/confirm-tag"),
     ("POST", "/api/conversation/track-tag-suggestion"),
+    # Own projects: the shell creates a default project when the user has none
+    # (WritingAreaIndex's createProject path) and can rename it. 2026-10-02, from
+    # the live demo's Sentry: POST /api/projects answered 403 on every first load
+    # because the demo user had no project row, and the console logged the
+    # refusal as an error. Deny of DELETE stays — a project never goes away.
+    ("POST", "/api/projects"),
+    ("PUT", "/api/projects/{project_id}"),
 )
 
 # Endpoints that reach the hosted model (or load the local embedder to ping it).
@@ -277,7 +303,7 @@ async def demo_policy_dispatch(request: Request, call_next):
 
     # ── 3. THE POLICY ──────────────────────────────────────────────────────
     if policy_method == "GET":
-        if path.startswith(GET_DENYLIST_PREFIXES):
+        if path.startswith(GET_DENYLIST_PREFIXES) and not path.startswith(GET_DENY_EXCEPTIONS):
             return _forbidden(_DENIED_GET)
         return await call_next(request)
 
