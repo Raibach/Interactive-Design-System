@@ -1121,6 +1121,29 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 """
 
+# The DEMO identity — seeded only when DEMO_MODE=1 (see Step 5b below), because the
+# deployed demo pins every request to this row (deps.get_user_id_from_header) and the
+# row must exist before the first request. The id and email come from the environment
+# (DEMO_USER_ID / DEMO_USER_EMAIL) with deps.py's defaults; init_db reads the
+# environment alone on purpose, so they are passed as parameters here. The password
+# hash is a placeholder — no credential opens this row; the demo's door is the browser
+# pin, and the server pins identity regardless. prompt_role='product' gives the demo
+# the same manifest the owner account has, so the sandbox is not a reduced experience.
+DEMO_USER_SQL = """
+INSERT INTO users (id, email, password_hash, full_name, status, email_verified, role, prompt_role)
+VALUES (
+    %s,
+    %s,
+    'demo_no_password_placeholder',
+    'Demo Visitor',
+    'active',
+    TRUE,
+    'student',
+    'product'
+)
+ON CONFLICT (id) DO NOTHING;
+"""
+
 # Default category palette + theme text colors — every value sourced 1:1
 # from the design system; the AI never picks colors:
 #   Writing        — from the Figma console-card node itself (40000717:17091):
@@ -1639,6 +1662,25 @@ def init_database():
             print("  Default user created or already exists")
         except Exception as e:
             print(f"  Warning: Could not create default user: {e}")
+
+        # Step 5b: The demo identity — ONLY where a demo runs. A container's own boot
+        # guarantees the row exists before the pinned identity points at it; local runs
+        # leave DEMO_MODE unset and this never executes, keeping the local database as
+        # it was. seed_demo_data.py also ensures the row (for --apply runs outside a
+        # container), and both are idempotent.
+        if os.getenv("DEMO_MODE", "0") == "1":
+            print("Creating demo user (DEMO_MODE=1)...")
+            try:
+                cur.execute(
+                    DEMO_USER_SQL,
+                    (
+                        os.getenv("DEMO_USER_ID", "00000000-0000-0000-0000-000000000002"),
+                        os.getenv("DEMO_USER_EMAIL", "demo@raibach.net"),
+                    ),
+                )
+                print("  Demo user created or already exists")
+            except Exception as e:
+                print(f"  Warning: Could not create demo user: {e}")
 
         # Step 6: Seed default categories (name → card color)
         print("Seeding default categories...")

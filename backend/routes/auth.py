@@ -43,7 +43,13 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel
 
 import services as state
-from deps import DEFAULT_USER_ID, get_user_id_from_header, user_is_admin
+from deps import (
+    DEFAULT_USER_ID,
+    DEMO_MODE,
+    DEMO_USER_ID,
+    get_user_id_from_header,
+    user_is_admin,
+)
 
 router = APIRouter()
 
@@ -202,7 +208,11 @@ async def login(request: LoginRequest, http_request: Request):
         # on. The credentials row is the gate; the identity is the owner. This
         # is not multi-tenant auth — it is a doorman that drops you into the
         # existing owner.
-        user_id = DEFAULT_USER_ID
+        #
+        # IN DEMO MODE THE DOOR OPENS INTO THE SANDBOX: the identity handed back
+        # is DEMO_USER_ID — the one seed_demo_data.py owns packages for and
+        # demo_policy.py permits — never the owner. Same shape, safe seat.
+        user_id = DEMO_USER_ID if DEMO_MODE else DEFAULT_USER_ID
         owner_email = DEFAULT_USER_ID
         owner_name = DEFAULT_USER_ID
         owner_role = None

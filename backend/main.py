@@ -120,6 +120,23 @@ for _m in (misc, conversations, projects, teacher, memory,
     app.include_router(_m.router)
 
 
+# ── THE DEMO GATE (registered unconditionally, on purpose) ─────────────────
+#
+# WHEN: only when DEMO_MODE=1 — the deployed demo service. Local runs are
+# unaffected (the gate's first line is a passthrough).
+#
+# WHERE, and why HERE: this must not live inside the `if os.path.isdir(frontend_dist)`
+# block below — a build without a frontend dist would then ship with no gate at all.
+# Registered after the router loop and BEFORE the two frontend middlewares, so the
+# stack runs: spa_fallback → cache headers → this gate → CORS → routes. That order is
+# deliberate: a 403/429 from the gate travels back out through the cache middleware
+# (which stamps no-cache on it), the SPA fallback only ever touches 404s, and no
+# request the gate refuses reaches a route handler.
+from demo_policy import demo_policy_dispatch
+
+app.middleware("http")(demo_policy_dispatch)
+
+
 # ── Serve production frontend (SPA) ────────────────────────────────────
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(frontend_dist):

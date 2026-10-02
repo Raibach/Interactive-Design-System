@@ -12,6 +12,7 @@ import CommandCenter from "@/pages/CommandCenter";
 // entry names it, and nothing on `/` links to it except this route's own path.
 import CatalogInspector from "@/pages/CatalogInspector";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
+import { isDemoMode } from "@/shared/demoMode";
 import "./global.css";
 
 const queryClient = new QueryClient();
@@ -90,16 +91,25 @@ function App() {
                     path="/"
                     element={<WritingAreaIndex isAuthenticated={true} />}
                   />
-                  <Route
-                    path="/debug/command-center"
-                    element={<CommandCenter />}
-                  />
+                  {/* The debug centre and the catalogue inspector read infrastructure
+                      and server files, and the demo refuses both at the gate
+                      (demo_policy.py: /api/debug/, /api/files/) — so the demo does not
+                      route to them either. Nothing on `/` links to them; a visitor
+                      only meets them by typing the URL. */}
+                  {!isDemoMode() && (
+                    <Route
+                      path="/debug/command-center"
+                      element={<CommandCenter />}
+                    />
+                  )}
                   {/* The catalogue inspector. A fixed route rather than a redirect, and
                       additive: `/` and the debug route are untouched. */}
-                  <Route
-                    path="/catalogs"
-                    element={<CatalogInspector />}
-                  />
+                  {!isDemoMode() && (
+                    <Route
+                      path="/catalogs"
+                      element={<CatalogInspector />}
+                    />
+                  )}
                   {/* All other paths redirect to root - AI controls navigation */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
