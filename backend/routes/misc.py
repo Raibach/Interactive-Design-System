@@ -9,7 +9,10 @@ from pydantic import BaseModel
 
 import services as state
 from deps import (
+    DEMO_MODE,
     REASONING_TRACE_PATH,
+    a2ui_catalog_surfaces,
+    a2ui_registry_for,
 )
 from grace_gui import (
     evaluate_source,
@@ -38,6 +41,18 @@ class SourceEvalRequest(BaseModel):
     url: str
     title: str | None = None
     content: str | None = None
+
+@router.get("/api/config")
+async def api_config():
+    """The public boot config the shell reads once — which build this is.
+
+    `demo_mode` is how the browser knows to hide destructive affordances
+    (frontend/src/shared/demoMode.ts). It is COSMETIC: the server-side lock is
+    demo_policy.py, and a client that lies about this value changes nothing but
+    its own buttons. `false` on local runs, where the full system is the point.
+    """
+    return {"demo_mode": DEMO_MODE}
+
 
 @router.get("/api/health")
 async def api_health():
@@ -212,6 +227,26 @@ async def api_catalog_audit():
     return _read_catalog_audit(DEFAULT_CATALOG)
 
 
+@router.get("/api/catalog/{system}/registry")
+async def api_catalog_registry(system: str):
+    """A partition's TAG MAP — the data half of the component resolver.
+
+    The app FETCHES this, it is never bundled: a `registry.ts` written while the server runs could
+    never be imported by a bundle built long before (wireframe-lab/ADD-A-DESIGN-SYSTEM.md §6). The
+    drafting canvas consults it, last, for names the app's own tables do not know.
+
+    An unknown SYSTEM is a 404 NAMING it — a typo must not read as "this system has no components",
+    because those are different repairs. A known system with no `registry.json` answers an empty
+    map, which is the truth: nothing from this system has an implementation yet.
+    """
+    if system not in a2ui_catalog_surfaces():
+        raise HTTPException(
+            status_code=404,
+            detail=f"no catalogue partition named '{system}'",
+        )
+    return {"system": system, "components": a2ui_registry_for(system)}
+
+
 @router.get("/api/catalog/audit/{catalog}")
 async def api_catalog_audit_named(catalog: str):
     """A named pipeline's catalog health (e.g. /api/catalog/audit/ecommerce)."""
@@ -226,41 +261,52 @@ async def api_search_news(query: NewsQuery):
     return {"result": result}
 
 
+# The upload cap, and why it exists: this endpoint used to write each upload to
+# `/tmp/<client-supplied filename>` — a client could name a file `../../…` and
+# choose where the server wrote it — and nothing capped the size. Now the name is
+# the server's (tempfile) and the bytes are counted AS THEY STREAM: past the cap
+# the request is refused with 413 and the partial files are deleted. The cap is
+# total across all files in one request, not per file.
+_PDF_UPLOAD_CAP_BYTES = 10 * 1024 * 1024
+_PDF_UPLOAD_CHUNK_BYTES = 64 * 1024
+
+
 @router.post("/api/pdf/summarize")
 async def api_summarize_pdfs(
     files: list[UploadFile] = File(...), reasoning: bool = False
 ):
-    # Save uploaded files temporarily
-    temp_files = []
-    for file in files:
-        temp_path = f"/tmp/{file.filename}"
-        with open(temp_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        temp_files.append(temp_path)
+    import tempfile
+    from types import SimpleNamespace
 
-    # Process PDFs
+    temp_files: list[str] = []
+    total_bytes = 0
     try:
-        from types import SimpleNamespace
+        for file in files:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as handle:
+                temp_files.append(handle.name)
+                while chunk := await file.read(_PDF_UPLOAD_CHUNK_BYTES):
+                    total_bytes += len(chunk)
+                    if total_bytes > _PDF_UPLOAD_CAP_BYTES:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=(
+                                "Upload refused: the request exceeds the "
+                                f"{_PDF_UPLOAD_CAP_BYTES // (1024 * 1024)} MB cap."
+                            ),
+                        )
+                    handle.write(chunk)
 
         wrapped_files = [SimpleNamespace(name=path) for path in temp_files]
-    except Exception:
-
-        class _F:  # minimal object with name attr
-            def __init__(self, name):
-                self.name = name
-
-        wrapped_files = [_F(path) for path in temp_files]
-    result = summarize_pdfs(wrapped_files, reasoning)
-
-    # Clean up temp files
-    for path in temp_files:
-        try:
-            os.remove(path)
-        except Exception:
-            pass
-
-    return {"result": result}
+        result = summarize_pdfs(wrapped_files, reasoning)
+        return {"result": result}
+    finally:
+        # Clean up temp files — on the success path AND when the cap refused the
+        # request mid-stream, so a refused upload leaves nothing behind.
+        for path in temp_files:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
 
 
 @router.post("/api/memory/recall")

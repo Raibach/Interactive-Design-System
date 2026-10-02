@@ -35,6 +35,7 @@ import { html as staticHtml, unsafeStatic } from 'lit/static-html.js';
 import { ref } from 'lit/directives/ref.js';
 import { A2UI_PRIMITIVES, A2UI_STRUCTURAL } from './a2ui-primitives';
 import { TAG_REGISTRY } from '@/shared/tag-registry';
+import { systemTagFor } from '@/shared/a2uiRegistries';
 
 // ── the payload shape ───────────────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ const COMPOSITE_MAP: Record<string, string> = {
  * element is called something else, and the failure then looks like a styling
  * problem instead of a missing component.
  */
-export function resolveTag(name: string): string | null {
+export function resolveTag(name: string, system?: string | null): string | null {
   // 1. Explicit composites — a name that is really another element
   if (COMPOSITE_MAP[name]) return COMPOSITE_MAP[name];
   // 2. Spec primitives — A2UI's six, which the renderer owns
@@ -292,7 +293,16 @@ export function resolveTag(name: string): string | null {
   // 5. The allowlist — names that map to a real design-system element
   const registry = TAG_REGISTRY as unknown as Record<string, { tag?: string } | undefined>;
   const entry = registry[pascalToKebab(name)];
-  return entry?.tag ?? null;
+  if (entry?.tag) return entry.tag;
+  /*
+   * 6. THE PARTITION'S OWN MAP — consulted LAST, and the order is deliberate. The tables above are
+   * the bundle's inventory of what this app can actually draw, and a design system's fetched
+   * `registry.json` (DATA, never a bundled `.ts` — see shared/a2uiRegistries.ts) must not be able to
+   * hijack a name the app already resolves. A system's NEW names exist nowhere else, so this is
+   * where they resolve — and a name that resolves to nothing the app draws is the CALLER's refusal,
+   * by name (the drafting canvas says both sentences).
+   */
+  return systemTagFor(name, system);
 }
 
 /**

@@ -1,2430 +1,2466 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
-  "title": "Design Artifacts",
-  "whatThisFileIs": "THE DESIGN ROOM'S OWN CATALOGUE. Same components as the composer's — entered a second time, deliberately (owner, 2026-09-30: \"they have to be entered in both places, they have to be entered in composer and then they have to be re-entered into design… later we can rename them. It doesn't matter, they can share the same name.\"). The entries are the components the Design room may name; they are a copy on purpose, so that a change made for Design cannot alter what the Composer accepts and vice versa.",
-  "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. Agent can only render components from this allowlist.",
-  "catalogId": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
-  "components": {
-    "TraceFeed": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Live telemetry feed for the rail's Trace view. Implemented by <trace-feed> in src/components/lit/trace-feed.ts. It is a VIEW and fetches nothing: the app logger and Sentry's global-scope breadcrumbs are read by lib/trace-source.ts, and the shell writes them into the data model. Every value it draws arrives through the two bindings below.",
-          "properties": {
-            "component": {
-              "const": "TraceFeed"
-            },
-            "entries": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Data-bound list of trace entries, newest first. Object form: {\"path\": \"/trace/entries\"}. Unset is NOT empty: the feed draws its waiting state until the path has been written, because an empty list is a claim that the app has logged nothing."
-            },
-            "breadcrumbCount": {
-              "description": "How many breadcrumbs Sentry's global scope is holding, bound as {\"path\": \"/trace/breadcrumbCount\"}. Written on the same channel as entries. Both forms are spelled out here because common_types.json has no DynamicNumber and the bound form is an object, not a number — a bare \"type\": \"number\" would describe a payload this catalog refuses.",
-              "oneOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "path": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "path"
-                  ]
-                }
-              ]
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ]
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
+ "title": "Design Artifacts",
+ "whatThisFileIs": "THE DESIGN ROOM'S OWN CATALOGUE. Same components as the composer's — entered a second time, deliberately (owner, 2026-09-30: \"they have to be entered in both places, they have to be entered in composer and then they have to be re-entered into design… later we can rename them. It doesn't matter, they can share the same name.\"). The entries are the components the Design room may name; they are a copy on purpose, so that a change made for Design cannot alter what the Composer accepts and vice versa.",
+ "description": "Custom A2UI v0.9.1 catalog for the Raibach Design System Lifecycle Management platform. Agent can only render components from this allowlist.",
+ "catalogId": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
+ "components": {
+  "TraceFeed": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
     },
-    "user-response-bubble": {
-      "type": "object",
-      "description": "The response row inside the chat output card — the design's \"user-response-bubble\", Figma node 40001119:6352 (file 20UPR2KQMsbAxlo5NJb1se), implemented by <user-response-bubble> in src/components/lit/user-response-bubble.ts. A 6px-radius #CBE6E3 row — or the seat's own --chat-user-bg when it sets one — holding a 19×19 mark and one line of Inter 500 13/20 in #171717. It is a DRAWING: the Figma node carries no annotation, so the element declares no events and nothing about it is invented; the host supplies the line.",
-      "properties": {
-        "component": {
-          "const": "user-response-bubble"
-        },
-        "id": {
-          "type": "string"
-        },
-        "text": {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-          "description": "The line to draw, e.g. {\"path\": \"/session/right_column/last_response\"}. Optional — the wireframe's own copy is sample text, not a default."
-        }
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Live telemetry feed for the rail's Trace view. Implemented by <trace-feed> in src/components/lit/trace-feed.ts. It is a VIEW and fetches nothing: the app logger and Sentry's global-scope breadcrumbs are read by lib/trace-source.ts, and the shell writes them into the data model. Every value it draws arrives through the two bindings below.",
+     "properties": {
+      "component": {
+       "const": "TraceFeed"
       },
-      "required": [
-        "component"
-      ]
-    },
-    "EvalFeed": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The judged runs of one package, for the rail's Evals view. Implemented by <eval-feed> in src/components/lit/eval-feed.ts. It is a VIEW and fetches nothing: the backend's /evaluations endpoint stores one row per run, and the shell binds the list into the data model. Every value it draws arrives through the binding below.",
-          "properties": {
-            "component": {
-              "const": "EvalFeed"
-            },
-            "evaluations": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Data-bound list of judged runs, newest first. Object form: {\"path\": \"/session/middle_column/evaluations\"}. Unset is NOT empty: the feed draws its waiting state until the path has been written, because an empty list is a claim that the package has run and nothing has been judged."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ]
-    },
-    "eval-feed": {
-      "type": "object",
-      "description": "The same component as EvalFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps EvalFeed to <eval-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the EvalFeed entry.",
-      "properties": {
-        "component": {
-          "const": "eval-feed"
-        },
-        "id": {
-          "type": "string"
-        }
+      "entries": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Data-bound list of trace entries, newest first. Object form: {\"path\": \"/trace/entries\"}. Unset is NOT empty: the feed draws its waiting state until the path has been written, because an empty list is a claim that the app has logged nothing."
       },
-      "required": [
-        "component"
-      ]
-    },
-    "trace-feed": {
-      "type": "object",
-      "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",
-      "properties": {
-        "component": {
-          "const": "trace-feed"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "AgentFlow": {
-      "type": "object",
-      "allOf": [
+      "breadcrumbCount": {
+       "description": "How many breadcrumbs Sentry's global scope is holding, bound as {\"path\": \"/trace/breadcrumbCount\"}. Written on the same channel as entries. Both forms are spelled out here because common_types.json has no DynamicNumber and the bound form is an object, not a number — a bare \"type\": \"number\" would describe a payload this catalog refuses.",
+       "oneOf": [
         {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+         "type": "number"
         },
         {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The flow, drawn — the output column's canvas, implemented by <agent-flow> in src/components/lit/agent-flow.ts. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph from facts the app already holds (the prompt's own seats, the finding, and the run's own responses) and the shell writes it into the data model. One binding carries the whole graph, so there is exactly one path to keep true.",
-          "properties": {
-            "component": {
-              "const": "AgentFlow"
-            },
-            "flow": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` — the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note — never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
-            },
-            "theme": {
-              "type": "string",
-              "description": "The drawing’s tone, sent by the assembly that puts the canvas in the middle column on a Run: \"dark\" is the reference’s near-black surface, which is the tone a Run is shown in, and unset draws the mid-tone this design was drawn in (the tone switch in <canvas-footer> writes it afterwards). Declared 2026-09-23 because the element has always taken this property and the catalog did not say so, while the Run’s assembly sends it every time — the catalog-check reported it as an under-described property, which is the declaration drifting from the surface rather than the surface from the declaration."
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ]
-    },
-    "agent-flow": {
-      "type": "object",
-      "description": "The same component as AgentFlow, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentFlow to <agent-flow>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the AgentFlow entry.",
-      "properties": {
-        "component": {
-          "const": "agent-flow"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "AgentCanvas": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "THE PLUG-IN — the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings — those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
-          "properties": {
-            "component": {
-              "const": "AgentCanvas"
-            },
-            "theme": {
-              "type": "string",
-              "description": "The drawing's tone. Empty is the mid-tone this design is drawn in; \"dark\" is the reference's near-black surface. It reaches the ground her column stands on."
-            },
-            "collapsed": {
-              "type": "boolean",
-              "description": "True when she is away and only her rail shows. The container owns the width, so the flag lives here; her rail and the gripper write it too, because it is one fact."
-            },
-            "id": {
-              "type": "string"
-            },
-            "children": {
-              "type": "object",
-              "description": "The two slots, filled BY NAME from the envelope: {\"flow\": <id of the drawing>, \"seat\": <id of her chat panel>}. Each child carries its own bindings — the drawing its graph, her seat its conversation, session and readouts — so nothing is forwarded through this element.",
-              "properties": {
-                "flow": {
-                  "type": "string"
-                },
-                "seat": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "component",
-            "children"
-          ]
-        }
-      ]
-    },
-    "agent-canvas": {
-      "type": "object",
-      "description": "The same component as AgentCanvas, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentCanvas to <agent-canvas>), while the allowlist and the catalog audit name the TAG. The slots are described on the AgentCanvas entry.",
-      "properties": {
-        "component": {
-          "const": "agent-canvas"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "chat-repair-actions": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The catalog checker's open findings, drawn in the chat panel's \"view\" slot. Implemented by <chat-repair-actions> in src/components/lit/chat-repair-actions.ts. A VIEW: it fetches nothing and composes no sentence about a finding — the writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them here, so the list cannot disagree with the check that produced it.",
-          "properties": {
-            "component": {
-              "const": "chat-repair-actions"
-            },
-            "findings": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Data-bound rows, blocking first: {\"path\": \"/findings\"}. Each row is {id, text, level}, with text and level composed by the writer. Unset is NOT empty: the element draws its waiting state until the path has been written, because an empty list is the claim that the checker found nothing open."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ]
-    },
-    "ai-surface-sandbox": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The bounded surface Grace assembles A2UI content into. <ai-surface-sandbox> is defined (components/lit/ai-surface-sandbox.ts) and named by the allowlist, but this schema did not list it - so any payload naming it was rejected with a 503.",
-          "properties": {
-            "component": {
-              "const": "ai-surface-sandbox"
-            },
-            "isAIAssembling": {
-              "type": "boolean",
-              "default": false,
-              "description": "True while an assembly is in flight; the sandbox shows its spinner slot."
-            },
-            "headerTab": {
-              "type": "string",
-              "enum": [
-                "console",
-                "composer",
-                "evaluation",
-                "variables",
-                "metadata"
-              ],
-              "default": "console",
-              "description": "Which slot the sandbox exposes."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "Text": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "component": {
-              "const": "Text"
-            },
-            "text": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "The text content to display. Simple Markdown supported (no HTML, images, or links)."
-            },
-            "variant": {
-              "type": "string",
-              "description": "A hint for the base text style. 'greeting' is the Grace welcome-message style used at the top of assembled surfaces.",
-              "enum": [
-                "h1",
-                "h2",
-                "h3",
-                "h4",
-                "h5",
-                "caption",
-                "body",
-                "greeting"
-              ],
-              "default": "body"
-            }
-          },
-          "required": [
-            "component",
-            "text"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "Image": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "component": {
-              "const": "Image"
-            },
-            "url": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "The URL of the image. Must be a registered catalog ID from the A2UI Image Catalog (raibach-logo, card-bg-design-system, card-img-default, molecule-logo)."
-            },
-            "description": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Accessibility text for the image (WCAG 2.1 AA required)."
-            },
-            "fit": {
-              "type": "string",
-              "enum": [
-                "contain",
-                "cover",
-                "fill",
-                "none",
-                "scaleDown"
-              ],
-              "default": "cover"
-            },
-            "variant": {
-              "type": "string",
-              "enum": [
-                "icon",
-                "avatar",
-                "smallFeature",
-                "mediumFeature",
-                "largeFeature",
-                "header"
-              ],
-              "default": "mediumFeature"
-            }
-          },
-          "required": [
-            "component",
-            "url"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "Row": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "A layout component that arranges its children horizontally.",
-          "properties": {
-            "component": {
-              "const": "Row"
-            },
-            "children": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Defines the children by ID reference. Use explicitList for fixed children or template for data-driven lists."
-            },
-            "justify": {
-              "type": "string",
-              "enum": [
-                "center",
-                "end",
-                "spaceAround",
-                "spaceBetween",
-                "spaceEvenly",
-                "start",
-                "stretch"
-              ],
-              "default": "start"
-            },
-            "align": {
-              "type": "string",
-              "enum": [
-                "start",
-                "center",
-                "end",
-                "stretch"
-              ],
-              "default": "stretch"
-            }
-          },
-          "required": [
-            "component",
-            "children"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "Column": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "A layout component that arranges its children vertically.",
-          "properties": {
-            "component": {
-              "const": "Column"
-            },
-            "children": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Defines the children by ID reference."
-            },
-            "justify": {
-              "type": "string",
-              "enum": [
-                "start",
-                "center",
-                "end",
-                "spaceBetween",
-                "spaceAround",
-                "spaceEvenly",
-                "stretch"
-              ],
-              "default": "start"
-            },
-            "align": {
-              "type": "string",
-              "enum": [
-                "center",
-                "end",
-                "start",
-                "stretch"
-              ],
-              "default": "stretch"
-            }
-          },
-          "required": [
-            "component",
-            "children"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "Card": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "component": {
-              "const": "Card"
-            },
-            "child": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId",
-              "description": "The ID of the single child component to be rendered inside the card."
-            }
-          },
-          "required": [
-            "component",
-            "child"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "Button": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "component": {
-              "const": "Button"
-            },
-            "child": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId",
-              "description": "The ID of the child component (typically a Text for the label)."
-            },
-            "variant": {
-              "type": "string",
-              "enum": [
-                "default",
-                "primary",
-                "borderless"
-              ],
-              "default": "default"
-            },
-            "action": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/Action"
-            }
-          },
-          "required": [
-            "component",
-            "child",
-            "action"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "agent-card": {
-      "deprecated": true,
-      "x-deprecated-reason": "No element defines this tag. The card is drawn INSIDE ConsoleCardGrid by <agent-card-element>, which that grid's own template instantiates (an internal sub-piece, like chat-messages inside chat-panel). Emitting this name draws an empty box. Use ConsoleCardGrid with items bound to /cards.",
-      "type": "object",
-      "x-figma-source": {
-        "fileKey": "20UPR2KQMsbAxlo5NJb1se",
-        "nodeId": "40001114:5813",
-        "nodeName": "console-card-design-system",
-        "description": "Design source of truth. The extracted style spec (every fill, stroke, effect, font, weight, size, line height, bounding box) is cached in PostgreSQL figma_specs and served by the spec endpoint."
-      },
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Lit web component <agent-card-element>. Console prompt card (262x251px) per Figma node 40001114:5813 \"console-card-design-system\". Renders header (molecule logo, function line, category line), title + description body (with the ##PROMPT## lead), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM — never invented or renamed. Registered as custom element: agent-card-element.",
-          "properties": {
-            "component": {
-              "const": "agent-card"
-            },
-            "id": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Unique identifier for the card (maps to prompt session ID)."
-            },
-            "title": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Card title displayed in the card-title row (16px bold, 2-line clamp)."
-            },
-            "function": {
-              "type": "string",
-              "description": "The function level — the line ABOVE the category in the card header (14px bold #F6C031). Falls back to the design's own sample line 'Function like Repair' until the data supplies it."
-            },
-            "category": {
-              "type": "string",
-              "description": "Content category label shown under the function line (12px bold, categories table title_color).",
-              "enum": [
-                "Design System",
-                "Learning Module",
-                "Graphics",
-                "Writing",
-                "Coding",
-                "Sales Service Design Accounts Team"
-              ],
-              "default": "Design System"
-            },
-            "category_color": {
-              "type": "string",
-              "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#1C2F4E' (the design's own fill) when the category is unregistered.",
-              "default": "#1C2F4E"
-            },
-            "category_title_color": {
-              "type": "string",
-              "description": "Color of the category label text, from the categories table (title_color). Fallback '#FB8D67' (the design's own category line).",
-              "default": "#FB8D67"
-            },
-            "category_text_color": {
-              "type": "string",
-              "description": "Color of the card title + description text, from the categories table (text_color). Fallback '#FFFFFF' (the design's own white).",
-              "default": "#FFFFFF"
-            },
-            "description": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Card description text."
-            },
-            "status": {
-              "type": "string",
-              "enum": [
-                "Active",
-                "Draft",
-                "Archived"
-              ],
-              "default": "Active"
-            },
-            "version": {
-              "type": "number",
-              "description": "Current version number displayed in the footer version pill.",
-              "default": 1
-            },
-            "likes": {
-              "type": "number",
-              "default": 0
-            }
-          },
-          "required": [
-            "component",
-            "id",
-            "title"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "chat-navigation-bar": {
-      "type": "object",
-      "x-figma-source": {
-        "fileKey": "20UPR2KQMsbAxlo5NJb1se",
-        "nodeId": "40001010:25768",
-        "nodeName": "chat-button",
-        "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] — the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
-      },
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Lit web component <chat-navigation-bar>. Right-column tab rail — chat, trace, tools, evaluation, variables, metadata — filtered by the user's departmental role, carrying the catalog-health marker on the chat tab. Renders the designed buttons (Figma chat-button 40001010:25768, trace-button 40001011:26266). Replaces React SidebarNavigation + NavigationButton.",
-          "properties": {
-            "component": {
-              "const": "chat-navigation-bar"
-            },
-            "activeTab": {
-              "type": "string",
-              "description": "The currently active tab. Matches the element's TabId union — 'approval' was listed here and is not one.",
-              "enum": [
-                "chat",
-                "trace",
-                "tools",
-                "evaluation",
-                "variables",
-                "metadata"
-              ],
-              "default": "chat"
-            },
-            "collapsed": {
-              "type": "boolean",
-              "description": "Whether the navigation panel is collapsed.",
-              "default": false
-            },
-            "allowedTabs": {
-              "type": "string",
-              "description": "Comma-separated tab IDs to show, filtered by the user's departmental role (element property 'allowed-tabs'). Empty shows every tab rather than an empty rail.",
-              "default": ""
-            },
-            "healthCount": {
-              "type": "number",
-              "description": "Open catalog findings (element property 'health-count'). Above zero the chat tab's icon pulses; zero is quiet.",
-              "default": 0
-            },
-            "healthState": {
-              "type": "string",
-              "description": "Whether healthCount can be trusted (element property 'health-state'). 'unknown' must never render the same as a clean result.",
-              "enum": [
-                "ok",
-                "loading",
-                "unknown"
-              ],
-              "default": "loading"
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "error-banner": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Lit web component <error-banner>. The system's error channel — the tag the runtime model is already instructed to report failures through (backend/grace_gui.py: 'Use <error-banner message=\"...\"/> only'). Rendered LOUD on purpose: it also carries the case where a component is generated WITHOUT its annotation, which means behaviour is being invented downstream on every surface that places it. Alert, don't block — the surface still renders underneath.",
-          "properties": {
-            "component": {
-              "const": "error-banner"
-            },
-            "message": {
-              "type": "string",
-              "description": "What went wrong, in a sentence a person can act on."
-            },
-            "code": {
-              "type": "string",
-              "description": "Short machine-ish label above the message, e.g. UNANNOTATED-IN-USE."
-            },
-            "retry": {
-              "type": "boolean",
-              "description": "Offer a Retry affordance. Off unless the caller can actually retry something.",
-              "default": false
-            }
-          },
-          "required": [
-            "component",
-            "message"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "ConsoleCardGrid": {
-      "x-internal-instantiation": "renders <agent-card-element> from its own template — an internal sub-piece (recorded nesting, 2026-09-18); the card is never emitted as a component by the model, the grid composes it from /cards",
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Implemented by a2ui-console-card-grid in src/components/lit/a2ui-primitives.ts, and it is the only renderer of this component — nothing in the React shell draws a second copy, so /cards is the single list of packages in play.",
-          "properties": {
-            "component": {
-              "const": "ConsoleCardGrid"
-            },
-            "items": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Data-bound list of agent cards. Object form: {\"path\": \"/cards\", \"componentId\": \"agent-card-template\"}."
-            }
-          },
-          "required": [
-            "component",
-            "items"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "DecisionDialog": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "AI decision surface — shown when the agent needs user confirmation before proceeding (e.g. unsaved changes). Contains a Text message and an ActionGroup of choices.",
-          "properties": {
-            "component": {
-              "const": "DecisionDialog"
-            },
-            "children": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Static child references: [messageText, actionGroup]."
-            }
-          },
-          "required": [
-            "component",
-            "children"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "ActionGroup": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Row of action buttons for a DecisionDialog. Renders one Button per item in the bound actions list (each item: {id, label, variant}).",
-          "properties": {
-            "component": {
-              "const": "ActionGroup"
-            },
-            "items": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Data-bound list of action descriptors. Object form: {\"path\": \"/actions\", \"componentId\": \"action-button-template\"}."
-            }
-          },
-          "required": [
-            "component",
-            "items"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "SectionEditor": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Left-column prompt section editor (composer). Renders the ordered prompt sections (System Role, User Role, Tool Call, Few Shot, Context, Constraints + customs) from the bound sections list. Backed by PromptWorkspace/ResponsivePromptBuilderWithDnD.",
-          "properties": {
-            "component": {
-              "const": "SectionEditor"
-            },
-            "sections": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "Data-bound list of prompt sections. Object form: {\"path\": \"/session/left_column/sections\", \"componentId\": \"prompt-section-template\"}."
-            }
-          },
-          "required": [
-            "component",
-            "sections"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "CompiledOutput": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Middle-column compiled output panel. Displays the assembled/executed prompt output (markdown). Backed by MiddleColumnSlot.",
-          "properties": {
-            "component": {
-              "const": "CompiledOutput"
-            },
-            "content": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "The compiled output content (Markdown supported). Typically bound to /session/middle_column/compiled_output."
-            }
-          },
-          "required": [
-            "component",
-            "content"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "ChatPanel": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Right-column chat panel — the surface command interface. Conversation scoped to the bound conversation id. Backed by InteractiveChatInterface.",
-          "properties": {
-            "component": {
-              "const": "ChatPanel"
-            },
-            "conversationId": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "The conversation this chat panel is scoped to. Typically bound to /session/right_column/conversation_id."
-            }
-          },
-          "required": [
-            "component",
-            "conversationId"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "footer-bar": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The prompt package control bar: Save Template, RUN, undo, and overflow gripper. Dispatches save-click / run-click CustomEvents for shell integration.",
-          "properties": {
-            "component": {
-              "const": "footer-bar"
-            },
-            "versionText": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Left status text, e.g. 'Saved: API Documentation Writer'."
-            },
-            "isSaving": {
-              "type": "boolean",
-              "default": false,
-              "description": "Shows compiling spinner on Save Template while Grace compiles."
-            },
-            "saveShortcut": {
-              "type": "string",
-              "default": "⌘ S"
-            },
-            "runShortcut": {
-              "type": "string",
-              "default": "⌘ ⏎"
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "add-section-button": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Adds a new prompt section to the left column. Optional chips enable {{variables}}, {{multimedia}}, and {{url}} insertion.",
-          "properties": {
-            "component": {
-              "const": "add-section-button"
-            },
-            "label": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Button label. Default 'Add Section'."
-            },
-            "chips": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "variables",
-                  "multimedia",
-                  "url"
-                ]
-              },
-              "default": [
-                "variables",
-                "multimedia",
-                "url"
-              ],
-              "description": "Insertion chips rendered on the button."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "status-readout": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Slim bottom readout area for the prompt package surface: active user ID plus transient status messaging (save, error, compile).",
-          "properties": {
-            "component": {
-              "const": "status-readout"
-            },
-            "userId": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Active user UUID, displayed truncated, e.g. u:00000000…0001."
-            },
-            "message": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
-              "description": "Transient status line, e.g. Saved, Compiling…, Error text."
-            },
-            "level": {
-              "type": "string",
-              "enum": [
-                "info",
-                "success",
-                "error"
-              ],
-              "default": "info"
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "token-cost-readout": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Rail readout showing running token usage and estimated cost for the current prompt package.",
-          "properties": {
-            "component": {
-              "const": "token-cost-readout"
-            },
-            "tokens": {
-              "type": "integer",
-              "description": "Total tokens consumed this session, e.g. 2022."
-            },
-            "costUsd": {
-              "type": "number",
-              "description": "Estimated cost in USD, e.g. 0.00802."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "workspace-layout": {
-      "type": "object",
-      "description": "Lit 3-column resizable workspace host (A2UI v0.9.1). Hosts prompt-section-editor (left), compiled-output-viewer (middle), chat-panel (right).",
-      "properties": {
-        "component": {
-          "const": "workspace-layout"
-        },
-        "children": {
-          "type": "array",
-          "items": {
-            "type": "string"
+         "type": "object",
+         "properties": {
+          "path": {
+           "type": "string"
           }
-        },
-        "id": {
-          "type": "string"
+         },
+         "required": [
+          "path"
+         ]
         }
-      },
-      "required": [
-        "component",
-        "children"
-      ]
-    },
-    "prompt-section-editor": {
-      "type": "object",
-      "description": "Lit prompt section editor (left column). Binds to /session/left_column/sections.",
-      "properties": {
-        "component": {
-          "const": "prompt-section-editor"
-        },
-        "sections": {
-          "type": "object"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component",
-        "sections"
-      ]
-    },
-    "compiled-output-viewer": {
-      "type": "object",
-      "description": "Lit compiled output viewer (middle column). Binds to /session/middle_column/compiled_output.",
-      "properties": {
-        "component": {
-          "const": "compiled-output-viewer"
-        },
-        "content": {
-          "type": "object"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component",
-        "content"
-      ]
-    },
-    "chat-panel": {
-      "type": "object",
-      "description": "Lit chat panel (right column + console). Binds to conversationId and to the Conversations dropdown's list.",
-      "properties": {
-        "component": {
-          "const": "chat-panel"
-        },
-        "conversationId": {
-          "type": "object"
-        },
-        "conversations": {
-          "type": "object",
-          "description": "The Conversations dropdown's rows — the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
-        },
-        "id": {
-          "type": "string"
-        },
-        "instructions": {
-          "type": "object",
-          "description": "WHO SHE IS IN THIS ROOM — a BINDING, {path: /session/grace_instructions}, to the script the surface assembled for this room, never a sentence written in the tree. The seat sends it as the context of every turn, so it decides her voice: the console's script is CONSOLE_GRACE_INSTRUCTIONS, a package's is COMPOSER_GRACE_INSTRUCTIONS, Design's is composed from the database on every assembly. Written by the assembly (routes/ai.py `_seat_grace`) on every seat it emits, so a room that states nothing cannot be answered in another room's voice."
-        },
-        "graceLiveContext": {
-          "type": "boolean",
-          "description": "Whether the seat appends its LIVE WORKSPACE to those words — the package, its prompt seats and the tool register, or the console's cards. FALSE where the room's script already carries its live facts, as Design's does. Never sent by a model: a surface that omits it is refused by the seat rather than defaulted. Written by routes/ai.py `_seat_grace`."
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "prompt-container": {
-      "type": "object",
-      "description": "Bordered container (Figma 40000746-6) hosting stacked prompt-input-sections with the vertical format rail.",
-      "properties": {
-        "component": {
-          "const": "prompt-container"
-        },
-        "formatLabel": {
-          "type": "object"
-        },
-        "tokensLabel": {
-          "type": "object"
-        },
-        "children": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ],
-      "annotation": "Data: formatLabel — the vertical rail's format line; tokensLabel — the vertical tokens/cost readout line.\nState: expanded — the container is always drawn; the rail is its right edge.\nA11y: no role of its own — a container."
-    },
-    "prompt-input-section": {
-      "type": "object",
-      "description": "One prompt input row (Figma 40000746-94): gripper + role-tile + Functions / Tools + status rail + textarea.",
-      "properties": {
-        "component": {
-          "const": "prompt-input-section"
-        },
-        "name": {
-          "type": "object"
-        },
-        "type": {
-          "type": "object"
-        },
-        "content": {
-          "type": "object"
-        },
-        "sticky": {
-          "type": "object"
-        },
-        "minHeight": {
-          "type": "object"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component",
-        "name"
-      ],
-      "annotation": "Data: name, type, content, sticky, minHeight.\nOn click: section-menu-select { role } when a role is chosen from the tile's menu; section-collapse-toggle { collapsed } on the tile's chevron.\nOn change: section-content-input { value } as the textarea is typed in.\nState: collapsed | expanded.\nDisabled: the System Role section is sticky — first, no menu, not draggable, not deletable.\nA11y: group, labelled by the role tile's text."
-    },
-    "gripper-prompt-input": {
-      "type": "object",
-      "description": "Meatballs drag handle (49x37) — the only drag anchor of a prompt-input-section (Figma 40000746-94).",
-      "properties": {
-        "component": {
-          "const": "gripper-prompt-input"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "role-dropdown": {
-      "type": "object",
-      "description": "Role-selector dropdown for a prompt-input-section accordion tile (Figma 40000934-22851). Lists User Role / Agent Role / Tool Call / Custom / Remove; dispatches role-select / role-remove.",
-      "properties": {
-        "component": {
-          "const": "role-dropdown"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "role-tile": {
-      "type": "object",
-      "description": "Role label tile 357x43 with Arrow_drop_down menu toggle (Figma 40000746-94).",
-      "properties": {
-        "component": {
-          "const": "role-tile"
-        },
-        "label": {
-          "type": "object"
-        },
-        "showMenu": {
-          "type": "object"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component",
-        "label"
-      ],
-      "annotation": "Data: label, showMenu.\nOn click: role-menu-toggle { open } from the caret; role-tile-collapse-toggle { collapsed } from the chevron.\nState: collapsed | expanded; menu closed | open.\nDisabled: no menu when showMenu is false.\nA11y: button, labelled by the tile's own text."
-    },
-    "status-bar-prompt-input": {
-      "type": "object",
-      "description": "Vertical activity rail (40px) — Database_fill + lightning_alt_fill_light icons grow with prompt activity (Figma 40000954-23865).",
-      "properties": {
-        "component": {
-          "const": "status-bar-prompt-input"
-        },
-        "icons": {
-          "type": "object"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ],
-      "annotation": "Data: icons — the activity icons drawn in the rail.\nState: idle | active — the icons grow with prompt activity.\nA11y: decorative; no label."
-    },
-    "prompt-textarea": {
-      "type": "object",
-      "description": "Active-data textarea (Figma 40000746-94; annotation: 'this is a textarea - for active data.').",
-      "properties": {
-        "component": {
-          "const": "prompt-textarea"
-        },
-        "value": {
-          "type": "object"
-        },
-        "placeholder": {
-          "type": "object"
-        },
-        "minHeight": {
-          "type": "object"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ],
-      "annotation": "Data: value, placeholder, minHeight.\nOn change: value-input { value } on every keystroke.\nState: idle | focused.\nA11y: textbox, multiline; labelled by the section's name."
-    },
-    "model-selector-button": {
-      "type": "object",
-      "description": "Model selector button (Figma 40000909-4322 'Function - Model Selector Button'): white, radius 6, 'button drop' shadow, fixed 171x40, 'Models' label (Inter Bold 16 #8B8B8B).",
-      "properties": {
-        "component": {
-          "const": "model-selector-button"
-        },
-        "label": {
-          "type": "object"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ],
-      "annotation": "Data: label — the current model's name, or \"Models\" when none is chosen.\nOn click: model-selector-toggle { open }.\nState: idle | open.\nA11y: button, labelled by its own text."
-    },
-    "control-bar": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The left column's bottom bar: undo, Save Template, RUN — and nothing else. Figma \"Left-column-ControlBar\" #40000761:261, placed as the last child of the left column container #40000954:23865. Implemented by <control-bar> in src/components/lit/control-bar.ts; the shell listens for its undo-click / save-click / run-click.",
-          "properties": {
-            "component": {
-              "const": "control-bar"
-            },
-            "isSaving": {
-              "type": "boolean",
-              "description": "True while a save is in flight; the bar shows its compiling state."
-            },
-            "isRunning": {
-              "type": "boolean",
-              "description": "True while a run is in flight."
-            },
-            "saveShortcut": {
-              "type": "string"
-            },
-            "runShortcut": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ]
-    },
-    "OutputControls": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The middle column's header row — the design's \"output-vontrols\" (node 40001034:1186): the selector tile (40001034:1187, text run 40001034:1190) and the published <model-selector-button>. Implemented by <output-controls> in src/components/lit/output-controls.ts, which draws it in every view of the middle column. The selector is a PLACEHOLDER by the owner's instruction (2026-09-18) — it renders with its design tag and role and opens no menu, because no menu contents exist in the Figma pull and the entries are the owner's specification rather than a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.",
-          "properties": {
-            "component": {
-              "const": "OutputControls"
-            },
-            "outputType": {
-              "type": "string",
-              "description": "What the selector tile reads — the view this column is showing. The design's drawn value is \"Agent Flow\" (40001034:1190); it is a property because this tile is the reader's choice at the top of the column, and the drawn value is the example, not the only value."
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ]
-    },
-    "output-controls": {
-      "type": "object",
-      "description": "The same component as OutputControls, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps OutputControls to <output-controls>), while the allowlist and the catalog audit name the TAG. The binding is described on the OutputControls entry.",
-      "properties": {
-        "component": {
-          "const": "output-controls"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "design-middle-container": {
-      "type": "object",
-      "description": "The Design room's middle column: the composer's own <output-controls> header row over a MOUNT inside its shadow tree (data-ingest-mount), where the ingest's Preview is rendered. It exists because the composer's column body (<compiled-output-viewer>) owns its whole area and has no slot, so nothing can be loaded inside it (the owner's ruling: \"If you have to make a different component because you can't figure out how to load something inside of it, then build a different lit component for the design section.\"). Content is loaded INTO this element, never beside it: loose React nodes in the room container's light DOM fight lit's own child list and re-baseline the container's split. The hole is a MOUNT rather than a slot for a measured reason — a slot leaves the content in its own tree, where the tool's Tailwind classes cannot match (no document stylesheet reaches into the renderer's shadow root), so the preview would arrive unformatted; rendering the region into this element's shadow tree makes the application's own sheet, adopted here, reach it. THE COLUMN IS DRAWN ONLY WHEN THE TREE REFERENCES IT: render-design declares this component and leaves it out of the layout's children, so the third column is collapsed until the ingest reports its first draft — the composer's own contract for its middle column ('the shell moves the flow view into it at Run time'). Design only — the composer's surface never names it.",
-      "properties": {
-        "component": {
-          "const": "design-middle-container"
-        },
-        "id": {
-          "type": "string"
-        },
-        "outputType": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "design-left-panel": {
-      "type": "object",
-      "description": "The Design room's left column: the composer's own <prompt-container> panel frame with a SLOT named \"left\" in it, and the SURFACE fills that slot — render-design names its child in this component's `children.left` and the renderer instantiates it there, so what stands in the column is the envelope's child and nothing else. Today that child is <figma-layers-view> — the ingestion rail's own component tree, reused unchanged. It exists because the panel is part of the drawing — the owner: \"it's the same panel that we have the prompt / agent prompt inputs, and it's called left column\" — while the composer's prompt sections are NOT: those are the Agent Role tile, the Functions | Tools button and the empty textarea the owner saw loading in Design, and they are removed from this surface. IT IS A SLOT AND NOT A MOUNT, which is a change worth recording: the mount (a div inside this element's shadow tree, `data-ingest-mount`) existed for the ingestion tool's React rail, and a slot left that content in its own tree where its Tailwind classes — selectors in a document stylesheet — could not match, so the rail arrived unformatted with a 153px URL field and an unscrollable component list. The tool is no longer loaded into this room at all (a React tree inside a surface is forbidden, and measured: it drew beneath the room and pushed the layout to y = −129), so the mount has nothing left to hold. A catalogue element needs none: it carries its own styles inside its own shadow root, and only its box comes from this frame (`::slotted(*)` gives it the hole's height and lets it be smaller than its content). The room's container still frames it: the panel's border, its rounded corner and its format rail are the drawing's. Design only — the composer's surface never names it.",
-      "properties": {
-        "component": {
-          "const": "design-left-panel"
-        },
-        "id": {
-          "type": "string"
-        },
-        "formatLabel": {
-          "type": "string"
-        },
-        "tokensLabel": {
-          "type": "string"
-        },
-        "children": {
-          "type": "object",
-          "description": "The panel's one hole, filled BY NAME from the envelope: {\"left\": <id of the component that stands in this column>}. Today render-design names `<figma-layers-view>` there — the ingestion rail's own tree. Declared because the element renders `<slot name=\"left\">` and the surface fills it — a slot the schema does not name is a hole nobody can legally address.",
-          "properties": {
-            "left": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "figma-layers-view": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "THE INGESTION LEFT RAIL'S OWN COMPONENT TREE — the one the ingest form draws in its left column (`IngestModal.tsx`, above the Preview), reused here unchanged and never restyled. Implemented by <figma-layers-view> in src/components/lit/figma-layers-view.ts. What it draws, top to bottom: the catalogue strip (every catalogue the build knows — design-artifacts, prompt-composer, ecommerce, primitives — with its entry count), the selected catalogue's head and catalogId, and then `Declared in this catalogue`: one row per component with its shape (`allOf(3)` / `flat`), its Figma node, the file that DRAWS it (`drawn by lit/<file>`), and a status dot from the checker's own audit. IT READS THE CATALOGUES OFF THE BUILD (`import.meta.glob` of `catalogs/*/catalog.json`) and the audit from `/api/catalog/audit/<pipeline>` — it takes no data-model binding for those, and it is not a second copy of the catalogue: the files are the source. THE STRIP IS LIVE INSIDE THE ELEMENT: clicking a catalogue at the top sets its own `pipeline` and re-reads, so switching catalogues needs no host. It dispatches `catalog-change`, `open-component`, `open-layer` and `open-function`.",
-          "properties": {
-            "component": {
-              "const": "figma-layers-view"
-            },
-            "pipeline": {
-              "type": "string",
-              "description": "WHICH CATALOGUE'S COMPONENTS ARE LISTED — a catalogue FOLDER NAME under `src/components/A2UI/catalogs/` (prompt-composer, design-artifacts, ecommerce, primitives), not a design system's name and not a session title. Defaults to the element's own default, prompt-composer, which is what the ingest form shows and the catalogue the section's 58 rows are declared in. Binding this to `/session/catalogue/system` would be WRONG: that value is `raibach-ids`, a design system, and no catalogue is named that."
-            },
-            "nodeId": {
-              "type": "string",
-              "description": "Show one node's tree instead of every node recorded for the catalogue. Unset draws the whole catalogue's declared list, which is what the rail shows before anything is selected."
-            },
-            "inline": {
-              "type": "boolean",
-              "description": "Sit in the flow of a column rather than float over the screen. True in the ingest rail and true here — the tree is the column's content."
-            },
-            "refresh": {
-              "type": "number",
-              "description": "Bumped by the host to force a re-read — after an ingest lands, or after a commit. Unset reads once on connect."
-            },
-            "reset": {
-              "type": "number",
-              "description": "Bumped by the host to fold the tree back to its opening state — a Reset."
-            },
-            "selected": {
-              "type": "string",
-              "description": "The catalogue name of the component the host has open in the preview, so the tree can mark it. Unset marks nothing."
-            },
-            "open": {
-              "type": "boolean",
-              "description": "Whether the tree is drawn open."
-            },
-            "showHead": {
-              "type": "boolean",
-              "description": "Whether the catalogue head (name, count, catalogId) is drawn above the declared rows. True by default; the Design room sets false because the head is drawn there by the ingested element f-40001207-3559."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "figma-ingest-form": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "THE INGEST RAIL’S TOP HALF — the Figma URL field, the Notes field and Submit, as a catalogue element (src/components/lit/figma-ingest-form.ts). The ingestion application is the template and its left column is this form over the catalogue tree; the tree half is `figma-layers-view`, reused, and this is the half the catalogue had no element for. It is a TRANSLATION, not a second design: the same two fields with the same words, and on Submit the same `POST /api/figma/ingest` the modal runs — the parsing (`@/utils/figmaUrl`) and the endpoint already exist and neither is reimplemented in the element. IT DRAWS AND DISPATCHES ONLY: it fetches nothing, ingests nothing, and decides nothing about what a typed string means. `ingest-submit` carries `{url, notes}` verbatim and the SHELL runs the ingest.",
-          "properties": {
-            "component": {
-              "const": "figma-ingest-form"
-            },
-            "url": {
-              "type": "string",
-              "description": "Prefilled URL, when the host has one. The field stays editable either way — it is a text input, not a label."
-            },
-            "notes": {
-              "type": "string",
-              "description": "Prefilled notes. Optional in the form and optional in the ingest."
-            },
-            "busy": {
-              "type": "boolean",
-              "description": "True while an ingest is in flight. SET BY THE HOST, never by the element: the fields lock and Submit reads 'Ingesting…', and only the caller that made the call knows when it finished."
-            },
-            "message": {
-              "type": "string",
-              "description": "A line drawn under the fields — a refusal, or why Submit is blocked. The host’s words, never the element’s."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "component-preview": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "THE MIDDLE COLUMN’S PREVIEW — what a RUN loaded, drawn in the column beside the rail. Implemented by <component-preview> in src/components/lit/component-preview.ts. The Design room has TWO run triggers — Submit in the ingest form, and clicking a row in the catalogue tree — and this is the destination both of them write to, exactly as RUN on the Composer moves its view into the middle column (owner, 2026-09-30: *\"submit is run, selecting one of those components in that list is a run function. It’s supposed to display it.\"*). IT DRAWS AND DISPATCHES ONLY: it fetches nothing, parses nothing and decides nothing about what a component is — the state arrives from `/session/preview`, written by the shell from the answer the ingest already returned or from the row the tree already lists. Its actions are events, never calls: `preview-approve`, `preview-discard` and `preview-collision-answer`, and the shell runs them. IT ALSO ASKS THE ONE QUESTION THE INGEST MEASURES: a layer whose NAME the design system already has on a DIFFERENT component means approving would add a second component under a name that exists, so the panel states the collision and the two answers (add it as its own, or overwrite that tag) and the answer travels back on the same data path the rest of the preview does - a view never writes to the catalogue.",
-          "properties": {
-            "component": {
-              "const": "component-preview"
-            },
-            "preview": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "What a run loaded, bound as {\"path\": \"/session/preview\"}: {source, tag, name, nodeId, alreadyInCatalogue, jobId, facts[], note}. UNSET IS NOT EMPTY: with no path written it draws \"nothing loaded yet\", because an empty preview pane and a preview of nothing are different claims and only one of them is true."
-            },
-            "busy": {
-              "type": "boolean",
-              "description": "True while the approve or a re-read is in flight. Set by the HOST that made the call."
-            },
-            "message": {
-              "type": "string",
-              "description": "A line under the actions — a refusal, or why the approve did not go through. The host’s words, never the element’s."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "draft-preview": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The Design room's third column when the run was an INGEST: the draft, drawn. Implemented by <draft-preview> in src/components/lit/draft-preview.ts. It loads the temporary file the ingest wrote (`.preview/<jobId>/<tag>.ts`, carried on the ingest result as `moduleUrl`) inside the same sandboxed document the ingest form's Preview pane builds - the same CSP, the same import map, the same single-module load - and draws nothing else. THE TAG IS NOT AN ADDRESS: a draft and an approved component can share a name, so a client given the NAME resolves it through the catalogue and draws the APPROVED element after the designer edited Figma (owner, 2026-09-30: 'when I go to preview a change, I'm not seeing a change. I'm seeing the old lit component because it has the same name. It's just reloading it from the lit catalog. I want to use the temporary folder.'). Given the FILE, it can only draw the draft. It fetches nothing, decides nothing, and never reaches for a catalogue element by name: the blindness is structural - the sandboxed document and its CSP, not a promise.",
-          "properties": {
-            "component": {
-              "const": "draft-preview"
-            },
-            "draft": {
-              "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
-              "description": "The draft to draw, bound as {\"path\": \"/session/preview/draft\"}: {jobId, tag, modulePath, moduleUrl}, written by the shell from the answer the ingest already returned. moduleUrl is the temporary file under .preview/<jobId>/ and it is what the document loads - never a name resolved through the catalogue. UNSET IS NOT EMPTY: with no draft written it draws 'no draft to preview' in words, because a blank frame and a draft that draws nothing are different claims."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
-    "CanvasFooter": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The canvas column's foot, built from the ControlBar master (node 40000761:261, instance 40001096:3241) and implemented by <canvas-footer> in src/components/lit/canvas-footer.ts. It carries a slot for the host's own controls and the canvas's tone switch, and it EMITS `theme-change` rather than restyling the drawing itself. It was the standalone playground's own chrome until the application needed the same foot.",
-          "properties": {
-            "component": {
-              "const": "CanvasFooter"
-            },
-            "theme": {
-              "type": "string",
-              "description": "The tone the drawing is currently in — '' is the mid-tone this design is drawn in, \"dark\" is the reference's near-black surface. Set by the host AFTER the footer asks for a change; the footer never writes it itself."
-            },
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ]
-    },
-    "canvas-footer": {
-      "type": "object",
-      "description": "The same component as CanvasFooter, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps CanvasFooter to <canvas-footer>), while the allowlist and the catalog audit name the TAG.",
-      "properties": {
-        "component": {
-          "const": "canvas-footer"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "chat-header": {
-      "type": "object",
-      "description": "One block of the chat column output area: the card, and on a bar the grip row under the card. Draws the readout line and the model mark at the card trailing edge.",
-      "properties": {
-        "component": {
-          "const": "chat-header"
-        },
-        "id": {
-          "type": "string"
-        },
-        "statusText": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "sessionLabel": {
-          "type": "string"
-        },
-        "sessionName": {
-          "type": "string"
-        },
-        "duration": {
-          "type": "string"
-        },
-        "qaScore": {
-          "type": "string"
-        },
-        "card": {
-          "type": "boolean"
-        },
-        "tokens": {
-          "type": "number"
-        },
-        "inTokens": {
-          "type": "number"
-        },
-        "outTokens": {
-          "type": "number"
-        },
-        "calls": {
-          "type": "number"
-        },
-        "lastCall": {
-          "type": "string"
-        },
-        "unattributed": {
-          "type": "boolean"
-        },
-        "children": {
-          "type": "object"
-        }
-      },
-      "required": [
-        "component",
-        "id"
-      ]
-    },
-    "output-header": {
-      "type": "object",
-      "description": "The readout block — Figma 40001119-6308, drawn above the conversations bar.",
-      "properties": {
-        "component": {
-          "const": "output-header"
-        },
-        "id": {
-          "type": "string"
-        },
-        "line": {
-          "type": "string"
-        },
-        "attributed": {
-          "type": "boolean"
-        },
-        "tokens": {
-          "type": "string"
-        },
-        "calls": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ],
-      "x-layers": [
-        {
-          "nodeId": "40001119:6308",
-          "name": "output-header",
-          "type": "FRAME",
-          "size": "540 × 83"
-        },
-        {
-          "nodeId": "40001119:6309",
-          "name": "chat-output-readout-area",
-          "type": "FRAME",
-          "size": "500 × 55"
-        },
-        {
-          "nodeId": "40001123:6763",
-          "name": "textarea",
-          "type": "FRAME",
-          "size": "450 × 40"
-        },
-        {
-          "nodeId": "40001123:6750",
-          "name": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text",
-          "type": "TEXT",
-          "size": "450 × 43"
-        },
-        {
-          "nodeId": "40001124:7096",
-          "name": "model-readout-tokens-etc",
-          "type": "IMAGE-SVG",
-          "size": "20 × 20"
-        },
-        {
-          "nodeId": "40001124:7442",
-          "name": "model-icon",
-          "type": "FRAME",
-          "size": "18.75 × 17.5  (carried by export)"
-        },
-        {
-          "nodeId": "40001124:7097",
-          "name": "Vector",
-          "type": "VECTOR",
-          "size": "18.75 × 17.5  (carried by export)"
-        },
-        {
-          "nodeId": "40001123:6773",
-          "name": "gripper-prompt-input-chat-menu",
-          "type": "FRAME",
-          "size": "500 × 7"
-        },
-        {
-          "nodeId": "40001123:6774",
-          "name": "Meatballs",
-          "type": "FRAME",
-          "size": "480 × 4.05"
-        },
-        {
-          "nodeId": "40001123:6775",
-          "name": "Ellipse 209",
-          "type": "ELLIPSE",
-          "size": "2.16 × 2.05"
-        },
-        {
-          "nodeId": "40001123:6776",
-          "name": "Ellipse 210",
-          "type": "ELLIPSE",
-          "size": "2.16 × 2.05"
-        },
-        {
-          "nodeId": "40001123:6777",
-          "name": "Ellipse 207",
-          "type": "ELLIPSE",
-          "size": "2.16 × 2.05"
-        },
-        {
-          "nodeId": "40001123:6778",
-          "name": "Ellipse 206",
-          "type": "ELLIPSE",
-          "size": "2.16 × 2.05"
-        },
-        {
-          "nodeId": "40001123:6779",
-          "name": "Ellipse 208",
-          "type": "ELLIPSE",
-          "size": "2.16 × 2.05"
-        }
-      ]
-    },
-    "output-footer-area": {
-      "type": "object",
-      "description": "The footer block of the chat column output area — Figma 40001123-6689, imported via the Figma Dev Mode MCP server (get_design_context). The output column's closing shell: the Active/Plugins control, the four 32x32 panel marks (forum, chat history, add-new-conversation, user feedback), the credit line in its own button, and the block's own gripper. This is where the plug-in tool bar loads — the drawing's default view shows the first five tools.",
-      "properties": {
-        "component": {
-          "const": "output-footer-area"
-        },
-        "id": {
-          "type": "string"
-        },
-        "credit": {
-          "type": "string"
-        },
-        "historySelected": {
-          "type": "boolean"
-        },
-        "pluginLabel": {
-          "type": "string"
-        },
-        "gripEnabled": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "component"
-      ],
-      "x-layers": [
-        {
-          "nodeId": "40001123:6689",
-          "name": "output-footer-area",
-          "type": "FRAME",
-          "size": "col · gap 7 · pad 10/20/20/20"
-        },
-        {
-          "nodeId": "40001123:6692",
-          "name": "gripper-prompt-input-chat-menu",
-          "type": "FRAME",
-          "size": "7 tall · pad 0/10"
-        },
-        {
-          "nodeId": "40001123:6693",
-          "name": "Meatballs",
-          "type": "IMAGE-SVG",
-          "size": "24.649 × 4.051 · rotate 180"
-        },
-        {
-          "nodeId": "40001124:7035",
-          "name": "forum 1",
-          "type": "IMAGE-SVG",
-          "size": "32 × 32 · fill #3D515B"
-        },
-        {
-          "nodeId": "40001123:6728",
-          "name": "chat history",
-          "type": "IMAGE-SVG",
-          "size": "32 × 32 · fill #507274"
-        },
-        {
-          "nodeId": "40001123:6732",
-          "name": "add-new-conversation",
-          "type": "IMAGE-SVG",
-          "size": "32 × 32 · fill #3D515B"
-        },
-        {
-          "nodeId": "40001123:6724",
-          "name": "user--feedback 1",
-          "type": "IMAGE-SVG",
-          "size": "32 × 32 · fill #3D515B"
-        },
-        {
-          "nodeId": "40001123:6690",
-          "name": "chat-output-footer",
-          "type": "FRAME",
-          "size": "500 · radius 8 · 2 inset shadows"
-        },
-        {
-          "nodeId": "40001123:6722",
-          "name": "",
-          "type": "FRAME",
-          "size": "row · gap 9"
-        },
-        {
-          "nodeId": "40001123:6723",
-          "name": "",
-          "type": "FRAME",
-          "size": "307 · row · gap 20"
-        },
-        {
-          "nodeId": "40001123:6829",
-          "name": "",
-          "type": "FRAME",
-          "size": "54 · row"
-        },
-        {
-          "nodeId": "40001123:6830",
-          "name": "Function - loads cards form console in prompt area",
-          "type": "FRAME",
-          "size": "54 · radius 6 · 2 drop shadows"
-        },
-        {
-          "nodeId": "40001123:6831",
-          "name": "btn-label",
-          "type": "FRAME",
-          "size": "col"
-        },
-        {
-          "nodeId": "40001123:6832",
-          "name": "Active / Plugins",
-          "type": "TEXT",
-          "size": "58 · Arial Rounded MT Bold 12px #3D515B"
-        },
-        {
-          "nodeId": "40001123:6738",
-          "name": "Function - loads cards form console in prompt area",
-          "type": "FRAME",
-          "size": "156 · radius 6 · 2 drop shadows"
-        },
-        {
-          "nodeId": "40001123:6739",
-          "name": "btn-label",
-          "type": "FRAME",
-          "size": "156 × 35"
-        },
-        {
-          "nodeId": "40001123:6740",
-          "name": "Created by John Travis Holt / Raibach.net © 2026 Raibach IDS",
-          "type": "TEXT",
-          "size": "Arial Rounded MT Bold 9px / 12px #3D515B right-bottom"
-        }
-      ]
-    },
-    "left-column-header": {
-      "type": "object",
-      "description": "The prompt's own bar: title, version label and package id, above the sections in the left column. Moved out of the React shell so the title is a surface value the AI can read and write. Also reachable as LeftColumnHeader, which the renderer resolves to this element (COMPOSITE_MAP in a2ui-renderer.ts). Tags, author and score are drawn placeholders; flip is drawn and inactive.",
-      "properties": {
-        "component": {
-          "const": "left-column-header"
-        },
-        "id": {
-          "type": "string"
-        },
-        "title": {
-          "$ref": "#/$defs/DynamicString"
-        },
-        "version": {
-          "type": "number"
-        },
-        "promptId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "LeftColumnHeader": {
-      "type": "object",
-      "description": "The same component as left-column-header, under its component name. Both are listed on purpose: the renderer maps the name to the element while the allowlist and the catalog audit name the tag.",
-      "properties": {
-        "component": {
-          "const": "LeftColumnHeader"
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "component"
-      ]
-    },
-    "f-40001204-5752": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Lit web component <f-40001204-5752>, generated from Figma node 40001204:5752 (System_Role) and rendered from src/components/lit/f-40001204-5752.ts. Ingested, then approved into the catalogue.",
-          "properties": {
-            "component": {
-              "const": "f-40001204-5752"
-            },
-            "content": {
-              "type": "string"
-            },
-            "disabled": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "component"
-          ],
-          "unevaluatedProperties": false
-        }
-      ]
-    },
-    "f-40001207-3497": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "THE CATALOGUE'S COMPONENT ROW, implemented by <f-40001207-3497> in src/components/lit/f-40001207-3497.ts and generated from Figma node 40001207:3497 (catalog-component-node-raibach-ids). It draws ONE component of the catalogue as the row the left column lists: the name, the code, and the catalogue's own description of it, plus a chevron that expands the row and a status well the host fills with one mark (owner, 2026-09-30: 'I do not need to see anything but the name and the f-code and the discription in these tiles. The other data should be in the metadata in the preview panel.'). The facts the row no longer shows travel with the click instead: the tree that lists the catalogue sends them, and the preview panel reads them. It is instantiated by that tree (figma-layers-view), not by an envelope.",
-          "properties": {
-            "component": {
-              "const": "f-40001207-3497"
-            },
-            "name": {
-              "type": "string",
-              "description": "What the catalogue calls it - the Figma layer's name for a generated component."
-            },
-            "code": {
-              "type": "string",
-              "description": "The catalogue's own key for it: f-40001207-3497, or a kebab name like trace-feed."
-            },
-            "description": {
-              "type": "string",
-              "description": "What it is, in the catalogue's words, cut to its first sentence by the row that passes it. The whole text goes to the preview panel."
-            },
-            "open": {
-              "type": "boolean",
-              "description": "Whether the row is expanded - the chevron's state. The element reports the change back as chevron-toggle; the tree records it."
-            }
-          },
-          "required": [
-            "component"
-          ],
-          "unevaluatedProperties": false
-        }
-      ]
-    },
-    "f-40001207-3559": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Lit web component <f-40001207-3559>, generated from Figma node 40001207:3559 (catalog-node-raibach-ids) and rendered from src/components/lit/f-40001207-3559.ts. Ingested, then approved into the catalogue.",
-          "properties": {
-            "component": {
-              "const": "f-40001207-3559"
-            },
-            "content": {
-              "type": "string"
-            },
-            "justify": {
-              "type": "string"
-            },
-            "align": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string",
-              "description": "The catalogue's name, drawn where the Figma node's sample text read \"Components (prompt-composer)\"."
-            },
-            "count": {
-              "type": "string",
-              "description": "How many components the catalogue declares, drawn on the second line (\"59 components\"). Supplied by the writer; the measured sample text is the element's own default."
-            },
-            "catalogId": {
-              "type": "string",
-              "description": "The catalogId the catalogue is published at, drawn under the name."
-            },
-            "description": {
-              "type": "string",
-              "description": "The line in the trailing block, where the node's sample text read \"FigmaNode: …\"."
-            }
-          },
-          "required": [
-            "component"
-          ],
-          "unevaluatedProperties": false
-        }
-      ]
-    },
-    "f-40001206-2888": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "Lit web component <f-40001206-2888>, generated from Figma node 40001206:2888 (layout-id-component) and rendered from src/components/lit/f-40001206-2888.ts. Ingested, then approved into the catalogue.",
-          "properties": {
-            "component": {
-              "const": "f-40001206-2888"
-            },
-            "content": {
-              "type": "string"
-            },
-            "justify": {
-              "type": "string"
-            },
-            "align": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "component"
-          ],
-          "unevaluatedProperties": false
-        }
-      ]
+       ]
+      }
+     },
+     "required": [
+      "component"
+     ]
     }
+   ]
   },
-  "$defs": {
-    "CatalogComponentCommon": {
-      "type": "object",
-      "properties": {
-        "weight": {
-          "type": "number",
-          "description": "The relative weight of this component within a Row or Column (CSS flex-grow). Only valid for direct children of Row or Column."
-        }
-      }
+  "user-response-bubble": {
+   "type": "object",
+   "description": "The response row inside the chat output card — the design's \"user-response-bubble\", Figma node 40001119:6352 (file 20UPR2KQMsbAxlo5NJb1se), implemented by <user-response-bubble> in src/components/lit/user-response-bubble.ts. A 6px-radius #CBE6E3 row — or the seat's own --chat-user-bg when it sets one — holding a 19×19 mark and one line of Inter 500 13/20 in #171717. It is a DRAWING: the Figma node carries no annotation, so the element declares no events and nothing about it is invented; the host supplies the line.",
+   "properties": {
+    "component": {
+     "const": "user-response-bubble"
     },
-    "theme": {
-      "type": "object",
-      "properties": {
-        "primaryColor": {
-          "type": "string",
-          "description": "Primary brand color in hex format.",
-          "pattern": "^#[0-9a-fA-F]{6}$"
-        },
-        "iconUrl": {
-          "type": "string",
-          "format": "uri",
-          "description": "URL for an image identifying the agent or tool."
-        },
-        "agentDisplayName": {
-          "type": "string",
-          "description": "Display name for the agent or tool that created the surface."
-        }
-      },
-      "additionalProperties": true
+    "id": {
+     "type": "string"
     },
-    "anyComponent": {
-      "oneOf": [
-        {
-          "$ref": "#/components/error-banner"
-        },
-        {
-          "$ref": "#/components/chat-panel"
-        },
-        {
-          "$ref": "#/components/compiled-output-viewer"
-        },
-        {
-          "$ref": "#/components/AgentFlow"
-        },
-        {
-          "$ref": "#/components/agent-flow"
-        },
-        {
-          "$ref": "#/components/AgentCanvas"
-        },
-        {
-          "$ref": "#/components/agent-canvas"
-        },
-        {
-          "$ref": "#/components/gripper-prompt-input"
-        },
-        {
-          "$ref": "#/components/prompt-container"
-        },
-        {
-          "$ref": "#/components/prompt-input-section"
-        },
-        {
-          "$ref": "#/components/prompt-section-editor"
-        },
-        {
-          "$ref": "#/components/prompt-textarea"
-        },
-        {
-          "$ref": "#/components/role-dropdown"
-        },
-        {
-          "$ref": "#/components/role-tile"
-        },
-        {
-          "$ref": "#/components/status-bar-prompt-input"
-        },
-        {
-          "$ref": "#/components/workspace-layout"
-        },
-        {
-          "$ref": "#/components/ai-surface-sandbox"
-        },
-        {
-          "$ref": "#/components/Text"
-        },
-        {
-          "$ref": "#/components/Image"
-        },
-        {
-          "$ref": "#/components/Row"
-        },
-        {
-          "$ref": "#/components/Column"
-        },
-        {
-          "$ref": "#/components/Card"
-        },
-        {
-          "$ref": "#/components/Button"
-        },
-        {
-          "$ref": "#/components/agent-card"
-        },
-        {
-          "$ref": "#/components/chat-navigation-bar"
-        },
-        {
-          "$ref": "#/components/ConsoleCardGrid"
-        },
-        {
-          "$ref": "#/components/DecisionDialog"
-        },
-        {
-          "$ref": "#/components/ActionGroup"
-        },
-        {
-          "$ref": "#/components/SectionEditor"
-        },
-        {
-          "$ref": "#/components/CompiledOutput"
-        },
-        {
-          "$ref": "#/components/ChatPanel"
-        },
-        {
-          "$ref": "#/components/footer-bar"
-        },
-        {
-          "$ref": "#/components/add-section-button"
-        },
-        {
-          "$ref": "#/components/status-readout"
-        },
-        {
-          "$ref": "#/components/model-selector-button"
-        },
-        {
-          "$ref": "#/components/token-cost-readout"
-        },
-        {
-          "$ref": "#/components/trace-feed"
-        },
-        {
-          "$ref": "#/components/user-response-bubble"
-        },
-        {
-          "$ref": "#/components/chat-repair-actions"
-        },
-        {
-          "$ref": "#/components/control-bar"
-        },
-        {
-          "$ref": "#/components/OutputControls"
-        },
-        {
-          "$ref": "#/components/output-controls"
-        },
-        {
-          "$ref": "#/components/CanvasFooter"
-        },
-        {
-          "$ref": "#/components/TraceFeed"
-        },
-        {
-          "$ref": "#/components/canvas-footer"
-        },
-        {
-          "$ref": "#/components/chat-header"
-        },
-        {
-          "$ref": "#/components/output-header"
-        },
-        {
-          "$ref": "#/components/output-footer-area"
-        },
-        {
-          "$ref": "#/components/left-column-header"
-        },
-        {
-          "$ref": "#/components/LeftColumnHeader"
-        },
-        {
-          "$ref": "#/components/design-left-panel"
-        },
-        {
-          "$ref": "#/components/figma-layers-view"
-        },
-        {
-          "$ref": "#/components/figma-ingest-form"
-        },
-        {
-          "$ref": "#/components/component-preview"
-        },
-        {
-          "$ref": "#/components/draft-preview"
-        },
-        {
-          "$ref": "#/components/f-40001204-5752"
-        },
-        {
-          "$ref": "#/components/f-40001207-3497"
-        },
-        {
-          "$ref": "#/components/f-40001207-3559"
-        },
-        {
-          "$ref": "#/components/f-40001206-2888"
-        }
-      ],
-      "discriminator": {
-        "propertyName": "component"
-      }
+    "text": {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+     "description": "The line to draw, e.g. {\"path\": \"/session/right_column/last_response\"}. Optional — the wireframe's own copy is sample text, not a default."
     }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "EvalFeed": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The judged runs of one package, for the rail's Evals view. Implemented by <eval-feed> in src/components/lit/eval-feed.ts. It is a VIEW and fetches nothing: the backend's /evaluations endpoint stores one row per run, and the shell binds the list into the data model. Every value it draws arrives through the binding below.",
+     "properties": {
+      "component": {
+       "const": "EvalFeed"
+      },
+      "evaluations": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Data-bound list of judged runs, newest first. Object form: {\"path\": \"/session/middle_column/evaluations\"}. Unset is NOT empty: the feed draws its waiting state until the path has been written, because an empty list is a claim that the package has run and nothing has been judged."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ]
+  },
+  "eval-feed": {
+   "type": "object",
+   "description": "The same component as EvalFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps EvalFeed to <eval-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the EvalFeed entry.",
+   "properties": {
+    "component": {
+     "const": "eval-feed"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "trace-feed": {
+   "type": "object",
+   "description": "The same component as TraceFeed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps TraceFeed to <trace-feed>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The two bindings are described on the TraceFeed entry.",
+   "properties": {
+    "component": {
+     "const": "trace-feed"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "AgentFlow": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The flow, drawn — the output column's canvas, implemented by <agent-flow> in src/components/lit/agent-flow.ts. It is a VIEW and fetches nothing: shared/agentFlow.ts builds the graph from facts the app already holds (the prompt's own seats, the finding, and the run's own responses) and the shell writes it into the data model. One binding carries the whole graph, so there is exactly one path to keep true.",
+     "properties": {
+      "component": {
+       "const": "AgentFlow"
+      },
+      "flow": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "The graph, bound as {\"path\": \"/session/middle_column/flow\"}: {label, nodes[], edges[], unresolved[], absent[]}. A node carries its SHAPE in `kind` — the canonical section id (system-role, user-role, agent-role, tool-call, custom-data), a step name, or the check that made the note — never a label, because a label is presentation a person may rename. Unset is NOT empty: with no path written the canvas waits, while an empty node list claims there is nothing to draw."
+      },
+      "theme": {
+       "type": "string",
+       "description": "The drawing’s tone, sent by the assembly that puts the canvas in the middle column on a Run: \"dark\" is the reference’s near-black surface, which is the tone a Run is shown in, and unset draws the mid-tone this design was drawn in (the tone switch in <canvas-footer> writes it afterwards). Declared 2026-09-23 because the element has always taken this property and the catalog did not say so, while the Run’s assembly sends it every time — the catalog-check reported it as an under-described property, which is the declaration drifting from the surface rather than the surface from the declaration."
+      },
+      "id": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ]
+  },
+  "agent-flow": {
+   "type": "object",
+   "description": "The same component as AgentFlow, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentFlow to <agent-flow>), while the allowlist and the catalog audit name the TAG — so a payload or a client validating by tag has to find it here as well. The binding is described on the AgentFlow entry.",
+   "properties": {
+    "component": {
+     "const": "agent-flow"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "AgentCanvas": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "THE PLUG-IN — the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings — those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
+     "properties": {
+      "component": {
+       "const": "AgentCanvas"
+      },
+      "theme": {
+       "type": "string",
+       "description": "The drawing's tone. Empty is the mid-tone this design is drawn in; \"dark\" is the reference's near-black surface. It reaches the ground her column stands on."
+      },
+      "collapsed": {
+       "type": "boolean",
+       "description": "True when she is away and only her rail shows. The container owns the width, so the flag lives here; her rail and the gripper write it too, because it is one fact."
+      },
+      "id": {
+       "type": "string"
+      },
+      "children": {
+       "type": "object",
+       "description": "The two slots, filled BY NAME from the envelope: {\"flow\": <id of the drawing>, \"seat\": <id of her chat panel>}. Each child carries its own bindings — the drawing its graph, her seat its conversation, session and readouts — so nothing is forwarded through this element.",
+       "properties": {
+        "flow": {
+         "type": "string"
+        },
+        "seat": {
+         "type": "string"
+        }
+       },
+       "additionalProperties": false
+      }
+     },
+     "required": [
+      "component",
+      "children"
+     ]
+    }
+   ]
+  },
+  "agent-canvas": {
+   "type": "object",
+   "description": "The same component as AgentCanvas, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentCanvas to <agent-canvas>), while the allowlist and the catalog audit name the TAG. The slots are described on the AgentCanvas entry.",
+   "properties": {
+    "component": {
+     "const": "agent-canvas"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "chat-repair-actions": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The catalog checker's open findings, drawn in the chat panel's \"view\" slot. Implemented by <chat-repair-actions> in src/components/lit/chat-repair-actions.ts. A VIEW: it fetches nothing and composes no sentence about a finding — the writer maps the report the checker already wrote (frontend/catalog-audit/<pipeline>.json) into rows of {id, text, level} and binds them here, so the list cannot disagree with the check that produced it.",
+     "properties": {
+      "component": {
+       "const": "chat-repair-actions"
+      },
+      "findings": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Data-bound rows, blocking first: {\"path\": \"/findings\"}. Each row is {id, text, level}, with text and level composed by the writer. Unset is NOT empty: the element draws its waiting state until the path has been written, because an empty list is the claim that the checker found nothing open."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ]
+  },
+  "ai-surface-sandbox": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The bounded surface Grace assembles A2UI content into. <ai-surface-sandbox> is defined (components/lit/ai-surface-sandbox.ts) and named by the allowlist, but this schema did not list it - so any payload naming it was rejected with a 503.",
+     "properties": {
+      "component": {
+       "const": "ai-surface-sandbox"
+      },
+      "isAIAssembling": {
+       "type": "boolean",
+       "default": false,
+       "description": "True while an assembly is in flight; the sandbox shows its spinner slot."
+      },
+      "headerTab": {
+       "type": "string",
+       "enum": [
+        "console",
+        "composer",
+        "evaluation",
+        "variables",
+        "metadata"
+       ],
+       "default": "console",
+       "description": "Which slot the sandbox exposes."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "Text": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Text"
+      },
+      "text": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "The text content to display. Simple Markdown supported (no HTML, images, or links)."
+      },
+      "variant": {
+       "type": "string",
+       "description": "A hint for the base text style. 'greeting' is the Grace welcome-message style used at the top of assembled surfaces.",
+       "enum": [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "caption",
+        "body",
+        "greeting"
+       ],
+       "default": "body"
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "Image": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Image"
+      },
+      "url": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "The URL of the image. Must be a registered catalog ID from the A2UI Image Catalog (raibach-logo, card-bg-design-system, card-img-default, molecule-logo)."
+      },
+      "description": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "Accessibility text for the image (WCAG 2.1 AA required)."
+      },
+      "fit": {
+       "type": "string",
+       "enum": [
+        "contain",
+        "cover",
+        "fill",
+        "none",
+        "scaleDown"
+       ],
+       "default": "cover"
+      },
+      "variant": {
+       "type": "string",
+       "enum": [
+        "icon",
+        "avatar",
+        "smallFeature",
+        "mediumFeature",
+        "largeFeature",
+        "header"
+       ],
+       "default": "mediumFeature"
+      }
+     },
+     "required": [
+      "component",
+      "url"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "Row": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "A layout component that arranges its children horizontally.",
+     "properties": {
+      "component": {
+       "const": "Row"
+      },
+      "children": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Defines the children by ID reference. Use explicitList for fixed children or template for data-driven lists."
+      },
+      "justify": {
+       "type": "string",
+       "enum": [
+        "center",
+        "end",
+        "spaceAround",
+        "spaceBetween",
+        "spaceEvenly",
+        "start",
+        "stretch"
+       ],
+       "default": "start"
+      },
+      "align": {
+       "type": "string",
+       "enum": [
+        "start",
+        "center",
+        "end",
+        "stretch"
+       ],
+       "default": "stretch"
+      }
+     },
+     "required": [
+      "component",
+      "children"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "Column": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "A layout component that arranges its children vertically.",
+     "properties": {
+      "component": {
+       "const": "Column"
+      },
+      "children": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Defines the children by ID reference."
+      },
+      "justify": {
+       "type": "string",
+       "enum": [
+        "start",
+        "center",
+        "end",
+        "spaceBetween",
+        "spaceAround",
+        "spaceEvenly",
+        "stretch"
+       ],
+       "default": "start"
+      },
+      "align": {
+       "type": "string",
+       "enum": [
+        "center",
+        "end",
+        "start",
+        "stretch"
+       ],
+       "default": "stretch"
+      }
+     },
+     "required": [
+      "component",
+      "children"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "Card": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Card"
+      },
+      "child": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId",
+       "description": "The ID of the single child component to be rendered inside the card."
+      }
+     },
+     "required": [
+      "component",
+      "child"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "Button": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Button"
+      },
+      "child": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentId",
+       "description": "The ID of the child component (typically a Text for the label)."
+      },
+      "variant": {
+       "type": "string",
+       "enum": [
+        "default",
+        "primary",
+        "borderless"
+       ],
+       "default": "default"
+      },
+      "action": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/Action"
+      }
+     },
+     "required": [
+      "component",
+      "child",
+      "action"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "agent-card": {
+   "deprecated": true,
+   "x-deprecated-reason": "No element defines this tag. The card is drawn INSIDE ConsoleCardGrid by <agent-card-element>, which that grid's own template instantiates (an internal sub-piece, like chat-messages inside chat-panel). Emitting this name draws an empty box. Use ConsoleCardGrid with items bound to /cards.",
+   "type": "object",
+   "x-figma-source": {
+    "fileKey": "20UPR2KQMsbAxlo5NJb1se",
+    "nodeId": "40001114:5813",
+    "nodeName": "console-card-design-system",
+    "description": "Design source of truth. The extracted style spec (every fill, stroke, effect, font, weight, size, line height, bounding box) is cached in PostgreSQL figma_specs and served by the spec endpoint."
+   },
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Lit web component <agent-card-element>. Console prompt card (262x251px) per Figma node 40001114:5813 \"console-card-design-system\". Renders header (molecule logo, function line, category line), title + description body (with the ##PROMPT## lead), and footer (version pill with status, like count with heart). Card background is tinted per category via category_color. All field values are sourced from PostgreSQL (prompt_sessions + categories tables) and must be carried through VERBATIM — never invented or renamed. Registered as custom element: agent-card-element.",
+     "properties": {
+      "component": {
+       "const": "agent-card"
+      },
+      "id": {
+       "type": "string",
+       "format": "uuid",
+       "description": "Unique identifier for the card (maps to prompt session ID)."
+      },
+      "title": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "Card title displayed in the card-title row (16px bold, 2-line clamp)."
+      },
+      "function": {
+       "type": "string",
+       "description": "The function level — the line ABOVE the category in the card header (14px bold #F6C031). Falls back to the design's own sample line 'Function like Repair' until the data supplies it."
+      },
+      "category": {
+       "type": "string",
+       "description": "Content category label shown under the function line (12px bold, categories table title_color).",
+       "enum": [
+        "Design System",
+        "Learning Module",
+        "Graphics",
+        "Writing",
+        "Coding",
+        "Sales Service Design Accounts Team"
+       ],
+       "default": "Design System"
+      },
+      "category_color": {
+       "type": "string",
+       "description": "Hex color tinting the card background, from the categories table (name → color). Fallback '#1C2F4E' (the design's own fill) when the category is unregistered.",
+       "default": "#1C2F4E"
+      },
+      "category_title_color": {
+       "type": "string",
+       "description": "Color of the category label text, from the categories table (title_color). Fallback '#FB8D67' (the design's own category line).",
+       "default": "#FB8D67"
+      },
+      "category_text_color": {
+       "type": "string",
+       "description": "Color of the card title + description text, from the categories table (text_color). Fallback '#FFFFFF' (the design's own white).",
+       "default": "#FFFFFF"
+      },
+      "description": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "Card description text."
+      },
+      "status": {
+       "type": "string",
+       "enum": [
+        "Active",
+        "Draft",
+        "Archived"
+       ],
+       "default": "Active"
+      },
+      "version": {
+       "type": "number",
+       "description": "Current version number displayed in the footer version pill.",
+       "default": 1
+      },
+      "likes": {
+       "type": "number",
+       "default": 0
+      }
+     },
+     "required": [
+      "component",
+      "id",
+      "title"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "chat-navigation-bar": {
+   "type": "object",
+   "x-figma-source": {
+    "fileKey": "20UPR2KQMsbAxlo5NJb1se",
+    "nodeId": "40001010:25768",
+    "nodeName": "chat-button",
+    "description": "Design source of truth for the rail's buttons: the chat button node (74x74; frame 'chat-menu-item' 40001010:25749 filled #FCCD3D with an inset 0 4 4 rgba(0,0,0,0.25) shadow and 8x13 padding; icon instance 40001012:26436, 38x38 at (18,8), #1FACC2; label 40001010:25751, #1FACC2 Inter Bold 13/20). Trace is 40001011:26266. Every button in the rail inherits the container constraint recorded in src/components/registry.json under containers['chat-menu-item'] — the node is compared against that constraint rather than copied. The extracted style spec is cached in PostgreSQL figma_specs and served by the spec endpoint."
+   },
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Lit web component <chat-navigation-bar>. Right-column tab rail — chat, trace, tools, evaluation, variables, metadata — filtered by the user's departmental role, carrying the catalog-health marker on the chat tab. Renders the designed buttons (Figma chat-button 40001010:25768, trace-button 40001011:26266). Replaces React SidebarNavigation + NavigationButton.",
+     "properties": {
+      "component": {
+       "const": "chat-navigation-bar"
+      },
+      "activeTab": {
+       "type": "string",
+       "description": "The currently active tab. Matches the element's TabId union — 'approval' was listed here and is not one.",
+       "enum": [
+        "chat",
+        "trace",
+        "tools",
+        "evaluation",
+        "variables",
+        "metadata"
+       ],
+       "default": "chat"
+      },
+      "collapsed": {
+       "type": "boolean",
+       "description": "Whether the navigation panel is collapsed.",
+       "default": false
+      },
+      "allowedTabs": {
+       "type": "string",
+       "description": "Comma-separated tab IDs to show, filtered by the user's departmental role (element property 'allowed-tabs'). Empty shows every tab rather than an empty rail.",
+       "default": ""
+      },
+      "healthCount": {
+       "type": "number",
+       "description": "Open catalog findings (element property 'health-count'). Above zero the chat tab's icon pulses; zero is quiet.",
+       "default": 0
+      },
+      "healthState": {
+       "type": "string",
+       "description": "Whether healthCount can be trusted (element property 'health-state'). 'unknown' must never render the same as a clean result.",
+       "enum": [
+        "ok",
+        "loading",
+        "unknown"
+       ],
+       "default": "loading"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "error-banner": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Lit web component <error-banner>. The system's error channel — the tag the runtime model is already instructed to report failures through (backend/grace_gui.py: 'Use <error-banner message=\"...\"/> only'). Rendered LOUD on purpose: it also carries the case where a component is generated WITHOUT its annotation, which means behaviour is being invented downstream on every surface that places it. Alert, don't block — the surface still renders underneath.",
+     "properties": {
+      "component": {
+       "const": "error-banner"
+      },
+      "message": {
+       "type": "string",
+       "description": "What went wrong, in a sentence a person can act on."
+      },
+      "code": {
+       "type": "string",
+       "description": "Short machine-ish label above the message, e.g. UNANNOTATED-IN-USE."
+      },
+      "retry": {
+       "type": "boolean",
+       "description": "Offer a Retry affordance. Off unless the caller can actually retry something.",
+       "default": false
+      }
+     },
+     "required": [
+      "component",
+      "message"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "ConsoleCardGrid": {
+   "x-internal-instantiation": "renders <agent-card-element> from its own template — an internal sub-piece (recorded nesting, 2026-09-18); the card is never emitted as a component by the model, the grid composes it from /cards",
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Console card grid. Renders one Lit <agent-card-element> per item in the bound cards list (data model /cards). Implemented by a2ui-console-card-grid in src/components/lit/a2ui-primitives.ts, and it is the only renderer of this component — nothing in the React shell draws a second copy, so /cards is the single list of packages in play.",
+     "properties": {
+      "component": {
+       "const": "ConsoleCardGrid"
+      },
+      "items": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Data-bound list of agent cards. Object form: {\"path\": \"/cards\", \"componentId\": \"agent-card-template\"}."
+      }
+     },
+     "required": [
+      "component",
+      "items"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "DecisionDialog": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "AI decision surface — shown when the agent needs user confirmation before proceeding (e.g. unsaved changes). Contains a Text message and an ActionGroup of choices.",
+     "properties": {
+      "component": {
+       "const": "DecisionDialog"
+      },
+      "children": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Static child references: [messageText, actionGroup]."
+      }
+     },
+     "required": [
+      "component",
+      "children"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "ActionGroup": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Row of action buttons for a DecisionDialog. Renders one Button per item in the bound actions list (each item: {id, label, variant}).",
+     "properties": {
+      "component": {
+       "const": "ActionGroup"
+      },
+      "items": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Data-bound list of action descriptors. Object form: {\"path\": \"/actions\", \"componentId\": \"action-button-template\"}."
+      }
+     },
+     "required": [
+      "component",
+      "items"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "SectionEditor": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Left-column prompt section editor (composer). Renders the ordered prompt sections (System Role, User Role, Tool Call, Few Shot, Context, Constraints + customs) from the bound sections list. Backed by PromptWorkspace/ResponsivePromptBuilderWithDnD.",
+     "properties": {
+      "component": {
+       "const": "SectionEditor"
+      },
+      "sections": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "Data-bound list of prompt sections. Object form: {\"path\": \"/session/left_column/sections\", \"componentId\": \"prompt-section-template\"}."
+      }
+     },
+     "required": [
+      "component",
+      "sections"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "CompiledOutput": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Middle-column compiled output panel. Displays the assembled/executed prompt output (markdown). Backed by MiddleColumnSlot.",
+     "properties": {
+      "component": {
+       "const": "CompiledOutput"
+      },
+      "content": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "The compiled output content (Markdown supported). Typically bound to /session/middle_column/compiled_output."
+      }
+     },
+     "required": [
+      "component",
+      "content"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "ChatPanel": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Right-column chat panel — the surface command interface. Conversation scoped to the bound conversation id. Backed by InteractiveChatInterface.",
+     "properties": {
+      "component": {
+       "const": "ChatPanel"
+      },
+      "conversationId": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "The conversation this chat panel is scoped to. Typically bound to /session/right_column/conversation_id."
+      }
+     },
+     "required": [
+      "component",
+      "conversationId"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "footer-bar": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The prompt package control bar: Save Template, RUN, undo, and overflow gripper. Dispatches save-click / run-click CustomEvents for shell integration.",
+     "properties": {
+      "component": {
+       "const": "footer-bar"
+      },
+      "versionText": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "Left status text, e.g. 'Saved: API Documentation Writer'."
+      },
+      "isSaving": {
+       "type": "boolean",
+       "default": false,
+       "description": "Shows compiling spinner on Save Template while Grace compiles."
+      },
+      "saveShortcut": {
+       "type": "string",
+       "default": "⌘ S"
+      },
+      "runShortcut": {
+       "type": "string",
+       "default": "⌘ ⏎"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "add-section-button": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Adds a new prompt section to the left column. Optional chips enable {{variables}}, {{multimedia}}, and {{url}} insertion.",
+     "properties": {
+      "component": {
+       "const": "add-section-button"
+      },
+      "label": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "Button label. Default 'Add Section'."
+      },
+      "chips": {
+       "type": "array",
+       "items": {
+        "type": "string",
+        "enum": [
+         "variables",
+         "multimedia",
+         "url"
+        ]
+       },
+       "default": [
+        "variables",
+        "multimedia",
+        "url"
+       ],
+       "description": "Insertion chips rendered on the button."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "status-readout": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Slim bottom readout area for the prompt package surface: active user ID plus transient status messaging (save, error, compile).",
+     "properties": {
+      "component": {
+       "const": "status-readout"
+      },
+      "userId": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "Active user UUID, displayed truncated, e.g. u:00000000…0001."
+      },
+      "message": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/DynamicString",
+       "description": "Transient status line, e.g. Saved, Compiling…, Error text."
+      },
+      "level": {
+       "type": "string",
+       "enum": [
+        "info",
+        "success",
+        "error"
+       ],
+       "default": "info"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "token-cost-readout": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Rail readout showing running token usage and estimated cost for the current prompt package.",
+     "properties": {
+      "component": {
+       "const": "token-cost-readout"
+      },
+      "tokens": {
+       "type": "integer",
+       "description": "Total tokens consumed this session, e.g. 2022."
+      },
+      "costUsd": {
+       "type": "number",
+       "description": "Estimated cost in USD, e.g. 0.00802."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "workspace-layout": {
+   "type": "object",
+   "description": "Lit 3-column resizable workspace host (A2UI v0.9.1). Hosts prompt-section-editor (left), compiled-output-viewer (middle), chat-panel (right).",
+   "properties": {
+    "component": {
+     "const": "workspace-layout"
+    },
+    "children": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component",
+    "children"
+   ]
+  },
+  "prompt-section-editor": {
+   "type": "object",
+   "description": "Lit prompt section editor (left column). Binds to /session/left_column/sections.",
+   "properties": {
+    "component": {
+     "const": "prompt-section-editor"
+    },
+    "sections": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component",
+    "sections"
+   ]
+  },
+  "compiled-output-viewer": {
+   "type": "object",
+   "description": "Lit compiled output viewer (middle column). Binds to /session/middle_column/compiled_output.",
+   "properties": {
+    "component": {
+     "const": "compiled-output-viewer"
+    },
+    "content": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component",
+    "content"
+   ]
+  },
+  "chat-panel": {
+   "type": "object",
+   "description": "Lit chat panel (right column + console). Binds to conversationId and to the Conversations dropdown's list.",
+   "properties": {
+    "component": {
+     "const": "chat-panel"
+    },
+    "conversationId": {
+     "type": "object"
+    },
+    "conversations": {
+     "type": "object",
+     "description": "The Conversations dropdown's rows — the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
+    },
+    "id": {
+     "type": "string"
+    },
+    "instructions": {
+     "type": "object",
+     "description": "WHO SHE IS IN THIS ROOM — a BINDING, {path: /session/grace_instructions}, to the script the surface assembled for this room, never a sentence written in the tree. The seat sends it as the context of every turn, so it decides her voice: the console's script is CONSOLE_GRACE_INSTRUCTIONS, a package's is COMPOSER_GRACE_INSTRUCTIONS, Design's is composed from the database on every assembly. Written by the assembly (routes/ai.py `_seat_grace`) on every seat it emits, so a room that states nothing cannot be answered in another room's voice."
+    },
+    "graceLiveContext": {
+     "type": "boolean",
+     "description": "Whether the seat appends its LIVE WORKSPACE to those words — the package, its prompt seats and the tool register, or the console's cards. FALSE where the room's script already carries its live facts, as Design's does. Never sent by a model: a surface that omits it is refused by the seat rather than defaulted. Written by routes/ai.py `_seat_grace`."
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "prompt-container": {
+   "type": "object",
+   "description": "Bordered container (Figma 40000746-6) hosting stacked prompt-input-sections with the vertical format rail.",
+   "properties": {
+    "component": {
+     "const": "prompt-container"
+    },
+    "formatLabel": {
+     "type": "object"
+    },
+    "tokensLabel": {
+     "type": "object"
+    },
+    "children": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ],
+   "annotation": "Data: formatLabel — the vertical rail's format line; tokensLabel — the vertical tokens/cost readout line.\nState: expanded — the container is always drawn; the rail is its right edge.\nA11y: no role of its own — a container."
+  },
+  "prompt-input-section": {
+   "type": "object",
+   "description": "One prompt input row (Figma 40000746-94): gripper + role-tile + Functions / Tools + status rail + textarea.",
+   "properties": {
+    "component": {
+     "const": "prompt-input-section"
+    },
+    "name": {
+     "type": "object"
+    },
+    "type": {
+     "type": "object"
+    },
+    "content": {
+     "type": "object"
+    },
+    "sticky": {
+     "type": "object"
+    },
+    "minHeight": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component",
+    "name"
+   ],
+   "annotation": "Data: name, type, content, sticky, minHeight.\nOn click: section-menu-select { role } when a role is chosen from the tile's menu; section-collapse-toggle { collapsed } on the tile's chevron.\nOn change: section-content-input { value } as the textarea is typed in.\nState: collapsed | expanded.\nDisabled: the System Role section is sticky — first, no menu, not draggable, not deletable.\nA11y: group, labelled by the role tile's text."
+  },
+  "gripper-prompt-input": {
+   "type": "object",
+   "description": "Meatballs drag handle (49x37) — the only drag anchor of a prompt-input-section (Figma 40000746-94).",
+   "properties": {
+    "component": {
+     "const": "gripper-prompt-input"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "role-dropdown": {
+   "type": "object",
+   "description": "Role-selector dropdown for a prompt-input-section accordion tile (Figma 40000934-22851). Lists User Role / Agent Role / Tool Call / Custom / Remove; dispatches role-select / role-remove.",
+   "properties": {
+    "component": {
+     "const": "role-dropdown"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "role-tile": {
+   "type": "object",
+   "description": "Role label tile 357x43 with Arrow_drop_down menu toggle (Figma 40000746-94).",
+   "properties": {
+    "component": {
+     "const": "role-tile"
+    },
+    "label": {
+     "type": "object"
+    },
+    "showMenu": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component",
+    "label"
+   ],
+   "annotation": "Data: label, showMenu.\nOn click: role-menu-toggle { open } from the caret; role-tile-collapse-toggle { collapsed } from the chevron.\nState: collapsed | expanded; menu closed | open.\nDisabled: no menu when showMenu is false.\nA11y: button, labelled by the tile's own text."
+  },
+  "status-bar-prompt-input": {
+   "type": "object",
+   "description": "Vertical activity rail (40px) — Database_fill + lightning_alt_fill_light icons grow with prompt activity (Figma 40000954-23865).",
+   "properties": {
+    "component": {
+     "const": "status-bar-prompt-input"
+    },
+    "icons": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ],
+   "annotation": "Data: icons — the activity icons drawn in the rail.\nState: idle | active — the icons grow with prompt activity.\nA11y: decorative; no label."
+  },
+  "prompt-textarea": {
+   "type": "object",
+   "description": "Active-data textarea (Figma 40000746-94; annotation: 'this is a textarea - for active data.').",
+   "properties": {
+    "component": {
+     "const": "prompt-textarea"
+    },
+    "value": {
+     "type": "object"
+    },
+    "placeholder": {
+     "type": "object"
+    },
+    "minHeight": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ],
+   "annotation": "Data: value, placeholder, minHeight.\nOn change: value-input { value } on every keystroke.\nState: idle | focused.\nA11y: textbox, multiline; labelled by the section's name."
+  },
+  "model-selector-button": {
+   "type": "object",
+   "description": "Model selector button (Figma 40000909-4322 'Function - Model Selector Button'): white, radius 6, 'button drop' shadow, fixed 171x40, 'Models' label (Inter Bold 16 #8B8B8B).",
+   "properties": {
+    "component": {
+     "const": "model-selector-button"
+    },
+    "label": {
+     "type": "object"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ],
+   "annotation": "Data: label — the current model's name, or \"Models\" when none is chosen.\nOn click: model-selector-toggle { open }.\nState: idle | open.\nA11y: button, labelled by its own text."
+  },
+  "control-bar": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The left column's bottom bar: undo, Save Template, RUN — and nothing else. Figma \"Left-column-ControlBar\" #40000761:261, placed as the last child of the left column container #40000954:23865. Implemented by <control-bar> in src/components/lit/control-bar.ts; the shell listens for its undo-click / save-click / run-click.",
+     "properties": {
+      "component": {
+       "const": "control-bar"
+      },
+      "isSaving": {
+       "type": "boolean",
+       "description": "True while a save is in flight; the bar shows its compiling state."
+      },
+      "isRunning": {
+       "type": "boolean",
+       "description": "True while a run is in flight."
+      },
+      "saveShortcut": {
+       "type": "string"
+      },
+      "runShortcut": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ]
+  },
+  "OutputControls": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The middle column's header row — the design's \"output-vontrols\" (node 40001034:1186): the selector tile (40001034:1187, text run 40001034:1190) and the published <model-selector-button>. Implemented by <output-controls> in src/components/lit/output-controls.ts, which draws it in every view of the middle column. The selector is a PLACEHOLDER by the owner's instruction (2026-09-18) — it renders with its design tag and role and opens no menu, because no menu contents exist in the Figma pull and the entries are the owner's specification rather than a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.",
+     "properties": {
+      "component": {
+       "const": "OutputControls"
+      },
+      "outputType": {
+       "type": "string",
+       "description": "What the selector tile reads — the view this column is showing. The design's drawn value is \"Agent Flow\" (40001034:1190); it is a property because this tile is the reader's choice at the top of the column, and the drawn value is the example, not the only value."
+      },
+      "id": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ]
+  },
+  "output-controls": {
+   "type": "object",
+   "description": "The same component as OutputControls, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps OutputControls to <output-controls>), while the allowlist and the catalog audit name the TAG. The binding is described on the OutputControls entry.",
+   "properties": {
+    "component": {
+     "const": "output-controls"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "design-middle-container": {
+   "type": "object",
+   "description": "The Design room's middle column: the composer's own <output-controls> header row over a MOUNT inside its shadow tree (data-ingest-mount), where the ingest's Preview is rendered. It exists because the composer's column body (<compiled-output-viewer>) owns its whole area and has no slot, so nothing can be loaded inside it (the owner's ruling: \"If you have to make a different component because you can't figure out how to load something inside of it, then build a different lit component for the design section.\"). Content is loaded INTO this element, never beside it: loose React nodes in the room container's light DOM fight lit's own child list and re-baseline the container's split. The hole is a MOUNT rather than a slot for a measured reason — a slot leaves the content in its own tree, where the tool's Tailwind classes cannot match (no document stylesheet reaches into the renderer's shadow root), so the preview would arrive unformatted; rendering the region into this element's shadow tree makes the application's own sheet, adopted here, reach it. THE COLUMN IS DRAWN ONLY WHEN THE TREE REFERENCES IT: render-design declares this component and leaves it out of the layout's children, so the third column is collapsed until the ingest reports its first draft — the composer's own contract for its middle column ('the shell moves the flow view into it at Run time'). Design only — the composer's surface never names it.",
+   "properties": {
+    "component": {
+     "const": "design-middle-container"
+    },
+    "id": {
+     "type": "string"
+    },
+    "outputType": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "design-left-panel": {
+   "type": "object",
+   "description": "The Design room's left column: the composer's own <prompt-container> panel frame with a SLOT named \"left\" in it, and the SURFACE fills that slot — render-design names its child in this component's `children.left` and the renderer instantiates it there, so what stands in the column is the envelope's child and nothing else. Today that child is <figma-layers-view> — the ingestion rail's own component tree, reused unchanged. It exists because the panel is part of the drawing — the owner: \"it's the same panel that we have the prompt / agent prompt inputs, and it's called left column\" — while the composer's prompt sections are NOT: those are the Agent Role tile, the Functions | Tools button and the empty textarea the owner saw loading in Design, and they are removed from this surface. IT IS A SLOT AND NOT A MOUNT, which is a change worth recording: the mount (a div inside this element's shadow tree, `data-ingest-mount`) existed for the ingestion tool's React rail, and a slot left that content in its own tree where its Tailwind classes — selectors in a document stylesheet — could not match, so the rail arrived unformatted with a 153px URL field and an unscrollable component list. The tool is no longer loaded into this room at all (a React tree inside a surface is forbidden, and measured: it drew beneath the room and pushed the layout to y = −129), so the mount has nothing left to hold. A catalogue element needs none: it carries its own styles inside its own shadow root, and only its box comes from this frame (`::slotted(*)` gives it the hole's height and lets it be smaller than its content). The room's container still frames it: the panel's border, its rounded corner and its format rail are the drawing's. Design only — the composer's surface never names it.",
+   "properties": {
+    "component": {
+     "const": "design-left-panel"
+    },
+    "id": {
+     "type": "string"
+    },
+    "formatLabel": {
+     "type": "string"
+    },
+    "tokensLabel": {
+     "type": "string"
+    },
+    "children": {
+     "type": "object",
+     "description": "The panel's one hole, filled BY NAME from the envelope: {\"left\": <id of the component that stands in this column>}. Today render-design names `<figma-layers-view>` there — the ingestion rail's own tree. Declared because the element renders `<slot name=\"left\">` and the surface fills it — a slot the schema does not name is a hole nobody can legally address.",
+     "properties": {
+      "left": {
+       "type": "string"
+      }
+     },
+     "additionalProperties": false
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "figma-layers-view": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "THE INGESTION LEFT RAIL'S OWN COMPONENT TREE — the one the ingest form draws in its left column (`IngestModal.tsx`, above the Preview), reused here unchanged and never restyled. Implemented by <figma-layers-view> in src/components/lit/figma-layers-view.ts. What it draws, top to bottom: the catalogue strip (every catalogue the build knows — design-artifacts, prompt-composer, ecommerce, primitives — with its entry count), the selected catalogue's head and catalogId, and then `Declared in this catalogue`: one row per component with its shape (`allOf(3)` / `flat`), its Figma node, the file that DRAWS it (`drawn by lit/<file>`), and a status dot from the checker's own audit. IT READS THE CATALOGUES OFF THE BUILD (`import.meta.glob` of `catalogs/*/catalog.json`) and the audit from `/api/catalog/audit/<pipeline>` — it takes no data-model binding for those, and it is not a second copy of the catalogue: the files are the source. THE STRIP IS LIVE INSIDE THE ELEMENT: clicking a catalogue at the top sets its own `pipeline` and re-reads, so switching catalogues needs no host. It dispatches `catalog-change`, `open-component`, `open-layer` and `open-function`.",
+     "properties": {
+      "component": {
+       "const": "figma-layers-view"
+      },
+      "pipeline": {
+       "type": "string",
+       "description": "WHICH CATALOGUE'S COMPONENTS ARE LISTED — a catalogue FOLDER NAME under `src/components/A2UI/catalogs/` (prompt-composer, design-artifacts, ecommerce, primitives), not a design system's name and not a session title. Defaults to the element's own default, prompt-composer, which is what the ingest form shows and the catalogue the section's 58 rows are declared in. Binding this to `/session/catalogue/system` would be WRONG: that value is `raibach-ids`, a design system, and no catalogue is named that."
+      },
+      "nodeId": {
+       "type": "string",
+       "description": "Show one node's tree instead of every node recorded for the catalogue. Unset draws the whole catalogue's declared list, which is what the rail shows before anything is selected."
+      },
+      "inline": {
+       "type": "boolean",
+       "description": "Sit in the flow of a column rather than float over the screen. True in the ingest rail and true here — the tree is the column's content."
+      },
+      "refresh": {
+       "type": "number",
+       "description": "Bumped by the host to force a re-read — after an ingest lands, or after a commit. Unset reads once on connect."
+      },
+      "reset": {
+       "type": "number",
+       "description": "Bumped by the host to fold the tree back to its opening state — a Reset."
+      },
+      "selected": {
+       "type": "string",
+       "description": "The catalogue name of the component the host has open in the preview, so the tree can mark it. Unset marks nothing."
+      },
+      "open": {
+       "type": "boolean",
+       "description": "Whether the tree is drawn open."
+      },
+      "showHead": {
+       "type": "boolean",
+       "description": "Whether the catalogue head (name, count, catalogId) is drawn above the declared rows. True by default; the Design room sets false because the head is drawn there by the ingested element f-40001207-3559."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "figma-ingest-form": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "THE INGEST RAIL’S TOP HALF — the Figma URL field, the Notes field and Submit, as a catalogue element (src/components/lit/figma-ingest-form.ts). The ingestion application is the template and its left column is this form over the catalogue tree; the tree half is `figma-layers-view`, reused, and this is the half the catalogue had no element for. It is a TRANSLATION, not a second design: the same two fields with the same words, and on Submit the same `POST /api/figma/ingest` the modal runs — the parsing (`@/utils/figmaUrl`) and the endpoint already exist and neither is reimplemented in the element. IT DRAWS AND DISPATCHES ONLY: it fetches nothing, ingests nothing, and decides nothing about what a typed string means. `ingest-submit` carries `{url, notes}` verbatim and the SHELL runs the ingest.",
+     "properties": {
+      "component": {
+       "const": "figma-ingest-form"
+      },
+      "url": {
+       "type": "string",
+       "description": "Prefilled URL, when the host has one. The field stays editable either way — it is a text input, not a label."
+      },
+      "notes": {
+       "type": "string",
+       "description": "Prefilled notes. Optional in the form and optional in the ingest."
+      },
+      "busy": {
+       "type": "boolean",
+       "description": "True while an ingest is in flight. SET BY THE HOST, never by the element: the fields lock and Submit reads 'Ingesting…', and only the caller that made the call knows when it finished."
+      },
+      "message": {
+       "type": "string",
+       "description": "A line drawn under the fields — a refusal, or why Submit is blocked. The host’s words, never the element’s."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "component-preview": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "THE MIDDLE COLUMN’S PREVIEW — what a RUN loaded, drawn in the column beside the rail. Implemented by <component-preview> in src/components/lit/component-preview.ts. The Design room has TWO run triggers — Submit in the ingest form, and clicking a row in the catalogue tree — and this is the destination both of them write to, exactly as RUN on the Composer moves its view into the middle column (owner, 2026-09-30: *\"submit is run, selecting one of those components in that list is a run function. It’s supposed to display it.\"*). IT DRAWS AND DISPATCHES ONLY: it fetches nothing, parses nothing and decides nothing about what a component is — the state arrives from `/session/preview`, written by the shell from the answer the ingest already returned or from the row the tree already lists. Its actions are events, never calls: `preview-approve`, `preview-discard` and `preview-collision-answer`, and the shell runs them. IT ALSO ASKS THE ONE QUESTION THE INGEST MEASURES: a layer whose NAME the design system already has on a DIFFERENT component means approving would add a second component under a name that exists, so the panel states the collision and the two answers (add it as its own, or overwrite that tag) and the answer travels back on the same data path the rest of the preview does - a view never writes to the catalogue.",
+     "properties": {
+      "component": {
+       "const": "component-preview"
+      },
+      "preview": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "What a run loaded, bound as {\"path\": \"/session/preview\"}: {source, tag, name, nodeId, alreadyInCatalogue, jobId, facts[], note}. UNSET IS NOT EMPTY: with no path written it draws \"nothing loaded yet\", because an empty preview pane and a preview of nothing are different claims and only one of them is true."
+      },
+      "busy": {
+       "type": "boolean",
+       "description": "True while the approve or a re-read is in flight. Set by the HOST that made the call."
+      },
+      "message": {
+       "type": "string",
+       "description": "A line under the actions — a refusal, or why the approve did not go through. The host’s words, never the element’s."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "draft-preview": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The Design room's third column when the run was an INGEST: the draft, drawn. Implemented by <draft-preview> in src/components/lit/draft-preview.ts. It loads the temporary file the ingest wrote (`.preview/<jobId>/<tag>.ts`, carried on the ingest result as `moduleUrl`) inside the same sandboxed document the ingest form's Preview pane builds - the same CSP, the same import map, the same single-module load - and draws nothing else. THE TAG IS NOT AN ADDRESS: a draft and an approved component can share a name, so a client given the NAME resolves it through the catalogue and draws the APPROVED element after the designer edited Figma (owner, 2026-09-30: 'when I go to preview a change, I'm not seeing a change. I'm seeing the old lit component because it has the same name. It's just reloading it from the lit catalog. I want to use the temporary folder.'). Given the FILE, it can only draw the draft. It fetches nothing, decides nothing, and never reaches for a catalogue element by name: the blindness is structural - the sandboxed document and its CSP, not a promise.",
+     "properties": {
+      "component": {
+       "const": "draft-preview"
+      },
+      "draft": {
+       "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ChildList",
+       "description": "The draft to draw, bound as {\"path\": \"/session/preview/draft\"}: {jobId, tag, modulePath, moduleUrl}, written by the shell from the answer the ingest already returned. moduleUrl is the temporary file under .preview/<jobId>/ and it is what the document loads - never a name resolved through the catalogue. UNSET IS NOT EMPTY: with no draft written it draws 'no draft to preview' in words, because a blank frame and a draft that draws nothing are different claims."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
+  },
+  "CanvasFooter": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "The canvas column's foot, built from the ControlBar master (node 40000761:261, instance 40001096:3241) and implemented by <canvas-footer> in src/components/lit/canvas-footer.ts. It carries a slot for the host's own controls and the canvas's tone switch, and it EMITS `theme-change` rather than restyling the drawing itself. It was the standalone playground's own chrome until the application needed the same foot.",
+     "properties": {
+      "component": {
+       "const": "CanvasFooter"
+      },
+      "theme": {
+       "type": "string",
+       "description": "The tone the drawing is currently in — '' is the mid-tone this design is drawn in, \"dark\" is the reference's near-black surface. Set by the host AFTER the footer asks for a change; the footer never writes it itself."
+      },
+      "id": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ]
+  },
+  "canvas-footer": {
+   "type": "object",
+   "description": "The same component as CanvasFooter, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps CanvasFooter to <canvas-footer>), while the allowlist and the catalog audit name the TAG.",
+   "properties": {
+    "component": {
+     "const": "canvas-footer"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "chat-header": {
+   "type": "object",
+   "description": "One block of the chat column output area: the card, and on a bar the grip row under the card. Draws the readout line and the model mark at the card trailing edge.",
+   "properties": {
+    "component": {
+     "const": "chat-header"
+    },
+    "id": {
+     "type": "string"
+    },
+    "statusText": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string"
+    },
+    "sessionLabel": {
+     "type": "string"
+    },
+    "sessionName": {
+     "type": "string"
+    },
+    "duration": {
+     "type": "string"
+    },
+    "qaScore": {
+     "type": "string"
+    },
+    "card": {
+     "type": "boolean"
+    },
+    "tokens": {
+     "type": "number"
+    },
+    "inTokens": {
+     "type": "number"
+    },
+    "outTokens": {
+     "type": "number"
+    },
+    "calls": {
+     "type": "number"
+    },
+    "lastCall": {
+     "type": "string"
+    },
+    "unattributed": {
+     "type": "boolean"
+    },
+    "children": {
+     "type": "object"
+    }
+   },
+   "required": [
+    "component",
+    "id"
+   ]
+  },
+  "output-header": {
+   "type": "object",
+   "description": "The readout block — Figma 40001119-6308, drawn above the conversations bar.",
+   "properties": {
+    "component": {
+     "const": "output-header"
+    },
+    "id": {
+     "type": "string"
+    },
+    "line": {
+     "type": "string"
+    },
+    "attributed": {
+     "type": "boolean"
+    },
+    "tokens": {
+     "type": "string"
+    },
+    "calls": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ],
+   "x-layers": [
+    {
+     "nodeId": "40001119:6308",
+     "name": "output-header",
+     "type": "FRAME",
+     "size": "540 × 83"
+    },
+    {
+     "nodeId": "40001119:6309",
+     "name": "chat-output-readout-area",
+     "type": "FRAME",
+     "size": "500 × 55"
+    },
+    {
+     "nodeId": "40001123:6763",
+     "name": "textarea",
+     "type": "FRAME",
+     "size": "450 × 40"
+    },
+    {
+     "nodeId": "40001123:6750",
+     "name": "Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text",
+     "type": "TEXT",
+     "size": "450 × 43"
+    },
+    {
+     "nodeId": "40001124:7096",
+     "name": "model-readout-tokens-etc",
+     "type": "IMAGE-SVG",
+     "size": "20 × 20"
+    },
+    {
+     "nodeId": "40001124:7442",
+     "name": "model-icon",
+     "type": "FRAME",
+     "size": "18.75 × 17.5  (carried by export)"
+    },
+    {
+     "nodeId": "40001124:7097",
+     "name": "Vector",
+     "type": "VECTOR",
+     "size": "18.75 × 17.5  (carried by export)"
+    },
+    {
+     "nodeId": "40001123:6773",
+     "name": "gripper-prompt-input-chat-menu",
+     "type": "FRAME",
+     "size": "500 × 7"
+    },
+    {
+     "nodeId": "40001123:6774",
+     "name": "Meatballs",
+     "type": "FRAME",
+     "size": "480 × 4.05"
+    },
+    {
+     "nodeId": "40001123:6775",
+     "name": "Ellipse 209",
+     "type": "ELLIPSE",
+     "size": "2.16 × 2.05"
+    },
+    {
+     "nodeId": "40001123:6776",
+     "name": "Ellipse 210",
+     "type": "ELLIPSE",
+     "size": "2.16 × 2.05"
+    },
+    {
+     "nodeId": "40001123:6777",
+     "name": "Ellipse 207",
+     "type": "ELLIPSE",
+     "size": "2.16 × 2.05"
+    },
+    {
+     "nodeId": "40001123:6778",
+     "name": "Ellipse 206",
+     "type": "ELLIPSE",
+     "size": "2.16 × 2.05"
+    },
+    {
+     "nodeId": "40001123:6779",
+     "name": "Ellipse 208",
+     "type": "ELLIPSE",
+     "size": "2.16 × 2.05"
+    }
+   ]
+  },
+  "output-footer-area": {
+   "type": "object",
+   "description": "The footer block of the chat column output area — Figma 40001123-6689, imported via the Figma Dev Mode MCP server (get_design_context). The output column's closing shell: the Active/Plugins control, the four 32x32 panel marks (forum, chat history, add-new-conversation, user feedback), the credit line in its own button, and the block's own gripper. This is where the plug-in tool bar loads — the drawing's default view shows the first five tools.",
+   "properties": {
+    "component": {
+     "const": "output-footer-area"
+    },
+    "id": {
+     "type": "string"
+    },
+    "credit": {
+     "type": "string"
+    },
+    "historySelected": {
+     "type": "boolean"
+    },
+    "pluginLabel": {
+     "type": "string"
+    },
+    "gripEnabled": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "component"
+   ],
+   "x-layers": [
+    {
+     "nodeId": "40001123:6689",
+     "name": "output-footer-area",
+     "type": "FRAME",
+     "size": "col · gap 7 · pad 10/20/20/20"
+    },
+    {
+     "nodeId": "40001123:6692",
+     "name": "gripper-prompt-input-chat-menu",
+     "type": "FRAME",
+     "size": "7 tall · pad 0/10"
+    },
+    {
+     "nodeId": "40001123:6693",
+     "name": "Meatballs",
+     "type": "IMAGE-SVG",
+     "size": "24.649 × 4.051 · rotate 180"
+    },
+    {
+     "nodeId": "40001124:7035",
+     "name": "forum 1",
+     "type": "IMAGE-SVG",
+     "size": "32 × 32 · fill #3D515B"
+    },
+    {
+     "nodeId": "40001123:6728",
+     "name": "chat history",
+     "type": "IMAGE-SVG",
+     "size": "32 × 32 · fill #507274"
+    },
+    {
+     "nodeId": "40001123:6732",
+     "name": "add-new-conversation",
+     "type": "IMAGE-SVG",
+     "size": "32 × 32 · fill #3D515B"
+    },
+    {
+     "nodeId": "40001123:6724",
+     "name": "user--feedback 1",
+     "type": "IMAGE-SVG",
+     "size": "32 × 32 · fill #3D515B"
+    },
+    {
+     "nodeId": "40001123:6690",
+     "name": "chat-output-footer",
+     "type": "FRAME",
+     "size": "500 · radius 8 · 2 inset shadows"
+    },
+    {
+     "nodeId": "40001123:6722",
+     "name": "",
+     "type": "FRAME",
+     "size": "row · gap 9"
+    },
+    {
+     "nodeId": "40001123:6723",
+     "name": "",
+     "type": "FRAME",
+     "size": "307 · row · gap 20"
+    },
+    {
+     "nodeId": "40001123:6829",
+     "name": "",
+     "type": "FRAME",
+     "size": "54 · row"
+    },
+    {
+     "nodeId": "40001123:6830",
+     "name": "Function - loads cards form console in prompt area",
+     "type": "FRAME",
+     "size": "54 · radius 6 · 2 drop shadows"
+    },
+    {
+     "nodeId": "40001123:6831",
+     "name": "btn-label",
+     "type": "FRAME",
+     "size": "col"
+    },
+    {
+     "nodeId": "40001123:6832",
+     "name": "Active / Plugins",
+     "type": "TEXT",
+     "size": "58 · Arial Rounded MT Bold 12px #3D515B"
+    },
+    {
+     "nodeId": "40001123:6738",
+     "name": "Function - loads cards form console in prompt area",
+     "type": "FRAME",
+     "size": "156 · radius 6 · 2 drop shadows"
+    },
+    {
+     "nodeId": "40001123:6739",
+     "name": "btn-label",
+     "type": "FRAME",
+     "size": "156 × 35"
+    },
+    {
+     "nodeId": "40001123:6740",
+     "name": "Created by John Travis Holt / Raibach.net © 2026 Raibach IDS",
+     "type": "TEXT",
+     "size": "Arial Rounded MT Bold 9px / 12px #3D515B right-bottom"
+    }
+   ]
+  },
+  "left-column-header": {
+   "type": "object",
+   "description": "The prompt's own bar: title, version label and package id, above the sections in the left column. Moved out of the React shell so the title is a surface value the AI can read and write. Also reachable as LeftColumnHeader, which the renderer resolves to this element (COMPOSITE_MAP in a2ui-renderer.ts). Tags, author and score are drawn placeholders; flip is drawn and inactive.",
+   "properties": {
+    "component": {
+     "const": "left-column-header"
+    },
+    "id": {
+     "type": "string"
+    },
+    "title": {
+     "$ref": "#/$defs/DynamicString"
+    },
+    "version": {
+     "type": "number"
+    },
+    "promptId": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "LeftColumnHeader": {
+   "type": "object",
+   "description": "The same component as left-column-header, under its component name. Both are listed on purpose: the renderer maps the name to the element while the allowlist and the catalog audit name the tag.",
+   "properties": {
+    "component": {
+     "const": "LeftColumnHeader"
+    },
+    "id": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "component"
+   ]
+  },
+  "f-40001204-5752": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Lit web component <f-40001204-5752>, generated from Figma node 40001204:5752 (System_Role) and rendered from src/components/lit/f-40001204-5752.ts. Ingested, then approved into the catalogue.",
+     "properties": {
+      "component": {
+       "const": "f-40001204-5752"
+      },
+      "content": {
+       "type": "string"
+      },
+      "disabled": {
+       "type": "boolean"
+      }
+     },
+     "required": [
+      "component"
+     ],
+     "unevaluatedProperties": false
+    }
+   ]
+  },
+  "f-40001207-3497": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "THE CATALOGUE'S COMPONENT ROW, implemented by <f-40001207-3497> in src/components/lit/f-40001207-3497.ts and generated from Figma node 40001207:3497 (catalog-component-node-raibach-ids). It draws ONE component of the catalogue as the row the left column lists: the name, the code, and the catalogue's own description of it, plus a chevron that expands the row and a status well the host fills with one mark (owner, 2026-09-30: 'I do not need to see anything but the name and the f-code and the discription in these tiles. The other data should be in the metadata in the preview panel.'). The facts the row no longer shows travel with the click instead: the tree that lists the catalogue sends them, and the preview panel reads them. It is instantiated by that tree (figma-layers-view), not by an envelope.",
+     "properties": {
+      "component": {
+       "const": "f-40001207-3497"
+      },
+      "name": {
+       "type": "string",
+       "description": "What the catalogue calls it - the Figma layer's name for a generated component."
+      },
+      "code": {
+       "type": "string",
+       "description": "The catalogue's own key for it: f-40001207-3497, or a kebab name like trace-feed."
+      },
+      "description": {
+       "type": "string",
+       "description": "What it is, in the catalogue's words, cut to its first sentence by the row that passes it. The whole text goes to the preview panel."
+      },
+      "open": {
+       "type": "boolean",
+       "description": "Whether the row is expanded - the chevron's state. The element reports the change back as chevron-toggle; the tree records it."
+      }
+     },
+     "required": [
+      "component"
+     ],
+     "unevaluatedProperties": false
+    }
+   ]
+  },
+  "f-40001207-3559": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Lit web component <f-40001207-3559>, generated from Figma node 40001207:3559 (catalog-node-raibach-ids) and rendered from src/components/lit/f-40001207-3559.ts. Ingested, then approved into the catalogue.",
+     "properties": {
+      "component": {
+       "const": "f-40001207-3559"
+      },
+      "content": {
+       "type": "string"
+      },
+      "justify": {
+       "type": "string"
+      },
+      "align": {
+       "type": "string"
+      },
+      "name": {
+       "type": "string",
+       "description": "The catalogue's name, drawn where the Figma node's sample text read \"Components (prompt-composer)\"."
+      },
+      "count": {
+       "type": "string",
+       "description": "How many components the catalogue declares, drawn on the second line (\"59 components\"). Supplied by the writer; the measured sample text is the element's own default."
+      },
+      "catalogId": {
+       "type": "string",
+       "description": "The catalogId the catalogue is published at, drawn under the name."
+      },
+      "description": {
+       "type": "string",
+       "description": "The line in the trailing block, where the node's sample text read \"FigmaNode: …\"."
+      }
+     },
+     "required": [
+      "component"
+     ],
+     "unevaluatedProperties": false
+    }
+   ]
+  },
+  "f-40001206-2888": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "Lit web component <f-40001206-2888>, generated from Figma node 40001206:2888 (layout-id-component) and rendered from src/components/lit/f-40001206-2888.ts. Ingested, then approved into the catalogue.",
+     "properties": {
+      "component": {
+       "const": "f-40001206-2888"
+      },
+      "content": {
+       "type": "string"
+      },
+      "justify": {
+       "type": "string"
+      },
+      "align": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component"
+     ],
+     "unevaluatedProperties": false
+    }
+   ]
+  },
+  "catalog-ingest-form": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "description": "ADD DESIGN SYSTEM — the Design room's second ingest tool, beside the Figma form: a packaged design system (a .zip carrying system.json and components.json) becomes a walled-off catalogue partition. Implemented by <catalog-ingest-form> in src/components/lit/catalog-ingest-form.ts. It is a VIEW and fetches nothing: on Submit it dispatches `catalog-ingest-submit` and the shell posts POST /api/catalog/ingest. Its two values are host-set bindings (busy, message). It cannot name an existing catalogue: the partition's name is the manifest's id and the server refuses one that exists.",
+     "properties": {
+      "component": {
+       "const": "catalog-ingest-form"
+      },
+      "busy": {
+       "type": "boolean",
+       "description": "True while an ingest is in flight. SET BY THE HOST, never by the element: the fields lock and Submit reads 'Ingesting…', and only the caller that made the call knows when it finished."
+      },
+      "message": {
+       "type": "string",
+       "description": "What the server answered — the created partition, or the refusal verbatim. Host-written."
+      },
+      "label": {
+       "type": "string",
+       "description": "The design system's label, typed by the person. Empty means the manifest's own label is used; a disagreement with it is refused."
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   ],
+   "unevaluatedProperties": false
   }
+ },
+ "$defs": {
+  "CatalogComponentCommon": {
+   "type": "object",
+   "properties": {
+    "weight": {
+     "type": "number",
+     "description": "The relative weight of this component within a Row or Column (CSS flex-grow). Only valid for direct children of Row or Column."
+    }
+   }
+  },
+  "theme": {
+   "type": "object",
+   "properties": {
+    "primaryColor": {
+     "type": "string",
+     "description": "Primary brand color in hex format.",
+     "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "iconUrl": {
+     "type": "string",
+     "format": "uri",
+     "description": "URL for an image identifying the agent or tool."
+    },
+    "agentDisplayName": {
+     "type": "string",
+     "description": "Display name for the agent or tool that created the surface."
+    }
+   },
+   "additionalProperties": true
+  },
+  "anyComponent": {
+   "oneOf": [
+    {
+     "$ref": "#/components/error-banner"
+    },
+    {
+     "$ref": "#/components/chat-panel"
+    },
+    {
+     "$ref": "#/components/compiled-output-viewer"
+    },
+    {
+     "$ref": "#/components/AgentFlow"
+    },
+    {
+     "$ref": "#/components/agent-flow"
+    },
+    {
+     "$ref": "#/components/AgentCanvas"
+    },
+    {
+     "$ref": "#/components/agent-canvas"
+    },
+    {
+     "$ref": "#/components/gripper-prompt-input"
+    },
+    {
+     "$ref": "#/components/prompt-container"
+    },
+    {
+     "$ref": "#/components/prompt-input-section"
+    },
+    {
+     "$ref": "#/components/prompt-section-editor"
+    },
+    {
+     "$ref": "#/components/prompt-textarea"
+    },
+    {
+     "$ref": "#/components/role-dropdown"
+    },
+    {
+     "$ref": "#/components/role-tile"
+    },
+    {
+     "$ref": "#/components/status-bar-prompt-input"
+    },
+    {
+     "$ref": "#/components/workspace-layout"
+    },
+    {
+     "$ref": "#/components/ai-surface-sandbox"
+    },
+    {
+     "$ref": "#/components/Text"
+    },
+    {
+     "$ref": "#/components/Image"
+    },
+    {
+     "$ref": "#/components/Row"
+    },
+    {
+     "$ref": "#/components/Column"
+    },
+    {
+     "$ref": "#/components/Card"
+    },
+    {
+     "$ref": "#/components/Button"
+    },
+    {
+     "$ref": "#/components/agent-card"
+    },
+    {
+     "$ref": "#/components/chat-navigation-bar"
+    },
+    {
+     "$ref": "#/components/ConsoleCardGrid"
+    },
+    {
+     "$ref": "#/components/DecisionDialog"
+    },
+    {
+     "$ref": "#/components/ActionGroup"
+    },
+    {
+     "$ref": "#/components/SectionEditor"
+    },
+    {
+     "$ref": "#/components/CompiledOutput"
+    },
+    {
+     "$ref": "#/components/ChatPanel"
+    },
+    {
+     "$ref": "#/components/footer-bar"
+    },
+    {
+     "$ref": "#/components/add-section-button"
+    },
+    {
+     "$ref": "#/components/status-readout"
+    },
+    {
+     "$ref": "#/components/model-selector-button"
+    },
+    {
+     "$ref": "#/components/token-cost-readout"
+    },
+    {
+     "$ref": "#/components/trace-feed"
+    },
+    {
+     "$ref": "#/components/user-response-bubble"
+    },
+    {
+     "$ref": "#/components/chat-repair-actions"
+    },
+    {
+     "$ref": "#/components/control-bar"
+    },
+    {
+     "$ref": "#/components/OutputControls"
+    },
+    {
+     "$ref": "#/components/output-controls"
+    },
+    {
+     "$ref": "#/components/CanvasFooter"
+    },
+    {
+     "$ref": "#/components/TraceFeed"
+    },
+    {
+     "$ref": "#/components/canvas-footer"
+    },
+    {
+     "$ref": "#/components/chat-header"
+    },
+    {
+     "$ref": "#/components/output-header"
+    },
+    {
+     "$ref": "#/components/output-footer-area"
+    },
+    {
+     "$ref": "#/components/left-column-header"
+    },
+    {
+     "$ref": "#/components/LeftColumnHeader"
+    },
+    {
+     "$ref": "#/components/design-left-panel"
+    },
+    {
+     "$ref": "#/components/figma-layers-view"
+    },
+    {
+     "$ref": "#/components/figma-ingest-form"
+    },
+    {
+     "$ref": "#/components/component-preview"
+    },
+    {
+     "$ref": "#/components/draft-preview"
+    },
+    {
+     "$ref": "#/components/f-40001204-5752"
+    },
+    {
+     "$ref": "#/components/f-40001207-3497"
+    },
+    {
+     "$ref": "#/components/f-40001207-3559"
+    },
+    {
+     "$ref": "#/components/f-40001206-2888"
+    }
+   ],
+   "discriminator": {
+    "propertyName": "component"
+   }
+  }
+ }
 }

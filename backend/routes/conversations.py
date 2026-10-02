@@ -205,6 +205,79 @@ async def update_conversation(
         )
 
 
+@router.get("/api/conversations/{conversation_id}/draft")
+async def get_conversation_draft(
+    conversation_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
+):
+    """The drafting canvas's payload for this conversation (S2, wireframe-lab/PLAN.md).
+
+    ABSENT IS A REAL ANSWER: `{"draft": null}` means nothing has been drafted in this thread yet,
+    and the canvas draws its empty state. A read that FAILS is a 500 with the reason — never an
+    empty draft standing in for a failure.
+    """
+    if not state.conversation_api:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Please check your connection.",
+        )
+    try:
+        uid = get_user_id_from_header(x_user_id)
+        row = state.conversation_api.get_draft(conversation_id, uid)
+        return {
+            "conversation_id": conversation_id,
+            "artifact_id": row["id"] if row else None,
+            "savedAt": row["savedAt"] if row else None,
+            "draft": row["draft"] if row else None,
+        }
+    except ValueError as refused:
+        # The same refusal the messages route makes, in the same words — the check is one rule.
+        raise HTTPException(status_code=404, detail=str(refused))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading the draft: {e!s}")
+
+
+@router.put("/api/conversations/{conversation_id}/draft")
+async def save_conversation_draft(
+    conversation_id: str,
+    request: Request,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """Write the conversation's draft — ONE ROW, REPLACED (S2).
+
+    One drag, one write: the drafting canvas's gesture end lands here, and the row it replaces is
+    the same one the canvas was initialized from. The shape is checked here because a stored draft
+    that is not a draft is a payload nothing can draw — and it would be found at LOAD time, in
+    another room, long after the write that caused it.
+    """
+    if not state.conversation_api:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Please check your connection.",
+        )
+    try:
+        body = await request.json()
+    except Exception as parse_error:
+        raise HTTPException(status_code=400, detail=f"The draft is not valid JSON: {parse_error}")
+    if not isinstance(body, dict) or not isinstance(body.get("nodes"), list):
+        raise HTTPException(
+            status_code=400,
+            detail="A draft is an object with a 'nodes' list (and optionally 'label' and "
+                   "'positions'); nothing was written",
+        )
+    try:
+        uid = get_user_id_from_header(x_user_id)
+        saved = state.conversation_api.save_draft(conversation_id, uid, body)
+        return {"conversation_id": conversation_id, "artifact_id": saved["id"], "savedAt": saved["savedAt"]}
+    except ValueError as refused:
+        raise HTTPException(status_code=404, detail=str(refused))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving the draft: {e!s}")
+
+
 @router.delete("/api/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")

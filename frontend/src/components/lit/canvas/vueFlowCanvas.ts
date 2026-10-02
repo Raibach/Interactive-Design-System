@@ -30,7 +30,7 @@
  * root property some tutorials mention DO NOT EXIST in 1.48.2, and code that reaches for them is
  * dead on arrival; neither appears here.
  */
-import { createApp, h, markRaw, type App } from 'vue';
+import { createApp, defineComponent, h, markRaw, onMounted, onUpdated, ref as vueRef, type App } from 'vue';
 import {
   VueFlow,
   useVueFlow,
@@ -120,9 +120,17 @@ const TOOLBAR = (n: FlowNode) => {
  * element's stylesheet styles it, its tests query it, and its delegated gesture handlers hit-test
  * it. The module itself owns no behaviour: it is a drawing, and the element is the decision.
  */
-const ModuleNode = (props: NodeProps<{ flow: FlowNode; selected: boolean }>) => {
+const ModuleNode = (props: NodeProps<{ flow: FlowNode; selected: boolean; locked: boolean }>) => {
   const n = props.data.flow;
   const selected = Boolean(props.data.selected);
+  /**
+   * `locked` IS THE ELEMENT'S RUNNING FLAG, ON THE DATA PATH — the one flag that says a run is in
+   * flight, so this module draws the tile as a picture of it: a locked tile carries NO ports and NO
+   * toolbar. The element enforces the same flag at its gesture boundary (`_onSurfaceClick`,
+   * `_onPortDown`); this is the drawing half of one fact, never a second decision — a control that
+   * is refused but still drawn is the dead control this canvas refuses to ship.
+   */
+  const locked = Boolean(props.data.locked);
   const trigger = n.family === 'seat' && n.kind === 'system-role';
   const size = trigger ? 140 : 96;
   return h(
@@ -143,25 +151,96 @@ const ModuleNode = (props: NodeProps<{ flow: FlowNode; selected: boolean }>) => 
         h('span', { class: 'glyph', innerHTML: GLYPH[n.family] ?? GLYPH.seat }),
         h('span', { class: 'label', title: n.title }, n.title),
         markOf(n),
-        ...SIDES.map((side) =>
+        // A PORT IS A CONTROL, AND A LOCKED TILE OFFERS NONE (see `locked` above).
+        ...(locked ? [] : SIDES.map((side) =>
           h('span', {
             class: `port port-${side}`,
             'data-port': side,
             title: side === 'right' ? 'Click to add a module here, or drag a line out of it' : 'Connect here',
             role: 'button',
             'aria-label': 'Port, ' + side,
-          }, [h('span', { class: 'port-plus', 'aria-hidden': 'true' }, '+')])),
+          }, [h('span', { class: 'port-plus', 'aria-hidden': 'true' }, '+')]))),
       ]),
       n.subtitle ? h('div', { class: 'sub' }, n.subtitle) : null,
       n.badge ? h('div', { class: `badge b-${n.badge}` }, n.badge) : null,
-      selected ? TOOLBAR(n) : null,
+      selected && !locked ? TOOLBAR(n) : null,
     ],
   );
 };
 
+/**
+ * ONE PLACED COMPONENT — the DRAFT canvas's node, drawn by this module instead of the run's tile.
+ *
+ * THE COMPONENT IS CREATED HERE, AND VUE IS NOT ASKED TO DIFF IT. A catalog element takes its props
+ * as PROPERTIES (an object prop cannot ride an attribute; this app's elements declare their
+ * properties), so Vue renders the frame and this mounts the resolved tag into it — created with
+ * `document.createElement`, its props assigned one by one. The frame is Vue's; the component is
+ * ours; no library ever patches a custom element's internals.
+ *
+ * A REFUSED NAME DRAWS A SENTENCE. The element resolved the tag before packing the node
+ * (`resolveTag` — the one reader of the name→tag mapping); an empty `tag` means the catalogue does
+ * not know the name, and the node says so BY NAME. Never a blank frame, never a substitute.
+ */
+const CatalogNode = defineComponent({
+  name: 'DraftCatalogNode',
+  props: { data: { type: Object, required: true } },
+  setup(props) {
+    const host = vueRef<HTMLElement | null>(null);
+    const apply = (): void => {
+      const el = host.value;
+      if (!el) return;
+      const tag = String(props.data.tag || '');
+      if (!tag) return;                       // a refusal: the template below draws the sentence
+      const current = el.firstElementChild;
+      if (!current || current.tagName.toLowerCase() !== tag) {
+        el.replaceChildren(document.createElement(tag));
+      }
+      const node = el.firstElementChild as (HTMLElement & Record<string, unknown>) | null;
+      if (!node) return;
+      const vars = (props.data.props || {}) as Record<string, unknown>;
+      // PROPS AS PROPERTIES, one write per key on every apply: the payload is the model, and this
+      // is the moment it lands on the element.
+      for (const [k, v] of Object.entries(vars)) node[k] = v;
+    };
+    onMounted(apply);
+    onUpdated(apply);
+    return () => h(
+      'div',
+      {
+        class: ['draft-node', props.data.selected ? 'sel' : ''],
+        'data-node-id': props.data.id,
+        ref: host,
+      },
+      [
+        props.data.refused ? h('div', { class: 'refusal' }, String(props.data.refused)) : null,
+      ],
+    );
+  },
+});
+
+/**
+ * WHAT AN ELEMENT HANDS THE RENDERER. The module variant spreads a whole `FlowNode` (its tile reads
+ * it); the catalog variant carries the resolved `tag` and the payload's `props` instead. One
+ * interface, two variants — the packing below is the only place that knows the difference.
+ */
+export type CanvasNodeInput = {
+  id: string;
+  x: number;
+  y: number;
+  selected?: boolean;
+  locked?: boolean;
+  /** The resolved tag the draft variant mounts; the module variant ignores it. */
+  tag?: string;
+  props?: Record<string, unknown>;
+  /** The name the catalogue refused, drawn as a sentence (the draft variant). */
+  refused?: string;
+};
+
 export interface VueFlowCanvas {
-  /** Redraw every module at the positions given. `nodes` carries x/y resolved by the element. */
-  update(nodes: Array<FlowNode & { selected: boolean }>): void;
+  /** Redraw every module at the positions given. `nodes` carries x/y resolved by the element,
+   *  the selection, and `locked` — the run's own flag, which strips a tile's controls. The
+   *  `catalog` variant reads `tag`/`props`/`refused` instead (see CatalogNode). */
+  update(nodes: CanvasNodeInput[]): void;
   /** Put the view where the element says it is. `duration` eases the travel (the glide). */
   setViewport(view: ViewportTransform, opts?: { duration?: number }): void;
   /** The dot grid's colour follows the element's theme. */
@@ -171,7 +250,15 @@ export interface VueFlowCanvas {
 
 const DOT = { '': '#aaa3b5', dark: 'rgba(107, 74, 158, 0.8)' };
 
-export function mountVueFlowCanvas(box: HTMLElement, opts: { theme?: string } = {}): VueFlowCanvas {
+export function mountVueFlowCanvas(
+  box: HTMLElement,
+  opts: { theme?: string; variant?: 'module' | 'catalog' } = {},
+): VueFlowCanvas {
+  // WHICH DRAWING THIS IS. 'module' is the run canvas (agent-flow); 'catalog' is the draft canvas,
+  // whose nodes mount real registered components. The variant picks the node type at mount and is
+  // the only thing that differs between the two drawings — the viewport, the theme and the
+  // gestures-off rule are the same, because they belong to the ELEMENT, not to the variant.
+  const variant = opts.variant ?? 'module';
   let setViewportFn: ((v: ViewportTransform, o?: { duration?: number }) => void) | null = null;
   // The store's setViewport is a no-op until d3 has the pane's dimensions. The element pushes the
   // view on every update, but a push that landed during that window would be dropped — so the last
@@ -204,7 +291,7 @@ export function mountVueFlowCanvas(box: HTMLElement, opts: { theme?: string } = 
         {
           nodes: this.nodes,
           edges: [],
-          nodeTypes: { module: markRaw(ModuleNode) },
+          nodeTypes: { [variant]: markRaw(variant === 'catalog' ? CatalogNode : ModuleNode) },
           minZoom: 0.25,
           maxZoom: 2,
           // The element is the gesture: every library gesture is off. See the file note.
@@ -231,9 +318,16 @@ export function mountVueFlowCanvas(box: HTMLElement, opts: { theme?: string } = 
       // to avoid.
       vm.nodes = nodes.map((n) => ({
         id: n.id,
-        type: 'module',
+        type: variant,
         position: { x: n.x, y: n.y },
-        data: { flow: n, selected: n.selected },
+        // EVERY FLAG A NODE TYPE READS IS PACKED HERE — this object is the module's whole input, so a
+        // field left out of it is a field the drawing never sees. `locked` was exactly that on the
+        // first pass: the element set it and the module read `undefined`, so the ports stayed drawn
+        // through a run (measured, 2026-10-02: 28 ports visible while `running` was true). The
+        // catalog variant's fields (`tag`, `props`, `refused`) sit beside them for the same reason.
+        data: variant === 'catalog'
+          ? { id: n.id, tag: n.tag, props: n.props, refused: n.refused, selected: Boolean(n.selected) }
+          : { flow: n as unknown as FlowNode, selected: n.selected, locked: n.locked },
       }));
     },
     setViewport(view, opts) {
