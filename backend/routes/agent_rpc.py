@@ -7,7 +7,7 @@ from fastapi import APIRouter, Header, HTTPException
 import services as state
 from agent_rpc_handler import AgentRpcHandler
 from deps import (
-    DEFAULT_USER_ID,
+    get_user_id_from_header,
 )
 
 router = APIRouter()
@@ -40,8 +40,9 @@ async def agent_rpc(
     }
     """
     try:
-        # Get or validate user ID
-        user_id = x_user_id or DEFAULT_USER_ID
+        # Get or validate user ID — through deps, so DEMO_MODE's identity pin
+        # applies here too (this route used to keep its own inline fallback).
+        user_id = get_user_id_from_header(x_user_id)
         
         # Validate UUID format
         import re

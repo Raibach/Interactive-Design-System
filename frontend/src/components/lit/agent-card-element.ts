@@ -15,11 +15,12 @@
  * content (title + description with the ##PROMPT## lead), footer (version pill
  * with status, likes with the heart). No author section — the design has none.
  */
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 // THE CHAT'S COPILOT MARK, the logo its column's header carries — the owner, 2026-09-19:
 // "I meant for that to be the copilot icon. It's at the very top of the chat vertical menu."
 import chatMenuIcon from './assets/chat-logo-bce2fe.png';
 import favoriteIcon from '@/assets/figma-card-favorite.svg';
+import { isDemoMode } from '@/shared/demoMode';
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -482,7 +483,9 @@ export class AgentCardElement extends LitElement {
                   ${safeTitleColor ? `--card-title-color: ${safeTitleColor};` : ''}">
 
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
-             Not in the Figma pull. -->
+             Not in the Figma pull. Absent on the demo, where the server refuses
+             the delete it would dispatch (demo_policy.py). -->
+        ${isDemoMode() ? nothing : html`
         <button
           class="card-delete ${this._deleteArmed ? 'armed' : ''}"
           type="button"
@@ -494,7 +497,7 @@ export class AgentCardElement extends LitElement {
           ${this._deleteArmed
             ? html`<span class="card-delete-label">CONFIRM</span>`
             : html`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
-        </button>
+        </button>`}
 
         <!-- card-header -->
         <div class="card-header">

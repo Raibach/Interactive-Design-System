@@ -28,6 +28,7 @@ import { LitElement, html, css, nothing } from 'lit';
 // inspections and the trace wear, so all three compose the same element.
 import './chat-fold';
 import { designTokens } from '@/shared/design-tokens';
+import { isDemoMode } from '@/shared/demoMode';
 
 /** One row, as the writer composes it. Nothing here is derived on the client. */
 export interface ChatRepairRow {
@@ -206,7 +207,11 @@ export class ChatRepairActions extends LitElement {
                   ? html`<span class="stage done">completed</span>`
                   : stage === 'repair'
                     ? html`<span class="stage repair">in repair</span>`
-                    : html`<button class="repair" type="button" @click=${() => this._repair(f.id)}>Repair</button>`}
+                    : isDemoMode()
+                      // Repair writes source through /api/repair/apply, which the demo
+                      // refuses (demo_policy.py) — so the button is not drawn there.
+                      ? nothing
+                      : html`<button class="repair" type="button" @click=${() => this._repair(f.id)}>Repair</button>`}
                 <!-- THE LEVEL IS DATA, NOT DECORATION. It rides on every row and repeats the
                      same word down the list (owner, 2026-09-19: "it doesn't need to be on
                      every line… the AI can see it but maybe the user doesn't"). The header's

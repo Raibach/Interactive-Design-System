@@ -1,5 +1,6 @@
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
+import { isDemoMode } from "@/shared/demoMode";
 import { useState, useEffect } from "react";
 import raibachLogo from "../assets/raibach-logo.jpg";
 import { IngestModal } from "./IngestModal";
@@ -138,6 +139,9 @@ export default function LeftVerticalMenu({
    */
   useEffect(() => {
     const onOpenIngest = () => {
+      // The demo does not ingest: /api/catalog/ingest and the whole figma-ingest
+      // family are refused server-side (demo_policy.py), so the modal must not open.
+      if (isDemoMode()) return;
       setIngestModalOpen(true);
       setIsNavOpen(false);
       handleCollapse();
@@ -199,6 +203,9 @@ export default function LeftVerticalMenu({
 
   const handleDeletePrompt = async (e: React.MouseEvent, promptId: string) => {
     e.stopPropagation();
+    // Belt to the hidden button's braces: the demo's DELETE is refused server-side,
+    // so the action must die here rather than round-trip to a 403.
+    if (isDemoMode()) return;
     if (!confirm('Delete this prompt?')) return;
     const r = await apiFetch('/api/prompt-sessions/' + promptId + '?permanent=true', { method: 'DELETE' });
     if (!r.ok) {
@@ -441,13 +448,17 @@ const LogoutIcon = () => (
                         )}
                         <span className="truncate">{p.title || "Untitled"}</span>
                       </button>
-                      <button
-                        onClick={(e) => handleDeletePrompt(e, p.id)}
-                        className="opacity-0 group-hover:opacity-100 shrink-0 text-red-400 hover:text-red-300 text-base leading-none px-1 py-0.5 transition-opacity"
-                        title="Delete"
-                      >
-                        ×
-                      </button>
+                      {/* Delete is not offered on the demo — the server refuses it
+                          (demo_policy.py), so the demo does not show the door. */}
+                      {!isDemoMode() && (
+                        <button
+                          onClick={(e) => handleDeletePrompt(e, p.id)}
+                          className="opacity-0 group-hover:opacity-100 shrink-0 text-red-400 hover:text-red-300 text-base leading-none px-1 py-0.5 transition-opacity"
+                          title="Delete"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   ))
                 )}
@@ -635,14 +646,16 @@ const LogoutIcon = () => (
         </>
       )}
 
-      {/* Ingest Modal */}
-      <IngestModal
-        open={ingestModalOpen}
-        onClose={() => setIngestModalOpen(false)}
-        apiFetch={apiFetch}
-        sessionId={activeSessionId}
-        sessionTitle={activeSessionTitle}
-      />
+      {/* Ingest Modal — never mounted on the demo (see onOpenIngest above). */}
+      {!isDemoMode() && (
+        <IngestModal
+          open={ingestModalOpen}
+          onClose={() => setIngestModalOpen(false)}
+          apiFetch={apiFetch}
+          sessionId={activeSessionId}
+          sessionTitle={activeSessionTitle}
+        />
+      )}
     </div>
   );
 }
