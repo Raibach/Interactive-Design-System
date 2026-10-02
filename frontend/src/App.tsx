@@ -127,14 +127,10 @@ function App() {
                   console.error("App-level error:", error.message);
                 }}
               >
-                {/* THE HOLD (owner, 2026-10-02): after Sign in, stay on the gate's own
-                    card — the same waves ground, a working spinner — until the console
-                    has actually drawn its first surface, then cross-fade away. Nothing
-                    under it is stepped through: the ground is already playing and the
-                    cards are already there. The cap inside is a floor, not a deadline. */}
-                <GateSplash holdUntilDrawn />
-                {demoSettled ? (
-                  <Suspense fallback={null}>
+                {!demoSettled ? (
+                  <GateSplash />
+                ) : (
+                  <Suspense fallback={<GateSplash />}>
                     <Routes>
                       {/* A2UI: Single root route - AI assembles all surfaces dynamically */}
                       <Route
@@ -164,7 +160,7 @@ function App() {
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Suspense>
-                ) : null}
+                )}
               </SentryErrorBoundary>
             </div>
           </TooltipProvider>

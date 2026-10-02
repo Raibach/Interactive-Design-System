@@ -42,14 +42,7 @@ import LeftVerticalMenu from "@/components/LeftVerticalMenu";
 import LeftColumnHeader from "@/components/LeftColumnHeader";
 import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
-// THE CONSOLE'S GROUND, as a URL rather than a bundled asset (2026-10-02): the sign-in
-// gate and the hold card draw this same video behind their cards, and a video referenced
-// from index.html cannot carry a build hash. One copy in public/ is served at this stable
-// path, the browser fetches it once, and the console's ground layer replays the bytes the
-// gate already loaded — which is the point: the ground a person saw while typing the pin
-// is the ground the console opens onto. Replacing the video means replacing this file
-// (the URL does not change, so give the new file a moment — it is 1.5 MB once).
-const consoleVideo = "/console-waves.mp4";
+import consoleVideo from "@/assets/No-Copyright-waves.mp4";
 import composerBackground from "@/assets/composer-image-bg.jpg";
 // THE DESIGN SECTION'S OWN CANVAS — the artwork behind the room's columns. Same import
 // mechanism as the Composer's, so it is bundled and hashed like every other asset.
