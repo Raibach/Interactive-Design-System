@@ -168,6 +168,11 @@ if os.path.isdir(frontend_dist):
         response = await call_next(request)
         if request.url.path.startswith("/assets/") and response.status_code == 200:
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif request.url.path == "/console-waves.mp4" and response.status_code == 200:
+            # ONE FILE AT ONE STABLE URL, so there is no hash to cache forever: stored
+            # and revalidated. Without this line the video sat under the no-store rule
+            # below and every single load re-downloaded 1.5 MB.
+            response.headers["Cache-Control"] = "no-cache"
         else:
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
@@ -176,6 +181,16 @@ if os.path.isdir(frontend_dist):
 
     # Serve static assets (JS, CSS, images)
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    # ── THE DIST ROOT, AS FILES (2026-10-02) ───────────────────────────────────────────
+    # Without this, anything sitting at the root of dist/ — the console's ground video,
+    # a favicon — fell through to the SPA fallback and was answered with index.html:
+    # measured locally, /console-waves.mp4 returned HTML, and the gate's video element
+    # could not play what it was handed. /api/* routes and the /assets mount are
+    # registered before this one, so they win; a path this mount cannot find still 404s
+    # and is answered by the SPA fallback below, exactly as before. html=True is what
+    # serves index.html for "/" from the mount itself.
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="dist-root")
 
     # Serve index.html for root and SPA fallback via a catch-all that runs AFTER all API routes.
     # Using a middleware approach: if a non-API GET request would 404, serve index.html instead.

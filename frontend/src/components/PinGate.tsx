@@ -81,11 +81,33 @@ export default function PinGate({ onLoginSuccess }: { onLoginSuccess: () => void
         justifyContent: 'center',
         backgroundColor: '#1a1625',
         margin: 0,
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
+      {/* THE GROUND — the console's own waves (one file, one stable URL, shared with
+          index.html's static twin and the console's ground layer; the browser fetches it
+          once). The gate is the first screen of the console's world, not a purple room
+          beside it. */}
+      <video
+        src="/console-waves.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+      />
+      <div
+        aria-hidden="true"
+        style={{ position: 'fixed', inset: 0, background: 'rgba(26, 22, 37, 0.55)', zIndex: 0 }}
+      />
       <form
         onSubmit={submit}
         style={{
+          position: 'relative',
+          zIndex: 1,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
