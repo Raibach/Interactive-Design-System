@@ -4,7 +4,7 @@ import { API_BASE } from "@/shared/apiHelper";
  *
  * Provides structured logging that simultaneously:
  *   1. Outputs to the browser console
- *   2. Drops a Sentry breadcrumb for session replay context
+ *   2. Drops a breadcrumb (the Sentry surface is a no-op since 2026-10-02 — see lib/sentry.ts)
  *   3. Persists to localStorage via the existing ErrorLogger service
  *
  * Usage:
@@ -14,7 +14,9 @@ import { API_BASE } from "@/shared/apiHelper";
  *   logger.warn('Slow render detected', { component: 'ConsolePage', ms: 3200 });
  */
 
-import * as Sentry from "@sentry/react";
+// Sentry is disabled (owner, 2026-10-02); this module keeps the same call surface so every
+// call below reads exactly as it did — the members are simply no-ops now. See lib/sentry.ts.
+import * as Sentry from "@/lib/sentry";
 import { errorLogger } from "@/services/errorLogger";
 
 // ── Types ────────────────────────────────────────────────────────────────────

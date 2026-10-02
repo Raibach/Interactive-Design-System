@@ -4,7 +4,8 @@ import { API_BASE } from "@/shared/apiHelper";
  * Manages API key authentication for Grace AI
  */
 
-import * as Sentry from "@sentry/react";
+// Sentry is disabled (owner, 2026-10-02): setUser below is a no-op; see lib/sentry.ts.
+import * as Sentry from "@/lib/sentry";
 
 const API_KEY_STORAGE_KEY = "grace_api_key";
 const USER_ID_STORAGE_KEY = "grace_user_id";

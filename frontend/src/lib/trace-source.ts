@@ -81,7 +81,6 @@ interface Breadcrumb {
 }
 
 const MAX_ENTRIES = 100;
-const POLL_INTERVAL = 2000;
 
 /**
  * Log lines arrive in bursts (an assembly logs half a dozen at once) and every
@@ -94,11 +93,9 @@ const COALESCE_MS = 250;
 const LONG_TASK_MS = 50;
 
 let entries: TraceEntry[] = [];
-let breadcrumbCount = 0;
 let seq = 0;
 let started = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * The object handed to readers, rebuilt only when the values actually change.
@@ -115,7 +112,11 @@ export function traceSnapshot(): TraceSnapshot {
 }
 
 function publish(): void {
-  current = { entries, breadcrumbCount };
+  // `breadcrumbCount` stays in the snapshot's shape at a CONSTANT 0: Sentry's breadcrumbs were
+  // the only thing it counted, and Sentry is disabled (2026-10-02 — see lib/sentry.ts). The
+  // field is kept because the view's model reads it; a constant is also what keeps the
+  // "same object until something actually changed" identity rule honest.
+  current = { entries, breadcrumbCount: 0 };
   for (const listener of listeners) {
     try {
       listener(current);
@@ -380,39 +381,13 @@ function observeLongTasks(): void {
   }
 }
 
-// ── 6. Sentry's breadcrumbs ───────────────────────────────────────────────────
-
-/** The newest breadcrumb Sentry is holding, if it is one not already shown. */
-function pollSentry(): void {
-  void import('@sentry/react')
-    .then((Sentry) => {
-      let scopeData: Breadcrumb[] | undefined;
-      try {
-        const scope = Sentry.getGlobalScope() as unknown as { _breadcrumbs?: Breadcrumb[] };
-        scopeData = scope?._breadcrumbs;
-      } catch {
-        return; // Sentry internals moved; keep what the feed already has.
-      }
-      if (!scopeData || scopeData.length === 0) return;
-      if (scopeData.length !== breadcrumbCount) {
-        breadcrumbCount = scopeData.length;
-        scheduleFlush();
-      }
-      const latest = scopeData[scopeData.length - 1];
-      const ts = Number(latest?.timestamp ?? 0) * 1000;
-      if (!ts) return;
-      if (entries.some((e) => e.kind === 'breadcrumb' && e.timestamp === ts)) return;
-      add({
-        kind: 'breadcrumb',
-        level: latest.level === 'warn' ? 'warning' : String(latest.level ?? 'info'),
-        message: '[' + String(latest.category ?? 'breadcrumb') + '] ' + String(latest.message ?? ''),
-        timestamp: ts,
-      });
-    })
-    .catch(() => {
-      // Sentry not present in this build; the other sources still feed the view.
-    });
-}
+// ── 6. (removed) Sentry's breadcrumbs ────────────────────────────────────────
+//
+// A two-second poller used to read Sentry's in-memory breadcrumb scope and feed new
+// ones into the view. Sentry is disabled (owner, 2026-10-02 — see lib/sentry.ts),
+// so there is no scope and no crumbs: the poll was a permanent no-op holding a
+// timer, and it is gone with its source. The trace view is fed by the app logger
+// (section 1 above), which is the same writer whose lines Sentry used to mirror.
 
 // ── start ─────────────────────────────────────────────────────────────────────
 
@@ -436,19 +411,13 @@ function ensureStarted(): void {
   install(observeErrors);
   install(observeSurfaceEvents);
   install(observeLongTasks);
-  install(() => {
-    pollSentry();
-    pollTimer = setInterval(pollSentry, POLL_INTERVAL);
-  });
 }
 
 ensureStarted();
 
 /** Dev-only escape hatch so a test can stop the poller. */
 export function stopTraceSource(): void {
-  if (pollTimer) clearInterval(pollTimer);
   if (flushTimer) clearTimeout(flushTimer);
-  pollTimer = null;
   flushTimer = null;
   started = false;
 }
