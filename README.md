@@ -9,6 +9,13 @@ Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
 Demo pin: 7377
 
+> **The demo is locked, server-side.** The pin is a doorman, not the lock: whoever
+> gets past it lands in a sandbox seat that can chat, assemble, and edit its own
+> cloned packages — and cannot delete, publish, ingest, or reach anything of the
+> owner's, because the backend refuses those calls outright. All of it is off on a
+> local run, where the full system is the point. The mechanisms, the sandbox, and
+> the environment are in [The Demo's Lock](#the-demos-lock-demomode) below.
+
 > ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
 > The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
 >
@@ -93,6 +100,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 | **Shell Always Visible** | The deterministic React shell renders unconditionally — nav, frame, error states, slot containers. The user never stares at a blank page. AI failure = shell shows the failure, not nothing. |
 | **AI Fills Slots** | Slots are the loading contract (left/middle/right). AI decides which prompt blocks, data, and chat populate them. It does not create or remove slots. |
 | **Zero-Trust Catalog** | Every component validated against `catalogs/<pipeline>/catalog.json`. Unknown → HTTP 503. No silent failures. |
+| **The Server Is the Lock** | The demo's restrictions live in the backend (`demo_policy.py`), never in the browser. The frontend only hides the affordances the gate already refuses; a client that lies about the demo changes its own buttons and nothing else. |
 | **Fail Loud** | Invalid AI responses → 503 with diagnostics. Database down → 503. Empty Figma spec → 503 with exact reason. Never silently degrade. |
 | **No Executable Code** | `eval()` eliminated. `innerHTML` blocked. Buttons dispatch declarative `a2ui:action` events only. |
 | **Package-First** | A composer creates the draft package row on mount. Chat is scoped from keystroke one. |
@@ -120,8 +128,10 @@ Workspace:      workspace-layout · prompt-section-editor · compiled-output-vie
                 role-tile · status-bar-prompt-input · prompt-textarea
                 model-selector-button · user-response-bubble
 Design room:    design-left-panel · design-middle-container · component-preview · draft-preview
-                figma-ingest-form · figma-layers-view
+                figma-ingest-form · catalog-ingest-form · figma-layers-view
 ```
+
+The Design room keeps its **own** catalogue (`catalogs/design-artifacts/`, 63 components) — one catalogue per surface, each the gate for its own payloads, resolved at ask-time from the directory itself (`deps.a2ui_catalog_for`).
 
 ---
 
@@ -130,9 +140,9 @@ Design room:    design-left-panel · design-middle-container · component-previe
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · npm · Tailwind · TypeScript |
-| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM providers (Z.ai GLM primary, DeepSeek) |
+| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · DeepSeek hosted API — one model for every mode |
 | **Components** | Lit Web Components (Shadow DOM) · Figma API spec-driven |
-| **Deploy** | Docker · Northflank (us-central) · Cloudflare Tunnel |
+| **Deploy** | Docker · Northflank (`semantic-design-systems`, `nf-europe-west`) |
 
 ---
 
@@ -140,34 +150,42 @@ Design room:    design-left-panel · design-middle-container · component-previe
 
 ```
 backend/
-├── main.py              # App setup, startup, router includes
-├── deps.py              # A2UI catalog loader, shared helpers
+├── main.py              # App setup, startup, router includes, the demo gate's registration
+├── deps.py              # A2UI catalog loader, shared helpers, the demo identity pin
+├── demo_policy.py       # The demo lock: deny-by-default policy tables + rate buckets
+├── check_demo_policy.py # Policy-vs-routes drift check (run before a deploy)
+├── seed_demo_data.py    # Seeds / resets the demo sandbox (clones, project, user)
 ├── services.py          # Database service startup
 ├── figma_service.py     # Figma API → Lit spec extractor
 ├── grace_gui.py         # AI system prompts & assembly logic
-└── routes/              # 11 topic routers
+└── routes/              # 14 topic routers
     ├── ai.py                # Manifest, assemble-surface, save, audit
     ├── conversations.py    # Conversation + message CRUD
     ├── prompt_sessions.py  # Packages, versions, permissions
     ├── projects.py         # Project CRUD
     ├── memory.py           # Memory storage (dictation)
-    ├── figma.py            # Figma API proxy
+    ├── figma.py            # Figma API proxy, catalogue ingest
+    ├── figma_intake.py     # Governance intake runs
     ├── milvus.py           # Zilliz/Milvus vectors
     ├── agent_rpc.py        # JSON-RPC 2.0 agent integration
     ├── teacher.py          # Teacher query, model ensure
-    ├── misc.py             # Health, news, PDF, reasoning
-    └── files.py            # Documentation file I/O
+    ├── auth.py             # Login, signup, users
+    ├── governance.py       # Inspection runs
+    ├── misc.py             # Health, config, news, PDF, reasoning
+    └── files.py            # Documentation file I/O, repair read/apply
 
 frontend/
+├── index.html               # The shell — carries a static twin of the sign-in gate
+│                            #   (drawn before any JS; main.tsx removes it on mount)
 ├── src/
 │   ├── App.tsx              # Root app with routes
 │   ├── components/
-│   │   ├── A2UI/            # A2UI surface container
+│   │   ├── A2UI/            # A2UI surface container + per-surface catalogs
 │   │   └── lit/             # Lit web components (agent-card, workspace-layout, …)
 │   ├── pages/               # WritingAreaIndex (main surface)
 │   ├── hooks/               # React hooks
-│   └── shared/              # Surface contract, tag registry
-└── scripts/                  # Manifest generator, Figma sync
+│   └── shared/              # Surface contract, tag registry, demo flag (demoMode.ts)
+└── scripts/                  # Manifest generator, Figma sync, catalog check
 ```
 
 ---
@@ -185,15 +203,92 @@ bash RESTART-LOCAL.sh
 open http://localhost:5001
 ```
 
-- **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}`
+- **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}` (a real, paid model ping — not a free liveness probe)
 - **Dev PIN:** `7377`
-- **Dev mode:** global no-cache middleware — no stale bytes
+- **Local runs the full system:** with `DEMO_MODE` unset the identity pin and the policy gate are inert — `GET /api/config` answers `{"demo_mode": false}` — and a request's `X-User-ID` header is honored exactly as before
+- **Caching:** the shell (`index.html`) is never cached; the hashed assets are cached immutable — a deploy takes effect on the next load with no hard refresh
 
 ---
 
 ## Deployment
 
-Docker on **Northflank** (`prompt-composer-console`, us-central). Production deploys via git push to `main` (CI/CD) or the local `DEPLOY-NORTHFLANK.sh` runbook. The image is a **multi-stage build**: the frontend compiles inside a Node stage (including manifest generation), so no build artifacts live in the repository.
+Docker on **Northflank** — project `semantic-design-system`, service
+`semantic-design-systems`, cluster `nf-europe-west`. The service builds from branch
+**`demo-mode`** and redeploys on every push to it; `main` is untouched. The image is
+a **multi-stage build**: the frontend compiles inside a Node stage (including the
+catalog audit report), so no build artifacts live in the repository. To return the
+service to plain `main`, point its build branch back (`northflank patch service
+combined` with `vcsData.projectBranch: main`).
+
+---
+
+## The Demo's Lock (DEMO_MODE)
+
+The public demo is one switch: `DEMO_MODE=1`, set only on the deployed service. Every
+mechanism below is inert without it, and a local run never sets it — local is the
+full system, on purpose.
+
+**The identity pin.** `deps.get_user_id_from_header()` ignores `X-User-ID` entirely
+when the switch is on and resolves every request to the demo user (`DEMO_USER_ID`).
+The frontend still sends its constant; the server never reads it. That is also what
+repairs `/api/teacher/query`, which called the resolver with no argument and
+therefore wrote every demo chat turn as the owner.
+
+**The gate** (`backend/demo_policy.py`, registered in `main.py`). Order: rate limit →
+pass-list → policy. Mutations are **deny-by-default** against an allowlist named by
+the app's own route templates (the chat turn, assembly, the demo's own packages and
+their versions, the conversation writes, project create/rename) — prefixes are
+deliberately not used, because `startswith("/api/prompt-sessions/")` reads as "the
+demo may use its packages" and actually permits their deletion. GETs pass except a
+denylist (the unscoped Milvus dump, source files, the reasoning trace, admin,
+governance, and the Figma endpoints that dial the API or write source), with three
+exceptions kept for the design rail: `/api/figma/activity`, `/api/figma/catalog`,
+`/api/figma/config`. Refusals are 403s with a sentence a person can read.
+`backend/check_demo_policy.py` asserts the tables still match `app.routes` — an
+allowlist entry whose route was renamed is drift, named — and prints every mutating
+route's demo disposition.
+
+**The money.** In-process token buckets: the LLM-backed endpoints (`teacher/query`,
+`assemble-surface`, `save-surface`, `confirm-exit`, `health`) are capped per visitor
+(20 per 10 min by default) and **globally** (300 per hour — the backstop that bounds
+the DeepSeek bill), other mutations 120 per hour per visitor. `GET /api/health` is
+throttled *before* the pass-list precisely because it is a paid model ping. Limits
+are environment-tunable (`DEMO_RATE_LLM_PER_KEY`, `DEMO_RATE_LLM_GLOBAL`,
+`DEMO_RATE_MUTATION_PER_KEY`; format `N/seconds`).
+
+**The sandbox.** The demo user owns cloned copies of packages the owner chooses:
+`DEMO_SEED_SESSION_IDS` names the originals, `seed_demo_data.py` clones them
+(versions, conversations, messages, the owner permission row, every pointer
+remapped), and `--reset` throws the copies away and re-clones. The originals are
+unreachable — the ownership predicates scope every list and read to the demo's own
+rows — and a project row ("Demo Workspace") exists so the shell's first load finds
+one instead of trying to create it.
+
+```bash
+python seed_demo_data.py                     # what it would do (dry run)
+python seed_demo_data.py --apply             # create user/project, clone the sources
+python seed_demo_data.py --reset --apply     # wipe the sandbox, re-clone
+# inside the deployed container:
+northflank exec service --cmd 'python seed_demo_data.py --reset --apply' \
+    --project semantic-design-system --service semantic-design-systems
+```
+
+**The shell side is cosmetic.** `GET /api/config` says which build this is; the
+frontend (`shared/demoMode.ts`) reads it once before the first render and hides the
+affordances the gate refuses (card/menu/chat deletes, Repair, the ingest forms, the
+debug routes). A client that lies about the flag changes its own buttons and nothing
+else — the server consults it never.
+
+**No blank page, down to the first byte.** The shell's oldest rule takes its
+strongest form here: `index.html` carries a static twin of the sign-in gate —
+colours, logo (inline data URI), the fixed `dev@local` — so the first paint *is* the
+gate, never a white screen while the bundle streams (measured before the fix: 2.2 MB
+of JS, about 3 seconds of white). `main.tsx` removes the twin one frame after React
+commits.
+
+Service environment: `DEMO_MODE=1`, `DEMO_USER_ID`, `ADMIN_USER_IDS` (the admin stub
+is allow-all when unset), `DEMO_SEED_SESSION_IDS`; optionally `DEMO_USER_EMAIL` and
+the three rate-limit variables.
 
 ---
 
