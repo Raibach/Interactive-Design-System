@@ -89,6 +89,20 @@ export class AISurfaceSandbox extends LitElement {
    * incoming surface fades in over the dark ground on each change.
    */
   private _committedSlot = '';
+  /**
+   * THE SECTION ALREADY FADED IN (2026-10-02) — the second half of the change detection.
+   *
+   * The slot alone cannot see every section change: the composer and the design room
+   * both live in the `workspace` slot, so entering one from the other is a change of
+   * SCENE with no change of slot — and the owner, measuring exactly that: "there is a
+   * very soft easing into that user interface that's gone now … it has to be a jarring
+   * slap in the face." The tab is the section's name, so a tab change inside one slot
+   * fades the same way a slot change does. It is deliberately NOT "fade on every
+   * update": data-model refreshes within one section (a keystroke, a version save)
+   * must never strobe the surface, and gating on (slot, tab) keeps the fade to section
+   * transitions only.
+   */
+  private _committedTab = '';
   /** Cross-fade phase: '' (settled) | 'out' (fading the old away) | 'in' (fading the new in). */
   private _fadePhase: '' | 'out' | 'in' = '';
   private _fadeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -142,8 +156,14 @@ export class AISurfaceSandbox extends LitElement {
    */
   updated(): void {
     const wanted = this._activeSlot;
-    if (wanted !== this._committedSlot) {
+    const tab = this.headerTab;
+    const slotChanged = wanted !== this._committedSlot;
+    // A section change inside one slot — the composer and the design room share the
+    // workspace slot, so their swap is a scene change the slot check alone cannot see.
+    const sceneChanged = wanted === 'workspace' && this._committedSlot === 'workspace' && tab !== this._committedTab;
+    if (slotChanged || sceneChanged) {
       this._committedSlot = wanted;
+      this._committedTab = tab;
       this._fadePhase = 'in';
       if (this._fadeTimer) clearTimeout(this._fadeTimer);
       this._fadeTimer = setTimeout(() => {
@@ -152,6 +172,8 @@ export class AISurfaceSandbox extends LitElement {
         this.requestUpdate();
       }, 875);
       this.requestUpdate();
+    } else {
+      this._committedTab = tab;
     }
   }
 
