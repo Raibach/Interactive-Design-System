@@ -48,9 +48,12 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 /*
- * THE STATIC GATE TWIN'S EXIT. index.html draws the gate before this bundle exists, and
- * its job ends the frame after React commits — one frame later so the swap happens out
- * of sight, and safe whenever it lands: the page behind it is the same #1a1625, so even
- * an early removal is a dark frame, never a white one.
+ * THE STATIC GATE'S EXIT — AND ONLY FOR A SIGNED-IN VISITOR. The card in index.html IS
+ * the door (it checks the pin itself, before any bundle exists); while unauthenticated
+ * it stays, because removing it would hand the screen to a `null` App — a door nobody
+ * can knock on. A signed-in boot removes it one frame after React commits, and the page
+ * behind it is the same #1a1625, so the swap cannot flash white.
  */
-requestAnimationFrame(() => document.getElementById("splash")?.remove());
+if (localStorage.getItem("grace_is_authenticated") === "true") {
+  requestAnimationFrame(() => document.getElementById("splash")?.remove());
+}

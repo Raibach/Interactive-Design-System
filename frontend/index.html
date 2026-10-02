@@ -14,22 +14,32 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500..700&display=swap" rel="stylesheet">
     <title>Raibach — Interactive Design</title>
     <!--
-      ── THE GATE, BEFORE THE BUNDLE ────────────────────────────────────────────────────────
-      Owner, 2026-10-02: "that gate image should pop up immediately … I saw a huge white
-      screen." Measured against the deployed service the same day: vendor JS 1.25 MB (2.8 s)
-      and index JS 984 KB (1.3 s), so the React gate could not draw until ~3 s after the
-      document arrived — and until then the page was white, because #root was empty.
+      ── THE GATE IS REAL, AND IT IS HERE ───────────────────────────────────────────────────
+      Owner, 2026-10-02: "it looks like … a fake login that no one can enter and then suddenly a
+      real login appears" — and that is exactly what this was: a drawn form whose fields were
+      dead until the React bundle arrived seconds later. A gate nobody can type into is worse
+      than no gate. So the static card IS the login now:
 
-      This block is that same gate as STATIC markup: no JS, no request beyond the document
-      itself (the logo rides inline as a data URI — the file is 7.5 KB). It is drawn by the
-      first paint and stays until React commits; main.tsx removes it one frame after render,
-      and the background behind it is the same #1a1625, so the swap cannot flash white.
+        · the SAME pair PinGate.tsx checks (`dev@local` / 7377), the SAME three localStorage
+          keys it writes — this script and that component are two doors, one lock;
+        · it works before any bundle exists, with the logo inline (7.5 KB) and no other request;
+        · a signed-in visitor (the flag is already set) sees the preparing card instead of the
+          form, which is also the state after a successful submit while the page reloads;
+        · React's PinGate remains the fallback (see main.tsx: the static gate is not removed
+          while unauthenticated, so a working form is never replaced by a hidden one).
 
-      IT MIRRORS PinGate.tsx — colours, sizes, weights and the fixed `dev@local` are copied
-      from there. If that component's look changes, this twin changes with it. The fields are
-      divs on purpose: typing into a not-yet-live input does nothing, and the real focused
-      input arrives with the bundle seconds later; "Preparing…" is what says so.
+      MEASURED EARLIER, KEPT AS HISTORY: before this card existed the page was white for ~3 s
+      (vendor JS 1.25 MB / 2.8 s, index JS 984 KB / 1.3 s) and the gate could not draw at all.
     -->
+    <script>
+      // Which state the first paint is in. Runs before the body renders, so the signed-in
+      // visitor never sees the form flash by. No catch: a read that throws leaves the
+      // authed class unset and the form on screen — and the submit path below reports a
+      // storage failure loudly, in the gate's own error line. No fallback door.
+      if (localStorage.getItem('grace_is_authenticated') === 'true') {
+        document.documentElement.classList.add('authed');
+      }
+    </script>
     <style>
       html, body { margin: 0; background: #1a1625; }
       #splash {
@@ -79,19 +89,26 @@
         margin: 20px 0;
         background: linear-gradient(-90deg, rgb(240, 179, 35), rgb(254, 209, 65));
       }
+      #splash .splash-form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+      }
       #splash .splash-field {
         width: 100%;
         box-sizing: border-box;
         height: 48px;
         padding: 0 14px;
         margin-bottom: 12px;
-        display: flex;
-        align-items: center;
+        display: block;
+        font: inherit;
         font-size: 14px;
         color: #f5f0e8;
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 10px;
+        outline: none;
       }
       #splash .splash-placeholder { color: rgba(245, 240, 232, 0.35); }
       #splash .splash-button {
@@ -101,13 +118,40 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        font: inherit;
         font-weight: 700;
         font-size: 14px;
         color: #1a1625;
         background: linear-gradient(-90deg, rgb(240, 179, 35), rgb(254, 209, 65));
+        border: none;
         border-radius: 10px;
+        cursor: pointer;
       }
-      #splash .splash-preparing { margin-top: 14px; font-size: 12px; color: rgba(245, 240, 232, 0.35); }
+      #splash .splash-error {
+        display: none;
+        font-size: 12px;
+        color: #ff6b6b;
+        margin: 4px 0 12px;
+        text-align: center;
+      }
+      #splash .splash-error.shown { display: block; }
+      #splash .splash-preparing { display: none; margin-top: 10px; font-size: 12px; color: rgba(245, 240, 232, 0.5); }
+      #splash .splash-spinner {
+        display: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid rgba(240, 179, 35, 0.25);
+        border-top-color: rgb(240, 179, 35);
+        margin-top: 6px;
+        animation: splash-spin 0.9s linear infinite;
+      }
+      /* THE SIGNED-IN VIEW: the form is not for them, and after a successful submit this is
+         the state the reload lands in — the same preparing card the React hold draws. */
+      html.authed #splash .splash-form { display: none; }
+      html.authed #splash .splash-spinner { display: block; }
+      html.authed #splash .splash-preparing { display: block; }
+      @keyframes splash-spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
@@ -118,12 +162,63 @@
         <div class="splash-sub">Interactive Design</div>
         <div class="splash-tag">AI-Driven Design System Management</div>
         <div class="splash-rule"></div>
-        <div class="splash-field">dev@local</div>
-        <div class="splash-field splash-placeholder">Password</div>
-        <div class="splash-button">Sign in</div>
+        <form class="splash-form" id="splash-form" novalidate>
+          <input
+            class="splash-field"
+            type="text"
+            value="dev@local"
+            readonly
+            aria-label="Email"
+          />
+          <input
+            class="splash-field"
+            type="password"
+            id="splash-password"
+            placeholder="Password"
+            autocomplete="current-password"
+            autofocus
+          />
+          <p class="splash-error" id="splash-error" role="alert"></p>
+          <button class="splash-button" type="submit">Sign in</button>
+        </form>
+        <div class="splash-spinner" aria-hidden="true"></div>
         <div class="splash-preparing">Preparing…</div>
       </div>
     </div>
+    <script>
+      // THE DOOR ITSELF — the same pair and the same three keys PinGate.tsx carried
+      // (`dev@local` / 7377), checked before any bundle exists. A wrong pin gets the
+      // sentence the endpoint used; a storage failure gets a loud line, never a silent
+      // no-op. On success the flag is written and the page reloads into the signed-in
+      // state above, while the app boots behind it.
+      (function () {
+        var form = document.getElementById('splash-form');
+        var password = document.getElementById('splash-password');
+        var error = document.getElementById('splash-error');
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          error.textContent = '';
+          error.classList.remove('shown');
+          if (password.value !== '7377') {
+            error.textContent = 'Invalid email or password';
+            error.classList.add('shown');
+            password.value = '';
+            return;
+          }
+          try {
+            localStorage.setItem('grace_user_id', '00000000-0000-0000-0000-000000000001');
+            localStorage.setItem('grace_user_role', 'student');
+            localStorage.setItem('grace_is_authenticated', 'true');
+          } catch (storageError) {
+            error.textContent =
+              'This browser will not store the session (' + storageError + ') — the gate cannot open here.';
+            error.classList.add('shown');
+            return;
+          }
+          window.location.reload();
+        });
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
