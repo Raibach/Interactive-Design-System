@@ -281,6 +281,27 @@ export class AgentCanvas extends LitElement {
     if (nodeId) this._drawing()?.focusNode(nodeId);
   };
 
+  /**
+   * SOMEBODY ASKED HER SOMETHING, SO HER COLUMN OPENS — the same rule as a picked node
+   * (`_onFlowSelect`), and it is one rule because it is one act: a person pressed a control whose
+   * whole meaning is "she should speak about this".
+   *
+   * WHY THE CONTAINER HEARS IT. The ask is dispatched at the surface (`a2ui:ask-grace`, the host's
+   * channel) and answered in the seat this container's layout lays out — and nothing was opening
+   * that seat. It was open only by ACCIDENT: pressing ✨ requires picking the node first, and
+   * picking a node opens her (`_onFlowSelect`). Collapse her column, press ✨, and she answered into
+   * a rail nobody could read — the same class of failure as a dead control, with the answer hidden
+   * instead of the button. The container owns the openness of the column she sits in (`_onTabChange`
+   * does it for a tab, `_onFlowSelect` for a node), so the ask lands here the same way: a request to
+   * look opens the thing that is looked at.
+   */
+  private _onAskGrace = (e: Event): void => {
+    // A RUN REVIEW IS NOT THIS — it has its own arrangement (the run is held and the layout is
+    // mid-dock, the prompt on its rail), and forcing the column open there would fight it.
+    if (((e as CustomEvent).detail || {}).review === 'run') return;
+    this.collapsed = false;
+  };
+
   connectedCallback(): void {
     super.connectedCallback();
     /*
@@ -312,6 +333,9 @@ export class AgentCanvas extends LitElement {
     this.addEventListener('tab-change', this._onTabChange as EventListener);
     this.addEventListener('flow-select', this._onFlowSelect as EventListener);
     this.addEventListener('turn-click', this._onTurnClick as EventListener);
+    // THE ASK IS THE SURFACE'S EVENT, not this container's: it is dispatched on `window` by the
+    // host, so it is heard the same way — see `_onAskGrace`.
+    window.addEventListener('a2ui:ask-grace', this._onAskGrace as EventListener);
   }
 
   disconnectedCallback(): void {
@@ -328,6 +352,7 @@ export class AgentCanvas extends LitElement {
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('flow-select', this._onFlowSelect as EventListener);
     this.removeEventListener('turn-click', this._onTurnClick as EventListener);
+    window.removeEventListener('a2ui:ask-grace', this._onAskGrace as EventListener);
   }
 
   protected updated(): void {

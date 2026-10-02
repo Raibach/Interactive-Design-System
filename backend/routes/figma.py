@@ -14,7 +14,7 @@ import urllib.request
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -50,6 +50,209 @@ from grace_gui import (
 )
 
 router = APIRouter()
+
+
+# ── ADD DESIGN SYSTEM: A ZIP BECOMES A PARTITION ────────────────────────────────────────────────
+#
+# THE CONTRACT (wireframe-lab/ADD-A-DESIGN-SYSTEM.md §6). The archive carries two members, read IN
+# MEMORY and never extracted:
+#
+#   system.json      {"id": "carbon-ui", "label": "Carbon"}
+#   components.json  {"components": [{"name": "CarbonDropdown",
+#                                     "props": [{"name": "label", "type": "string"}],
+#                                     "source": "src/components/Dropdown/index.js"}]}
+#
+# WHAT IT WRITES, AND WHAT IT MAY NOT TOUCH. One NEW directory — `<catalogs>/<id>/` — holding exactly
+# two files: `catalog.json` (one entry per component, `draft: false` — a PROPOSED skeleton; the
+# assembler's palette reads `draft: true`, and a PERSON accepts an entry, the ingest never does) and
+# `registry.json` (`{"system": id, "components": {}}` — no implementation exists yet, which is the
+# truth and draws as the refusal sentence on a tile). The system catalogues are never opened: an id
+# that already exists is a 409, and only the new directory is ever written.
+#
+# WHY THE ZIP IS NOT EXTRACTED: extraction writes attacker-named paths. Two members are read BY NAME
+# from the archive, validated, and turned into two files whose names this code chooses — nothing from
+# the archive becomes a path.
+_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
+_PROP_TYPES = {"string", "number", "boolean", "object", "array"}
+
+
+def _catalogs_dir() -> str:
+    return os.path.join(
+        os.path.dirname(__file__), "..", "..", "frontend", "src", "components", "A2UI", "catalogs"
+    )
+
+
+def _zip_member(archive: Any, name: str) -> Any:
+    """One named member, parsed. Absent or unparseable FAILS with the member named."""
+    try:
+        raw = archive.read(name)
+    except KeyError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"the archive has no '{name}' at its root — a design-system zip carries "
+                   "'system.json' and 'components.json', and nothing else is read",
+        )
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as parse_error:
+        raise HTTPException(
+            status_code=400, detail=f"'{name}' is not valid JSON: {parse_error}"
+        )
+
+
+@router.post("/api/catalog/ingest")
+async def ingest_design_system(
+    file: UploadFile = File(...),
+    label: str | None = Form(None),
+):
+    """A design-system zip becomes a walled-off partition. It PROPOSES; a person accepts."""
+    import io
+    import zipfile
+
+    data = await file.read()
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            system = _zip_member(archive, "system.json")
+            components_doc = _zip_member(archive, "components.json")
+    except zipfile.BadZipFile as bad_zip:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{file.filename or 'the upload'}' is not a zip archive: {bad_zip}",
+        )
+
+    if not isinstance(system, dict):
+        raise HTTPException(status_code=400, detail="'system.json' must be an object")
+    system_id = str(system.get("id") or "")
+    system_label = str(system.get("label") or "")
+    if not _ID_RE.match(system_id):
+        raise HTTPException(
+            status_code=400,
+            detail=f"'system.json' states id {system_id!r}: an id is 2-41 characters of lowercase "
+                   "letters, digits and dashes, and it becomes the partition's directory name",
+        )
+    if not system_label:
+        raise HTTPException(status_code=400, detail="'system.json' states no label")
+    # THE MANIFEST IS THE AUTHORITY, AND A CONFLICT IS SAID OUT LOUD. Two authorities on one name is
+    # how a catalogue gets titled one thing and referenced as another; the form's label must agree.
+    if label and label.strip() and label.strip() != system_label:
+        raise HTTPException(
+            status_code=409,
+            detail=f"the form says the label is {label.strip()!r} and 'system.json' says "
+                   f"{system_label!r} — one of them is out of date, and nothing here chooses "
+                   "between them",
+        )
+
+    entries = components_doc.get("components") if isinstance(components_doc, dict) else None
+    if not isinstance(entries, list) or not entries:
+        raise HTTPException(
+            status_code=400,
+            detail="'components.json' must be an object with a non-empty 'components' list",
+        )
+    parsed: list[dict[str, Any]] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or not str(entry.get("name") or "").strip():
+            raise HTTPException(
+                status_code=400, detail=f"components[{index}] states no name"
+            )
+        name = str(entry["name"]).strip()
+        props_raw = entry.get("props") or []
+        if not isinstance(props_raw, list):
+            raise HTTPException(
+                status_code=400, detail=f"components[{index}] ({name}): 'props' must be a list"
+            )
+        props: list[dict[str, str]] = []
+        for prop in props_raw:
+            if not isinstance(prop, dict) or not str(prop.get("name") or "").strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"components[{index}] ({name}): a prop states no name",
+                )
+            prop_type = str(prop.get("type") or "")
+            if prop_type not in _PROP_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"components[{index}] ({name}).{prop['name']}: type {prop_type!r} is not "
+                           f"one of {sorted(_PROP_TYPES)} — a prop whose type nobody stated cannot "
+                           "become a schema",
+                )
+            props.append({"name": str(prop["name"]).strip(), "type": prop_type})
+        parsed.append({
+            "name": name,
+            "props": props,
+            "source": str(entry.get("source") or ""),
+        })
+
+    catalogs = _catalogs_dir()
+    partition = os.path.join(catalogs, system_id)
+    if os.path.exists(partition):
+        raise HTTPException(
+            status_code=409,
+            detail=f"a catalogue partition named '{system_id}' already exists — creating a NEW one "
+                   "is the action, and nothing writes into a catalogue that is already there",
+        )
+
+    stamp = datetime.now().isoformat(timespec="seconds")
+    component_map: dict[str, Any] = {}
+    for entry in parsed:
+        properties: dict[str, Any] = {"component": {"const": entry["name"]}}
+        for prop in entry["props"]:
+            properties[prop["name"]] = {"type": prop["type"]}
+        component_map[entry["name"]] = {
+            "type": "object",
+            "allOf": [
+                {"$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"},
+                {
+                    "type": "object",
+                    "description": (
+                        f"Proposed by the design-system ingest from {system_label}"
+                        + (f" ({entry['source']})" if entry["source"] else "")
+                        + ". NOT REVIEWED: an authorized designer accepts it before the assembler "
+                          "may place it — the palette reads draft: true."
+                    ),
+                    "properties": properties,
+                },
+            ],
+            # THE MARKER, TOP LEVEL AND FALSE — a proposed entry is data, and the palette filter is
+            # what keeps it out of the model's vocabulary until a person flips this.
+            "draft": False,
+            "proposed": {"source": entry["source"], "at": stamp},
+        }
+
+    catalog = {
+        "title": f"{system_label} (proposed)",
+        "catalogId": f"https://raibach.net/a2ui/catalogs/{system_id}/v0_9_1/catalog.json",
+        "whatThisFileIs": (
+            f"Written by the design-system ingest on {stamp} from an uploaded archive. Every entry "
+            "is PROPOSED (draft: false) until a person accepts it. Components here have no "
+            "implementation yet — registry.json is empty — so a name that resolves to nothing is "
+            "drawn as the refusal sentence on a tile."
+        ),
+        "components": component_map,
+    }
+    registry = {"system": system_id, "components": {}}
+
+    os.makedirs(partition)  # the exists-check above pre-empts this; a race lands in the 500 below
+    try:
+        with open(os.path.join(partition, "catalog.json"), "w") as catalog_file:
+            json.dump(catalog, catalog_file, indent=2, ensure_ascii=False)
+            catalog_file.write("\n")
+        with open(os.path.join(partition, "registry.json"), "w") as registry_file:
+            json.dump(registry, registry_file, indent=2, ensure_ascii=False)
+            registry_file.write("\n")
+    except OSError as write_error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"the partition could not be written at {partition}: {write_error}",
+        )
+
+    return {
+        "system": system_id,
+        "label": system_label,
+        "partition": f"catalogs/{system_id}",
+        "components": [entry["name"] for entry in parsed],
+        "entries": "proposed (draft: false) — an authorized person accepts each one",
+        "registry": "empty — nothing from this system is implemented yet",
+    }
 
 
 # ── A FIGMA NODE ID IS TWO THINGS AT ONCE ─────────────────────────────────────

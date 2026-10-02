@@ -29,6 +29,7 @@ import {
 // import MemoriesTab from "@/components/MemoriesTab";
 // Progress import removed — was only used by retired PDF processing
 import { useToast } from "@/hooks/use-toast";
+import { loadSystemRegistry } from "@/shared/a2uiRegistries";
 import { getAuthState } from "@/services/authService";
 import { promptService, type PromptSession, type PromptSection } from "@/services/promptService";
 import { UI_ID } from "@/utils/uiIdentifiers";
@@ -92,6 +93,7 @@ import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
+import { DEMO_DISABLED_SENTENCE, isDemoMode } from "@/shared/demoMode";
 import { IngestModal } from "@/components/IngestModal";
 // The ingest's own URL parser, imported rather than re-written: the form in the room and the form in
 // the modal must read a Figma link the same way, and this is the one place that does.
@@ -222,6 +224,24 @@ function loadCanvasElements(): Promise<void> {
       throw err;
     });
   return canvasElements;
+}
+
+/**
+ * THE DRAFTING VIEW'S ELEMENT, loaded the same lazy way and for the same reason: the tree-write
+ * that shows the draft CREATES `<draft-canvas>` by tag, and a tag whose module was never imported
+ * is an unknown element — a blank column with no error anywhere. So the module is awaited before
+ * the write, not after it.
+ */
+let draftElements: Promise<void> | null = null;
+function loadDraftElements(): Promise<void> {
+  if (draftElements) return draftElements;
+  draftElements = import('@/components/lit/draft-canvas')
+    .then(() => undefined)
+    .catch((err: unknown) => {
+      draftElements = null;
+      throw err;
+    });
+  return draftElements;
 }
 
 /**
@@ -1815,6 +1835,35 @@ export default function Index({
     requestAnimationFrame(write);
   }, []);
 
+  /**
+   * THE CANVAS IS TOLD THE RUN IS IN FLIGHT — the same writer pattern as `holding` above, and for
+   * the same reason: the drawing may be built while the run already is (a mount mid-run takes the
+   * constructor's `false`), so the write is retried for a few frames and re-asserted every time the
+   * fact changes.
+   *
+   * WHY THE DRAWING LOCKS. A run rebuilds it at four awaits, so an edit made between two of them
+   * would be erased by the next rebuild — the drawing would take the gesture and then quietly undo
+   * it. While the model execution loop is active the drawing is a PICTURE: no tile drags, no ports,
+   * no toolbar, no line handles, no picker — and the VIEW is still the person's (pan, zoom, fit, the
+   * tool switch), so they can move it out of her column's way and watch. The owner, 2026-10-02:
+   * "it stays completely pannable, but structurally locked."
+   *
+   * ONE FACT, TWO READERS: this is `isComposerRunning`'s own fact, written where the run starts
+   * (6930) and where it ends (the run's `finally`), and the element reads it as one flag.
+   */
+  const setCanvasRunning = useCallback((running: boolean): void => {
+    let frames = 0;
+    const write = (): void => {
+      const flow = deepFind<HTMLElement & { running?: boolean }>('agent-flow');
+      if (flow) {
+        if (flow.running !== running) flow.running = running;
+        return;
+      }
+      if (++frames < 40) requestAnimationFrame(write);
+    };
+    requestAnimationFrame(write);
+  }, []);
+
   useEffect(() => {
     publishFlowRef.current = publishRepairFlow;
   }, [publishRepairFlow]);
@@ -1862,6 +1911,280 @@ export default function Index({
    * hands it an empty literal instead, which is why this binds it on the way back rather than
    * trusting the assembly to.
    */
+  /**
+   * WHAT THE COLUMN'S HEADER OFFERS, AND WHAT IT IS SHOWING.
+   *
+   * A LIVE PROPERTY WRITE, like `holding` on the canvas and `running` on the drawing — NOT a stamp
+   * in the tree. Measured 2026-10-02: a tree-stamped prop goes STALE, because the renderer re-hands
+   * props to the elements it already drew only when the DATA MODEL changes and the components do
+   * not (`a2ui-renderer.updated` — a components change rebuilds the tree, and a surviving element
+   * keeps what it was constructed with). The body swapped and the tile still read "Agent Flow".
+   *
+   * So the host writes the two facts where they land: the header draws itself from them, and the
+   * host is the only thing that knows them (whether a drawing exists; whether a draft is open).
+   */
+  const setColumnView = useCallback((view: string, views: string[], onlyIfUnset = false): void => {
+    let frames = 0;
+    const write = (): void => {
+      const header = deepFind<HTMLElement & { view?: string; views?: string[] }>('output-controls');
+      if (header) {
+        // `onlyIfUnset` is for the DEFAULT writer alone (a model-composed column that no switch has
+        // told yet): if a more specific path — a Run, a switch — has written in the meantime, this
+        // one stands down. Measured 2026-10-02: both writers were scheduled in one tick, the
+        // default landed last, and a column showing the DRAWING read "Output".
+        if (onlyIfUnset && (header.view || (Array.isArray(header.views) && header.views.length))) return;
+        if (header.view !== view) header.view = view;
+        const same = Array.isArray(header.views) && header.views.length === views.length
+          && header.views.every((v, i) => v === views[i]);
+        if (!same) header.views = [...views];
+        return;
+      }
+      if (++frames < 40) requestAnimationFrame(write);
+    };
+    requestAnimationFrame(write);
+  }, []);
+
+  /**
+   * THE DRAFT IS TOLD WHICH DESIGN SYSTEM IT DRAWS FROM — a live property write, like the header's
+   * view (see setColumnView; the renderer does not re-hand props on a components change). '' is the
+   * honest default: the package never chose one, so the draft resolves against the app's own tables.
+   */
+  const writeDraftSystem = useCallback((system: string): void => {
+    let frames = 0;
+    const write = (): void => {
+      const draft = deepFind<HTMLElement & { system?: string }>('draft-canvas');
+      if (draft) {
+        if (draft.system !== system) draft.system = system;
+        return;
+      }
+      if (++frames < 40) requestAnimationFrame(write);
+    };
+    requestAnimationFrame(write);
+  }, []);
+
+  /**
+   * S2'S FRONTEND HALF — THE LOOP THAT MAKES THE DRAFT REMEMBER.
+   *
+   * READ: `showDraftColumn` loads the conversation's stored layout (GET
+   * /api/conversations/{id}/draft) and writes it to the path the view already binds
+   * (`/session/middle_column/draft`), so opening the draft shows what was left there. Absent is a
+   * real answer — this thread has no draft yet — and a read that FAILS does not open the view at
+   * all: the empty state claims "nothing is drafted here", which is a different fact from "the
+   * layout could not be read", and the reason goes where a person reads (her thread).
+   *
+   * WRITE: the host listens for `draft-node-moved` — the drafting canvas's own gesture end — folds
+   * the released place into its copy of the payload and PUTs it. ONE DRAG, ONE WRITE, and the host
+   * is the single writer of the stored draft: the element owns the live drag, the model owns the
+   * payload, and this is the only thing that talks to the database.
+   *
+   * A WRITE THAT FAILS IS SAID, never swallowed: a layout that silently stopped saving is the
+   * failure this whole loop exists to prevent.
+   */
+  type DraftPayloadShape = {
+    label?: string;
+    nodes: Array<Record<string, unknown>>;
+    positions?: Record<string, { x: number; y: number }>;
+  };
+  const draftPayloadRef = useRef<DraftPayloadShape | null>(null);
+
+  const writeDraftPayload = useCallback((payload: unknown): void => {
+    setWorkspaceTree((prev) => {
+      const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
+      const session = { ...((model.session ?? {}) as Record<string, any>) };
+      const middle = { ...((session.middle_column ?? {}) as Record<string, any>) };
+      middle.draft = payload;
+      session.middle_column = middle;
+      model.session = session;
+      return { ...prev, dataModel: model };
+    });
+  }, []);
+
+  const sayInThread = useCallback((content: string): void => {
+    window.dispatchEvent(new CustomEvent('a2ui:system-message', {
+      detail: { role: 'assistant', content },
+    }));
+  }, []);
+
+  useEffect(() => {
+    const onDraftNodeMoved = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as {
+        nodeId?: unknown; x?: unknown; y?: unknown;
+      };
+      const nodeId = typeof detail.nodeId === 'string' ? detail.nodeId : '';
+      const at = (typeof detail.x === 'number' && typeof detail.y === 'number')
+        ? { x: detail.x, y: detail.y }
+        : null;
+      const payload = draftPayloadRef.current;
+      if (!nodeId || !at || !payload) return;
+      const next: DraftPayloadShape = {
+        ...payload,
+        positions: { ...(payload.positions ?? {}), [nodeId]: at },
+      };
+      draftPayloadRef.current = next;
+      // The model follows the drag immediately — the payload and the drawing stay one fact.
+      writeDraftPayload(next);
+      const conversationId = String(((currentPromptSessionObjRef.current as any)?.conversationId) || '');
+      if (!conversationId) {
+        sayInThread('That drag was not saved: this package has no conversation to keep its draft in.');
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(next),
+            },
+          );
+          if (!res.ok) {
+            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
+            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
+          }
+        } catch (err) {
+          sayInThread(
+            'That drag was not saved to this conversation: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      })();
+    };
+    window.addEventListener('draft-node-moved', onDraftNodeMoved);
+    return () => window.removeEventListener('draft-node-moved', onDraftNodeMoved);
+  }, [writeDraftPayload, sayInThread]);
+
+  /**
+   * The views a column can show in each state.
+   *
+   * THE DRAFT IS A VIEW OF THE COLUMN, SO THE OUTPUT VIEW CANNOT OFFER IT: leaving the run's column
+   * gives the column up (that is what `showOutputColumn` has always done — "the middle column goes
+   * away again, it is a Run's column"), and a draft needs a column to be drawn in. Raising one from
+   * the output view means assembling it — the model's job (`render-draft`), not a hand-written
+   * chain, which is the protocol violation the canvas docs already record. So the menu carries
+   * exactly what is there, and nothing else.
+   */
+  const COLUMN_VIEWS_RUN = ['flow', 'output', 'draft'];
+  const COLUMN_VIEWS_DRAFT = ['output', 'draft'];
+  const COLUMN_VIEWS_OUTPUT = ['output'];
+
+  /**
+   * THE THIRD VIEW — the drafting canvas takes the output column's body, by the same rules the
+   * Run's drawing and the output do: the body is found by ROLE, replaced, and what was there
+   * leaves with its subtree. The DRAWING GOES WITH IT when it was the view being left — the same
+   * consequence choosing "Output" has always had, and the reason the header only offers the canvas
+   * while a Run has put one there.
+   */
+  const showDraftColumn = useCallback(async (): Promise<void> => {
+    // The element must exist before the tree names it — see loadDraftElements.
+    await loadDraftElements();
+    /*
+     * THE PACKAGE'S CHOSEN DESIGN SYSTEM IS LOADED BEFORE THE TREE NAMES ANY COMPONENT. `resolveTag`
+     * reads the fetched map (shared/a2uiRegistries), so a load that happened after the first render
+     * would leave names refusing that are about to be resolvable. ABSENT IS A REAL ANSWER — the
+     * package never chose one, and the draft resolves against the app's own tables only. A load that
+     * FAILS throws: the switch fails loud rather than drawing a draft for a system it could not read.
+     */
+    const system = String(
+      ((currentPromptSessionObjRef.current as any)?.metadata?.design_system) || '',
+    );
+    if (system) await loadSystemRegistry(system);
+    /*
+     * THE STORED LAYOUT, READ BEFORE THE VIEW OPENS (see the S2 block above). Absent is a real
+     * answer — nothing drafted in this thread yet — and the empty state then tells the truth. A
+     * read that FAILS does not open the draft at all: the empty state would claim "nothing is
+     * drafted here", which is a different fact from "the layout could not be read", and the reason
+     * goes where a person reads.
+     */
+    const conversationId = String(((currentPromptSessionObjRef.current as any)?.conversationId) || '');
+    if (conversationId) {
+      try {
+        const res = await fetch(`${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { draft?: unknown };
+        draftPayloadRef.current = (body?.draft as DraftPayloadShape | null) ?? null;
+      } catch (err) {
+        sayInThread(
+          'The draft was not opened: this conversation\'s layout could not be read '
+          + `(${err instanceof Error ? err.message : String(err)}). Nothing was changed.`,
+        );
+        return;
+      }
+      // The payload lands where the view reads it — its own bound path — before the tree names
+      // the element, so the first paint is the stored layout rather than the empty state.
+      writeDraftPayload(draftPayloadRef.current);
+    }
+    setWorkspaceTree((prev) => {
+      const comps = Array.isArray(prev.components) ? prev.components : [];
+      const next = comps.slice();
+      /*
+       * THE DRAFT TAKES THE DRAWING'S SLOT, NOT THE COLUMN — and that distinction WAS the defect.
+       * Measured 2026-10-02: replacing the column's body replaced the CONTAINER (`AgentCanvas` —
+       * the header and the foot are its slots), so choosing Draft took the header with it: the
+       * selector, the label, and every way back, leaving a column with no furniture. The draft is a
+       * view INSIDE the column: the container, its header and its foot stay; only the `flow` child
+       * changes.
+       */
+      const container = next.find((c: any) => c?.component === 'AgentCanvas');
+      const flowId = (container?.children as Record<string, unknown> | undefined)?.flow;
+      const j = typeof flowId === 'string' ? next.findIndex((c: any) => c?.id === flowId) : -1;
+      if (j < 0) {
+        // Unreachable while the menu carries no Draft in a state with no column (see the
+        // COLUMN_VIEWS_* constants). Named rather than silent, so a future caller that reaches it
+        // is told why nothing happened.
+        logger.warn('the draft was asked for, but there is no column to draw it in', {
+          hasContainer: Boolean(container),
+          hasFlow: typeof flowId === 'string',
+        });
+        return prev;
+      }
+      /*
+       * THE BODY IS THE DRAFT, bound to the one data-model path this view reads — where the
+       * assembler will write a layout and a hand adjusts it. Unset is its own state: the element
+       * says nothing is drafted yet, which is the truth, not a blank.
+       *
+       * THE PATH IS `/session/middle_column/draft`, and the owner's note said `output_column`:
+       * every binding this column has ever carried lives under `middle_column` (the flow, the
+       * compiled output), so ONE name is used for one place — a second prefix for the same column
+       * would be two names for it.
+       */
+      next[j] = {
+        id: flowId as string,
+        component: 'draft-canvas',
+        draft: { path: '/session/middle_column/draft' },
+      };
+      return { ...prev, components: next };
+    });
+    // The header is told in the same act — a live property write (see setColumnView) — and the
+    // draft is told which system it draws from, which was loaded above.
+    setColumnView('draft', COLUMN_VIEWS_DRAFT);
+    writeDraftSystem(system);
+  }, []);
+
+  /**
+   * THE HEADER IS TOLD WHAT THIS COLUMN CAN SHOW, ON ARRIVAL TOO — not only when a view is
+   * switched. Without this the menu existed only after a Run: a fresh package's header is composed
+   * by the model (render-composer) with no view props, so the tile stayed the label it had always
+   * been and the drafting view was unreachable from exactly the state a person starts in.
+   *
+   * ONE WRITER AND ONE FACT: `stampColumnView`, and the guard is the fact itself — a header that
+   * already carries `views` is left alone, so this cannot fight a switch (which stamps too) or
+   * re-run against its own write.
+   */
+  useEffect(() => {
+    const comps = Array.isArray(workspaceTree?.components) ? workspaceTree.components : [];
+    if (!comps.some((c: any) => c?.component === 'OutputControls')) return;
+    // The header has arrived without a view written (a model-composed column: render-composer,
+    // render-run's own emission). Tell it what THIS state can show; a header that already carries
+    // views is left alone, so this cannot fight a switch, and the property write is idempotent, so
+    // a re-render cannot loop it. The retry inside setColumnView covers the element not being
+    // committed yet.
+    const header = deepFind<HTMLElement & { views?: string[] }>('output-controls');
+    if (!header || !(Array.isArray(header.views) && header.views.length)) {
+      setColumnView('output', COLUMN_VIEWS_OUTPUT, true);
+    }
+  }, [workspaceTree, setColumnView]);
+
   const showOutputColumn = useCallback(() => {
     setWorkspaceTree((prev) => {
       const comps = Array.isArray(prev.components) ? prev.components : [];
@@ -1885,7 +2208,10 @@ export default function Index({
       // without pointing at it (a Run is what makes it a column).
       const middleId =
         (childMap.middle as string | undefined) ??
-        next.find((c: any) => c?.component === 'compiled-output-viewer' || c?.component === 'AgentCanvas')?.id;
+        next.find((c: any) =>
+          c?.component === 'compiled-output-viewer'
+          || c?.component === 'AgentCanvas'
+          || c?.component === 'draft-canvas')?.id;
       const i = middleId ? next.findIndex((c: any) => c?.id === middleId) : -1;
       if (i < 0) return prev;
       const have = next[i];
@@ -1925,6 +2251,7 @@ export default function Index({
       if (root) next[r] = { ...root, children: childMap };
       return { ...prev, components: next };
     });
+    setColumnView('output', COLUMN_VIEWS_OUTPUT);
   }, []);
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -4438,9 +4765,30 @@ export default function Index({
        * a delay for its own sake — nothing else is being timed — and it is deliberately not a fixed
        * millisecond count, which would be a number nobody's system states.
        */
-      window.requestAnimationFrame(() => {
-        markArrival(designSession?.id ? 'resume' : 'blank', designSession?.id ?? null);
-      });
+        window.requestAnimationFrame(() => {
+          const kind = designSession?.id ? 'resume' : 'blank';
+          const forSeat = designSession?.id ?? null;
+          markArrival(kind, forSeat);
+          /*
+           * ── AND ANNOUNCED, NOT ONLY RECORDED — WHICH IS WHAT WAS MISSING HERE ─────────────
+           *
+           * The other rooms do both, and this one did only the record: the package open and the
+           * console open SEND `a2ui:composer-opened` and record it, because either channel can be
+           * the one that reaches the seat. A record is read by the seat at exactly two moments —
+           * when it connects, and when its `sessionId` changes — and BOTH of those happen in the
+           * commit that drew this tree, a frame BEFORE this callback runs. So the record was
+           * written after the only two reads there are, nothing ever read it again, and Design's
+           * seat sat silent with `wantsGreeting: ''` while every other room greeted.
+           *
+           * Measured 2026-10-01 in production: the Design conversation held zero messages, her
+           * seat carried this room's script and `greeted: false`. It greeted on the machine it
+           * was written on by timing luck — the element connecting after the record existed —
+           * which is exactly the kind of "it worked once" this repository refuses to call done.
+           */
+          window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
+            detail: { kind, sessionId: forSeat },
+          }));
+        });
     } finally {
       setIsAIAssembling(false);
     }
@@ -4688,6 +5036,84 @@ export default function Index({
     window.addEventListener("ingest-submit", onIngestSubmit);
     return () => window.removeEventListener("ingest-submit", onIngestSubmit);
   }, [designIngestBusy, setDesignIngest, currentDesignSession]);
+
+  /*
+   * ══ ADD DESIGN SYSTEM, ANSWERED HERE ═════════════════════════════════════════════════════════
+   *
+   * The rail's second form dispatches `catalog-ingest-submit` with the label and the archive and
+   * nothing else; this is the half that knows. It posts the SAME call the ingest route documents —
+   * `POST /api/catalog/ingest`, multipart — and says what came back, the server's words VERBATIM
+   * when it refuses (every 400/409 names what is wrong; re-wording it here would be a second
+   * authority on the reason).
+   *
+   * THE TWO VALUES IT WRITES ARE THIS FORM'S OWN BOUND PATHS
+   * (`/session/design_system_ingest/...`), not the Figma ingest's: two tools in one rail must not
+   * write one message line. Same channel and same reason as the form above it — a components change
+   * does not re-hand props (see the emission in routes/ai.py).
+   *
+   * IT NEVER CHOOSES A PARTITION NAME: the manifest's id is the name, an existing id is refused by
+   * the server, and nothing here offers a name that could overwrite a catalogue.
+   */
+  const [catalogIngestBusy, setCatalogIngestBusy] = useState(false);
+
+  const writeDesignSystemIngest = useCallback((patch: { busy?: boolean; message?: string }): void => {
+    setWorkspaceTree((prev) => {
+      const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
+      const session = { ...((model.session ?? {}) as Record<string, any>) };
+      const current = { ...((session.design_system_ingest ?? {}) as Record<string, any>) };
+      if (patch.busy !== undefined) current.busy = patch.busy;
+      if (patch.message !== undefined) current.message = patch.message;
+      session.design_system_ingest = current;
+      model.session = session;
+      return { ...prev, dataModel: model };
+    });
+  }, []);
+
+  useEffect(() => {
+    const onCatalogIngestSubmit = async (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { label?: string; file?: File };
+      const file = detail.file;
+      const typedLabel = String(detail.label || '');
+      if (!file || catalogIngestBusy) return;
+      setCatalogIngestBusy(true);
+      writeDesignSystemIngest({
+        busy: true,
+        message: typedLabel ? `Ingesting ${file.name} as “${typedLabel}”…` : `Ingesting ${file.name}…`,
+      });
+      try {
+        const body = new FormData();
+        body.append('file', file);
+        if (typedLabel) body.append('label', typedLabel);
+        const res = await fetch(`${API_BASE}/catalog/ingest`, { method: 'POST', body });
+        const payload = (await res.json().catch(() => null)) as
+          | { system?: string; label?: string; components?: string[]; detail?: string }
+          | null;
+        if (!res.ok) {
+          writeDesignSystemIngest({
+            busy: false,
+            message: String(payload?.detail || `The ingest was refused: HTTP ${res.status}`),
+          });
+          return;
+        }
+        const names = Array.isArray(payload?.components) ? payload?.components ?? [] : [];
+        writeDesignSystemIngest({
+          busy: false,
+          message: `Created the partition '${payload?.system}' (${payload?.label}) — ${names.length} `
+            + `component${names.length === 1 ? '' : 's'} PROPOSED (draft: false). A person accepts `
+            + 'each before the assembler may place it.',
+        });
+      } catch (err) {
+        writeDesignSystemIngest({
+          busy: false,
+          message: `The ingest request failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      } finally {
+        setCatalogIngestBusy(false);
+      }
+    };
+    window.addEventListener('catalog-ingest-submit', onCatalogIngestSubmit);
+    return () => window.removeEventListener('catalog-ingest-submit', onCatalogIngestSubmit);
+  }, [catalogIngestBusy, writeDesignSystemIngest]);
 
   /*
    * ══ THE TWO RUN TRIGGERS, AND THE COLUMN THEY LAUNCH ═════════════════════════════════════════
@@ -5652,6 +6078,10 @@ export default function Index({
    * (arm, then CONFIRM), and a native dialog on top of it would be a third ask for one act.
    */
   const deletePackage = useCallback(async (sessionId: string) => {
+    // THE DEMO KEEPS EVERYTHING. DELETE is refused server-side (demo_policy.py) and
+    // the card's delete control is not drawn there (agent-card-element) — this is the
+    // belt under that brace, for any other caller of this path.
+    if (isDemoMode()) return;
     try {
       await promptService.deletePromptSession(sessionId, true);
       if (currentPromptSession?.id === sessionId) setCurrentPromptSession(null);
@@ -5662,6 +6092,10 @@ export default function Index({
   }, [currentPromptSession?.id, removePackageFromConsole]);
 
   const _handleDeletePromptSession = async (sessionId: string) => {
+    if (isDemoMode()) {
+      alert(DEMO_DISABLED_SENTENCE);
+      return;
+    }
     if (!confirm('Are you sure you want to delete this prompt? This will remove all versions and the linked chat.')) return;
     await deletePackage(sessionId);
     setConsoleRefreshKey(k => k + 1);
@@ -5843,6 +6277,56 @@ export default function Index({
       // the operator's feed under the canvas's zoom.
       if (action === 'zoom' || action === 'fit') return;
       /*
+       * ONE READER OF THE DRAWING, for the branches below that need a node's own facts. The type
+       * carries `rowIndex` because a node knows the address of the row it is (see FlowNode) — the
+       * same address the trigger branch reads. It used to be declared per-branch, which is how two
+       * readers of one fact drift.
+       */
+      type FlowNodeShape = {
+        id: string; family: string; kind: string; title: string; subtitle?: string; rowIndex?: number;
+      };
+      const nodeById = (nodeId: string): FlowNodeShape | undefined =>
+        (deepFind<HTMLElement & { flow?: { nodes?: FlowNodeShape[] } }>('agent-flow')?.flow?.nodes ?? [])
+          .find((n) => n.id === nodeId);
+      /*
+       * ▶ RUN THIS STEP — THE SAME RUN PATH THE FOOT'S PLAY MAKES.
+       *
+       * The toolbar's play was DEAD: it emitted `flow-action{action:'run'}` and the only thing that
+       * answered was the logger line at the bottom of this handler — measured 2026-10-02 by driving
+       * the app: the event recorded, nothing happened. It now dispatches the same `run-requested`
+       * the canvas footer's Play dispatches, so there is ONE run path: the review gate holds it when
+       * it must, the same spinner runs, and the drawing locks for the run's flight (setCanvasRunning).
+       * Nothing is ever executed "for one step" — a step is what a Run does.
+       */
+      if (action === 'run') {
+        window.dispatchEvent(new CustomEvent('run-requested'));
+        return;
+      }
+      /*
+       * ✨ ASK GRACE ABOUT THIS — HER OWN CHANNEL, WITH THE NODE'S OWN FACTS.
+       *
+       * The same division of labour as the delete branch below: the request carries what the node IS
+       * (whether it is a row, its kind, its title, the first of its line, its row's address when it
+       * has one) so her answer is about THIS node — and nothing is written and nothing is asked of
+       * the person. She answers in the thread, which is where this app does its talking.
+       */
+      if (action === 'ask') {
+        const node = nodeById(String(detail.nodeId || ''));
+        if (!node) return;
+        const rowAddress = typeof node.rowIndex === 'number' ? ` Its row is index ${node.rowIndex} in the prompt.` : '';
+        const line = node.subtitle ? ` Its line reads: "${String(node.subtitle).slice(0, 200)}".` : '';
+        window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
+          detail: {
+            request: `A person pressed "Ask Grace" on the node called "${node.title}" on the canvas. That node is `
+              + (node.family === 'seat'
+                ? `a ROW of the prompt — the ${node.kind} row.${rowAddress}${line}`
+                : `a STEP of the Run (${node.kind}) — part of what the prompt's execution does, not a row of it.${line}`)
+              + ' Say in one or two sentences what it is and what it does in this flow. Do not offer a button and do not change anything.',
+          },
+        }));
+        return;
+      }
+      /*
        * DELETING A NODE IS DELETING ITS ROW — AND SHE IS THE ONE WHO ASKS.
        *
        * The brief's last increment: "Removing a node removes its row — through `remove-seat`, and
@@ -5860,9 +6344,7 @@ export default function Index({
        */
       if (action === 'delete') {
         const nodeId = String(detail.nodeId || '');
-        type FlowNodeShape = { id: string; family: string; kind: string; title: string; subtitle?: string };
-        const nodes = deepFind<HTMLElement & { flow?: { nodes?: FlowNodeShape[] } }>('agent-flow')?.flow?.nodes ?? [];
-        const node = nodes.find((n) => n.id === nodeId);
+        const node = nodeById(nodeId);
         if (!node) return;
         // Matched on the canonical id first — see the note in the `trigger` branch: a node wears the
         // seat's LABEL and a row answers to its own name, so a name comparison misses.
@@ -5932,9 +6414,7 @@ export default function Index({
         const nodeId = String(detail.nodeId || '');
         const token = String(detail.token || '');
         if (!nodeId || !token) return;
-        type FlowNodeShape = { id: string; family: string; kind: string; title: string };
-        const nodes = deepFind<HTMLElement & { flow?: { nodes?: FlowNodeShape[] } }>('agent-flow')?.flow?.nodes ?? [];
-        const node = nodes.find((n) => n.id === nodeId);
+        const node = nodeById(nodeId);
         if (!node || node.family !== 'seat') {
           // A step is what a run does; nothing starts it but the run it belongs to. Reported rather
           // than silently dropped, because a control that does nothing reads as a broken control.
@@ -6288,6 +6768,20 @@ export default function Index({
       logger.info('console page', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
     };
     window.addEventListener('card-page', onCardPage);
+    /**
+     * THE COLUMN'S HEADER ASKED FOR ANOTHER VIEW — the one control `<output-controls>` owns, and
+     * the host is what performs it (the header does not know where the column's body lives).
+     *
+     * 'flow' IS NOT HANDLED HERE, deliberately: the drawing exists only while a Run has put one
+     * there, and the header only offers it in that state — so a 'flow' choice can only mean "the
+     * view you are already in", which the element already refuses to emit (see `_choose`).
+     */
+    const onViewChange = (event: Event) => {
+      const view = String((event as CustomEvent).detail?.view || '');
+      if (view === 'draft') void showDraftColumn();
+      else if (view === 'output') showOutputColumn();
+    };
+    window.addEventListener('view-change', onViewChange);
     window.addEventListener('canvas-play', onCanvasPlay);
     window.addEventListener('canvas-reset', onCanvasReset);
     window.addEventListener('canvas-save', onCanvasSave);
@@ -6305,6 +6799,7 @@ export default function Index({
       window.removeEventListener('flow-action', onFlowAction);
       window.removeEventListener('card-delete', onCardDelete);
       window.removeEventListener('card-page', onCardPage);
+      window.removeEventListener('view-change', onViewChange);
       window.removeEventListener('canvas-play', onCanvasPlay);
       window.removeEventListener('canvas-reset', onCanvasReset);
       window.removeEventListener('canvas-save', onCanvasSave);
@@ -6436,6 +6931,12 @@ export default function Index({
   }, [currentPromptSession?.id]);
 
   const _handleDeleteProject = (projectId: string) => {
+    // The demo refuses DELETE server-side (demo_policy.py) — say so instead of
+    // letting the action fail quietly after a confirm.
+    if (isDemoMode()) {
+      alert(DEMO_DISABLED_SENTENCE);
+      return;
+    }
     // Prevent deletion of the only project
     if (projects.length <= 1) {
       alert(
@@ -6907,6 +7408,10 @@ export default function Index({
       prev ? { ...prev, leftColumnContent, compiledOutput: '' } : prev
     );
     setIsComposerRunning(true);
+    // AND THE DRAWING IS TOLD THE SAME FACT IN THE SAME BREATH. It locks while the model execution
+    // loop is in flight and unlocks where the run ends (the run's `finally`) — one fact, two
+    // readers, so the lock cannot outlive the run and cannot lag it.
+    setCanvasRunning(true);
 
     // ── THE PROMPT DOCKS, AND THE CANVAS TAKES THE WIDTH ────────────────────
     //
@@ -7041,7 +7546,14 @@ export default function Index({
       layoutEl?.dockPrompt?.();
       await new Promise((r) => window.setTimeout(r, RUN_DOCK_MS));
       applyThirdColumn(assembled);
+      // The header is told what this column can now offer — the drawing itself, the output it came
+      // from, and the draft — by the same live write every view switch makes (see setColumnView).
+      setColumnView('flow', COLUMN_VIEWS_RUN);
       setCanvasHolding(true);
+      // THE FRESH MOUNT TAKES THE LOCK, TOO — this drawing was built while the run already was, so
+      // its constructor default (`false`) is a moment out of date; the same re-assert `holding`
+      // gets above, for the same reason.
+      setCanvasRunning(true);
 
       // THE DRAWING, in the same breath: the graph is a function of the rows and the run's own
       // facts, and it is built here — the one writer of `/session/middle_column/flow`.
@@ -7429,6 +7941,10 @@ export default function Index({
       }));
     } finally {
       setIsComposerRunning(false);
+      // AND THE DRAWING IS UNLOCKED WITH THE SPINNER — the same fact, the same breath, every exit
+      // from the run: success, a rejected request, or a thrown one all pass through here, so the
+      // lock can never outlive the work it was protecting.
+      setCanvasRunning(false);
       // Optional: give the layout a hint to equalize widths when middle appears
       window.dispatchEvent(new CustomEvent('reset-columns-to-equal-widths', { detail: { isThirdColumnOpening: true } }));
     }

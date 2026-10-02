@@ -1304,6 +1304,26 @@ export const TAG_REGISTRY = {
       'ASSEMBLED ON RUN (2026-09-23): the chain this view is part of is emitted by the model against this catalog — /api/ai/assemble-surface, intent render-run, assembled when a person presses RUN. It used to be written by WritingAreaIndex.setOutputColumn by hand, which is the protocol violation READ-ME/CONTINUE-HERE.md §00c records.',
     ],
   },
+  'draft-canvas': {
+    tag: 'draft-canvas',
+    surface: 'composer',
+    column: 'middle',
+    description:
+      'The wireframe DRAFTING view for the output column — a restricted assembly surface where real, registered components are placed on a grid. It is a VIEW and fetches nothing: the layout arrives as one data-model binding (a flat node list plus a positions map), and `resolveTag` is the one reader that turns a component NAME into a tag, so the view cannot draw a component the catalogue does not declare. A name the catalogue refuses is drawn as a SENTENCE on the node, by name — never a blank frame, never a substitute. NOT the execution canvas: <agent-flow> draws the RUN (rows, steps, connectors) from the prompt and the run\'s facts; this draws a layout a person is assembling.',
+    props: {
+      draft: { type: 'object', optional: true },
+      theme: { type: 'string', optional: true },
+    },
+    events: ['draft-select', 'draft-node-moved'],
+    constraints: [
+      'a view, not a source: the whole layout arrives as one data-model binding',
+      'nothing is drawn that the catalogue does not resolve — an unresolved name is SAID on the node',
+      'a node\'s props are set as PROPERTIES on the mounted element (an object prop cannot ride an attribute)',
+      'ITS OWN EVENT NAMES (draft-select, draft-node-moved): both canvases can be in the same room and the host listens on window — one name for two facts would make the run canvas answer a draft gesture',
+      'placements: the element owns the live drag, the payload owns the model — one writer for a place, and a rebuild never moves what a hand has placed',
+      'PLANNED (2026-10-02): reached through the output column selector as its third view; the palette (which catalogue components may be placed) and the store (prompt_artifacts, keyed by conversation) are decided, not yet built — see wireframe-lab/PLAN.md',
+    ],
+  },
   'agent-canvas': {
     tag: 'agent-canvas',
     surface: 'composer',
@@ -1368,13 +1388,17 @@ export const TAG_REGISTRY = {
       'The middle column\'s header row — the design\'s "output-vontrols" (node 40001034:1186), two children exactly as drawn: the selector tile (40001034:1187, its text run 40001034:1190) and the published <model-selector-button>. It is its own element because the header belongs to the COLUMN and not to the body under it: the flow view takes the column on Run, and the header went with the output viewer until this existed. A PLACEHOLDER BY THE OWNER\'S INSTRUCTION (2026-09-18): "that could just be a placeholder, it doesn\'t have to do anything… add the element to the canvas and that way it\'ll be there when we get ready to wire it up". The tile therefore renders with its design tag and role and opens no menu — the menu is not in the Figma pull, and what it is FOR (switching between the canvas view, the raw output, and more to come) is the owner\'s specification, not a trace. Sheet: AGENTIC_EDITOR/10-TODO.md P6.',
     props: {
       outputType: { type: 'string', optional: true },
+      view: { type: 'string', optional: true },
+      views: { type: 'array', optional: true },
     },
-    events: [],
+    events: ['view-change'],
     constraints: [
       'the column\'s header, not the body\'s: it is drawn in every view of the middle column',
-      'the tile is inert until the menu is designed — absent behaviour, not invented behaviour',
+      'THE MENU IS DESIGNED NOW (2026-10-02): the tile opens the views the HOST declares (`views` — what can actually be shown: the canvas exists only after a Run) and emits `view-change {view}`; the host performs the swap. Unset views leaves it exactly what it was: a label that opens nothing — absent behaviour, never invented behaviour',
+      'the label is READ FROM `view`, so the tile names the view the column is actually showing',
       'RECORDED NESTING (2026-09-18): the model control is the published <model-selector-button>, instantiated from this element\'s own template, never restyled — the one place this protocol\'s flat-adjacency rule is knowingly excepted, and it is recorded rather than hidden',
       'ASSEMBLED ON RUN (2026-09-23): the model emits this as the canvas\'s "header" slot (render-run), which is the point of it being its own element. It used to be written by WritingAreaIndex.setOutputColumn by hand.',
+      'THE VIEW SELECTOR, WIRED (2026-10-02): the tile opens the menu its own annotation promised — the views the HOST declares it can show (flow | output | draft) — and emits `view-change {view}`; the host performs the swap, the element never does. With no `views` set it is what it was before: a label that opens nothing.',
     ],
   },
   /**
@@ -1575,6 +1599,30 @@ export const TAG_REGISTRY = {
    * `busy` AND `message` ARE THE HOST'S. Only the caller that made the call knows when it finished,
    * and only it knows why Submit is blocked — so the element decides neither.
    */
+  'catalog-ingest-form': {
+    tag: 'catalog-ingest-form',
+    surface: 'design',
+    column: 'left',
+    description: 'ADD DESIGN SYSTEM — the design room\'s second ingest tool, beside the Figma form. A packaged design system (a .zip carrying `system.json` and `components.json`) becomes a walled-off catalogue partition: it draws the label field, the archive field and Submit, and dispatches `catalog-ingest-submit` with `{label, file}` verbatim — the shell runs `POST /api/catalog/ingest`, and nothing here fetches, unzips or writes. Every component it creates lands PROPOSED (`draft: false`) until a person accepts it.',
+    props: {
+      /** The system's label as typed. Empty means the manifest's own label is used. */
+      label: { type: 'string', optional: true },
+      /** Set by the HOST while the ingest is in flight; locks the fields and reads "Ingesting…". */
+      busy: { type: 'boolean', optional: true },
+      /** What the server answered — the created partition, or the refusal verbatim. The host's words. */
+      message: { type: 'string', optional: true },
+    },
+    events: ['catalog-ingest-submit'],
+    constraints: [
+      'IT DRAWS AND DISPATCHES ONLY: it never fetches, never unzips, and never writes — the endpoint exists (`POST /api/catalog/ingest`) and is not reimplemented in an element',
+      'THE MANIFEST IS THE AUTHORITY: the label typed here must MATCH the zip\'s `system.json` label or be left empty; a disagreement is refused (409) naming both, never silently resolved — the form says so out loud rather than letting a person learn it by being refused',
+      'CREATING A NEW SYSTEM IS THE ACTION: the partition\'s name is the manifest\'s id, an id that already exists is refused (409), and no field here can name an existing catalogue — the system catalogues are not ingest targets by construction',
+      'a form that cannot see the systems it must not touch also cannot overwrite them: nothing in this element lists, edits or deletes a catalogue',
+      'every component lands PROPOSED (`draft: false`) and registered with an EMPTY tag map: a name that resolves to nothing draws as the refusal sentence until an implementation lands and a person accepts it',
+      '`busy` and `message` are the HOST\'S to set, and they travel as BOUND DATA-MODEL PATHS (`/session/design_system_ingest/...`) — under this form\'s own keys, because two ingests in one rail must not write one message line (see the emission in routes/ai.py)',
+      'it sits BETWEEN the Figma form and the tree in the design rail: the form above, the tree below, this one beside its sibling',
+    ],
+  },
   'figma-ingest-form': {
     tag: 'figma-ingest-form',
     surface: 'design',

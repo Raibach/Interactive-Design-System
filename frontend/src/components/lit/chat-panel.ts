@@ -83,6 +83,7 @@ import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
 // The app's one "when" — the same format the Evals feed shows for a run. See shared/when.
 import { formatWhen } from '@/shared/when';
 import { resultsAreTheReading } from '@/shared/chatScroll';
+import { isDemoMode } from '@/shared/demoMode';
 import { getStoredUserId } from '@/services/authService';
 
 interface SeatMessage {
@@ -738,7 +739,10 @@ export class ChatPanel extends LitElement {
      * where the verdict is read, after the reply lands.
      */
     this._reviewingRun = detail.review === 'run';
-    void this._send(request, { silent: true });
+    // `asked: true` — this channel IS a person asking (see the hard stop in `_send`): the canvas's
+    // ✨, its trash's explanation, the seat menu's "what is this seat for". Without it a package
+    // that has already run answered a press with nothing at all.
+    void this._send(request, { silent: true, asked: true });
   };
 
   /**
@@ -1547,6 +1551,11 @@ export class ChatPanel extends LitElement {
     /* The Conversations dropdown's rows, from "small-dropdown" state=open
        #40001085:2414: a column of white tiles, gap 5, radius 4, height 30,
        label #4E68D2 Semi Bold 600 / 14. */
+    /* A LONG LIST SCROLLS IN ITS OWN SMALL BOX — more than two rows, or a short window,
+       and a slim scrollbar appears inside the dropdown instead of the list stretching the
+       Conversations row down the column. Two rows are always held whole (2×30 + 5 gap =
+       65px); the viewport term only bites on a short window, where the box shrinks further
+       rather than crowding the results area below it. */
     .conversation-list {
       margin: 0;
       padding: 0;
@@ -1554,14 +1563,31 @@ export class ChatPanel extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 5px;
+      max-height: min(65px, 20vh);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    /* 6px, and WEBKIT-ONLY ON PURPOSE — a scrollbar-width: thin here would take precedence
+       in this app's own browser and draw Chrome's 11px bar instead (measured on the Scout's
+       23-row list, 2026-10-02: an 11px gutter). The rest of the app's scrollers style only
+       through the pseudo-elements for the same reason. (No backticks in this comment: this is
+       a Lit css literal and one would end it.) */
+    .conversation-list::-webkit-scrollbar { width: 6px; }
+    .conversation-list::-webkit-scrollbar-track { background: transparent; }
+    .conversation-list::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.28);
+      border-radius: 3px;
     }
     /* THE ROW IS THE TILE, AND IT HOLDS TWO CONTROLS — the conversation (open it) and the
        trash (remove it). The tile could not stay a <button>: a button inside a button is not
        HTML, and the inner click would fire both. So the tile's own look (white, radius 4, the
        twin shadows, 30 tall) lives on the row and the controls inside it are transparent. */
+    /* AND THE ROWS DO NOT SHRINK INTO THE BOX — flex items compress before they overflow
+       (min-height: auto), which would squash every tile instead of scrolling the list. */
     .conversation-list li {
       display: flex;
       align-items: center;
+      flex-shrink: 0;
       height: 30px;
       border-radius: 4px;
       background: #F7F8F2;
@@ -2077,7 +2103,24 @@ export class ChatPanel extends LitElement {
      * either order: the announcement (which can land before this seat exists) and
      * the history attempt (which is async). Whichever finishes last is the one that
      * runs it; `_greeted` makes that happen once.
+     *
+     * ── AND THE RECORD IS RE-READ UNTIL IT IS READ ────────────────────────────────────────
+     *
+     * A seat read the pending arrival at connect and when its `sessionId` changed, and never
+     * again. Both of those can PRECEDE the record: the seat is drawn by the commit that opens
+     * the room, so an arrival announced a frame later — the design room's own ordering — was
+     * written after both reads, nothing ever looked again, and she stayed silent with the
+     * record waiting for a seat whose name it matched. Measured 2026-10-01 in production:
+     * Design's conversation held zero messages while her seat carried the room's script.
+     *
+     * `consumeArrival` refuses an arrival addressed to another seat and leaves it where it is,
+     * so asking again cannot steal one — this only ever takes what is THIS seat's, and once
+     * taken the record is gone, making this one comparison per render.
      */
+    if (!this._wantsGreeting && this.sessionId) {
+      const waiting = consumeArrival(this.sessionId);
+      if (waiting) this._takeArrival(waiting.kind);
+    }
     this._greetIfArriving();
     // History arriving lands the column at the newest turn (see _scrollThreadToBottom)...
     // EXCEPT WHEN THE NEWEST TURN IS A RUN'S RESULT: those open at their HEAD, scrolled by
@@ -3317,7 +3360,7 @@ export class ChatPanel extends LitElement {
    * the person had written it, and it was a wall of instructions nobody could
    * read. The fix is not to stop asking; it is to stop showing the ask.
    */
-  private async _send(text: string, opts: { silent?: boolean } = {}): Promise<void> {
+  private async _send(text: string, opts: { silent?: boolean; asked?: boolean } = {}): Promise<void> {
     text = (text ?? '').trim();
     if (!text || this._sending) return;
     /*
@@ -3331,11 +3374,25 @@ export class ChatPanel extends LitElement {
      * a question … stop questioning me."
      *
      * WHAT IS NOT SILENCED: the person's own turn (`silent` is false — that is the question she is
-     * answering), and the RUN REVIEW, which is the app asking her to judge a prompt before a run
-     * that has not happened yet. Everything else — a greeting, a suggestion, a note of her own —
+     * answering), the RUN REVIEW, which is the app asking her to judge a prompt before a run that
+     * has not happened yet, and — the third kind, added 2026-10-02 — THE TURN A PERSON ASKED FOR BY
+     * PRESSING A CONTROL (`asked`). Everything else — a greeting, a suggestion, a note of her own —
      * waits until the person asks, which is the whole of the rule.
+     *
+     * ON `asked`, AND WHY IT IS A FLAG AND NOT A NEW CHANNEL. The owner, 2026-10-02, on the canvas's
+     * ✨ Ask Grace: "a person pressing the button absolutely counts as 'the person asking'… there is
+     * no difference between a user typing a manual command or clicking an explicit, contextual
+     * button tile." The rule above exists to stop her speaking UNINVITED; a press is an invitation,
+     * and leaving the button dead is the failure it reads as. The flag is passed by exactly one
+     * caller — `_onHostAsk`, the receiver of `a2ui:ask-grace` — and every dispatcher of that event
+     * in this tree is a person's press: the Run gate and Apply all (both carry `review: 'run'`), the
+     * canvas's trash and ✨, and the seat menu's "what is this seat for". It is a flag on the SEND
+     * and not a new event, because a second channel would be a second authority on whether a person
+     * asked. NOTE WHAT DOES NOT CHANGE: `person_turn` stays false (`!opts.silent`), so the app's
+     * wording is never written into the thread as the person's words — the defect the owner found
+     * on 2026-10-01.
      */
-    if (opts.silent && !this._reviewingRun && this._hasResultTurns) return;
+    if (opts.silent && !opts.asked && !this._reviewingRun && this._hasResultTurns) return;
     /*
      * THE CHAT DOES NOT REASON, AND THAT IS A MEASUREMENT, NOT A PREFERENCE.
      *
@@ -4189,7 +4246,11 @@ export class ChatPanel extends LitElement {
           // says what the other cannot.
           ? html`<span class="conv-when" title=${`Last saved ${r.savedAt}`}>${formatWhen(r.savedAt)}</span>`
           : nothing}
-        <button
+        ${isDemoMode()
+          // Deleting a conversation is refused on the demo (demo_policy.py locks
+          // every DELETE), so the remove control is not drawn there.
+          ? nothing
+          : html`<button
           class="conv-remove ${this._armedDelete === r.id ? 'armed' : ''}"
           type="button"
           data-conversation-id=${r.id}
@@ -4200,7 +4261,7 @@ export class ChatPanel extends LitElement {
           ${this._armedDelete === r.id
             ? html`REMOVE`
             : html`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 7h16M10 7V5h4v2M6 7l1 13h10l1-13M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
-        </button>
+        </button>`}
       </li>`,
     );
   }
@@ -4224,6 +4285,8 @@ export class ChatPanel extends LitElement {
    */
   private _onConversationRemove = (e: Event): void => {
     e.stopPropagation();
+    // Belt to the hidden control's braces: the demo's DELETE is refused server-side.
+    if (isDemoMode()) return;
     const el = e.currentTarget as HTMLElement | null;
     const id = el?.dataset.conversationId ?? '';
     if (!id) return;

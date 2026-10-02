@@ -6,10 +6,15 @@ Handles conversations and messages with offline support
 import concurrent.futures
 import json
 import time
+from typing import Any
 
 import psycopg2
 
 from database_pool import DatabasePoolManager
+
+# The artifact_type the drafting canvas stores under. One name, one reader: the routes and the
+# tests name it through this constant.
+DRAFT_ARTIFACT_TYPE = "wireframe_draft"
 
 
 class ConversationAPI:
@@ -632,6 +637,96 @@ class ConversationAPI:
         finally:
             cursor.close()
             conn.close()
+
+    # ── THE WIREFRAME DRAFT: ONE FACT PER CONVERSATION ──────────────────────────────────────────
+    #
+    # S2 of the drafting plan (wireframe-lab/PLAN.md). The key is the CONVERSATION — decided
+    # 2026-10-02: `prompt_artifacts` already carries `conversation_id` (indexed) and no package
+    # column, and the seat's own law is that the package owns its conversations, so a draft belongs
+    # to the thread it was made in. There is no fallback to another conversation, ever.
+    #
+    # ONE ROW, REPLACED. A draft is a fact, not a history: `save_draft` rewrites the newest row of
+    # this type for the conversation, or inserts the first one. A row per drag would turn a layout
+    # into a log nobody reads.
+    #
+    # THE AUTHORIZATION IS `add_message`'S OWN RULE — a person may write to a conversation they own
+    # or that their package granted them. A second check written here would be a second authority on
+    # who may write.
+    def _assert_conversation_writable(self, cursor, conversation_id: str, user_id: str) -> None:
+        cursor.execute(
+            """
+            SELECT c.id FROM conversations c
+            WHERE c.id = %s
+              AND (c.user_id = %s
+                   OR EXISTS (SELECT 1 FROM session_permissions sp
+                              WHERE sp.user_id = %s AND sp.session_id = c.session_id))
+            """,
+            (conversation_id, user_id, user_id),
+        )
+        if not cursor.fetchone():
+            raise ValueError(
+                f"Conversation {conversation_id} not found or not writable by user"
+            )
+
+    def get_draft(self, conversation_id: str, user_id: str) -> dict[str, Any] | None:
+        """The newest wireframe draft for a conversation, or None.
+
+        NONE IS A REAL ANSWER — this conversation has no draft yet — and the caller draws the empty
+        state for it. It is not "the read failed": a read that fails RAISES, with the reason.
+        """
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            self.set_user_context(cursor, user_id)
+            self._assert_conversation_writable(cursor, conversation_id, user_id)
+            cursor.execute(
+                """
+                SELECT id, artifact_data, created_at FROM prompt_artifacts
+                WHERE conversation_id = %s AND artifact_type = %s
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (conversation_id, DRAFT_ARTIFACT_TYPE),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            saved = dict(row)
+            return {
+                "id": str(saved["id"]),
+                "draft": saved["artifact_data"],
+                "savedAt": str(saved["created_at"]),
+            }
+
+    def save_draft(self, conversation_id: str, user_id: str, draft: dict[str, Any]) -> dict[str, Any]:
+        """Write the conversation's draft — one row, replaced. Returns the row it wrote."""
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            self.set_user_context(cursor, user_id)
+            self._assert_conversation_writable(cursor, conversation_id, user_id)
+            payload = json.dumps(draft)
+            cursor.execute(
+                """
+                SELECT id FROM prompt_artifacts
+                WHERE conversation_id = %s AND artifact_type = %s
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (conversation_id, DRAFT_ARTIFACT_TYPE),
+            )
+            row = cursor.fetchone()
+            if row:
+                cursor.execute(
+                    "UPDATE prompt_artifacts SET artifact_data = %s::jsonb WHERE id = %s "
+                    "RETURNING id, created_at",
+                    (payload, dict(row)["id"]),
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO prompt_artifacts (conversation_id, artifact_type, artifact_data) "
+                    "VALUES (%s, %s, %s::jsonb) RETURNING id, created_at",
+                    (conversation_id, DRAFT_ARTIFACT_TYPE, payload),
+                )
+            saved = dict(cursor.fetchone())
+            conn.commit()
+            return {"id": str(saved["id"]), "savedAt": str(saved["created_at"])}
 
     def add_message(
         self,

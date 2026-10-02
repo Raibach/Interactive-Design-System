@@ -115,6 +115,25 @@ export class AgentFlow extends LitElement {
     /** True while the hand is holding the canvas — the grabbing cursor. */
     panning: { type: Boolean, state: true },
     /**
+     * THE RUN'S OWN LOCK — true while the model execution loop is in flight.
+     *
+     * The host writes it from the one fact that says a run is happening (`setCanvasRunning`, beside
+     * `setIsComposerRunning`), and this element enforces it as a BOUNDARY: while it is set, nothing
+     * on the drawing is a control. A press on a tile pans the canvas instead of dragging the tile,
+     * the ports and the node toolbar are not drawn (see the Vue module), a line's end handle is not
+     * drawn, the arrow keys do not move a node, and a dropped line opens no picker. The view stays
+     * the person's — pan, zoom, fit and the tool switch are untouched — so a run can be watched and
+     * the drawing can be moved out of her column's way.
+     *
+     * WHY IT EXISTS. A run rebuilds the drawing at four awaits, so an edit landing between two of
+     * them is an edit the next rebuild erases: the drawing would take the gesture and then quietly
+     * undo it, which is the shape this repository refuses. The owner, 2026-10-02: "the canvas
+     * element needs an explicit, one-writer running state… It stays completely pannable, but
+     * structurally locked." The lock is not a fallback: it hides no failure, it makes the drawing
+     * say what it is — a picture of work in flight — until the work lands.
+     */
+    running: { type: Boolean, attribute: 'running', reflect: true },
+    /**
      * HOW MUCH OF THIS ELEMENT'S BOX IS COVERED — her column is a LAYER over the drawing
      * whenever a Run is on screen (workspace-layout's `.pane.right.over`), so this element's
      * box is wider than the pane a person can see. THE HOST MEASURES IT from the two boxes
@@ -137,6 +156,8 @@ export class AgentFlow extends LitElement {
   declare theme: string;
   declare mode: string;
   declare panning: boolean;
+  /** True while a run is in flight — the boundary the host writes (see the property note). */
+  declare running: boolean;
   /** Pixels of this element's right-hand side covered by her column (see the property note). */
   declare viewportInset: number;
   declare selectedId: string | null;
@@ -210,6 +231,7 @@ export class AgentFlow extends LitElement {
     this.theme = '';
     this.mode = '';
     this.panning = false;
+    this.running = false;
     this.viewportInset = 0;
     this.selectedId = null;
     this.zoom = 1;
@@ -236,7 +258,9 @@ export class AgentFlow extends LitElement {
     const target = e.target;
     // A port is inside its node: check the smaller surface first.
     const port = target instanceof Element ? target.closest('[data-port]') : null;
-    if (port) {
+    // NOT WHILE A RUN IS IN FLIGHT: a port press falls through to the node branch below, which
+    // pans instead of dragging (see the running property). The ports are not drawn while locked.
+    if (port && !this.running) {
       const n = this._nodeFromTarget(target);
       if (n) {
         this._onPortDown(e, n, port.getAttribute('data-port') as Side);
@@ -264,6 +288,11 @@ export class AgentFlow extends LitElement {
    * flow-action — the same contract the toolbar has always had, now read off the Vue module's DOM.
    */
   private _onSurfaceClick = (e: MouseEvent): void => {
+    // THE BOUNDARY, CHECKED FIRST. While a run is in flight the drawing offers no controls — the
+    // toolbar is not drawn (the Vue module reads the same flag) — and this is the gate that makes
+    // the flag the single authority: a press that races the flag change is dropped here, at the
+    // edge, instead of being half-carried into a handler that would then have to decide.
+    if (this.running) return;
     const btn = e.target instanceof Element ? (e.target.closest('.tb-btn') as HTMLButtonElement | null) : null;
     if (!btn || btn.disabled) return;
     const n = this._nodeFromTarget(e.target);
@@ -288,7 +317,11 @@ export class AgentFlow extends LitElement {
     // THE HAND PANS FROM ANYWHERE. With it chosen, a press that lands on a tile is
     // still a press on the canvas — the tile comes along with everything else instead
     // of being dragged out of place.
-    if (this.mode === 'hand') {
+    //
+    // AND IT PANS WHILE A RUN IS IN FLIGHT, by the same branch and for the same reason: the run
+    // rebuilds the drawing at four awaits, so a tile edit made between two of them would be erased
+    // by the next rebuild. A picture of work in flight takes no gestures — the view still moves.
+    if (this.mode === 'hand' || this.running) {
       this._pan = { startClientX: e.clientX, startClientY: e.clientY, x0: this.panX, y0: this.panY, moved: false };
       window.addEventListener('pointermove', this._onMove);
       window.addEventListener('pointerup', this._onUp);
@@ -410,6 +443,16 @@ export class AgentFlow extends LitElement {
     if (this._connect) {
       // RELEASED ON NOTHING — the person pulled a line into empty space, which is a
       // request for a node there. The picker opens at the drop point.
+      //
+      // UNLESS A RUN STARTED MID-GESTURE: the drawing is a picture while the loop is in flight,
+      // so the request is dropped with the gesture rather than opening a menu the lock would
+      // immediately hide (see the running property).
+      if (this.running) {
+        this._connect = null;
+        this.panning = false;
+        this.requestUpdate();
+        return;
+      }
       this._picker = {
         x: this._connect.x,
         y: this._connect.y,
@@ -478,6 +521,9 @@ export class AgentFlow extends LitElement {
   /** Grabbing the END OF AN EXISTING LINE: the same drag, meaning "move this end". */
   private _onHandleDown = (e: PointerEvent, key: string, from: string, to: string): void => {
     if (e.button !== 0) return;
+    // A LINE'S END IS NOT GRABBABLE WHILE A RUN IS IN FLIGHT (see the running property). The press
+    // is not stopped, so it lands on the canvas and pans — the line's handle is not even drawn.
+    if (this.running) return;
     e.stopPropagation();
     e.preventDefault();
     const node = this._node(from);
@@ -520,7 +566,7 @@ export class AgentFlow extends LitElement {
    */
   private _addNodeAt(kind: string, label: string): void {
     const picker = this._picker;
-    if (!picker) return;
+    if (!picker || this.running) return;
     const id = 'draft:' + (++this._draftSeq);
     // NO CLAMP AT THE ORIGIN HERE EITHER — the last one of its kind, and it was the same
     // mistake in a third place: `Math.max(0, …)` on both axes, which put a node added near the
@@ -672,6 +718,17 @@ export class AgentFlow extends LitElement {
      * projection of this element's state and nothing else — the element decides, the library
      * draws. There is exactly one drawing; the hand-rolled node layer is GONE, not hidden.
      */
+    /*
+     * A RUN THAT STARTS TAKES THE DRAWING'S LIVE OFFERS WITH IT. Any picker, trigger menu or
+     * half-pulled line is dropped the moment the lock arrives — the render gates below already
+     * refuse to paint them, and this clears the state so none of them can be RESURRECTED when the
+     * run ends (a menu reappearing after a run would be an offer nobody made — see running).
+     */
+    if (this.running && (this._picker || this._triggerMenuFor || this._connect)) {
+      this._picker = null;
+      this._triggerMenuFor = null;
+      this._connect = null;
+    }
     if (this.flow && this._vueHost) {
       if (!this._vue) {
         this._vue = mountVueFlowCanvas(this._vueHost, { theme: this.theme });
@@ -680,7 +737,7 @@ export class AgentFlow extends LitElement {
       }
       const nodes = this._allNodes().map((n) => {
         const p = this._nodePos(n);
-        return { ...n, x: p.x, y: p.y, selected: this.selectedId === n.id };
+        return { ...n, x: p.x, y: p.y, selected: this.selectedId === n.id, locked: this.running };
       });
       this._vue.update(nodes);
       this._vue.setViewport(
@@ -1046,7 +1103,9 @@ export class AgentFlow extends LitElement {
     if (e.key === 'v' || e.key === 'V') { this._setMode(''); return; }
     if (e.key === 'h' || e.key === 'H') { this._setMode('hand'); return; }
     const node = this.selectedId ? this._node(this.selectedId) : null;
-    if (!node) return;
+    // A NODE'S KEYS ARE NODE EDITS — not while a run is in flight (see the running property). The
+    // view's own keys above (+, −, 0, v, h) are the person's and stay live.
+    if (!node || this.running) return;
     const step = e.shiftKey ? 10 : 1;
     const p = this._nodePos(node);
     const move: Record<string, { dx: number; dy: number }> = {
@@ -1285,8 +1344,9 @@ export class AgentFlow extends LitElement {
     }
 
     // The connection being drawn: from the source port to wherever the pointer is.
+    // Not drawn while a run is in flight — the lock takes the gesture's live line with the rest.
     let livePath: string | null = null;
-    if (this._connect) {
+    if (this._connect && !this.running) {
       const from = byId.get(this._connect.from);
       if (from) {
         // THE LINE LEAVES THE PORT THE GESTURE STARTED AT. This used the right edge and the
@@ -1393,8 +1453,11 @@ export class AgentFlow extends LitElement {
           <!-- THE END OF EVERY LINE IS GRABBABLE. One handle per line, sitting on the
                port it lands at: press it and the end follows the pointer, so a
                connection can be moved to another port or another node, or pulled out
-               into a new one. -->
-          <div class="handles">
+               into a new one. NOT DRAWN WHILE A RUN IS IN FLIGHT — a locked line is not
+               a control, and the handler refuses the gesture besides (see running). -->
+          ${this.running
+            ? nothing
+            : html`<div class="handles">
             ${this._resolvedEdges().map((e) => {
               const target = byId.get(e.to);
               if (!target) return nothing;
@@ -1410,13 +1473,13 @@ export class AgentFlow extends LitElement {
                 @pointerdown=${(ev: PointerEvent) => this._onHandleDown(ev, e.key, e.from, e.to)}
               ></span>`;
             })}
-          </div>
+          </div>`}
         </div>
 
         <!-- THE KIND PICKER. It opens where a line was dropped on empty canvas: the one
              question the canvas cannot answer for itself. The kinds are the prompt's own
              seats, so this view and the prompt panel cannot drift apart. -->
-        ${this._picker
+        ${this._picker && !this.running
           ? html`<div
               class="picker"
               style="left: ${this._picker.x * this.zoom + this.panX}px; top: ${this._picker.y * this.zoom + this.panY}px;"
@@ -1433,7 +1496,7 @@ export class AgentFlow extends LitElement {
              prompt row's Functions | Tools menu offers, from the same catalogue — so a person who
              is looking at the picture can ask what starts this without leaving it. The choice is
              emitted, never written here: the canvas has no copy of the row's text. -->
-        ${this._triggerMenuFor
+        ${this._triggerMenuFor && !this.running
           ? (() => {
               const n = this._node(this._triggerMenuFor as string);
               if (!n) return nothing;
@@ -1646,6 +1709,9 @@ export class AgentFlow extends LitElement {
       .canvas { cursor: grab; }
       .canvas.panning { cursor: grabbing; }
       .canvas.mode-hand .node { cursor: inherit; }
+      /* A RUN IN FLIGHT: the tiles are a picture and the canvas is still the hand's, so a press
+         that lands on a tile says grab, not drag (see the running property). */
+      :host([running]) .canvas .node { cursor: grab; }
       .scrim {
         position: absolute; top: 0; right: 0; bottom: 0; width: 64px;
         background: linear-gradient(to right, transparent, var(--ds-surface));

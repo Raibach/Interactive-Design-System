@@ -6,6 +6,7 @@ import { isSentryReady } from "@/lib/sentry";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { loadDemoMode } from "@/shared/demoMode";
 import "./index.css";
 // The composer's ground, preloaded below — before React renders, which is the point (see
 // THE TWO GROUNDS). The drawing's ground is NOT preloaded here: it belongs to a column that
@@ -37,6 +38,7 @@ import "@/components/lit/design-left-panel";
 // input the owner asked for could not be named by any surface until this existed. Same registration
 // rule as every import here — a tag nothing defines draws an empty box and says nothing.
 import "@/components/lit/figma-ingest-form";
+import "@/components/lit/catalog-ingest-form";
 // THE MIDDLE COLUMN'S PREVIEW — what a RUN loaded. Same registration rule: without this import
 // the surface names a tag nothing defines and the column draws an empty pane with no error.
 import "@/components/lit/component-preview";
@@ -169,8 +171,23 @@ if (import.meta.env.PROD && !isSentryReady()) {
   if (img.decode) img.decode().catch(() => {});
 }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+/*
+ * ── WHICH BUILD THIS IS, ASKED BEFORE ANYTHING IS DRAWN ───────────────────────
+ *
+ * /api/config answers `demo_mode`, and the shell hides destructive affordances on
+ * the demo so nobody is offered a button the server will refuse (shared/demoMode.ts).
+ *
+ * AWAITED, ON PURPOSE: the flag is read once at render time by plain components, not
+ * through a reactive store, so mounting first and asking after would draw Delete
+ * buttons on the demo and never take them back. `loadDemoMode` cannot throw and times
+ * out in 3 s — a server that never answers leaves the flag false, which is the local,
+ * full-power default, and the gate still refuses the action.
+ */
+void (async () => {
+  await loadDemoMode();
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+})();

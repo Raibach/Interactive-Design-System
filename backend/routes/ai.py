@@ -2109,6 +2109,29 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 "busy": {"path": "/session/ingest/busy"},
                 "message": {"path": "/session/ingest/message"},
             })
+            # ── THE RAIL'S SECOND FORM: ADD A DESIGN SYSTEM, BESIDE THE FIGMA ONE ────────
+            #
+            # THE OWNER, 2026-10-02: Design *"will manage the input and control of catalogs and
+            # design system resources… we can add that ingest function to our current Figma ingest
+            # function."* So the rail carries BOTH tools: the Figma form, then this one, then the
+            # tree (see the `children` wiring below).
+            #
+            # THE SAME DIVISION AS THE FORM ABOVE, AND THE SAME TWO LAWS. The element draws the label
+            # field, the archive field and Submit, and dispatches `catalog-ingest-submit`; the SHELL
+            # posts `POST /api/catalog/ingest` and says what came back. Its two values travel as
+            # BOUND PATHS for the same reason the Figma form's do — the renderer re-applies props on
+            # a data-model change and returns early on a components change — under this form's OWN
+            # keys, because two ingests in one rail must not write one message line.
+            #
+            # IT CANNOT NAME AN EXISTING CATALOGUE: the partition's name is the manifest's id, the
+            # server refuses one that exists, and no field here offers a name to overwrite — the
+            # system catalogues are not ingest targets by construction.
+            components.append({
+                "id": "left-system-form",
+                "component": "catalog-ingest-form",
+                "busy": {"path": "/session/design_system_ingest/busy"},
+                "message": {"path": "/session/design_system_ingest/message"},
+            })
             # ── THE FIRST TRANSLATION: THE CATALOGUE'S NAME, IN THE INGESTED CONTAINER ────
             #
             # THE OWNER, 2026-09-30: *"I want you to do your first transition — I want you to take
@@ -2145,7 +2168,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                     _c["children"] = _kids
                 # A slot takes one child OR a list of them (the Composer ships a list), so both
                 # halves are named rather than one replacing the other.
-                _kids["left"] = ["left-form", "left-rail"]
+                _kids["left"] = ["left-form", "left-system-form", "left-rail"]
                 break
 
             # ── AND THE GATE IS THIS SURFACE'S OWN ──────────────────────────────────────
