@@ -10,11 +10,6 @@ live in production. The full outcome is in `READ-ME/CONVERSATIONS-FIX.md`
 ("What happened next (2026-09-24)"). What follows is the diagnosis as it stood when this file
 was written.
 
-The owner's words, verbatim: "She has an automatic prompt that's supposed to generate when the
-person opens up the card, it's tied to the conversations. The conversations are broken. We need
-to figure out why the conversations in the model can't connect and can't enter them in the
-database. Can't save the conversation."
-
 Two live errors, both reproduced:
 
 1. `Not saved — This reply could not be written to this package's conversation: Conversation
