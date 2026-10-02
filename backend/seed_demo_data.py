@@ -113,6 +113,25 @@ VALUES (%s, 'Demo Workspace', 'The sandbox project the demo shell opens onto. Cr
 
 FIND_DEMO_PROJECT = "SELECT id FROM projects WHERE user_id = %s LIMIT 1"
 
+# ── THE CONSOLE'S OWN FILTER, FOR THE SOURCE LIST ──────────────────────────────
+# A card is drawn for a package that is SAVED: `routes/ai.py` reads the console's
+# list with exclude_drafts=True ("unsigned composer drafts never litter the
+# console"), so an unsaved draft — metadata.draft 'true' — never becomes a card no
+# matter how many of them the sandbox holds. `--list-sources` prints exactly the
+# set that will draw cards, so DEMO_SEED_SESSION_IDS is chosen against the truth
+# rather than against the package count. `%%` is a literal percent inside the
+# parameterized LIKE (psycopg2 would otherwise read a placeholder).
+LIST_OWNER_SOURCES = """
+SELECT ps.id, ps.title, ps.current_version
+FROM prompt_sessions ps
+WHERE ps.user_id = %s
+  AND ps.is_archived = FALSE
+  AND COALESCE(ps.metadata->>'draft', 'false') <> 'true'
+  AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') <> 'console'
+  AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
+ORDER BY ps.created_at
+"""
+
 INSERT_SESSION = """
 INSERT INTO prompt_sessions (
     id, user_id, title, description, left_column_content, compiled_output,
@@ -313,10 +332,19 @@ def main() -> int:
         action="store_true",
         help="delete ALL demo-owned packages and conversations first, then re-clone",
     )
+    parser.add_argument(
+        "--list-sources",
+        action="store_true",
+        help=(
+            "print the OWNER's packages that draw console cards (saved, not archived, not "
+            "containers) as a paste-ready DEMO_SEED_SESSION_IDS line, then exit"
+        ),
+    )
     args = parser.parse_args()
 
     demo_id = os.getenv("DEMO_USER_ID", DEMO_USER_ID_DEFAULT)
     demo_email = os.getenv("DEMO_USER_EMAIL", DEMO_USER_EMAIL_DEFAULT)
+    owner_id = os.getenv("DEMO_SOURCE_USER_ID", "00000000-0000-0000-0000-000000000001")
     sources = [s.strip() for s in os.getenv("DEMO_SEED_SESSION_IDS", "").split(",") if s.strip()]
 
     url = database_url()
@@ -328,6 +356,20 @@ def main() -> int:
 
     try:
         cur = conn.cursor()
+
+        # ── THE CANDIDATE LIST, BEFORE ANYTHING IS ASSUMED ─────────────────────
+        # Its own mode, and its own exit: it answers a question ("what draws
+        # cards?") and does not need the demo user, the sandbox, or an email check
+        # to answer it.
+        if args.list_sources:
+            cur.execute(LIST_OWNER_SOURCES, (owner_id,))
+            rows = cur.fetchall()
+            print(f"the owner's card-drawing packages (saved, archived excluded, containers excluded): {len(rows)}")
+            for row in rows:
+                print(f"  {row['id']}  v{row['current_version']}  {(row['title'] or '')[:60]}")
+            print()
+            print("DEMO_SEED_SESSION_IDS=" + ",".join(str(r["id"]) for r in rows))
+            return 0
 
         # The demo user's email must not already belong to someone else — two people
         # under one address is how a demo login lands in a real account.
