@@ -127,10 +127,15 @@ function App() {
                   console.error("App-level error:", error.message);
                 }}
               >
-                {!demoSettled ? (
-                  <GateSplash />
-                ) : (
-                  <Suspense fallback={<GateSplash />}>
+                {/* THE HOLD (owner, 2026-10-02): after Sign in, stay on the gate's own
+                    card — a spinner and "Preparing…" — until the console has FINISHED
+                    its first attempt (a surface drawn, or its error state showing), then
+                    cross-fade away. No timer decides; the console's own state does. The
+                    cap inside is a last-resort abort so a dead server cannot freeze the
+                    tab. */}
+                <GateSplash holdUntilDrawn />
+                {demoSettled ? (
+                  <Suspense fallback={null}>
                     <Routes>
                       {/* A2UI: Single root route - AI assembles all surfaces dynamically */}
                       <Route
@@ -160,7 +165,7 @@ function App() {
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Suspense>
-                )}
+                ) : null}
               </SentryErrorBoundary>
             </div>
           </TooltipProvider>
