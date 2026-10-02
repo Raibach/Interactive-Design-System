@@ -102,6 +102,17 @@ VALUES (%s, %s, %s, 'Demo Visitor', 'active', TRUE, 'student', 'product')
 ON CONFLICT (id) DO NOTHING
 """
 
+# The demo's own project. The shell creates a default project when a user has none
+# (WritingAreaIndex's createProject path), and on the live demo that POST answered
+# 403 on every first load until this row existed — the gate refuses what the
+# sandbox never seeded. One row, named for what it is.
+INSERT_DEMO_PROJECT = """
+INSERT INTO projects (user_id, name, description)
+VALUES (%s, 'Demo Workspace', 'The sandbox project the demo shell opens onto. Created by seed_demo_data.py.')
+"""
+
+FIND_DEMO_PROJECT = "SELECT id FROM projects WHERE user_id = %s LIMIT 1"
+
 INSERT_SESSION = """
 INSERT INTO prompt_sessions (
     id, user_id, title, description, left_column_content, compiled_output,
@@ -167,6 +178,15 @@ def find_existing_clone(cur, demo_id: str, source_id: str) -> str | None:
 
 def ensure_user(cur, demo_id: str, demo_email: str) -> None:
     cur.execute(INSERT_DEMO_USER, (demo_id, demo_email, DEMO_PASSWORD_PLACEHOLDER))
+
+
+def ensure_project(cur, demo_id: str) -> bool:
+    """True when a project already existed; False when one was created."""
+    cur.execute(FIND_DEMO_PROJECT, (demo_id,))
+    if cur.fetchone():
+        return True
+    cur.execute(INSERT_DEMO_PROJECT, (demo_id,))
+    return False
 
 
 def clone_session(cur, demo_id: str, source_id: str) -> tuple[str, dict]:
@@ -328,6 +348,11 @@ def main() -> int:
         owned = cur.fetchall()
         print(f"demo user: {demo_id} ({demo_email})")
         print(f"demo-owned packages now: {len(owned)}")
+        cur.execute(FIND_DEMO_PROJECT, (demo_id,))
+        print(
+            "demo project: "
+            + ("exists" if cur.fetchone() else "will create 'Demo Workspace'")
+        )
 
         if not sources and not args.reset:
             print()
@@ -369,6 +394,8 @@ def main() -> int:
 
         # ── THE APPLY ──────────────────────────────────────────────────────────
         ensure_user(cur, demo_id, demo_email)
+        if not ensure_project(cur, demo_id):
+            print("created the demo's project ('Demo Workspace')")
 
         if args.reset:
             sessions_deleted, conversations_deleted = reset_sandbox(cur, demo_id)
