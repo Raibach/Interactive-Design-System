@@ -268,10 +268,17 @@ one instead of trying to create it.
 python seed_demo_data.py                     # what it would do (dry run)
 python seed_demo_data.py --apply             # create user/project, clone the sources
 python seed_demo_data.py --reset --apply     # wipe the sandbox, re-clone
+python seed_demo_data.py --list-sources      # the cards the console would draw, as a paste-ready id list
 # inside the deployed container:
 northflank exec service --cmd 'python seed_demo_data.py --reset --apply' \
     --project semantic-design-system --service semantic-design-systems
 ```
+
+**Cards come from saved packages only.** The console reads its list with
+`exclude_drafts=True` ("unsigned composer drafts never litter the console"), so an
+unsaved draft never draws a card however many the sandbox holds — which is why
+`--list-sources` prints exactly the set that renders, and why the seeded-count and
+the card-count can legitimately differ.
 
 **The shell side is cosmetic.** `GET /api/config` says which build this is; the
 frontend (`shared/demoMode.ts`) reads it once before the first render and hides the
