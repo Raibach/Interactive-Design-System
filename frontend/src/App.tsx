@@ -54,6 +54,21 @@ function App() {
     setIsAuthenticated(true);
   };
 
+  /*
+   * THE PIN-ENTRY TIME IS LOADING TIME (the owner's design, 2026-10-02). Nothing used
+   * the seconds a person spends typing the pin — the app only began downloading after
+   * Sign in, so the wait landed where it read as hesitation. This starts the console's
+   * own chunk the moment the gate appears (and for an already-signed-in session, the
+   * moment the app mounts — in parallel with the config read). By the time Enter is
+   * pressed, the download is done; what remains is the console's own Standby while the
+   * surface assembles, which is where a wait belongs. Same specifier as the lazy()
+   * above, so it warms exactly that chunk; a failed prefetch is nothing — the real
+   * import retries on the way in.
+   */
+  useEffect(() => {
+    void import("@/pages/WritingAreaIndex").catch(() => {});
+  }, []);
+
   // Show login form if not authenticated
   if (!isAuthenticated) {
     return (
