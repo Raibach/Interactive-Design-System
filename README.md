@@ -1,25 +1,26 @@
 # Interactive Design System Manager
 
-> **Deterministic runtime protocols, data schemas, and governance architectures - One surface. Any payload. AI fills the slots.**
+> **Deterministic runtime protocols, data schemas, and governance architectures — One surface. Any payload. AI fills the slots.**
 
 **Raibach Interactive Design Studio** · John Holt  
-Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
+Version **0.9.1** · A2UI Protocol Compliant · 2026-10-02
+
+A prompt-package lifecycle workspace built on the A2UI (Agent-to-User Interface)
+protocol: the AI assembles every screen at runtime from a trusted component catalog —
+no static pages, no hardcoded layouts — and every component in a payload is validated
+against that catalog before anything renders. This repository is the reference
+implementation: the protocol, the runtime, the catalog, and the surface that draws
+them.
 
 ## Demo: Wireframe interactive prototype
-https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
-Demo pin: 7377
 
-> **The demo is locked, server-side.** The pin is a doorman, not the lock: whoever
-> gets past it lands in a sandbox seat that can chat, assemble, and edit its own
-> cloned packages — and cannot delete, publish, ingest, or reach anything of the
-> owner's, because the backend refuses those calls outright. All of it is off on a
-> local run, where the full system is the point. The mechanisms, the sandbox, and
-> the environment are in [The Demo's Lock](#the-demos-lock-demomode) below.
-
-> ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
-> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
->
-> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
+The hosted demo is **shared privately with reviewers** — the URL and pin come from
+the owner, not from this page. It is **locked, server-side**: the pin is a doorman,
+not the lock. Whoever gets past it lands in a sandbox seat that can chat, assemble,
+and edit its own cloned packages — and cannot delete, publish, ingest, or reach
+anything of the owner's, because the backend refuses those calls outright. On a local
+run the lock is off and the full system is the point; the mechanisms, the sandbox,
+and the environment are in [The Demo's Lock](#the-demos-lock-demomode) below.
 
 ---
 
@@ -110,7 +111,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-60 trusted components — 17 A2UI Basic Catalog primitives + 43 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 60 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+60 trusted components — 17 A2UI Basic Catalog primitives + 43 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 60 trusted components`).
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
@@ -204,7 +205,7 @@ open http://localhost:5001
 ```
 
 - **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}` (a real, paid model ping — not a free liveness probe)
-- **Dev PIN:** `7377`
+- **Sign-in gate:** the local gate takes the team pin — the same one shared privately with the demo's reviewers
 - **Local runs the full system:** with `DEMO_MODE` unset the identity pin and the policy gate are inert — `GET /api/config` answers `{"demo_mode": false}` — and a request's `X-User-ID` header is honored exactly as before
 - **Caching:** the shell (`index.html`) is never cached; the hashed assets are cached immutable — a deploy takes effect on the next load with no hard refresh
 
@@ -311,11 +312,8 @@ the three rate-limit variables.
 
 ## Documentation
 
-- [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
-- [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
 - [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
-- [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
-- [`FIGMA/CONSOLE_CONTRACTS.md`](FIGMA/CONSOLE_CONTRACTS.md) — Console surface data contract
+- [`CHANGELOG.md`](CHANGELOG.md) — Release history
 
 ---
 
