@@ -190,4 +190,11 @@ void (async () => {
       <App />
     </StrictMode>,
   );
+  /*
+   * THE STATIC GATE TWIN'S EXIT. index.html draws the gate before this bundle exists, and
+   * its job ends the frame after React commits — one frame later so the swap happens out of
+   * sight, and safe whenever it lands: the page behind it is the same #1a1625, so even an
+   * early removal is a dark frame, never a white one.
+   */
+  requestAnimationFrame(() => document.getElementById("splash")?.remove());
 })();
