@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import PinGate from "@/components/PinGate";
 import GateSplash from "@/components/GateSplash";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 import { demoModeReady, isDemoMode } from "@/shared/demoMode";
@@ -49,10 +48,15 @@ function App() {
     };
   }, []);
 
-  const handleLoginSuccess = () => {
-    localStorage.setItem("grace_is_authenticated", "true");
-    setIsAuthenticated(true);
-  };
+  /*
+   * THE GATE IS THE HTML CARD (index.html) — the ONLY door. It checks the pin and writes
+   * the flag itself, before any bundle exists; this component does not re-implement it
+   * and renders NOTHING while the flag is absent (the card covers the screen). No
+   * fallback login, no degraded path: one lock, one door.
+   */
+  if (!isAuthenticated) {
+    return null;
+  }
 
   /*
    * THE PIN-ENTRY TIME IS LOADING TIME (the owner's design, 2026-10-02). Nothing used
@@ -68,34 +72,6 @@ function App() {
   useEffect(() => {
     void import("@/pages/WritingAreaIndex").catch(() => {});
   }, []);
-
-  // Show login form if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner 
-            position="top-center" 
-            richColors 
-            toastOptions={{
-              style: {
-                background: '#166534',
-                color: '#fff',
-                border: '1px solid #15803d',
-                fontSize: '15px',
-                fontWeight: 600,
-                padding: '14px 20px',
-                minWidth: '320px',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-              },
-            }}
-          />
-          <PinGate onLoginSuccess={handleLoginSuccess} />
-        </TooltipProvider>
-      </QueryClientProvider>
-    );
-  }
 
   // Show main app if authenticated
   try {
