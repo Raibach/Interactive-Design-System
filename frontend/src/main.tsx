@@ -11,26 +11,16 @@
  * So the app moved behind the pin: the registrations live in
  * `components/lit/register` (imported by the app's own page, still before any
  * surface assembles), the pages are lazy (App), and the composer's ground starts
- * with them. This file's whole job is Sentry, the first render, the demo flag
- * started without blocking, and the static twin's exit.
+ * with them. This file's whole job is the first render, the demo flag started
+ * without blocking, and the gate card's exit. (SENTRY IS OFF — owner, 2026-10-02:
+ * nothing to initialize first any more; the whole configuration and its reasons are
+ * in `lib/sentry.ts`.)
  */
-import "@/lib/sentry";
-import { isSentryReady } from "@/lib/sentry";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { demoModeReady } from "@/shared/demoMode";
 import "./index.css";
-
-// ── Production Sentry guard ──────────────────────────────────────────────────
-if (import.meta.env.PROD && !isSentryReady()) {
-  console.error(
-    "[main] Sentry failed to initialize. Check VITE_SENTRY_DSN in .env.production. " +
-      "Application will continue but errors will not be reported to Sentry.",
-  );
-  // Set a global flag so ErrorBoundary can show a subtle indicator
-  (window as any).__SENTRY_DEGRADED__ = true;
-}
 
 /*
  * ── FIRST RENDER, AND THE READ THAT NO LONGER BLOCKS IT ────────────────────────

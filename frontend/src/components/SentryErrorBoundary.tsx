@@ -1,17 +1,22 @@
 /**
- * Sentry Error Boundary
+ * Error Boundary
  *
  * A production-grade error boundary that:
  *   - Catches rendering crashes anywhere in its child tree
- *   - Logs the full component stack trace to Sentry with tagged context
+ *   - Logs the full component stack locally (logger → DebugPanel + localStorage)
  *   - Shows a clean, user-friendly fallback UI with a "Try Again" action
- *   - Preserves the error for the DebugPanel
+ *   - Calls the optional `onError` prop
  *
- * Replaces the existing bare-bones ErrorBoundary in App.tsx.
+ * THE NAME STAYS, SENTRY DOES NOT (2026-10-02). This boundary used to be Sentry's
+ * `ErrorBoundary` with a `beforeCapture` that tagged a Sentry scope; Sentry is
+ * disabled (owner's call — see `lib/sentry.ts`), so the boundary is its own small
+ * class component now: catch, log locally, call onError, show the fallback. The
+ * name is kept because every import site says `SentryErrorBoundary` and renaming it
+ * would touch them all for no behaviour; the file's job never was Sentry — it is
+ * that a rendering crash shows a fallback instead of a blank tree.
  */
 
-import { type FC, type ReactNode, useCallback } from "react";
-import * as Sentry from "@sentry/react";
+import { Component, type ErrorInfo, type FC, type ReactNode, useCallback } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { logger } from "@/lib/logger";
 
@@ -21,9 +26,9 @@ interface SentryErrorBoundaryProps {
   children: ReactNode;
   /** Optional custom fallback; if omitted, the built-in UI is used. */
   fallback?: ReactNode;
-  /** Called when an error is caught, after Sentry logging. */
+  /** Called when an error is caught, after the local log line. */
   onError?: (error: Error, componentStack: string) => void;
-  /** Optional tag for identifying the boundary scope in Sentry. */
+  /** Optional label identifying the boundary in the local log. */
   scope?: string;
 }
 
@@ -88,7 +93,50 @@ const DefaultFallback: FC<{
   );
 };
 
-// ── Error Boundary ───────────────────────────────────────────────────────────
+// ── The boundary itself ──────────────────────────────────────────────────────
+//
+// THE STATE LIVES HERE AND NOWHERE ELSE. `componentDidCatch` runs AFTER the
+// fallback render (React calls getDerivedStateFromError first to draw it), so the
+// stack recorded for the fallback's dev panel arrives in the same commit and the
+// onError callback fires once per crash.
+
+interface BoundaryProps {
+  children: ReactNode;
+  onError: (error: Error, componentStack: string) => void;
+  renderFallback: (error: Error, componentStack: string, resetError: () => void) => ReactNode;
+}
+
+interface BoundaryState {
+  error: Error | null;
+  componentStack: string;
+}
+
+class Boundary extends Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { error: null, componentStack: "" };
+
+  static getDerivedStateFromError(error: Error): Partial<BoundaryState> {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    const componentStack = info.componentStack || "";
+    this.setState({ componentStack });
+    this.props.onError(error, componentStack);
+  }
+
+  private reset = (): void => {
+    this.setState({ error: null, componentStack: "" });
+  };
+
+  render(): ReactNode {
+    if (this.state.error) {
+      return this.props.renderFallback(this.state.error, this.state.componentStack, this.reset);
+    }
+    return this.props.children;
+  }
+}
+
+// ── The exported boundary ────────────────────────────────────────────────────
 
 export const SentryErrorBoundary: FC<SentryErrorBoundaryProps> = ({
   children,
@@ -96,16 +144,6 @@ export const SentryErrorBoundary: FC<SentryErrorBoundaryProps> = ({
   onError,
   scope = "app",
 }) => {
-  const handleBeforeCapture = useCallback(
-    (scope_: Sentry.Scope, error: Error, componentStack: string) => {
-      scope_.setTag("error_boundary", scope);
-      scope_.setContext("react", {
-        componentStack: componentStack.slice(0, 2000), // avoid oversized events
-      });
-    },
-    [scope],
-  );
-
   const handleError = useCallback(
     (error: Error, componentStack: string) => {
       // Log locally (visible in DebugPanel + localStorage)
@@ -121,8 +159,9 @@ export const SentryErrorBoundary: FC<SentryErrorBoundaryProps> = ({
   );
 
   return (
-    <Sentry.ErrorBoundary
-      fallback={({ error, componentStack, resetError }) => {
+    <Boundary
+      onError={handleError}
+      renderFallback={(error, componentStack, resetError) => {
         if (fallback) return <>{fallback}</>;
         const err = error instanceof Error ? error : new Error(String(error));
         return (
@@ -133,11 +172,9 @@ export const SentryErrorBoundary: FC<SentryErrorBoundaryProps> = ({
           />
         );
       }}
-      beforeCapture={handleBeforeCapture}
-      onError={handleError}
     >
       {children}
-    </Sentry.ErrorBoundary>
+    </Boundary>
   );
 };
 

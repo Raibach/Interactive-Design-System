@@ -1,5 +1,7 @@
 import { logger } from '@/lib/logger';
-import * as Sentry from '@sentry/react';
+// Sentry is disabled (owner, 2026-10-02): every captureException below is a no-op; the local
+// logger lines beside them are unchanged. See lib/sentry.ts.
+import * as Sentry from '@/lib/sentry';
 // Conversation data types
 export interface Message {
   id: string;
