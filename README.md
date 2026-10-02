@@ -293,6 +293,16 @@ gate, never a white screen while the bundle streams (measured before the fix: 2.
 of JS, about 3 seconds of white). `main.tsx` removes the twin one frame after React
 commits.
 
+**And the gate's JavaScript is its own small bundle** (2026-10-02). The entry used to
+carry the whole application — every Lit registration, the surface, the pages — so the
+gate could not be *typed into* until ~2.5 s of script had arrived. The registrations
+live in `components/lit/register` (imported by the app's own page, still before any
+surface assembles), the pages are lazy, the composer's ground travels with them, and
+`manualChunks` keeps the React family in the entry while every other dependency rides
+behind the pin. Whatever waits — the config read, the app chunk for a session already
+signed in — shows `GateSplash`, the same card, so the whole boot reads as one slow
+gate that becomes typeable.
+
 Service environment: `DEMO_MODE=1`, `DEMO_USER_ID`, `ADMIN_USER_IDS` (the admin stub
 is allow-all when unset), `DEMO_SEED_SESSION_IDS`; optionally `DEMO_USER_EMAIL` and
 the three rate-limit variables.
