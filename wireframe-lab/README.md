@@ -38,7 +38,7 @@ Three placements, locked by the owner 2026-10-02, and each has a different job:
 | place | state | what it is |
 |---|---|---|
 | **Design** (top nav) | live — the Figma ingest form and the catalog browser are already there (the partitions list with their counts: `design-artifacts 62`, `ecommerce 38`, `primitives 7`, `prompt-composer 60`) | **CATALOG MANAGEMENT, AND THE INGEST'S HOME.** *"Design will manage the input and control of catalogs and design system resources… we can add that ingest function to our current Figma ingest function."* The **Add Design System** upload lands here, beside the Figma hooks — and it must say which catalogue it is creating, never assume: creating a NEW partition is the action, and no code path may write into an existing one. **The system catalogues stay locked**: *"System catalogues like our current lit catalog will be only available to people with high-level permission."* |
-| **Product** (top nav) | a **deliberately dead stub** today (`LeftVerticalMenu.tsx:580`, `disabled: true`; WritingAreaIndex:606 — *"DEAD TABS — Product, Development and Governance are STUBS, and they are dead on purpose"*) | **THE PRIMARY WORKSPACE, and its DEFAULT VIEW IS THE DRAFT.** *"The product person will enter their business requirements in the prompt section just like the composer… but instead of outputting the agent orchestration canvas it would automatically load the drafting wireframe output."* Turning the tab on is an ACT, not a bug fix: it un-does a recorded decision and means a real ROOM — the tab enabled, a `render-product` intent, a surface the model composes against the catalogue (never a hand-written chain: the §00c violation), and the run path in this room composing the DRAFT rather than the execution drawing. The design-system picker and the palette live here. |
+| **Product** (top nav) | **THE ROOM IS LIVE — Slice A landed and driven, 2026-10-03** (the tab, `render-product`, the stage with the tray and the strip; see `PLANS.AGENT/session-notes-2026-10-03.md` and `PRODUCT-ROOM.md` §4) | **THE PRIMARY WORKSPACE, and its DEFAULT VIEW IS THE DRAFT.** *"The product person will enter their business requirements in the prompt section just like the composer… but instead of outputting the agent orchestration canvas it would automatically load the drafting wireframe output."* The door is the owner's own shape (2026-10-03): *"clicking on the tab in the top navigation is the creation of a session"* — `render-product` alone is a server-side get-or-create, the console's and the design room's own shape. The design-system picker and the palette live here — both landed. Slice B (the speaking) and Slice C (Submit → the queue) are next. |
 | **Composer** | live — the draft is its output column's third view (S1a/S1b) | **THE DEVELOPER/ORCHESTRATION SIDE, and the second copy of the build.** *"Instead of streaming an active backend execution graph (the orchestration view used by developers in the Composer)…"* — the run canvas stays what it is here; the draft is its third view, which is also where the authoring/testing side of this build lives. |
 
 **And one fact none of the three has today: the permission.** *"System catalogues… only available to
@@ -136,6 +136,14 @@ Open, in the order they matter:
 5. **The catalog permission declaration** — who may edit a catalog, and which rooms may draft with
    it. Nothing says that today (`session_permissions` carries package roles, not catalog roles), and
    the walled-off harness catalog is exactly the case it exists for.
+6. **The room, landed and driven (2026-10-03).** Slice A of the Product room is built and walked
+   checkpoint by checkpoint: the tab is the door (`render-product` = a server-side get-or-create,
+   mirroring the console room and the design room); the stage draws, the tray adds (`draft-node-added`,
+   one write) and the drag moves (`draft-node-moved`, one write); the strip lists the partitions and
+   choosing one writes `metadata.design_system` (a jsonb MERGE — `room_domain` survives) and
+   re-assembles. The palette's first set is ten components, marked `draft: true`, computed by the one
+   server-side filter the Slice-B compiler will read — **the owner's word on the list is owed**
+   (`PLANS.AGENT/session-notes-2026-10-03.md` §5.1). Remove (a delete gesture) is not built yet.
 
 ## The code, one paragraph
 

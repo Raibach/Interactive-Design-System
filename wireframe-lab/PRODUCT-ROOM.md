@@ -2,8 +2,12 @@
 
 Written 2026-10-02, from the owner's blueprint (nav tab → domain-filtered cards → sandboxed package)
 and Google's framing of it as a "2-to-3 click cognitive hierarchy". **Nothing here is built beyond
-what the list below says.** The blueprint is right about the shape; three of its facts are assumed,
-and two of them are the owner's to define.
+what the list below says** — and the list below now says: **R1 has LANDED and been driven
+(2026-10-03; Slice A — the room, the tray, the strip, the door), and R2's strip landed with it.**
+The owner's shape for the door (2026-10-03): *"clicking on the tab in the top navigation is the
+creation of a session… it should mirror how composer, and how console and how the design also create
+session packages"* — `render-product` alone is a server-side get-or-create. The record of the day:
+`PLANS.AGENT/session-notes-2026-10-03.md`.
 
 ## §1 — What is real today, and what the blueprint assumes
 

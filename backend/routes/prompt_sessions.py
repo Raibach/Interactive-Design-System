@@ -24,6 +24,11 @@ router = APIRouter()
 class CreatePromptSessionRequest(BaseModel):
     title: str = "Untitled Prompt Session"
     description: str | None = None
+    # A PACKAGE'S ROOM (PRODUCT-ROOM.md §2): a package born in the Product room is
+    # sent room_domain 'product'; the Composer's path sends 'composer'. ABSENT IS A
+    # REAL ANSWER — every legacy package has no room and keeps belonging where it
+    # always has. The writer ships with the reader.
+    room_domain: str | None = None
 
 
 class UpdatePromptSessionRequest(BaseModel):
@@ -286,7 +291,8 @@ async def create_prompt_session(
     try:
         uid = get_user_id_from_header(x_user_id)
         session = state.prompt_sessions_api.create_session(
-            user_id=uid, title=request.title, description=request.description
+            user_id=uid, title=request.title, description=request.description,
+            room_domain=request.room_domain,
         )
         return {"session": session, "error": None}
     except HTTPException:

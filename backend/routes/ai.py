@@ -14,9 +14,11 @@ from deps import (
     A2UI_CATALOG_ID,
     a2ui_catalog,
     a2ui_catalog_id,
+    a2ui_catalog_for,
+    a2ui_catalog_surfaces,
+    design_system_of,
     get_user_id_from_header,
     user_is_admin,
-    a2ui_catalog_for,
     validate_a2ui_components,
 )
 from grace_gui import (
@@ -79,6 +81,11 @@ CONSOLE_TABS = "chat,eval,tools,approvals,settings"
 # constant closes. `trace` stays because Design's seat is given a trace view; `approvals` does
 # not, because approvals are the console's job.
 DESIGN_TABS = "chat,trace,tools,executions,eval,repair,settings"
+
+# THE PRODUCT ROOM'S RAIL. The product role's own declared tabs (`role_caps.py`, the 'product'
+# role: chat, trace, tools) — the stage needs no more, and the seat draws a button only for a
+# tab its list names.
+PRODUCT_TABS = "chat,trace,tools"
 
 
 # ── WHO SHE IS IN EACH ROOM, STATED BY THE ROOM ───────────────────────────────────────────────
@@ -428,6 +435,22 @@ You do not write into a prompt from this room. Work on a prompt happens in the C
 package at a time, and this room is how the person finds it.
 """
 
+# THE PRODUCT ROOM'S OWN SCRIPT — the ideation workspace. What she is here the day this room
+# exists: the assistant of a person assembling wireframes out of one design system's approved
+# catalogue, on the stage beside her. THE COMPOSING OFFER (ask → press → the structure lands)
+# is declared with the assembler that backs it, not before — a room must not offer what it
+# cannot do.
+PRODUCT_GRACE_INSTRUCTIONS = """\
+You are Grace, and this is the product team's ideation workspace. The stage on the left is a
+wireframe the person is assembling out of the approved components of one design system — the
+design-system chooser in your panel names which catalogue it comes from. Nothing on that stage
+is free-hand: every piece of the wireframe is a real, registered component of that catalogue.
+
+You do not write code from this room, and you do not change the stage directly. You help the
+person think: what the business requirement is, which catalogue fits it, what the wireframe
+should show, and what is missing from it.
+"""
+
 
 def _seat_tabs(components: list, tabs: str) -> None:
     """Set every chat seat's allowed-tabs. Idempotent, and it never adds a component."""
@@ -548,6 +571,33 @@ def _design_surface_components() -> list[dict[str, Any]]:
             "outputType": "Agent Flow",
         },
     ]
+
+
+def _draft_safe_palette(catalogue: dict[str, Any]) -> list[dict[str, str]]:
+    """The draft-safe palette: which of THIS catalogue's components may be placed in a draft.
+
+    THE MARKER IS THE AUTHORITY, NEVER AN INFERENCE: an entry is placeable when its own
+    declaration says `"draft": true` (top level on the entry — the same key the design-system
+    ingest writes `false` for a proposal). PLAN.md §4's invariant: a catalogue contains
+    components a draft must never host — `chat-panel` is a second Grace, `agent-canvas` is a
+    nested surface, the canvas's own furniture is a control that does nothing — and that wall
+    is a declared fact, not a rule anyone re-derives.
+
+    ONE READER, TWO USES: the stage's tray lists this palette, and the compile prompt (slice B)
+    is bounded by the same filter, so what the tray offers and what the model may place can
+    never disagree. Descriptions ride along when the entry states one (the picker shows them).
+    """
+    palette: list[dict[str, str]] = []
+    for name, entry in (catalogue.get("components") or {}).items():
+        if not isinstance(entry, dict) or entry.get("draft") is not True:
+            continue
+        description = ""
+        for part in [entry] + list(entry.get("allOf") or []):
+            if isinstance(part, dict) and isinstance(part.get("description"), str) and part["description"]:
+                description = part["description"]
+                break
+        palette.append({"name": name, "description": description})
+    return sorted(palette, key=lambda item: item["name"].lower())
 
 
 def _catalog_component_vocabulary() -> str:
@@ -835,6 +885,7 @@ class AISurfaceRequest(BaseModel):
     Intents:
     - render-console: AI assembles console with cards
     - render-composer: AI assembles blank composer with greeting
+    - render-product:{id}: AI assembles the Product room around one package
     - render-session:{id}: AI assembles existing session
     - render-run[:{id}]: AI assembles the THIRD COLUMN a Run opens (the canvas)
 
@@ -1052,6 +1103,11 @@ def ai_assemble_surface(
                 "id": str(session.get("id")),
                 "title": title,
                 "description": description,
+                # THE CARD CARRIES ITS ROOM (2026-10-03): the card click routes to the
+                # room that owns the package — a product package opens the Product room,
+                # every other card the Composer. Absent stays absent: a legacy card
+                # routes exactly where it always has.
+                "room_domain": ((session.get("metadata") or {}).get("room_domain") or ""),
                 "category": session.get("category") or "",
                 "status": (session.get("status") or "Active").lower(),
                 "version": session.get("current_version") or 1,
@@ -1448,6 +1504,313 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
                     },
                 },
             },
+        ]
+
+    # ═══════════════════════════════════════════════════════════════
+    # INTENT: render-product[:{id}] — the Product room
+    #
+    # THE ROOM IS THE CONSOLE'S SHAPE, with the stage where the cards were. The owner,
+    # 2026-10-03: *"designed exactly like the console, however instead of cards in the
+    # left column we have the wireframe canvas"*. One layout: the stage on the left, her
+    # seat on the right. No prompt section, no third column — the packages are the
+    # Composer's shape exactly (title, owners, conversations, saving), and this intent
+    # opens ONE of them.
+    #
+    # THE TREE IS MODEL-COMPOSED (never a hand-written chain — the §00c violation): the
+    # contract prompt below is the room's whole description and the model assembles it
+    # against the catalogue. The draft is NOT tree vocabulary — it rides the data model at
+    # /session/draft and the stage resolves each name through `resolveTag`.
+    #
+    # THE STAGE'S LAYOUT IS READ HERE, BEFORE THE TREE NAMES THE ELEMENT. A missing draft
+    # is a real answer (the stage's empty state); a FAILED read raises, named — it must
+    # never assemble as "nothing is drafted here", which is a different fact.
+    # ═══════════════════════════════════════════════════════════════
+    elif intent == "render-product" or intent.startswith("render-product:"):
+        session_id = intent.split(":", 1)[1].strip() if ":" in intent else (request.session_id or "")
+        if not state.prompt_sessions_api:
+            raise HTTPException(status_code=503, detail="A2UI FAILURE: Database not available")
+        if not session_id:
+            # THE ROOM'S OWN DOOR — GET-OR-CREATE, the console's and the design room's own
+            # shape (owner, 2026-10-03: *"it should mirror how composer, and how console and
+            # how the design also create session packages — those packages in their structure
+            # are critical"*). The most recent product package is the one the room opens;
+            # with none, one is BORN HERE — created through the SAME create_session path
+            # every package uses (title, conversation, owner permission row, the room fact)
+            # — and this assembly opens it. The frontend never asks twice: the tab click IS
+            # the creation.
+            try:
+                existing = state.prompt_sessions_api.get_sessions(
+                    user_id=uid, include_archived=False, limit=50, offset=0,
+                    lightweight=True, exclude_drafts=True,
+                )
+                for row in existing:
+                    if (row.get("metadata") or {}).get("room_domain") == "product":
+                        session_id = str(row.get("id") or "")
+                        break
+            except Exception as e:
+                _warn(f"the product package list could not be read, so the room creates a fresh session: {e}")
+            if not session_id:
+                created = state.prompt_sessions_api.create_session(
+                    user_id=uid,
+                    title="Wireframe Session",
+                    description=(
+                        "The Product room's wireframe session — a layout assembled from one "
+                        "design system's approved components."
+                    ),
+                    room_domain="product",
+                )
+                session_id = str((created or {}).get("id") or "")
+            if not session_id:
+                raise HTTPException(
+                    status_code=503,
+                    detail="A2UI FAILURE: the product session did not resolve (not created).",
+                )
+
+        # ── PERFORMANCE TRACE: Milestone A (Database) ──
+        t_a_start = time.perf_counter()
+
+        session = state.prompt_sessions_api.get_session(user_id=uid, session_id=session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # THE PACKAGE'S CONVERSATIONS, READ BY ITS OWNER (`conversations.session_id`) — the
+        # same read the composer's seat makes, so the seat's dropdown and the draft's key
+        # are one fact, not two.
+        product_conversations = []
+        if state.conversation_api:
+            try:
+                product_conversations = state.conversation_api.get_conversations_by_session(
+                    session_id, uid
+                )
+            except Exception as e:
+                _warn(
+                    f"the package's conversation list could not be read, so the room's seat has none to offer: {e}"
+                )
+
+        # The conversation the seat binds — the package's chat thread. With none, the id is
+        # empty and the seat binds none: one is created when the person speaks, not by
+        # landing (the console's own rule).
+        product_conversation_id = ""
+        for c in product_conversations:
+            if (c.get("tab") or "chat") == "chat":
+                product_conversation_id = str(c.get("id") or "")
+                break
+        if not product_conversation_id and product_conversations:
+            product_conversation_id = str(product_conversations[0].get("id") or "")
+
+        # ── THE STAGE'S LAYOUT (see the branch's own note above) ──
+        product_draft = None
+        if product_conversation_id and state.conversation_api:
+            try:
+                stored = state.conversation_api.get_draft(product_conversation_id, uid)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        f"A2UI FAILURE: the stage's layout could not be read for conversation "
+                        f"{product_conversation_id} — {e}. A failed read is not an empty stage."
+                    ),
+                )
+            product_draft = stored.get("draft") if stored else None
+
+        # THE CHOSEN DESIGN SYSTEM — the fact the chooser writes and `design_system_of`
+        # reads; absent means this package never chose, which is a real answer.
+        chosen_system = design_system_of(session)
+
+        # THE CHOOSER'S LIST: the partitions that exist on disk, each with its count — the
+        # directory is the truth, so a system that does not exist cannot be offered.
+        catalogues = []
+        try:
+            for name in a2ui_catalog_surfaces():
+                try:
+                    catalogues.append({
+                        "system": name,
+                        "count": len(a2ui_catalog_for(name).get("components", {})),
+                    })
+                except Exception:
+                    catalogues.append({"system": name, "count": None})
+        except Exception as e:
+            _warn(f"the catalogue list could not be read, so the room's chooser offers none: {e}")
+
+        # THE TRAY'S OWN LIST — the draft-safe palette of the catalogue this stage draws from,
+        # computed by the SAME filter the compiler will read (one reader, two uses: the tray
+        # lists it; the compile prompt is bounded by it). A failure is said, and the tray then
+        # offers nothing — an empty tray, never a guessed list.
+        palette_catalog = chosen_system or "prompt-composer"
+        try:
+            palette = _draft_safe_palette(a2ui_catalog_for(palette_catalog))
+        except Exception as e:
+            _warn(f"the draft-safe palette of '{palette_catalog}' could not be read, so the stage's tray offers nothing: {e}")
+            palette = []
+
+        ms_a = (time.perf_counter() - t_a_start) * 1000
+
+        # ── THE CONTRACT — the room's whole description, composed by the model ──────
+        llm_prompt = f"""You are Grace, the A2UI surface assembler for the product room.
+{render_tools_block()}
+
+The user opened the Product room — their wireframe workspace, one prompt package at a time.
+The package is "{session.get('title') or '(untitled)'}".
+
+Assemble the FULL product room surface using A2UI v0.9.1.
+
+{_catalog_component_vocabulary()}
+
+REQUIREMENTS:
+1. id "root", component "workspace-layout" — the composer's own container. Its panes are
+   NAMED slots, so "children" is an OBJECT keyed by slot name; the array form fills nothing.
+2. "product-stage": "draft-canvas" in slot "left", its layout bound to
+   {{"path": "/session/draft"}} and its palette bound to {{"path": "/session/palette"}} — the
+   tray's list of the draft-safe components. THIS IS THE STAGE — the wireframe a person is
+   assembling out of real catalogue components. It fetches nothing.
+3. "product-chat": "chat-panel" in slot "right" — the person's seat, bound to this
+   package's own conversation: conversationId {{"path": "/session/conversation_id"}},
+   conversations {{"path": "/session/conversations"}}, sessionId {{"path": "/session/session_id"}}.
+   There is no middle slot.
+4. "isThirdOpen": false — the chat column loads CLOSED. This is the container's own state
+   and it owns the column's width: at false the right pane sits at its designed collapsed
+   floor with the rail showing, and the rail's Chat button OPENS it on the first click. Do
+   NOT send "collapsed" or "rightWidth" on the panel or the container.
+5. "product-chat" carries "allowedTabs": "chat,trace,tools" and "tracePrompt": false. Emit
+   them exactly as written. It carries ONE child in its "view" slot: "system-picker" — the
+   room's context strip, "design-system-picker" bound to /session/catalogues and
+   /session/design_system. The panel draws this one view above her THREAD, the same hole the
+   console's repair rows use.
+6. Short friendly ai_message
+
+Emit nothing else — no greeting, no header, no Text above them.
+
+Output ONLY this exact JSON (no markdown, no extra text):
+{{
+  "components": [
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "product-stage", "right": "product-chat"}}}},
+    {{"id": "product-stage", "component": "draft-canvas", "draft": {{"path": "/session/draft"}}, "palette": {{"path": "/session/palette"}}}},
+    {{"id": "product-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,trace,tools", "conversationId": {{"path": "/session/conversation_id"}}, "conversations": {{"path": "/session/conversations"}}, "sessionId": {{"path": "/session/session_id"}}, "children": {{"view": "system-picker"}}}},
+    {{"id": "system-picker", "component": "design-system-picker", "catalogues": {{"path": "/session/catalogues"}}, "selected": {{"path": "/session/design_system"}}}}
+  ],
+  "ai_message": "Your message"
+}}
+"""
+
+        ms_b = 0.0
+        ms_c = 0.0
+        t_b_start = time.perf_counter()
+        llm_response = query_llm(
+            question=llm_prompt,
+            mode="surface_assembly",
+            temperature=0.0,
+            prompt_id="surface-assembly-product"
+            # model intentionally omitted — use the enabled provider's default
+        )
+        ms_b = (time.perf_counter() - t_b_start) * 1000
+
+        if not llm_response or not llm_response.strip():
+            raise HTTPException(
+                status_code=503,
+                detail="A2UI FAILURE: AI did not respond. The AI must be active to render this surface."
+            )
+        if llm_response.strip().startswith("Error:"):
+            raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
+
+        t_c_start = time.perf_counter()
+        response_text = llm_response.strip()
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            parsed = _extract_json_payload(response_text)
+            components = parsed["components"]
+            # Her rail, and her words — both THIS room's, written by the assembly rather
+            # than trusted to the model's memory (see `_seat_grace`).
+            _seat_tabs(components, PRODUCT_TABS)
+            _seat_grace(components, "/session", False)
+            ai_message = parsed.get("ai_message", "The room is ready.")
+            if not isinstance(components, list) or len(components) == 0:
+                raise ValueError("components must be non-empty array")
+            ms_c = (time.perf_counter() - t_c_start) * 1000
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+            print(
+                f"[A2UI Product] AI RESPONSE PARSE FAILED:\n"
+                f"  error_type: {type(e).__name__}\n"
+                f"  error_message: {e}\n"
+                f"  llm_response_length: {len(response_text)}\n"
+                f"  llm_response_first_500: {response_text[:500]}\n"
+                f"  timestamp: {time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n"
+                f"  FIX: The LLM returned something that isn't valid A2UI JSON. Check the prompt or the model."
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: AI returned invalid JSON for render-product — {type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
+            )
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        print(f"\n{'='*60}")
+        print(f"[PERF TRACE] POST /api/ai/assemble-surface | intent=render-product | total={elapsed_ms}ms")
+        print(f"  Milestone A (Database): {ms_a:8.1f}ms")
+        print(f"  Milestone B (LLM):      {ms_b:8.1f}ms")
+        print(f"  Milestone C (Parse):    {ms_c:8.1f}ms")
+        print(f"{'='*60}\n")
+
+        validate_a2ui_components(components)
+        return [
+            {
+                "version": "v0.9.1",
+                "createSurface": {
+                    "surfaceId": "main",
+                    "catalogId": A2UI_CATALOG_ID
+                }
+            },
+            {
+                "version": "v0.9.1",
+                "updateComponents": {
+                    "surfaceId": "main",
+                    "components": components
+                }
+            },
+            {
+                "version": "v0.9.1",
+                "updateDataModel": {
+                    "surfaceId": "main",
+                    "path": "/",
+                    "value": {
+                        # THIS ROOM'S OWN SESSION BLOCK — what the emitted seat binds to,
+                        # and what the host reads to know which package and thread it is in.
+                        "session": {
+                            "session_id": session_id,
+                            "conversation_id": product_conversation_id,
+                            "grace_instructions": PRODUCT_GRACE_INSTRUCTIONS,
+                            "conversations": [
+                                {
+                                    "id": str(c.get("id")),
+                                    "title": c.get("title") or "(untitled)",
+                                    "tab": c.get("tab") or "chat",
+                                }
+                                for c in product_conversations
+                            ],
+                            # THE CHOOSER: what exists to choose from, and what this
+                            # package chose. Empty `design_system` = never chose — a real
+                            # answer, not an error.
+                            "design_system": chosen_system or "",
+                            "catalogues": catalogues,
+                            # THE TRAY'S LIST, computed by the palette filter above — the
+                            # stage draws its + Add picker from it, and the compiler will be
+                            # bounded by the same filter (one reader, two uses).
+                            "palette": palette,
+                            # THE STAGE'S LAYOUT, read above before the tree named the
+                            # element. None = nothing is drafted yet (the element's empty
+                            # state, the truth), never a failed read (that raised).
+                            "draft": product_draft,
+                        },
+                        "assembly_time_ms": elapsed_ms,
+                        "llm_used": True,
+                        "usage": dict(LAST_USAGE),  # measured, straight from the provider
+                        "ai_message": ai_message,
+                        "warnings": _drain_warnings(),
+                    }
+                }
+            }
         ]
 
     # ═══════════════════════════════════════════════════════════════
@@ -3154,7 +3517,8 @@ Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
             status_code=400,
             detail=(
                 f"Unknown intent: {intent}. Valid intents: render-console, render-composer, "
-                f"render-design, render-section:{{id}}, render-session:{{id}}, render-run[:{{id}}]"
+                f"render-design, render-product:{{id}}, render-section:{{id}}, "
+                f"render-session:{{id}}, render-run[:{{id}}]"
             )
         )
 

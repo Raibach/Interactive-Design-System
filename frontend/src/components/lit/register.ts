@@ -51,6 +51,11 @@ import "@/components/lit/component-preview";
 // it through the catalogue, so re-ingesting a node the catalogue already holds drew the approved
 // component while the fresh draft sat untouched. Given the FILE, it can only draw the draft.
 import "@/components/lit/draft-preview";
+// THE PRODUCT ROOM'S CONTEXT STRIP (2026-10-03) — the design-system chooser that sits at the
+// top of her panel and names the catalogue the stage draws from. Same registration rule as
+// every import here — the room's tree names it, so a tag nothing defines would draw an empty
+// strip with no error.
+import "@/components/lit/design-system-picker";
 import "@/components/lit/workspace-layout";
 // The prompt's own bar — title, version label and package id, above the sections in the
 // left column. It used to be row 2 of the React `LeftColumnHeader`, which meant the TITLE

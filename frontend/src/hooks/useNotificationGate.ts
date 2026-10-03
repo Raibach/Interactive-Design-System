@@ -76,7 +76,7 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
      * passed, which is what a first visit gets.
      *
      * ── AND A STUB IS NOT SOMEWHERE TO BE RESTORED ONTO (2026-10-01) ──────────────────────────
-     * Product, Development and Governance are drawn as stubs — visible, in order, and doing
+     * Development and Governance are drawn as stubs — visible, in order, and doing
      * nothing when clicked (owner: *"these items on the navigation and our shell at the top should
      * be stubs. They shouldn't do anything at this time."*). They are still KNOWN names, so they
      * stay in the list above; what they cannot be is a RESTORE TARGET. A browser whose last tab
@@ -84,9 +84,14 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
      * which is the complaint itself, arriving through localStorage instead of through a click, and
      * surviving a reload. So the two lists are separate on purpose: a name the application
      * RECOGNISES, and a place it can LAND.
+     *
+     * ── AND PRODUCT LEFT THE STUBS (2026-10-03) ───────────────────────────────────────────────
+     * Product is a real room now — its own branch, `render-product`, its own renderer — so it is
+     * a place the application can LAND: a browser whose last tab was Product opens there, which
+     * is what a room is for.
      */
     const KNOWN_TABS = ['console', 'composer', 'design', 'product', 'development', 'governance'];
-    const LANDABLE_TABS = ['console', 'composer', 'design'];
+    const LANDABLE_TABS = ['console', 'composer', 'design', 'product'];
     const saved = localStorage.getItem("activeHeaderTab");
     if (saved && LANDABLE_TABS.includes(saved)) return saved;
     return initialTab && LANDABLE_TABS.includes(initialTab) ? initialTab : "console";

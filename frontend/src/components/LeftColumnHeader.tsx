@@ -94,10 +94,10 @@ export default function LeftColumnHeader({
     { id: 'composer', label: 'Composer' },
     { id: 'design', label: 'Design' },
     /*
-     * THREE STUBS, AND THEY NOW SAY SO.
+     * TWO STUBS REMAIN, AND THEY NOW SAY SO.
      *
-     * Product, Development and Governance are compartments of the shell with nothing behind them
-     * yet: selecting one changed the tab and drew no section, so the person landed on an empty
+     * Development and Governance are compartments of the shell with nothing behind them yet:
+     * selecting one changed the tab and drew no section, so the person landed on an empty
      * column and could not tell an unbuilt compartment from a broken one. `disabled` is the
      * mechanism this row already had for exactly that — `title="Not wired up yet"`,
      * `aria-disabled`, `cursor-default`, and no click effect — and it was here, unused.
@@ -106,8 +106,12 @@ export default function LeftColumnHeader({
      * be stubs. They shouldn't do anything at this time."* They stay VISIBLE and in their order,
      * because the shell is the compartments and a reader should see what is coming; what stops is
      * the pretence that the click opens something.
+     *
+     * PRODUCT LEFT THIS SET (2026-10-03): it is a real room — its own branch,
+     * `render-product`, its own renderer — so it takes the click like Console, Composer and
+     * Design do.
      */
-    { id: 'product', label: 'Product', disabled: true },
+    { id: 'product', label: 'Product' },
     { id: 'development', label: 'Development', disabled: true },
     { id: 'governance', label: 'Governance', disabled: true },
   ];

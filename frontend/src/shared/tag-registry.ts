@@ -1309,19 +1309,37 @@ export const TAG_REGISTRY = {
     surface: 'composer',
     column: 'middle',
     description:
-      'The wireframe DRAFTING view for the output column — a restricted assembly surface where real, registered components are placed on a grid. It is a VIEW and fetches nothing: the layout arrives as one data-model binding (a flat node list plus a positions map), and `resolveTag` is the one reader that turns a component NAME into a tag, so the view cannot draw a component the catalogue does not declare. A name the catalogue refuses is drawn as a SENTENCE on the node, by name — never a blank frame, never a substitute. NOT the execution canvas: <agent-flow> draws the RUN (rows, steps, connectors) from the prompt and the run\'s facts; this draws a layout a person is assembling.',
+      'The wireframe DRAFTING stage — a restricted assembly surface where real, registered components are placed on a grid. SEATED IN TWO ROOMS (2026-10-03): the Composer\'s output column as its third view (behind the view selector) and the Product room\'s stage. It is a VIEW and fetches nothing: the layout arrives as one data-model binding (a flat node list plus a positions map), and `resolveTag` is the one reader that turns a component NAME into a tag, so the view cannot draw a component the catalogue does not declare. A name the catalogue refuses is drawn as a SENTENCE on the node, by name — never a blank frame, never a substitute. NOT the execution canvas: <agent-flow> draws the RUN (rows, steps, connectors) from the prompt and the run\'s facts; this draws a layout a person is assembling.',
     props: {
       draft: { type: 'object', optional: true },
       theme: { type: 'string', optional: true },
+      palette: { type: 'array', optional: true },
     },
-    events: ['draft-select', 'draft-node-moved'],
+    events: ['draft-select', 'draft-node-moved', 'draft-node-added'],
     constraints: [
       'a view, not a source: the whole layout arrives as one data-model binding',
       'nothing is drawn that the catalogue does not resolve — an unresolved name is SAID on the node',
       'a node\'s props are set as PROPERTIES on the mounted element (an object prop cannot ride an attribute)',
       'ITS OWN EVENT NAMES (draft-select, draft-node-moved): both canvases can be in the same room and the host listens on window — one name for two facts would make the run canvas answer a draft gesture',
       'placements: the element owns the live drag, the payload owns the model — one writer for a place, and a rebuild never moves what a hand has placed',
-      'PLANNED (2026-10-02): reached through the output column selector as its third view; the palette (which catalogue components may be placed) and the store (prompt_artifacts, keyed by conversation) are decided, not yet built — see wireframe-lab/PLAN.md',
+      'the store is BUILT (2026-10-02): prompt_artifacts keyed by conversation, one row replaced, written on gesture end — the host is the single writer; the blueprint is wireframe-lab/PRODUCT-ROOM.md',
+      'the tray: when a `palette` is bound, the stage draws its + Add picker whose list IS that palette — an add announces `draft-node-added` and the host folds and writes it, exactly as a drag announces `draft-node-moved`; with no palette bound (the Composer seat), no tray is drawn',
+    ],
+  },
+  'design-system-picker': {
+    tag: 'design-system-picker',
+    surface: 'composer',
+    column: 'right',
+    description:
+      'THE PRODUCT ROOM CONTEXT STRIP \u2014 which design system the stage draws from. Implemented by <design-system-picker> in src/components/lit/design-system-picker.ts. One row at the top of her panel (the seat view slot): the catalogues that exist (the server hands the list from the directory, so a partition that does not exist cannot be offered) and the one this package chose. Choosing dispatches `design-system-chosen` and writes nothing \u2014 the host persists the fact (metadata.design_system, the key design_system_of reads) and re-assembles the room, which re-hands the stage its system and its palette. With no list it SAYS the read failed; with no choice it says none is chosen yet \u2014 absent is a real answer, never a blank.',
+    props: {
+      catalogues: { type: 'array', optional: true },
+      selected: { type: 'string', optional: true },
+    },
+    events: ['design-system-chosen'],
+    constraints: [
+      'the element writes nothing: one fact, one writer \u2014 the host persists it and re-assembles the room',
+      'drawn only where the room binds it (the Product seat view slot \u2014 the one content hole the design left, shared with the console repair rows)',
     ],
   },
   'agent-canvas': {

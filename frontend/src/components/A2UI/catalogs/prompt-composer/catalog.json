@@ -293,9 +293,10 @@
               "enum": [
                 "console",
                 "composer",
-                "evaluation",
-                "variables",
-                "metadata"
+                "design",
+                "product",
+                "development",
+                "governance"
               ],
               "default": "console",
               "description": "Which slot the sandbox exposes."
@@ -309,6 +310,7 @@
       "unevaluatedProperties": false
     },
     "Text": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -352,6 +354,7 @@
       "unevaluatedProperties": false
     },
     "Image": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -407,6 +410,7 @@
       "unevaluatedProperties": false
     },
     "Row": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -459,6 +463,7 @@
       "unevaluatedProperties": false
     },
     "Column": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -511,6 +516,7 @@
       "unevaluatedProperties": false
     },
     "Card": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -539,6 +545,7 @@
       "unevaluatedProperties": false
     },
     "Button": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -1464,6 +1471,82 @@
         "component"
       ]
     },
+    "draft-canvas": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE WIREFRAME DRAFTING STAGE \u2014 a restricted assembly surface where real, registered components are placed on a grid. Implemented by <draft-canvas> in src/components/lit/draft-canvas.ts. It is a VIEW and fetches nothing: the layout arrives as one data-model binding (a flat node list plus a positions map), and `resolveTag` is the one reader that turns a component NAME into a tag, so the stage cannot draw a component the catalogue does not declare \u2014 an unresolved name is drawn as a SENTENCE on the node, by name. It is seated in two rooms (2026-10-03): the Composer's output column as its third view, and the Product room's stage. Its gestures are its own \u2014 `draft-select` and `draft-node-moved`, deliberately not the run canvas's names \u2014 and the host is the single writer: one drag, one write on gesture end.",
+          "properties": {
+            "component": {
+              "const": "draft-canvas"
+            },
+            "draft": {
+              "type": "object",
+              "description": "The whole layout: {label, nodes, positions} \u2014 a flat node list (one registered component per node, names resolved through the catalogue) plus a positions map {id \u2192 {x, y}}. The positions are the one thing A2UI has no notion of; they ride in the same payload as data."
+            },
+            "theme": {
+              "type": "string",
+              "description": "Accepted and optional; unset draws under the app's own theme."
+            },
+            "system": {
+              "type": "string",
+              "description": "The chosen design system this draft draws from. A HOST-WRITTEN property (like the header's view), never a tree binding: the host loads the session's metadata.design_system before the tree names any component and fails loud if it cannot read it."
+            },
+            "palette": {
+              "type": "array",
+              "description": "The draft-safe palette: one {name, description} per catalogue entry marked draft: true, computed by the server from the SAME filter the compiler reads \u2014 one reader, two uses (the tray lists it; the compile prompt is bounded by it). Bound to /session/palette; with it bound, the stage draws its + Add picker."
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
+    "design-system-picker": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE PRODUCT ROOM CONTEXT STRIP \u2014 which design system the stage draws from. Implemented by <design-system-picker> in src/components/lit/design-system-picker.ts. One row at the top of her panel (the seat's view slot): the catalogues that exist (bound from the server, which reads the directory) and the one this package chose. Choosing dispatches `design-system-chosen`; the host writes the fact and re-assembles. It writes nothing itself.",
+          "properties": {
+            "component": {
+              "const": "design-system-picker"
+            },
+            "catalogues": {
+              "type": "array",
+              "description": "The partitions that exist, one {system, count} per catalogue \u2014 bound to /session/catalogues."
+            },
+            "selected": {
+              "type": "string",
+              "description": "The one this package chose ('' = never chose, a real answer) \u2014 bound to /session/design_system."
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
     "figma-layers-view": {
       "type": "object",
       "allOf": [
@@ -2011,6 +2094,7 @@
       ]
     },
     "f-40001204-5752": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -2041,6 +2125,7 @@
       ]
     },
     "f-40001207-3497": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -2065,6 +2150,7 @@
       ]
     },
     "f-40001207-3559": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {
@@ -2114,6 +2200,7 @@
       ]
     },
     "f-40001206-2888": {
+      "draft": true,
       "type": "object",
       "allOf": [
         {

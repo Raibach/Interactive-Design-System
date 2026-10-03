@@ -459,6 +459,30 @@ export default function Index({
   const [currentDesignSession, setCurrentDesignSession] = useState<Record<string, any> | null>(null);
 
   /*
+   * THE PRODUCT ROOM'S OWN STATE (2026-10-03) — the same shape and the same law as Design's:
+   * this room's assembly writes THESE two, and no path from Products writes the Composer's
+   * `currentPromptSession`. A PRODUCT SESSION IS A PACKAGE (title, owners, conversations,
+   * saving — exactly the Composer's data shape); `currentProductSession` is "which package is
+   * open"; the draft the stage draws arrives INSIDE the tree's data model at
+   * `/session/draft` — the server reads it before the tree names the element, so a failed
+   * read can never draw as an empty stage.
+   */
+  const [productTree, setProductTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
+    { components: [], dataModel: {} },
+  );
+  const [currentProductSession, setCurrentProductSession] = useState<Record<string, any> | null>(null);
+  /* Read by the long-lived drag listener below — a listener registered once keeps the render
+     it was registered on, so it reads THROUGH the ref (the file's own rule for Save). */
+  const currentProductSessionRef = useRef<Record<string, any> | null>(null);
+  /* The drag listener's payload copy for THIS room — kept by the product renderer effect from
+     the assembly's own read (the server read it BEFORE the tree named the element). */
+  const productDraftPayloadRef = useRef<{
+    label?: string;
+    nodes: Array<Record<string, unknown>>;
+    positions?: Record<string, { x: number; y: number }>;
+  } | null>(null);
+
+  /*
    * THE ROOM'S CONTAINER, ONCE IT EXISTS — THE TARGET OF THE INJECTION.
    *
    * The design surface is a CONTAINER: `workspace-layout`, with `left`, `middle` and `right`
@@ -606,11 +630,20 @@ export default function Index({
    * and `right` with the rail, the output and Grace — so the architecture is reused and the
    * contents are the ingest's rather than the Composer's.
    */
-  const SECTION_TABS = ['product', 'development', 'governance'];
+  /*
+   * PRODUCT LEFT THIS LIST (2026-10-03) — the list's own promise, kept: *"the day one of them
+   * is designed it leaves this list and nothing else moves."* Product is a real room now: its
+   * own branch in the tab handler, its own assembly (`render-product`), its own renderer.
+   * Development and Governance remain, exactly as before.
+   */
+  const SECTION_TABS = ['development', 'governance'];
   const isSectionShell = SECTION_TABS.includes(headerTab || '');
 
   /*
-   * DEAD TABS — Product, Development and Governance are STUBS, and they are dead on purpose.
+   * DEAD TABS — Development and Governance are STUBS, and they are dead on purpose.
+   * (PRODUCT LEFT THIS SET on 2026-10-03: it is a real room now — handler branch,
+   * `render-product`, its own renderer — and a room is not a stub. The instruction below
+   * still holds, word for word, for the two that remain.)
    *
    * The owner, 2026-09-30: *"I want to just disable. We don't have to un-wire it. We just need to
    * make it not display. Just make them dead… product, development and governance should not load
@@ -965,6 +998,8 @@ export default function Index({
   const composerRendererRef = useRef<any>(null);
   /* DESIGN'S OWN RENDERER — a separate instance, never the Composer's with a swapped tree. */
   const designRendererRef = useRef<any>(null);
+  /* AND THE PRODUCT ROOM'S — the same rule, one room further (2026-10-03). */
+  const productRendererRef = useRef<any>(null);
 
   // Preload the composer background at mount so a transition never paints a
   // half-decoded image in sections. The browser fetches and decodes it eagerly
@@ -1967,6 +2002,31 @@ export default function Index({
     requestAnimationFrame(write);
   }, []);
 
+  /*
+   * PRODUCT'S OWN RENDERER (2026-10-03) — a third instance, same catalogue, same resolver.
+   * Simpler than Design's: no portals, no preview column. What it DOES carry beyond the
+   * tree assignment, both from the assembly's own data model:
+   *
+   *  · THE STAGE IS TOLD WHICH SYSTEM IT DRAWS FROM — a live property write, like the
+   *    header's view (the renderer does not re-hand props on a components change). '' is
+   *    honest: this package never chose a design system.
+   *  · THE DRAG LISTENER'S PAYLOAD REF is kept here, from the same read the server made
+   *    BEFORE the tree named the element — a missing draft stores null (no drag can fold
+   *    into a payload that does not exist).
+   *
+   * IT LIVES HERE, not beside the other renderer effects, because its deps array evaluates at
+   * render time and `writeDraftSystem` is a const declared below them (tsc's TS2448, measured).
+   */
+  useEffect(() => {
+    const el = productRendererRef.current;
+    if (!el) return;
+    el.components = productTree.components;
+    el.dataModel = productTree.dataModel;
+    const model = (productTree.dataModel ?? {}) as Record<string, any>;
+    writeDraftSystem(String((model.session ?? {}).design_system || ''));
+    productDraftPayloadRef.current = ((model.session ?? {}).draft ?? null);
+  }, [productTree, writeDraftSystem]);
+
   /**
    * S2'S FRONTEND HALF — THE LOOP THAT MAKES THE DRAFT REMEMBER.
    *
@@ -2058,6 +2118,130 @@ export default function Index({
     window.addEventListener('draft-node-moved', onDraftNodeMoved);
     return () => window.removeEventListener('draft-node-moved', onDraftNodeMoved);
   }, [writeDraftPayload, sayInThread]);
+
+  /*
+   * THE PRODUCT ROOM'S DRAFT PAYLOAD — the drag listener's own copy, folded and PUT the same
+   * way the Composer's is (ONE DRAG, ONE WRITE; the host is the single writer). The ref is
+   * kept by the product renderer effect from the assembly's read; the guard on `payload`
+   * means the Composer's listener and this one can each stand down for the other's canvas
+   * (only one room's ref is ever set), so one drag can never write twice.
+   */
+  const writeProductDraftPayload = useCallback((payload: unknown): void => {
+    setProductTree((prev) => {
+      const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
+      const session = { ...((model.session ?? {}) as Record<string, any>) };
+      session.draft = payload;
+      model.session = session;
+      return { ...prev, dataModel: model };
+    });
+  }, []);
+
+  useEffect(() => {
+    const onProductDraftNodeMoved = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as {
+        nodeId?: unknown; x?: unknown; y?: unknown;
+      };
+      const nodeId = typeof detail.nodeId === 'string' ? detail.nodeId : '';
+      const at = (typeof detail.x === 'number' && typeof detail.y === 'number')
+        ? { x: detail.x, y: detail.y }
+        : null;
+      const payload = productDraftPayloadRef.current as DraftPayloadShape | null;
+      if (!nodeId || !at || !payload) return;
+      const next: DraftPayloadShape = {
+        ...payload,
+        positions: { ...(payload.positions ?? {}), [nodeId]: at },
+      };
+      productDraftPayloadRef.current = next;
+      // The model follows the drag immediately — the payload and the drawing stay one fact.
+      writeProductDraftPayload(next);
+      const conversationId = String((currentProductSessionRef.current?.conversation_id) || '');
+      if (!conversationId) {
+        sayInThread('That drag was not saved: this wireframe session has no conversation to keep its draft in.');
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(next),
+            },
+          );
+          if (!res.ok) {
+            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
+            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
+          }
+        } catch (err) {
+          sayInThread(
+            'That drag was not saved to this conversation: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      })();
+    };
+    const onProductDraftNodeAdded = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as {
+        nodeId?: unknown; component?: unknown; x?: unknown; y?: unknown;
+      };
+      const nodeId = typeof detail.nodeId === 'string' ? detail.nodeId : '';
+      const component = typeof detail.component === 'string' ? detail.component : '';
+      const at = (typeof detail.x === 'number' && typeof detail.y === 'number')
+        ? { x: detail.x, y: detail.y }
+        : null;
+      if (!nodeId || !component || !at) return;
+      /*
+       * AN ADD ON AN EMPTY STAGE IS A REAL PAYLOAD'S FIRST NODE — no draft row exists yet, so
+       * the base is built here in the store's own shape. The element announced; the host folds
+       * and writes (one write, at the gesture's end), and the model the element draws follows.
+       * THE NAME IS NOT RE-CHECKED HERE: the tray's list IS the server-computed palette, so a
+       * name it cannot offer cannot arrive — and if one ever did, the stage draws the
+       * catalogue's refusal sentence on the node rather than this handler inventing a rule.
+       */
+      const payload = (productDraftPayloadRef.current as DraftPayloadShape | null) ?? { nodes: [], positions: {} };
+      if (payload.nodes.some((n) => (n as Record<string, unknown>).id === nodeId)) return;
+      const next: DraftPayloadShape = {
+        ...payload,
+        nodes: [...payload.nodes, { id: nodeId, component }],
+        positions: { ...(payload.positions ?? {}), [nodeId]: at },
+      };
+      productDraftPayloadRef.current = next;
+      writeProductDraftPayload(next);
+      const conversationId = String((currentProductSessionRef.current?.conversation_id) || '');
+      if (!conversationId) {
+        sayInThread('That component was not saved: this wireframe session has no conversation to keep its draft in.');
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(next),
+            },
+          );
+          if (!res.ok) {
+            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
+            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
+          }
+        } catch (err) {
+          sayInThread(
+            'That component was not saved to this conversation: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      })();
+    };
+    window.addEventListener('draft-node-moved', onProductDraftNodeMoved);
+    window.addEventListener('draft-node-added', onProductDraftNodeAdded);
+    return () => {
+      window.removeEventListener('draft-node-moved', onProductDraftNodeMoved);
+      window.removeEventListener('draft-node-added', onProductDraftNodeAdded);
+    };
+  }, [writeProductDraftPayload, sayInThread]);
 
   /**
    * The views a column can show in each state.
@@ -3879,6 +4063,19 @@ export default function Index({
   };
 
   const handleOpenPromptFromConsole = async (sessionId: string) => {
+    /*
+     * A CARD OPENS THE ROOM THAT OWNS IT (2026-10-03). The console's card data carries each
+     * package's room (`room_domain`): a product card opens the Product room, and every other
+     * card routes exactly where it always has — the Composer. The room's assembly announces
+     * its own arrival (see `assembleProductSurface`), so this path holds no second record.
+     */
+    const openedCard = assembledConsoleCards?.find((c) => String(c?.id) === String(sessionId));
+    if (openedCard?.room_domain === 'product') {
+      console.log(`🤖 [A2UI] Product card → intent: render-product:${sessionId}`);
+      handleHeaderTabChange('product');
+      await assembleProductSurface(String(sessionId));
+      return;
+    }
     // ══════════════════════════════════════════════════════════════════════════
     // A2UI v0.9: Open session via unified surface assembly
     // ══════════════════════════════════════════════════════════════════════════
@@ -4798,6 +4995,99 @@ export default function Index({
       setIsAIAssembling(false);
     }
   }, []);
+
+  /*
+   * THE PRODUCT ROOM'S OWN ASSEMBLY (2026-10-03) — Design's shape, aimed at
+   * `render-product:{id}`. It writes `productTree` and `currentProductSession` and NOTHING
+   * else: `currentPromptSession` is not in its body, so no path from Product can write the
+   * Composer's state. The arrival is recorded AND announced one frame after the tree lands
+   * — the same ordering Design's own note explains at length: the seat must have THIS
+   * room's words before it answers an arrival.
+   */
+  const assembleProductSurface = useCallback(async (sessionId?: string): Promise<void> => {
+    setIsAIAssembling(true);
+    try {
+      /*
+       * THE STAGE'S ELEMENT MUST EXIST BEFORE THE TREE NAMES IT — found by driving, 2026-10-03:
+       * the room assembled and the stage drew a refusal sentence ABOUT ITSELF ("Resolved to
+       * <draft-canvas>, which no element defines — nothing was drawn"). The Composer's draft
+       * view awaits this same lazy import before its tree-write (`loadDraftElements`, whose own
+       * note states the rule); the product path now does the same. A failure here throws before
+       * any tree is set, so the room never draws a stage it cannot fill.
+       */
+      await loadDraftElements();
+      /*
+       * WITH NO ID THE SERVER IS THE DOOR: `render-product` alone is the room's own
+       * get-or-create — the most recent product package, or one born for this arrival
+       * (the console room's and the design room's own shape). The tab click sends exactly
+       * that; a card click sends the package it opened.
+       */
+      const response = await apiFetch(`${API_BASE}/ai/assemble-surface`, {
+        method: "POST",
+        body: JSON.stringify({ intent: sessionId ? `render-product:${sessionId}` : "render-product" }),
+      });
+      const rawData = await response.json();
+      const read = readA2UIEnvelope(rawData);
+      if (read.ok === false) {
+        console.error(`🤖 [A2UI] ENVELOPE REFUSED for render-product — ${read.refusal.code}: ${read.refusal.message}`);
+        throw envelopeRefusalError(read.refusal);
+      }
+      const reading = read.reading;
+      setProductTree({
+        components: reading.components as any[],
+        dataModel: reading.dataModel as Record<string, any>,
+      });
+      const productSession = (reading.dataModel as Record<string, any>)?.session ?? null;
+      setCurrentProductSession(productSession);
+      currentProductSessionRef.current = productSession;
+      window.requestAnimationFrame(() => {
+        const kind = productSession?.session_id ? 'resume' : 'blank';
+        const forSeat = productSession?.session_id ?? null;
+        markArrival(kind, forSeat);
+        window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
+          detail: { kind, sessionId: forSeat },
+        }));
+      });
+    } finally {
+      setIsAIAssembling(false);
+    }
+  }, []);
+
+  /*
+   * THE STRIP'S WRITE (2026-10-03) — `design-system-chosen` from the Product room. ONE fact,
+   * ONE WRITER: the host writes `metadata.design_system` (the session PUT MERGES jsonb — the
+   * row's other keys, room_domain included, survive), then re-assembles the room so the stage
+   * is re-handed its `system` and its `palette` — the two values that live outside the tree.
+   * A failed write is said in her thread, never swallowed.
+   */
+  useEffect(() => {
+    const onDesignSystemChosen = (event: Event) => {
+      const system = String(((event as CustomEvent).detail || {}).system || '');
+      const sessionId = String((currentProductSessionRef.current?.session_id) || '');
+      if (!system || !sessionId) return;
+      void (async () => {
+        try {
+          const res = await apiFetch(`${API_BASE}/prompt-sessions/${encodeURIComponent(sessionId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metadata: { design_system: system } }),
+          });
+          if (!res.ok) {
+            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
+            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
+          }
+          await assembleProductSurface(sessionId);
+        } catch (err) {
+          sayInThread(
+            'That design system was not saved: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      })();
+    };
+    window.addEventListener('design-system-chosen', onDesignSystemChosen);
+    return () => window.removeEventListener('design-system-chosen', onDesignSystemChosen);
+  }, [assembleProductSurface, sayInThread]);
 
   /*
    * ══ THE INGEST FORM IN THE ROOM, ANSWERED HERE ══════════════════════════════════════════════
@@ -5843,6 +6133,31 @@ export default function Index({
       return;
     }
 
+    if (tabId === 'product') {
+      /*
+       * PRODUCT GOES THROUGH ITS OWN PROCESS (2026-10-03) — the same shape as Design's above:
+       * the tab moves, the room's own assembly is asked, and nothing of the Composer's is
+       * called: no package adopted, no thread cleared, no `currentPromptSession` written.
+       *
+       * THE ROOM OPENS THE MOST RECENT PRODUCT PACKAGE. The console's cards already carry
+       * each package's room (`room_domain`, from the console's own read), so the door is a
+       * lookup in data that is already on screen. None → the honest empty state with the
+       * create door — never an assembly around nothing.
+       */
+      handleHeaderTabChange('product');
+      console.log('🤖 [A2UI] Product clicked → intent: render-product (its own process)');
+      /*
+       * THE CLICK IS THE DOOR (owner, 2026-10-03), and the door is the SERVER's — the SAME
+       * get-or-create the console room and the design room use: *"it should mirror how
+       * composer, and how console and how the design also create session packages — those
+       * packages in their structure are critical."* So the frontend asks for the room, and
+       * the server resolves WHICH session (the most recent product package, or one born for
+       * this arrival); no client-side creation, no empty state, no second question.
+       */
+      void assembleProductSurface();
+      return;
+    }
+
     if (SECTION_TABS.includes(tabId || '')) {
       /*
        * A SECTION ASSEMBLES, AND IT TOUCHES NOTHING OF THE COMPOSER'S.
@@ -5889,7 +6204,7 @@ export default function Index({
 
     // Other tabs - just switch for now (TODO: wire to AI assembly)
     handleHeaderTabChange(tabId);
-  }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab]);
+  }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab, assembleProductSurface]);
 
   // The copilot logo in the chat rail navigates back to the console — the same
   // path the Console header tab uses.
@@ -5897,6 +6212,22 @@ export default function Index({
     const onNavigateConsole = () => { void handleTabChangeWithGate('console'); };
     window.addEventListener('navigate-console', onNavigateConsole);
     return () => window.removeEventListener('navigate-console', onNavigateConsole);
+  }, [handleTabChangeWithGate]);
+
+  /*
+   * THE DRAWER'S HAND-OVER (2026-10-03). The mobile drawer receives `currentTab` and no switch
+   * callback, so a tab a person can actually open hands over through an event — the same device
+   * `navigate-console` already is. This routes it through the SAME gate every header click uses,
+   * so the drawer can never become a second, ungated way into a room.
+   */
+  useEffect(() => {
+    const onNavigateTab = (event: Event) => {
+      const tabId = String(((event as CustomEvent).detail || {}).tabId || '');
+      if (!tabId) return;
+      void handleTabChangeWithGate(tabId);
+    };
+    window.addEventListener('navigate-tab', onNavigateTab);
+    return () => window.removeEventListener('navigate-tab', onNavigateTab);
   }, [handleTabChangeWithGate]);
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -8582,7 +8913,9 @@ export default function Index({
                       ? null
                       : headerTab === 'design'
                         ? <a2ui-renderer key="design-render" ref={designRendererRef} />
-                        : <a2ui-renderer key="composer-render" ref={composerRendererRef} />)
+                        : headerTab === 'product'
+                          ? <a2ui-renderer key="product-render" ref={productRendererRef} />
+                          : <a2ui-renderer key="composer-render" ref={composerRendererRef} />)
                   )}
                   {/*
                     ══ THE INJECTION ═══════════════════════════════════════════════════════

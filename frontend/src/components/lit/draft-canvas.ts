@@ -12,7 +12,8 @@
  * picker. This one draws a LAYOUT a person is assembling: components at places. The two share the
  * rendering engine (Vue Flow) and the gesture discipline, and nothing else.
  *
- * WHY ITS EVENTS HAVE THEIR OWN NAMES — `draft-select` and `draft-node-moved`, not `flow-select`
+ * WHY ITS EVENTS HAVE THEIR OWN NAMES — `draft-select`, `draft-node-moved` and
+ * `draft-node-added`, not `flow-select`
  * and `flow-node-moved`. Both canvases can exist in the same room (the output column switches
  * between them), and the host listens on `window`: one name for two facts would make the execution
  * handlers answer a draft's gestures, and the draft's autosave write fire on a run drawing's drag.
@@ -74,6 +75,13 @@ export class DraftCanvas extends LitElement {
      * are resolved against.
      */
     system: { type: String, attribute: 'system', reflect: true },
+    /**
+     * THE TRAY'S LIST — the draft-safe palette of the chosen catalogue, bound by the host
+     * (/session/palette; the SERVER computes it from the same filter the compiler reads).
+     * With it bound the stage draws its + Add picker; with none (the Composer's seat), no
+     * tray — a control that cannot work is not drawn.
+     */
+    palette: { type: Array, attribute: false },
     /** Protected: the selection is the operator's, never the payload's. */
     selectedId: { type: String, attribute: false },
   };
@@ -81,6 +89,7 @@ export class DraftCanvas extends LitElement {
   declare draft: DraftPayload | undefined;
   declare theme: string;
   declare system: string;
+  declare palette: Array<{ name: string; description?: string }>;
   declare selectedId: string | null;
 
   private _vue: VueFlowCanvas | null = null;
@@ -92,12 +101,14 @@ export class DraftCanvas extends LitElement {
   private _zoom = 1;
   private _panX = 0;
   private _panY = 0;
+  private _pickerOpen = false;
 
   constructor() {
     super();
     this.draft = undefined;
     this.theme = '';
     this.system = '';
+    this.palette = [];
     this.selectedId = null;
   }
 
@@ -208,6 +219,34 @@ export class DraftCanvas extends LitElement {
     }));
   }
 
+  private _togglePicker = (e: Event): void => {
+    e.stopPropagation();
+    this._pickerOpen = !this._pickerOpen;
+    this.requestUpdate();
+  };
+
+  /**
+   * ADD A COMPONENT — the tray's one gesture, and it ANNOUNCES rather than writes: the element
+   * does not own the payload (the model does, and the host is the single writer), so an add
+   * dispatches `draft-node-added` with the node and its place, exactly as a drag dispatches
+   * `draft-node-moved`. The host folds it into the payload and persists it.
+   *
+   * THE PLACE IS THE SEED RULE (`_seedFor`) — a new node lands where an item with that index
+   * reads, deterministic, never a hidden default. The ID is derived the same way and checked
+   * against the payload, so `n-1` is never handed out twice.
+   */
+  private _addNode(name: string): void {
+    const nodes = this.draft?.nodes ?? [];
+    let k = nodes.length + 1;
+    while (nodes.some((n) => n.id === `n-${k}`)) k += 1;
+    const at = this._seedFor(nodes.length);
+    this._pickerOpen = false;
+    this.dispatchEvent(new CustomEvent('draft-node-added', {
+      bubbles: true, composed: true,
+      detail: { nodeId: `n-${k}`, component: name, x: at.x, y: at.y },
+    }));
+  }
+
   disconnectedCallback(): void {
     this._vue?.unmount();
     this._vue = null;
@@ -269,8 +308,30 @@ export class DraftCanvas extends LitElement {
           class="vue-host"
           ${ref((el) => { this._vueHost = (el as HTMLElement | undefined) ?? null; })}
         ></div>
+        ${this.palette && this.palette.length > 0
+          ? html`
+              <div class="tray" @pointerdown=${(e: PointerEvent) => e.stopPropagation()}>
+                <button
+                  class="tray-btn"
+                  type="button"
+                  aria-expanded=${this._pickerOpen ? 'true' : 'false'}
+                  @click=${this._togglePicker}
+                >+ Add</button>
+                ${this._pickerOpen
+                  ? html`
+                      <div class="tray-menu" role="listbox" aria-label="Draft-safe components">
+                        ${this.palette.map((item) => html`
+                          <button class="tray-item" type="button" role="option" @click=${() => this._addNode(item.name)}>
+                            <span class="tray-name">${item.name}</span>
+                            ${item.description ? html`<span class="tray-desc">${item.description}</span>` : nothing}
+                          </button>
+                        `)}
+                      </div>`
+                  : nothing}
+              </div>`
+          : nothing}
         ${!draft || draft.nodes.length === 0
-          ? html`<div class="empty" role="status">Nothing drafted yet. A layout appears here.</div>`
+          ? html`<div class="empty" role="status">Nothing drafted yet. Add a component from the palette, and drag it where it belongs.</div>`
           : nothing}
       </div>
     `;
@@ -326,6 +387,35 @@ export class DraftCanvas extends LitElement {
         color: var(--ds-muted); font-size: var(--ds-fs-md);
         pointer-events: none;
       }
+
+      /* THE TRAY — the one control this element adds, and it is drawn ONLY when a palette is
+         bound (see the property). Colors carry fallbacks: the tokens this app defines are used
+         where they exist, and nothing here invents a variable the theme may not hold. */
+      .tray { position: absolute; top: 12px; left: 12px; z-index: 4; }
+      .tray-btn {
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 13px; font-weight: 600;
+        color: var(--ds-ink, #234354); background: var(--ds-surface);
+        border: 1px solid var(--ds-rule); border-radius: var(--ds-radius);
+        padding: 6px 12px; cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+      }
+      .tray-btn:hover { background: rgba(0, 0, 0, 0.04); }
+      .tray-menu {
+        position: absolute; top: 36px; left: 0;
+        width: 280px; max-height: 320px; overflow: auto;
+        background: var(--ds-surface);
+        border: 1px solid var(--ds-rule); border-radius: var(--ds-radius);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+      }
+      .tray-item {
+        display: flex; flex-direction: column; gap: 2px;
+        width: 100%; padding: 8px 10px; text-align: left;
+        background: none; border: 0; cursor: pointer;
+      }
+      .tray-item:hover { background: rgba(0, 0, 0, 0.05); }
+      .tray-name { font-family: 'Inter', system-ui, sans-serif; font-size: 13px; color: var(--ds-ink, #234354); }
+      .tray-desc { font-family: 'Inter', system-ui, sans-serif; font-size: 11px; color: var(--ds-muted); }
     `,
   ];
 }
