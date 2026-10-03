@@ -2226,6 +2226,19 @@ export class ChatPanel extends LitElement {
      */
     if (resultsAreTheReading(this._thread)) return;
     const once = () => {
+      // SEAT THE CURRENT EXCHANGE, NOT ITS TAIL (2026-10-03 — the owner: *"the question
+      // should set at the top… so that the user can start reading the response at its
+      // beginning instead of picking it up at the end where it currently loads."*). The
+      // thread element owns the seating — it is the element that knows where the question
+      // is; this only asks for it. A thread that cannot seat (no such element) keeps the
+      // old follow-to-bottom.
+      const thread = this.renderRoot?.querySelector('chat-messages') as
+        | (HTMLElement & { seatConversation?: () => void })
+        | null;
+      if (thread?.seatConversation) {
+        thread.seatConversation();
+        return;
+      }
       const scroller = this._scrollerEl();
       if (scroller) scroller.scrollTop = scroller.scrollHeight;
     };
