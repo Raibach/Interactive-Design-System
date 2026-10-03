@@ -349,6 +349,35 @@ export class ChatMessages extends LitElement {
     return raw === 'user' || raw === 'question' ? 'user' : 'assistant';
   }
 
+  /** The message count the view was last seated against — see `seatConversation` below. */
+  private _seatCount = -1;
+
+  /**
+   * SEAT THE CONVERSATION AT THE HEAD OF ITS CURRENT EXCHANGE (the owner, 2026-10-03).
+   *
+   * A long answer used to open at its TAIL — *"so that the user can start reading the
+   * response at its beginning instead of picking it up at the end where it currently
+   * loads."* The current question goes to the TOP of the viewport (it draws clamped to two
+   * lines; see <user-response-bubble>, which the owner asked for in the same breath), and
+   * the answer reads from its beginning below — the rule the results already had ("A RUN'S
+   * RESULTS OPEN AT THEIR HEAD"), applied to the conversational thread. No user turn at all
+   * (a results-only or brand-new thread) keeps the old behaviour: the newest words in view.
+   */
+  seatConversation(): void {
+    const thread = this.renderRoot?.querySelector('.thread');
+    if (!thread) return;
+    const userTurns = thread.querySelectorAll('.turn.user');
+    const last = userTurns.length ? (userTurns[userTurns.length - 1] as HTMLElement) : null;
+    if (!last) {
+      const root = thread.parentElement;
+      if (root) root.scrollTop = root.scrollHeight;
+      return;
+    }
+    const reduce = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    last.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }
+
   /**
    * GRACE'S WORDS AS A PERSON PRINTS THEM — and the buttons those words carry. The control
    * tags come out (pipeline instructions, see shared/plainText), the markers are made plain,
@@ -411,7 +440,6 @@ export class ChatMessages extends LitElement {
     }
     if (changed.has('messages')) {
       const list = this.messages ?? [];
-      const root = thread.parentElement;
       /*
        * A RUN'S RESULTS OPEN AT THEIR HEAD, NOT AT THEIR TAIL. When the thread's
        * newest turn is a result (the run's conversation just loaded, or the results
@@ -442,9 +470,16 @@ export class ChatMessages extends LitElement {
          */
         return;
       }
-      // Nothing marked, nothing to follow: a new conversational turn keeps the
-      // newest words in view.
-      if (root) root.scrollTop = root.scrollHeight;
+      // THE CURRENT EXCHANGE OPENS AT ITS HEAD (2026-10-03) — the question to the top, the
+      // answer read from its beginning; see `seatConversation`. SEATED ON GROWTH ONLY: a
+      // streaming answer is never re-yanked to the top while it is being read, and
+      // content-only updates leave the view where the person put it (the clamp lesson,
+      // 2026-09-24). No user turn anywhere falls back to the oldest behaviour — newest
+      // words in view.
+      if (list.length !== this._seatCount) {
+        this._seatCount = list.length;
+        this.seatConversation();
+      }
     }
   }
 
