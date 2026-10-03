@@ -293,9 +293,10 @@
        "enum": [
         "console",
         "composer",
-        "evaluation",
-        "variables",
-        "metadata"
+        "design",
+        "product",
+        "development",
+        "governance"
        ],
        "default": "console",
        "description": "Which slot the sandbox exposes."

@@ -37,6 +37,7 @@ class PromptSessionsAPI:
         user_id: str,
         title: str = "Untitled Prompt Session",
         description: str | None = None,
+        room_domain: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a new prompt session with associated conversation
@@ -71,6 +72,24 @@ class PromptSessionsAPI:
                     """,
                     (session_id, user_id, user_id, session_id, user_id),
                 )
+
+                # A PACKAGE'S ROOM (2026-10-03, PRODUCT-ROOM.md §2). The room's creation
+                # path is the one writer of this fact: a package born in the Product room
+                # carries room_domain 'product'; the Composer's carries 'composer'.
+                # ABSENT IS A REAL ANSWER — every package that existed before this has no
+                # room and keeps belonging where it has always been. The readers ship
+                # with the writer: the console's card data carries it, and a card click
+                # routes to the room that owns the package.
+                if room_domain:
+                    cursor.execute(
+                        """
+                        UPDATE prompt_sessions
+                        SET metadata = COALESCE(metadata, '{}'::jsonb)
+                            || jsonb_build_object('room_domain', %s::text)
+                        WHERE id = %s
+                        """,
+                        (room_domain, session_id),
+                    )
 
                 # Get the created session
                 cursor.execute(

@@ -1777,6 +1777,11 @@ export class ChatPanel extends LitElement {
     }
     .chat-top ::slotted(*) { display: none; }
     .chat-top ::slotted(chat-repair-actions) { display: block; }
+    /* AND THE ROOMS' OWN VIEWS DRAW — the allow-list above is what keeps this hole to KNOWN
+       views only (2026-10-03: the Product room's context strip was assigned, projected, and
+       then hidden here — measured on the live page as a zero-sized element). A room's view
+       joins the list the day the room exists, named, nothing else admitted. */
+    .chat-top ::slotted(design-system-picker) { display: block; }
     /* THE FILED INSPECTIONS, UNDER APPROVALS — the governance reports as cards, not chat turns:
        the header in the header's cream, the attention rows in amber, the ok rows in green. */
     .inspection-reports { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 10px; }
@@ -2004,6 +2009,42 @@ export class ChatPanel extends LitElement {
     return Array.from(this.children).some(
       (el) => el.getAttribute('slot') === 'view' && el.tagName.toLowerCase() === wanted,
     );
+  }
+
+  /**
+   * IS A FOREIGN VIEW ASSIGNED — a view this seat's own tabs do not name.
+   *
+   * The Product room binds its context strip (design-system-picker) into this hole, and the
+   * seat's `_wantedViewTag` knows only its own views (trace-feed, eval-feed, chat-repair-actions),
+   * so the strip is neither "wanted" nor wrong — it is a ROOM's furniture in the hole the
+   * design left open ("holds plain text output and inserted functions"). This asks the narrow
+   * question that lets it draw above her thread on the Chat tab WITHOUT changing any other
+   * seat: are any assigned view elements tags this seat does not own? The composer's seat
+   * assigns trace/eval views — all known — so nothing changes there; the console's repair
+   * rows are known too. The two assignment checks mirror `_viewSlotted`'s own.
+   */
+  private _anyForeignViewAssigned(): boolean {
+    const known = new Set(['trace-feed', 'eval-feed', 'chat-repair-actions']);
+    const tags = new Set<string>();
+    const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
+    for (const n of assigned) {
+      if (n.nodeType === Node.ELEMENT_NODE) tags.add((n as Element).tagName.toLowerCase());
+    }
+    for (const el of Array.from(this.children)) {
+      if (el.getAttribute('slot') === 'view' && el.tagName.toLowerCase() !== 'slot') tags.add(el.tagName.toLowerCase());
+    }
+    return [...tags].some((t) => !known.has(t));
+  }
+
+  /**
+   * DOES THIS TAB DRAW A VIEW ABOVE THE THREAD. Two cases, one place: the console's repair
+   * rows on Approvals (their own recorded rule), and a room's foreign view on Chat (the
+   * Product room's context strip, 2026-10-03 — the room must open with its chooser visible,
+   * the same "never opens on a blank chat" the console's rows answer).
+   */
+  private _chatTopView(): boolean {
+    return (this.activeTab === 'approvals' && this._findingsSeat())
+      || (this.activeTab === 'chat' && this._anyForeignViewAssigned());
   }
 
   /**
@@ -4839,7 +4880,7 @@ export class ChatPanel extends LitElement {
                   <div class="content-scroll" @scroll=${this._onOutputScroll}>
                     <div class="content-header"><slot name="content-header"></slot></div>
                   ${this._showsThread
-                    ? html`${this.activeTab === 'approvals' && this._findingsSeat()
+                    ? html`${this._chatTopView()
                         ? html`<div class="chat-top">
                             <slot name="view" @slotchange=${this._onSlotChange}></slot>
                           </div>`
