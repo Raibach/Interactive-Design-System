@@ -242,6 +242,97 @@ script = '''<script id="house-patch-ground">
        (see the block above `run(set)`) — and the variable stays as the page's record of
        where its visitor came from, for whatever the next door-dependent piece needs. */
     var DOOR = (location.search.match(/[?&]house_door=([a-z]+)/) || [])[1] || "";
+    /* ── THE BETA MODEL POP-UP — RESTORED, WITHOUT THE SKIP (owner, 2026-10-04, last) ────────
+       Owner, walking the beta: *"Whenever somebody selects a model whether it's local or
+       whether it's in the cloud, it's supposed to show a little pop-up [that] says there is
+       no model to select in beta mode."* He is right, and it had been removed in the same cut
+       as the pass-through — the pop-up was never the problem; the SKIP was. So it is back,
+       hosted only (it is the beta's own truth; the Mac's workbench is not the beta), and it
+       does exactly one thing: a click on a tile in "Choose your agent" opens the notice and
+       goes no further — the click is intercepted in the capture phase, so nothing selects (a
+       per-visitor agent choice must not reach the one shared configuration), and BOTH
+       controls simply close it. NO ADVANCE, NO PINNING, NO PROFILE REPAIR: the wizard stays
+       exactly where the visitor left it, and walking the rest of it — the LLM parameters
+       screen included — is theirs to do through the vendor's own steps. (The pass-through
+       that used to follow Confirm stays deleted; the owner's zero-trust ruling above is why.) */
+    var BETA_MESSAGE =
+      "This beta runs on the hosted service with the provided model; sovereignty — your own " +
+      "models, local or cloud, on your own machine — arrives with the installed suite.";
+    var betaWizard = function () {
+      return document.querySelector("div.fixed.inset-0.flex.items-center.justify-center");
+    };
+    var betaHeading = function (wiz) {
+      /* EVERY SLIDE STAYS MOUNTED — only the ACTIVE one is in normal flow, the rest are
+         absolutely positioned (onboarding-modal.tsx). The active panel's heading is the
+         first heading with NO absolutely-positioned ancestor between it and the wizard. */
+      if (!wiz) return "";
+      var heads = wiz.querySelectorAll("h1,h2,h3");
+      for (var i = 0; i < heads.length; i++) {
+        var node = heads[i];
+        var inactive = false;
+        while (node && node !== wiz) {
+          if (getComputedStyle(node).position === "absolute") { inactive = true; break; }
+          node = node.parentElement;
+        }
+        if (!inactive) return heads[i].textContent;
+      }
+      return heads.length ? heads[0].textContent : "";
+    };
+    var betaModal = function () {
+      var box = document.getElementById("house-beta-consent");
+      if (box) return;
+      box = document.createElement("div");
+      box.id = "house-beta-consent";
+      box.setAttribute("style",
+        "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;" +
+        "justify-content:center;background:rgba(17,14,31,0.72);font-family:Inter,system-ui,sans-serif;");
+      box.innerHTML =
+        '<div style="width:430px;max-width:calc(100vw - 48px);box-sizing:border-box;' +
+        'background:#231f2e;border:1px solid rgba(255,255,255,0.08);border-radius:16px;' +
+        'padding:28px 28px 22px;box-shadow:0 32px 80px rgba(0,0,0,0.5);">' +
+        '<div style="font-size:16px;font-weight:800;color:#f5f0e8;margin-bottom:10px;">' +
+        "Beta model notice</div>" +
+        '<p style="font-size:13px;line-height:1.6;color:rgba(245,240,232,0.6);margin:0 0 20px;">' +
+        BETA_MESSAGE + "</p>" +
+        '<div style="display:flex;gap:10px;">' +
+        '<button type="button" data-house="cancel" style="flex:1;padding:10px;font-size:13px;' +
+        'font-weight:700;color:rgba(245,240,232,0.7);background:transparent;' +
+        'border:1px solid rgba(255,255,255,0.12);border-radius:9px;cursor:pointer;' +
+        'font-family:inherit;">Cancel</button>' +
+        '<button type="button" data-house="confirm" style="flex:1;padding:10px;font-size:13px;' +
+        'font-weight:700;color:#110E1F;background:#D4A0EE;border:none;border-radius:9px;' +
+        'cursor:pointer;font-family:inherit;">Confirm</button>' +
+        "</div></div>";
+      box.addEventListener("click", function (event) {
+        var el = event.target;
+        var act = el && el.getAttribute ? el.getAttribute("data-house") : null;
+        if (!act) return;
+        event.stopPropagation();
+        /* BOTH CONTROLS CLOSE IT, AND NOTHING ELSE HAPPENS — the skip that used to follow
+           Confirm is deleted on purpose (see the block's header). */
+        box.remove();
+      });
+      document.body.appendChild(box);
+    };
+    var betaNotice = function () {
+      if (!HOSTED) return;
+      if (window.__houseBetaNoticeHooked) return;
+      window.__houseBetaNoticeHooked = true;
+      document.addEventListener("click", function (event) {
+        var wiz = betaWizard();
+        if (!wiz || !wiz.contains(event.target)) return;
+        if (betaHeading(wiz).indexOf("Choose your agent") === -1) return;
+        var el = event.target;
+        while (el && el.tagName !== "BUTTON") el = el.parentElement;
+        if (!el) return;
+        var text = (el.textContent || "").trim();
+        if (text === "Skip for now" || text === "Back") return;
+        /* capture phase: React never sees the click, so nothing selects and Next never fires */
+        event.stopPropagation();
+        event.preventDefault();
+        betaModal();
+      }, true);
+    };
     var set = function () {
       if (document.body) document.body.style.setProperty("background", "transparent", "important");
       var ground = document.querySelector("div.dark.min-h-screen");
@@ -293,8 +384,9 @@ script = '''<script id="house-patch-ground">
     run(set); setTimeout(function () { run(set); }, 600);
     setTimeout(function () { run(set); }, 2200); setTimeout(function () { run(set); }, 4000);
     run(relabel); setTimeout(function () { run(relabel); }, 600);
+    run(betaNotice); setTimeout(function () { run(betaNotice); }, 1000);
     setTimeout(function () { run(relabel); }, 2200); setTimeout(function () { run(relabel); }, 4000);
-    new MutationObserver(function () { run(relabel); }).observe(document.documentElement, { childList: true, subtree: true });
+    new MutationObserver(function () { run(relabel); run(betaNotice); }).observe(document.documentElement, { childList: true, subtree: true });
   })();
 </script>'''
 script = script.replace("__HOUSE_HOSTED__", "true" if hosted == "1" else "false")

@@ -609,3 +609,14 @@ said plainly as PROVISIONING rather than suppression: the entrypoint's injected 
 model (what makes the workspace usable once the walk ends). Validated by running the patch
 against a copy of the build: the emitted index.html carries the ground script in canonical
 form, and the only mentions of the deleted functions are the deletion note itself.
+
+**AND THE BETA MODEL POP-UP CAME BACK — WITHOUT THE SKIP (same hour).** The cut above took
+the pop-up out with the machinery; the owner, walking the beta: *"Whenever somebody selects a
+model whether it's local or whether it's in the cloud, it's supposed to show a little pop-up
+[that] says there is no model to select in beta mode."* Right on both counts: the pop-up was
+never the problem; the SKIP was. Restored, hosted-only, stripped to exactly its one honest
+act — a tile click on "Choose your agent" opens the notice (capture-phase, so nothing selects:
+no per-visitor choice reaches the shared configuration) and BOTH controls simply close it.
+No advance, no pinning, no profile repair; the wizard stays where the visitor left it and the
+LLM parameters screen is theirs to walk. Verified in the emitted page (build-copy run):
+the modal is present, `run(betaNotice)` is wired, and no pass-through function exists.
