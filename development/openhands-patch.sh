@@ -43,8 +43,28 @@
 #      the locale file; the TITLE is not a string in the build at all — the wizard renders each
 #      row's name from the backend's agent metadata (`display_name`) — so the row title is
 #      relabeled in-page by the ground script, exact-match only, inside the wizard container.
-#      The "Skip for now" control is deliberately left alone.
+#      The "Skip for now" control is deliberately left alone ON THE MAC — but the HOSTED
+#      copy (2026-10-04, run with `--hosted`, as the service's Dockerfile does) turns the
+#      first-run flow into a single door:
+#        · THE KEY STEP STAYS. In --public mode the wizard's "Add a backend" step IS the
+#          session-key entry (measured: with no backend registered the app renders a white
+#          page — "onboarding is responsible for collecting backend connection details").
+#        · THE SETUP STEPS AUTO-SKIP. Once a backend exists, the wizard's remaining steps
+#          ("Choose your agent", "Set up your LLM", "Say hello") are skipped for the
+#          visitor — the owner's ask, 2026-10-04: *"we should disable the onboarding setup
+#          process"* — and skipping marks it completed, so nobody meets it twice. The
+#          ground script clicks the wizard's own "Skip for now" (exact text, once, never
+#          during a `?previewOnboardingStep=` design preview).
+#        · THE GETTING-STARTED CHECKLIST DEFAULTS OFF (dismissed-if-absent — the Settings
+#          toggle can bring it back for anyone who wants it).
 set -euo pipefail
+
+HOSTED=0
+for arg in "$@"; do
+  case "$arg" in
+    --hosted) HOSTED=1 ;;
+  esac
+done
 
 BUILD="$(npm root -g)/@openhands/agent-canvas/build"
 
@@ -148,9 +168,9 @@ echo "✅ stylesheet: assets/$NAME"
 if [ -n "$TILE_NAME" ]; then echo "✅ tile: assets/$TILE_NAME"; fi
 
 # ── the HTML: the link and the ground script, in their canonical form ───────────────────────
-python3 - "$BUILD" "$NAME" <<'PY'
+python3 - "$BUILD" "$NAME" "$HOSTED" <<'PY'
 import os, re, sys
-build, name = sys.argv[1], sys.argv[2]
+build, name, hosted = sys.argv[1], sys.argv[2], sys.argv[3]
 p = os.path.join(build, "index.html")
 src = open(p).read()
 
@@ -185,6 +205,10 @@ script = '''<script id="house-patch-ground">
                  "--oh-bg-dark": "#110E1F", "--oh-bg-light": "#22202D",
                  "--oh-bg-input": "#22202D", "--oh-bg-workspace": "#22202D",
                  "--oh-color-tertiary": "#22202D" };
+    /* HOSTED OR NOT — the flag the patch script was run with (the service's Dockerfile says
+       --hosted; the Mac does not). It gates the first-run-flow changes below, so the owner's
+       own workbench keeps its wizard exactly as it was. */
+    var HOSTED = __HOUSE_HOSTED__;
     var set = function () {
       if (document.body) document.body.style.setProperty("background", "transparent", "important");
       var ground = document.querySelector("div.dark.min-h-screen");
@@ -211,6 +235,40 @@ script = '''<script id="house-patch-ground">
         }
       }
     };
+    /* THE HOSTED COPY'S FIRST-RUN FLOW (owner, 2026-10-04: *"we should disable the onboarding
+       setup process … the getting started process"*; see the script header's notes). Two acts,
+       both exact and idempotent:
+       1. THE GETTING-STARTED CHECKLIST DEFAULTS OFF — dismissed-if-absent, so the Settings
+          toggle can bring it back for anyone who wants it.
+       2. THE WIZARD'S SETUP STEPS AUTO-SKIP — every step after the key door, via the
+          wizard's own "Skip for now". THE KEY DOOR ITSELF IS NEVER SKIPPED: with no backend
+          registered the app has nothing to talk to (measured: a white page), so the rule is
+          "a backend exists, the modal is open, the heading is not 'Add a backend'". A
+          `?previewOnboardingStep=` design preview is deliberate and left alone. */
+    var preseedChecklist = function () {
+      if (!HOSTED) return;
+      try {
+        if (localStorage.getItem("openhands-sidebar-onboarding-checklist-dismissed") === null) {
+          localStorage.setItem("openhands-sidebar-onboarding-checklist-dismissed", "true");
+        }
+      } catch (e) {}
+    };
+    var skipSetupSteps = function () {
+      if (!HOSTED) return;
+      if (location.search.indexOf("previewOnboardingStep") !== -1) return;
+      var hasBackend = false;
+      try { hasBackend = localStorage.getItem("openhands-backends") !== null; } catch (e) { return; }
+      if (!hasBackend) return;
+      var wiz = document.querySelector("div.fixed.inset-0.flex.items-center.justify-center");
+      if (!wiz) return;
+      var heading = wiz.querySelector("h1,h2,h3");
+      var title = heading ? heading.textContent : "";
+      if (title.indexOf("Add a backend") !== -1) return;
+      var buttons = wiz.querySelectorAll("button");
+      for (var b = 0; b < buttons.length; b++) {
+        if (buttons[b].textContent.trim() === "Skip for now") { buttons[b].click(); return; }
+      }
+    };
     set();
     setTimeout(set, 600);
     setTimeout(set, 2200);
@@ -219,9 +277,15 @@ script = '''<script id="house-patch-ground">
     setTimeout(relabel, 600);
     setTimeout(relabel, 2200);
     setTimeout(relabel, 4000);
-    new MutationObserver(relabel).observe(document.documentElement, { childList: true, subtree: true });
+    preseedChecklist();
+    skipSetupSteps();
+    setTimeout(skipSetupSteps, 600);
+    setTimeout(skipSetupSteps, 2200);
+    setTimeout(skipSetupSteps, 4000);
+    new MutationObserver(function () { relabel(); skipSetupSteps(); }).observe(document.documentElement, { childList: true, subtree: true });
   })();
 </script>'''
+script = script.replace("__HOUSE_HOSTED__", "true" if hosted == "1" else "false")
 src2 = src2.replace("</body>", script + "\n  </body>", 1)
 
 if src2 != src:

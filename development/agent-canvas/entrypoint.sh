@@ -105,7 +105,13 @@ profiles = call("GET", "/api/agent-profiles")
 target = next((p for p in profiles.get("profiles", []) if p.get("name") == "default"), None)
 if target and profiles.get("active_agent_profile_id") != target.get("id"):
     call("POST", f"/api/agent-profiles/{target['id']}/activate")
-call("PATCH", "/api/settings", {"conversation_settings_diff": {"max_iterations": 150}})
+call("PATCH", "/api/settings", {
+    "conversation_settings_diff": {"max_iterations": 150},
+    # THE TELEMETRY PROMPT, ANSWERED (2026-10-04): the "Help improve OpenHands" dialog shows
+    # while this preference is NULL; answering it — false, declining — keeps it off every
+    # reviewer's screen without opting the demo's traffic into anything.
+    "misc_settings_diff": {"app_preferences": {"user_consents_to_analytics": False}},
+})
 print("→ model profile seeded:", label, "→", model)
 PY
 }

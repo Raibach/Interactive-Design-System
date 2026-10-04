@@ -31,7 +31,7 @@ RUN npm install -g @openhands/agent-canvas@1.24.0
 # no cache can hold an old look.
 COPY development/openhands-patch.sh /src/development/openhands-patch.sh
 COPY frontend/src/assets/canvas-development-lab-bkg.png /src/frontend/src/assets/canvas-development-lab-bkg.png
-RUN bash /src/development/openhands-patch.sh
+RUN bash /src/development/openhands-patch.sh --hosted
 
 # THE AGENT SERVER'S VERSION — THE FIXED ONE, ON PURPOSE (see the entrypoint's header for
 # the full story): at 1.49.6 the SDK's telemetry reads
