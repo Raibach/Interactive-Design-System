@@ -497,7 +497,7 @@ export default function Index({
    * he asked to be ten. `builder-embed-loaded` is the frame's own announcement (see
    * builder-embed); both refs reset on every entry, so each visit gets the same opening.
    */
-  const DEVELOPMENT_GATE_MIN_MS = 10_000;
+  const DEVELOPMENT_GATE_MIN_MS = 5_000; // the owner, same night: ten was too long — five.
   const [developmentGateDown, setDevelopmentGateDown] = useState(false);
   const developmentMinElapsedRef = useRef(false);
   const developmentFrameLoadedRef = useRef(false);

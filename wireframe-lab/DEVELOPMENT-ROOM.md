@@ -133,3 +133,9 @@ and every beat seen in a live browser (not inferred):
 - And the styling boundary, recorded so nobody fights it later: the GATE is ours (his tile, the
   amber ring, neutral copy — gray on purpose). The OpenHands app inside is its own origin with
   its own theme; styling IT means its own theme knobs, never our CSS reaching across the frame.
+
+**THE ZONE'S CHANGELOG IS LIVE:** `development/CHANGELOG.md` — the Development zone's own log
+(the room's record stays here; the day-to-day and the NEXT PROMPT for a fresh chat live there).
+Its two records are the only things under `development/` that are tracked by git; the clones
+stay outside on purpose. And the installer patch this room applies to OpenHands' built chrome is
+scripted: `development/openhands-patch.sh` (idempotent — run it again after any package update).
