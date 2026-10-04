@@ -56,10 +56,12 @@ cat > "$TMP" <<'CSS'
    URL changes with it, and the no-store HTML that links it carries the rules on the next reload.
    1. THE LOGO GOES (the sidebar's OpenHands mark sits under this app's own logo).
    2. THE PALETTE — the neutral theme's whole gray family takes the house colours: #110E1F (the
-      pin gate's navy) for grounds, #22202D (the owner's purple) for panels. The eight variables
-      replaced are the ones a fresh-profile probe measured on 2026-10-03. Hovers stay untouched.
-   3. THE PAPER SHOWS THROUGH: grounds transparent, and the landing's pt-[max(4rem,28vh)] gives
-      back 100px. The ground is ALSO forced by an inline-important script in index.html.
+      pin gate's navy) for grounds, #22202D (the owner's purple) for panels. The variables
+      replaced are every gray a fresh-profile probe measured on 2026-10-03. Hovers stay
+      untouched.
+   3. THE GROUND IS THE ASSEMBLY TILE — painted into the tool's own canvas (see below), and the
+      landing's pt-[max(4rem,28vh)] gives back 100px. The ground is ALSO forced by an
+      inline-important script in index.html.
    WHY TRIPLE SELECTOR + !important: the active theme re-declares its variables from a runtime
    <style> under TWO selectors — the shell (doubled) and an inner themed scope
    ([data-agent-server-ui] [data-theme][data-theme]) — and specificity ties went to the runtime
@@ -82,17 +84,53 @@ cat > "$TMP" <<'CSS'
   --oh-color-tertiary: #22202D !important;        /* rows, base buttons    (was #313131) */
 }
 div.dark.min-h-screen{ background-color: transparent !important; }
+/* THE MIDDLE OPENS (owner, same night: "make that background in the middle area transparent to
+   show our boxes"): the app's own full-window frame div paints bg-base straight across the main
+   area and hides the room's assembly tile. It goes transparent; the sidebar keeps its navy —
+   it is a panel, not the middle. */
+div[class*="h-screen"][class*="bg-base"]{ background-color: transparent !important; }
 [aria-label="OpenHands Logo"]{ display:none !important; }
-html, body, [data-agent-server-ui]{ background: transparent !important; }
+
+/* THE GROUND IS PAINTED INTO THE TOOL (measured 2026-10-03): the owner asked for the room's
+   assembly ground — the graph-paper tile with its boxes — to show through the middle of the
+   tool. It CANNOT show through: the embedded page runs under its own theme with its own
+   painting, and an iframe's transparent areas never reveal what the parent painted behind it —
+   the middle stayed flat whatever the parent carried (wrapper, tile and all, measured by
+   painting the room's wrapper red: not one pixel reached the eye). So the tile is copied in
+   beside this stylesheet under its own content hash and painted AS THE TOOL'S OWN CANVAS —
+   same image, same repeat: the middle IS the assembly ground, and no compositing rule of any
+   browser can take it away. */
+__HOUSE_PATCH_HTML_BG__
+body, [data-agent-server-ui]{ background: transparent !important; }
 .pt-\[max\(4rem\,28vh\)\]{ padding-top: max(4rem, calc(28vh - 100px)) !important; }
 CSS
 
+# The tile: copied in beside the stylesheet under its own content hash (the room's assembly
+# image, straight from the app's assets — same file, same repeat).
+TILE_SRC="$(cd "$(dirname "$0")" && pwd)/../frontend/src/assets/canvas-development-lab-bkg.png"
+TILE_NAME=""
+if [ -f "$TILE_SRC" ]; then
+  TILE_NAME="house-patch-tile-$(shasum -a 256 "$TILE_SRC" | cut -c1-10).png"
+  HTML_BG_RULE="html{ background: transparent url($TILE_NAME) repeat !important; }"
+else
+  HTML_BG_RULE="html{ background: transparent !important; }"
+  echo "⚠️  tile not found at $TILE_SRC — the canvas falls back to plain transparent" >&2
+fi
+python3 - "$TMP" "$HTML_BG_RULE" <<'PY'
+import sys
+path, rule = sys.argv[1], sys.argv[2]
+src = open(path).read().replace("__HOUSE_PATCH_HTML_BG__", rule)
+open(path, "w").write(src)
+PY
+
 HASH="$(shasum -a 256 "$TMP" | cut -c1-10)"
 NAME="house-patch-$HASH.css"
-find "$BUILD/assets" -maxdepth 1 -name 'house-patch*.css' -delete
+find "$BUILD/assets" -maxdepth 1 -name 'house-patch*' -delete
+if [ -n "$TILE_NAME" ]; then cp "$TILE_SRC" "$BUILD/assets/$TILE_NAME"; fi
 cp "$TMP" "$BUILD/assets/$NAME"
 rm -f "$TMP"
 echo "✅ stylesheet: assets/$NAME"
+if [ -n "$TILE_NAME" ]; then echo "✅ tile: assets/$TILE_NAME"; fi
 
 # ── the HTML: the link and the ground script, in their canonical form ───────────────────────
 python3 - "$BUILD" "$NAME" <<'PY'
@@ -136,6 +174,8 @@ script = '''<script id="house-patch-ground">
       if (document.body) document.body.style.setProperty("background", "transparent", "important");
       var ground = document.querySelector("div.dark.min-h-screen");
       if (ground) ground.style.setProperty("background-color", "transparent", "important");
+      var frame = document.querySelector('div[class*="h-screen"][class*="bg-base"]');
+      if (frame) frame.style.setProperty("background-color", "transparent", "important");
       var targets = document.querySelectorAll("[data-agent-server-ui], [data-agent-server-ui] [data-theme]");
       for (var t = 0; t < targets.length; t++) {
         targets[t].style.setProperty("background", "transparent", "important");

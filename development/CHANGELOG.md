@@ -172,3 +172,53 @@ Logo hidden, checklist reading "local sovereign model", and the same page reache
 app's own Development tab (screenshot on file: navy frame, purple panels inside the room). The
 law this night earned: **a patch URL is a promise about bytes — if the bytes can change, the
 URL must change with them; never amend what a cache has already learned by heart.**
+
+**The ground follows the tool itself — and AN IFRAME CANNOT SHOW YOU THE PARENT, full stop
+(owner: "How hard is it to make that background in the middle area transparent to show our boxes
+…" then "Yeah, I didn't go transparent").** The honest answer to the owner's question: the
+transparent-middle idea itself is the hard part, and it turned out to be the impossible part.
+Measured, layer by layer: the tool's document genuinely goes transparent (its own tab shows the
+page behind through every non-panel pixel), the room's wrapper genuinely carries the assembly
+tile (it has since the gate pass — MY EARLIER CLAIM THAT IT WAS FLAT WAS WRONG, corrected here
+the same night), and still the middle stayed a featureless dark — verified by painting the
+room's wrapper SOLID RED behind a fully transparent embed: not one red pixel reached the eye,
+and a 3× magnified screenshot showed not one grid line. The reason is architectural: a framed
+document paints its own canvas, and what the parent painted behind the frame is never part of
+that canvas. No amount of `background: transparent`, color-scheme changes or cascades changes
+that. THE FIX, therefore, paints the ground INTO the tool: `openhands-patch.sh` now copies the
+room's tile (`frontend/src/assets/canvas-development-lab-bkg.png`) beside its stylesheet as
+`house-patch-tile-<sha>.png` — its own content hash, same discipline as the stylesheet — and the
+tool's canvas carries it (`html{ background: url(house-patch-tile-<sha>.png) repeat !important }`),
+body and shell stay transparent above it, the sidebar keeps its navy, the panels their purple.
+Verified in the owner's exact path (fresh reload → app → Development): the boxed graph paper now
+runs through the middle, behind the hero, the composer and the cards — the assembly look, made
+unremovable by any compositing rule of any browser.
+
+**A NOTE TO OURSELVES — WHY THE STYLING WAS REWORKED SO MANY TIMES TONIGHT (the owner asked for
+this note: "there's a lot of reworking of the styling … make a note about that in our folder").**
+Five passes on one surface in one night is the symptom; these were the causes, kept here so the
+next styling night is shorter:
+1. **The theming stack was unknown.** The tool paints its grays through a family of ~12
+   variables, set at RUNTIME by a theme script using doubled selectors, re-declared on two
+   scopes — while an older pass of mine appended a rule into a hash-named stylesheet that no
+   cache would ever refetch. Each pass discovered one more layer of that stack instead of the
+   whole stack being mapped first (the map now exists — the stylesheet's own comments carry
+   every measured value it replaces).
+2. **The cache was twice the author of a "fix".** `?v=2` was amended one minute after it went
+   live (a burned URL), and the first patch lived inside an immutable file for a year by
+   contract. Both lessons are now structural: the patch's NAME carries its bytes' hash.
+3. **Verification looked at the wrong instrument** in the middle passes: reading files and
+   computed variables instead of the thing the owner sees. What settled every open question
+   tonight was the same move — reproduce the owner's EXACT path (fresh profile → app → room),
+   then either read the computed value ON the rendered element or look at real pixels
+   (screenshots; magnify; paint a layer loud red to see what reaches the eye). The painting-into-
+   the-tool fix was only possible because the red-paint test finally named the layer that
+   paints.
+4. **Two of my own interim claims were wrong and each cost a pass**: "the panels were swapped"
+   (2 of 12 variables had been) and "the room's wrapper is flat" (it carried the tile all
+   along). The rule this re-earns: claim only what the last measurement showed, and correct the
+   record where it landed.
+THE STANDING RULES FROM TONIGHT, for the next styling touch on any room: patch bytes live at
+content-hashed URLs; a visual change is "done" only when seen through the owner's own door; when
+a surface refuses to change, probe the paint chain in order (parent → frame → document) with
+loud test values instead of guessing which layer is guilty.
