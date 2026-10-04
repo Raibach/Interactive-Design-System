@@ -1704,11 +1704,12 @@ function startStaticFrontend(config, staticDir) {
       // development/agent-canvas/entrypoint.sh, whose header records the accepted trade (the
       // URL is unlisted, not secret).
       ...(() => {
+        const allowLanSessionKey = /^(1|true)$/i.test(
+          process.env.AGENT_CANVAS_ALLOW_LAN_SESSION_KEY ?? "",
+        );
         const policy = applySessionKeyPolicy({
           host: config.bindHost,
-          allowLanSessionKey: /^(1|true)$/i.test(
-            process.env.AGENT_CANVAS_ALLOW_LAN_SESSION_KEY ?? "",
-          ),
+          allowLanSessionKey,
           sessionApiKey:
             config.launchAgentServer && !config.isPublic
               ? config.sessionApiKey
@@ -1722,6 +1723,16 @@ function startStaticFrontend(config, staticDir) {
         }
         if (policy.authRequired) {
           flags.push("--auth-required");
+        }
+        // ── AND THE STATIC SERVER MUST AGREE (measured on the deployed pod, 2026-10-04) ──
+        // static-server.mjs runs the SAME policy a second time, over its own flags — so
+        // without this one it strips the key the launcher just decided to keep, and the
+        // served page carried `window.__AGENT_CANVAS_AUTH_REQUIRED__=true` with no key:
+        // every visitor met the key-entry screen. Reproduced and fixed locally the same
+        // hour: the page without this flag showed AUTH_REQUIRED=true; with it, the injected
+        // key. One decision, stated to both halves.
+        if (allowLanSessionKey && policy.sessionApiKey) {
+          flags.push("--allow-lan-session-key");
         }
         return flags;
       })(),

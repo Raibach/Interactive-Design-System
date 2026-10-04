@@ -558,3 +558,16 @@ files pass `bash -n` / `node --check`; and the served page's markers are known
 (`window.__AGENT_CANVAS_SESSION_API_KEY__` present, `__AGENT_CANVAS_AUTH_REQUIRED__` absent)
 for the post-deploy check. **Still the cloud's to prove:** the fifth build, the public URL,
 and a first conversation through the room.
+
+**AND THEN THE SERVED PAGE ITSELF WAS READ — THE STATIC SERVER RUNS THE POLICY A *SECOND*
+TIME (`goofy-hydrant-3642` deployed, URL 200, `/api/settings` 401 — and the page carrying
+`window.__AGENT_CANVAS_AUTH_REQUIRED__=true` with NO key marker: every visitor would have met
+the key-entry screen).** The launcher's decision was right now; the static server simply
+never heard it — `static-server.mjs` re-applies `applySessionKeyPolicy` over its own flags
+(`--session-api-key` / `--auth-required` / `--allow-lan-session-key`), and the launcher pushed
+only the first two, so the second policy pass stripped the key the first pass had kept.
+Reproduced at home the same hour, one process at a time: `static-server --host 0.0.0.0
+--session-api-key …` → the page shows `AUTH_REQUIRED=true` and no key; add
+`--allow-lan-session-key` → the page shows the injected key. The launcher now pushes that
+third flag whenever the opt-in is set, so the two policy passes cannot disagree. One decision,
+stated to both halves.
