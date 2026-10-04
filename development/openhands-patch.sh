@@ -37,6 +37,13 @@
 #      "sitting way down".
 #   4. Relabels the checklist's outbound "Join the OpenHands Slack" item to "local sovereign
 #      model" (a placeholder name for the model story — wiring later, the owner's word).
+#   5. THE FIRST-RUN WIZARD'S DEFAULT ROW (owner, same night: this panel "should just say
+#      sovereign local model, and the description should say defaults to local model agent …
+#      best for general purpose work"). The description is a locale string and is patched in
+#      the locale file; the TITLE is not a string in the build at all — the wizard renders each
+#      row's name from the backend's agent metadata (`display_name`) — so the row title is
+#      relabeled in-page by the ground script, exact-match only, inside the wizard container.
+#      The "Skip for now" control is deliberately left alone.
 set -euo pipefail
 
 BUILD="$(npm root -g)/@openhands/agent-canvas/build"
@@ -89,6 +96,14 @@ div.dark.min-h-screen{ background-color: transparent !important; }
    area and hides the room's assembly tile. It goes transparent; the sidebar keeps its navy —
    it is a panel, not the middle. */
 div[class*="h-screen"][class*="bg-base"]{ background-color: transparent !important; }
+/* THE SETUP PANEL STANDS ON THE SAME GROUND (owner, same night: "it has to also be there when
+   the Setup panel opens up … it's just a black dark background"). The first-run wizard renders
+   its own opaque navy takeover (`main.min-h-screen.bg-base`) under a 60%-black veil — measured:
+   those two layers, not the panel, were painting the black. Both go transparent, and the opaque
+   purple card floats on the assembly tile like every other panel. The "Skip for now" control is
+   deliberately untouched (meant to be skippable). */
+main[class*="min-h-screen"][class*="bg-base"]{ background-color: transparent !important; }
+div[class*="bg-black"][class*="opacity-60"]{ background-color: transparent !important; }
 [aria-label="OpenHands Logo"]{ display:none !important; }
 
 /* THE GROUND IS PAINTED INTO THE TOOL (measured 2026-10-03): the owner asked for the room's
@@ -182,10 +197,29 @@ script = '''<script id="house-patch-ground">
         for (var k in VARS) targets[t].style.setProperty(k, VARS[k], "important");
       }
     };
+    /* THE WIZARD'S DEFAULT ROW, renamed (see the patch script's note 5): its title is backend
+       agent metadata, not a locale string, so it is relabeled here — exact text match, inside
+       the first-run wizard only. The description is patched in the locale file. */
+    var relabel = function () {
+      var wiz = document.querySelector("div.fixed.inset-0.flex.items-center.justify-center");
+      if (!wiz) return;
+      var spans = wiz.querySelectorAll("span");
+      for (var i = 0; i < spans.length; i++) {
+        var s = spans[i];
+        if (s.textContent === "OpenHands" && s.className.indexOf("truncate") !== -1) {
+          s.textContent = "Sovereign local model";
+        }
+      }
+    };
     set();
     setTimeout(set, 600);
     setTimeout(set, 2200);
     setTimeout(set, 4000);
+    relabel();
+    setTimeout(relabel, 600);
+    setTimeout(relabel, 2200);
+    setTimeout(relabel, 4000);
+    new MutationObserver(relabel).observe(document.documentElement, { childList: true, subtree: true });
   })();
 </script>'''
 src2 = src2.replace("</body>", script + "\n  </body>", 1)
@@ -197,17 +231,32 @@ else:
     print("⏭  index.html already canonical")
 PY
 
-# ── 4 — the label, guarded by value ──────────────────────────────────────────────────────────
+# ── 4 + 5 — the strings, each guarded by value ───────────────────────────────────────────────
 python3 - "$BUILD" <<'PY'
 import json, sys, os
 build = sys.argv[1]
 p = os.path.join(build, "locales", "en", "openhands.json")
 d = json.load(open(p))
-key = "SIDEBAR$ONBOARDING_CHECKLIST_JOIN_SLACK"
-if d.get(key) == "local sovereign model":
-    print("⏭  label already patched")
+changed = False
+# The checklist's outbound Slack item — the model story's placeholder name (owner's word).
+k1, v1 = "SIDEBAR$ONBOARDING_CHECKLIST_JOIN_SLACK", "local sovereign model"
+if d.get(k1) != v1:
+    d[k1] = v1
+    changed = True
+    print("✅ label patched:", k1, "→", v1)
 else:
-    d[key] = "local sovereign model"
+    print("⏭  label already patched")
+# The wizard's default row description (owner, same night): "defaults to local model agent …
+# best for general purpose work". The row's TITLE is backend metadata — the ground script
+# relabels it in-page (see note 5 in the header).
+k2 = "ONBOARDING$AGENT_OPENHANDS_DESCRIPTION"
+v2 = "Defaults to the local model agent. Best for general purpose work."
+if d.get(k2) != v2:
+    d[k2] = v2
+    changed = True
+    print("✅ wizard description patched →", v2)
+else:
+    print("⏭  wizard description already patched")
+if changed:
     json.dump(d, open(p, "w"), indent=1, ensure_ascii=False)
-    print("✅ label patched:", key, "→ local sovereign model")
 PY
