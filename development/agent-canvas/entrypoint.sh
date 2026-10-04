@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ── THE DEV WORKSPACE'S DOOR, HOSTED (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md) ─────────
+# ── THE DEV WORKSPACE'S DOOR, HOSTED (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md) ─────────
 # Three jobs, then the tool's own process in the foreground:
 #
 #   1. THE GATE IS REAL. `--public` mode: the server always requires its session key
@@ -16,7 +16,7 @@
 #      the banner and the wizard read. A steps ceiling rides along (max_iterations —
 #      the SDK's own knob; this version has NO dollar-budget setting, measured).
 #
-#   3. THE DRIFT IS REPAIRED. WHY A LOOP AND NOT ONE SEED (measured live, 2026-10-05):
+#   3. THE DRIFT IS REPAIRED. WHY A LOOP AND NOT ONE SEED (measured live, 2026-10-04):
 #      the first-run wizard's "Set up your LLM" step ALWAYS proposes its own default
 #      model, so its Next button is always a dirty save — a reviewer clicking through it
 #      overwrote the seeded profile with an unusable model and a blank key, and every
@@ -97,7 +97,7 @@ call("POST", "/api/agent-profiles/default", {
     "agent_kind": "openhands",
     "llm_profile_ref": label,
 })
-# AND THE POINTER (measured on a fresh container, 2026-10-05): a brand-new state has
+# AND THE POINTER (measured on a fresh container, 2026-10-04): a brand-new state has
 # active_agent_profile_id = None — the wizard normally sets it, and nobody walks the
 # wizard on our behalf. Activation is pointer-only (it does not write agent_settings),
 # which is exactly what a fresh demo wants.

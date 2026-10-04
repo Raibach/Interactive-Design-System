@@ -260,3 +260,132 @@ addresses into runtime config (`/api/config`), point the bridge's `BUILDER_ENGIN
 hosted engine — carrying the three OWNER decisions the hosting must ask before anything
 public-facing gets a key (who may drive the agent, whether visitors may run the builder, whether
 to copy the Mac's projects). The file ends with a NEXT PROMPT block for the next chat window.
+
+---
+
+## 2026-10-04 — THE TOOLS GO HOSTED: both rooms run on the remote site (HOST-THE-TOOLS executed)
+
+**The night the plan was written, it was executed — end to end, and verified on the deployed
+site.** `wireframe-lab/HOST-THE-TOOLS.md` is no longer a plan: both tools run as their own
+Northflank services in the same project and cluster (`nf-europe-west`), both rooms show them
+to a signed-out visitor, and the interim panels are now what a MISSING tool says, not what the
+demo says. First, the three decisions the plan refused to make alone (owner, the same night):
+
+| # | decision | answer |
+|---|---|---|
+| 1 | who may drive the hosted development agent | **pin-holders** — the workspace runs in `--public` mode; its session key is a service secret, handed out with the demo pin, typed once per browser |
+| 2 | may demo visitors run the builder | **yes, with caps** — per-visitor and global run budgets inside the engine (env-tunable) |
+| 3 | the Mac's 10 builder projects | **start fresh** — the hosted store begins empty; the Mac's store stays untouched |
+
+**THE FOUR SERVICES, BY NAME.** The app service is unchanged but for its environment
+(`DEVELOPMENT_TOOL_URL`, `BUILDER_TOOL_URL`, `BUILDER_ENGINE_URL`) and the pushes; three new
+combined services carry the tools:
+
+- **`dev-workspace`** — `canvas--dev-workspace--mgtvxtd7xr2v.code.run` — OpenHands Agent
+  Canvas, built from THIS repo (`development/agent-canvas/Dockerfile`, branch `demo-mode`):
+  node:24 (the package's engines field requires >=24 — the plan said node:20 before the
+  package was read), the pinned `@openhands/agent-canvas@1.24.0`, **the house patch applied
+  inside the image build** (`openhands-patch.sh` — the same act as on the Mac, single home
+  kept), uv pre-warmed at build so a cold container boots without a minute of downloads.
+- **`builder`** — `builder--builder--mgtvxtd7xr2v.code.run` — the Next app, root Dockerfile
+  (`next build` → `next start -p 3223`; the same port the Mac uses, so the room's address
+  shape is identical in both worlds).
+- **`builder-engine`** — `engine--builder-engine--mgtvxtd7xr2v.code.run` — `local-vcaas`
+  server.mjs as its own process, with a **volume** (`builder-engine-store`, 6144 MB — the
+  nvme class's minimum, learned from a 409) mounted over `data/` so a redeploy does not
+  throw the projects away.
+
+**THE REPO QUESTION, ANSWERED THE WAY IT HAD TO BE.** The builder + engine live in
+`wireframe-lab/ai-app-builder-open`'s own git repo, whose upstream
+(`totalumlabs/ai-app-builder-open`) is **pull-only** — the room's wiring commit (`9b1c77d`)
+had never had a remote. So the repo is now **forked** (`Raibach/ai-app-builder-open`,
+public, MIT) and Northflank builds both services from it; upstream stays pullable and our
+main rides on top. The engine's two hosting changes ride that fork: with `PUBLIC_BASE_URL`
+set, every URL the UI is handed is `<base>/preview/<id>/` (one hostname, the path form the
+engine always served — verified live: the detail's preview URL and a 200 at it), the banner
+names its own origin instead of localhost, and **the run budget is armed exactly and only
+where the demo's address is** — 4 runs/hour/visitor, 60/hour globally, "N/seconds" env
+specs, consumed before the two token-spending endpoints — while a local engine (no
+`PUBLIC_BASE_URL`) is never throttled (verified in an isolated run, both directions, and a
+refused launch leaves NO project behind). The builder forwards the visitor's address
+(`x-visitor-ip`, read off the first XFF hop at its catch-all proxy) so the fairness bucket
+bills the right person; the global bucket does not care who asks — the documented XFF
+limits, same as `demo_policy.py`.
+
+**THE APP HALF — small, and now the architecture.** `GET /api/config` grew
+`development_tool_url` / `builder_tool_url` (env-driven); `shared/demoMode.ts` became
+`shared/appConfig.ts`, the shell's one read-once module, which OWNS the localhost defaults
+for a local run and returns the empty string on the demo when the server names nothing —
+so the rooms never branch on demo-ness for their address, they render the tool or the
+fallback panel. The Development room's gate gained a ceiling (`DEVELOPMENT_GATE_MAX_MS`,
+25 s): a frame that never arrives gets the honest panel over a still-mounted embed, and a
+late arrival still wins. The Product room checks and births against the HOSTED engine on
+the demo too (`/api/builder/new` through the bridge — the old "no engine on the demo"
+guard is gone, per decision 2), and `demo_policy.py` admits the bridge's four mutations
+(`new`, `sync`, `publish`, `discard` — templates checked against the router's registered
+paths), still behind the per-visitor mutation bucket.
+
+**TWO FAILURES ONLY A LIVE ROOM COULD FIND — both fixed where they lived.** (1) **Every run
+died**: `AttributeError: 'PromptTokensDetailsWrapper' object has no attribute
+'cache_creation_tokens'` — the OpenHands SDK at 1.49.6 reads DeepSeek's usage block
+unguarded, and DeepSeek's OpenAI-compatible responses do not carry it. The fix is a version,
+not a hack: the launcher pins sdk/tools/workspace to the same number as the agent server, so
+`OH_AGENT_SERVER_VERSION=1.51.0` (in the image and the entrypoint) carries the guarded read —
+verified by diffing the two `telemetry.py` copies in the uv cache, then live
+(`/server_info` now says 1.51.0 across all four packages). (2) **The wizard trampled the
+seed**: the first-run "Set up your LLM" step ALWAYS proposes its own default model, so its
+Next is always a dirty save — measured: it overwrote the seeded profile with
+`openai/gpt-5.6-sol` and a cleared key, and the composer said "Your LLM isn't set up yet".
+The entrypoint now seeds the whole chain the tool actually reads — the LLM PROFILE (key
+included, from the service secret; in no image, no repository), its activation, the AGENT
+profile conversations launch from (the launch request carries `agent_profile_id`, and a
+brand-new container has NO active pointer — measured, so the seed sets it), and
+`max_iterations: 150` as the steps ceiling — and a quiet 45-second drift check re-seeds
+whenever a save tramples it. **Said plainly, because the record should say it: this SDK has
+NO dollar-budget setting** (a `max_budget_per_task` field exists in the frontend's types and
+the server silently drops it — measured). The ceilings that exist are max_iterations, the
+key gate, and the DeepSeek account's own limits; a global daily cap would need a proxy in
+front of the model, and that is a decision, not a line.
+
+**VERIFIED THE WAY THE OWNER WILL MEET IT.** Signed out, on the deployed demo: `/api/config`
+returns both addresses; the canvas answers 200 with `house-patch-<sha>.css` linked and every
+house colour in it (`#110E1F` / `#22202D` — the content-hash discipline riding the image),
+the tile asset 200 beside it; the workspace's key screen answers 401 without the session key
+and the seeded settings with it; the wizard's default row reads "Sovereign local model" and
+its list shows the seeded profile in the composer; the Product room's frame is
+`https://builder--builder--mgtvxtd7xr2v.code.run/project/product-idea?embedded=console` —
+born through the bridge against the HOSTED engine (`"engine":"http://builder-engine:4000"`
+in the response — internal DNS confirmed from inside the cluster: `builder-engine:4000`
+resolves, `builder-engine.semantic-design-system` does NOT), a real build ran through the
+hosted builder (3 files in 4 s, preview 200), publish created the Product Team card, discard
+removed the project, sync removed the row, and the room's own exit guard discarded its blank
+project (store back to zero — decision 3 honored); **the browser's resource hosts contain NO
+localhost** — the app, the canvas, the builder, the engine, and fonts, nothing else — so
+Chrome's local-network prompt has nothing left to fire at; and the hosted agent, asked to
+reply, answered on `deepseek-v4-pro` (`status finished`, "hello from the hosted agent",
+cost accrued on the real key). Local runs: the engine's unchanged behavior is verified in an
+isolated run of the new code with `PUBLIC_BASE_URL` unset (identical URLs, no budget), and
+the frontend's local defaults are the module's own constants — the Mac's running processes
+pick the new code up on their next start.
+
+**What remains open, in order:** the Development room's bridge (conversations → console
+cards — the Product room's shape, not yet built); the automation backend inside the
+workspace still runs its own pinned SDK (1.49.6) — its DeepSeek paths were not exercised
+and are an unknown, not a claim; a global spending cap (above); and the standing cost note:
+three deployment plans at list (`nf-compute-50` / `100-1` / `100-2` ≈ $54/mo) plus build
+plans mirroring the app's — the Northflank dashboard is the truth. **The demo's sentence for
+reviewers:** the workspace's session key goes out WITH the pin; the room asks for it once.
+
+## NEXT PROMPT — copy this into a fresh chat
+
+> The tools are hosted (see the entry above and `wireframe-lab/HOST-THE-TOOLS.md`): the
+> Development room shows `dev-workspace` (OpenHands Agent Canvas, house-patched at image
+> build), the Product room shows `builder` on `builder-engine`, both addresses arrive via
+> `GET /api/config` (`shared/appConfig.ts`). Tonight, in order: (1) the Development room's
+> bridge — the room's conversations onto the console as cards, the Product room's bridge as
+> the proven shape (reference, not copy; publish = the commit) — starting by reading
+> OpenHands' own API (`/api/automation/docs`); (2) decide whether the automation backend's
+> pinned SDK (1.49.6, unexercised with DeepSeek) needs the same version treatment the agent
+> server got; (3) if the owner wants a hard global spending cap, design the proxy in front
+> of the model — it is the one ceiling the tool cannot hold itself. Follow the repo's laws:
+> one writer per fact, drive it, and record corrections where they land.

@@ -9,7 +9,7 @@
  *    always errors. This flag lets the shell HIDE those affordances instead, so the demo never
  *    offers a door it will not open.
  *
- * 2. THE ROOMS' TOOL ADDRESSES (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md). The Development
+ * 2. THE ROOMS' TOOL ADDRESSES (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md). The Development
  *    room embeds OpenHands' Agent Canvas and the Product room embeds the app builder; both used
  *    to be hardcoded `http://localhost:…`, which on a deployed site means THE VISITOR'S OWN
  *    COMPUTER — the night the demo went remote, that is exactly what raised Chrome's

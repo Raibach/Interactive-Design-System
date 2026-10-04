@@ -213,13 +213,28 @@ open http://localhost:5001
 
 ## Deployment
 
-Docker on **Northflank** — project `semantic-design-system`, service
-`semantic-design-systems`, cluster `nf-europe-west`. The service builds from branch
-**`demo-mode`** and redeploys on every push to it; `main` is untouched. The image is
-a **multi-stage build**: the frontend compiles inside a Node stage (including the
-catalog audit report), so no build artifacts live in the repository. To return the
-service to plain `main`, point its build branch back (`northflank patch service
-combined` with `vcsData.projectBranch: main`).
+Docker on **Northflank** — project `semantic-design-system`, cluster `nf-europe-west`.
+The app service is `semantic-design-systems` (builds from branch **`demo-mode`**,
+redeploys on every push to it; `main` is untouched). The image is a **multi-stage
+build**: the frontend compiles inside a Node stage (including the catalog audit report),
+so no build artifacts live in the repository. To return the service to plain `main`,
+point its build branch back (`northflank patch service combined` with
+`vcsData.projectBranch: main`).
+
+**The rooms' tools are services of their own** (2026-10-04 — `wireframe-lab/HOST-THE-TOOLS.md`):
+
+| service | what it is | builds from |
+|---|---|---|
+| `dev-workspace` | the Development room's workspace: OpenHands Agent Canvas (pinned, the house patch applied inside the image), `--public` mode — the session key is typed once per browser | this repo, `/development/agent-canvas/Dockerfile` |
+| `builder` | the Product room's app builder (Next, port 3223) | `Raibach/ai-app-builder-open` (a fork of the upstream vendor repo; the local-vcaas engine and the room's wiring are versioned there) |
+| `builder-engine` | the engine behind the builder (VCaaS-shaped API, DeepSeek, path-form previews, per-visitor + global run budgets). Its `data/` rides a **volume** — the projects store. | the same fork, `/local-vcaas/Dockerfile` |
+
+The app service pins the three addresses: `DEVELOPMENT_TOOL_URL` and
+`BUILDER_TOOL_URL` (public, read by `GET /api/config` and handed to the rooms —
+`development/CHANGELOG.md`, 2026-10-04), and `BUILDER_ENGINE_URL` (the engine's
+internal address, `http://builder-engine:4000` — services in one project reach each
+other by service name). The workspace's session key and the DeepSeek key ride the
+services' runtime environments, set through the CLI — never in git.
 
 ---
 
@@ -306,7 +321,8 @@ gate that becomes typeable.
 
 Service environment: `DEMO_MODE=1`, `DEMO_USER_ID`, `ADMIN_USER_IDS` (the admin stub
 is allow-all when unset), `DEMO_SEED_SESSION_IDS`; optionally `DEMO_USER_EMAIL` and
-the three rate-limit variables.
+the three rate-limit variables — plus the rooms' tool addresses (`DEVELOPMENT_TOOL_URL`,
+`BUILDER_TOOL_URL`, `BUILDER_ENGINE_URL`) described in Deployment above.
 
 ---
 

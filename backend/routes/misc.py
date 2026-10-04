@@ -167,7 +167,7 @@ async def api_config():
     demo_policy.py, and a client that lies about this value changes nothing but
     its own buttons. `false` on local runs, where the full system is the point.
 
-    `development_tool_url` / `builder_tool_url` (2026-10-05) are the rooms' tool
+    `development_tool_url` / `builder_tool_url` (2026-10-04) are the rooms' tool
     addresses, runtime config instead of hardcoded localhost: the deployed demo sets
     them to the hosted tool services (wireframe-lab/HOST-THE-TOOLS.md), a local run
     leaves them unset and the shell keeps `http://localhost:8090` / `:3223`. The rooms
