@@ -95,3 +95,12 @@ ever needs one. *(Both recorded in `wireframe-lab/DEVELOPMENT-ROOM.md`.)*
 > OpenHands' insides — the gate is ours, the app is its own; extend the patch script only for the
 > chrome the owner names. Follow the repo's laws: one writer per fact, drive it, and record
 > corrections where they land.
+
+**Patch amendments, same night (owner's second look):** the panel colour is now HIS value,
+exactly — *"this is my preferred colour for all the panels that are currently gray … you can just
+leave the hovers."* So patch #2's secondary is **#22202D** (it was my #231f2e guess, one bit off
+his swatch — the app's own cache had also been showing him the pre-patch greys until a hard
+refresh). The ground keeps the gate's navy #110E1F, and hovers are deliberately untouched. Both
+the live build and `openhands-patch.sh` carry the new value; verified by the COMPUTED style on
+the running element (`--oh-color-base: #110E1F`, `--oh-color-base-secondary: #22202D`), not by
+reading the file.
