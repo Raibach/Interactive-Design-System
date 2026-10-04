@@ -4615,8 +4615,9 @@ export default function Index({
     if ((headerTab || '') !== 'product') return;
     void checkBuilderEngine();
     // Entering the room with no project — a reload, a restored tab — births one exactly as
-    // a click does. The room may never stand on the dashboard.
-    if (!productRoomProjectId) void createProductProject();
+    // a click does. The room may never stand on the dashboard. NOT ON THE DEMO (2026-10-04):
+    // there is no engine to birth one against, and the demo's panel doesn't need one.
+    if (!productRoomProjectId && !isDemoMode()) void createProductProject();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
@@ -9716,6 +9717,24 @@ export default function Index({
                          The agent's model is configured in ITS OWN settings; it runs with full
                          local access in this mode — see wireframe-lab/DEVELOPMENT-ROOM.md. */
                       ? (
+                        isDemoMode() ? (
+                          /* THE DEMO'S HONEST PANEL (2026-10-04, the night it went remote): on
+                             the deployed demo the room must not reach for a program on the
+                             VISITOR's own machine — that request is what made Chrome ask
+                             "access other apps and services on this device", a prompt no demo
+                             should raise. Until the workspace is HOSTED as its own service
+                             (the next session — wireframe-lab/HOST-THE-TOOLS.md), the demo
+                             says plainly that it isn't connected. Local runs never take this
+                             branch, so the Mac keeps the full experience. */
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+                            <p style={{ margin: 0, color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                              {"The development workspace isn't connected to this demo."}
+                            </p>
+                            <p style={{ margin: 0, color: '#8b8b8b', fontSize: 12, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                              {"It runs as a separate tool on its own machine. Hosting it here is the next step."}
+                            </p>
+                          </div>
+                        ) : (
                         /* THE STAGED OPENING (owner, 2026-10-04): the ground is his own
                            graph-paper tile (dark, neutral — *"god knows it's gotta be gray"*),
                            the ring is the assembly gate's amber, the line is plain, and the
@@ -9754,6 +9773,7 @@ export default function Index({
                             </p>
                           </div>
                         </div>
+                        )
                       )
                       : isDeadTab
                       ? null
@@ -9777,7 +9797,23 @@ export default function Index({
                                   engine is down — the pane is quiet; it is never pointed at the
                                   tool's project list. The key carries the project id so a new
                                   project remounts the frame clean rather than reusing one. */}
-                              {productRoomProjectId ? (
+                              {isDemoMode() ? (
+                                /* THE DEMO'S HONEST PANEL — the sibling of the development
+                                   room's (2026-10-04): the builder's engine runs on its own
+                                   machine; until it is HOSTED (wireframe-lab/HOST-THE-TOOLS.md)
+                                   the demo says so plainly — instead of pointing the frame at
+                                   a localhost that belongs to each visitor, or showing a banner
+                                   whose copy ("npm run dev:local") reads like a broken feature.
+                                   Local runs never take this branch. */
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundImage: `url(${wireframeLabBackground})`, backgroundRepeat: 'repeat' }}>
+                                  <p style={{ margin: 0, color: '#6B7280', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                    {"The builder isn't connected to this demo."}
+                                  </p>
+                                  <p style={{ margin: 0, color: '#9aa0a6', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                    {"It runs as a separate engine on its own machine. Hosting it here is the next step."}
+                                  </p>
+                                </div>
+                              ) : productRoomProjectId ? (
                                 <builder-embed
                                   key={`product-builder-${productRoomProjectId}`}
                                   src={`http://localhost:3223/project/${encodeURIComponent(productRoomProjectId)}`}
@@ -9797,8 +9833,11 @@ export default function Index({
                                   {builderEngineDown ? '' : "Opening a new project\u2026"}
                                 </div>
                               )}
-                              {/* A STOPPED ENGINE GETS SAID PLAINLY — else the tool's own errors read like broken features. */}
-                              {builderEngineDown && (
+                              {/* A STOPPED ENGINE GETS SAID PLAINLY — else the tool's own errors read
+                                  like broken features. NEVER ON THE DEMO (2026-10-04): its copy names
+                                  the repo's own start script, which is developer text, and on the
+                                  deployed site it reads to a visitor as "this program cannot run". */}
+                              {builderEngineDown && !isDemoMode() && (
                                 <div
                                   role="status"
                                   style={{
