@@ -51,11 +51,42 @@ import "@/components/lit/component-preview";
 // it through the catalogue, so re-ingesting a node the catalogue already holds drew the approved
 // component while the fresh draft sat untouched. Given the FILE, it can only draw the draft.
 import "@/components/lit/draft-preview";
-// THE PRODUCT ROOM'S CONTEXT STRIP (2026-10-03) — the design-system chooser that sits at the
-// top of her panel and names the catalogue the stage draws from. Same registration rule as
-// every import here — the room's tree names it, so a tag nothing defines would draw an empty
-// strip with no error.
-import "@/components/lit/design-system-picker";
+// (THE PRODUCT ROOM'S CONTEXT STRIP WAS HERE — `design-system-picker`, registered 2026-10-03 and
+// removed the same day on the owner's word: *"I don't want the user to be able to select a
+// catalogue… I'm removing that feature."* The room's system is a server-side constant now;
+// nothing selects, so nothing is registered. The element file is deleted with this import.)
+// THE COPIED-IN DESIGN SYSTEMS (2026-10-03) — AgnosticUI's Select (instance #1) and Kor's
+// button (instance #2), real upstream source walked through this app's catalogue pipeline
+// (manifest → ingest → accept). EACH SYSTEM'S REGISTRATION IS ITS OWN FILE: these imports point
+// at each system's registry module (components/lit/<system>/registry.ts), which registers that
+// system's elements and carries its declarations — by the owner's wall (PLANS.AGENT/
+// multiple-catalogs.md §10), an ingested system's registry lives in its own tree and never in
+// shared/tag-registry.ts, and this list pulls it into the bundle the same way it pulls every
+// other element of this app.
+import "@/components/lit/agnosticui/registry";
+import "@/components/lit/kor/registry";
+// AND CARBON — IBM'S OWN (2026-10-03, late): the vendor package's own Lit components, used
+// AS-IS (its registry module imports @carbon/web-components' modules — no copied source) plus
+// Carbon's styles. The room's system is Carbon; Kor stays a partition, unseated.
+import "@/components/lit/carbon/registry";
+// THE GOVERNANCE ROOM'S FEED (2026-10-03) — the per-call cost ledger, drawn. Same registration
+// rule as every import here: the room's tree names it, so a tag nothing defines would draw an
+// empty box and say nothing.
+import "@/components/lit/governance-usage-view";
+// THE PRODUCT ROOM'S STAGE, IN ITS OWN ERA (2026-10-03, late): <artifact-canvas> is the window
+// onto the PAGE Grace builds from the person's sentence (POST /api/ai/build-artifact) — a
+// sandboxed iframe that cannot run a script, with the rail's one Clear. Same registration rule
+// as every import here: the room's tree names it, so a tag nothing defines would draw an empty
+// box and say nothing. (The node-era <draft-canvas> stage stays for the Composer; it is
+// parked, unwired, in the Product room's tree.)
+import "@/components/lit/artifact-canvas";
+// THE PRODUCT ROOM IS THE BUILDER NOW (2026-10-04): <builder-embed> is the room's one pane —
+// the whole app builder (prompt box, run progression, live preview, code) served by this
+// machine's local engine, with Grace's seat removed from this room (owner: *"just load that
+// inside of the product area … the product room will just remove the grace chat"*). Same
+// registration rule as every import here: the room's tree names it, so a tag nothing defines
+// would draw an empty box and say nothing.
+import "@/components/lit/builder-embed";
 import "@/components/lit/workspace-layout";
 // The prompt's own bar — title, version label and package id, above the sections in the
 // left column. It used to be row 2 of the React `LeftColumnHeader`, which meant the TITLE

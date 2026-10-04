@@ -101,6 +101,7 @@ from routes import (
     agent_rpc,
     ai,
     auth,
+    builder_bridge,
     conversations,
     figma,
     figma_intake,
@@ -116,7 +117,7 @@ from routes import (
 
 for _m in (misc, conversations, projects, teacher, memory,
            prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance,
-           figma_intake):
+           figma_intake, builder_bridge):
     app.include_router(_m.router)
 
 
@@ -135,6 +136,40 @@ for _m in (misc, conversations, projects, teacher, memory,
 from demo_policy import demo_policy_dispatch
 
 app.middleware("http")(demo_policy_dispatch)
+
+
+# ── AND EVERY MODEL CALL BECOMES A ROW, ONCE, WITH ITS USER (2026-10-03) ────────────────────────
+# The Governance room reads what the system spent; this is where a call becomes a row. The
+# NUMBERS are made in grace_gui (LAST_USAGE, from the provider's own usage block); the USER is
+# known HERE, at the request boundary — this middleware composes the two and writes exactly one
+# row per changed call_id. It never fails a request: the response travels back untouched, and a
+# failed record is printed loudly by the writer itself (a broken ledger must be visible, not
+# fatal). A request that made no model call is a no-op — the call_id has not changed.
+from deps import get_user_id_from_header
+from grace_gui import record_pending_usage
+
+
+@app.middleware("http")
+async def usage_ledger(request: Request, call_next):
+    # WHAT THE CALL WAS ABOUT — from REQUEST HEADERS, never the body. The first version read
+    # `request.body()` here and the first POST after it hung forever (measured 2026-10-03,
+    # 12:54: `curl` timed out at 90s with no access line — a body read in this middleware
+    # deadlocks these requests). Headers are free: the shell names the package it is asking
+    # about (`X-Package-Session`), and a request that names nothing records nothing.
+    package_context: dict[str, object] | None = None
+    head_session = request.headers.get("x-package-session")
+    head_conversation = request.headers.get("x-conversation-id")
+    if head_session or head_conversation:
+        package_context = {
+            "package_session_id": head_session,
+            "conversation_id": head_conversation,
+        }
+    response = await call_next(request)
+    try:
+        record_pending_usage(get_user_id_from_header(request.headers.get("X-User-ID")), package_context)
+    except Exception as ledger_error:
+        print(f"[usage] the ledger middleware failed: {ledger_error}")
+    return response
 
 
 # ── Serve production frontend (SPA) ────────────────────────────────────

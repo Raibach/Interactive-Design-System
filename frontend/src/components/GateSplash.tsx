@@ -134,7 +134,7 @@ export default function GateSplash({ holdUntilDrawn = false }: { holdUntilDrawn?
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#1a1625',
+        backgroundColor: '#110E1F',
         fontFamily: "'Inter', system-ui, sans-serif",
         opacity: fading ? 0 : 1,
         transition: `opacity ${FADE_MS}ms ease`,

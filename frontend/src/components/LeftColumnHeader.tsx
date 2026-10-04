@@ -94,26 +94,25 @@ export default function LeftColumnHeader({
     { id: 'composer', label: 'Composer' },
     { id: 'design', label: 'Design' },
     /*
-     * TWO STUBS REMAIN, AND THEY NOW SAY SO.
+     * ONE STUB REMAINED, AND IT SAID SO — AND NOW IT IS A ROOM.
      *
-     * Development and Governance are compartments of the shell with nothing behind them yet:
-     * selecting one changed the tab and drew no section, so the person landed on an empty
-     * column and could not tell an unbuilt compartment from a broken one. `disabled` is the
-     * mechanism this row already had for exactly that — `title="Not wired up yet"`,
-     * `aria-disabled`, `cursor-default`, and no click effect — and it was here, unused.
+     * Development was the last compartment of the shell with nothing behind it: selecting it
+     * changed the tab and drew no section, so the person landed on an empty column and could
+     * not tell an unbuilt compartment from a broken one. `disabled` was the mechanism this row
+     * already had for exactly that — `title="Not wired up yet"`, `aria-disabled`,
+     * `cursor-default`, and no click effect.
      *
-     * THE OWNER'S WORD, 2026-10-01: *"these items on the navigation and our shell at the top should
-     * be stubs. They shouldn't do anything at this time."* They stay VISIBLE and in their order,
-     * because the shell is the compartments and a reader should see what is coming; what stops is
-     * the pretence that the click opens something.
+     * THE OWNER'S WORD, 2026-10-01: *"these items on the navigation and our shell at the top
+     * should be stubs. They shouldn't do anything at this time."*
      *
-     * PRODUCT LEFT THIS SET (2026-10-03): it is a real room — its own branch,
-     * `render-product`, its own renderer — so it takes the click like Console, Composer and
-     * Design do.
+     * PRODUCT AND GOVERNANCE (2026-10-03) LEFT THIS SET first; DEVELOPMENT LEFT IT 2026-10-04 —
+     * the owner: *"you could just drop it right in there. Can't you under a development tab"* —
+     * and it is now bolt.diy's room, embedded whole the way the Product room embeds the app
+     * builder. No stubs remain.
      */
     { id: 'product', label: 'Product' },
-    { id: 'development', label: 'Development', disabled: true },
-    { id: 'governance', label: 'Governance', disabled: true },
+    { id: 'development', label: 'Development' },
+    { id: 'governance', label: 'Governance' },
   ];
 
   // ── Embla carousel for nav tabs — no dragFree so tabs stay

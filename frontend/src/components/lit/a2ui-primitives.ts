@@ -562,6 +562,7 @@ class A2UIConsoleCardGrid extends LitElement {
         data-a2ui-id=${sessionId}
         title=${item?.title ?? ''}
         category=${item?.category ?? ''}
+        header-label=${item?.room_domain === 'product' ? (item?.category ?? '') : ''}
         function=${item?.function ?? 'Function like Repair'}
         description=${item?.description ?? ''}
         version=${item?.version || item?.message_count || 1}

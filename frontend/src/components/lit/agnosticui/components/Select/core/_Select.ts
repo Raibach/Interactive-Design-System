@@ -1,0 +1,518 @@
+// ── COPIED IN FROM AGNOSTICUI, 2026-10-03 ───────────────────────────────────────────────────────
+// Real upstream source (github.com/AgnosticUI/agnosticui, v2/lib/src/components/Select/core),
+// taken under that project's own source-first design — "copy the source, own the code, no npm
+// dependency at runtime" — through this app's design-system pipeline: manifest → ingest → accept.
+// TWO MECHANICAL ADAPTATIONS TO THIS REPO'S DECORATOR MODE, and nothing else was touched:
+//   · lit 3 standard decorators require `accessor` fields, so `accessor` was inserted on every
+//     decorated member (the decorators themselves are untouched);
+//   · `@property({ attribute: false })` was removed from the four `declare`d event-callback
+//     members — TS forbids decorators on `declare` members, and those members are type-only.
+import { LitElement, html, css } from 'lit';
+import { property, query } from 'lit/decorators.js';
+import {
+  createFormControlIds,
+  buildAriaDescribedBy,
+  isHorizontalLabel,
+  type LabelPosition,
+} from '../../../shared/form-control-utils';
+import { formControlStyles } from '../../../shared/form-control-styles';
+import { FaceMixin, syncInnerInputValidity } from '../../../shared/face-mixin';
+
+export type SelectSize = 'small' | 'large' | '';
+
+// Event types
+export interface SelectChangeEventDetail {
+  value: string | string[];
+}
+export type SelectChangeEvent = CustomEvent<SelectChangeEventDetail>;
+
+export interface SelectProps {
+  size?: SelectSize;
+  multiple?: boolean;
+  disabled?: boolean;
+  name?: string;
+  multipleSize?: number;
+  // External label support
+  label?: string;
+  labelPosition?: LabelPosition;
+  labelHidden?: boolean;
+  noLabel?: boolean;
+  required?: boolean;
+  invalid?: boolean;
+  errorMessage?: string;
+  helpText?: string;
+  // Event callbacks
+  onClick?: (event: MouseEvent) => void;
+  onFocus?: (event: FocusEvent) => void;
+  onBlur?: (event: FocusEvent) => void;
+  onChange?: (event: SelectChangeEvent) => void;
+}
+
+/**
+ * Select component - A lightly styled native select element
+ *
+ * @slot - Option elements
+ *
+ * @csspart ag-select - The select element
+ *
+ * @fires change - Emitted when selection changes
+ */
+export class Select extends FaceMixin(LitElement) implements SelectProps {
+  static shadowRootOptions = {
+    ...LitElement.shadowRootOptions,
+    delegatesFocus: true,
+  };
+
+  @property({ type: String, reflect: true })
+  public accessor size: SelectSize = '';
+
+  @property({ type: Boolean, reflect: true })
+  public accessor multiple = false;
+
+  @property({ type: Boolean, reflect: true })
+  public accessor disabled = false;
+
+  @property({ type: Number, attribute: 'multiple-size' })
+  public accessor multipleSize: number | undefined;
+
+  // External label properties
+  @property({ type: String })
+  public accessor label = '';
+
+  @property({ type: String, attribute: 'label-position' })
+  public accessor labelPosition: LabelPosition = 'top';
+
+  @property({ type: Boolean, attribute: 'label-hidden' })
+  public accessor labelHidden = false;
+
+  @property({ type: Boolean, attribute: 'no-label' })
+  public accessor noLabel = false;
+
+  @property({ type: Boolean })
+  public accessor required = false;
+
+  @property({ type: Boolean })
+  public accessor invalid = false;
+
+  @property({ type: String, attribute: 'error-message' })
+  public accessor errorMessage = '';
+
+  @property({ type: String, attribute: 'help-text' })
+  public accessor helpText = '';
+
+  declare onClick?: (event: MouseEvent) => void;
+
+  declare onFocus?: (event: FocusEvent) => void;
+
+  declare onBlur?: (event: FocusEvent) => void;
+
+  declare onChange?: (event: SelectChangeEvent) => void;
+
+  @query('select')
+  private accessor selectElement!: HTMLSelectElement;
+
+  // ─── FACE ─────────────────────────────────────────────────────────────────
+
+  /**
+   * FACE lifecycle: called when the parent form is reset.
+   * Restores each option to its defaultSelected state (the `selected`
+   * attribute from the original HTML), then re-syncs the form value.
+   */
+  override formResetCallback(): void {
+    if (this.selectElement) {
+      Array.from(this.selectElement.options).forEach(opt => (opt.selected = opt.defaultSelected));
+    }
+    this._syncFormValue();
+    this._internals.setValidity({});
+    this._syncStates();
+  }
+
+  /**
+   * FACE lifecycle: called on session restore or browser autofill.
+   * Restores the selected option(s) from the previously saved form state.
+   * Uses updateComplete to ensure options are in the DOM before restoring.
+   */
+  override formStateRestoreCallback(
+    state: File | string | FormData | null,
+    _mode: 'restore' | 'autocomplete'
+  ): void {
+    this.updateComplete.then(() => {
+      if (!this.selectElement) return;
+      if (this.multiple && state instanceof FormData) {
+        const restored = new Set(Array.from(state.values()) as string[]);
+        Array.from(this.selectElement.options).forEach(opt => {
+          opt.selected = restored.has(opt.value);
+        });
+      } else if (typeof state === 'string') {
+        Array.from(this.selectElement.options).forEach(opt => {
+          opt.selected = opt.value === state;
+        });
+      }
+      this._syncFormValue();
+      this._syncValidity();
+      this._syncStates();
+    });
+  }
+
+  /**
+   * Sync CustomStateSet states so :state() pseudo-classes work from external CSS.
+   *
+   * Must be called AFTER _syncValidity() so that :state(invalid) reads the
+   * freshly-updated _internals.validity.valid value.
+   *
+   * Exposed states:
+   *  :state(disabled) — select is disabled
+   *  :state(required) — select is required
+   *  :state(invalid)  — FACE constraint validation is failing
+   */
+  private _syncStates(): void {
+    this._setState('disabled', this.disabled);
+    this._setState('required', this.required);
+    this._setState('invalid', !this._internals.validity.valid);
+  }
+
+  /**
+   * Sync the form value to ElementInternals.
+   * Single select: submits the selected value as a string.
+   * Multi-select: uses the FormData overload to submit all selected values
+   * under the same key (matching native <select multiple> behavior).
+   */
+  private _syncFormValue(): void {
+    if (!this.selectElement) return;
+    if (this.multiple) {
+      const formData = new FormData();
+      Array.from(this.selectElement.selectedOptions).forEach(opt => {
+        formData.append(this.name, opt.value);
+      });
+      this._internals.setFormValue(formData);
+    } else {
+      this._internals.setFormValue(this.selectElement.value || '');
+    }
+  }
+
+  /**
+   * Sync validity to ElementInternals by delegating to the inner <select>.
+   */
+  private _syncValidity(): void {
+    syncInnerInputValidity(this._internals, this.selectElement);
+  }
+
+  // ─── End FACE ─────────────────────────────────────────────────────────────
+
+  override updated(changedProperties: Map<string, unknown>) {
+    super.updated(changedProperties);
+    if (
+      changedProperties.has('disabled') ||
+      changedProperties.has('required') ||
+      changedProperties.has('invalid')
+    ) {
+      this._syncStates();
+    }
+  }
+
+  protected firstUpdated() {
+    // Ensure options are moved after first render
+    this.handleSlotChange();
+
+    // Listen for dynamic changes to slotted options
+    const slotElement = this.shadowRoot?.querySelector('slot');
+    if (slotElement) {
+      slotElement.addEventListener('slotchange', () => this.handleSlotChange());
+    }
+
+    // FACE: set initial form value and sync validity after options are in place
+    this._syncFormValue();
+    this._syncValidity();
+    this._syncStates();
+  }
+
+  private handleSlotChange() {
+    // Move option/optgroup elements from light DOM into the shadow DOM select
+    // This is required because <option> elements must be direct children of <select>
+    // and slotted content doesn't satisfy this requirement
+    if (!this.selectElement) return;
+
+    const slotElement = this.shadowRoot?.querySelector('slot');
+    if (!slotElement) return;
+
+    const assignedNodes = slotElement.assignedNodes();
+
+    // Move each option/optgroup from light DOM into the select element
+    assignedNodes.forEach(node => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as Element;
+        if (el.tagName === 'OPTION' || el.tagName === 'OPTGROUP') {
+          // Move the element from light DOM to shadow DOM
+          // appendChild will move it if it's not already a child
+          this.selectElement.appendChild(node);
+        }
+      }
+    });
+  }
+
+  static styles = [
+    formControlStyles,
+    css`
+      :host {
+        display: block;
+        width: 100%;
+      }
+
+      /* Hide the slot since options are moved into select */
+      slot {
+        display: none;
+      }
+
+      .select {
+      display: block;
+      width: 100%;
+      /* Remove default browser styling */
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+
+      /* Base styling */
+      padding: var(--ag-space-2) var(--ag-space-8) var(--ag-space-2) var(--ag-space-3);
+      -moz-padding-start: calc(var(--ag-space-3) - 3px);
+      font-size: var(--ag-font-size-sm);
+      font-weight: 400;
+      line-height: 1.5;
+      font-family: inherit;
+      color: var(--ag-text-primary);
+      border: var(--ag-border-width-1) solid var(--ag-border);
+      border-radius: var(--ag-radius-md);
+      background-color: var(--ag-background-primary);
+      transition:
+        border-color var(--ag-transition-fast) ease-in-out,
+        box-shadow var(--ag-transition-fast) ease-in-out;
+    }
+
+    /* Custom dropdown arrow for single select */
+    .select:not([multiple]) {
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23333330' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right var(--ag-space-3) center;
+      background-size: var(--ag-font-size-base) var(--ag-space-3);
+    }
+
+    /* Focus state */
+    .select:focus {
+      border-color: var(--ag-focus-ring-color);
+      box-shadow: 0 0 0 var(--ag-focus-ring-outline-width) var(--ag-focus-ring-color);
+      /* Needed for High Contrast mode */
+      outline:
+        var(--ag-focus-ring-outline-width) var(--ag-focus-ring-outline-style)
+        var(--ag-focus-ring-outline-color);
+      transition: box-shadow var(--ag-transition-fast) ease-out;
+    }
+
+    /* Disabled state */
+    .select:disabled {
+      background-color: var(--ag-disabled-bg);
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    /* Firefox focusring fix */
+    .select:-moz-focusring {
+      color: transparent;
+      text-shadow: 0 0 0 var(--ag-text-primary);
+    }
+
+    /* Small size variant */
+    :host([size="small"]) .select {
+      padding-block-start: var(--ag-space-1);
+      padding-block-end: var(--ag-space-1);
+      padding-inline-start: var(--ag-space-2);
+      font-size: var(--ag-font-size-sm);
+    }
+
+    /* Large size variant */
+    :host([size="large"]) .select {
+      padding-block-start: var(--ag-space-2);
+      padding-block-end: var(--ag-space-2);
+      padding-inline-start: var(--ag-space-4);
+      font-size: var(--ag-font-size-large);
+    }
+
+    /* Reduced motion support */
+    @media (prefers-reduced-motion), (update: slow) {
+      .select,
+      .select:focus {
+        transition: none;
+      }
+    }
+  `,
+  ];
+
+  private handleClick(event: MouseEvent) {
+    // Invoke callback if provided (native composed event)
+    if (this.onClick) {
+      this.onClick(event);
+    }
+  }
+
+  private handleFocus(event: FocusEvent) {
+    // Re-dispatch from host so consumers can listen on <ag-select>
+    this.dispatchEvent(new FocusEvent('focus', {
+      bubbles: true,
+      composed: true,
+    }));
+
+    // Invoke callback if provided
+    if (this.onFocus) {
+      this.onFocus(event);
+    }
+  }
+
+  private handleBlur(event: FocusEvent) {
+    // Re-dispatch from host so consumers can listen on <ag-select>
+    this.dispatchEvent(new FocusEvent('blur', {
+      bubbles: true,
+      composed: true,
+    }));
+
+    // Invoke callback if provided
+    if (this.onBlur) {
+      this.onBlur(event);
+    }
+  }
+
+  private handleChange(e: Event) {
+    const select = e.target as HTMLSelectElement;
+    let value: string | string[];
+
+    if (this.multiple) {
+      value = Array.from(select.selectedOptions).map(option => option.value);
+    } else {
+      value = select.value;
+    }
+
+    // FACE: sync form value and validity on every selection change
+    this._syncFormValue();
+    this._syncValidity();
+
+    // Dual-dispatch: dispatchEvent + callback
+    const changeEvent = new CustomEvent<SelectChangeEventDetail>('change', {
+      detail: { value },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(changeEvent);
+
+    // Invoke callback if provided
+    if (this.onChange) {
+      this.onChange(changeEvent);
+    }
+  }
+
+  private renderLabel(ids: { inputId: string }) {
+    if (!this.label || this.noLabel) return '';
+
+    // Build position classes
+    const positionClasses: string[] = [];
+    if (isHorizontalLabel(this.labelPosition)) {
+      positionClasses.push('ag-form-control__label--horizontal');
+      positionClasses.push(`ag-form-control__label--${this.labelPosition}`);
+    } else if (this.labelPosition === 'bottom') {
+      positionClasses.push(`ag-form-control__label--${this.labelPosition}`);
+    }
+
+    return html`
+      <label
+        for=${ids.inputId}
+        class="ag-form-control__label ${this.labelHidden
+          ? 'ag-form-control__label--hidden'
+          : ''} ${this.required ? 'ag-form-control__label--required' : ''} ${positionClasses.join(' ')}"
+      >
+        ${this.label}
+      </label>
+    `;
+  }
+
+  render() {
+    const ids = createFormControlIds('select');
+    const ariaDescribedBy = buildAriaDescribedBy({
+      helperId: ids.helperId,
+      errorId: ids.errorId,
+      hasHelper: !!this.helpText && !this.invalid,
+      hasError: !!this.invalid && !!this.errorMessage,
+    });
+
+    const isHorizontal = isHorizontalLabel(this.labelPosition);
+
+    const selectElement = html`
+      <select
+        id=${ids.inputId}
+        class="select"
+        part="ag-select"
+        ?multiple=${this.multiple}
+        ?disabled=${this.disabled}
+        ?required=${this.required}
+        .name=${this.name}
+        .size=${this.multipleSize ?? (this.multiple ? 4 : 1)}
+        @click=${this.handleClick}
+        @focus=${this.handleFocus}
+        @blur=${this.handleBlur}
+        @change=${this.handleChange}
+        aria-disabled=${this.disabled ? 'true' : 'false'}
+        aria-invalid=${this.invalid ? 'true' : 'false'}
+        aria-describedby=${ariaDescribedBy || undefined}
+      ></select>
+      <slot></slot>
+    `;
+
+    const helperText = this.helpText && !this.invalid
+      ? html`<div id=${ids.helperId} class="ag-form-control__helper">
+          ${this.helpText}
+        </div>`
+      : '';
+
+    const errorText = this.invalid && this.errorMessage
+      ? html`<div id=${ids.errorId} class="ag-form-control__error">
+          ${this.errorMessage}
+        </div>`
+      : '';
+
+    // For horizontal layout: [Label] [Select] structure with helper/error below
+    if (isHorizontal) {
+      return html`
+        <div class="ag-form-control--horizontal">
+          ${this.renderLabel(ids)}
+          ${selectElement}
+        </div>
+        ${helperText}
+        ${errorText}
+      `;
+    }
+
+    // For bottom label: Select first, then helper/error, then label
+    if (this.labelPosition === 'bottom') {
+      return html`
+        ${selectElement}
+        ${helperText}
+        ${errorText}
+        ${this.renderLabel(ids)}
+      `;
+    }
+
+    // Top label (default): Label first, then select, then helper/error
+    return html`
+      ${this.renderLabel(ids)}
+      ${selectElement}
+      ${helperText}
+      ${errorText}
+    `;
+  }
+}
+
+// Register the custom element
+if (!customElements.get('ag-select')) {
+  customElements.define('ag-select', Select);
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'ag-select': Select;
+  }
+}

@@ -85,13 +85,13 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
      * surviving a reload. So the two lists are separate on purpose: a name the application
      * RECOGNISES, and a place it can LAND.
      *
-     * ── AND PRODUCT LEFT THE STUBS (2026-10-03) ───────────────────────────────────────────────
-     * Product is a real room now — its own branch, `render-product`, its own renderer — so it is
-     * a place the application can LAND: a browser whose last tab was Product opens there, which
-     * is what a room is for.
+     * ── AND PRODUCT AND GOVERNANCE LEFT THE STUBS (2026-10-03) ───────────────────────────────
+     * Both are real rooms now — their own branches, `render-product` / `render-governance`,
+     * their own renderers — so they are places the application can LAND: a browser whose last
+     * tab was either opens there, which is what a room is for. Development is the last stub.
      */
     const KNOWN_TABS = ['console', 'composer', 'design', 'product', 'development', 'governance'];
-    const LANDABLE_TABS = ['console', 'composer', 'design', 'product'];
+    const LANDABLE_TABS = ['console', 'composer', 'design', 'product', 'governance'];
     const saved = localStorage.getItem("activeHeaderTab");
     if (saved && LANDABLE_TABS.includes(saved)) return saved;
     return initialTab && LANDABLE_TABS.includes(initialTab) ? initialTab : "console";

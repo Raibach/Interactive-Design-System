@@ -1,0 +1,11 @@
+{
+  "system": "carbon",
+  "components": {
+    "cds-button": "cds-button",
+    "cds-card": "cds-card",
+    "cds-checkbox": "cds-checkbox",
+    "cds-select": "cds-select",
+    "cds-text-input": "cds-text-input",
+    "cds-textarea": "cds-textarea"
+  }
+}

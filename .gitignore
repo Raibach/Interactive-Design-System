@@ -213,3 +213,16 @@ n8n-data/
 # discards, or asks for something else. It is not source, not a component, and must never be
 # committed (backend/routes/figma.py _write_preview_files / _drop_preview_files).
 frontend/.preview/
+
+# ── THE VENDORED SHELF AND THE DEVELOPMENT CLONES (2026-10-04) ─────────────────────────────
+# Reference material adopted whole, never ours to version: the sample repos under
+# wireframe-lab/ and every clone under development/. The ENGINE that the Product room runs on
+# IS versioned — inside wireframe-lab/ai-app-builder-open's own git repo (it is that copy's
+# local-vcaas/), because it lives beside the app it serves.
+wireframe-lab/agent-native/
+wireframe-lab/ai-app-builder-open/
+wireframe-lab/ai-elements-main/
+wireframe-lab/builder-main/
+wireframe-lab/chatbot-main/
+wireframe-lab/mitosis-main/
+development/

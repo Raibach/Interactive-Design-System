@@ -110,7 +110,9 @@ export default function ConsolePage({
   if (isParentLoading) {
     return (
       <div className="flex-1 w-full h-full flex flex-col items-center justify-center gap-4" style={{ minHeight: "calc(100vh - 120px)" }}>
-        <div className="w-8 h-8 border-3 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
+        {/* THE GATE'S RING (2026-10-04) — the sign-in gate's amber indicator, so every
+            assembly gate wears one look. */}
+        <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
         <p className="text-[#507274] text-sm font-medium font-['Inter'] animate-pulse">{loadingMessage}</p>
       </div>
     );

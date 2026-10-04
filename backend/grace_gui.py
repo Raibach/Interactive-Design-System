@@ -2,7 +2,12 @@
 Grace — LLM query layer for the prompt-composer backend.
 
 Single entry point: query_llm().
-ONE MODEL SERVES EVERY MODE: DeepSeek's hosted API (deepseek-chat), chosen 2026-09-24
+ONE MODEL SERVES EVERY MODE: DeepSeek's hosted API, running `deepseek-v4-pro` since
+2026-10-03 (the owner: *"switch it to DeepSeek pro"* — the API's own model list carries
+`deepseek-v4-pro` and `deepseek-flash`, and v4-pro was probed BEFORE the switch: it answers
+in ~1.9s and accepts `response_format: json_object`, the format every assembly call sends.
+The knob is `DEEPSEEK_MODEL` in `.env`; the code default follows it). Before that,
+`deepseek-chat`, chosen 2026-09-24
 for speed — the local Qwen on LM Studio took 17–30s to assemble a surface, and the
 Northflank account has no GPU plans to host it on. What changes per mode is the
 SETTINGS, not the model — an A2UI surface is a transcription whose answer space the
@@ -14,6 +19,7 @@ model cannot answer. No fake surfaces: there is no cache and no substitute of an
 """
 
 import itertools
+import json
 import os
 import time
 from typing import Any
@@ -47,9 +53,23 @@ MODEL_PROVIDERS = [
         # the local Qwen9B was measured too slow for surface assembly and Northflank
         # turned out to offer the account no GPU plans to host the model on. The key
         # already existed in the production environment; the switch is this entry.
+        #
+        # AND IT MOVED TO `deepseek-v4-pro` ON 2026-10-03 — the owner: *"switch it to DeepSeek
+        # pro."* The API's model list offers `deepseek-v4-pro` and `deepseek-flash`; v4-pro was
+        # probed first (answers in ~1.9s, json_object accepted) and the env value is the knob —
+        # so a deployment can differ by env alone, and the demo's env moves only on the owner's
+        # word. `deepseek-flash` is the faster tier if a mode ever wants it.
+        #
+        # AND BACK TO `deepseek-flash` LOCALLY ON 2026-10-04 — the owner: *"let's switch our
+        # model back to DeepSeek flash. Which is you. Now you can do the assembly and talk to
+        # yourself."* Both of this house's consumers moved together the same hour: THIS file's
+        # app (assembly + Grace, `backend/.env`) and the builder's engine
+        # (`wireframe-lab/ai-app-builder-open/local-vcaas/.env`). Measured on the switch: a
+        # builder build 5s vs 12s for the same prompt, a console assembly 2s. The env value is
+        # still the knob — one line per system to move back.
         "name": "DeepSeek (hosted API)",
         "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
         "api_key_env": "DEEPSEEK_API_KEY",
         "api_key_required": True,
         # DeepSeek accepts json_object — the constraint the local server refused (LM
@@ -99,7 +119,7 @@ def _provider_hint(mode: str) -> str:
     return (
         "No model is configured. Every mode runs on DeepSeek's hosted API: set "
         f"DEEPSEEK_API_KEY (and optionally DEEPSEEK_BASE_URL / DEEPSEEK_MODEL, "
-        f"currently {os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')}). There is no second "
+        f"currently {os.getenv('DEEPSEEK_MODEL', 'deepseek-v4-pro')}). There is no second "
         "model: nothing is assembled or written by anything else."
     )
 
@@ -225,10 +245,10 @@ ASSISTANT_PROFILE = """
 YOUR PROFILE — you are the COLLABORATOR, not the assembler and not the repair applier.
 The rule against inventing annotations, event names, data paths, states, and
 accessibility labels binds the code that applies changes — never your conversation.
-Never refuse to help because a value is missing. When a design value is absent,
-PROPOSE one and say it is proposed: "I'll propose role-select — confirm it, or
-paste the Figma value." Never write a proposed value into the surface as if it
-came from the design.
+Never refuse to help because a value is missing. When a value a room's work needs
+is absent, PROPOSE one and say it is proposed: name it plainly, ask for a
+confirmation, and never write a proposed value into a surface as if it came from
+the room's own source.
 """
 
 
@@ -247,6 +267,157 @@ LAST_USAGE: dict[str, Any] = {}
 # twice dispatches its usage twice and the running tally double-counts.
 # itertools.count() is atomic in CPython — no lock, and no `global` needed.
 _CALL_SEQ = itertools.count(1)
+
+
+# ── AND EVERY CALL IS PERSISTED, SO THE COST HAS A HISTORY (2026-10-03) ─────────────────────────
+# The owner: *"it's a great way to test our system for me to observe the governance of the
+# system's performance — to see what kind of cost is generated using a pro model from a cloud,
+# because the ultimate objective of the application is to reduce token costs."*
+#
+# LAST_USAGE carries the numbers per call (from the provider's own usage block). This WRITES
+# them — one row per call, `metric_type='llm_call'` in the schema's own `usage_metrics` — so the
+# Governance room reads a HISTORY rather than a heartbeat. ONE WRITER, ONE ROW PER CALL: the
+# middleware in main.py composes the request's user with these numbers and calls this exactly
+# once per changed call_id (the guard below is the "once").
+#
+# TOKENS ARE MEASURED; COST IS AN ESTIMATE, and only exists when this deployment states its
+# prices (DEEPSEEK_PRICE_IN_PER_M / DEEPSEEK_PRICE_OUT_PER_M, USD per million tokens). With no
+# prices configured the row carries tokens and NO cost — an absent number, never an invented one.
+_LAST_RECORDED_CALL_ID: int | None = None
+
+
+# ── THE PRICES, FROM THE OWNER'S SHEET (2026-10-03) ─────────────────────────────────────────────
+# USD per 1M tokens, as DeepSeek publishes them: cache-HIT and cache-MISS input are priced
+# apart, and so is output. OFF-PEAK IS HALF OF PEAK; peak hours are 01:00-04:00 and 06:00-10:00
+# UTC, Monday-Friday — and Chinese public holidays are excluded from peak BY THE SHEET and NOT
+# modeled here, so this estimator bills a CN holiday at PEAK rates: the error is conservative,
+# and the basis string says which side it used. `DEEPSEEK_PRICING` = `auto` (the clock),
+# `peak`, or `off` — the owner's override if the formula is ever disputed.
+_DEEPSEEK_PRICING = {
+    "deepseek-v4-pro": {
+        "off_peak": {"input_hit": 0.022, "input_miss": 0.66, "output": 1.98},
+        "peak": {"input_hit": 0.044, "input_miss": 1.32, "output": 3.96},
+    },
+    "deepseek-flash": {
+        "off_peak": {"input_hit": 0.003, "input_miss": 0.15, "output": 0.6},
+        "peak": {"input_hit": 0.006, "input_miss": 0.30, "output": 1.2},
+    },
+}
+
+
+def _is_peak_now() -> bool:
+    """DeepSeek's peak windows on the UTC clock: 01:00-04:00 and 06:00-10:00, Monday-Friday."""
+    now = time.gmtime()
+    if now.tm_wday >= 5:  # Saturday and Sunday are off-peak in full
+        return False
+    return (1 <= now.tm_hour < 4) or (6 <= now.tm_hour < 10)
+
+
+def _estimate_cost(
+    model: str | None,
+    prompt_tokens: int | None,
+    prompt_hit_tokens: int | None,
+    prompt_miss_tokens: int | None,
+    completion_tokens: int | None,
+) -> tuple[float | None, str | None]:
+    """One call's estimated USD, and the basis it was estimated on. No table entry, no number.
+
+    THE CACHE SPLIT IS USED WHEN THE PROVIDER REPORTED ONE. Without it every input token is
+    billed at the MISS price — the conservative side — and the basis SAYS so, so a reader can
+    tell a measured split from a cautious assumption.
+    """
+    rates = _DEEPSEEK_PRICING.get(str(model or ""))
+    if not rates:
+        return None, None
+    mode = os.getenv("DEEPSEEK_PRICING", "auto").strip().lower()
+    peak = mode == "peak" or (mode != "off" and _is_peak_now())
+    tier = rates["peak"] if peak else rates["off_peak"]
+    window = "peak" if peak else "off-peak"
+    completion = int(completion_tokens) if completion_tokens is not None else 0
+    if prompt_hit_tokens is not None and prompt_miss_tokens is not None:
+        input_part = (
+            (int(prompt_hit_tokens) / 1_000_000) * tier["input_hit"]
+            + (int(prompt_miss_tokens) / 1_000_000) * tier["input_miss"]
+        )
+        split = "measured cache split"
+    else:
+        input_part = (
+            (int(prompt_tokens) if prompt_tokens is not None else 0) / 1_000_000
+        ) * tier["input_miss"]
+        split = "all input at the cache-miss price (no split reported)"
+    output_part = (completion / 1_000_000) * tier["output"]
+    return round(input_part + output_part, 6), f"DeepSeek {window} rates, {split}"
+
+
+def record_pending_usage(user_id: str | None, package_context: dict[str, Any] | None = None) -> None:
+    """Persist the most recent call's usage, once. Never raises; a failure is printed loudly.
+
+    `package_context` (optional) names what the call was ABOUT — the request's own package /
+    conversation ids, read at the boundary (main.py). The owner's governance shape reads by
+    user and sorts by package activity, so a row that can say which package it belonged to is
+    the difference between a list and a bill nobody can attribute.
+    """
+    global _LAST_RECORDED_CALL_ID
+    usage = dict(LAST_USAGE)
+    call_id = usage.get("call_id")
+    if call_id is None or call_id == _LAST_RECORDED_CALL_ID or not user_id:
+        return
+    _LAST_RECORDED_CALL_ID = call_id
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    # THE REAL ESTIMATE — DeepSeek's own published rates, at the right window (see the table
+    # above); absent for a model the table does not know, because an invented price is worse
+    # than no price.
+    est_cost, cost_basis = _estimate_cost(
+        usage.get("model"),
+        prompt_tokens,
+        usage.get("prompt_cache_hit_tokens"),
+        usage.get("prompt_cache_miss_tokens"),
+        completion_tokens,
+    )
+    metadata = {
+        "call_id": call_id,
+        "provider": usage.get("provider"),
+        "model": usage.get("model"),
+        "mode": usage.get("mode"),
+        "temperature": usage.get("temperature"),
+        "reasoning_effort": usage.get("reasoning_effort"),
+        "elapsed_s": usage.get("elapsed_s"),
+        "reasoning_tokens": usage.get("reasoning_tokens"),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": usage.get("total_tokens"),
+        # THE CACHE SPLIT THE ESTIMATE USED — carried in the row too, so a reader can check the
+        # price against the same numbers (hit tokens are ~30x cheaper than misses).
+        "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens"),
+        "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens"),
+        "est_cost_usd": est_cost,
+        "cost_basis": cost_basis,
+        # WHICH PACKAGE THIS CALL WAS ABOUT, when the request named one — see the docstring.
+        "package_session_id": (package_context or {}).get("package_session_id"),
+        "conversation_id": (package_context or {}).get("conversation_id"),
+    }
+    try:
+        from database_pool import DatabasePoolManager
+
+        pool = DatabasePoolManager.get_instance()
+        with pool.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO usage_metrics (user_id, metric_type, count, period_month, metadata)
+                VALUES (%s, 'llm_call', 1, date_trunc('month', now())::date, %s::jsonb)
+                """,
+                (user_id, json.dumps(metadata)),
+            )
+            conn.commit()
+    except Exception as metric_error:
+        # A WRITE THAT FAILED IS SAID — the call itself already succeeded, so failing the
+        # request now would punish the wrong thing; silence would hide a broken ledger.
+        print(
+            f"[usage] this call was NOT recorded ({metric_error}) — "
+            f"mode={usage.get('mode')} model={usage.get('model')}"
+        )
 
 
 def query_llm(
@@ -516,6 +687,11 @@ def query_llm(
                 "prompt_tokens": getattr(_usage, "prompt_tokens", None),
                 "completion_tokens": getattr(_usage, "completion_tokens", None),
                 "total_tokens": getattr(_usage, "total_tokens", None),
+                # THE CACHE SPLIT, WHEN THE PROVIDER REPORTS ONE — DeepSeek prices cache-hit
+                # input an order of magnitude below misses, so the two are carried apart (the
+                # estimate above uses them when both are present).
+                "prompt_cache_hit_tokens": getattr(_usage, "prompt_cache_hit_tokens", None),
+                "prompt_cache_miss_tokens": getattr(_usage, "prompt_cache_miss_tokens", None),
             })
         content = (message.content or "").strip()
         if not content:

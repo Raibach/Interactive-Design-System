@@ -25,6 +25,122 @@ from grace_gui import (
 router = APIRouter()
 
 
+# ── WHAT THE SYSTEM SPENT (2026-10-03) ──────────────────────────────────────────────────────────
+# The Governance room's feed. The per-call ledger lives in `usage_metrics`
+# (`metric_type='llm_call'`, one row per model call — written by `record_pending_usage`, its
+# numbers from the provider's own usage block, its user composed in by the middleware in
+# main.py). This reads it newest-first with today's totals.
+#
+# TOKENS ARE MEASURED; COST IS AN ESTIMATE and is present only when the deployment states its
+# prices (`DEEPSEEK_PRICE_IN_PER_M` / `DEEPSEEK_PRICE_OUT_PER_M`) — an absent cost is reported
+# as absent, never zeroed and never guessed. `priced_calls` says how many of today's calls the
+# cost covers, so a partial sum can never masquerade as the whole bill.
+#
+# THE PATH IS UNDER /api/governance/ ON PURPOSE: the demo's GET denylist already refuses that
+# prefix, so spend data stays off the public demo with no new policy entry to write.
+@router.get("/api/governance/usage")
+async def governance_usage(limit: int = 50):
+    """The per-call ledger (newest first) and today's totals. A read of the record, nothing else."""
+    if state.prompt_sessions_api is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    limit = max(1, min(int(limit), 500))
+    try:
+        with state.prompt_sessions_api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT user_id, created_at, metadata
+                FROM usage_metrics
+                WHERE metric_type = 'llm_call'
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*)                                                     AS calls,
+                    COALESCE(SUM((metadata->>'prompt_tokens')::bigint), 0)       AS prompt_tokens,
+                    COALESCE(SUM((metadata->>'completion_tokens')::bigint), 0)   AS completion_tokens,
+                    COALESCE(SUM((metadata->>'total_tokens')::bigint), 0)        AS total_tokens,
+                    SUM((metadata->>'est_cost_usd')::numeric)                    AS est_cost_usd,
+                    COUNT(*) FILTER (WHERE metadata->>'est_cost_usd' IS NOT NULL) AS priced_calls
+                FROM usage_metrics
+                WHERE metric_type = 'llm_call' AND created_at >= date_trunc('day', now())
+                """,
+            )
+            today = cursor.fetchone() or {}
+            cursor.execute(
+                """
+                SELECT metadata->>'model' AS model, COUNT(*) AS calls,
+                       COALESCE(SUM((metadata->>'total_tokens')::bigint), 0) AS total_tokens
+                FROM usage_metrics
+                WHERE metric_type = 'llm_call' AND created_at >= date_trunc('day', now())
+                GROUP BY 1 ORDER BY 2 DESC
+                """,
+            )
+            by_model = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT user_id, COUNT(*) AS calls,
+                       COALESCE(SUM((metadata->>'total_tokens')::bigint), 0) AS total_tokens
+                FROM usage_metrics
+                WHERE metric_type = 'llm_call' AND created_at >= date_trunc('day', now())
+                GROUP BY 1 ORDER BY 3 DESC
+                """
+            )
+            by_user = cursor.fetchall()
+    except Exception as read_error:
+        raise HTTPException(status_code=503, detail=f"the usage ledger could not be read: {read_error}")
+
+    def _call_row(row: dict[str, Any]) -> dict[str, Any]:
+        meta = row.get("metadata") or {}
+        return {
+            "user_id": str(row.get("user_id") or ""),
+            "at": row["created_at"].isoformat() if row.get("created_at") else "",
+            **meta,
+        }
+
+    return {
+        "calls": [_call_row(r) for r in rows],
+        "today": {
+            "calls": int(today.get("calls") or 0),
+            "prompt_tokens": int(today.get("prompt_tokens") or 0),
+            "completion_tokens": int(today.get("completion_tokens") or 0),
+            "total_tokens": int(today.get("total_tokens") or 0),
+            "est_cost_usd": (
+                float(today["est_cost_usd"]) if today.get("est_cost_usd") is not None else None
+            ),
+            "priced_calls": int(today.get("priced_calls") or 0),
+        },
+        "today_by_model": [
+            {
+                "model": b.get("model"),
+                "calls": int(b.get("calls") or 0),
+                "total_tokens": int(b.get("total_tokens") or 0),
+            }
+            for b in by_model
+        ],
+        # THE OWNER'S SHAPE: *"a list of activity, listed at the level of USER… sorted by their
+        # package activity"* — so the day is also grouped by user, busiest first.
+        "today_by_user": [
+            {
+                "user_id": str(u.get("user_id") or ""),
+                "calls": int(u.get("calls") or 0),
+                "total_tokens": int(u.get("total_tokens") or 0),
+            }
+            for u in by_user
+        ],
+        "cost_note": (
+            "costs are estimated from DeepSeek's published rates (peak/off-peak on the UTC clock; "
+            "a measured cache split is used when the provider reported one, and every input token "
+            "is billed at the cache-miss price otherwise)"
+        ),
+    }
+
+
 # Models for request/response
 class NewsQuery(BaseModel):
     query: str

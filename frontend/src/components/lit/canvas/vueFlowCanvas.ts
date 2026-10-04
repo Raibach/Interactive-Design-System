@@ -181,6 +181,36 @@ const ModuleNode = (props: NodeProps<{ flow: FlowNode; selected: boolean; locked
  * (`resolveTag` — the one reader of the name→tag mapping); an empty `tag` means the catalogue does
  * not know the name, and the node says so BY NAME. Never a blank frame, never a substitute.
  */
+/**
+ * MOUNT A CONTAINER'S CONTENTS (2026-10-03 — the owner's rule, from watching the room: *"Always
+ * create a container first"*; this is the half that makes it true). Each child is mounted as a
+ * LIGHT-DOM child of its container's element, which is exactly how this platform's containers
+ * already work — kor-card's template has a default slot, and slotted content lands in it. A
+ * refused child draws its sentence INSIDE the container, by name; the recursion has no depth
+ * limit because the rule does not. The `data-kids` signature is the one-writer guard: children
+ * rebuild only when their ids/tags actually change, so a props-only update does not remount
+ * what already drew.
+ */
+const mountChildren = (parent: HTMLElement, kids: CanvasNodeInput[]): void => {
+  const signature = kids.map((c) => `${c.id}:${c.tag ?? ''}`).join('|');
+  if (parent.getAttribute('data-kids') === signature) return;
+  parent.setAttribute('data-kids', signature);
+  parent.replaceChildren();
+  for (const kid of kids) {
+    if (!kid.tag) {
+      const refusal = document.createElement('div');
+      refusal.className = 'refusal';
+      refusal.textContent = String(kid.refused || '');
+      parent.append(refusal);
+      continue;
+    }
+    const childEl = document.createElement(kid.tag) as HTMLElement & Record<string, unknown>;
+    for (const [k, v] of Object.entries(kid.props || {})) childEl[k] = v;
+    mountChildren(childEl, Array.isArray(kid.children) ? kid.children : []);
+    parent.append(childEl);
+  }
+};
+
 const CatalogNode = defineComponent({
   name: 'DraftCatalogNode',
   props: { data: { type: Object, required: true } },
@@ -190,7 +220,21 @@ const CatalogNode = defineComponent({
       const el = host.value;
       if (!el) return;
       const tag = String(props.data.tag || '');
-      if (!tag) return;                       // a refusal: the template below draws the sentence
+      /*
+       * A REFUSAL CLEARS THE HOST — found by driving 2026-10-03, the day the wall went in. The
+       * early return here used to LEAVE whatever the node had mounted: invisible while an
+       * unresolvable name stayed unresolvable, but the moment a session switched design systems
+       * it left the OTHER system's element standing under the refusal sentence (measured: an
+       * `<ag-select>` still mounted in a kor session's tile, beside "The catalogue does not know
+       * \"ag-select\"."). One writer per fact: what this node draws is the currently resolved
+       * tag's — a refused node draws the sentence and nothing else.
+       */
+      if (!tag) {
+        for (const child of Array.from(el.children)) {
+          if (!child.classList.contains('refusal')) child.remove();
+        }
+        return;
+      }
       const current = el.firstElementChild;
       if (!current || current.tagName.toLowerCase() !== tag) {
         el.replaceChildren(document.createElement(tag));
@@ -201,6 +245,8 @@ const CatalogNode = defineComponent({
       // PROPS AS PROPERTIES, one write per key on every apply: the payload is the model, and this
       // is the moment it lands on the element.
       for (const [k, v] of Object.entries(vars)) node[k] = v;
+      // AND THE CONTENTS, when this node is a container — see `mountChildren`.
+      mountChildren(node, Array.isArray(props.data.children) ? (props.data.children as CanvasNodeInput[]) : []);
     };
     onMounted(apply);
     onUpdated(apply);
@@ -209,6 +255,9 @@ const CatalogNode = defineComponent({
       {
         class: ['draft-node', props.data.selected ? 'sel' : ''],
         'data-node-id': props.data.id,
+        // THE LADDER'S WIDTH, CLAMPED BY THE ROOM — the element computed `widthPx` from the
+        // ladder and its own box (see the field's note). No widthPx means natural size.
+        style: props.data.widthPx ? { width: `${props.data.widthPx}px` } : undefined,
         ref: host,
       },
       [
@@ -234,6 +283,20 @@ export type CanvasNodeInput = {
   props?: Record<string, unknown>;
   /** The name the catalogue refused, drawn as a sentence (the draft variant). */
   refused?: string;
+  /** The node's size from the room's ladder — see SIZES. Unset means natural. */
+  size?: string;
+  /** The ladder width after the element CLAMPED it to its own box (2026-10-03): a smaller
+   *  window narrows the tile instead of overflowing it — the owner, in a small browser window:
+   *  *"Are you using clamps to center things? It's not responsive"*. The tile renders this, so
+   *  the ladder is a ceiling and the room is the floor. */
+  widthPx?: number;
+  /**
+   * A CONTAINER'S CONTENTS (2026-10-03 — the owner's rule: *"Always create a container first"*):
+   * each entry is the same shape as a top-level node ('tag'/'props'/'refused'/'children', no
+   * x/y of its own). The CatalogNode mounts them as LIGHT-DOM children of the container's
+   * element — the platform's own slot mechanism — and recurses.
+   */
+  children?: CanvasNodeInput[];
 };
 
 export interface VueFlowCanvas {
@@ -250,9 +313,19 @@ export interface VueFlowCanvas {
 
 const DOT = { '': '#aaa3b5', dark: 'rgba(107, 74, 158, 0.8)' };
 
+/**
+ * THE SIZE LADDER — the room's declared STRUCTURAL vocabulary (2026-10-03). The owner, watching
+ * a form render "1 inch wide": *"That's not a form size. Is she not using any of her judgment?"*
+ * — she had no size to choose FROM. So the ladder exists, the compile may set a node's `size`
+ * from it, and the TILE renders it: sm 320 / md 560 / lg 880 / full 1280. Structural, not
+ * styling: the values are ours and declared, the model never names a pixel, and the styling door
+ * stays shut. Unset = the tile's natural size.
+ */
+export const SIZES: Record<string, number> = { sm: 320, md: 560, lg: 880, full: 1280 };
+
 export function mountVueFlowCanvas(
   box: HTMLElement,
-  opts: { theme?: string; variant?: 'module' | 'catalog' } = {},
+  opts: { theme?: string; variant?: 'module' | 'catalog'; grid?: boolean } = {},
 ): VueFlowCanvas {
   // WHICH DRAWING THIS IS. 'module' is the run canvas (agent-flow); 'catalog' is the draft canvas,
   // whose nodes mount real registered components. The variant picks the node type at mount and is
@@ -301,7 +374,12 @@ export function mountVueFlowCanvas(
           connectOnClick: false,
           applyDefault: false,
         },
-        { default: () => h(Background, { gap: 16, size: 1.5, patternColor: this.dot }) },
+        // THE DOT GRID, AND THE ROOM'S SAY IN IT (2026-10-03): the Product room hides it — its
+        // ground already carries dots (owner: *"remove the dots from the screen because the
+        // background already has dots"*) — and every other drawing keeps it. A room-declared
+        // fact, like the gestures: `grid: false` renders no Background at all (not a transparent
+        // one — an unmounted pattern is one less layer to reason about).
+        { default: () => (opts.grid === false ? [] : h(Background, { gap: 16, size: 1.5, patternColor: this.dot })) },
       );
     },
   });
@@ -326,7 +404,7 @@ export function mountVueFlowCanvas(
         // through a run (measured, 2026-10-02: 28 ports visible while `running` was true). The
         // catalog variant's fields (`tag`, `props`, `refused`) sit beside them for the same reason.
         data: variant === 'catalog'
-          ? { id: n.id, tag: n.tag, props: n.props, refused: n.refused, selected: Boolean(n.selected) }
+          ? { id: n.id, tag: n.tag, props: n.props, refused: n.refused, selected: Boolean(n.selected), size: n.size, widthPx: n.widthPx, children: n.children ?? [] }
           : { flow: n as unknown as FlowNode, selected: n.selected, locked: n.locked },
       }));
     },

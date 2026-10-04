@@ -1,0 +1,10 @@
+{
+  "system": "kor",
+  "components": {
+    "kor-button": "kor-button",
+    "kor-card": "kor-card",
+    "kor-input": "kor-input",
+    "kor-text": "kor-text",
+    "kor-textarea": "kor-textarea"
+  }
+}

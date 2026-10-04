@@ -1136,6 +1136,10 @@
             "type": "string"
           }
         },
+        "chatLoadWidth": {
+          "type": "number",
+          "description": "THE ROOM'S DECLARED WIDTH FOR HER COLUMN ON LOAD (2026-10-03). 0/absent keeps the element's own rule (the equal split, the composer's design); a room that declares a width — the Product room sends 700, its owner's number — opens her there. NOT a clamp: a drag is still the operator's, and a saved width still wins."
+        },
         "id": {
           "type": "string"
         }
@@ -1503,6 +1507,18 @@
               "type": "array",
               "description": "The draft-safe palette: one {name, description} per catalogue entry marked draft: true, computed by the server from the SAME filter the compiler reads \u2014 one reader, two uses (the tray lists it; the compile prompt is bounded by it). Bound to /session/palette; with it bound, the stage draws its + Add picker."
             },
+            "movable": {
+              "type": "boolean",
+              "description": "May a hand MOVE ANYTHING here \u2014 a node, or the view? Default true (the Composer's draft view \u2014 a developer's hands keep their gestures: drag, pan, zoom). The Product room binds FALSE (owner, 2026-10-03: *\"get rid of the idea dragging elements around to reassemble them\u2026 if they want to move something, they have to tell her\"*, and, after finding the pan: *\"when I grab the background, it moves the buttons\"*): the tile still SELECTS and nothing else moves \u2014 no drag, no pan, no zoom \u2014 until Grace compiles a new layout."
+            },
+            "grid": {
+              "type": "boolean",
+              "description": "The canvas's dot grid \u2014 visible by default; the Product room binds FALSE (owner, 2026-10-03: *\"remove the dots from the screen because the background already has dots\"*) because that room's ground carries its own pattern. Same room-declared family as `movable`."
+            },
+            "clearable": {
+              "type": "boolean",
+              "description": "MAY THE STAGE BE CLEARED BY HAND? Default false; the Product room binds TRUE (owner, 2026-10-03, about the form that 'never goes away'). With it bound \u2014 and only while the draft holds at least one node \u2014 the rail draws a small Clear beside + Add; a press announces `draft-cleared` and the HOST writes the empty layout through the SAME one draft store the spoken 'clear the stage' lands in (one fact, both hands, one writer). Drawn only when there is something to clear: a control that cannot work is not drawn."
+            },
             "id": {
               "type": "string"
             }
@@ -1513,7 +1529,7 @@
         }
       ]
     },
-    "design-system-picker": {
+    "artifact-canvas": {
       "type": "object",
       "allOf": [
         {
@@ -1524,18 +1540,44 @@
         },
         {
           "type": "object",
-          "description": "THE PRODUCT ROOM CONTEXT STRIP \u2014 which design system the stage draws from. Implemented by <design-system-picker> in src/components/lit/design-system-picker.ts. One row at the top of her panel (the seat's view slot): the catalogues that exist (bound from the server, which reads the directory) and the one this package chose. Choosing dispatches `design-system-chosen`; the host writes the fact and re-assembles. It writes nothing itself.",
+          "description": "THE PRODUCT ROOM'S STAGE IN THE ARTIFACT ERA (2026-10-03, late): the window onto the PAGE Grace builds from the person's own sentence (POST /api/ai/build-artifact) \u2014 a real HTML document held IN-SESSION, drawn in a sandboxed iframe that cannot run a script (no allow-scripts, no allow-same-origin: dead by construction, not by trust). It is a VIEW with one property; it fetches nothing and stores nothing. NOT the node canvas: <draft-canvas> assembles catalogue components and stays the Composer's own; the node-era stage is parked, unwired, in the Product room.",
           "properties": {
             "component": {
-              "const": "design-system-picker"
+              "const": "artifact-canvas"
             },
-            "catalogues": {
-              "type": "array",
-              "description": "The partitions that exist, one {system, count} per catalogue \u2014 bound to /session/catalogues."
-            },
-            "selected": {
+            "artifact": {
               "type": "string",
-              "description": "The one this package chose ('' = never chose, a real answer) \u2014 bound to /session/design_system."
+              "description": "The built page \u2014 a full HTML document, or empty/absent for nothing built yet (the element's own empty state \u2014 a real answer, never an error). A HOST-WRITTEN binding (like the draft before it): the sandbox lives in the CLIENT until Save / Submit lands (a later slice on the owner's word), so the room assembles blank and the host writes this slot on every build. A press of the rail's Clear announces `artifact-cleared` and the host empties this slot \u2014 one fact, both hands (the spoken \"clear the stage\" empties it through the same build route)."
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
+    "governance-usage-view": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "THE GOVERNANCE ROOM'S FEED \u2014 the per-call cost ledger, drawn. Implemented by <governance-usage-view> in src/components/lit/governance-usage-view.ts. Reads its own feed from GET /api/governance/usage; writes nothing. Tokens are measured; a cost exists only when the deployment states its prices, and an absent cost is drawn as absent.",
+          "properties": {
+            "component": {
+              "const": "governance-usage-view"
+            },
+            "refresh": {
+              "type": "number",
+              "description": "Bumped by the host to force a re-read of the feed."
             },
             "id": {
               "type": "string"

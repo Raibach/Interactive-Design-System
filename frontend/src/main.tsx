@@ -42,8 +42,15 @@ createRoot(document.getElementById("root")!).render(
  * the door (it checks the pin itself, before any bundle exists); while unauthenticated
  * it stays, because removing it would hand the screen to a `null` App — a door nobody
  * can knock on. A signed-in boot removes it one frame after React commits, and the page
- * behind it is the same #1a1625, so the swap cannot flash white.
+ * behind it is the same #110E1F, so the swap cannot flash white.
  */
 if (localStorage.getItem("grace_is_authenticated") === "true") {
-  requestAnimationFrame(() => document.getElementById("splash")?.remove());
+  // SYNCHRONOUS, AND THAT IS A FIX — measured 2026-10-03, late: this removal was scheduled on
+  // requestAnimationFrame, and rAF DOES NOT FIRE IN A HIDDEN PANE (the in-app browser behind
+  // another window, a backgrounded tab). The splash then stayed over a fully-rendered app until
+  // the pane was looked at again — "I can't read it… nothing works" from the other side of the
+  // glass, and a driver's clicks timing out against a full-screen overlay. The one-frame delay
+  // was only ever for the flash this comment's neighbours say cannot happen (#splash and the page
+  // behind it are the same #110E1F); a synchronous remove has no such window at all.
+  document.getElementById("splash")?.remove();
 }

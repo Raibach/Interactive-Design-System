@@ -73,6 +73,8 @@ import {
   parseRunAction,
   parseSaveAction,
   parseSetTitleAction,
+  parseBuildWireframeAction,
+  parseEditNodeAction,
   requestForAction,
   HER_ANSWERS,
   NO_ADVICE,
@@ -533,6 +535,20 @@ export class ChatPanel extends LitElement {
   }
 
   private _sending = false;
+
+  /**
+   * THE WORK CARD'S STATE (2026-10-03, late — the owner, on this seat: *"the chat seems
+   * underwhelming to me. It's not very performative. It'll need to be for this vibecoding
+   * interface because that's their main experience is the chat room"*). `_workActive` spans the
+   * WHOLE turn — her reply AND, in a room whose host builds, the page-build that follows it —
+   * and `_workStage` names what is happening ('thinking' until the host says 'building' via
+   * `a2ui:grace-status`). The card itself (shimmer, elapsed time, collapse) is <chat-messages>'
+   * own, ported from AI Elements' <Reasoning> (MIT; see frontend/ai-elements/README.md); these
+   * two fields plus the timer are the seat's facts.
+   */
+  private _workActive = false;
+  private _workStage = '';
+  private _workTimer: number | null = null;
   /**
    * THE NEXT REPLY OFFERS AND DOES NOT WRITE. Set when the panel asks her a
    * question on its own behalf (a seat was chosen — offer what could go in it) and
@@ -808,6 +824,8 @@ export class ChatPanel extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    // THE WORK CARD'S OTHER HALF — the room's host announces its build (see `_onGraceStatus`).
+    window.addEventListener('a2ui:grace-status', this._onGraceStatus as EventListener);
     /*
      * THE OPENING MAY HAVE BEEN ANNOUNCED BEFORE THIS SEAT EXISTED. A composer
      * announces itself in the same commit that creates this element, so the event
@@ -839,6 +857,7 @@ export class ChatPanel extends LitElement {
     window.removeEventListener('a2ui:system-message', this._onHostSay);
     window.removeEventListener('section-write-failed', this._onWriteFailed as EventListener);
     window.removeEventListener('a2ui:ask-grace', this._onHostAsk as EventListener);
+    window.removeEventListener('a2ui:grace-status', this._onGraceStatus as EventListener);
     window.removeEventListener('a2ui:composer-opened', this._onComposerOpened as EventListener);
     this.removeEventListener('chat-action-send', this._onActionSend);
     window.removeEventListener('resize', this._onOutputScroll);
@@ -1105,6 +1124,30 @@ export class ChatPanel extends LitElement {
      */
     if (parseRunAction(action)) {
       window.dispatchEvent(new CustomEvent('a2ui:run-approved'));
+      return;
+    }
+    /*
+     * BUILD THE WIREFRAME — the product room's compile, released by her own button.
+     *
+     * THE OWNER'S SHAPE, VERBATIM (2026-10-03 evening): *"they're basically prompting Grace and
+     * she's doing everything… It only allows them to imagine and vibe-code structure or features
+     * — they cannot design in it."* The ask is the THREAD's last person turn, read server-side
+     * by the compile — the button carries no words of its own, so what gets built cannot drift
+     * from what was said. The host answers by compiling and applying through the one draft store
+     * (see WritingAreaIndex's build handler); a refusal comes back as her words in the thread.
+     */
+    if (parseBuildWireframeAction(action)) {
+      window.dispatchEvent(new CustomEvent('a2ui:build-wireframe'));
+      return;
+    }
+    /*
+     * EDIT THE SELECTED TILE — the scoped op, STOLEN FROM THE EXAMPLE (see actionLink's note on
+     * EDIT_NODE, and the route's own note for the borrowed contract): the host holds the stage's
+     * own selection (`draft-select`), and the route edits exactly that node — the model answers
+     * with the tile only, never the layout.
+     */
+    if (parseEditNodeAction(action)) {
+      window.dispatchEvent(new CustomEvent('a2ui:edit-node'));
       return;
     }
     /*
@@ -1780,8 +1823,10 @@ export class ChatPanel extends LitElement {
     /* AND THE ROOMS' OWN VIEWS DRAW — the allow-list above is what keeps this hole to KNOWN
        views only (2026-10-03: the Product room's context strip was assigned, projected, and
        then hidden here — measured on the live page as a zero-sized element). A room's view
-       joins the list the day the room exists, named, nothing else admitted. */
-    .chat-top ::slotted(design-system-picker) { display: block; }
+       joins the list the day the room exists, named, nothing else admitted.
+       THE STRIP'S LINE IS GONE WITH THE STRIP (late 2026-10-03): the owner removed the
+       catalogue chooser, so nothing foreign is assigned today — the next room's view joins
+       this list the day it exists, the same rule as before. */
     /* THE FILED INSPECTIONS, UNDER APPROVALS — the governance reports as cards, not chat turns:
        the header in the header's cream, the attention rows in amber, the ok rows in green. */
     .inspection-reports { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 10px; }
@@ -2014,14 +2059,18 @@ export class ChatPanel extends LitElement {
   /**
    * IS A FOREIGN VIEW ASSIGNED — a view this seat's own tabs do not name.
    *
-   * The Product room binds its context strip (design-system-picker) into this hole, and the
-   * seat's `_wantedViewTag` knows only its own views (trace-feed, eval-feed, chat-repair-actions),
-   * so the strip is neither "wanted" nor wrong — it is a ROOM's furniture in the hole the
-   * design left open ("holds plain text output and inserted functions"). This asks the narrow
-   * question that lets it draw above her thread on the Chat tab WITHOUT changing any other
-   * seat: are any assigned view elements tags this seat does not own? The composer's seat
-   * assigns trace/eval views — all known — so nothing changes there; the console's repair
-   * rows are known too. The two assignment checks mirror `_viewSlotted`'s own.
+   * THE SEAT'S OWN DOOR, kept when the first room to use it left. The Product room bound its
+   * context strip here (declared 2026-10-03; the owner removed the catalogue chooser the same
+   * day, and the strip with it — see the allow-list note above the styles), and this mechanism
+   * was what let it draw: the seat's `_wantedViewTag` knows only its own views (trace-feed,
+   * eval-feed, chat-repair-actions), so a room's furniture in the hole the design left open
+   * ("holds plain text output and inserted functions") is neither "wanted" nor wrong. The
+   * question is narrow on purpose — are any assigned view elements tags this seat does not
+   * own? — so a room's view draws above her thread on the Chat tab WITHOUT changing any other
+   * seat: the composer's seat assigns trace/eval views (all known, nothing changes there), and
+   * the console's repair rows are known too. Nothing binds it today; the next room's view needs
+   * the same one-line allow-list entry above and nothing here. The two assignment checks mirror
+   * `_viewSlotted`'s own.
    */
   private _anyForeignViewAssigned(): boolean {
     const known = new Set(['trace-feed', 'eval-feed', 'chat-repair-actions']);
@@ -3521,6 +3570,15 @@ export class ChatPanel extends LitElement {
       this._scrollThreadToBottom();
     }
     this._sending = true;
+    if (!opts.silent) {
+      // THE WORK CARD OPENS — the person's own turn; silent turns draw nothing.
+      this._workActive = true;
+      this._workStage = 'thinking';
+      if (this._workTimer) clearTimeout(this._workTimer);
+      // THE ROOM-AGNOSTIC CAP: a seat in a room that never builds must still end. The
+      // no-build fallback below fires first for those seats; this cap is the last resort.
+      this._workTimer = window.setTimeout(() => this._endWork(), 30000) as unknown as number;
+    }
     this.requestUpdate();
     let answered = false;
     /*
@@ -3620,6 +3678,20 @@ export class ChatPanel extends LitElement {
         // for the next assembly. Without this the row was in the database but not in the
         // list until a reload — measured live 2026-09-24.
         void this._readPackageConversations(this._userId());
+      }
+      /*
+       * THE PERSON'S TURN IS ANNOUNCED — THE ROOM BUILDS AS THEY SPEAK (owner, 2026-10-03:
+       * *"we don't need that [button] — just give her a prompt and she starts building"*). This
+       * fires AFTER the server has answered AND after the thread adoption above, so it carries
+       * the conversation the turn actually landed in, and the turn is PERSISTED — a room that
+       * builds on this event (the Product room's host) reads "the thread's last person message"
+       * and is guaranteed to find THIS one. Silent turns — the app's own instructions to her —
+       * never announce; nobody typed them. The event is generic: no other room listens.
+       */
+      if (!opts.silent) {
+        window.dispatchEvent(new CustomEvent('a2ui:person-turn', {
+          detail: { conversationId: this.conversationId, sessionId: this.sessionId },
+        }));
       }
       // The measured cost of this call, attributed to the conversation it
       // served. The host's accumulator only accepts calls whose
@@ -3739,9 +3811,50 @@ export class ChatPanel extends LitElement {
       }
       this._sending = false;
       this._abort = null;
+      if (this._workActive && this._workStage === 'thinking') {
+        // NO BUILD WAS ANNOUNCED IN THIS ROOM — the reply was the whole turn. Give the build's
+        // announcement one beat to beat us to it, then close the card. (A room that builds
+        // announces 'building' within that beat and ends the card later, on 'idle'.)
+        if (this._workTimer) clearTimeout(this._workTimer);
+        this._workTimer = window.setTimeout(() => this._endWork(), 1500) as unknown as number;
+      }
       this.requestUpdate();
     }
   }
+
+  /**
+   * END THE WORK CARD — the one exit (the host's `a2ui:grace-status` 'idle', the no-build
+   * fallback above, or the cap). The stage is NOT cleared: <chat-messages> reads it in the
+   * same update to record "Built the page" in the collapsed card's trail.
+   */
+  private _endWork(): void {
+    if (this._workTimer) {
+      clearTimeout(this._workTimer);
+      this._workTimer = null;
+    }
+    if (!this._workActive) return;
+    this._workActive = false;
+    this.requestUpdate();
+  }
+
+  /**
+   * THE HOST'S BUILD ANNOUNCES ITSELF — `a2ui:grace-status` {state, conversationId} from the
+   * room that builds (WritingAreaIndex's person-turn handler): 'building' while the page is
+   * being written, 'idle' when the turn is fully done. Scoped to THIS seat's conversation so
+   * another room's seat never draws this room's work. One name for one fact.
+   */
+  private _onGraceStatus = (event: Event): void => {
+    const detail = ((event as CustomEvent).detail || {}) as { state?: unknown; conversationId?: unknown };
+    const cid = String(detail.conversationId || '');
+    if (cid && this.conversationId && cid !== String(this.conversationId)) return;
+    const state = String(detail.state || '');
+    if (state === 'building') {
+      this._workStage = 'building';
+      this.requestUpdate();
+    } else if (state === 'idle') {
+      this._endWork();
+    }
+  };
 
   /**
    * THE THREAD THAT PREDATES THE PACKAGE, WRITTEN DOWN WHEN THE PACKAGE APPEARS.
@@ -4934,7 +5047,8 @@ export class ChatPanel extends LitElement {
                         : nothing}
                       <chat-messages
                         .messages=${this._thread}
-                        .sending=${this._sending}
+                        .sending=${this._workActive}
+                        .stage=${this._workStage}
                         .spentActions=${[...this._spent]}
                         .spentTurn=${this._spentTurn}
                         .doneActions=${this._stepsDone()}

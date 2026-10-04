@@ -1,0 +1,257 @@
+{
+  "title": "Kor (proposed)",
+  "catalogId": "https://raibach.net/a2ui/catalogs/kor/v0_9_1/catalog.json",
+  "whatThisFileIs": "Written by the design-system ingest on 2026-10-03T14:02:03 from an uploaded archive. Every entry is PROPOSED (draft: false) until a person accepts it. Components here have no implementation yet — registry.json is empty — so a name that resolves to nothing is drawn as the refusal sentence on a tile.",
+  "components": {
+    "kor-button": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Proposed by the design-system ingest from Kor (components/button/kor-button.ts). NOT REVIEWED: an authorized designer accepts it before the assembler may place it — the palette reads draft: true.",
+          "properties": {
+            "component": {
+              "const": "kor-button"
+            },
+            "label": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string"
+            },
+            "disabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "components/button/kor-button.ts",
+        "at": "2026-10-03T14:02:03"
+      },
+      "accepted": {
+        "at": "2026-10-03T14:10:59",
+        "by": ""
+      }
+    },
+    "kor-input": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Imported BY HAND from Kor (components/input/kor-input.ts) on 2026-10-03T15:52:33 — the contact-form set the owner asked for in one sentence. The source is copied in and this manifest is MEASURED from it (wireframe-lab/IMPORT-A-DESIGN-SYSTEM.md); the ingest stays out of scope by the owner's direction, and ACCEPTANCE is his direction of the same evening, not an ingest proposal.",
+          "properties": {
+            "component": {
+              "const": "kor-input"
+            },
+            "label": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "min": {
+              "type": "string"
+            },
+            "max": {
+              "type": "string"
+            },
+            "step": {
+              "type": "number"
+            },
+            "condensed": {
+              "type": "boolean"
+            },
+            "active": {
+              "type": "boolean"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "readonly": {
+              "type": "boolean"
+            },
+            "noClear": {
+              "type": "boolean"
+            },
+            "autofocus": {
+              "type": "boolean"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "components/input/kor-input.ts",
+        "at": "2026-10-03T15:52:33"
+      },
+      "accepted": {
+        "at": "2026-10-03T15:52:33",
+        "by": "hand import (owner-directed, 2026-10-03)"
+      }
+    },
+    "kor-textarea": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Imported BY HAND from Kor (components/textarea/kor-textarea.ts) on 2026-10-03T15:52:33 — the contact-form set the owner asked for in one sentence. The source is copied in and this manifest is MEASURED from it (wireframe-lab/IMPORT-A-DESIGN-SYSTEM.md); the ingest stays out of scope by the owner's direction, and ACCEPTANCE is his direction of the same evening, not an ingest proposal.",
+          "properties": {
+            "component": {
+              "const": "kor-textarea"
+            },
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "number"
+            },
+            "active": {
+              "type": "boolean"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "readonly": {
+              "type": "boolean"
+            },
+            "autofocus": {
+              "type": "boolean"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "components/textarea/kor-textarea.ts",
+        "at": "2026-10-03T15:52:33"
+      },
+      "accepted": {
+        "at": "2026-10-03T15:52:33",
+        "by": "hand import (owner-directed, 2026-10-03)"
+      }
+    },
+    "kor-card": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Imported BY HAND from Kor (components/card/kor-card.ts) on 2026-10-03T15:52:33 — the contact-form set the owner asked for in one sentence. The source is copied in and this manifest is MEASURED from it (wireframe-lab/IMPORT-A-DESIGN-SYSTEM.md); the ingest stays out of scope by the owner's direction, and ACCEPTANCE is his direction of the same evening, not an ingest proposal.",
+          "properties": {
+            "component": {
+              "const": "kor-card"
+            },
+            "label": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            },
+            "image": {
+              "type": "string"
+            },
+            "flexDirection": {
+              "type": "string"
+            },
+            "flat": {
+              "type": "boolean"
+            },
+            "children": {
+              "type": "object",
+              "description": "THE CARD'S CONTENTS — the container's default slot, where a layout's pieces ride (the owner's rule, 2026-10-03: *\"Always create a container first\"*). A draft node's `children` are mounted into this slot, in order; header/functions/footer are the card's other named slots, drawn only when filled.",
+              "properties": {
+                "default": {
+                  "type": "array"
+                },
+                "header": {
+                  "type": "array"
+                },
+                "functions": {
+                  "type": "array"
+                },
+                "footer": {
+                  "type": "array"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "components/card/kor-card.ts",
+        "at": "2026-10-03T15:52:33"
+      },
+      "accepted": {
+        "at": "2026-10-03T15:52:33",
+        "by": "hand import (owner-directed, 2026-10-03)"
+      }
+    },
+    "kor-text": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Imported BY HAND from Kor (components/text/kor-text.ts) on 2026-10-03T15:52:33 — the contact-form set the owner asked for in one sentence. The source is copied in and this manifest is MEASURED from it (wireframe-lab/IMPORT-A-DESIGN-SYSTEM.md); the ingest stays out of scope by the owner's direction, and ACCEPTANCE is his direction of the same evening, not an ingest proposal.",
+          "properties": {
+            "component": {
+              "const": "kor-text"
+            },
+            "size": {
+              "type": "string"
+            },
+            "color": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "components/text/kor-text.ts",
+        "at": "2026-10-03T15:52:33"
+      },
+      "accepted": {
+        "at": "2026-10-03T15:52:33",
+        "by": "hand import (owner-directed, 2026-10-03)"
+      }
+    }
+  }
+}
