@@ -240,3 +240,23 @@ The other rows (Claude Code, Codex, Gemini CLI) and the "Skip for now" control a
 untouched — the owner's earlier decision stands that the onboarding stays skippable and is
 remembered per browser. Verified live: wizard open, first row relabeled with the new
 description, grid running behind the whole panel, other rows byte-identical.
+
+**The demo stops reaching for machines that aren't there — and the hosting plan is written
+(owner, same night).** The work went remote (`demo-mode` pushed to `2220adb`; Northflank built
+and deployed it), and the owner met the two symptoms the deployed build produced, in their
+words: Chrome's *"…is asking you to access other apps and services on this device"* box over
+the Development room, and the Product room's *"The builder's engine isn't running. Start it
+with: npm run dev:local"* banner. The diagnosis in one line: the rooms embedded `localhost` —
+which means the VISITOR's computer — so the deployed Development room asked every visitor's
+browser for local-network access, and the Product banner's copy is developer text that reads to
+a visitor as a verdict ("this program cannot run"). INTERIM, shipped the same night: on the demo
+(`isDemoMode()` — the server's own flag, read at boot) both rooms render an honest panel instead
+— each on the room's own tile ground, one plain line — the engine banner never shows on the
+demo, and the demo's Product room no longer births a project against an engine that isn't there.
+Local runs never take those branches; the Mac keeps the full experience. THE REAL FIX IS PLANNED,
+NOT IMPROVISED: `wireframe-lab/HOST-THE-TOOLS.md` — host OpenHands and the builder engine as
+their own Northflank services (the house patch riding the tool's image build), move both room
+addresses into runtime config (`/api/config`), point the bridge's `BUILDER_ENGINE_URL` at the
+hosted engine — carrying the three OWNER decisions the hosting must ask before anything
+public-facing gets a key (who may drive the agent, whether visitors may run the builder, whether
+to copy the Mac's projects). The file ends with a NEXT PROMPT block for the next chat window.
