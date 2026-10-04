@@ -6,11 +6,9 @@ const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(file
 
 // Unit-test environment (jsdom).
 //
-// The former Storybook browser-test project (storybookTest plugin) was
-// removed: it referenced @storybook/addon-vitest — never declared in
-// package.json — and .storybook/vitest.setup.ts, which did not exist.
-// Browser-mode story tests return as a deliberate Vitest 4 + addon-vitest
-// migration; see READ-ME/IMPLEMENTATION_CONFORMANCE.md status map.
+// There is no browser-mode project and no story runner: Storybook was removed from this app
+// entirely (2026-10-04) — the tooling, the stories and the configs — so this is the unit
+// environment and nothing else.
 
 export default defineConfig({
   plugins: [react()],

@@ -1,54 +1,90 @@
-# THE DEVELOPMENT WORKSPACE, HOSTED — OpenHands' Agent Canvas as its own service
+# THE DEVELOPMENT WORKSPACE, HOSTED — the Raibach IDS Agent Canvas as its own service
 # (2026-10-04, wireframe-lab/HOST-THE-TOOLS.md).
 #
-# The same package the Mac runs (`agent-canvas -p 8090`), built the same way: a global
-# npm install, THE HOUSE PATCH APPLIED WHERE THE PACKAGE ACTUALLY LIVES (the patch script
-# is the single home of that work, exactly as on the Mac), and the ingress on 8090.
+# ── SOVEREIGN AS OF 2026-10-04: NOTHING HERE IS FETCHED FROM OPENHANDS ────────────────────────
+# Until today this image installed the tool from npm and pre-warmed two Python backends from
+# PyPI at build time, so a build reached two of the vendor's registries before the service
+# existed. That is gone. Every third-party piece now comes out of THIS REPOSITORY — the tool's
+# own source, the two Python trees, and the pinned dependency fingerprints — and the build is
+# made to FAIL rather than reach the network, so a silent fallback cannot creep back in.
 #
-# node:24 IS NOT A PREFERENCE — the package's own engines field requires >=24 (the plan
-# said node:20 before the package was read; 24 is what it asks for).
+# THE ONE THING THIS IMAGE STILL REACHES THE INTERNET FOR, said plainly: Debian's apt and the
+# uv installer at the top, because a base image needs a package manager and an interpreter
+# runner. Everything after that line is repository material.
+#
+# node:24 IS NOT A PREFERENCE — the source's own engines field requires >=24.
 FROM node:24-slim
 
-# WHAT THE PATCH SCRIPT NEEDS, INSTALLED BECAUSE THE IMAGE IS ITS HOST: python3 (its
-# HTML/JSON edits), perl (its `shasum` — the content hashes that name every patch file),
-# plus git/curl/ca-certificates for npm's own fetches.
+# WHAT THE PATCH SCRIPT NEEDS: python3 (its HTML/JSON edits), perl (its `shasum` — the content
+# hashes that name every patch file), plus git/curl/ca-certificates and procps.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 perl ca-certificates curl git procps \
     && rm -rf /var/lib/apt/lists/*
 
-# uv — the agent server and the automation backend are Python, run from PyPI by `uvx`
-# (the launcher's own mechanism, not a choice made here). Installed to /usr/local/bin so
-# the same binary is on PATH for the build-time pre-warm and for runtime.
+# uv — how the two Python halves are run. The same binary is on PATH for the build-time
+# install and for runtime.
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 
-# THE TOOL, PINNED — the version the Mac runs and the patch was written against.
-RUN npm install -g @openhands/agent-canvas@1.24.0
+# ── 1. THE TOOL ITSELF: THIS REPOSITORY'S COPY, BUILT HERE ────────────────────────────────────
+# The source travels with the repository (development/OpenHands-main, 2,431 files) and is built
+# in the image exactly as it builds on the Mac — same `npm ci`, same `npm run build`. The global
+# install that follows puts it where the house patch expects to find it
+# (`$(npm root -g)/@openhands/agent-canvas`), copied from the registry's layout on purpose: the
+# patch script is unchanged and still works against the same paths.
+COPY development/OpenHands-main /opt/agent-canvas
+WORKDIR /opt/agent-canvas
+RUN npm ci --no-audit --no-fund \
+ && npm run build \
+ && npm install -g .
 
-# THE HOUSE PATCH RIDES THE IMAGE: the script and the tile it needs come from the repo
-# (the script's single home), and running it here is the same act as running it on the Mac
-# after an install — palette, logo, wizard relabel, locale strings, and the assembly tile
-# painted into the tool's own canvas. Idempotent by design; content-hashed file names, so
-# no cache can hold an old look.
+# ── 2. THE PYTHON SIDE: THIS REPOSITORY'S TREES ───────────────────────────────────────────────
+# Four packages (the SDK, the tools, the workspaces, the agent server) live in
+# software-agent-sdk; the fifth (the automation backend) in automation/. Both are pointed at by
+# the tool's own documented overrides — the vendor's guide calls OH_AGENT_SERVER_LOCAL_PATH
+# "highest precedence" — so the launcher runs OUR files instead of resolving them from PyPI.
+# The embedded .git folders were removed when these were vendored: left in, git records a folder
+# like that as a pointer to another repository, and this image would have been built from two
+# empty directories.
+COPY development/vendor /opt/vendor
+ENV OH_AGENT_SERVER_LOCAL_PATH=/opt/vendor/software-agent-sdk
+ENV OH_AUTOMATION_LOCAL_PATH=/opt/vendor/automation
+
+# ── 3. THE DEPENDENCIES, INSTALLED BY FINGERPRINT ─────────────────────────────────────────────
+# The libraries the two trees need (192 packages for the agent server, 167 for automation) are
+# pinned to exact versions with their SHA-256 hashes in two lockfiles that travel with the repo.
+# `--require-hashes` makes the install VERIFY every wheel against those hashes before it is
+# used: a package changed or substituted on the public registry between today and a future build
+# fails this step instead of being installed. The wheels land in uv's cache, which is what makes
+# the offline run below possible.
+COPY development/vendor/agent-server.lock /tmp/agent-server.lock
+COPY development/vendor/automation.lock /tmp/automation.lock
+RUN uv venv /opt/python-env \
+ && uv pip install --python /opt/python-env --require-hashes -r /tmp/agent-server.lock \
+ && uv pip install --python /opt/python-env --require-hashes -r /tmp/automation.lock
+
+# ── 4. AND NOTHING MAY REACH THE NETWORK AT RUNTIME ───────────────────────────────────────────
+# UV_OFFLINE is the enforcement, not decoration: with it set, uv refuses to fetch anything, so a
+# dependency this image failed to prepare becomes a LOUD error on the first boot rather than a
+# quiet download from a registry that was supposed to be out of the picture. It is set for the
+# service's whole life, not just the build.
+ENV UV_OFFLINE=1
+
+# THE AGENT SERVER'S VERSION — the fixed one, on purpose: at 1.49.6 the SDK's telemetry reads
+# `usage.prompt_tokens_details.cache_creation_tokens` unguarded, and DeepSeek's
+# OpenAI-compatible responses do not carry it — every run died with AttributeError. 1.51.0
+# guards the read, and the vendored tree in /opt/vendor is that version.
+ENV OH_AGENT_SERVER_VERSION=1.51.0
+
+# THE HOUSE PATCH RIDES THE IMAGE: the script and the tile it needs come from the repo, and
+# running it here is the same act as running it on the Mac after an install — palette, logo,
+# wizard relabel, locale strings, and the assembly tile painted into the tool's own canvas.
+# Idempotent by design; content-hashed file names, so no cache can hold an old look.
 COPY development/openhands-patch.sh /src/development/openhands-patch.sh
 COPY frontend/src/assets/canvas-development-lab-bkg.png /src/frontend/src/assets/canvas-development-lab-bkg.png
 RUN bash /src/development/openhands-patch.sh --hosted
 
-# THE AGENT SERVER'S VERSION — THE FIXED ONE, ON PURPOSE (see the entrypoint's header for
-# the full story): at 1.49.6 the SDK's telemetry reads
-# `usage.prompt_tokens_details.cache_creation_tokens` unguarded, and DeepSeek's
-# OpenAI-compatible responses do not carry it — every run died with AttributeError.
-# 1.51.0 guards the read. The launcher pins sdk/tools/workspace to this same number.
-ENV OH_AGENT_SERVER_VERSION=1.51.0
-
-# PRE-WARM uv's CACHE (a Python interpreter + both backends) so a cold container boots
-# without a minute of downloads. These are the launcher's own invocations, run exactly the
-# way it will run them — a build-time hiccup here costs only the warm cache, so it must
-# not fail the image.
-RUN uvx --from openhands-agent-server==$OH_AGENT_SERVER_VERSION python -V || echo "⚠️ agent-server pre-warm skipped"
-RUN uvx --from openhands-automation==1.15.1 python -V || echo "⚠️ automation pre-warm skipped"
-
-# THE DOOR — public mode (the owner's decision: pin-holders may drive the agent; the key
-# is typed once per browser) and the model seed. See the script's own header.
+# THE DOOR — local mode (the key is injected into the served page at startup, so no visitor is
+# asked for anything) and the model seed. See the script's own header.
 COPY development/agent-canvas/entrypoint.sh /usr/local/bin/house-entrypoint.sh
 RUN chmod +x /usr/local/bin/house-entrypoint.sh
 

@@ -10,7 +10,7 @@
  *    offers a door it will not open.
  *
  * 2. THE ROOMS' TOOL ADDRESSES (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md). The Development
- *    room embeds OpenHands' Agent Canvas and the Product room embeds the app builder; both used
+ *    room embeds the Raibach IDS Agent Canvas and the Product room embeds the app builder; both used
  *    to be hardcoded `http://localhost:…`, which on a deployed site means THE VISITOR'S OWN
  *    COMPUTER — the night the demo went remote, that is exactly what raised Chrome's
  *    local-network permission box. The server (env-driven on the app service) now names the
@@ -46,7 +46,7 @@ let builderTool = LOCAL_BUILDER_TOOL;
 export const isDemoMode = (): boolean => demoMode;
 
 /**
- * The Development room's tool (OpenHands Agent Canvas). Empty string = not connected —
+ * The Development room's tool (Raibach IDS Agent Canvas). Empty string = not connected —
  * the room shows its honest panel instead of reaching anywhere.
  */
 export const developmentToolUrl = (): string => developmentTool;

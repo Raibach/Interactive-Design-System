@@ -247,11 +247,15 @@ export class FigmaLayersView extends LitElement {
     /** Bumped by the host to force a re-read — after an ingest lands, or a commit. */
     refresh: { type: Number },
     /**
-     * TRUE WHILE AN INGEST IS IN FLIGHT — the host's fact (the same `/session/design_system_ingest/busy`
-     * the form's own button reads), so the column SPINS while something is being processed. The
-     * owner, 2026-10-03: *"that whole column or maybe a section of that column could spin — those
-     * little spinners are important. They provide feedback to the user that something's processing
-     * in the background."* One fact, two readers: the button and the tree.
+     * TRUE WHILE SOMETHING IS IN FLIGHT — the host's fact, so the column SPINS while the work is
+     * being processed. The owner, 2026-10-03: *"that whole column or maybe a section of that column
+     * could spin — those little spinners are important. They provide feedback to the user that
+     * something's processing in the background."*
+     *
+     * NOTHING BINDS IT TODAY (2026-10-04): its one writer was the add-design-system form's shell
+     * handler, and that form is gone — the path it wrote (`/session/design_system_ingest/busy`) had
+     * no other writer. The prop stays because the spin is wanted the moment an accept flow gives the
+     * column a fact to watch; until then it reads false and nothing turns.
      */
     busy: { type: Boolean },
     /** Bumped by the host to fold the tree back to its opening state — a Reset. */

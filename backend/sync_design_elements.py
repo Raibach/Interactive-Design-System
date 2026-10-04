@@ -29,8 +29,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from prompt_sessions_api import PromptSessionsAPI  # noqa: E402
 from deps import A2UI_CATALOG_SURFACES  # noqa: E402
+from prompt_sessions_api import PromptSessionsAPI  # noqa: E402
 
 # Which catalogues are THIS system's. Taken from the server's own list (`deps.py`) rather than
 # restated: the surfaces the server validates are the surfaces whose components belong to the

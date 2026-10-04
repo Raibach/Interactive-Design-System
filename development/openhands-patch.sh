@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ── THE HOUSE PATCH on OpenHands' Agent Canvas (the Development room's tool) ─────────────────
+# ── THE HOUSE PATCH on the Raibach IDS Agent Canvas (the Development room's tool) ─────────────────
 # The running app is the INSTALLED package (@openhands/agent-canvas under the global npm root),
 # not the source clone — so its chrome is patched where it actually lives, and this script is
 # how the patch survives an update: run it again after `npm install -g @openhands/agent-canvas`.
@@ -18,7 +18,7 @@
 # is served `no-store`, so the next ordinary reload carries it — no hard refresh, no cleared cache.
 #
 # WHAT IT DOES (owner's pass, 2026-10-03):
-#   1. Hides the sidebar's OpenHands logo (it sits right under this app's own logo).
+#   1. Hides the vendor's logo from the sidebar (it sits right under this app's own logo).
 #   2. THE PALETTE — every gray the neutral theme paints becomes a house colour: the grounds take
 #      the pin gate's navy #110E1F, the panels take the owner's purple #22202D ("my preferred
 #      colour for all the panels that are currently gray"). Hovers are deliberately untouched.
@@ -35,7 +35,7 @@
 #   3. THE PAPER SHOWS THROUGH: grounds transparent (the room behind the frame carries the lab's
 #      graph-paper tile), and the landing's `pt-[max(4rem,28vh)]` gives back 100px — it was
 #      "sitting way down".
-#   4. Relabels the checklist's outbound "Join the OpenHands Slack" item to "local sovereign
+#   4. Relabels the checklist's outbound Slack-invite item to "local sovereign
 #      model" (a placeholder name for the model story — wiring later, the owner's word).
 #   5. THE FIRST-RUN WIZARD'S DEFAULT ROW (owner, same night: this panel "should just say
 #      sovereign local model, and the description should say defaults to local model agent …
@@ -59,6 +59,17 @@
 #          `?previewOnboardingStep=` design preview).
 #        · THE GETTING-STARTED CHECKLIST DEFAULTS OFF (dismissed-if-absent — the Settings
 #          toggle can bring it back for anyone who wants it).
+#   6. THE TAB TITLE (2026-10-04): the vendor's name is in <title> — visible in every tab and
+#      every bookmark, and the one branding no stylesheet can reach — so it is rewritten to the
+#      house title ("Raibach — Agent Canvas", the same pattern as the site's own). Forced on
+#      every run; a rebuild cannot leave it unpatched for long.
+#   7. THE BETA NOTICE ON THE REGISTERED DOOR (2026-10-04): the wizard is kept whole — every
+#      step-by-step panel, including the LLM panel that shows the model is set — but on the
+#      hosted beta the agent tiles are informational (no credentials in this container, and
+#      nothing for anyone to enter). Any tile click or Next opens one modal with the owner's
+#      sentence; Confirm pins the default row, advances one step onto the LLM panel, and that
+#      panel's untouched Next passes through without a save. dev@local (the pin) never sees
+#      any of this: the behavior is gated on `house_door=registered`, not on the deployment.
 set -euo pipefail
 
 HOSTED=0
@@ -68,10 +79,20 @@ for arg in "$@"; do
   esac
 done
 
-BUILD="$(npm root -g)/@openhands/agent-canvas/build"
+# ── WHICH BUILD GETS PATCHED, AND WHY THAT IS NOW A QUESTION (2026-10-04) ────────────────────
+# This was `npm root -g` and nothing else, because the globally installed package was the only
+# copy of the tool that existed. It is not any more: the Development tool runs from THIS
+# repository's own checkout (`development/OpenHands-main`) — that is what the untethering work
+# was for — and a patch that could only reach the global install left that copy wearing the
+# vendor's bare colours while every other surface of the house was styled.
+#
+# So the target is named by the caller when the caller knows better, and falls back to the
+# global install every other time. The patch itself is untouched: one script, one look.
+BUILD="${OH_PATCH_BUILD_DIR:-$(npm root -g)/@openhands/agent-canvas/build}"
 
 if [ ! -d "$BUILD" ]; then
   echo "❌ not found: $BUILD — is @openhands/agent-canvas installed globally?" >&2
+  echo "   (or set OH_PATCH_BUILD_DIR to the build directory of a local checkout)" >&2
   exit 1
 fi
 
@@ -83,7 +104,7 @@ cat > "$TMP" <<'CSS'
    reaches nobody who has ever loaded the page; and a hand-bumped `?v=N` was already burned once
    (see the script header). This file's name carries the hash of its own bytes: change it and the
    URL changes with it, and the no-store HTML that links it carries the rules on the next reload.
-   1. THE LOGO GOES (the sidebar's OpenHands mark sits under this app's own logo).
+   1. THE LOGO GOES (the vendor's mark sits under this app's own logo).
    2. THE PALETTE — the neutral theme's whole gray family takes the house colours: #110E1F (the
       pin gate's navy) for grounds, #22202D (the owner's purple) for panels. The variables
       replaced are every gray a fresh-profile probe measured on 2026-10-03. Hovers stay
@@ -191,6 +212,13 @@ else:
 if link not in src2:
     raise SystemExit("❌ could not place the stylesheet link")
 
+# THE TAB TITLE (2026-10-04): the vendor's name lives in <title> — the one branding no stylesheet
+# can reach — so it is rewritten to the house title. Forced every run (any title is replaced),
+# so a rebuild that puts "OpenHands" back is fixed on the next patch with nothing to remember.
+src2 = re.sub(r"<title>[^<]*</title>", "<title>Raibach — Agent Canvas</title>", src2, count=1)
+if "<title>Raibach" not in src2:
+    raise SystemExit("❌ could not rewrite the page title")
+
 # The ground script: replaced wholesale with the canonical block (strip-if-present, then insert
 # before </body>), so its content can evolve between runs.
 src2 = re.sub(r'\s*<script id="house-patch-ground">.*?</script>', '', src2, flags=re.S)
@@ -211,6 +239,10 @@ script = '''<script id="house-patch-ground">
        --hosted; the Mac does not). It gates the first-run-flow changes below, so the owner's
        own workbench keeps its wizard exactly as it was. */
     var HOSTED = __HOUSE_HOSTED__;
+    /* WHICH DOOR THIS PAGE WAS REACHED THROUGH (2026-10-04): 'registered' (a signed-up beta
+       user — wizard is theirs, and the beta notice below applies) or 'dev' (the pin) or ""
+       (older sessions). builder-embed.ts appends it; everything door-dependent reads it here. */
+    var DOOR = (location.search.match(/[?&]house_door=([a-z]+)/) || [])[1] || "";
     var set = function () {
       if (document.body) document.body.style.setProperty("background", "transparent", "important");
       var ground = document.querySelector("div.dark.min-h-screen");
@@ -251,8 +283,27 @@ script = '''<script id="house-patch-ground">
        2. THE GETTING-STARTED CHECKLIST DEFAULTS OFF — dismissed-if-absent, so the Settings
           toggle can bring it back for anyone who wants it. */
     var preseedFirstRun = function () {
-      if (!HOSTED) return;
       try {
+        /* THE DOOR THE VISITOR CAME THROUGH (2026-10-04): the shell appends `house_door` to
+           this page's address (builder-embed.ts) — `registered` for a person who signed up,
+           `dev` for the pin (dev@local). Their two behaviors, stated once:
+             · registered — the onboarding wizard (the model setup) IS the way in, so the
+               completed-preset below must not stand for them: undo it ONCE (for a browser
+               that carries it from the demo), after which the wizard's own completion marker
+               rules. Re-arm by deleting `house_welcome_granted`.
+             · dev — the demo identity keeps the tool's current state, no wizard: the preset
+               is asserted whenever it is absent, so it also REPAIRS itself after any test
+               that re-opened the wizard.
+           A browser with no marker at all (older sessions) falls through to the old rules. */
+        var door = DOOR;
+        if (door === "registered") {
+          if (localStorage.getItem("house_welcome_granted") === null) {
+            localStorage.removeItem("openhands-onboarded");
+            localStorage.setItem("house_welcome_granted", "1");
+          }
+          return;
+        }
+        if (!HOSTED && door !== "dev") return;
         if (localStorage.getItem("openhands-onboarded") === null) {
           localStorage.setItem("openhands-onboarded", "1");
         }
@@ -277,20 +328,208 @@ script = '''<script id="house-patch-ground">
         if (buttons[b].textContent.trim() === "Skip for now") { buttons[b].click(); return; }
       }
     };
-    set();
-    setTimeout(set, 600);
-    setTimeout(set, 2200);
-    setTimeout(set, 4000);
-    relabel();
-    setTimeout(relabel, 600);
-    setTimeout(relabel, 2200);
-    setTimeout(relabel, 4000);
-    preseedFirstRun();
-    skipSetupSteps();
-    setTimeout(skipSetupSteps, 600);
-    setTimeout(skipSetupSteps, 2200);
-    setTimeout(skipSetupSteps, 4000);
-    new MutationObserver(function () { relabel(); skipSetupSteps(); }).observe(document.documentElement, { childList: true, subtree: true });
+    /* ── THE BETA'S ONE HONEST SENTENCE, AND THE STEP IT SKIPS (owner, 2026-10-04) ──────────
+       The hosted beta runs on the provided model, so the agent tiles are informational: a
+       choice of Claude Code / Codex / Gemini CANNOT work here (no credentials in this
+       container — the trap measured on the local run), and there is no API key for anyone to
+       enter. So on the registered door, any tile click — or the step's Next — opens one modal
+       with the owner's words verbatim; Confirm pins the default "Sovereign local model" row,
+       advances, and passes the LLM step through WITHOUT a save (its untouched form falls
+       through by design — setup-llm-step.tsx), landing on "Say hello". Cancel dismisses and
+       leaves the wizard exactly where it was; "Skip for now" is the vendor's dismiss and is
+       deliberately left alone. The tiles never select (capture-phase interception), so no
+       per-visitor agent choice can reach the one shared configuration. */
+    var BETA_MESSAGE =
+      "This beta runs on the hosted service with the provided model; sovereignty — your own " +
+      "models, local or cloud, on your own machine — arrives with the installed suite.";
+    var betaBypass = false;
+    var betaWizard = function () {
+      return document.querySelector("div.fixed.inset-0.flex.items-center.justify-center");
+    };
+    var betaHeading = function (wiz) {
+      /* EVERY SLIDE STAYS MOUNTED — only the ACTIVE one is in normal flow, the rest are
+         absolutely positioned (onboarding-modal.tsx). So the active panel's heading is the
+         first heading with NO absolutely-positioned ancestor between it and the wizard; the
+         first DOM heading would always be "Choose your agent" and would make the modal fire
+         on the LLM panel's buttons too (caught in review, 2026-10-04). */
+      if (!wiz) return "";
+      var heads = wiz.querySelectorAll("h1,h2,h3");
+      for (var i = 0; i < heads.length; i++) {
+        var node = heads[i];
+        var inactive = false;
+        while (node && node !== wiz) {
+          if (getComputedStyle(node).position === "absolute") { inactive = true; break; }
+          node = node.parentElement;
+        }
+        if (!inactive) return heads[i].textContent;
+      }
+      return heads.length ? heads[0].textContent : "";
+    };
+    var betaModal = function () {
+      var box = document.getElementById("house-beta-consent");
+      if (box) return;
+      box = document.createElement("div");
+      box.id = "house-beta-consent";
+      box.setAttribute("style",
+        "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;" +
+        "justify-content:center;background:rgba(17,14,31,0.72);font-family:Inter,system-ui,sans-serif;");
+      box.innerHTML =
+        '<div style="width:430px;max-width:calc(100vw - 48px);box-sizing:border-box;' +
+        'background:#231f2e;border:1px solid rgba(255,255,255,0.08);border-radius:16px;' +
+        'padding:28px 28px 22px;box-shadow:0 32px 80px rgba(0,0,0,0.5);">' +
+        '<div style="font-size:16px;font-weight:800;color:#f5f0e8;margin-bottom:10px;">' +
+        "Beta model notice</div>" +
+        '<p style="font-size:13px;line-height:1.6;color:rgba(245,240,232,0.6);margin:0 0 20px;">' +
+        BETA_MESSAGE + "</p>" +
+        '<div style="display:flex;gap:10px;">' +
+        '<button type="button" data-house="cancel" style="flex:1;padding:10px;font-size:13px;' +
+        'font-weight:700;color:rgba(245,240,232,0.7);background:transparent;' +
+        'border:1px solid rgba(255,255,255,0.12);border-radius:9px;cursor:pointer;' +
+        'font-family:inherit;">Cancel</button>' +
+        '<button type="button" data-house="confirm" style="flex:1;padding:10px;font-size:13px;' +
+        'font-weight:700;color:#110E1F;background:#D4A0EE;border:none;border-radius:9px;' +
+        'cursor:pointer;font-family:inherit;">Confirm</button>' +
+        "</div></div>";
+      box.addEventListener("click", function (event) {
+        var el = event.target;
+        var act = el && el.getAttribute ? el.getAttribute("data-house") : null;
+        if (!act) return;
+        event.stopPropagation();
+        if (act === "cancel") { box.remove(); return; }
+        box.remove();
+        betaConfirmAndAdvance();
+      });
+      document.body.appendChild(box);
+    };
+    var betaClickNext = function (wiz) {
+      /* THE ACTIVE SLIDE'S OWN NEXT — every step is mounted at once, so a plain query reaches
+         the WRONG step's button. The in-flow button is the one whose ancestor walk never hits
+         an absolutely-positioned node — the same rule betaHeading uses for headings. */
+      var bs = wiz.querySelectorAll("button");
+      for (var i = 0; i < bs.length; i++) {
+        if (bs[i].textContent.trim() !== "Next") continue;
+        var node = bs[i];
+        var inactive = false;
+        while (node && node !== wiz) {
+          if (getComputedStyle(node).position === "absolute") { inactive = true; break; }
+          node = node.parentElement;
+        }
+        if (!inactive) {
+          betaBypass = true;
+          bs[i].click();
+          setTimeout(function () { betaBypass = false; }, 500);
+          return true;
+        }
+      }
+      return false;
+    };
+    var betaRestoreProfile = function () {
+      /* UNDO THE PASS-THROUGH'S SAVE. The LLM panel's Next persists its pre-selected default
+         (gpt-5.6-sol, blank key) on the way past — the exact overwrite the hosted drift guard
+         repairs on a 45s clock; measured here, 2026-10-04, from the beta walk itself. The
+         profile that was active BEFORE the walk (snapshotted in betaConsent) is re-activated
+         a moment after the save lands, which applies its model and key back onto the
+         settings. Same mechanism the entrypoint's seed uses; no drift loop needed. */
+      var profile = window.__houseBetaRestoreProfile;
+      var key = window.__AGENT_CANVAS_SESSION_API_KEY__;
+      if (!profile || !key) return;
+      setTimeout(function () {
+        try {
+          fetch("/api/profiles/" + encodeURIComponent(profile) + "/activate", {
+            method: "POST",
+            headers: { "X-Session-API-Key": key },
+          }).catch(function () {});
+        } catch (e) {}
+      }, 1500);
+    };
+    var betaConfirmAndAdvance = function () {
+      var wiz = betaWizard();
+      if (!wiz) { betaBypass = false; return; }
+      /* pin the default row — a non-default choice must never be saved */
+      betaBypass = true;
+      var buttons = wiz.querySelectorAll("button");
+      for (var i = 0; i < buttons.length; i++) {
+        if (buttons[i].textContent.indexOf("Sovereign local model") !== -1) { buttons[i].click(); break; }
+      }
+      betaBypass = false;
+      /* SKIP THE MODEL-PARAMETER STEP (owner, 2026-10-04: *"it's supposed to skip the third
+         step which is where you enter your parameters for your model. It should just go to
+         the third step."*): forward twice — agent → LLM panel → "Say hello" — then repair
+         what the pass-through saved (betaRestoreProfile above). */
+      if (!betaClickNext(wiz)) { betaBypass = false; return; }
+      var tries = 0;
+      var tick = setInterval(function () {
+        tries += 1;
+        var w = betaWizard();
+        if (!w) { clearInterval(tick); betaBypass = false; return; }
+        var heads = w.querySelectorAll("h1,h2,h3");
+        var active = "";
+        for (var h = 0; h < heads.length; h++) {
+          var node = heads[h];
+          var inactive = false;
+          while (node && node !== w) {
+            if (getComputedStyle(node).position === "absolute") { inactive = true; break; }
+            node = node.parentElement;
+          }
+          if (!inactive) { active = heads[h].textContent; break; }
+        }
+        if (active.indexOf("Set up your LLM") !== -1) {
+          betaClickNext(w);
+        } else if (active.indexOf("Say hello") !== -1 || tries > 40) {
+          clearInterval(tick);
+          betaBypass = false;
+          betaRestoreProfile();
+        }
+      }, 200);
+    };
+    var betaConsent = function () {
+      if (DOOR !== "registered") return;
+      if (window.__houseBetaHooked) return;
+      window.__houseBetaHooked = true;
+      /* SNAPSHOT THE ACTIVE PROFILE BEFORE THE WALK — the pass-through of the LLM panel can
+         overwrite the model with the onboarding default; this is what betaRestoreProfile
+         re-activates afterwards. Fire-and-forget; absent data simply skips the repair. */
+      try {
+        var key0 = window.__AGENT_CANVAS_SESSION_API_KEY__;
+        if (key0) {
+          fetch("/api/settings", { headers: { "X-Session-API-Key": key0 } })
+            .then(function (r) { return r.json(); })
+            .then(function (s) { window.__houseBetaRestoreProfile = s.active_profile || null; })
+            .catch(function () {});
+        }
+      } catch (e) {}
+      document.addEventListener("click", function (event) {
+        if (betaBypass) return;
+        if (DOOR !== "registered") return;
+        var wiz = betaWizard();
+        if (!wiz || !wiz.contains(event.target)) return;
+        if (betaHeading(wiz).indexOf("Choose your agent") === -1) return;
+        var el = event.target;
+        while (el && el.tagName !== "BUTTON") el = el.parentElement;
+        if (!el) return;
+        var text = (el.textContent || "").trim();
+        if (text === "Skip for now" || text === "Back") return;
+        /* capture phase: React never sees the click, so nothing selects and Next never fires */
+        event.stopPropagation();
+        event.preventDefault();
+        betaModal();
+      }, true);
+    };
+    /* EVERY ENTRY GUARDED ON ITS OWN (2026-10-04). Measured: one throw anywhere in this list
+       aborted everything after it — and the later the entry, the quieter the loss (the beta
+       interceptor never attached while the palette, which is CSS, still looked right). So no
+       step may take another down, and betaConsent gets a late re-assert as well: attaching a
+       listener is idempotent behind its own `__houseBetaHooked` flag. */
+    var run = function (fn) { try { fn(); } catch (e) {} };
+    run(set); setTimeout(function () { run(set); }, 600);
+    setTimeout(function () { run(set); }, 2200); setTimeout(function () { run(set); }, 4000);
+    run(relabel); setTimeout(function () { run(relabel); }, 600);
+    setTimeout(function () { run(relabel); }, 2200); setTimeout(function () { run(relabel); }, 4000);
+    run(preseedFirstRun);
+    run(betaConsent); setTimeout(function () { run(betaConsent); }, 1000);
+    run(skipSetupSteps); setTimeout(function () { run(skipSetupSteps); }, 600);
+    setTimeout(function () { run(skipSetupSteps); }, 2200); setTimeout(function () { run(skipSetupSteps); }, 4000);
+    new MutationObserver(function () { run(relabel); run(skipSetupSteps); }).observe(document.documentElement, { childList: true, subtree: true });
   })();
 </script>'''
 script = script.replace("__HOUSE_HOSTED__", "true" if hosted == "1" else "false")

@@ -537,42 +537,21 @@ export class ChatMessages extends LitElement {
     if (changed.has('messages')) {
       const list = this.messages ?? [];
       /*
-       * A RUN'S RESULTS OPEN AT THEIR HEAD, NOT AT THEIR TAIL. When the thread's
-       * newest turn is a result (the run's conversation just loaded, or the results
-       * just landed in a seat with no package), the top of the first result turn —
-       * the "Your Results" line — is the top of the reading, and a long answer is
-       * scrolled so it opens the viewport with the rest below as a normal scroll
-       * (the owner, 2026-09-24: "the output should be visible at the top and then
-       * the user can scroll to see the rest"). A short thread fits the column
-       * anyway, so there is nothing to move — the guard reads the real heights.
-       *
-       * THE RULE ENDS THE MOMENT THE PERSON SPEAKS: their turn, or her reply, is a
-       * conversational turn, and the thread follows it to the bottom exactly as it
-       * always has — answering the results reverts to the normal flow.
+       * A RUN'S RESULTS OPEN AT THEIR HEAD, AND THERE IS NOTHING TO SEAT. When the thread's
+       * newest turn is a result, the scroller's natural position — the top — is already the
+       * head of that reading, so the seat below is skipped outright rather than applied and
+       * then taken back. A thread that is not showing results follows the ordinary rule
+       * (owner, 2026-09-24: "the output should be visible at the top and then the user can
+       * scroll to see the rest").
        */
-      if (resultsAreTheReading(list)) {
-        /*
-         * NOTHING IS MOVED, AND THAT IS THE WHOLE OF THE RULE.
-         *
-         * The results are the FIRST content of that conversation, so the scroller's natural
-         * position — the top — is already the head of the results. Reaching for it with a scroll
-         * is what turned "open at the top" into a clamp: every effort to hold the view there also
-         * stopped the person moving it, and every re-render re-applied it. The owner, 2026-09-24:
-         * "why you put a fucking clamp on it… unbelievable." There is nothing to place, so this
-         * does nothing — and the person scrolls the results like any other text.
-         *
-         * THE RULE ENDS THE MOMENT THE PERSON SPEAKS: their turn, or her reply, is a conversational
-         * turn, and the thread follows it to the bottom exactly as it always has.
-         */
-        return;
-      }
+      const resultsShowing = resultsAreTheReading(list);
       // THE CURRENT EXCHANGE OPENS AT ITS HEAD (2026-10-03) — the question to the top, the
       // answer read from its beginning; see `seatConversation`. SEATED ON GROWTH ONLY: a
       // streaming answer is never re-yanked to the top while it is being read, and
       // content-only updates leave the view where the person put it (the clamp lesson,
       // 2026-09-24). No user turn anywhere falls back to the oldest behaviour — newest
       // words in view.
-      if (list.length !== this._seatCount) {
+      if (!resultsShowing && list.length !== this._seatCount) {
         this._seatCount = list.length;
         this.seatConversation();
       }

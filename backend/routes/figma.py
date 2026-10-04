@@ -31,6 +31,7 @@ from deps import (
 )
 from design_renderer import accepted_unrendered, render_spec
 from design_renderer import unrendered_keys as unrendered_spec_keys
+
 # THE PROOF, AND THE GATE BUILT ON IT. `figma_fidelity` reads this module's own measurement
 # (`_figma_spec_for_model`) and its renderer, so it is imported here rather than beside them —
 # and it imports THIS module only inside functions, which is what keeps the two from cycling.

@@ -40,7 +40,8 @@ import "@/components/lit/design-left-panel";
 // input the owner asked for could not be named by any surface until this existed. Same registration
 // rule as every import here — a tag nothing defines draws an empty box and says nothing.
 import "@/components/lit/figma-ingest-form";
-import "@/components/lit/catalog-ingest-form";
+// (THE ADD-DESIGN-SYSTEM FORM WAS HERE — imported 2026-10-02, removed 2026-10-04: no catalogue is
+// installed from the front end. The rail is the Figma form over the tree, as it was before it.)
 // THE MIDDLE COLUMN'S PREVIEW — what a RUN loaded. Same registration rule: without this import
 // the surface names a tag nothing defines and the column draws an empty pane with no error.
 import "@/components/lit/component-preview";
@@ -55,20 +56,15 @@ import "@/components/lit/draft-preview";
 // removed the same day on the owner's word: *"I don't want the user to be able to select a
 // catalogue… I'm removing that feature."* The room's system is a server-side constant now;
 // nothing selects, so nothing is registered. The element file is deleted with this import.)
-// THE COPIED-IN DESIGN SYSTEMS (2026-10-03) — AgnosticUI's Select (instance #1) and Kor's
-// button (instance #2), real upstream source walked through this app's catalogue pipeline
-// (manifest → ingest → accept). EACH SYSTEM'S REGISTRATION IS ITS OWN FILE: these imports point
-// at each system's registry module (components/lit/<system>/registry.ts), which registers that
-// system's elements and carries its declarations — by the owner's wall (PLANS.AGENT/
-// multiple-catalogs.md §10), an ingested system's registry lives in its own tree and never in
-// shared/tag-registry.ts, and this list pulls it into the bundle the same way it pulls every
-// other element of this app.
-import "@/components/lit/agnosticui/registry";
-import "@/components/lit/kor/registry";
-// AND CARBON — IBM'S OWN (2026-10-03, late): the vendor package's own Lit components, used
-// AS-IS (its registry module imports @carbon/web-components' modules — no copied source) plus
-// Carbon's styles. The room's system is Carbon; Kor stays a partition, unseated.
-import "@/components/lit/carbon/registry";
+// (AGNOSTICUI AND KOR WERE HERE — two copied-in design systems registered 2026-10-03 and removed
+// 2026-10-04, along with their trees. Their registry imports went with them: an import naming a
+// module that does not exist is a build failure, and these two were exactly that once the folders
+// were deleted. Each ingested system's registry lived in its own tree by the wall in
+// PLANS.AGENT/multiple-catalogs.md §10. No ingested system is registered here now: all three were
+// removed the same day.)
+// (CARBON WAS HERE — the vendor package's own Lit components, registered 2026-10-03 and removed
+// 2026-10-04 with its tree, the same as agnosticui and kor above: an import naming a module that
+// no longer exists is a build failure, which is what this was once the folder went.)
 // THE GOVERNANCE ROOM'S FEED (2026-10-03) — the per-call cost ledger, drawn. Same registration
 // rule as every import here: the room's tree names it, so a tag nothing defines would draw an
 // empty box and say nothing.

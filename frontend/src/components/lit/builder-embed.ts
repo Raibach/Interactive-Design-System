@@ -40,6 +40,22 @@ export class BuilderEmbed extends LitElement {
     try {
       const url = new URL(base);
       url.searchParams.set('embedded', 'console');
+      /* THE DOOR TRAVELS TO THE FRAME (2026-10-04). The Development room's tool decides what a
+         first-time visitor sees — its onboarding wizard (the one with the model setup), or
+         straight to the workspace — from a marker in its own address, because the frame cannot
+         ask who came in. The shell knows which door was used: a person who signed up carries
+         `grace_door = 'registered'` (App.tsx's onEnterWorkspace) and gets the wizard; the pin
+         (dev@local) writes `grace_door = 'dev'` (index.html) and keeps the tool's current
+         state — no wizard. The canvas's ground script (openhands-patch.sh) reads this. Same
+         one-place contract as `embedded` above. A browser with no marker at all (older
+         sessions) sends nothing and behaves exactly as it did before this existed. */
+      let door: string | null = null;
+      try {
+        door = localStorage.getItem('grace_door');
+      } catch {
+        /* no storage — send nothing, the pre-existing behavior */
+      }
+      if (door === 'registered' || door === 'dev') url.searchParams.set('house_door', door);
       return url.toString();
     } catch {
       return base;

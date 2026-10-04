@@ -298,11 +298,17 @@ export const login = async (
     );
 
     if (!response.ok) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ error: response.statusText }));
+      // `detail` first — FastAPI's key. Same defect as the signup block above had: reading only
+      // `error` erased the server's sentence and left "Login failed" in its place.
+      const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
       console.error("❌ Login failed:", errorData);
-      return { success: false, error: errorData.error || "Login failed" };
+      const detail =
+        typeof errorData.detail === "string"
+          ? errorData.detail
+          : typeof errorData.error === "string"
+            ? errorData.error
+            : "";
+      return { success: false, error: detail || `Sign-in failed (HTTP ${response.status}).` };
     }
 
     const data = await response.json();
@@ -403,6 +409,19 @@ export const signup = async (
   email?: string;
   name?: string;
   role?: string;
+  /**
+   * Whether the verification mail actually left the server. The account is created either way —
+   * `routes/auth.py` commits the row before it tries to send, so a mail failure is reported
+   * rather than dressed up as a signup failure. The screen shows this, because "check your
+   * email" is a lie when nothing was sent.
+   */
+  verificationEmailSent?: boolean;
+  /**
+   * True when the server refused because that address already has an account (HTTP 409).
+   * The wizard reads this to offer the way forward — the code step — rather than leaving the
+   * person at a red sentence with nothing to do about it.
+   */
+  alreadyExists?: boolean;
   error?: string;
 }> => {
   if (!email || !password) {
@@ -426,10 +445,21 @@ export const signup = async (
     });
 
     if (!response.ok) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ error: response.statusText }));
-      return { success: false, error: errorData.error || "Signup failed" };
+      // FastAPI puts a refusal's sentence in `detail`. Reading only `error` here is what turned
+      // every specific reason the server gave — "An account with that email already exists",
+      // the password rule, a database that is down — into the same three words, "Signup failed".
+      const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+      const detail =
+        typeof errorData.detail === "string"
+          ? errorData.detail
+          : typeof errorData.error === "string"
+            ? errorData.error
+            : "";
+      return {
+        success: false,
+        error: detail || `The server refused the signup (HTTP ${response.status}).`,
+        alreadyExists: response.status === 409,
+      };
     }
 
     const data = await response.json();
@@ -449,17 +479,26 @@ export const signup = async (
         email: data.email,
         name: data.name,
         role: data.role,
+        // Straight from the server: whether the verification mail actually LEFT. The account
+        // exists either way — `routes/auth.py` commits the row before it tries to send — so the
+        // screen can either say "check your email" or admit that nothing went, and only this
+        // value knows which is true.
+        verificationEmailSent: Boolean(data.verification_email_sent),
       };
     }
 
     return { success: false, error: data.error || "Signup failed" };
   } catch (error: any) {
     console.error("❌ Signup error:", error);
+    // A fetch that never reached the server throws `TypeError: Failed to fetch`, whose own
+    // message names nothing a person can act on — so the connection case gets its own sentence
+    // instead of that one being shown to them.
     return {
       success: false,
       error:
-        error.message ||
-        "Failed to connect to server. Please check your connection and try again.",
+        error instanceof TypeError
+          ? "The server could not be reached. Check the connection and try again."
+          : error?.message || "The signup did not complete.",
     };
   }
 };
@@ -495,5 +534,74 @@ export const initializeDevAuth = (): void => {
     console.log("✅ Development authentication initialized - login screen bypassed");
   } catch (error) {
     console.error("❌ Failed to initialize dev auth:", error);
+  }
+};
+
+/**
+ * VERIFY THE EMAIL — the code from the mail, checked by the server.
+ *
+ * NOTHING IS COMPARED HERE. The code is posted and the server's answer is reported; the
+ * comparison and the expiry check both live in `routes/auth.py`, because a check made in the
+ * browser is a check the browser can lie about. This function's whole job is to carry two
+ * strings and bring back a sentence.
+ */
+export const verifyEmail = async (
+  email: string,
+  code: string,
+): Promise<{ success: boolean; alreadyVerified?: boolean; error?: string }> => {
+  if (!email || !code) {
+    return { success: false, error: "Email and code are required" };
+  }
+  try {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+    const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      // The server's own words, not a re-wording: it already refuses a bad code in a sentence
+      // written for the person reading it.
+      return {
+        success: false,
+        error: data?.detail || `Verification failed (HTTP ${response.status})`,
+      };
+    }
+    return { success: true, alreadyVerified: Boolean(data?.already_verified) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+/**
+ * ASK FOR ANOTHER CODE.
+ *
+ * THE REPLY GIVES NOTHING AWAY, and this function does not try to. The server answers the same
+ * way whether the address exists, does not, or is already verified — a deliberate choice made
+ * so this endpoint cannot be used to ask "is this email registered here?" one address at a
+ * time. A client that reported a difference would undo that on its own.
+ */
+export const resendVerificationCode = async (
+  email: string,
+): Promise<{ success: boolean; error?: string }> => {
+  if (!email) return { success: false, error: "Email is required" };
+  try {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+    const response = await fetch(`${API_BASE_URL}/api/auth/resend-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        error: data?.detail || `Could not resend the code (HTTP ${response.status})`,
+      };
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 };

@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import GateSplash from "@/components/GateSplash";
+import { SignUpWizard } from "@/components/SignUpWizard";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 import { appConfigReady, isDemoMode } from "@/shared/appConfig";
 import "./global.css";
@@ -54,10 +55,6 @@ function App() {
    * and renders NOTHING while the flag is absent (the card covers the screen). No
    * fallback login, no degraded path: one lock, one door.
    */
-  if (!isAuthenticated) {
-    return null;
-  }
-
   /*
    * THE PIN-ENTRY TIME IS LOADING TIME (the owner's design, 2026-10-02). Nothing used
    * the seconds a person spends typing the pin — the app only began downloading after
@@ -72,6 +69,59 @@ function App() {
   useEffect(() => {
     void import("@/pages/WritingAreaIndex").catch(() => {});
   }, []);
+
+  /*
+   * ── THE REGISTRATION DOOR (2026-10-04) ─────────────────────────────────────────────────────
+   * `?signup` renders the sign-up wizard, and this is the real door — not a test one. The gate
+   * in index.html carries the link that reaches it ("Register for beta testing", quieter than
+   * the pin button on purpose): the pin is for the people who already have one, and this is for
+   * the people who do not yet exist here. BESIDE the pin, not a way past it.
+   *
+   * THE TWO HALVES MOVE TOGETHER: index.html hides its card for this query (the `signup` class)
+   * and this early return renders the wizard before the auth check. Deleting either leaves a
+   * visitor staring at the gate with a door they cannot open.
+   *
+   * IT SITS BELOW THE HOOKS ON PURPOSE. Both returns below this point are EARLY returns, and a
+   * hook after one of them would be a hook called on some renders and not others — which is the
+   * one thing React does not forgive, and which this file was already doing before the door was
+   * added (the prefetch above used to sit under the `!isAuthenticated` return). Moving the
+   * returns down is the whole of that fix.
+   */
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("signup")) {
+    return (
+      <SignUpWizard
+        open
+        onClose={() => { window.location.search = ""; }}
+        /* THE REGISTERED GUEST COMES IN (2026-10-04). A person who just signed up and started a
+           trial has no pin and never will — the gate is the door for people who already have
+           one. So the success button opens the same session the pin opens (the flag
+           index.html writes) and then leaves the door address behind; the reload lands in the
+           console. Cancel keeps the old behavior: straight back to the gate. Measured before
+           this existed: the success button reused onClose, and a fresh registrant met a pin
+           card they could not answer. */
+        onEnterWorkspace={() => {
+          try {
+            localStorage.setItem("grace_is_authenticated", "true");
+            /* THIS DOOR IS 'registered' (2026-10-04) — the marker the Development room's frame
+               carries (builder-embed.ts) so the tool's onboarding wizard appears for a
+               signed-up person while dev@local keeps its current behavior. The pin login
+               writes 'dev' over it; the two markers cannot both be true. */
+            localStorage.setItem("grace_door", "registered");
+          } catch {
+            console.error("[signup] could not open the session — the gate will still show.");
+          }
+          /* AND THE LANDING IS THE CONSOLE (owner, 2026-10-04) — not the Development room: the
+             room carries the registered door marker, so the onboarding wizard greets them
+             there WHEN THEY GO THERE, and nothing drags them into it on arrival. */
+          window.location.search = "";
+        }}
+      />
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   // Show main app if authenticated
   try {

@@ -177,7 +177,7 @@ A2UI_CATALOG_ID = (
 def a2ui_catalog_for(surface: str | None = None, system: str | None = None) -> dict[str, Any]:
     """The catalogue that gates a payload: the PACKAGE's chosen system, else the surface's.
 
-    `system` is the per-package design-system fact (`design_system_of` below) — the partition a
+    `system` is the per-package design-system fact — the partition a
     person chose for this package. IT IS LOUD: a chosen system whose partition does not exist
     raises, naming the system and the directory, because a package that asked for one design system
     and was silently assembled against the Composer's vocabulary is the kind of quiet substitution
@@ -200,23 +200,6 @@ def a2ui_catalog_for(surface: str | None = None, system: str | None = None) -> d
     if surface and surface in a2ui_catalog_surfaces():
         return _load_a2ui_catalog(surface)
     return a2ui_catalog
-
-
-def design_system_of(session: dict[str, Any] | None) -> str | None:
-    """A PACKAGE'S CHOSEN DESIGN SYSTEM — the fact the picker writes and the assembler reads.
-
-    It lives in the session's own `metadata` (jsonb; no migration): the key is `design_system`,
-    written when a person chooses one for the package. ABSENT IS A REAL ANSWER — it means this
-    package never chose, and the surface's own catalogue gates it, exactly as before the fact
-    existed. Nothing here invents a default: the caller that needs a system asks for one.
-    """
-    if not session:
-        return None
-    metadata = session.get("metadata") or {}
-    if not isinstance(metadata, dict):
-        return None
-    value = metadata.get("design_system")
-    return str(value) if value else None
 
 
 def a2ui_catalog_id(surface: str | None = None, system: str | None = None) -> str:

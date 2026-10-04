@@ -6043,115 +6043,19 @@ export default function Index({
     return () => window.removeEventListener("ingest-submit", onIngestSubmit);
   }, [designIngestBusy, setDesignIngest, currentDesignSession]);
 
-  /*
-   * ══ ADD DESIGN SYSTEM, ANSWERED HERE ═════════════════════════════════════════════════════════
-   *
-   * The rail's second form dispatches `catalog-ingest-submit` with the label and the archive and
-   * nothing else; this is the half that knows. It posts the SAME call the ingest route documents —
-   * `POST /api/catalog/ingest`, multipart — and says what came back, the server's words VERBATIM
-   * when it refuses (every 400/409 names what is wrong; re-wording it here would be a second
-   * authority on the reason).
-   *
-   * THE TWO VALUES IT WRITES ARE THIS FORM'S OWN BOUND PATHS
-   * (`/session/design_system_ingest/...`), not the Figma ingest's: two tools in one rail must not
-   * write one message line. Same channel and same reason as the form above it — a components change
-   * does not re-hand props (see the emission in routes/ai.py).
-   *
-   * IT NEVER CHOOSES A PARTITION NAME: the manifest's id is the name, an existing id is refused by
-   * the server, and nothing here offers a name that could overwrite a catalogue.
-   */
-  const [catalogIngestBusy, setCatalogIngestBusy] = useState(false);
 
-  const writeDesignSystemIngest = useCallback((patch: { busy?: boolean; message?: string }): void => {
-    /*
-     * THE DESIGN TREE, AND IT WAS THE COMPOSER'S — measured 2026-10-03, the owner's first
-     * upload: the request fired and the server answered 400 TWICE (the access log has both
-     * lines) and the form sat silent, because this wrote the answer into `workspaceTree`
-     * while the room that DRAWS this form is the design room. The Figma form's own writer
-     * (`setDesignIngest` above) targets `setDesignTree` — which is why ITS messages show —
-     * and this now mirrors it exactly: the room that draws the form is the room whose
-     * model carries its words.
-     */
-    setDesignTree((prev) => {
-      const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
-      const session = { ...((model.session ?? {}) as Record<string, any>) };
-      const current = { ...((session.design_system_ingest ?? {}) as Record<string, any>) };
-      if (patch.busy !== undefined) current.busy = patch.busy;
-      if (patch.message !== undefined) current.message = patch.message;
-      session.design_system_ingest = current;
-      model.session = session;
-      return { ...prev, dataModel: model };
-    });
-  }, []);
-
-  useEffect(() => {
-    const onCatalogIngestSubmit = async (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as { label?: string; file?: File };
-      const file = detail.file;
-      const typedLabel = String(detail.label || '');
-      if (!file || catalogIngestBusy) return;
-      setCatalogIngestBusy(true);
-      writeDesignSystemIngest({
-        busy: true,
-        message: typedLabel ? `Ingesting ${file.name} as “${typedLabel}”…` : `Ingesting ${file.name}…`,
-      });
-      try {
-        const body = new FormData();
-        body.append('file', file);
-        if (typedLabel) body.append('label', typedLabel);
-        const res = await fetch(`${API_BASE}/catalog/ingest`, { method: 'POST', body });
-        const payload = (await res.json().catch(() => null)) as
-          | { system?: string; label?: string; components?: string[]; detail?: string }
-          | null;
-        if (!res.ok) {
-          writeDesignSystemIngest({
-            busy: false,
-            message: String(payload?.detail || `The ingest was refused: HTTP ${res.status}`),
-          });
-          return;
-        }
-        const names = Array.isArray(payload?.components) ? payload?.components ?? [] : [];
-        writeDesignSystemIngest({
-          busy: false,
-          message: `Created the partition '${payload?.system}' (${payload?.label}) — ${names.length} `
-            + `component${names.length === 1 ? '' : 's'} PROPOSED (draft: false). A person accepts `
-            + 'each before the assembler may place it.',
-        });
-        /*
-         * AND THE ROOM TURNS TO WHAT JUST LANDED (owner, 2026-10-03): *"the catalog appears in
-         * the list where it was not there before and it DEFAULTS to that catalog you just
-         * ingested and shows the component tree for that catalog, so you can begin working on
-         * it."* One live property write — the rail's own `updated` re-reads on a `pipeline`
-         * change — plus the refresh bump its counts ride. No assembly, no reload, nothing by
-         * hand; and the tree it draws now carries the proposed row with its Accept control.
-         */
-        const rail = deepFind<HTMLElement & { pipeline?: string }>('figma-layers-view');
-        if (rail && payload?.system) {
-          rail.pipeline = String(payload.system);
-        }
-        setDesignIngest({ refresh: Date.now() });
-      } catch (err) {
-        writeDesignSystemIngest({
-          busy: false,
-          message: `The ingest request failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      } finally {
-        setCatalogIngestBusy(false);
-      }
-    };
-    window.addEventListener('catalog-ingest-submit', onCatalogIngestSubmit);
-    return () => window.removeEventListener('catalog-ingest-submit', onCatalogIngestSubmit);
-  }, [catalogIngestBusy, writeDesignSystemIngest]);
 
   /*
    * ══ THE ACCEPT ACT, ANSWERED HERE (2026-10-03) ══════════════════════════════════════════════
    *
-   * The rail announces `catalog-accept {system, name}`; this posts it and says what came back —
-   * the server's words VERBATIM on a refusal (every 404/409 names what is wrong), and on success
-   * the note that the entry is placeable NOW (the room's palette reads the marker the instant the
-   * write lands). The result goes back to BOTH readers: the message line above (the
-   * design-system form's own), and `catalog-accept-settled`, which is what lets the rail's row
-   * change — a row may not flip on its own press; it flips on the write that landed.
+   * The rail announces `catalog-accept {system, name}`; this posts it and reports the outcome by
+   * `catalog-accept-settled`, which is what lets the rail's row change — a row may not flip on its
+   * own press; it flips on the write that landed.
+   *
+   * IT USED TO SPEAK AS WELL, on the message line the add-design-system form drew. That form is
+   * gone (2026-10-04), so the write had no reader left and went with it: the row is the whole
+   * account of an accept now. A refusal the person must read would need a line on an element that
+   * exists — the server's reason is still returned, and nothing currently displays it.
    */
   useEffect(() => {
     const onCatalogAccept = async (event: Event) => {
@@ -6159,39 +6063,24 @@ export default function Index({
       const system = String(detail.system || '');
       const name = String(detail.name || '');
       if (!system || !name) return;
+      let ok = false;
       try {
         const res = await fetch(`${API_BASE}/catalog/${encodeURIComponent(system)}/accept`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name }),
         });
-        const payload = (await res.json().catch(() => null)) as
-          | { detail?: string; accepted?: { at?: string } }
-          | null;
-        if (!res.ok) {
-          writeDesignSystemIngest({
-            message: String(payload?.detail || `The accept was refused: HTTP ${res.status}`),
-          });
-          window.dispatchEvent(new CustomEvent('catalog-accept-settled', {
-            detail: { system, name, ok: false },
-          }));
-          return;
-        }
-        writeDesignSystemIngest({
-          message: `'${name}' is accepted — placeable in the rooms now (recorded ${payload?.accepted?.at || ''}).`,
-        });
-        window.dispatchEvent(new CustomEvent('catalog-accept-settled', {
-          detail: { system, name, ok: true },
-        }));
-      } catch (err) {
-        writeDesignSystemIngest({
-          message: `The accept request failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        ok = res.ok;
+      } catch {
+        ok = false;
       }
+      window.dispatchEvent(new CustomEvent('catalog-accept-settled', {
+        detail: { system, name, ok },
+      }));
     };
     window.addEventListener('catalog-accept', onCatalogAccept);
     return () => window.removeEventListener('catalog-accept', onCatalogAccept);
-  }, [writeDesignSystemIngest]);
+  }, []);
 
   /*
    * ══ THE TWO RUN TRIGGERS, AND THE COLUMN THEY LAUNCH ═════════════════════════════════════════
@@ -9741,7 +9630,7 @@ export default function Index({
                     !isConsoleView && (headerTab === 'development'
                       /* THE DEVELOPMENT ROOM, TAKE TWO (owner, 2026-10-04, late: *"Check it out
                          — all the other one, bolt, is not gonna cut it… I think this one will
-                         work better"*): **OpenHands' Agent Canvas** — the self-hosted developer
+                         work better"*): **the Raibach IDS Agent Canvas** — the self-hosted developer
                          control center for coding agents — replaces bolt.diy here. It is a
                          REAL WEB APP (its own server on :8090), so it embeds whole, with no
                          strip and no door: bolt.diy's WebContainer runtime could never boot

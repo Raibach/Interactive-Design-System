@@ -22,7 +22,6 @@
     "node_modules/**",
     "src/**/*.stories.ts",
     "src/**/*.stories.tsx",
-    "src/storybook/**",
     "src/components/_old/**",
     "**/*.test.ts",
     "**/*.spec.ts"

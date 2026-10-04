@@ -38,7 +38,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 // The right column's pieces. Each import is a side effect that registers the tag,
 // so <chat-panel> stays self-contained: composing these elements requires them to
-// be defined before render, the same rule that forced the main.tsx import above.
+// be defined before render, the same rule that forced the main.tsx import above. 
 import './chat-fold';
 import './chat-header';
 import './chat-messages';

@@ -17,7 +17,12 @@ import sys
 
 from fastapi.routing import APIRoute
 
-from demo_policy import ALLOWED_MUTATIONS, GET_DENYLIST_PREFIXES, GET_DENY_EXCEPTIONS, PASS_LIST
+from demo_policy import (
+    ALLOWED_MUTATIONS,
+    GET_DENY_EXCEPTIONS,
+    GET_DENYLIST_PREFIXES,
+    PASS_LIST,
+)
 from main import app
 
 MUTATING_METHODS = ("POST", "PUT", "PATCH", "DELETE")

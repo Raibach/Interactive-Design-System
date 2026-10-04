@@ -233,3 +233,15 @@ development/*
 # Development room's tool runs as its own service now, and its Dockerfile + entrypoint are
 # source — the service builds them straight from this branch.
 !development/agent-canvas/
+# …and THE TOOL'S OWN SOURCE (2026-10-04). The Development room's tool is built from THIS copy
+# rather than downloaded from the vendor, so these files travel with the repository. Until this
+# line existed the rule above kept them off GitHub — which is why a cloud build could never see
+# them. This is the one deliberate exception to "the clones stay out": it is not a clone kept for
+# reading, it is the thing the room runs.
+!development/OpenHands-main/
+# …and THE PYTHON SIDE OF THE SAME TOOL (2026-10-04). The agent server, the SDK, the tools, the
+# workspaces and the automation backend: four packages from OpenHands/software-agent-sdk and one
+# from OpenHands/automation. The tool can be pointed at these instead of PyPI — that override is
+# built in and documented by the vendor (`OH_AGENT_SERVER_LOCAL_PATH`, "highest precedence") — and
+# they have to travel with the repository for a cloud build to see them.
+!development/vendor/

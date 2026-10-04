@@ -1657,30 +1657,8 @@ export const TAG_REGISTRY = {
    * `busy` AND `message` ARE THE HOST'S. Only the caller that made the call knows when it finished,
    * and only it knows why Submit is blocked — so the element decides neither.
    */
-  'catalog-ingest-form': {
-    tag: 'catalog-ingest-form',
-    surface: 'design',
-    column: 'left',
-    description: 'ADD DESIGN SYSTEM — the design room\'s second ingest tool, beside the Figma form. A packaged design system (a .zip carrying `system.json` and `components.json`) becomes a walled-off catalogue partition: it draws the label field, the archive field and Submit, and dispatches `catalog-ingest-submit` with `{label, file}` verbatim — the shell runs `POST /api/catalog/ingest`, and nothing here fetches, unzips or writes. Every component it creates lands PROPOSED (`draft: false`) until a person accepts it.',
-    props: {
-      /** The system's label as typed. Empty means the manifest's own label is used. */
-      label: { type: 'string', optional: true },
-      /** Set by the HOST while the ingest is in flight; locks the fields and reads "Ingesting…". */
-      busy: { type: 'boolean', optional: true },
-      /** What the server answered — the created partition, or the refusal verbatim. The host's words. */
-      message: { type: 'string', optional: true },
-    },
-    events: ['catalog-ingest-submit'],
-    constraints: [
-      'IT DRAWS AND DISPATCHES ONLY: it never fetches, never unzips, and never writes — the endpoint exists (`POST /api/catalog/ingest`) and is not reimplemented in an element',
-      'THE MANIFEST IS THE AUTHORITY: the label typed here must MATCH the zip\'s `system.json` label or be left empty; a disagreement is refused (409) naming both, never silently resolved — the form says so out loud rather than letting a person learn it by being refused',
-      'CREATING A NEW SYSTEM IS THE ACTION: the partition\'s name is the manifest\'s id, an id that already exists is refused (409), and no field here can name an existing catalogue — the system catalogues are not ingest targets by construction',
-      'a form that cannot see the systems it must not touch also cannot overwrite them: nothing in this element lists, edits or deletes a catalogue',
-      'every component lands PROPOSED (`draft: false`) and registered with an EMPTY tag map: a name that resolves to nothing draws as the refusal sentence until an implementation lands and a person accepts it',
-      '`busy` and `message` are the HOST\'S to set, and they travel as BOUND DATA-MODEL PATHS (`/session/design_system_ingest/...`) — under this form\'s own keys, because two ingests in one rail must not write one message line (see the emission in routes/ai.py)',
-      'it sits BETWEEN the Figma form and the tree in the design rail: the form above, the tree below, this one beside its sibling',
-    ],
-  },
+  // (THE ADD-DESIGN-SYSTEM TAG WAS HERE — declared 2026-10-02, removed 2026-10-04 together with
+  // the form itself: no catalogue is installed from the front end, so no surface may name it.)
   'figma-ingest-form': {
     tag: 'figma-ingest-form',
     surface: 'design',
