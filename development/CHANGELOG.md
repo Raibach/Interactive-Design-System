@@ -103,6 +103,36 @@ the emitted ground script through `node --check`, and its HTML edit dry-run agai
 build. The drift repair (above) stays as the belt to this suspender: with the wizard's LLM
 step unreachable, the seed can still be trampled from Settings, and the loop puts it back.
 
+**NO VISITOR IS ASKED FOR ANYTHING — AND THE ONBOARDING IS PARKED, NOT LOST (the same night,
+the owner watching a fresh state twice).** First: *"every single person that views this
+will be seeing it for the first time … just add the back in so that it's not asking the
+user or the visitor."* So the hosted copy stopped running the tool in `--public` mode: the
+session key (still a service secret) is injected into the served page at startup, and the
+tool's own first-load code adds its "Local" backend from it — the same mechanism the Mac
+uses, which is why the Mac never asks the owner for a key either. The house patch (hosted
+mode) adds the client half: the first-run flow is preset completed. The "Add a backend"
+step is untouched in the tool and never appears; MEASURED after the deploy, fresh state:
+the served page carries the injected key, the tool registers its own backend, no modal
+opens, and the room — reached through the demo's own shell, the only way it is ever
+presented — lands directly on the workspace with its navigation and the seeded profile.
+The raw API still answers **401 without the key** (the server has not changed). THE TRADE,
+recorded where the door was: anyone with the workspace's URL can drive the agent from a
+browser — the URL is unlisted, not secret; the ceilings are now `max_iterations` and the
+DeepSeek account's limits; **the session key is retired from the hand-out with the pin.**
+
+Second, and this is the part a future session must not break: *"we'll have to re-introduce
+that onboarding later but I don't wanna lose it."* NOTHING WAS LOST — the onboarding code
+in the tool was never touched, modified, or deleted; only two switches govern whether it
+appears, and both live in this repo:
+1. `development/agent-canvas/entrypoint.sh` — the launch line drops `--public`; putting
+   `--public` back restores the wizard's "Add a backend" step as the key door (and the key
+   then needs re-issuing to whoever should carry it).
+2. `development/openhands-patch.sh` — `preseedFirstRun` presets `openhands-onboarded` and
+   the checklist dismissal (hosted mode only); removing the `openhands-onboarded` line
+   brings the wizard back for first-time visitors, and the auto-skip stays dormant because
+   it never fires on the wizard's first step.
+Push to `demo-mode` and the service rebuilds with whichever flow is wanted.
+
 ## NEXT PROMPT — copy this into a fresh chat
 
 > We are working on the **Development room** of this application — the tab in the top nav that

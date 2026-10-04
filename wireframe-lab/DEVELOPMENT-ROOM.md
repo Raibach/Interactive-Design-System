@@ -194,11 +194,21 @@ form a next session needs them:
   the address set but the frame never arriving (25 s ceiling), the same panel covers a
   still-mounted embed — a late workspace still wins.
 
-- **The gate, mechanically.** `--public` mode: the session key
-  (`LOCAL_BACKEND_API_KEY`, a service secret) is NOT injected into the page; each
-  reviewer types it once, per browser, in the wizard's local-backend step. **The owner
-  hands the key out WITH the demo pin** (decision 1: pin-holders may drive the agent).
-  The key value lives only in the service's environment — never in this repo.
+- **No gate, mechanically — the backend is added FOR the visitor.** The service runs
+  the tool in LOCAL mode (not `--public`): the session key (`LOCAL_BACKEND_API_KEY`, a
+  service secret) is injected into the served page at startup, and the tool's own
+  first-load code registers its "Local" backend from it — the same mechanism the Mac
+  uses. The house patch (hosted) also presets the first-run flow completed, so the
+  "Add a backend" step never appears. MEASURED, fresh state: backend registered by the
+  tool, no modal, landing straight in. Raw API callers without the key still get 401.
+  THE TRADE, said here where the door was: anyone with the workspace's URL can drive
+  the agent — unlisted, not secret; `max_iterations` and the DeepSeek account are the
+  ceilings; the key is NO LONGER handed out with the pin. **THE ONBOARDING IS PARKED,
+  NOT LOST** (owner: *"we'll have to re-introduce that onboarding later but I don't
+  wanna lose it"*): the wizard code was never touched — `--public` back on the
+  entrypoint's launch line plus removing the `openhands-onboarded` preset in
+  `openhands-patch.sh` restores it whole (the full recipe is in
+  `development/CHANGELOG.md`, same night).
 
 - **The model, mechanically.** The entrypoint seeds the chain the tool actually reads —
   the LLM PROFILE (`sovereign-local-model`: `deepseek-v4-pro` at
@@ -221,24 +231,26 @@ form a next session needs them:
 
 - **What the room is NOT, stated plainly:** the 45-second repair loop is the demo's
   robustness, not a model-switching feature; there is NO dollar-budget setting in this
-  SDK version (measured — the ceilings are `max_iterations`, the key gate, and the
-  DeepSeek account's own limits); and the state directory is ephemeral — conversations
+  SDK version (measured — the ceilings are `max_iterations` and the
+  DeepSeek account's own limits; the key gate is gone, see the gate bullet above); and the state directory is ephemeral — conversations
   do not survive a redeploy (the settings do, because the boot re-seeds them).
 
 - **The room's plan, updated:** item 1 (the agent's model) is DONE, hosted — keep the
   seed/repair pair in mind before changing anything about profiles; item 2 (the sandbox)
-  is answered FOR THE DEMO by the gate above (pin-holders only) — the agent runs inside
-  the service's own container, nowhere near anyone's machine; item 3 (lifecycle) is the
+  is answered by the container itself — the agent runs inside the service's own, nowhere
+  near anyone's machine, and the demo no longer asks who is driving; item 3 (lifecycle) is the
   service itself now — the room's panel covers the down state on both platforms; item 4
   (the bridge — conversations onto the console as cards) is the open one, and the
   changelog's NEXT PROMPT starts there; item 5 (styling) is done, riding the image.
 
-- **A reviewer's path, as built — AND SHORTENED BY THE OWNER THE SAME NIGHT**
-  (*"we should disable the onboarding setup process … the getting started process"*): open
-  the demo → the pin → Development → the workspace loads wearing the house ground → **the
-  wizard asks for the session key and NOTHING ELSE** (its later steps auto-skip via its own
-  "Skip for now" — the house patch's `--hosted` mode; the key step CANNOT be skipped,
-  because it is the backend registration itself, and with no backend the app renders a
-  white page — measured) → the workspace, checklist gone, telemetry prompt already
-  answered (declined) in the seed → a conversation runs on DeepSeek. Every step of that
-  path was walked on the deployed copy; screenshots on file in the session record.
+- **A reviewer's path, as built — and shortened twice the same night** (owner: *"we
+  should disable the onboarding setup process … the getting started process"*, then,
+  watching a first-time visit: *"every single person that views this will be seeing it
+  for the first time … just add the back in so that it's not asking the user or the
+  visitor"*): open the demo → the pin → Development → **the workspace, directly** —
+  navigation up, the seeded DeepSeek profile in the composer, nothing typed, nothing
+  asked; no "Add a backend", no wizard, no checklist, no telemetry prompt. Walked on
+  the deployed copy THROUGH THE DEMO'S OWN SHELL (the only way the room is ever
+  presented — the owner's correction, same night: *"you should never do that. Never
+  presented that way"* — the bare tool URL is a test instrument, never a deliverable),
+  with screenshots on file in the session record.

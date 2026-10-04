@@ -2,15 +2,22 @@
 
 > **EXECUTED — 2026-10-04, the same long night.** Both tools run as their own Northflank
 > services and both rooms show them on the deployed demo, verified signed out. The three
-> owner decisions Part 4 asked for were made first: **pin-holders may drive the hosted
-> development agent** (public mode; the session key goes out with the demo pin), **demo
-> visitors may run the builder** (per-visitor + global caps inside the engine), and **the
-> hosted builder store starts fresh**. Three build notes where the plan met the machine:
-> node **24** (the package's engines field requires it), the agent-server pin is **1.51.0**
-> (1.49.6 crashed every run on DeepSeek's usage block — measured), and the run budget
-> lives in the **engine** (it is the money's home), with the builder forwarding the
-> visitor's address. The full story, measured end to end, is in `development/CHANGELOG.md`
-> (2026-10-04, "the tools go hosted") and `wireframe-lab/DEVELOPMENT-ROOM.md`.
+> owner decisions Part 4 asked for were made first, and ONE WAS NARROWED LATER THE SAME
+> NIGHT: the hosted development agent first ran on "pin-holders" (a key typed once per
+> browser) — then the owner watched a fresh incognito window meet that door and ruled:
+> *"every single person that views this will be seeing it for the first time … just add
+> the back in so that it's not asking the user or the visitor."* So the workspace now runs
+> in local mode with its key injected into the page — the tool adds its own backend, no
+> visitor is asked, and the URL is the only thing bounding who can drive it (raw API
+> callers still need the key; the workspace is unlisted, not secret). Demo visitors may run
+> the builder (per-visitor + global caps inside the engine), and the hosted builder store
+> started fresh. Three build notes where the plan met the machine: node **24** (the
+> package's engines field requires it), the agent-server pin is **1.51.0** (1.49.6 crashed
+> every run on DeepSeek's usage block — measured), and the run budget lives in the
+> **engine** (it is the money's home), with the builder forwarding the visitor's address.
+> The full story, measured end to end, is in `development/CHANGELOG.md`
+> (2026-10-04, "the tools go hosted") and `wireframe-lab/DEVELOPMENT-ROOM.md` — including
+> the exact recipe for bringing the onboarding back, which the owner asked to keep.
 
 *Written 2026-10-04, the night the demo went remote, at the owner's ask: **"I don't do in-person
 demos. This has to be on the remote site."** This is the plan for a fresh chat window; the

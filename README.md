@@ -225,7 +225,7 @@ point its build branch back (`northflank patch service combined` with
 
 | service | what it is | builds from |
 |---|---|---|
-| `dev-workspace` | the Development room's workspace: OpenHands Agent Canvas (pinned, the house patch applied inside the image), `--public` mode — the session key is typed once per browser | this repo, `/development/agent-canvas/Dockerfile` |
+| `dev-workspace` | the Development room's workspace: OpenHands Agent Canvas (pinned, the house patch applied inside the image), local mode — the session key is injected into the page at startup, so the tool adds its own backend and no visitor is asked for anything | this repo, `/development/agent-canvas/Dockerfile` |
 | `builder` | the Product room's app builder (Next, port 3223) | `Raibach/ai-app-builder-open` (a fork of the upstream vendor repo; the local-vcaas engine and the room's wiring are versioned there) |
 | `builder-engine` | the engine behind the builder (VCaaS-shaped API, DeepSeek, path-form previews, per-visitor + global run budgets). Its `data/` rides a **volume** — the projects store. | the same fork, `/local-vcaas/Dockerfile` |
 
