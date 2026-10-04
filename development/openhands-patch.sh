@@ -37,7 +37,9 @@ if ! grep -q "THE HOUSE PATCH" "$CSS"; then
    1. THE LOGO GOES: the sidebar's OpenHands mark sits right under this app's own logo.
    2. THE PALETTE: the dark ground and cards take the pin gate's navy and its lifted card
       (#110E1F / #231f2e) — the chooser screens and every base surface follow. */
-[data-agent-server-ui]{ --oh-color-base:#110E1F; --oh-color-base-secondary:#231f2e; }
+[data-agent-server-ui]{ --oh-color-base:#110E1F; /* the ground keeps the gate's navy */
+  --oh-color-base-secondary:#22202D; /* THE OWNER'S PANELS, 2026-10-04: his preferred colour for
+     all the panels that were gray — his swatch, exactly. Hovers deliberately untouched. */ }
 [aria-label="OpenHands Logo"]{ display:none !important; }
 CSS_PATCH
   echo "✅ css patched ($CSS)"
