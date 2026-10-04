@@ -2,11 +2,18 @@
 # ── THE DEV WORKSPACE'S DOOR, HOSTED (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md) ─────────
 # Three jobs, then the tool's own process in the foreground:
 #
-#   1. THE GATE IS REAL. `--public` mode: the server always requires its session key
-#      (LOCAL_BACKEND_API_KEY, from the service's environment — a secret) and the key is
-#      NOT injected into the page — each reviewer types it once, per browser. This is the
-#      owner's decision made mechanical: pin-holders may drive the agent, and the key is
-#      the pin's partner (which is why the same sentence is handed out with both).
+#   1. NOBODY IS ASKED FOR ANYTHING (owner, 2026-10-04, watching a fresh window: *"every
+#      single person that views this will be seeing it for the first time … You just need
+#      to add the back in so that it's not asking the user or the visitor."*). So the tool
+#      runs its LOCAL mode — not `--public`: LOCAL_BACKEND_API_KEY (the service secret) is
+#      INJECTED into the served page at startup, and the tool's own first-load code adds
+#      its "Local" backend from it — the same mechanism the owner's Mac uses, which is why
+#      the Mac never asks him for a key either. The "Add a backend" step is untouched in
+#      the tool and simply never appears; every first-time visitor lands in the workspace.
+#      WHAT THIS TRADES, SAID PLAINLY: anyone who has this workspace's URL can drive the
+#      agent from a browser — the URL is unlisted, not secret, and the demo circle is the
+#      exposure. Raw API callers WITHOUT the key still get 401 (the server still requires
+#      it — verified live), and the key is no longer handed out with the pin.
 #
 #   2. THE MODEL IS SEEDED — nobody types an API key. The DeepSeek configuration is
 #      written through the agent server's own APIs, in the order the tool actually reads:
@@ -18,12 +25,13 @@
 #
 #   3. THE DRIFT IS REPAIRED. WHY A LOOP AND NOT ONE SEED (measured live, 2026-10-04):
 #      the first-run wizard's "Set up your LLM" step ALWAYS proposes its own default
-#      model, so its Next button is always a dirty save — a reviewer clicking through it
-#      overwrote the seeded profile with an unusable model and a blank key, and every
-#      conversation died at "Your LLM isn't set up". The demo has exactly ONE valid
-#      configuration, so the door puts it back: a quiet check every 45 seconds, and the
-#      full seed again only when drift is found. This is the demo's own robustness, not
-#      a fight with the tool.
+#      model, so its Next button is always a dirty save — it once overwrote the seeded
+#      profile with an unusable model and a blank key, and every conversation died at
+#      "Your LLM isn't set up". The wizard no longer appears for visitors (the house patch
+#      presets the flow as completed), but Settings can still trample the seed, so the demo
+#      has exactly ONE valid configuration and this seed puts it back: a quiet check every
+#      45 seconds, and the full seed again only when drift is found. The demo's own
+#      robustness, not a fight with the tool.
 #
 # THE VERSION PIN IS A FIX, NOT A PREFERENCE: OH_AGENT_SERVER_VERSION=1.51.0 (the launcher
 # pins sdk/tools/workspace to the same number). At 1.49.6 the SDK's telemetry reads
@@ -34,16 +42,15 @@
 # guessed: the two versions' telemetry.py were diffed in the uv cache.
 #
 # WHAT IS *NOT* HERE, SAID PLAINLY: no global daily cap exists inside this tool — the
-# ceilings are max_iterations per conversation, the key gate (only pin-holders run
-# anything at all), and the DeepSeek account's own limits, which are the hard floor under
-# all of it. A global cap would need a proxy in front of the model — a decision with its
-# own measurement, not a line smuggled into this script.
+# ceilings are max_iterations per conversation and the DeepSeek account's own limits,
+# which are the hard floor under all of it. A global cap would need a proxy in front of
+# the model — a decision with its own measurement, not a line smuggled into this script.
 set -euo pipefail
 
 PORT="${PORT:-8090}"
 
 if [ -z "${LOCAL_BACKEND_API_KEY:-}" ]; then
-  echo "❌ LOCAL_BACKEND_API_KEY is not set — --public mode requires it; refusing to start." >&2
+  echo "❌ LOCAL_BACKEND_API_KEY is not set — it is the session key the served page carries (and every API call still requires); refusing to start." >&2
   exit 1
 fi
 
@@ -52,7 +59,9 @@ fi
 # suspender, with the reason one screen up.
 export OH_AGENT_SERVER_VERSION="${OH_AGENT_SERVER_VERSION:-1.51.0}"
 
-agent-canvas -p "$PORT" --public &
+# LOCAL MODE, ON PURPOSE (see job 1 in the header): the key is injected into the page at
+# startup, so the tool adds its own backend and no visitor is asked for anything.
+agent-canvas -p "$PORT" &
 CANVAS_PID=$!
 
 # Wait for the ingress — the launcher boots an agent server behind it (first boot after a

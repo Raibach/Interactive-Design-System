@@ -45,16 +45,18 @@
 #      relabeled in-page by the ground script, exact-match only, inside the wizard container.
 #      The "Skip for now" control is deliberately left alone ON THE MAC — but the HOSTED
 #      copy (2026-10-04, run with `--hosted`, as the service's Dockerfile does) turns the
-#      first-run flow into a single door:
-#        · THE KEY STEP STAYS. In --public mode the wizard's "Add a backend" step IS the
-#          session-key entry (measured: with no backend registered the app renders a white
-#          page — "onboarding is responsible for collecting backend connection details").
-#        · THE SETUP STEPS AUTO-SKIP. Once a backend exists, the wizard's remaining steps
-#          ("Choose your agent", "Set up your LLM", "Say hello") are skipped for the
-#          visitor — the owner's ask, 2026-10-04: *"we should disable the onboarding setup
-#          process"* — and skipping marks it completed, so nobody meets it twice. The
-#          ground script clicks the wizard's own "Skip for now" (exact text, once, never
-#          during a `?previewOnboardingStep=` design preview).
+#      first-run flow into NO FIRST-RUN FLOW AT ALL, the owner's ask twice over:
+#        · *"we should disable the onboarding setup process"* (2026-10-04) — and then,
+#          watching a fresh incognito window: *"every single person that views this will be
+#          seeing it for the first time … just add the back in so that it's not asking the
+#          user or the visitor."* The service runs the tool in LOCAL mode, so the backend is
+#          ALREADY there when a page loads (the entrypoint's job 1); this script adds the
+#          client half: the flow is PRESET COMPLETED (openhands-onboarded, when absent), so
+#          the wizard — "Add a backend" and every step after it — never appears for anyone.
+#        · THE AUTO-SKIP STAYS AS A BACKSTOP: should the wizard ever appear anyway (a
+#          hand-cleared store, a future build), its steps after the first click the
+#          wizard's own "Skip for now" (exact text, once, never during a
+#          `?previewOnboardingStep=` design preview).
 #        · THE GETTING-STARTED CHECKLIST DEFAULTS OFF (dismissed-if-absent — the Settings
 #          toggle can bring it back for anyone who wants it).
 set -euo pipefail
@@ -235,19 +237,25 @@ script = '''<script id="house-patch-ground">
         }
       }
     };
-    /* THE HOSTED COPY'S FIRST-RUN FLOW (owner, 2026-10-04: *"we should disable the onboarding
-       setup process … the getting started process"*; see the script header's notes). Two acts,
-       both exact and idempotent:
-       1. THE GETTING-STARTED CHECKLIST DEFAULTS OFF — dismissed-if-absent, so the Settings
-          toggle can bring it back for anyone who wants it.
-       2. THE WIZARD'S SETUP STEPS AUTO-SKIP — every step after the key door, via the
-          wizard's own "Skip for now". THE KEY DOOR ITSELF IS NEVER SKIPPED: with no backend
-          registered the app has nothing to talk to (measured: a white page), so the rule is
-          "a backend exists, the modal is open, the heading is not 'Add a backend'". A
-          `?previewOnboardingStep=` design preview is deliberate and left alone. */
-    var preseedChecklist = function () {
+    /* THE HOSTED COPY'S FIRST-RUN FLOW — NONE OF IT (owner, 2026-10-04: *"we should disable
+       the onboarding setup process … the getting started process"*, then, watching a fresh
+       incognito window: *"every single person that views this will be seeing it for the
+       first time … just add the back in so that it's not asking the user or the visitor."*)
+       Two presets, both "only when absent", both exact and idempotent:
+       1. THE FLOW IS COMPLETED — `openhands-onboarded` is what the app writes when the flow
+          is finished or skipped; seeding it means the wizard never appears for a first-time
+          visitor. ⚠️ SAFE ONLY BECAUSE THE SERVICE INJECTS ITS KEY (local mode — the
+          entrypoint's job 1): with NO backend the app renders a white page behind the
+          wizard (measured 2026-10-04); if this service is ever put back into `--public`
+          mode, this preset must come out with it.
+       2. THE GETTING-STARTED CHECKLIST DEFAULTS OFF — dismissed-if-absent, so the Settings
+          toggle can bring it back for anyone who wants it. */
+    var preseedFirstRun = function () {
       if (!HOSTED) return;
       try {
+        if (localStorage.getItem("openhands-onboarded") === null) {
+          localStorage.setItem("openhands-onboarded", "1");
+        }
         if (localStorage.getItem("openhands-sidebar-onboarding-checklist-dismissed") === null) {
           localStorage.setItem("openhands-sidebar-onboarding-checklist-dismissed", "true");
         }
@@ -277,7 +285,7 @@ script = '''<script id="house-patch-ground">
     setTimeout(relabel, 600);
     setTimeout(relabel, 2200);
     setTimeout(relabel, 4000);
-    preseedChecklist();
+    preseedFirstRun();
     skipSetupSteps();
     setTimeout(skipSetupSteps, 600);
     setTimeout(skipSetupSteps, 2200);
