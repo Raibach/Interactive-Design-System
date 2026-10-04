@@ -213,7 +213,7 @@ ALLOWED_MUTATIONS = (
     # refusal as an error. Deny of DELETE stays — a project never goes away.
     ("POST", "/api/projects"),
     ("PUT", "/api/projects/{project_id}"),
-    # The Product room's bridge (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md): the
+    # The Product room's bridge (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md): the
     # builder's engine is HOSTED now, and the owner's decision is that demo visitors
     # may run the builder — so the room's normal moves go through the bridge like
     # they do locally: birth a project (`new`), sync the console cards (`sync`),

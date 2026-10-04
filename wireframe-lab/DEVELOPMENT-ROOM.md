@@ -175,3 +175,67 @@ stands now:
   of their own bytes — change the content and the URL changes with it; a hand-bumped `?v=N` is
   cached for a year the moment anyone loads it, and one was already burned. The script is
   idempotent and self-upgrading; re-run it after any `npm install -g @openhands/agent-canvas`.
+
+## HOSTED — the room's tool is a service now, and the room carries it (2026-10-04, the same long night)
+
+`wireframe-lab/HOST-THE-TOOLS.md` executed; the full blow-by-blow is in
+`development/CHANGELOG.md` (the "tools go hosted" entry). The room's own facts, in the
+form a next session needs them:
+
+- **The service.** `dev-workspace` — `canvas--dev-workspace--mgtvxtd7xr2v.code.run` —
+  built from THIS repo on every push to `demo-mode`:
+  `development/agent-canvas/Dockerfile` (node:24, the pinned package, **the house patch
+  applied inside the image build** — the same `openhands-patch.sh` as the Mac, palette,
+  tile, logo, wizard relabel and all, content-hashed files riding the image) and
+  `development/agent-canvas/entrypoint.sh` (the door: public mode, the model seed, the
+  drift repair). The room's address arrives at runtime: `GET /api/config` →
+  `development_tool_url` → `shared/appConfig.ts` → the embed. **The room hard-codes
+  localhost no longer**; with the address unset the room's honest panel shows, and with
+  the address set but the frame never arriving (25 s ceiling), the same panel covers a
+  still-mounted embed — a late workspace still wins.
+
+- **The gate, mechanically.** `--public` mode: the session key
+  (`LOCAL_BACKEND_API_KEY`, a service secret) is NOT injected into the page; each
+  reviewer types it once, per browser, in the wizard's local-backend step. **The owner
+  hands the key out WITH the demo pin** (decision 1: pin-holders may drive the agent).
+  The key value lives only in the service's environment — never in this repo.
+
+- **The model, mechanically.** The entrypoint seeds the chain the tool actually reads —
+  the LLM PROFILE (`sovereign-local-model`: `deepseek-v4-pro` at
+  `https://api.deepseek.com/v1`, key from the service secret), its activation, the AGENT
+  profile conversations launch from, and `max_iterations: 150`. The key is in no image
+  and no repository. Two measured facts drove this shape: the composer's "LLM isn't set
+  up" banner reads SETTINGS while conversations launch from the AGENT PROFILE (the first
+  seed wrote settings only — every run still died keyless), and the first-run wizard's
+  "Set up your LLM" step is ALWAYS a dirty save (it proposes its own default model), so a
+  reviewer clicking through it clobbers the seed — hence the 45-second drift check that
+  re-seeds when, and only when, the chain has been trampled.
+
+- **The version pin is the fix for the run-killing bug.** `OH_AGENT_SERVER_VERSION=1.51.0`
+  (image + entrypoint): at 1.49.6 the SDK read DeepSeek's
+  `usage.prompt_tokens_details.cache_creation_tokens` unguarded and every conversation
+  died with an AttributeError; 1.51.0 guards the read (the two `telemetry.py` copies
+  were diffed in the uv cache — read, not guessed). Verified live after the bump:
+  `/server_info` 1.51.0 across all four packages, and a real conversation answered
+  ("hello from the hosted agent", `status finished`, `deepseek-v4-pro`, cost accrued).
+
+- **What the room is NOT, stated plainly:** the 45-second repair loop is the demo's
+  robustness, not a model-switching feature; there is NO dollar-budget setting in this
+  SDK version (measured — the ceilings are `max_iterations`, the key gate, and the
+  DeepSeek account's own limits); and the state directory is ephemeral — conversations
+  do not survive a redeploy (the settings do, because the boot re-seeds them).
+
+- **The room's plan, updated:** item 1 (the agent's model) is DONE, hosted — keep the
+  seed/repair pair in mind before changing anything about profiles; item 2 (the sandbox)
+  is answered FOR THE DEMO by the gate above (pin-holders only) — the agent runs inside
+  the service's own container, nowhere near anyone's machine; item 3 (lifecycle) is the
+  service itself now — the room's panel covers the down state on both platforms; item 4
+  (the bridge — conversations onto the console as cards) is the open one, and the
+  changelog's NEXT PROMPT starts there; item 5 (styling) is done, riding the image.
+
+- **A reviewer's path, as built:** open the demo → the pin → Development → the workspace
+  loads wearing the house ground → the wizard's local-backend step asks for the session
+  key (the one the owner handed out with the pin) → the default agent row reads
+  "Sovereign local model" → the composer shows the seeded profile → a conversation runs
+  on DeepSeek. Every step of that path was walked on the deployed copy, screenshots on
+  file in the session record.

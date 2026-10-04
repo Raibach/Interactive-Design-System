@@ -499,7 +499,7 @@ export default function Index({
    */
   const DEVELOPMENT_GATE_MIN_MS = 5_000; // the owner, same night: ten was too long — five.
   /*
-   * AND THE DOOR THAT NEVER OPENS GETS SAID PLAINLY (2026-10-05): the gate waits on the
+   * AND THE DOOR THAT NEVER OPENS GETS SAID PLAINLY (2026-10-04): the gate waits on the
    * frame's own load event, which never arrives from a tool that is down — leaving the
    * spinner turning for ever. This is the second clock's ceiling: not loaded by now means
    * the honest panel, on the room's own ground. A late frame still wins (the embed stays
@@ -4624,12 +4624,12 @@ export default function Index({
 
   useEffect(() => {
     if ((headerTab || '') !== 'product') return;
-    // NO TOOL, NO REQUEST (2026-10-05): with no address configured the room is its panel and
+    // NO TOOL, NO REQUEST (2026-10-04): with no address configured the room is its panel and
     // there is nothing to check or birth against — a demo without its builder service.
     if (!builderToolUrl()) return;
     void checkBuilderEngine();
     // Entering the room with no project — a reload, a restored tab — births one exactly as
-    // a click does. The room may never stand on the dashboard. ON THE DEMO TOO, from 2026-10-05
+    // a click does. The room may never stand on the dashboard. ON THE DEMO TOO, from 2026-10-04
     // (the owner's decision — visitors may run the builder, capped in the tool's engine): the
     // engine it births against is the HOSTED one, reached through the bridge like everything
     // else. The old note here said "not on the demo: there is no engine to birth one against" —
@@ -9747,13 +9747,13 @@ export default function Index({
                          strip and no door: bolt.diy's WebContainer runtime could never boot
                          inside a frame (`SharedArrayBuffer … crossOriginIsolated`), and this
                          one asks for no such isolation. Locally boot it with `agent-canvas -p
-                         8090`; HOSTED (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md) it is its
+                         8090`; HOSTED (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md) it is its
                          own Northflank service of the same shape, and this room gets its
                          address from the server (`/api/config` — shared/appConfig.ts). That is
                          what ended the hardcoded localhost whose request made every demo
                          visitor's browser reach for their own machine. */
                       ? (
-                        /* THE ROOM HAS ONE ADDRESS AND TWO STATES (2026-10-05): the tool (gate,
+                        /* THE ROOM HAS ONE ADDRESS AND TWO STATES (2026-10-04): the tool (gate,
                            frame, ease-in) when an address exists, and the honest panel when it
                            does not — an unconfigured demo, or a frame that never arrived by the
                            ceiling (DEVELOPMENT_GATE_MAX_MS, above). THE FRAME STAYS MOUNTED
@@ -9830,7 +9830,7 @@ export default function Index({
                              surface, no tree, no seat: the whole app builder (prompt box, run
                              progression, live preview, code) runs in this one pane, served by
                              the builder — the Mac's own copy locally, the HOSTED service on the
-                             demo (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md; the address
+                             demo (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md; the address
                              arrives at runtime, shared/appConfig.ts). The Lit catalogue keeps
                              its parts; this room just stops asking for them.
                              THE PROJECT COMES FROM THE CARD: a console card for a builder
@@ -9844,14 +9844,14 @@ export default function Index({
                                   engine is down — the pane is quiet; it is never pointed at the
                                   tool's project list. The key carries the project id so a new
                                   project remounts the frame clean rather than reusing one.
-                                  THE ADDRESS IS RUNTIME CONFIG NOW (2026-10-05, HOST-THE-TOOLS):
+                                  THE ADDRESS IS RUNTIME CONFIG NOW (2026-10-04, HOST-THE-TOOLS):
                                   `builderToolUrl()` — the hosted builder service on the demo, the
                                   Mac's own :3223 locally. The FALLBACK panel shows when there is
                                   no address at all (a demo without its service) or the demo's
                                   engine reads as down; a local engine down keeps its own forms —
                                   the quiet opening state plus the red banner below. */}
                               {!builderToolUrl() || (isDemoMode() && builderEngineDown) ? (
-                                /* THE FALLBACK PANEL — the honest state, for free (2026-10-05).
+                                /* THE FALLBACK PANEL — the honest state, for free (2026-10-04).
                                    The old interim copy ("Hosting it here is the next step") was
                                    true the night it shipped and is false now that hosting landed;
                                    this says what a missing or stopped service actually means. */

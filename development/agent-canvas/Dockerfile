@@ -1,5 +1,5 @@
 # THE DEVELOPMENT WORKSPACE, HOSTED — OpenHands' Agent Canvas as its own service
-# (2026-10-05, wireframe-lab/HOST-THE-TOOLS.md).
+# (2026-10-04, wireframe-lab/HOST-THE-TOOLS.md).
 #
 # The same package the Mac runs (`agent-canvas -p 8090`), built the same way: a global
 # npm install, THE HOUSE PATCH APPLIED WHERE THE PACKAGE ACTUALLY LIVES (the patch script

@@ -1,5 +1,17 @@
 # Host the tools — the plan (the demo must carry both rooms)
 
+> **EXECUTED — 2026-10-04, the same long night.** Both tools run as their own Northflank
+> services and both rooms show them on the deployed demo, verified signed out. The three
+> owner decisions Part 4 asked for were made first: **pin-holders may drive the hosted
+> development agent** (public mode; the session key goes out with the demo pin), **demo
+> visitors may run the builder** (per-visitor + global caps inside the engine), and **the
+> hosted builder store starts fresh**. Three build notes where the plan met the machine:
+> node **24** (the package's engines field requires it), the agent-server pin is **1.51.0**
+> (1.49.6 crashed every run on DeepSeek's usage block — measured), and the run budget
+> lives in the **engine** (it is the money's home), with the builder forwarding the
+> visitor's address. The full story, measured end to end, is in `development/CHANGELOG.md`
+> (2026-10-04, "the tools go hosted") and `wireframe-lab/DEVELOPMENT-ROOM.md`.
+
 *Written 2026-10-04, the night the demo went remote, at the owner's ask: **"I don't do in-person
 demos. This has to be on the remote site."** This is the plan for a fresh chat window; the
 Development zone's changelog (`development/CHANGELOG.md`) carries the night's story, and
