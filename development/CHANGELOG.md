@@ -118,3 +118,18 @@ included, no hard refresh and no cache to clear. Verified exactly that way: an o
 `linked: true`, computed `--oh-color-base: #110E1F` and `--oh-color-base-secondary: #22202D`,
 logo hidden. `openhands-patch.sh` carries the new mechanism, and the appended block was removed
 from the hashed stylesheet so the patch has ONE home.
+
+**The paper comes through, and the landing rises (same night, owner):** *"Add the background
+that we're using at assembly for development behind the splash page … just make the background
+behind [the] contents transparent. And move the contents up … like 100 pixels."* Done, and
+verified on the live element, not by reading files: the ROOM's wrapper now carries the
+graph-paper tile (`WritingAreaIndex.tsx`, behind the iframe), the app's own ground is
+transparent (html/body/shell — measured `rgba(0,0,0,0)`), and the landing's hero container pads
+`max(4rem, calc(28vh - 100px))` instead of `max(4rem,28vh)` — measured 201.6px → **101.6px**,
+exactly the hundred back. Panels stay the owner's purple (`rgb(34,32,45)` ✓) and hovers are
+untouched. TWO MECHANICAL LESSONS, both recorded because both cost time tonight: (1) the app's
+LAYERED stylesheet beats an unlayered `!important` override — the transparent ground is also
+forced by a three-line inline-important script in index.html, and that script is part of the
+patch, not a hack around it; (2) `house-patch.css` is now linked as `?v=2` — an in-place edit of
+a fixed URL is cached by the same one-year policy this very patch exists to escape, so the patch
+script bumps the number with any content change.

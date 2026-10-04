@@ -36,11 +36,20 @@ cat > "$BUILD/assets/house-patch.css" <<'CSS'
    them reaches nobody who has ever loaded the page. This file is a NEW url with no cache
    history: the HTML that links it is served no-store, so the very next ordinary reload
    carries these rules — no hard refresh, no cache to clear.
+   ⚠️ THIS FILE IS LINKED WITH ?v=N — an edit in place would be cached too. Bump N below
+   (HOUSE_PATCH_VERSION) whenever its content changes.
    1. THE LOGO GOES (the sidebar's OpenHands mark sits under this app's own logo).
    2. THE PALETTE: the ground takes the pin gate's navy; the panels take the owner's purple
-      (#22202D). Hovers are deliberately untouched. */
+      (#22202D). Hovers are deliberately untouched.
+   3. THE PAPER SHOWS THROUGH: grounds transparent (the room behind the frame carries the
+      lab's graph-paper tile — the sibling of #2's panel colour, one layer down), and the
+      landing's `pt-[max(4rem,28vh)]` gives back 100px — it was "sitting way down".
+   NOTE the ground is ALSO forced by an inline-important script in index.html: the app's
+   LAYERED stylesheet beats an unlayered !important override (measured 2026-10-04). */
 [data-agent-server-ui]{ --oh-color-base:#110E1F; --oh-color-base-secondary:#22202D; }
 [aria-label="OpenHands Logo"]{ display:none !important; }
+html, body, [data-agent-server-ui]{ background: transparent !important; }
+.pt-\[max\(4rem\,28vh\)\]{ padding-top: max(4rem, calc(28vh - 100px)) !important; }
 CSS
 echo "✅ stylesheet written: assets/house-patch.css"
 
@@ -49,18 +58,43 @@ import os, sys, glob
 build = sys.argv[1]
 p = os.path.join(build, "index.html")
 src = open(p).read()
-if "house-patch.css" in src:
-    print("⏭  index.html already links it")
-else:
+changed = False
+if "house-patch.css" not in src:
     root_link = sorted(glob.glob(os.path.join(build, "assets", "root-*.css")))
     name = os.path.basename(root_link[0]) if root_link else None
     needle = f'<link rel="stylesheet" href="/assets/{name}"/>' if name else None
     if needle and needle in src:
-        src = src.replace(needle, needle + '\n    <link rel="stylesheet" href="/assets/house-patch.css"/>')
+        src = src.replace(needle, needle + '\n    <link rel="stylesheet" href="/assets/house-patch.css?v=2"/>')
     else:
-        src = src.replace("</head>", '    <link rel="stylesheet" href="/assets/house-patch.css"/>\n</head>')
-    open(p, "w").write(src)
+        src = src.replace("</head>", '    <link rel="stylesheet" href="/assets/house-patch.css?v=2"/>\n</head>')
+    changed = True
     print("✅ index.html: link injected")
+else:
+    print("⏭  index.html already links it")
+if "house-patch-ground" not in src:
+    script = '''    <script id="house-patch-ground">
+      /* THE HOUSE PATCH (see assets/house-patch.css): the app's ground goes transparent so the
+         Development room's graph paper shows through. Inline-important ON PURPOSE — the app's
+         layered stylesheet beat a plain CSS override (measured 2026-10-04). */
+      (function () {
+        var set = function () {
+          if (document.body) document.body.style.setProperty("background", "transparent", "important");
+          var shell = document.querySelector("[data-agent-server-ui]");
+          if (shell) shell.style.setProperty("background", "transparent", "important");
+        };
+        set();
+        setTimeout(set, 600);
+        setTimeout(set, 2200);
+      })();
+    </script>
+'''
+    src = src.replace("</body>", script + "  </body>")
+    changed = True
+    print("✅ index.html: ground script injected")
+else:
+    print("⏭  ground script already injected")
+if changed:
+    open(p, "w").write(src)
 PY
 
 # 3 — the label, guarded by value.
