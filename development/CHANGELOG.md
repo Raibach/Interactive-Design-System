@@ -222,3 +222,21 @@ THE STANDING RULES FROM TONIGHT, for the next styling touch on any room: patch b
 content-hashed URLs; a visual change is "done" only when seen through the owner's own door; when
 a surface refuses to change, probe the paint chain in order (parent → frame → document) with
 loud test values instead of guessing which layer is guilty.
+
+**The Setup panel stands on the same ground — and names the model (owner, same night: *"it has
+to also be there when the Setup panel opens up … it's just a black dark background"* and *"this
+particular panel … should just say sovereign, local model, and the description should say
+defaults to local model agent … best for general purpose work"*).** The first-run wizard was
+measured before it was touched: the black surround was TWO layers — the wizard's own opaque navy
+takeover (`main.min-h-screen.bg-base`) under a 60%-black veil — while its card was already the
+house purple from the palette rules. Both layers now go transparent (the veil rule covers any
+other modal that uses the same scrim combo; future ones get measured when met). The wizard's
+default row: the description is a locale string and now reads "Defaults to the local model
+agent. Best for general purpose work."; the TITLE is not a string in the build at all — the
+wizard renders each row's name from the BACKEND's agent metadata (`display_name`) — so the row
+title is relabeled in-page by the ground script (exact text match, inside the wizard container
+only, with a MutationObserver so a late mount is caught): it now reads "Sovereign local model".
+The other rows (Claude Code, Codex, Gemini CLI) and the "Skip for now" control are deliberately
+untouched — the owner's earlier decision stands that the onboarding stays skippable and is
+remembered per browser. Verified live: wizard open, first row relabeled with the new
+description, grid running behind the whole panel, other rows byte-identical.
