@@ -446,3 +446,39 @@ reviewers:** the workspace's session key goes out WITH the pin; the room asks fo
 > server got; (3) if the owner wants a hard global spending cap, design the proxy in front
 > of the model — it is the one ceiling the tool cannot hold itself. Follow the repo's laws:
 > one writer per fact, drive it, and record corrections where they land.
+
+## 2026-10-04 (later) — the sovereign image's first cloud build, read and repaired
+
+Northflank built the untethering commit (`ee99a1d`, build `wanted-silver-6569`) and it
+**FAILED** — the outcome said in advance, because the rewritten
+`development/agent-canvas/Dockerfile` had never been built (no Docker on the Mac). The npm
+half of the image built fine (`npm ci` → `npm run build` → global install, step #10, 33 s);
+the Python half gave the trap, and reading it gave the second one:
+
+1. **THE LOCK CARRIED THIS MAC'S PATH.** `agent-server.lock` opened with two
+   `-e file:///Users/raibach/…` lines — `uv pip compile` emits them for the workspace's own
+   editable packages (`openhands-sdk`, `openhands-tools`) — and `uv pip install
+   --require-hashes` refuses an unhashed requirement: *"all requirements must have a hash,
+   but none were provided for: file:///Users/raibach/…/openhands-sdk"*, exit 2. The lines are
+   gone; those two packages were never this lock's job (the launcher builds them at RUNTIME
+   from `/opt/vendor` via `uvx --with-editable`, its own documented override), and the
+   lock's header now says so, with the reason — a regeneration that re-adds them is a known
+   edit, not a mystery for the next session.
+2. **THE VENV PICKED PYTHON 3.11 — read from the same log before it could bite.** `uv venv`
+   chose Debian bookworm's `/usr/bin/python3` (3.11.2), while both vendored trees' own
+   pyprojects require **>=3.12** and the locks were resolved against a 3.12 (the Mac's
+   uv-managed CPython 3.12.13 is what `uv pip compile` used — the system python is 3.9, so
+   3.12 is the only candidate that satisfies the pyprojects). The image now installs a
+   managed 3.12 (`uv python install 3.12`) and pins `ENV UV_PYTHON=3.12`, so the build-time
+   venv AND the runtime's `uvx` / `uv run --project` builds all land on the interpreter the
+   locks were resolved on. The runtime builds the four SDK packages FROM SOURCE, so their
+   build backends are part of the offline cache too: `setuptools>=83.0.0`, `wheel`, and
+   `hatchling` (automation's backend) are now fetched into uv's cache at build time — under
+   `UV_OFFLINE=1` a missing tool is a loud boot error, and the point is that none is missing.
+
+**Verified:** the edited lock resolves clean under the image's own flags —
+`uv pip install --dry-run --require-hashes -r agent-server.lock` (and `automation.lock`) on
+a 3.12 venv, no errors, the full wheel set listed. **Not verified:** the image build and the
+first boot — still Docker-free on the Mac; the next Northflank build is that test, and the
+deploy's runtime logs (the entrypoint's own sentences) are where the offline cache proves
+complete or names its missing piece.

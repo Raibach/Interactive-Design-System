@@ -8,9 +8,10 @@
 # own source, the two Python trees, and the pinned dependency fingerprints — and the build is
 # made to FAIL rather than reach the network, so a silent fallback cannot creep back in.
 #
-# THE ONE THING THIS IMAGE STILL REACHES THE INTERNET FOR, said plainly: Debian's apt and the
-# uv installer at the top, because a base image needs a package manager and an interpreter
-# runner. Everything after that line is repository material.
+# THE ONE THING THIS IMAGE STILL REACHES THE INTERNET FOR, said plainly: Debian's apt, the
+# uv installer, and the one managed CPython uv installs just after it, because a base image
+# needs a package manager, an interpreter runner, and an interpreter the tool's own source
+# accepts. Everything after that line is repository material.
 #
 # node:24 IS NOT A PREFERENCE — the source's own engines field requires >=24.
 FROM node:24-slim
@@ -24,6 +25,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # uv — how the two Python halves are run. The same binary is on PATH for the build-time
 # install and for runtime.
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+
+# PYTHON 3.12, INSTALLED HERE ON PURPOSE — THE FIRST CLOUD BUILD'S SECOND TRAP (2026-10-04).
+# Both vendored trees (and every package in the locks) require >=3.12 — measured in their own
+# pyprojects — while Debian bookworm's python3 is 3.11, and that is the interpreter the first
+# build's venv picked before it died on the lockfile two steps later. The locks were resolved
+# against a 3.12 (the Mac's uv managed one), so a 3.11 venv is not merely slow — it is the
+# wrong resolution. `uv python install` rides the same reach as the installer above and lands
+# in the image, which is what lets the runtime's uvx/uv run builds (UV_OFFLINE=1) find an
+# interpreter without fetching one.
+RUN uv python install 3.12
+ENV UV_PYTHON=3.12
 
 # ── 1. THE TOOL ITSELF: THIS REPOSITORY'S COPY, BUILT HERE ────────────────────────────────────
 # The source travels with the repository (development/OpenHands-main, 2,431 files) and is built
@@ -56,9 +68,23 @@ ENV OH_AUTOMATION_LOCAL_PATH=/opt/vendor/automation
 # used: a package changed or substituted on the public registry between today and a future build
 # fails this step instead of being installed. The wheels land in uv's cache, which is what makes
 # the offline run below possible.
+#
+# WHAT /opt/python-env IS, SAID PLAINLY: nothing at runtime points at this venv — the launcher
+# builds its own environments from /opt/vendor (uvx --with-editable for the agent server,
+# `uv run --project` for automation). This venv EXISTS so the install is verified and the cache
+# warmed: those runtime builds under UV_OFFLINE=1 draw every wheel from this cache, or they
+# fail loudly. The two -e file:// lines the compile emitted for the workspace's own packages
+# are gone from agent-server.lock for the same reason — see its header.
+#
+# AND THE BUILD BACKENDS ARE PART OF THAT CACHE (2026-10-04, the first cloud build): the
+# runtime uvx builds the four SDK packages from source, and their pyprojects require
+# setuptools>=83.0.0 + wheel (hatchling, for automation). They are not in either lock — they
+# are uv's build tooling, not the app's dependency set — so they are fetched here, once, so
+# the offline builds can find their tools.
 COPY development/vendor/agent-server.lock /tmp/agent-server.lock
 COPY development/vendor/automation.lock /tmp/automation.lock
-RUN uv venv /opt/python-env \
+RUN uv venv --python 3.12 /opt/python-env \
+ && uv pip install --python /opt/python-env "setuptools>=83.0.0" wheel hatchling \
  && uv pip install --python /opt/python-env --require-hashes -r /tmp/agent-server.lock \
  && uv pip install --python /opt/python-env --require-hashes -r /tmp/automation.lock
 
