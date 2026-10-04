@@ -3,22 +3,39 @@
 # The running app is the INSTALLED package (@openhands/agent-canvas under the global npm root),
 # not the source clone — so its chrome is patched where it actually lives, and this script is
 # how the patch survives an update: run it again after `npm install -g @openhands/agent-canvas`.
-# Idempotent: each step checks its own marker first.
+# Idempotent AND self-upgrading: every step removes older forms of itself before writing, so a
+# re-run after this file has changed replaces the old patch instead of doubling it.
 #
 #   bash development/openhands-patch.sh
 #
-# WHY A SEPARATE STYLESHEET, AND WHY THAT MATTERS: the app's own assets are served
-# `immutable, max-age=1yr` — a rule appended to them reaches nobody who has ever loaded the
-# page (measured 2026-10-04: the owner's incognito session kept the OLD bytes because the file's
-# URL had not changed). `assets/house-patch.css` is a NEW url with no cache history, and the
-# HTML that links it is served `no-store`, so the next ordinary reload carries these rules.
+# WHY THE STYLESHEET CARRIES A CONTENT HASH IN ITS NAME: the app's own assets are served
+# `immutable, max-age=1yr`; a rule appended to them reaches nobody who has ever loaded the page
+# (measured 2026-10-03 — the owner's incognito kept OLD bytes through every reload and new tab,
+# because the file's URL had not changed). An earlier pass here linked `house-patch.css?v=2` and
+# then AMENDED the file one minute later — the amendment was invisible to any browser that had
+# loaded it in that window, permanently. So the css now lands under `house-patch-<sha>.css`:
+# change any byte and the URL changes with it, with nothing to remember. The HTML that links it
+# is served `no-store`, so the next ordinary reload carries it — no hard refresh, no cleared cache.
 #
-# WHAT IT DOES (owner's pass, 2026-10-04, amended same night):
+# WHAT IT DOES (owner's pass, 2026-10-03):
 #   1. Hides the sidebar's OpenHands logo (it sits right under this app's own logo).
-#   2. THE PALETTE: the ground takes the pin gate's navy #110E1F; the panels take the owner's
-#      purple #22202D ("my preferred colour for all the panels that are currently gray");
-#      hovers are deliberately untouched.
-#   3. Relabels the checklist's outbound "Join the OpenHands Slack" item to "local sovereign
+#   2. THE PALETTE — every gray the neutral theme paints becomes a house colour: the grounds take
+#      the pin gate's navy #110E1F, the panels take the owner's purple #22202D ("my preferred
+#      colour for all the panels that are currently gray"). Hovers are deliberately untouched.
+#      The event: root.css maps the oh-color vars onto the theme's grays (probed fresh-profile,
+#      default `openhands-neutral`: base #181818, base-secondary #202020, surface #202020,
+#      surface-deep #101010, bg-dark #181818, bg-light #282828, bg-input #313131,
+#      bg-workspace #202020) — the first pass swapped only the first two, so the cards, the
+#      composer and the sidebar's buttons stayed gray and the owner rightly said so. The whole
+#      family (including the raised cards and the editor chrome) is swapped here. NOTE the
+#      active theme re-declares its vars from a runtime <style> under TWO selectors — the shell
+#      (doubled) and an inner themed scope — which outrank a plain rule; hence the TRIPLE
+#      selector + !important, and the inline-important script in index.html as the unstoppable
+#      backstop (inline important beats every stylesheet).
+#   3. THE PAPER SHOWS THROUGH: grounds transparent (the room behind the frame carries the lab's
+#      graph-paper tile), and the landing's `pt-[max(4rem,28vh)]` gives back 100px — it was
+#      "sitting way down".
+#   4. Relabels the checklist's outbound "Join the OpenHands Slack" item to "local sovereign
 #      model" (a placeholder name for the model story — wiring later, the owner's word).
 set -euo pipefail
 
@@ -29,75 +46,118 @@ if [ ! -d "$BUILD" ]; then
   exit 1
 fi
 
-# 1 + 2 — the patch stylesheet (fresh URL) and its link in the always-fresh HTML.
-cat > "$BUILD/assets/house-patch.css" <<'CSS'
-/* ── THE HOUSE PATCH (2026-10-04) — a SEPARATE, UNHASHED stylesheet ON PURPOSE.
-   The app's own asset files are immutable-cached for a year by URL, so a rule appended to
-   them reaches nobody who has ever loaded the page. This file is a NEW url with no cache
-   history: the HTML that links it is served no-store, so the very next ordinary reload
-   carries these rules — no hard refresh, no cache to clear.
-   ⚠️ THIS FILE IS LINKED WITH ?v=N — an edit in place would be cached too. Bump N below
-   (HOUSE_PATCH_VERSION) whenever its content changes.
+# ── 1 + 2 + 3 — the stylesheet, under a content-hashed url ──────────────────────────────────
+TMP="$(mktemp)"
+cat > "$TMP" <<'CSS'
+/* ── THE HOUSE PATCH — a SEPARATE stylesheet under a CONTENT-HASHED url, ON PURPOSE.
+   The app's own asset files are immutable-cached for a year by URL, so an edit appended to them
+   reaches nobody who has ever loaded the page; and a hand-bumped `?v=N` was already burned once
+   (see the script header). This file's name carries the hash of its own bytes: change it and the
+   URL changes with it, and the no-store HTML that links it carries the rules on the next reload.
    1. THE LOGO GOES (the sidebar's OpenHands mark sits under this app's own logo).
-   2. THE PALETTE: the ground takes the pin gate's navy; the panels take the owner's purple
-      (#22202D). Hovers are deliberately untouched.
-   3. THE PAPER SHOWS THROUGH: grounds transparent (the room behind the frame carries the
-      lab's graph-paper tile — the sibling of #2's panel colour, one layer down), and the
-      landing's `pt-[max(4rem,28vh)]` gives back 100px — it was "sitting way down".
-   NOTE the ground is ALSO forced by an inline-important script in index.html: the app's
-   LAYERED stylesheet beats an unlayered !important override (measured 2026-10-04). */
-[data-agent-server-ui]{ --oh-color-base:#110E1F; --oh-color-base-secondary:#22202D; }
+   2. THE PALETTE — the neutral theme's whole gray family takes the house colours: #110E1F (the
+      pin gate's navy) for grounds, #22202D (the owner's purple) for panels. The eight variables
+      replaced are the ones a fresh-profile probe measured on 2026-10-03. Hovers stay untouched.
+   3. THE PAPER SHOWS THROUGH: grounds transparent, and the landing's pt-[max(4rem,28vh)] gives
+      back 100px. The ground is ALSO forced by an inline-important script in index.html.
+   WHY TRIPLE SELECTOR + !important: the active theme re-declares its variables from a runtime
+   <style> under TWO selectors — the shell (doubled) and an inner themed scope
+   ([data-agent-server-ui] [data-theme][data-theme]) — and specificity ties went to the runtime
+   sheet. Both scopes are mirrored here with a third copy + important: nothing has ever won
+   against that. The .dark wrapper paints its own ground from OUTSIDE the shell, so it gets the
+   transparency rule by name. */
+[data-agent-server-ui][data-agent-server-ui][data-agent-server-ui],
+[data-agent-server-ui] [data-theme][data-theme][data-theme] {
+  --oh-color-base: #110E1F !important;            /* ground / frame        (was #181818) */
+  --oh-color-base-secondary: #22202D !important;  /* panels                (was #202020) */
+  --oh-surface: #22202D !important;               /* cards & panels        (was #202020) */
+  --oh-surface-raised: #22202D !important;        /* raised cards          (was #282828) */
+  --oh-surface-deep: #110E1F !important;          /* deep panels           (was #101010) */
+  --oh-bg-dark: #110E1F !important;               /* dark grounds          (was #181818) */
+  --oh-bg-light: #22202D !important;              /* raised controls       (was #282828) */
+  --oh-bg-input: #22202D !important;              /* the composer's field  (was #313131) */
+  --oh-bg-workspace: #22202D !important;          /* workspace surfaces    (was #202020) */
+  --oh-bg-editor-sidebar: #22202D !important;     /* editor chrome         (was #202020) */
+  --oh-bg-editor-active: #22202D !important;      /* editor chrome         (was #282828) */
+  --oh-color-tertiary: #22202D !important;        /* rows, base buttons    (was #313131) */
+}
+div.dark.min-h-screen{ background-color: transparent !important; }
 [aria-label="OpenHands Logo"]{ display:none !important; }
 html, body, [data-agent-server-ui]{ background: transparent !important; }
 .pt-\[max\(4rem\,28vh\)\]{ padding-top: max(4rem, calc(28vh - 100px)) !important; }
 CSS
-echo "✅ stylesheet written: assets/house-patch.css"
 
-python3 - "$BUILD" <<'PY'
-import os, sys, glob
-build = sys.argv[1]
+HASH="$(shasum -a 256 "$TMP" | cut -c1-10)"
+NAME="house-patch-$HASH.css"
+find "$BUILD/assets" -maxdepth 1 -name 'house-patch*.css' -delete
+cp "$TMP" "$BUILD/assets/$NAME"
+rm -f "$TMP"
+echo "✅ stylesheet: assets/$NAME"
+
+# ── the HTML: the link and the ground script, in their canonical form ───────────────────────
+python3 - "$BUILD" "$NAME" <<'PY'
+import os, re, sys
+build, name = sys.argv[1], sys.argv[2]
 p = os.path.join(build, "index.html")
 src = open(p).read()
-changed = False
-if "house-patch.css" not in src:
-    root_link = sorted(glob.glob(os.path.join(build, "assets", "root-*.css")))
-    name = os.path.basename(root_link[0]) if root_link else None
-    needle = f'<link rel="stylesheet" href="/assets/{name}"/>' if name else None
-    if needle and needle in src:
-        src = src.replace(needle, needle + '\n    <link rel="stylesheet" href="/assets/house-patch.css?v=2"/>')
+
+# The stylesheet link: strip any older house-patch link (any name, with or without ?v=) and
+# insert exactly one, right after the app's own root css link.
+link = f'<link rel="stylesheet" href="/assets/{name}"/>'
+src2 = re.sub(r'\s*<link rel="stylesheet" href="/assets/house-patch[^"]*"/>', '', src)
+if link in src2:
+    src2 = src2  # canonical link already present
+else:
+    root = re.search(r'<link rel="stylesheet" href="/assets/root-[^"]+\.css"/>', src2)
+    if root:
+        src2 = src2[:root.end()] + "\n    " + link + src2[root.end():]
     else:
-        src = src.replace("</head>", '    <link rel="stylesheet" href="/assets/house-patch.css?v=2"/>\n</head>')
-    changed = True
-    print("✅ index.html: link injected")
+        src2 = src2.replace("</head>", "    " + link + "\n</head>", 1)
+if link not in src2:
+    raise SystemExit("❌ could not place the stylesheet link")
+
+# The ground script: replaced wholesale with the canonical block (strip-if-present, then insert
+# before </body>), so its content can evolve between runs.
+src2 = re.sub(r'\s*<script id="house-patch-ground">.*?</script>', '', src2, flags=re.S)
+script = '''<script id="house-patch-ground">
+  /* THE HOUSE PATCH (see the /assets/house-patch-*.css link above): the app's ground goes
+     transparent so the Development room's graph paper shows through, and the palette variables
+     are pinned INLINE-IMPORTANT on the shell — the active theme re-declares them from a runtime
+     style sheet (doubled selector), and inline styles beat every stylesheet there is.
+     Measured 2026-10-03. */
+  (function () {
+    var VARS = { "--oh-color-base": "#110E1F", "--oh-color-base-secondary": "#22202D",
+                 "--oh-surface": "#22202D", "--oh-surface-raised": "#22202D",
+                 "--oh-surface-deep": "#110E1F",
+                 "--oh-bg-dark": "#110E1F", "--oh-bg-light": "#22202D",
+                 "--oh-bg-input": "#22202D", "--oh-bg-workspace": "#22202D",
+                 "--oh-color-tertiary": "#22202D" };
+    var set = function () {
+      if (document.body) document.body.style.setProperty("background", "transparent", "important");
+      var ground = document.querySelector("div.dark.min-h-screen");
+      if (ground) ground.style.setProperty("background-color", "transparent", "important");
+      var targets = document.querySelectorAll("[data-agent-server-ui], [data-agent-server-ui] [data-theme]");
+      for (var t = 0; t < targets.length; t++) {
+        targets[t].style.setProperty("background", "transparent", "important");
+        for (var k in VARS) targets[t].style.setProperty(k, VARS[k], "important");
+      }
+    };
+    set();
+    setTimeout(set, 600);
+    setTimeout(set, 2200);
+    setTimeout(set, 4000);
+  })();
+</script>'''
+src2 = src2.replace("</body>", script + "\n  </body>", 1)
+
+if src2 != src:
+    open(p, "w").write(src2)
+    print("✅ index.html: link + ground script in canonical form")
 else:
-    print("⏭  index.html already links it")
-if "house-patch-ground" not in src:
-    script = '''    <script id="house-patch-ground">
-      /* THE HOUSE PATCH (see assets/house-patch.css): the app's ground goes transparent so the
-         Development room's graph paper shows through. Inline-important ON PURPOSE — the app's
-         layered stylesheet beat a plain CSS override (measured 2026-10-04). */
-      (function () {
-        var set = function () {
-          if (document.body) document.body.style.setProperty("background", "transparent", "important");
-          var shell = document.querySelector("[data-agent-server-ui]");
-          if (shell) shell.style.setProperty("background", "transparent", "important");
-        };
-        set();
-        setTimeout(set, 600);
-        setTimeout(set, 2200);
-      })();
-    </script>
-'''
-    src = src.replace("</body>", script + "  </body>")
-    changed = True
-    print("✅ index.html: ground script injected")
-else:
-    print("⏭  ground script already injected")
-if changed:
-    open(p, "w").write(src)
+    print("⏭  index.html already canonical")
 PY
 
-# 3 — the label, guarded by value.
+# ── 4 — the label, guarded by value ──────────────────────────────────────────────────────────
 python3 - "$BUILD" <<'PY'
 import json, sys, os
 build = sys.argv[1]
