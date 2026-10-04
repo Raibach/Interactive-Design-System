@@ -59,6 +59,25 @@ fi
 # suspender, with the reason one screen up.
 export OH_AGENT_SERVER_VERSION="${OH_AGENT_SERVER_VERSION:-1.51.0}"
 
+# ── THE BIND, AND WHY THE KEY MAY TRAVEL WITH IT (2026-10-04, later — the sixth measured trap) ─
+# The launcher binds 127.0.0.1 by default. In a Northflank pod that is an INVISIBLE service:
+# measured from inside the running container, a curl to the pod's own IP:8090 was "Connection
+# refused" while 127.0.0.1:8090 answered 200 — so the platform's edge could never reach the
+# ingress (the public URL was 503 for ten minutes while the agent server, automation, static
+# server and this loop were all healthy). OH_BIND_HOST moves the ingress and the static server
+# to every interface; the agent server and automation stay on loopback behind the proxy.
+#
+# AND THE SESSION KEY STAYS INJECTED: off-loopback, the launcher's own policy would otherwise
+# strip the key and show visitors the key-entry screen — the one thing the owner has ruled out
+# (*"just add the back in so that it's not asking the user or the visitor"*). The opt-in below
+# is the upstream's OWN env name for this decision (`AGENT_CANVAS_ALLOW_LAN_SESSION_KEY`, its
+# docker entrypoint: *"set to true only when … you accept embedding the session key in the
+# served HTML"*), now honored by the launcher (dev-with-automation.mjs). The trade is the one
+# this file's header already records: anyone with the workspace's URL can drive the agent —
+# the URL is unlisted, not secret; raw API callers still get 401 without the key.
+export OH_BIND_HOST="${OH_BIND_HOST:-0.0.0.0}"
+export AGENT_CANVAS_ALLOW_LAN_SESSION_KEY="${AGENT_CANVAS_ALLOW_LAN_SESSION_KEY:-true}"
+
 # LOCAL MODE, ON PURPOSE (see job 1 in the header): the key is injected into the page at
 # startup, so the tool adds its own backend and no visitor is asked for anything.
 agent-canvas -p "$PORT" &

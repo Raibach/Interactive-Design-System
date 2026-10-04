@@ -530,3 +530,31 @@ warms exit 0 — the uvx built the agent server from our source, resolved postho
 and answered `--help`; `uv run --project` rebuilt `openhands-automation @
 file:///…/vendor/automation` and exited. **Still not verified:** the cloud boot itself — the
 fourth build and its first minute of logs are that test.
+
+**AND THE FIRST *PUBLIC* MINUTE NAMED THE SIXTH TRAP — THE INGRESS BOUND LOOPBACK
+(`furtive-spark-8954` built, deployed, every process inside healthy — and the public URL a
+503 for ten minutes).** Read from inside the running pod, not guessed:
+`curl -v http://10.124.72.248:8090/` (the pod's own IP) → *"Connection refused"*, while
+`curl 127.0.0.1:8090/` → **200 OK**. The launcher binds 127.0.0.1 by default (bind-host.mjs:
+*"Binding `::` / `0.0.0.0` exposes the UI …"*) — right for a laptop, invisible for a pod: the
+platform's edge reaches the pod IP, so every request 503'd while the agent server answered the
+seed's calls on loopback and the drift loop ticked. And moving the bind alone was not enough:
+the launcher's policy strips the session key off-loopback (*"Off-loopback binds (and public
+mode) use the API key entry screen instead"*) — the one thing the owner has ruled out
+(*"it's not asking the user or the visitor"*). The fix, both halves:
+- `entrypoint.sh` exports `OH_BIND_HOST=0.0.0.0` (ingress and static move to every interface;
+  the agent server and automation stay on loopback behind the proxy) and
+  `AGENT_CANVAS_ALLOW_LAN_SESSION_KEY=true`;
+- `scripts/dev-with-automation.mjs` (our source) now honors that variable in its session-key
+  policy — the upstream's OWN docker entrypoint names it for exactly this decision (*"set to
+  true only when … you accept embedding the session key in the served HTML"*); the launcher
+  had never wired it. The trade is the one the entrypoint's header already records: the URL is
+  unlisted, not secret; raw API callers still get 401 without the key.
+
+**Verified in-process before pushing:** the policy function now returns
+`{sessionApiKey, authRequired: false}` off-loopback with the opt-in, and
+`{sessionApiKey: null, authRequired: true}` without it — printed, not assumed; both edited
+files pass `bash -n` / `node --check`; and the served page's markers are known
+(`window.__AGENT_CANVAS_SESSION_API_KEY__` present, `__AGENT_CANVAS_AUTH_REQUIRED__` absent)
+for the post-deploy check. **Still the cloud's to prove:** the fifth build, the public URL,
+and a first conversation through the room.

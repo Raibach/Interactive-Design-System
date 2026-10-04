@@ -1691,9 +1691,24 @@ function startStaticFrontend(config, staticDir) {
       // In local mode on loopback, inject the API key so the pre-built
       // frontend can authenticate transparently. Off-loopback binds (and
       // public mode) use the API key entry screen instead.
+      //
+      // ── RAIBACH IDS, 2026-10-04 — AGENT_CANVAS_ALLOW_LAN_SESSION_KEY (THE HOSTED WORKSPACE) ──
+      // A hosted container must bind its ingress off-loopback: measured in the deployed pod,
+      // a curl to the pod's OWN IP:8090 was "Connection refused" while 127.0.0.1:8090 answered
+      // 200 — so the platform's edge could never reach it (the public URL was 503 while every
+      // process inside was healthy). And the house's rule is that no visitor is ever asked for
+      // a key: the key is injected into the served page. The upstream's own docker entrypoint
+      // already names this exact env var for this exact decision ("set to true only when …
+      // you accept embedding the session key in the served HTML"); the launcher never wired
+      // it, so off-loopback collapsed to the key screen. Honored here; set by
+      // development/agent-canvas/entrypoint.sh, whose header records the accepted trade (the
+      // URL is unlisted, not secret).
       ...(() => {
         const policy = applySessionKeyPolicy({
           host: config.bindHost,
+          allowLanSessionKey: /^(1|true)$/i.test(
+            process.env.AGENT_CANVAS_ALLOW_LAN_SESSION_KEY ?? "",
+          ),
           sessionApiKey:
             config.launchAgentServer && !config.isPublic
               ? config.sessionApiKey
