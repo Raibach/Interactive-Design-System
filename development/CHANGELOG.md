@@ -1,0 +1,97 @@
+# The Development zone — changelog and what comes next
+
+*Started 2026-10-04, the night the Development room was built. This is the Development zone's own
+log (its siblings: `wireframe-lab/DEVELOPMENT-ROOM.md` for the room's record and plan,
+`wireframe-lab/PRODUCT-ROOM.md` for the Product room). The top-level README is deliberately not
+touched.*
+
+---
+
+## 2026-10-04 — the room lands, and its tool changes twice in one night
+
+**The room.** `Development` — the last dead stub of the shell (`SECTION_TABS = ['development']`,
+`disabled: true` in the nav) — is live: the tab handler gained its branch (no A2UI assembly,
+nothing of the Composer touched), the nav entry lost `disabled`, and the tab now embeds a tool
+whole, the Product room's own move one tab over.
+
+**bolt.diy was tried and replaced the same night.** It is a web app, but its runtime
+(WebContainers) needs cross-origin isolation — `SharedArrayBuffer transfer requires
+self.crossOriginIsolated`, proven live in the console — and a page nested in an iframe can never
+have it unless the top page does too. Its UI could show in the frame; building could not. The
+owner's verdict: *"not designed properly for what I want — that's a vibecoding thing."* The clone
+stays on disk, unpointed.
+
+**OpenHands' Agent Canvas is the room's tool** (MIT, npm: `@openhands/agent-canvas@1.24.0`,
+web UI on the ingress port). Installed globally, booted with **`agent-canvas -p 8090`** (8000 is
+this app's backend), serving 200. It is a REAL web app — no isolation requirement — so the room
+embeds it plain, with no strip and no door.
+
+**The staged opening.** The Development gate is deliberately staged, not measured: the owner's
+graph-paper tile (`frontend/src/assets/canvas-development-lab-bkg.png`) as the ground, the
+assembly gate's amber ring, one neutral line, a **held 5 seconds** (`DEVELOPMENT_GATE_MIN_MS` in
+`frontend/src/pages/WritingAreaIndex.tsx`; it was 10, cut by the owner the same night), and a
+700 ms cross-fade into the window — the same feel as composer and design. The gate covers the
+frame from the first paint, so the white splash is gone by construction.
+
+**The installed build is patched — and the patch is scripted.** The running app is the built
+package, not the source clone, so its chrome is patched where it lives, by
+**`development/openhands-patch.sh`** (idempotent; run it again after any
+`npm install -g @openhands/agent-canvas` update). Applied tonight, all three verified live in the
+browser:
+
+| # | patch | where it landed |
+|---|---|---|
+| 1 | **The logo is hidden** — the sidebar's OpenHands mark sat right under this app's own logo | the built CSS (an `[aria-label="OpenHands Logo"]{display:none}` rule) |
+| 2 | **The palette takes the pin gate's darks** — `--oh-color-base #110E1F`, `--oh-color-base-secondary #231f2e`, so the chooser screens and every base surface read navy like the gate | the built CSS, on `[data-agent-server-ui]` |
+| 3 | **"Join the OpenHands Slack" → "local sovereign model"** in the sidebar checklist — a placeholder name for the model story, wiring later (owner's word). ⚠️ MY CHOICE OF TARGET, flagged: the app has no literal "sign-up tab"; this outbound link was the only sign-up-shaped item. If a different tab was meant, it is one string. | `build/locales/en/openhands.json`, key `SIDEBAR$ONBOARDING_CHECKLIST_JOIN_SLACK` |
+
+Originals are kept in `development/openhands-patch-backup/` (first run only). The patch is NOT in
+git in the usual sense — the installed package lives outside both repos, which is exactly why the
+script exists; the script itself IS committed.
+
+**Decisions recorded (owner, same night):** the **branding stays** — showing that this harness
+absorbs other real applications whole is the point, and it is MIT. The **onboarding needs
+nothing**: it is remembered per browser (the `openhands-onboarded` localStorage key), so every
+new visitor gets it fresh; `?previewOnboardingStep=0` is its own non-persisting replay if a demo
+ever needs one. *(Both recorded in `wireframe-lab/DEVELOPMENT-ROOM.md`.)*
+
+**Still open, in order** (the room's plan carries the detail):
+
+1. **The agent's model.** It has no LLM configured yet ("Your LLM isn't set up yet" is on
+   screen). Its settings speak OpenAI-compatible providers, so the house's hosted DeepSeek fits.
+   Preseeding its config (so nobody types a key) is the natural follow-up — and it is what the
+   "local sovereign model" label is placeholder-ing for.
+2. **The sandbox decision.** The agent currently runs in LOCAL mode with full filesystem access
+   (OpenHands' own warning). Contained = Docker sandboxes, which needs Docker Desktop installed.
+   Until then, the room is the owner's workbench alone.
+3. **Lifecycle + the health banner.** A `dev:local`-style start script for `agent-canvas -p 8090`,
+   and the Product room's health-door pattern so a stopped server says so instead of an empty
+   frame.
+4. **The bridge (parity with Product).** Conversations/tasks → console cards under their own
+   category, reference not copy, publish as the commit — the same questions the Product bridge
+   answered with the owner's words.
+5. **Styling.** The gate is ours; the app inside is its own origin with its own theme (the
+   patches above are the exception, not the rule). Prefer its theme knobs over rewriting its
+   components.
+
+---
+
+## NEXT PROMPT — copy this into a fresh chat
+
+> We are working on the **Development room** of this application — the tab in the top nav that
+> embeds **OpenHands' Agent Canvas**. Read `wireframe-lab/DEVELOPMENT-ROOM.md` (the room's record
+> and plan) and `development/CHANGELOG.md` (this file) first; the room's gate and embed live in
+> `frontend/src/pages/WritingAreaIndex.tsx` (search for `openhands-room` /
+> `DEVELOPMENT_GATE_MIN_MS`), the engine-free tool runs from the globally installed
+> `@openhands/agent-canvas` on port 8090, and the chrome patches we apply to that installed build
+> are scripted in `development/openhands-patch.sh`.
+>
+> Tonight, in order: (1) get the agent's model configured — it speaks OpenAI-compatible providers,
+> use our hosted DeepSeek, and preseed the config if you can so nobody types a key; (2) bring up
+> the room's lifecycle — a start script for `agent-canvas -p 8090` plus the Product room's health
+> banner pattern; (3) decide the sandbox (local mode currently has full filesystem access; Docker
+> sandboxes need Docker Desktop); (4) sketch the bridge that would put the room's conversations on
+> the console as cards under the same publish rule the Product room uses. Do not restyle
+> OpenHands' insides — the gate is ours, the app is its own; extend the patch script only for the
+> chrome the owner names. Follow the repo's laws: one writer per fact, drive it, and record
+> corrections where they land.

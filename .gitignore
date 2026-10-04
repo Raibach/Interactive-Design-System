@@ -225,4 +225,7 @@ wireframe-lab/ai-elements-main/
 wireframe-lab/builder-main/
 wireframe-lab/chatbot-main/
 wireframe-lab/mitosis-main/
-development/
+development/*
+# …except the Development zone's own records — the clones stay out, these belong in git.
+!development/CHANGELOG.md
+!development/openhands-patch.sh
