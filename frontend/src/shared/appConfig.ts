@@ -69,6 +69,14 @@ export function appConfigReady(): Promise<void> {
       if (!response.ok) return;
       const body = await response.json();
       demoMode = body?.demo_mode === true;
+      // THE DOOR DECIDES THE TIER, NOT THE BUILD (2026-10-04): the config flag
+      // describes the instance; the session door describes the person at the
+      // keyboard. A registered beta account is the full system even on the
+      // deployed instance, so the limited-view cosmetics never hide its
+      // affordances. The pin door ("dev") keeps the flag as the server set it.
+      if (typeof window !== "undefined" && window.sessionStorage?.getItem("grace_door") === "registered") {
+        demoMode = false;
+      }
       const development = typeof body?.development_tool_url === "string" ? body.development_tool_url.trim() : "";
       const builder = typeof body?.builder_tool_url === "string" ? body.builder_tool_url.trim() : "";
       // Unset is local localhost when this is a full run, and "not connected" on the demo —

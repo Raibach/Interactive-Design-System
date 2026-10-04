@@ -272,16 +272,16 @@ def user_is_admin(user_id: str) -> bool:
 def get_user_id_from_header(x_user_id: str | None = None) -> str:
     """Get user ID from header or use default placeholder.
 
-    ── THE DEMO PINS IDENTITY HERE ────────────────────────────────────────────
-    When DEMO_MODE=1, every request resolves to DEMO_USER_ID and X-User-ID is
-    IGNORED — not validated, ignored. The deployed demo is one shared sandbox
-    identity; trusting a client-supplied id would let any visitor send the
-    owner's UUID and walk past `demo_policy`. This is also the one place that
-    repairs /api/teacher/query: it calls this function with no argument
-    (teacher.py), so without the pin every demo chat turn would be written as
-    the owner. Local runs leave DEMO_MODE unset and take the paths below.
+    ── THE GATE FOLLOWS THE IDENTITY, NOT THE INSTANCE (2026-10-04) ───────────
+    The old rule pinned EVERY request to DEMO_USER_ID when DEMO_MODE=1 — the
+    whole instance was one shared sandbox and no real account could exist on
+    it, which is why the beta door could never open on the deployed build. Now
+    only the default/dev identity (the pin path, which sends DEFAULT_USER_ID
+    or nothing) resolves to the demo sandbox; a signed-up account keeps its
+    own id and takes the full-system paths. demo_policy.py applies its limits
+    to the demo identity alone.
     """
-    if DEMO_MODE:
+    if DEMO_MODE and (not x_user_id or x_user_id == DEFAULT_USER_ID):
         return DEMO_USER_ID
     if x_user_id:
         return x_user_id

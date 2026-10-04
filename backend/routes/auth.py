@@ -393,14 +393,9 @@ async def signup(request: SignupRequest):
         # person can ask for another code — reporting it as their signup failing would be a lie
         # about which thing went wrong. So the truth travels in the response and in the log
         # rather than being dressed up as a different failure.
-        #
-        # NOT ON THE DEMO: that deployment is a shared sandbox identity with no real signups,
-        # and it must never send mail to an address a visitor typed.
-        sent = False
-        if not DEMO_MODE:
-            sent, detail = await asyncio.to_thread(send_verification_code, email, code)
-            if not sent:
-                print(f"⚠️  [auth] the verification mail for {email} was not sent: {detail}")
+        sent, detail = await asyncio.to_thread(send_verification_code, email, code)
+        if not sent:
+            print(f"⚠️  [auth] the verification mail for {email} was not sent: {detail}")
 
         return {
             "success": True,
@@ -560,10 +555,9 @@ async def resend_code(request: ResendRequest):
         )
         conn.commit()
 
-        if not DEMO_MODE:
-            sent, detail = await asyncio.to_thread(send_verification_code, email, code)
-            if not sent:
-                print(f"⚠️  [auth] the resent code for {email} was not sent: {detail}")
+        sent, detail = await asyncio.to_thread(send_verification_code, email, code)
+        if not sent:
+            print(f"⚠️  [auth] the resent code for {email} was not sent: {detail}")
         return generic
     except HTTPException:
         raise
