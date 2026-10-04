@@ -97,6 +97,14 @@ call("POST", "/api/agent-profiles/default", {
     "agent_kind": "openhands",
     "llm_profile_ref": label,
 })
+# AND THE POINTER (measured on a fresh container, 2026-10-05): a brand-new state has
+# active_agent_profile_id = None — the wizard normally sets it, and nobody walks the
+# wizard on our behalf. Activation is pointer-only (it does not write agent_settings),
+# which is exactly what a fresh demo wants.
+profiles = call("GET", "/api/agent-profiles")
+target = next((p for p in profiles.get("profiles", []) if p.get("name") == "default"), None)
+if target and profiles.get("active_agent_profile_id") != target.get("id"):
+    call("POST", f"/api/agent-profiles/{target['id']}/activate")
 call("PATCH", "/api/settings", {"conversation_settings_diff": {"max_iterations": 150}})
 print("→ model profile seeded:", label, "→", model)
 PY
@@ -122,9 +130,13 @@ llm = settings.get("agent_settings", {}).get("llm", {})
 clean = llm.get("model") == model and settings.get("llm_api_key_is_set") is True
 profiles = get("/api/agent-profiles")
 active = profiles.get("active_agent_profile_id")
-for profile in profiles.get("profiles", []):
-    if profile.get("id") == active:
-        clean = clean and profile.get("llm_profile_ref") == label
+active_ref = next(
+    (p.get("llm_profile_ref") for p in profiles.get("profiles", []) if p.get("id") == active),
+    None,
+)
+# The pointer matters as much as the ref: a fresh state has neither, and a wizard pass
+# can repoint both (see the header).
+clean = clean and active_ref == label
 print("clean" if clean else "drift")
 PY
 }
