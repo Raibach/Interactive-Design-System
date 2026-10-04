@@ -22,7 +22,7 @@ export interface AuthState {
 }
 
 /**
- * Get stored API key from localStorage
+ * Get stored API key from sessionStorage
  * NOTE: API key authentication removed - Railway handles authentication
  * This function returns null to indicate no API key is needed
  */
@@ -32,25 +32,25 @@ export const getStoredApiKey = (): string | null => {
 };
 
 /**
- * Store API key in localStorage
+ * Store API key in sessionStorage
  */
 export const storeApiKey = (apiKey: string): void => {
   try {
-    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+    sessionStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
   } catch (error) {
     console.error("Failed to store API key:", error);
   }
 };
 
 /**
- * Remove API key from localStorage (logout)
+ * Remove API key from sessionStorage (logout)
  */
 export const clearApiKey = (): void => {
   try {
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    localStorage.removeItem(USER_ID_STORAGE_KEY);
-    localStorage.removeItem("grace_is_admin");
-    localStorage.removeItem(USER_ROLE_STORAGE_KEY);
+    sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+    sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+    sessionStorage.removeItem("grace_is_admin");
+    sessionStorage.removeItem(USER_ROLE_STORAGE_KEY);
   } catch (error) {
     console.error("Failed to clear API key:", error);
   }
@@ -76,7 +76,7 @@ export const getStoredUserId = (): string => {
     Sentry.setUser({ id: DEFAULT_USER_ID });
     return DEFAULT_USER_ID;
   } catch {
-    console.error("[auth] localStorage unavailable — cannot persist user session.");
+    console.error("[auth] sessionStorage unavailable — cannot persist user session.");
     return DEFAULT_USER_ID;
   }
 };
@@ -89,7 +89,7 @@ export const storeUserId = (_userId: string): void => {
     // The identity is a constant — see getStoredUserId(). A credential-row id must never
     // land under this key: the old chat panel read it first and posted it as X-User-ID,
     // which is how the owner's own conversations started answering "not writable by user".
-    localStorage.setItem(USER_ID_STORAGE_KEY, DEFAULT_USER_ID);
+    sessionStorage.setItem(USER_ID_STORAGE_KEY, DEFAULT_USER_ID);
   } catch (error) {
     console.error("Failed to store user ID:", error);
   }
@@ -102,17 +102,19 @@ export const storeUserId = (_userId: string): void => {
  */
 export const getAuthState = (): AuthState => {
   const userId = getStoredUserId(); // Always returns a user ID (default if none stored)
-  const isAdmin = localStorage.getItem("grace_is_admin") === "true";
-  const role = localStorage.getItem(USER_ROLE_STORAGE_KEY) || "student";
+  const isAdmin = sessionStorage.getItem("grace_is_admin") === "true";
+  const role = sessionStorage.getItem(USER_ROLE_STORAGE_KEY) || "student";
   const isTeacher = role === "teacher";
   const isStudent = role === "student";
 
-  // Always return authenticated - Railway handles authentication
-  // FORCE AUTHENTICATION FOR DEVELOPMENT - bypass login screen
+  // THE FLAG IS REPORTED AS IT IS (owner, 2026-10-04): this used to FORCE `true` — "bypass
+  // login screen" — which is the shortcut the owner caught while testing (*"I'm just seeing
+  // shortcuts … it's like it's cached"*). What the gate's session wrote is what this reports;
+  // the gate itself, not this function, is what verifies a pin.
   return {
     apiKey: null, // No longer used
     userId,
-    isAuthenticated: true, // FORCE authenticated to bypass login
+    isAuthenticated: sessionStorage.getItem("grace_is_authenticated") === "true",
     isAdmin,
     role,
     isTeacher,
@@ -218,7 +220,7 @@ export const validateApiKey = async (
  */
 export const clearInvalidUserIds = (): void => {
   try {
-    const userId = localStorage.getItem(USER_ID_STORAGE_KEY);
+    const userId = sessionStorage.getItem(USER_ID_STORAGE_KEY);
     if (userId) {
       // Check if it's a valid UUID format
       const uuidRegex =
@@ -229,8 +231,8 @@ export const clearInvalidUserIds = (): void => {
           "⚠️ Clearing invalid user ID format from storage:",
           userId,
         );
-        localStorage.removeItem(USER_ID_STORAGE_KEY);
-        localStorage.removeItem("grace_is_admin");
+        sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+        sessionStorage.removeItem("grace_is_admin");
       }
 
       // NOTE: The admin user ID '994cf308-b467-4a48-ab6a-dbbcdb81e4e4' is now VALID
@@ -240,8 +242,8 @@ export const clearInvalidUserIds = (): void => {
       // Also clear any user_1, default_user, etc.
       if (userId.startsWith("user_") || userId === "default_user") {
         console.warn("⚠️ Clearing old invalid user ID:", userId);
-        localStorage.removeItem(USER_ID_STORAGE_KEY);
-        localStorage.removeItem("grace_is_admin");
+        sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+        sessionStorage.removeItem("grace_is_admin");
       }
     }
   } catch (error) {
@@ -273,9 +275,9 @@ export const login = async (
   // This prevents using cached invalid IDs that cause foreign key violations
   clearInvalidUserIds();
   // Also force clear any cached user ID to ensure fresh login
-  localStorage.removeItem(USER_ID_STORAGE_KEY);
-  localStorage.removeItem("grace_is_admin");
-  localStorage.removeItem(USER_ROLE_STORAGE_KEY);
+  sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+  sessionStorage.removeItem("grace_is_admin");
+  sessionStorage.removeItem(USER_ROLE_STORAGE_KEY);
 
   try {
     const API_BASE_URL = import.meta.env.VITE_API_URL || "";
@@ -334,17 +336,17 @@ export const login = async (
 
         // Store admin status if applicable
         if (data.is_admin || data.isAdmin) {
-          localStorage.setItem("grace_is_admin", "true");
+          sessionStorage.setItem("grace_is_admin", "true");
         } else {
-          localStorage.removeItem("grace_is_admin");
+          sessionStorage.removeItem("grace_is_admin");
         }
 
         // Store user role
         if (data.role) {
-          localStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
+          sessionStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
           console.log("✅ Stored user role:", data.role);
         } else {
-          localStorage.setItem(USER_ROLE_STORAGE_KEY, "student");
+          sessionStorage.setItem(USER_ROLE_STORAGE_KEY, "student");
         }
 
         return {
@@ -389,9 +391,9 @@ export const logout = (): void => {
   clearApiKey();
   clearInvalidUserIds(); // Clear any invalid user IDs
   // Also clear any cached user ID to force fresh login
-  localStorage.removeItem(USER_ID_STORAGE_KEY);
-  localStorage.removeItem("grace_is_admin");
-  localStorage.removeItem(USER_ROLE_STORAGE_KEY);
+  sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+  sessionStorage.removeItem("grace_is_admin");
+  sessionStorage.removeItem(USER_ROLE_STORAGE_KEY);
   // Redirect to login will be handled by App.tsx
 };
 
@@ -469,7 +471,7 @@ export const signup = async (
       if (data.user_id) {
         storeUserId(data.user_id);
         if (data.role) {
-          localStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
+          sessionStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
         }
       }
 
@@ -511,30 +513,6 @@ export const signup = async (
 export const getApiKey = (): string | null => {
   // API keys no longer required - Railway handles authentication
   return null;
-};
-
-/**
- * Initialize authentication for development - ensure user is always authenticated
- * This bypasses the login screen for development purposes
- */
-export const initializeDevAuth = (): void => {
-  try {
-    // Ensure we have a valid user ID stored
-    const userId = getStoredUserId();
-    console.log("🔑 Dev Auth: Using user ID:", userId);
-    
-    // Mark as authenticated
-    localStorage.setItem("grace_is_authenticated", "true");
-    
-    // Set a default role if none exists
-    if (!localStorage.getItem(USER_ROLE_STORAGE_KEY)) {
-      localStorage.setItem(USER_ROLE_STORAGE_KEY, "student");
-    }
-    
-    console.log("✅ Development authentication initialized - login screen bypassed");
-  } catch (error) {
-    console.error("❌ Failed to initialize dev auth:", error);
-  }
 };
 
 /**

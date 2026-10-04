@@ -51,7 +51,8 @@ export class BuilderEmbed extends LitElement {
          sessions) sends nothing and behaves exactly as it did before this existed. */
       let door: string | null = null;
       try {
-        door = localStorage.getItem('grace_door');
+        // Session-scoped with the sign-in itself (2026-10-04; src/shared/session.ts).
+        door = sessionStorage.getItem('grace_door');
       } catch {
         /* no storage — send nothing, the pre-existing behavior */
       }

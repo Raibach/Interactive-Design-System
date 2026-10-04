@@ -45,7 +45,20 @@
       //
       // IT CHANGES NOTHING FOR ANYONE ELSE. Every other URL behaves exactly as it did, and the
       // door closes the moment the line naming it goes.
-      if (localStorage.getItem('grace_is_authenticated') === 'true') {
+      //
+      // ── THE SESSION'S DOOR, AND THE LEGACY CACHE'S RETIREMENT (owner, 2026-10-04) ──────────
+      // The flag lives in sessionStorage now, not localStorage: the sign-in covers the gate's
+      // own reload and this tab's life, and a NEW visit lands on the gate as if for the first
+      // time — the honest landing the owner asked for (*"load every single time as if it's
+      // landed on for the first time"*). The localStorage copies are DELETED here, at parse,
+      // before any bundle exists: a browser that has been skipping the gate since before this
+      // change meets the gate on the very next load. (The same keys and the same reason are in
+      // src/shared/session.ts, which the bundle uses.)
+      try {
+        ['grace_is_authenticated', 'grace_user_id', 'grace_user_role', 'grace_door', 'grace_is_admin']
+          .forEach(function (key) { localStorage.removeItem(key); });
+      } catch (e) { /* no storage — nothing was cached to retire */ }
+      if (sessionStorage.getItem('grace_is_authenticated') === 'true') {
         document.documentElement.classList.add('authed');
       } else if (new URLSearchParams(location.search).has('signup')) {
         document.documentElement.classList.add('signup');
@@ -239,15 +252,16 @@
             return;
           }
           try {
-            localStorage.setItem('grace_user_id', '00000000-0000-0000-0000-000000000001');
-            localStorage.setItem('grace_user_role', 'student');
-            localStorage.setItem('grace_is_authenticated', 'true');
+            sessionStorage.setItem('grace_user_id', '00000000-0000-0000-0000-000000000001');
+            sessionStorage.setItem('grace_user_role', 'student');
+            sessionStorage.setItem('grace_is_authenticated', 'true');
             /* WHICH DOOR (2026-10-04): this is the dev@local / demo door — it CLEARS any
                earlier 'registered' marker so the Development room keeps its current behavior
                (no onboarding wizard) for this identity, and builder-embed consequently passes
                no door marker to the frame. Written at the only place the pin succeeds, so the
-               marker stays honest across mixed use of one browser. */
-            localStorage.setItem('grace_door', 'dev');
+               marker stays honest across mixed use of one browser. Session-scoped with the
+               sign-in itself (see the retirement note above). */
+            sessionStorage.setItem('grace_door', 'dev');
           } catch (storageError) {
             error.textContent =
               'This browser will not store the session (' + storageError + ') — the gate cannot open here.';

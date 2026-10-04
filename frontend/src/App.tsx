@@ -33,7 +33,8 @@ const queryClient = new QueryClient();
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem("grace_is_authenticated") === "true";
+    // Session-scoped (2026-10-04): a fresh visit meets the gate — see src/shared/session.ts.
+    return sessionStorage.getItem("grace_is_authenticated") === "true";
   });
   // WHICH BUILD THIS IS, BEFORE THE TREE DRAWS. The read was STARTED by the entry
   // (main.tsx, not awaited — see there); this only waits for its answer, which for an
@@ -101,12 +102,13 @@ function App() {
            card they could not answer. */
         onEnterWorkspace={() => {
           try {
-            localStorage.setItem("grace_is_authenticated", "true");
+            sessionStorage.setItem("grace_is_authenticated", "true");
             /* THIS DOOR IS 'registered' (2026-10-04) — the marker the Development room's frame
                carries (builder-embed.ts) so the tool's onboarding wizard appears for a
                signed-up person while dev@local keeps its current behavior. The pin login
-               writes 'dev' over it; the two markers cannot both be true. */
-            localStorage.setItem("grace_door", "registered");
+               writes 'dev' over it; the two markers cannot both be true. Session-scoped with
+               the sign-in itself (src/shared/session.ts). */
+            sessionStorage.setItem("grace_door", "registered");
           } catch {
             console.error("[signup] could not open the session — the gate will still show.");
           }
