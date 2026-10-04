@@ -502,3 +502,31 @@ both traps, so a hand regeneration cannot quietly re-introduce either.
 --require-hashes --python-platform x86_64-unknown-linux-gnu` on a 3.12 venv — the Linux
 resolution, hashes and all, which is the platform that failed. **Still not verified:** the
 image build and the first boot; the third Northflank build is that test.
+
+**AND THE FIRST BOOT NAMED THE FOURTH AND FIFTH TRAPS — BOTH VERSION SKEWS (`steady-chess-6922`
+built green; the boot it deployed failed BOTH Python halves).** The container came up and the
+Canvas itself served from our build (`[static] Static dir: /opt/agent-canvas/build`, the
+ingress on 8090), but both backends refused the offline cache in the same minute, one message
+each:
+- **agent server**: *"No solution found when resolving tool dependencies … you require
+  posthog>=6,<7"* — the launcher's own cap (dev-safe.mjs, `AGENT_SERVER_POSTHOG_CONSTRAINT`)
+  against a cache holding **posthog 7.62.1**, what the fresh universal compile had chosen;
+- **automation**: *"Failed to download `botocore==1.42.93`"* — the tree's OWN `uv.lock`, which
+  `uv run --project` honors, pins 1.42.93; the compile had pinned **1.43.108**.
+One lesson for both: **a compile of a pyproject is not what the runtime resolves.** `uv pip
+compile` resolves today's newest; the launcher resolves against its own constraint, and
+automation resolves against the lock that travelled in its tree. So step 3 of the Dockerfile
+no longer installs compiles at all — it warms the cache **by running the runtime's own
+commands**, once, with the network still on: the exact uvx the launcher runs (the same
+`--with-editable` set and `--with "posthog>=6,<7"` — the tool environment the boot then finds
+cached and reuses) and `uv run --project /opt/vendor/automation true` (the project's own
+environment, materialized so the boot has nothing left to resolve). The two lockfiles stay in
+the repository as the FINGERPRINTS of those graphs; they are not the install mechanism,
+because they were never the runtime's writer. `/opt/python-env` is gone with them — nothing
+ever read it.
+
+**Verified by running the very commands** (Mac, the same vendored trees, same flags): both
+warms exit 0 — the uvx built the agent server from our source, resolved posthog under the cap
+and answered `--help`; `uv run --project` rebuilt `openhands-automation @
+file:///…/vendor/automation` and exited. **Still not verified:** the cloud boot itself — the
+fourth build and its first minute of logs are that test.

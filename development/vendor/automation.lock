@@ -5,6 +5,12 @@
 # only for the Mac, and the Linux builder met `secretstorage` — keyring's Linux-only backend —
 # as an unpinned requirement, which `--require-hashes` refuses. Universal resolves every
 # platform once; the Linux dry-run of this file is clean. Regenerate with this exact command.
+#
+# AND THIS FILE IS A FINGERPRINT NOW, NOT THE INSTALL PATH (2026-10-04, later): the runtime
+# resolves automation from the tree's OWN uv.lock (`uv run --project`, which pins botocore
+# 1.42.93 against this compile's 1.43.108 — the boot's other half died on exactly that), so
+# the image warms the cache by running THAT resolution. Read this file to see the graph;
+# don't install it.
 agent-client-protocol==0.12.1 \
     --hash=sha256:9963ccb590ed96d7dc542c9c023e90676fc76b1c6562e21a9ee112f4fbcb0095 \
     --hash=sha256:aaf3cc301ed87d9e2c4ccb91adfe1cd58784355f6ce7e513f50e7ca2391862ef

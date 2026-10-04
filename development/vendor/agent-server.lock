@@ -15,6 +15,11 @@
 # BOTH were proven fixed the same day the second way from here: `uv pip install --dry-run
 # --require-hashes --python-platform x86_64-unknown-linux-gnu` on a 3.12 venv — clean.
 # Regenerating by hand without this exact command re-introduces one or both; don't.
+#
+# AND THIS FILE IS A FINGERPRINT NOW, NOT THE INSTALL PATH (2026-10-04, later): the image
+# warms its caches by running the runtime's own resolutions (the Dockerfile's step 3 says
+# why — a compile resolves today's newest, the launcher resolves under its own posthog<7
+# cap). Read this file to see the graph; don't install it.
 agent-client-protocol==0.12.1 \
     --hash=sha256:9963ccb590ed96d7dc542c9c023e90676fc76b1c6562e21a9ee112f4fbcb0095 \
     --hash=sha256:aaf3cc301ed87d9e2c4ccb91adfe1cd58784355f6ce7e513f50e7ca2391862ef

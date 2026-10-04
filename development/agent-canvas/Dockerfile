@@ -61,32 +61,32 @@ COPY development/vendor /opt/vendor
 ENV OH_AGENT_SERVER_LOCAL_PATH=/opt/vendor/software-agent-sdk
 ENV OH_AUTOMATION_LOCAL_PATH=/opt/vendor/automation
 
-# ── 3. THE DEPENDENCIES, INSTALLED BY FINGERPRINT ─────────────────────────────────────────────
-# The libraries the two trees need (192 packages for the agent server, 167 for automation) are
-# pinned to exact versions with their SHA-256 hashes in two lockfiles that travel with the repo.
-# `--require-hashes` makes the install VERIFY every wheel against those hashes before it is
-# used: a package changed or substituted on the public registry between today and a future build
-# fails this step instead of being installed. The wheels land in uv's cache, which is what makes
-# the offline run below possible.
-#
-# WHAT /opt/python-env IS, SAID PLAINLY: nothing at runtime points at this venv — the launcher
-# builds its own environments from /opt/vendor (uvx --with-editable for the agent server,
-# `uv run --project` for automation). This venv EXISTS so the install is verified and the cache
-# warmed: those runtime builds under UV_OFFLINE=1 draw every wheel from this cache, or they
-# fail loudly. The two -e file:// lines the compile emitted for the workspace's own packages
-# are gone from agent-server.lock for the same reason — see its header.
-#
-# AND THE BUILD BACKENDS ARE PART OF THAT CACHE (2026-10-04, the first cloud build): the
-# runtime uvx builds the four SDK packages from source, and their pyprojects require
-# setuptools>=83.0.0 + wheel (hatchling, for automation). They are not in either lock — they
-# are uv's build tooling, not the app's dependency set — so they are fetched here, once, so
-# the offline builds can find their tools.
-COPY development/vendor/agent-server.lock /tmp/agent-server.lock
-COPY development/vendor/automation.lock /tmp/automation.lock
-RUN uv venv --python 3.12 /opt/python-env \
- && uv pip install --python /opt/python-env "setuptools>=83.0.0" wheel hatchling \
- && uv pip install --python /opt/python-env --require-hashes -r /tmp/agent-server.lock \
- && uv pip install --python /opt/python-env --require-hashes -r /tmp/automation.lock
+# ── 3. THE DEPENDENCIES, WARMED BY RUNNING WHAT THE RUNTIME RUNS ──────────────────────────────
+# THREE SHAPES, ONE LESSON, all measured (development/CHANGELOG.md, 2026-10-04):
+#   · the first cloud build installed `--require-hashes` compiles of the two trees' pyprojects —
+#     and the compile carried this Mac's editable `-e file:///Users/…` paths, which the flag
+#     refuses (exit 2, build `wanted-silver-6569`);
+#   · the second installed UNIVERSAL compiles of the same pyprojects — right in form, but a
+#     fresh compile resolves today's newest versions, and neither runtime half uses those: the
+#     launcher builds the agent server with its own `posthog>=6,<7` constraint (dev-safe.mjs)
+#     and runs automation from the tree's OWN uv.lock (`uv run --project`). The boot met
+#     `posthog==7.62.1` in the cache where it needed 6.x, and `botocore==1.43.108` where the
+#     tree's lock pins 1.42.93 — and under UV_OFFLINE=1 a missing wheel is a HARD boot error,
+#     which is how both halves died in the same minute (build `steady-chess-6922`'s deploy);
+#   · THIS shape warms the cache BY RUNNING THE RUNTIME'S OWN COMMANDS, once, with the network
+#     still on: the exact uvx the launcher will run (leaving a tool environment it then finds
+#     cached and reused) and the automation project's environment, materialized so the
+#     runtime's `uv run --project` has nothing left to resolve at boot.
+# The two lockfiles stay in the repository as the FINGERPRINTS of these graphs — read them,
+# don't install them; they were never the runtime's writer.
+RUN uvx --reinstall \
+      --from /opt/vendor/software-agent-sdk/openhands-agent-server \
+      --with-editable /opt/vendor/software-agent-sdk/openhands-sdk \
+      --with-editable /opt/vendor/software-agent-sdk/openhands-tools \
+      --with-editable /opt/vendor/software-agent-sdk/openhands-workspace \
+      --with "posthog>=6,<7" \
+      agent-server --help
+RUN uv run --project /opt/vendor/automation true
 
 # ── 4. AND NOTHING MAY REACH THE NETWORK AT RUNTIME ───────────────────────────────────────────
 # UV_OFFLINE is the enforcement, not decoration: with it set, uv refuses to fetch anything, so a
