@@ -571,3 +571,41 @@ Reproduced at home the same hour, one process at a time: `static-server --host 0
 `--allow-lan-session-key` → the page shows the injected key. The launcher now pushes that
 third flag whenever the opt-in is set, so the two policy passes cannot disagree. One decision,
 stated to both halves.
+
+## 2026-10-04 (last) — THE SUPPRESSIONS COME OUT: the owner caught them from the outside
+
+Two of the day's conveniences were named for what they were, and both are gone.
+
+**1. THE CACHED SIGN-IN (commit 52673fd).** The owner, testing: *"I'm just trying to see an
+honest version of the local site … I'm just seeing shortcuts … You've removed the dev@local
+login, the registration links … It's like it's cached."* It WAS cached: the sign-in flags
+lived in localStorage (a returning browser skipped the gate on every load), and
+`authService` even carried `initializeDevAuth` — *"FORCE AUTHENTICATION FOR DEVELOPMENT —
+login screen bypassed"* — with `getAuthState` returning `isAuthenticated: true`
+unconditionally. The sign-in now belongs to the BROWSING SESSION
+(`frontend/src/shared/session.ts`): sessionStorage keeps the gate's own reload (and every
+reload of the tab) working and dies with the tab — a new visit, new tab or new window lands
+on the gate as if for the first time. The legacy localStorage copies are DELETED, not
+ignored: index.html does it at parse (before any bundle), main.tsx again at boot.
+`initializeDevAuth` is deleted; `getAuthState` reports the session's flag as it is.
+Verified in the browser: a fresh tab lands on the gate with dev@local, Sign in and the
+"Register for beta testing" link; the pin still signs in (sessionFlag 'true', door 'dev',
+localStorage untouched); a brand-new tab meets the gate again.
+
+**2. THE HOSTED WORKSPACE'S FIRST-RUN SUPPRESSION (the patch script's third cut).** The
+owner, watching the hosted workspace: *"we worked very hard on creating the onboarding screen
+… then skip the third step to avoid showing the parameters screen for APIs. We did a lot of
+work to suppress an error. Skip this process makes me suspicious that it's not working
+correct."* And: *"That's error suppression … It has to fail hard. You can't skip things for
+convenience. This is a zero-trust application."* Deleted from `openhands-patch.sh`, exactly
+the switches the records had named for re-introduction: the flow preset completed
+(`preseedFirstRun`), the auto-clicker for the wizard's "Skip for now" (`skipSetupSteps`), and
+the whole beta-notice machinery — the tile interception, the modal, the LLM/parameters
+slide's pass-through, and the profile-restore that repaired the save the pass-through made.
+The wizard now stands everywhere exactly as the tool ships it: every step visible, every save
+kept; skipping a step is the visitor's own choice through the vendor's own control. KEPT, and
+said plainly as PROVISIONING rather than suppression: the entrypoint's injected session key
+(no visitor has a key to type — the key is retired from hand-out) and the seeded provided
+model (what makes the workspace usable once the walk ends). Validated by running the patch
+against a copy of the build: the emitted index.html carries the ground script in canonical
+form, and the only mentions of the deleted functions are the deletion note itself.
