@@ -120,10 +120,11 @@ and every beat seen in a live browser (not inferred):
 - **The white splash is gone by construction**: the frame starts at `opacity: 0` under an
   OPAQUE gate, so its first paint is never visible — verified at 2.5 s: `gateOpacity: 1,
   frameOpacity: 0`.
-- **Ten seconds, one constant** (`DEVELOPMENT_GATE_MIN_MS` in WritingAreaIndex — *"you could
-  use it as a 10 second delay"*), and the gate waits for BOTH clocks: the ten and the frame's
-  own load (`builder-embed` now announces `builder-embed-loaded`; the refs reset on every
-  entry, so each visit gets the same opening).
+- **Five seconds now — one constant, cut from ten** (`DEVELOPMENT_GATE_MIN_MS` in
+  WritingAreaIndex; the owner's first word was ten — *"you could use it as a 10 second delay"* —
+  then the same night *"ten was too long — five"*), and the gate waits for BOTH clocks: the
+  hold and the frame's own load (`builder-embed` now announces `builder-embed-loaded`; the refs
+  reset on every entry, so each visit gets the same opening).
 - **The ease-in**: one 700 ms cross-fade — the gate to 0, the window to 1 — the same feel as
   composer and design. Verified after the wait: `gateOpacity: 0, frameOpacity: 1`, and the
   screenshot shows OpenHands itself standing there (`http://localhost:8090/?embedded=console`),
@@ -139,3 +140,38 @@ and every beat seen in a live browser (not inferred):
 Its two records are the only things under `development/` that are tracked by git; the clones
 stay outside on purpose. And the installer patch this room applies to OpenHands' built chrome is
 scripted: `development/openhands-patch.sh` (idempotent — run it again after any package update).
+
+## The styling pass — landed, and the boundary note corrected (the same long night)
+
+The plan's last item — the tool's styling — is no longer "later". Done and driven in a live
+browser; the full blow-by-blow (including why it took five passes) lives in
+`development/CHANGELOG.md`, and every step of it is `development/openhands-patch.sh`. What
+stands now:
+
+- **The palette**: every gray the tool's default theme paints — twelve variables, measured on
+  the rendered element — takes the house colours: grounds #110E1F (the pin gate's navy), panels
+  #22202D (the owner's purple). Hovers untouched. The tool's runtime theme style outranks plain
+  rules (it re-declares variables from a `<style>` under doubled selectors), so both scopes are
+  mirrored tripled + `!important`, plus an inline-important script in its HTML as the backstop.
+- **The ground**: the room's own assembly tile — graph paper and boxes — is painted into the
+  TOOL's canvas (a content-hashed copy of the tile sits beside the stylesheet). Why not
+  "transparent": an embedded document never shows what the parent paints behind it — measured
+  the hard way (the room's wrapper painted solid red behind a fully transparent embed: not one
+  red pixel reached the eye, magnified 3× confirmed).
+- **The Setup wizard** stands on the same ground — its own opaque takeover (`main.min-h-screen
+  .bg-base`) and the 60 %-black veil were the entire "black background"; both cleared — and its
+  default row is relabeled **"Sovereign local model"**. That row's TITLE is backend agent
+  metadata, not a string in the build, so the ground script rewrites it in-page (exact match,
+  wizard container only); the description is a locale string now reading "Defaults to the local
+  model agent. Best for general purpose work." The "Skip for now" control is untouched,
+  deliberately — the onboarding stays skippable and remembered per browser.
+- **The boundary note, corrected**: "styling IT means its own theme knobs, never our CSS
+  reaching across the frame" still holds in spirit — nothing of ours crosses the frame AT
+  RUNTIME. What the patch does is different in kind: it is applied INSIDE the tool's own build
+  at install time (its own stylesheet link, its own theme variables, its own locale file, its
+  own canvas) — which is exactly "its own theme knobs", at the only level the tool offers. The
+  app's CSS still never reaches across the frame.
+- **The mechanism's law** (earned the hard way, three times): the patch's files carry the hashes
+  of their own bytes — change the content and the URL changes with it; a hand-bumped `?v=N` is
+  cached for a year the moment anyone loads it, and one was already burned. The script is
+  idempotent and self-upgrading; re-run it after any `npm install -g @openhands/agent-canvas`.
