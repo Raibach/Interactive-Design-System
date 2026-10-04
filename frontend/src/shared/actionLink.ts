@@ -332,6 +332,55 @@ export const REVIEW_PROMPT_REQUEST = [
 ].join(' ');
 
 /**
+ * `build-wireframe` — the product room's compile, and the name her offer is spelled with.
+ *
+ * THE OWNER'S SHAPE FOR THE PRODUCT ROOM, verbatim (2026-10-03 evening): *"they're basically
+ * prompting Grace and she's doing everything… It only allows them to imagine and vibe-code
+ * structure or features — they cannot design in it."* The room's script teaches her to end the
+ * reply that describes a structure with `[Build that](action:build-wireframe)`; the press runs
+ * ONE compile (`POST /api/ai/assemble-wireframe` — the closed contract of the session's own
+ * design system, its declared props the whole vocabulary) and the host applies the returned
+ * layout through the ONE draft store every gesture already uses: one writer, one shape, and the
+ * stage redraws from the model.
+ *
+ * IT CARRIES NO WORDS, DELIBERATELY. The ask is the thread's own last person turn — the compile
+ * reads it from the conversation, never from the button, so what gets built cannot drift from
+ * what was actually said. An approval's shape, like RUN: the press releases what the
+ * conversation already holds, and the host stands down when no package is open.
+ */
+export const BUILD_WIREFRAME = 'build-wireframe';
+
+/** The action of a "Build that" button. Whole word only — `builder` is not a build here. */
+export function parseBuildWireframeAction(action: unknown): boolean {
+  const word = String(action ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return word === BUILD_WIREFRAME || word === 'build';
+}
+
+/**
+ * `edit-node` — one SELECTED TILE changes, and everything else stands.
+ *
+ * STOLEN FROM THE EXAMPLE (owner: *"if you can just steal what they've done in this folder and
+ * implement it"* — LangChain's Open Canvas, MIT, wireframe-lab/open-canvas-main). THEIR chat
+ * edits the HIGHLIGHT — the selected block of the artifact — and the model answers with that
+ * fragment only; OURS edits the SELECTED TILE: the stage's own `draft-select` names one node,
+ * this button releases `POST /api/ai/edit-node` for exactly that node, the model answers with
+ * the tile only, the server splices it into the layout, and the host writes through the one
+ * draft store. Same offer grammar as a build: she offers, one press changes it.
+ *
+ * IT CARRIES NO WORDS AND NO ID: the instruction is the thread's last person turn (read
+ * server-side, like the compile's), and the TILE is the app's own fact — the host holds the
+ * selection the stage reported, so the button cannot name a tile the person never picked.
+ * Pressed with nothing selected, the route refuses in one sentence and the stage is untouched.
+ */
+export const EDIT_NODE = 'edit-node';
+
+/** The action of an "Edit it" button. Whole word only — `editable` is not an edit here. */
+export function parseEditNodeAction(action: unknown): boolean {
+  const word = String(action ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return word === EDIT_NODE || word === 'edit';
+}
+
+/**
  * A REQUEST WITH NO WORDS IN IT IS STILL A REQUEST — it is the person's words that are missing.
  *
  * Measured 2026-09-23: her blocker list offered `[Name it](action:set-title)` with no name in the

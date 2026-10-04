@@ -452,7 +452,7 @@
     },
     "card": {
      "node": "40001130:5060",
-     "fill": "#ADC7C3",
+     "fill": "#F7F8F3",
      "stroke": "rgba(117, 142, 135, 0.5) bottom 1px",
      "radius": 8,
      "padding": "10px 10px 10px 2px",
@@ -467,7 +467,7 @@
    },
    "gaps": [
     "THE FRAME COLUMN FOLLOWS THE CONTAINER (owner, 2026-09-24). This entry was named for the card it holds \u2014 \"chat-output-area-results\" #40001130:5060 \u2014 and the frame the element is drawn from is the container around it: \"output-output-results-area-container\" #40001130:5059, column, padding 6px 20px 4px, gap 7, fill #CBE6E3. The card keeps its own id under values.card.node, so both frames chat-header draws are recorded.",
-    "TWO FRAMES, TWO FILLS \u2014 ONLY THE INNER ONE GOES LIGHT. The container is the block's #CBE6E3 in both states. The card is the owner's solid #ADC7C3 between runs and #F7F8F2 while the thread carries a run's results; the file's card reads #F7F8F2 (read live 2026-09-24) and draws no between-runs state. The code had painted the container light together with the card \u2014 the defect the owner caught: \"the entire container now is a light color. It should've only been the inside.\" \u2014 and the results fill now lives on the shell alone (chat-header.ts).",
+    "TWO FRAMES, TWO FILLS \u2014 ONLY THE INNER ONE GOES LIGHT. The container is the block's #CBE6E3 in both states. \u26d0 THE OWNER MOVED THE CARD'S SOLID, 2026-10-04: *\"you changed the wrong thing. You changed the frame around it. What you needed to change was the interior area of grace. Just this one slot. And you'll want to change back the frame to the green\"* \u2014 the between-runs fill is now his swatch #F7F8F3 (was #ADC7C3, the composited tone of the drawing's translucent shell), the results state stays #F7F8F2, and the container stays #CBE6E3. The code had once painted the container light together with the card \u2014 the defect the owner caught: \"the entire container now is a light color. It should've only been the inside.\" \u2014 and that correction holds: one fill moved, the frame did not.",
     "Node carries no annotation: the grip row and the bars have no On click:, so nothing is wired and nothing invented."
    ]
   },

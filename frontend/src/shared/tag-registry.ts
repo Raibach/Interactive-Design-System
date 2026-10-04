@@ -1313,33 +1313,73 @@ export const TAG_REGISTRY = {
     props: {
       draft: { type: 'object', optional: true },
       theme: { type: 'string', optional: true },
+      system: { type: 'string', optional: true },
       palette: { type: 'array', optional: true },
+      movable: { type: 'boolean', optional: true },
+      grid: { type: 'boolean', optional: true },
+      clearable: { type: 'boolean', optional: true },
     },
-    events: ['draft-select', 'draft-node-moved', 'draft-node-added'],
+    events: ['draft-select', 'draft-node-moved', 'draft-node-added', 'draft-cleared'],
     constraints: [
       'a view, not a source: the whole layout arrives as one data-model binding',
       'nothing is drawn that the catalogue does not resolve — an unresolved name is SAID on the node',
+      'movable (default true) is the room\'s call, and it means NOTHING moves by hand — not a node, not the view: the Product room binds FALSE (its people move things by talking to Grace, owner 2026-10-03), so the tile SELECTS and no drag, pan or zoom exists there; the Composer keeps all three gestures',
+      'grid (default true) is the same room-declared family: the Product room binds FALSE because its ground carries its own dots (owner, 2026-10-03)',
       'a node\'s props are set as PROPERTIES on the mounted element (an object prop cannot ride an attribute)',
       'ITS OWN EVENT NAMES (draft-select, draft-node-moved): both canvases can be in the same room and the host listens on window — one name for two facts would make the run canvas answer a draft gesture',
       'placements: the element owns the live drag, the payload owns the model — one writer for a place, and a rebuild never moves what a hand has placed',
       'the store is BUILT (2026-10-02): prompt_artifacts keyed by conversation, one row replaced, written on gesture end — the host is the single writer; the blueprint is wireframe-lab/PRODUCT-ROOM.md',
       'the tray: when a `palette` is bound, the stage draws its + Add picker whose list IS that palette — an add announces `draft-node-added` and the host folds and writes it, exactly as a drag announces `draft-node-moved`; with no palette bound (the Composer seat), no tray is drawn',
+      'clearable (default false) is the stage\'s own hand: the Product room binds TRUE, and while the draft holds at least one node the rail draws a small Clear — a press announces `draft-cleared` carrying nothing, and the host writes the EMPTY layout through the same one store the spoken "clear the stage" lands in (one fact, both hands, one writer); with nothing to clear the button is not drawn — a control that cannot work is not drawn (owner, 2026-10-03: the stage had no way to be emptied)',
     ],
   },
-  'design-system-picker': {
-    tag: 'design-system-picker',
+  'artifact-canvas': {
+    tag: 'artifact-canvas',
     surface: 'composer',
-    column: 'right',
+    column: 'middle',
     description:
-      'THE PRODUCT ROOM CONTEXT STRIP \u2014 which design system the stage draws from. Implemented by <design-system-picker> in src/components/lit/design-system-picker.ts. One row at the top of her panel (the seat view slot): the catalogues that exist (the server hands the list from the directory, so a partition that does not exist cannot be offered) and the one this package chose. Choosing dispatches `design-system-chosen` and writes nothing \u2014 the host persists the fact (metadata.design_system, the key design_system_of reads) and re-assembles the room, which re-hands the stage its system and its palette. With no list it SAYS the read failed; with no choice it says none is chosen yet \u2014 absent is a real answer, never a blank.',
+      'THE PRODUCT ROOM\'S STAGE IN THE ARTIFACT ERA (2026-10-03, late): the window onto the PAGE Grace builds from the person\'s own sentence (POST /api/ai/build-artifact) — a real HTML document held IN-SESSION (nothing reaches the database until Save / Submit lands, a later slice on the owner\'s word), drawn in a sandboxed iframe that cannot run a script (no allow-scripts, no allow-same-origin — dead by construction, not by trust). A VIEW with ONE property: `artifact` — the document string, or null/empty for nothing built yet (the empty state says so; a blank stage is a real answer). NOT the node canvas: <draft-canvas> assembles catalogue components and stays the Composer\'s own; the node-era stage is parked, unwired, in the Product room.',
     props: {
-      catalogues: { type: 'array', optional: true },
-      selected: { type: 'string', optional: true },
+      artifact: { type: 'string', optional: true },
     },
-    events: ['design-system-chosen'],
+    events: ['artifact-cleared'],
     constraints: [
-      'the element writes nothing: one fact, one writer \u2014 the host persists it and re-assembles the room',
-      'drawn only where the room binds it (the Product seat view slot \u2014 the one content hole the design left, shared with the console repair rows)',
+      'a window, not a builder: the page arrives as one string property; the element fetches nothing and stores nothing',
+      'scripts are dead by construction: the iframe carries no allow-scripts and no allow-same-origin',
+      'the sandbox is in-session: the host holds the page; Save / Submit as a named package is a later slice on the owner\'s word',
+      'the rail keeps ONE control: ✕ Clear, drawn only while a page stands — a press announces `artifact-cleared` carrying nothing, and the host empties the sandbox (the spoken "clear the stage" empties it through the same build route: an empty artifact)',
+      'one name for one fact: `artifact-cleared` is this element\'s own event, distinct from <draft-canvas>\'s draft-* gestures — both canvases can be in the same document and the host listens on window',
+    ],
+  },
+  // ── 'design-system-picker' WAS HERE, DECLARED AND REMOVED 2026-10-03 ──────────────────────  // The product room's context strip lived here for one day. The owner, seeing the room work:
+  // *"So I don't want the user to be able to select a catalogue. Let's just pick one that's most
+  // compatible and use it. I'm removing that feature — they don't need to select anything."*
+  // So the room's system is a server-side constant (`_PRODUCT_ROOM_DESIGN_SYSTEM` in
+  // routes/ai.py), the element file is deleted, and the entry left with the element — a
+  // declaration for an element nothing draws is the dead control this repository deletes.
+  // ── THE INGESTED SYSTEMS' ENTRIES MOVED OUT, 2026-10-03 ───────────────────────────────────
+  // 'ag-select' (AgnosticUI, declared here 2026-10-03) and 'kor-button' / 'kor-icon' (Kor) were
+  // declared here while the wall was incomplete. By the owner's own rule this file is the
+  // PROMPT-COMPOSER catalogue's own — "The app's three files are the app catalogue's files. A
+  // second catalogue must never write into them" (PLANS.AGENT/multiple-catalogs.md §10) — and
+  // each system's declarations now live in its own registry module:
+  //   components/lit/agnosticui/registry.ts   (ag-select)
+  //   components/lit/kor/registry.ts          (kor-button, kor-icon)
+  // with each system's name→tag table in its own partition's registry.json, which is what
+  // `resolveTag` consults for a system's names. Nothing of a system resolves through this table.
+  'governance-usage-view': {
+    tag: 'governance-usage-view',
+    surface: 'composer',
+    column: 'middle',
+    description:
+      'THE GOVERNANCE ROOM\'S FEED — what the system spent, drawn from the per-call ledger the middleware writes (one row per model call: mode, model, tokens measured from the provider, latency; cost only when the deployment states its prices). It reads its own feed (`GET /api/governance/usage`, under the prefix the demo already denies) and writes nothing. Plain on purpose: the owner redesigns this UI and uses the data\'s shape as the guide.',
+    props: {
+      refresh: { type: 'number', optional: true },
+    },
+    events: [],
+    constraints: [
+      'a view, not a writer: the ledger is written at the request boundary (main.py), its numbers made in grace_gui — this element only reads and draws',
+      'an absent cost is drawn as absent ("not priced"), and a partial sum names how many calls it covers — never a zero standing in for an unknown',
     ],
   },
   'agent-canvas': {
@@ -1723,13 +1763,14 @@ export const TAG_REGISTRY = {
       /** Whether the tree is drawn open. */
       open: { type: 'boolean', optional: true },
     },
-    events: ['catalog-change', 'open-component', 'open-layer', 'open-function'],
+    events: ['catalog-change', 'open-component', 'open-layer', 'open-function', 'catalog-accept'],
     constraints: [
       'REUSED, NOT REBUILT: this is the ingest form\'s own element, instantiated unchanged and never restyled. It was entered in the catalogue precisely so that nothing new had to be authored for this column',
       '`pipeline` is a CATALOGUE FOLDER name, never a design system or a session title. Binding it to `/session/catalogue/system` names a catalogue that does not exist (`raibach-ids` is a design system) and the tree reports it rather than drawing',
       'IT READS THE BUILD ON PURPOSE: catalogues from `import.meta.glob` over `catalogs/*​/catalog.json`, audit from `/api/catalog/audit/<pipeline>`. No data-model binding for those exists or should be invented — the files are the source, and a copy in the model would be a second catalogue that can disagree',
       'the catalogue strip is live INSIDE the element: a click sets its own `pipeline` and re-reads, so no host and no event round trip are needed to switch catalogues',
       'it DISPATCHES `open-component`, `open-layer` and `open-function` to open what it is showing. Nothing in the Design room answers them yet: opening a component for review is the ingest tool\'s job and it is NOT wired here — the tree draws and marks, it does not yet open',
+      'AND ONE WRITE CONTROL (2026-10-03): a row whose entry carries the ingest\'s proposal marker (`draft: false`) draws an Accept button. The press announces `catalog-accept {system, name}` and the shell posts — the element writes nothing, and a row flips to accepted only when the shell reports the write landed (`catalog-accept-settled`)',
     ],
   },
   'workspace-layout': {
@@ -1744,6 +1785,7 @@ export const TAG_REGISTRY = {
     // workspaceState.
     props: {
       isThirdOpen: { type: 'boolean', optional: true },
+      chatLoadWidth: { type: 'number', optional: true },
     },
       events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
       constraints: [
@@ -1837,6 +1879,27 @@ export const TAG_REGISTRY = {
 
 export type TagName = keyof typeof TAG_REGISTRY;
 export type TagEntry = (typeof TAG_REGISTRY)[TagName];
+
+/**
+ * THE CONTRACT A SECOND CATALOGUE'S REGISTRY DECLARES AGAINST (2026-10-03).
+ *
+ * THIS FILE IS THE PROMPT-COMPOSER CATALOGUE'S OWN — and by the owner's wall
+ * (PLANS.AGENT/multiple-catalogs.md §10: *"The app's three files are the app catalogue's files…
+ * A second catalogue must never write into them"*) an ingested design system's entries never
+ * live here. Each system carries its own registry module in its own tree
+ * (components/lit/<system>/registry.ts), typed against this interface — one shape, declared
+ * where the allowlist's schema lives, so a per-system registry cannot drift from the app's
+ * contract while living in its own file.
+ */
+export interface TagDefinition {
+  tag: string;
+  surface: string;
+  column: string;
+  description: string;
+  props?: Record<string, { type: string; optional?: boolean }>;
+  events?: string[];
+  constraints?: string[];
+}
 
 /**
  * CATALOG TIERS — the design-system grouping.

@@ -38,6 +38,13 @@ export class AgentCardElement extends LitElement {
     categoryColor: { type: String, attribute: 'category-color' },
     categoryTitleColor: { type: String, attribute: 'category-title-color' },
     categoryTextColor: { type: String, attribute: 'category-text-color' },
+    /**
+     * THE TOP LINE'S ONE OVERRIDE (owner, 2026-10-04): *"the cards have a name at the top —
+     * agent function pipe category … it should say product team."* Set by the GRID, only
+     * for product-room cards (their category's name); every other card keeps the literal
+     * indicator — see the note in the render.
+     */
+    headerLabel: { type: String, attribute: 'header-label' },
     // Owner-instructed control (not in the Figma pull): arm → confirm.
     _deleteArmed: { state: true },
   };
@@ -53,6 +60,7 @@ export class AgentCardElement extends LitElement {
   declare categoryColor: string;
   declare categoryTitleColor: string;
   declare categoryTextColor: string;
+  declare headerLabel: string;
   /** First confirmation step: trash clicked once, waiting for the second click. */
   declare _deleteArmed: boolean;
   /** Auto-disarm timer so an armed trash never stays armed. */
@@ -71,6 +79,7 @@ export class AgentCardElement extends LitElement {
     this.categoryColor = '';
     this.categoryTitleColor = '';
     this.categoryTextColor = '';
+    this.headerLabel = '';
     this._deleteArmed = false;
   }
 
@@ -504,9 +513,14 @@ export class AgentCardElement extends LitElement {
           <img class="card-logo" src=${chatMenuIcon} alt="" aria-hidden="true" />
           <div class="header-labels">
             <!-- THE INDICATOR, NOT A VALUE — the owner, 2026-09-19: "'Agent Function | Category'
-                 is just an indicator. Don't insert category there." The category's own value
-                 keeps its line below. -->
-            <div class="fn-line">Agent Function | Category</div>
+                 is just an indicator. Don't insert category there. The category's own value
+                 keeps its line below."
+                 AND THE OWNER'S ONE EXCEPTION (2026-10-04): *"the cards have a name at the top
+                 — agent function pipe category … it should say product team."* The product-room
+                 cards read their category's name on this line instead — a data-driven
+                 headerLabel the GRID writes, so every other card keeps the literal.
+                 (No backticks in this comment, deliberately: a template literal ends at one.) -->
+            <div class="fn-line">${this.headerLabel || 'Agent Function | Category'}</div>
             <div class="cat-line">${this.category || ''}</div>
           </div>
         </div>

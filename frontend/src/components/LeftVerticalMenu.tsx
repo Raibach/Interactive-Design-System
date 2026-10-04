@@ -584,14 +584,15 @@ const LogoutIcon = () => (
                 { id: "composer", label: "Composer" },
                 { id: "design", label: "Design" },
                 /*
-                 * TWO STUBS REMAIN, AND THE FLAG IS READ, NOT THE LABEL — so the two lists
-                 * cannot drift into disagreeing about which tabs exist. Product left this set
-                 * on 2026-10-03; Development and Governance are still compartments with
-                 * nothing behind them.
+                 * ONE STUB REMAINS, AND THE FLAG IS READ, NOT THE LABEL — so the two lists
+                 * cannot drift into disagreeing about which tabs exist. Product and Governance
+                 * left this set on 2026-10-03 — both are real rooms now, and the drawer hands
+                 * their switches over through `navigate-tab`; Development is still a compartment
+                 * with nothing behind it.
                  */
                 { id: "product", label: "Product" },
                 { id: "development", label: "Development", disabled: true },
-                { id: "governance", label: "Governance", disabled: true },
+                { id: "governance", label: "Governance" },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -603,8 +604,8 @@ const LogoutIcon = () => (
                     setMobileMenuOpen(false);
                     if (tab.id === "design") {
                       window.dispatchEvent(new CustomEvent("open-ingest"));
-                    } else if (tab.id === "product") {
-                      window.dispatchEvent(new CustomEvent("navigate-tab", { detail: { tabId: "product" } }));
+                    } else if (tab.id === "product" || tab.id === "governance") {
+                      window.dispatchEvent(new CustomEvent("navigate-tab", { detail: { tabId: tab.id } }));
                     }
                   }}
                   className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${

@@ -62,6 +62,12 @@ interface DeclaredComponent {
   props: string[];
   required: string[];
   /**
+   * True when the entry carries the ingest's proposal marker (`"draft": false`) — an entry of an
+   * INGESTED partition that a person has not accepted yet. False for hand-written system entries
+   * (they carry no marker; they are placeable by declaration, reviewed in git).
+   */
+  proposed: boolean;
+  /**
    * What it is, in the catalogue's own words, cut to its first sentence (see `descriptionOf`).
    * The row shows this much; the whole text travels with the click for the metadata panel.
    */
@@ -107,6 +113,9 @@ function readComponent(name: string, entry: any): DeclaredComponent {
     shape: allOf ? `allOf(${allOf.length})` : 'flat',
     props,
     required,
+    // The proposal marker lives at the ENTRY's top level (the ingest writes it there) — not in
+    // the block the description came from. A marker that is not exactly false is not a proposal.
+    proposed: entry?.draft === false,
     description: descriptionOf(block?.description),
   };
 }
@@ -237,6 +246,14 @@ export class FigmaLayersView extends LitElement {
     inline: { type: Boolean },
     /** Bumped by the host to force a re-read — after an ingest lands, or a commit. */
     refresh: { type: Number },
+    /**
+     * TRUE WHILE AN INGEST IS IN FLIGHT — the host's fact (the same `/session/design_system_ingest/busy`
+     * the form's own button reads), so the column SPINS while something is being processed. The
+     * owner, 2026-10-03: *"that whole column or maybe a section of that column could spin — those
+     * little spinners are important. They provide feedback to the user that something's processing
+     * in the background."* One fact, two readers: the button and the tree.
+     */
+    busy: { type: Boolean },
     /** Bumped by the host to fold the tree back to its opening state — a Reset. */
     reset: { type: Number },
     /** The catalogue name of the component the host has open in the preview. */
@@ -260,6 +277,7 @@ export class FigmaLayersView extends LitElement {
   declare nodeId: string;
   declare inline: boolean;
   declare refresh: number;
+  declare busy: boolean;
   declare reset: number;
   declare selected: string;
   declare open: boolean;
@@ -411,6 +429,31 @@ export class FigmaLayersView extends LitElement {
   /** The re-read attached to focus and visibility. See connectedCallback. */
   private _onWake: () => void = () => {};
 
+  /**
+   * THE ACCEPT ACT (2026-10-03) — the ingest PROPOSES; a person accepts, and this is where that
+   * press lives. An ingested partition's entry arrives `draft: false`; accepting flips it through
+   * the server (`draft: true`), the single marker the room's palette reads — so the moment the
+   * server answers, the tray offers the component and Grace can name it.
+   *
+   * THE ELEMENT WRITES NOTHING: it announces `catalog-accept {system, name}` and the shell posts
+   * (the division every write in this app keeps). The shell answers with
+   * `catalog-accept-settled {system, name, ok}` and only then is the row marked accepted HERE — a
+   * button that flipped itself on its own press would be claiming a write it never saw land.
+   */
+  private _acceptedThisSession = new Set<string>();
+
+  private _accept(name: string): void {
+    this.dispatchEvent(
+      new CustomEvent('catalog-accept', {
+        bubbles: true,
+        composed: true,
+        detail: { system: this.pipeline, name },
+      }),
+    );
+  }
+
+  private _onAcceptSettled: (event: Event) => void = () => {};
+
   connectedCallback(): void {
     super.connectedCallback();
     if (this.inline && !this._toggled) this.open = true;
@@ -430,9 +473,17 @@ export class FigmaLayersView extends LitElement {
     };
     window.addEventListener('focus', this._onWake);
     document.addEventListener('visibilitychange', this._onWake);
+    this._onAcceptSettled = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { system?: string; name?: string; ok?: boolean };
+      if (!detail.ok || detail.system !== this.pipeline || !detail.name) return;
+      this._acceptedThisSession.add(String(detail.name));
+      this.requestUpdate();
+    };
+    window.addEventListener('catalog-accept-settled', this._onAcceptSettled);
   }
 
   disconnectedCallback(): void {
+    window.removeEventListener('catalog-accept-settled', this._onAcceptSettled);
     window.removeEventListener('focus', this._onWake);
     document.removeEventListener('visibilitychange', this._onWake);
     super.disconnectedCallback();
@@ -1456,7 +1507,10 @@ export class FigmaLayersView extends LitElement {
             being re-read", so an unchanged list afterwards is understood as the answer rather
             than as nothing having happened. The rows stay on screen underneath while it spins:
             emptying the list to reload it would make every update a blank. */ ''}
-      ${this._state === 'loading'
+      ${/* THE COLUMN SPINS WHILE SOMETHING IS BEING PROCESSED — its own re-read, or the host's
+            ingest in flight (see `busy`). The rows stay underneath while it spins: emptying the
+            list would make every update a blank. */ ''}
+      ${this._state === 'loading' || this.busy
         ? html`<div class="lrow reloading" style="--d:0">
             <span class="spin" aria-hidden="true"></span>
             <span class="lname quiet">re-reading the list…</span>
@@ -1567,6 +1621,27 @@ export class FigmaLayersView extends LitElement {
               ><span slot="status" class="ldot ${dotTone}" title=${dotTitle}></span
             ></f-40001207-3497>
           </div>
+          ${/* A PROPOSED COMPONENT IS NOT PLACEABLE YET, AND THE ROW SAYS SO. The ingest writes
+                every entry draft: false — "an authorized person accepts each one" — and this line
+                is the person's control. The flip happens on the SERVER first; this row changes
+                only when the shell reports the write landed (`catalog-accept-settled`). */ ''}
+          ${comp.proposed
+            ? html`<div class="lrow" style="--d:1">
+                <span class="lchev"></span>
+                <span class="lname quiet">Proposed — not placeable yet</span>
+                ${this._acceptedThisSession.has(comp.name)
+                  ? html`<span class="lreuse">accepted</span>`
+                  : html`<button
+                      class="laccept"
+                      type="button"
+                      title="Accept this component — it becomes placeable in the rooms"
+                      @click=${(e: Event) => {
+                        e.stopPropagation();
+                        this._accept(comp.name);
+                      }}
+                    >Accept</button>`}
+              </div>`
+            : nothing}
           ${isOpen
             ? html`
                 ${/* THE FUNCTIONS COME FIRST: what it does is what a person is auditing for, and
@@ -1765,6 +1840,22 @@ export class FigmaLayersView extends LitElement {
   }
 
   static styles = css`
+    /* THE ACCEPT CONTROL (2026-10-03) — a proposed entry's one act, beside the row it belongs
+       to. Small and quiet on purpose: the rail's tiles keep their own look, and this is not a
+       restyle of anything. Colors carry fallbacks so nothing here invents a token. */
+    .laccept {
+      margin-left: 8px;
+      padding: 3px 10px;
+      border: 1px solid var(--ds-navy, #234354);
+      border-radius: var(--ds-radius, 6px);
+      background: transparent;
+      color: var(--ds-navy, #234354);
+      font: inherit;
+      font-size: var(--ds-fs-xs, 11px);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .laccept:hover { background: rgba(35, 67, 84, 0.08); }
     :host {
       /* A column, so the one part meant to grow, .body, can. Harmless to the overlay, whose
          .wrap is fixed-positioned and therefore out of this flow. */

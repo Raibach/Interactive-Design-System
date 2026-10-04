@@ -38,6 +38,10 @@ class PromptSessionsAPI:
         title: str = "Untitled Prompt Session",
         description: str | None = None,
         room_domain: str | None = None,
+        design_system: str | None = None,
+        builder_project_id: str | None = None,
+        builder_preview_url: str | None = None,
+        builder_runs: int | None = None,
     ) -> dict[str, Any]:
         """
         Create a new prompt session with associated conversation
@@ -80,15 +84,37 @@ class PromptSessionsAPI:
                 # room and keeps belonging where it has always been. The readers ship
                 # with the writer: the console's card data carries it, and a card click
                 # routes to the room that owns the package.
+                #
+                # AND THE CHOSEN DESIGN SYSTEM, SAME RULE, SAME ACT (2026-10-03 evening): a
+                # package born in the Product room is born drawing from the first declared
+                # design system of its room (routes/ai.py `_PRODUCT_ROOM_DESIGN_SYSTEMS`), so
+                # its chooser shows a real choice from the first byte. One writer per fact:
+                # the creation path writes it here; the chooser's own PUT re-writes it when a
+                # person switches. Only the keys given are written — an absent key stays absent.
+                meta_keys: dict[str, str] = {}
                 if room_domain:
+                    meta_keys["room_domain"] = room_domain
+                if design_system:
+                    meta_keys["design_system"] = design_system
+                # THE BRIDGED BUILDER PROJECT (2026-10-04, routes/builder_bridge.py). A
+                # package that stands for a project in the Product room's tool carries the
+                # project's own id, preview URL and run count — the console's card reads
+                # them to open the room ON that project. Written by the bridge's sync,
+                # which is this key's one writer; nothing here invents a project.
+                if builder_project_id:
+                    meta_keys["builder_project_id"] = builder_project_id
+                if builder_preview_url is not None:
+                    meta_keys["builder_preview_url"] = builder_preview_url
+                if builder_runs is not None:
+                    meta_keys["builder_runs"] = str(builder_runs)
+                if meta_keys:
                     cursor.execute(
                         """
                         UPDATE prompt_sessions
-                        SET metadata = COALESCE(metadata, '{}'::jsonb)
-                            || jsonb_build_object('room_domain', %s::text)
+                        SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
                         WHERE id = %s
                         """,
-                        (room_domain, session_id),
+                        (json.dumps(meta_keys), session_id),
                     )
 
                 # Get the created session
@@ -563,6 +589,9 @@ class PromptSessionsAPI:
                           -- The console should remain untouched."* The rows were there and the
                           -- list had no reason to exclude them; this is that reason.
                           AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
+                          -- AND THE GOVERNANCE ROOM'S CONTAINER (2026-10-03), same rule: the room's
+                          -- row exists so its seat has a session; it is not a card.
+                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'governance%%'
                     """
                 else:
                     query = """
@@ -599,6 +628,8 @@ class PromptSessionsAPI:
                           -- catalogues, its masters and its children are containers for their
                           -- conversations, never cards in the console.
                           AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
+                          -- And the GOVERNANCE room's container (2026-10-03) — same rule.
+                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'governance%%'
                     """
 
                 params = [user_uuid, user_uuid]

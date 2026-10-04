@@ -400,6 +400,31 @@ async def delete_prompt_session(
 
     try:
         uid = get_user_id_from_header(x_user_id)
+        # ⭐ THE OTHER DIRECTION OF "DELETE MEANS REMOVE IT" (owner, 2026-10-04: *"I deleted
+        # product team cards from the console … they came back"*). A builder-backed card and
+        # its project are ONE thing wearing two doors: deleting the card must delete the
+        # PROJECT, or the console's sync (routes/builder_bridge.py) finds the orphaned
+        # project and faithfully puts the card back — which is exactly what it did, twice.
+        # THE ENGINE GOES FIRST: a project that cannot be removed keeps its card and the
+        # refusal says why — a deleted card on a living project is a lie the next sync exposes.
+        bridged_project_id = None
+        try:
+            session = state.prompt_sessions_api.get_session(session_id, uid)
+            bridged_project_id = ((session or {}).get("metadata") or {}).get("builder_project_id")
+        except Exception as read_error:  # noqa: BLE001 — an unreadable row deletes as it always did
+            print(f"[builder] could not read session {session_id} before delete: {read_error}")
+        if bridged_project_id:
+            from routes import builder_bridge
+
+            removal = builder_bridge.delete_builder_project(str(bridged_project_id))
+            if not removal.get("ok"):
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        f"The builder's project '{bridged_project_id}' could not be removed, so the "
+                        f"card was kept: {removal.get('error')}"
+                    ),
+                )
         success = state.prompt_sessions_api.delete_session(
             session_id=session_id, user_id=uid, permanent=permanent
         )
@@ -899,8 +924,15 @@ async def grant_session_permission(
     x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Grant a user a contributor role on the package (owner-only)."""
-    if request.role not in ("owner", "editor", "viewer"):
-        raise HTTPException(status_code=400, detail="Role must be owner, editor, or viewer")
+    # ⚠️ 'owner' IS NOT GRANTABLE (2026-10-04). Ownership is the row's `user_id`, and a
+    # granted 'owner' ROW is a trap: `revoke` refuses owner rows by its own rule
+    # ("transfer ownership first"), so a second owner could never be taken back, and a
+    # later transfer would leave two owner rows behind. One owner, one door: transfer.
+    if request.role not in ("editor", "viewer"):
+        raise HTTPException(
+            status_code=400,
+            detail="Role must be 'editor' or 'viewer' — ownership moves through transfer",
+        )
     if not state.prompt_sessions_api:
         raise HTTPException(status_code=503, detail="Database not available")
     uid = get_user_id_from_header(x_user_id)
@@ -914,6 +946,11 @@ async def grant_session_permission(
             raise HTTPException(status_code=404, detail="Session not found")
         if str(row["user_id"]) != uid:
             raise HTTPException(status_code=403, detail="Only the owner can grant permissions")
+        # A PERMISSION ROW MUST NAME A REAL USER — `session_permissions.user_id` has an FK
+        # to `users`, so a UUID that is not one answers an opaque 500; this answers by name.
+        cursor.execute("SELECT 1 AS present FROM users WHERE id = %s", (request.user_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"No user {request.user_id}")
         cursor.execute(
             """
             INSERT INTO session_permissions (session_id, user_id, role, granted_by)
@@ -984,7 +1021,19 @@ async def transfer_session_ownership(
     request: TransferOwnershipRequest,
     x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
-    """Transfer package ownership to another user (owner-only). Previous owner keeps 'editor'."""
+    """Transfer package ownership to another user (owner-only). Previous owner keeps 'editor'.
+
+    THE CONTENT POLICY A TRANSFER EMBODIES — REFERENCE POINTER (2026-10-04, the owner's
+    assistant's decision matrix; the recommended strategy, and this is what the code
+    already did): the row's metadata rides along UNTOUCHED — including
+    `builder_project_id` for a bridged product package — so the tool's project stays
+    where it is and the new owner's card opens the same workspace. Nothing is spread
+    out: conversation, versions and permissions all hang off `session_id`.
+    THE DEEP-COPY PATH IS A NAMED SEAM, NOT BUILT: it would call the tool's export/import
+    (the transfer code the engine already produces), create a project of the new owner's
+    own, and repoint `builder_project_id`/`builder_preview_url` — a cross-system
+    transaction and a product decision, recorded here so it is not re-derived.
+    """
     if not state.prompt_sessions_api:
         raise HTTPException(status_code=503, detail="Database not available")
     uid = get_user_id_from_header(x_user_id)
@@ -998,6 +1047,14 @@ async def transfer_session_ownership(
             raise HTTPException(status_code=404, detail="Session not found")
         if str(row["user_id"]) != uid:
             raise HTTPException(status_code=403, detail="Only the owner can transfer ownership")
+        # A TRANSFER MUST NAME A REAL USER (2026-10-04) — the FK answers a UUID that is not
+        # one with an opaque 500; and handing a package to its own owner is a no-op that
+        # should say so, not run three writes to change nothing.
+        if request.new_owner_id == uid:
+            raise HTTPException(status_code=400, detail="The package already belongs to that user")
+        cursor.execute("SELECT 1 AS present FROM users WHERE id = %s", (request.new_owner_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"No user {request.new_owner_id}")
         # New owner takes over the row + gets owner permission
         cursor.execute(
             "UPDATE prompt_sessions SET user_id = %s, updated_at = NOW() WHERE id = %s",
@@ -1313,5 +1370,3 @@ async def search_prompt_sessions(
         raise HTTPException(
             status_code=500, detail=f"Error searching prompt sessions: {e!s}"
         )
-
-

@@ -67,6 +67,13 @@ body {
 :root {
   --chat-bg: #F7F8F2;
   --chat-text: #171717;
+  /* THE OWNER'S GREEN-VS-CARD CORRECTION, 2026-10-04: *"you changed the wrong thing. You
+     changed the frame around it. What you needed to change was the interior area of grace.
+     Just this one slot. And you'll want to change back the frame to the green."* So the
+     frame's fills stay the drawing's #CBE6E3 (an earlier pass painted THEM, wrongly), and
+     the ONE fill that moved is Grace's own card in chat-header (.shell, values.card.fill) —
+     default #F7F8F3 now, results state unchanged at #F7F8F2. The bubble keeps the drawing's
+     #CBE6E3 too. One slot, on the owner's word. */
   --chat-user-bg: #CBE6E3;
   --chat-rule: transparent;
 }

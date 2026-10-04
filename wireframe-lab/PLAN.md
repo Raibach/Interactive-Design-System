@@ -313,7 +313,9 @@ Three consequences to hold, in the order they constrain the build:
 2. **The design → composer connection is the CATALOG, and it already exists**: catalogs are files
    under `frontend/src/components/A2UI/catalogs/<system>/`, the id rides the envelope
    (`createSurface.catalogId`; `shared/a2ui-envelope.ts` reads it), and the server resolves it per
-   surface (`a2ui_catalog`, `a2ui_catalog_id`, `a2ui_catalog_for` in `backend/routes/ai.py`). The
+   surface (`a2ui_catalog`, `a2ui_catalog_id`, `a2ui_catalog_for` — defined in
+   `backend/deps.py`, imported by `routes/ai.py`; corrected against the tree 2026-10-03, this
+   line had placed them in `ai.py`). The
    Figma ingest (`backend/routes/figma.py` + the design room's `figma-ingest-form`) is what CREATES
    a system; the draft is one of the things that READS one. So "create new repository / new design
    system" is the design room's job over the same partitions the composer consumes — one mechanism,

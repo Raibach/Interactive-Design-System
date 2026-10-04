@@ -290,19 +290,25 @@ export function resolveTag(name: string, system?: string | null): string | null 
     // in _build will verify it's actually defined.
     return name;
   }
-  // 5. The allowlist — names that map to a real design-system element
+  /*
+   * 5. THE CHOSEN SYSTEM'S OWN TABLE FIRST (2026-10-03 — THE WALL). A design system's catalogue
+   * is the authority for its own session, and its name→tag table is its own file: the partition's
+   * `registry.json` (DATA, fetched — see shared/a2uiRegistries.ts — because a bundle is built
+   * before a system is ingested and a runtime-written `.ts` can never be imported). The owner's
+   * rule, stated when the second system landed (PLANS.AGENT/multiple-catalogs.md §9/§10): a
+   * foreign catalogue needs its OWN resolver — *"the registries"* are the wall — so an ingested
+   * system's names never resolve through the app's allowlist below, and nothing of that system
+   * was ever written into it.
+   */
+  const systemTag = systemTagFor(name, system);
+  if (systemTag) return systemTag;
+  // 6. The allowlist — the PROMPT-COMPOSER catalogue's own names (its own file, by the same
+  // wall). With no system given — or one of the app's own catalogues — the app's tables are the
+  // session's tables, which is a real answer and the default everywhere.
   const registry = TAG_REGISTRY as unknown as Record<string, { tag?: string } | undefined>;
   const entry = registry[pascalToKebab(name)];
   if (entry?.tag) return entry.tag;
-  /*
-   * 6. THE PARTITION'S OWN MAP — consulted LAST, and the order is deliberate. The tables above are
-   * the bundle's inventory of what this app can actually draw, and a design system's fetched
-   * `registry.json` (DATA, never a bundled `.ts` — see shared/a2uiRegistries.ts) must not be able to
-   * hijack a name the app already resolves. A system's NEW names exist nowhere else, so this is
-   * where they resolve — and a name that resolves to nothing the app draws is the CALLER's refusal,
-   * by name (the drafting canvas says both sentences).
-   */
-  return systemTagFor(name, system);
+  return null;
 }
 
 /**

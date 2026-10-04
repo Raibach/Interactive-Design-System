@@ -1,0 +1,567 @@
+{
+  "title": "Carbon (generated)",
+  "catalogId": "https://raibach.net/a2ui/catalogs/carbon/v0_9_1/catalog.json",
+  "whatThisFileIs": "Written by scripts/prepare_design_system.mjs on 2026-10-03T21:17:31 from Carbon's own Custom Elements Manifest. Props are MEASURED from it (unmappable ones left out, printed by the run); the accept list of that run is the person-directed act that flips draft to true. The elements themselves are the vendor package’s own Lit components — nothing is copied.",
+  "components": {
+    "cds-button": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Button. Generated from Carbon's own Custom Elements Manifest (the frontend/node_modules/@carbon/web-components/custom-elements.json the package ships) by scripts/prepare_design_system.mjs — types MEASURED, unmappable props left out.",
+          "properties": {
+            "component": {
+              "const": "cds-button"
+            },
+            "autofocus": {
+              "type": "boolean"
+            },
+            "batch-action": {
+              "type": "boolean"
+            },
+            "danger-description": {
+              "type": "string"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "download": {
+              "type": "string"
+            },
+            "has-main-content": {
+              "type": "boolean"
+            },
+            "href": {
+              "type": "string"
+            },
+            "hreflang": {
+              "type": "string"
+            },
+            "isExpressive": {
+              "type": "boolean"
+            },
+            "isSelected": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "link-role": {
+              "type": "string"
+            },
+            "openTooltip": {
+              "type": "boolean"
+            },
+            "ping": {
+              "type": "string"
+            },
+            "rel": {
+              "type": "string"
+            },
+            "size": {
+              "type": "string"
+            },
+            "tab-index": {
+              "type": "number"
+            },
+            "target": {
+              "type": "string"
+            },
+            "tooltip-alignment": {
+              "type": "string"
+            },
+            "tooltip-position": {
+              "type": "string"
+            },
+            "tooltip-text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "frontend/node_modules/@carbon/web-components/custom-elements.json#cds-button",
+        "at": "2026-10-03T21:17:31"
+      },
+      "accepted": {
+        "at": "2026-10-03T21:17:31",
+        "by": "accept list of this generation run (person-directed)"
+      }
+    },
+    "cds-card": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Card — composable container component. Generated from Carbon's own Custom Elements Manifest (the frontend/node_modules/@carbon/web-components/custom-elements.json the package ships) by scripts/prepare_design_system.mjs — types MEASURED, unmappable props left out.",
+          "properties": {
+            "component": {
+              "const": "cds-card"
+            },
+            "clickable": {
+              "type": "boolean"
+            },
+            "density": {
+              "type": "string"
+            },
+            "horizontal": {
+              "type": "boolean"
+            },
+            "media-position": {
+              "type": "string"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "download": {
+              "type": "string"
+            },
+            "href": {
+              "type": "string"
+            },
+            "hreflang": {
+              "type": "string"
+            },
+            "inline": {
+              "type": "boolean"
+            },
+            "link-role": {
+              "type": "string"
+            },
+            "ping": {
+              "type": "string"
+            },
+            "rel": {
+              "type": "string"
+            },
+            "size": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "visited": {
+              "type": "boolean"
+            },
+            "children": {
+              "type": "object",
+              "properties": {
+                "default": {
+                  "type": "array"
+                },
+                "decorator": {
+                  "type": "array"
+                },
+                "footer-icon": {
+                  "type": "array"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "frontend/node_modules/@carbon/web-components/custom-elements.json#cds-card",
+        "at": "2026-10-03T21:17:31"
+      },
+      "accepted": {
+        "at": "2026-10-03T21:17:31",
+        "by": "accept list of this generation run (person-directed)"
+      }
+    },
+    "cds-checkbox": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Check box. Generated from Carbon's own Custom Elements Manifest (the frontend/node_modules/@carbon/web-components/custom-elements.json the package ships) by scripts/prepare_design_system.mjs — types MEASURED, unmappable props left out.",
+          "properties": {
+            "component": {
+              "const": "cds-checkbox"
+            },
+            "checked": {
+              "type": "boolean"
+            },
+            "data-table": {
+              "type": "boolean"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "hide-checkbox": {
+              "type": "boolean"
+            },
+            "hide-label": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "indeterminate": {
+              "type": "boolean"
+            },
+            "label-text": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "readonly": {
+              "type": "boolean"
+            },
+            "invalid": {
+              "type": "boolean"
+            },
+            "title": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "warn": {
+              "type": "boolean"
+            },
+            "warn-text": {
+              "type": "boolean"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "frontend/node_modules/@carbon/web-components/custom-elements.json#cds-checkbox",
+        "at": "2026-10-03T21:17:31"
+      },
+      "accepted": {
+        "at": "2026-10-03T21:17:31",
+        "by": "accept list of this generation run (person-directed)"
+      }
+    },
+    "cds-select": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Select box. Generated from Carbon's own Custom Elements Manifest (the frontend/node_modules/@carbon/web-components/custom-elements.json the package ships) by scripts/prepare_design_system.mjs — types MEASURED, unmappable props left out.",
+          "properties": {
+            "component": {
+              "const": "cds-select"
+            },
+            "isFluid": {
+              "type": "boolean"
+            },
+            "autofocus": {
+              "type": "boolean"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "helper-text": {
+              "type": "string"
+            },
+            "hide-label": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "invalid": {
+              "type": "boolean"
+            },
+            "invalid-text": {
+              "type": "string"
+            },
+            "warn": {
+              "type": "boolean"
+            },
+            "warn-text": {
+              "type": "string"
+            },
+            "label-text": {
+              "type": "string"
+            },
+            "label-styles-disable": {
+              "type": "boolean"
+            },
+            "inline": {
+              "type": "boolean"
+            },
+            "multiple": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "readonly": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "required-validity-message": {
+              "type": "string"
+            },
+            "selectedIndex": {
+              "type": "number"
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "frontend/node_modules/@carbon/web-components/custom-elements.json#cds-select",
+        "at": "2026-10-03T21:17:31"
+      },
+      "accepted": {
+        "at": "2026-10-03T21:17:31",
+        "by": "accept list of this generation run (person-directed)"
+      }
+    },
+    "cds-text-input": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Text Input element. Supports all the usual attributes for textual input types Generated from Carbon's own Custom Elements Manifest (the frontend/node_modules/@carbon/web-components/custom-elements.json the package ships) by scripts/prepare_design_system.mjs — types MEASURED, unmappable props left out.",
+          "properties": {
+            "component": {
+              "const": "cds-text-input"
+            },
+            "autocomplete": {
+              "type": "string"
+            },
+            "autofocus": {
+              "type": "boolean"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "enable-counter": {
+              "type": "boolean"
+            },
+            "helper-text": {
+              "type": "string"
+            },
+            "invalid-text": {
+              "type": "string"
+            },
+            "warn": {
+              "type": "boolean"
+            },
+            "warn-text": {
+              "type": "string"
+            },
+            "hide-label": {
+              "type": "boolean"
+            },
+            "label": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "readonly": {
+              "type": "boolean"
+            },
+            "hidePasswordLabel": {
+              "type": "string"
+            },
+            "showPasswordLabel": {
+              "type": "string"
+            },
+            "show-password-visibility-toggle": {
+              "type": "boolean"
+            },
+            "size": {
+              "type": "string"
+            },
+            "isFluid": {
+              "type": "boolean"
+            },
+            "inline": {
+              "type": "boolean"
+            },
+            "tooltipAlignment": {
+              "type": "string"
+            },
+            "tooltipDirection": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            },
+            "invalid": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "required-validity-message": {
+              "type": "string"
+            },
+            "validity-message": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "frontend/node_modules/@carbon/web-components/custom-elements.json#cds-text-input",
+        "at": "2026-10-03T21:17:31"
+      },
+      "accepted": {
+        "at": "2026-10-03T21:17:31",
+        "by": "accept list of this generation run (person-directed)"
+      }
+    },
+    "cds-textarea": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Text area. Generated from Carbon's own Custom Elements Manifest (the frontend/node_modules/@carbon/web-components/custom-elements.json the package ships) by scripts/prepare_design_system.mjs — types MEASURED, unmappable props left out.",
+          "properties": {
+            "component": {
+              "const": "cds-textarea"
+            },
+            "counter-mode": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "number"
+            },
+            "autocomplete": {
+              "type": "string"
+            },
+            "autofocus": {
+              "type": "boolean"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "enable-counter": {
+              "type": "boolean"
+            },
+            "helper-text": {
+              "type": "string"
+            },
+            "invalid-text": {
+              "type": "string"
+            },
+            "warn": {
+              "type": "boolean"
+            },
+            "warn-text": {
+              "type": "string"
+            },
+            "hide-label": {
+              "type": "boolean"
+            },
+            "label": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "readonly": {
+              "type": "boolean"
+            },
+            "hidePasswordLabel": {
+              "type": "string"
+            },
+            "showPasswordLabel": {
+              "type": "string"
+            },
+            "show-password-visibility-toggle": {
+              "type": "boolean"
+            },
+            "isFluid": {
+              "type": "boolean"
+            },
+            "inline": {
+              "type": "boolean"
+            },
+            "invalid": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "required-validity-message": {
+              "type": "string"
+            },
+            "validity-message": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "frontend/node_modules/@carbon/web-components/custom-elements.json#cds-textarea",
+        "at": "2026-10-03T21:17:31"
+      },
+      "accepted": {
+        "at": "2026-10-03T21:17:31",
+        "by": "accept list of this generation run (person-directed)"
+      }
+    }
+  }
+}

@@ -37,8 +37,8 @@ Three placements, locked by the owner 2026-10-02, and each has a different job:
 
 | place | state | what it is |
 |---|---|---|
-| **Design** (top nav) | live — the Figma ingest form and the catalog browser are already there (the partitions list with their counts: `design-artifacts 62`, `ecommerce 38`, `primitives 7`, `prompt-composer 60`) | **CATALOG MANAGEMENT, AND THE INGEST'S HOME.** *"Design will manage the input and control of catalogs and design system resources… we can add that ingest function to our current Figma ingest function."* The **Add Design System** upload lands here, beside the Figma hooks — and it must say which catalogue it is creating, never assume: creating a NEW partition is the action, and no code path may write into an existing one. **The system catalogues stay locked**: *"System catalogues like our current lit catalog will be only available to people with high-level permission."* |
-| **Product** (top nav) | **THE ROOM IS LIVE — Slice A landed and driven, 2026-10-03** (the tab, `render-product`, the stage with the tray and the strip; see `PLANS.AGENT/session-notes-2026-10-03.md` and `PRODUCT-ROOM.md` §4) | **THE PRIMARY WORKSPACE, and its DEFAULT VIEW IS THE DRAFT.** *"The product person will enter their business requirements in the prompt section just like the composer… but instead of outputting the agent orchestration canvas it would automatically load the drafting wireframe output."* The door is the owner's own shape (2026-10-03): *"clicking on the tab in the top navigation is the creation of a session"* — `render-product` alone is a server-side get-or-create, the console's and the design room's own shape. The design-system picker and the palette live here — both landed. Slice B (the speaking) and Slice C (Submit → the queue) are next. |
+| **Design** (top nav) | live — the Figma ingest form and the catalog browser are already there (the partitions list with their counts, measured 2026-10-03: `agnosticui 1`, `design-artifacts 63`, `ecommerce 38`, `kor 1`, `primitives 7`, `prompt-composer 63`) | **CATALOG MANAGEMENT, AND THE INGEST'S HOME.** *"Design will manage the input and control of catalogs and design system resources… we can add that ingest function to our current Figma ingest function."* The **Add Design System** upload lands here, beside the Figma hooks — and it must say which catalogue it is creating, never assume: creating a NEW partition is the action, and no code path may write into an existing one. **The system catalogues stay locked**: *"System catalogues like our current lit catalog will be only available to people with high-level permission."* |
+| **Product** (top nav) | **THE ROOM IS LIVE — Slice A landed and driven, 2026-10-03** (the tab, `render-product`, the stage with the tray and the strip; see `PLANS.AGENT/session-notes-2026-10-03.md` and `PRODUCT-ROOM.md` §4) | **THE PRIMARY WORKSPACE, and its DEFAULT VIEW IS THE DRAFT.** *"The product person will enter their business requirements in the prompt section just like the composer… but instead of outputting the agent orchestration canvas it would automatically load the drafting wireframe output."* The door is the owner's own shape (2026-10-03): *"clicking on the tab in the top navigation is the creation of a session"* — `render-product` alone is a server-side get-or-create, the console's and the design room's own shape. The design-system picker and the palette live here — both landed. Slice B (the speaking) and Slice C (Submit → the queue) are next. **⚠️ SUPERSEDED 2026-10-04: the room is the app builder now (this row is the historical record) — see `PRODUCT-TEAM-SOLUTION.md` §1.** |
 | **Composer** | live — the draft is its output column's third view (S1a/S1b) | **THE DEVELOPER/ORCHESTRATION SIDE, and the second copy of the build.** *"Instead of streaming an active backend execution graph (the orchestration view used by developers in the Composer)…"* — the run canvas stays what it is here; the draft is its third view, which is also where the authoring/testing side of this build lives. |
 
 **And one fact none of the three has today: the permission.** *"System catalogues… only available to
@@ -53,6 +53,15 @@ three audiences — catalogue management in Design, the product team's workspace
 developer's orchestration view in the Composer — and the catalogues stay partitioned either way.
 
 ## The plan, and where the effort stands
+
+> **⚠️ THE PRODUCT ROOM CHANGED ERA ON 2026-10-04 — READ `PRODUCT-TEAM-SOLUTION.md` FIRST.**
+> The room is the app builder now (the whole tool embedded, its projects bridged to the console
+> as packages, the dashboard unreachable, no Grace seat in that room). **`PRODUCT-TEAM-SOLUTION.md`
+> is the forward plan for the product team's solution** — what stands, the next builds in order,
+> where everything lives, and the owner's open questions. `PRODUCT-ROOM.md` is the record of how
+> it got here (its §10/§11 are the latest). Everything below in THIS file that speaks of the
+> node-era room — the tray, the drag, the palette, `render-product` — is the historical record
+> and the Composer's own; the node-era stage is parked, unwired (see `PRODUCT-ROOM.md` §9).
 
 **`PLAN.md`** — the blueprint: what the feature is, the three mechanisms against this tree (the
 component ingestion loop, the assembly mapper, the drag/tray capture), the palette-as-a-subset
@@ -144,6 +153,24 @@ Open, in the order they matter:
    re-assembles. The palette's first set is ten components, marked `draft: true`, computed by the one
    server-side filter the Slice-B compiler will read — **the owner's word on the list is owed**
    (`PLANS.AGENT/session-notes-2026-10-03.md` §5.1). Remove (a delete gesture) is not built yet.
+7. **The catalog home, settled; the wall, landed; instance #2 in (2026-10-03, evening).** The
+   `catalogs/` question is decided and recorded (the lab is the source; the app tree holds one
+   symlink per partition), and **the owner's wall is built and proven**: each ingested system
+   carries its own registry — a registry module with its Lit tree, its own `registry.json` name→tag
+   table, its own lit tree — nothing of a system in the app's shared files, and a session's model
+   context carries the session's own catalogue. Kor is instance #2, end to end (see
+   `catalogs/README.md` and `PLANS.AGENT/session-notes-2026-10-03.md` §11). **Slice B LANDED THE
+   SAME EVENING — Grace builds the wireframe** (`PRODUCT-ROOM.md` §7, and it was driven): the
+   room draws from ONE declared system (`_PRODUCT_ROOM_DESIGN_SYSTEM = "kor"` — the owner removed
+   the chooser itself: *"they don't need to select anything"*; the application's catalogues never
+   appear in the room), the compile (`POST /api/ai/assemble-wireframe`) builds a whole layout
+   from that system's OWN catalogue with every name and prop validated against it, her
+   `[Build that]` offer is one press, and the drag retires in this room (`movable: false`) — the
+   person moves things by telling her. **Open beside it:** Grace loading libraries in the
+   background (`prepare_design_system.py` — the person never selects); a per-partition audit
+   (the rail's row reads "not measured yet" until a system's catalogue has its own checker);
+   Slice C (Submit → the queue); the demo's allowlist entry whenever a publish is approved; and
+   the owed word on the palette's first set.
 
 ## The code, one paragraph
 

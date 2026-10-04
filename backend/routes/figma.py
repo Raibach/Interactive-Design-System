@@ -76,7 +76,19 @@ _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
 _PROP_TYPES = {"string", "number", "boolean", "object", "array"}
 
 
+# WHERE THE PARTITION IS WRITTEN, AND WHERE THE APP READS IT (owner, 2026-10-03). The lab is the
+# SOURCE: `wireframe-lab/catalogs/<id>/` holds the real `catalog.json` + `registry.json` (the
+# decision is recorded in `wireframe-lab/catalogs/README.md`). The app tree holds ONE SYMLINK per
+# partition — `frontend/src/components/A2UI/catalogs/<id>` — which is what keeps every existing
+# reader (deps.py's scan, the bundle's `import.meta.glob`, the audit) reading the same path it
+# always has. The two are written together by the ingest and never diverge: one writer per fact.
 def _catalogs_dir() -> str:
+    """The lab — where a partition's files really live."""
+    return os.path.join(os.path.dirname(__file__), "..", "..", "wireframe-lab", "catalogs")
+
+
+def _app_catalogs_dir() -> str:
+    """The app tree — where each partition's symlink makes it readable."""
     return os.path.join(
         os.path.dirname(__file__), "..", "..", "frontend", "src", "components", "A2UI", "catalogs"
     )
@@ -184,11 +196,17 @@ async def ingest_design_system(
 
     catalogs = _catalogs_dir()
     partition = os.path.join(catalogs, system_id)
-    if os.path.exists(partition):
+    link = os.path.join(_app_catalogs_dir(), system_id)
+    # BOTH HALVES ARE CHECKED: the real directory in the lab AND its symlink in the app tree. A
+    # leftover of either half is still a partition that exists, and the retry is refused, naming
+    # the half that was found.
+    if os.path.exists(partition) or os.path.lexists(link):
+        present = partition if os.path.exists(partition) else link
         raise HTTPException(
             status_code=409,
-            detail=f"a catalogue partition named '{system_id}' already exists — creating a NEW one "
-                   "is the action, and nothing writes into a catalogue that is already there",
+            detail=f"a catalogue partition named '{system_id}' already exists ({present}) — "
+                   "creating a NEW one is the action, and nothing writes into a catalogue that "
+                   "is already there",
         )
 
     stamp = datetime.now().isoformat(timespec="seconds")
@@ -245,13 +263,116 @@ async def ingest_design_system(
             detail=f"the partition could not be written at {partition}: {write_error}",
         )
 
+    # THE LINK IS PART OF THE PARTITION, not a convenience beside it: a real directory the app
+    # tree does not point at is a partition no reader can see. The target is COMPUTED (relpath),
+    # so the two halves cannot drift apart the day one of them moves; and a failure here says
+    # exactly which half exists and which does not.
+    try:
+        os.symlink(os.path.relpath(partition, os.path.dirname(link)), link)
+    except OSError as link_error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"the partition is written at {partition} but its symlink at {link} could not "
+                   f"be created ({link_error}) — the app cannot see the partition until that link "
+                   "exists; remove the directory and retry, or create the link by hand",
+        )
+
     return {
         "system": system_id,
         "label": system_label,
-        "partition": f"catalogs/{system_id}",
+        "partition": f"wireframe-lab/catalogs/{system_id}",
+        "appTreeLink": f"catalogs/{system_id} (symlink)",
         "components": [entry["name"] for entry in parsed],
         "entries": "proposed (draft: false) — an authorized person accepts each one",
         "registry": "empty — nothing from this system is implemented yet",
+    }
+
+
+# ── ACCEPT: THE ACT THE INGEST CANNOT DO FOR ITSELF ─────────────────────────────────────────────
+# The ingest writes every entry PROPOSED (`"draft": false`) — "an authorized person accepts each
+# one, the ingest never does" (the law above). This route is that person's act: ONE proposed entry
+# of ONE ingested partition becomes placeable (`"draft": true`), the single marker the room's
+# palette filter (`_draft_safe_palette`, routes/ai.py) reads — so the tray and the compiler see it
+# the moment this returns. Who/when is written onto the entry itself, beside the ingest's own
+# `proposed` mark, and the system catalogues are never opened: their markers are hand
+# declarations, reviewed in git, exactly like the ingest states.
+_ACCEPT_SYSTEM_CATALOGUES = {"prompt-composer", "design-artifacts", "ecommerce", "primitives"}
+
+
+@router.post("/api/catalog/{system}/accept")
+async def accept_catalog_entry(
+    system: str,
+    request: dict,
+    http_request: Request,
+):
+    """One proposed entry becomes placeable. A person's act; the ingest only proposes."""
+    name = str((request or {}).get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="accept needs the component's name in the body")
+    if system in _ACCEPT_SYSTEM_CATALOGUES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"'{system}' is a system catalogue — its entries are hand declarations, reviewed in "
+                "git, and a runtime write never opens them. This route accepts entries of INGESTED "
+                "partitions only."
+            ),
+        )
+    catalog_path = os.path.join(_catalogs_dir(), system, "catalog.json")
+    if not os.path.isfile(catalog_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"there is no partition named '{system}' — nothing was accepted",
+        )
+    try:
+        with open(catalog_path) as catalog_file:
+            catalog = json.load(catalog_file)
+    except (OSError, json.JSONDecodeError) as read_error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"the catalogue '{system}' could not be read: {read_error}",
+        )
+    components = catalog.get("components")
+    if not isinstance(components, dict) or name not in components:
+        raise HTTPException(
+            status_code=404,
+            detail=f"'{name}' is not an entry of '{system}' — nothing was accepted",
+        )
+    entry = components[name]
+    marker = entry.get("draft") if isinstance(entry, dict) else None
+    if marker is True:
+        already = (entry.get("accepted") or {}).get("at") or "an earlier accept"
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{name}' is already accepted — it has been placeable since {already}",
+        )
+    if marker is not False:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"'{name}' carries no proposal marker (draft is {marker!r}), so it is not an ingest "
+                "proposal this route may accept"
+            ),
+        )
+    actor = _resolve_actor(http_request)
+    accepted_at = datetime.now().isoformat(timespec="seconds")
+    entry["draft"] = True
+    entry["accepted"] = {"at": accepted_at, "by": actor}
+    try:
+        with open(catalog_path, "w") as catalog_file:
+            json.dump(catalog, catalog_file, indent=2, ensure_ascii=False)
+            catalog_file.write("\n")
+    except OSError as write_error:
+        raise HTTPException(
+            status_code=500, detail=f"the acceptance could not be written: {write_error}"
+        )
+    print(f"[catalog] accepted {system}/{name} by {actor}")
+    return {
+        "system": system,
+        "name": name,
+        "draft": True,
+        "accepted": entry["accepted"],
+        "note": "placeable now — the room's palette reads this marker",
     }
 
 

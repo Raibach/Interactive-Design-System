@@ -33,7 +33,25 @@ export class WorkspaceLayout extends LitElement {
     // distinction lives.
     isThirdOpen: { type: Boolean, attribute: 'is-third-open', noAccessor: true },
     leftCollapsed: { type: Boolean, attribute: 'left-collapsed', reflect: true, noAccessor: true },
+    chatLoadWidth: { type: Number, attribute: 'chat-load-width' },
   };
+
+  /**
+   * THE ROOM'S LOAD WIDTH FOR HER COLUMN (2026-10-03) — a DECLARED room fact, the same kind of
+   * fact `movable` is on the stage: the room says how wide she STANDS, not how wide she MAY be.
+   *
+   * 0 (the default) keeps this element's own rule: a package nobody has adjusted opens her at
+   * the EQUAL split — the owner's 2026-09-18 design for the composer's prompt|her pair ("they
+   * should be equal on both sides… let's just do percentages and then let the user expand"), and
+   * that design is untouched.
+   *
+   * A room that declares a width opens her THERE instead. The Product room sends 700, on the
+   * owner's word from its first real session: *"reduce the size of Grace Chat panel — 700px.
+   * No, that's not a fixed width, that's just a width on load; the user can of course resize it
+   * and do whatever they want."* The moment a hand drags her, `_rightIsOperatorSet` wins and
+   * nothing here re-asserts: the declaration only says where she stands before anyone moves her.
+   */
+  declare chatLoadWidth: number;
 
   /**
    * THE LEFT COLUMN, SAME LAW AS THE RIGHT: the payload may set it, the operator
@@ -226,10 +244,15 @@ export class WorkspaceLayout extends LitElement {
   private static readonly MIN_RIGHT_PX =
     WorkspaceLayout.MIN_CHAT_PX + WorkspaceLayout.GRIP_CHAT_PX;
   /**
-   * HER COLUMN'S OPEN WIDTH — the design's 650, and the width she returns to when the rail
-   * opens her again (the owner's number, 2026-09-18).
+   * HER COLUMN'S OPEN WIDTH — the width she loads at and returns to when the rail opens her
+   * again. The owner's number, twice: 650 (2026-09-18, the design), re-set to 700 on the
+   * product room's first real session (2026-10-03): *"reduce the size of Grace Chat panel —
+   * 700px. No, that's not a fixed width, that's just a width on load; the user can of course
+   * resize it and do whatever they want."* THIS IS THE LOAD WIDTH ONLY: a drag is still the
+   * operator's (`_rightIsOperatorSet`), and the saved-width path (`setColumnWidths`) is
+   * untouched — 700 is simply where she stands before a hand moves her.
    */
-  private static readonly OPEN_CHAT_PX = 650;
+  private static readonly OPEN_CHAT_PX = 700;
   /**
    * HER SHARE OF THE ROOM WHEN SHE IS A LAYER OVER A DRAWING — the drawing takes the other
    * two thirds. See the note at `rightStyle`: what she covers is the thing being worked, and
@@ -299,6 +322,7 @@ export class WorkspaceLayout extends LitElement {
     super();
     this.isThirdOpen = true;
     this.leftCollapsed = false;
+    this.chatLoadWidth = 0;
   }
 
   /**
@@ -1755,7 +1779,11 @@ export class WorkspaceLayout extends LitElement {
     // AND ONLY WHEN SHE IS OPEN. A closed column is its floor — the rail plus the spacer — and
     // that is not a share of anything. (Caught by the layer test: without the open check, a
     // closed column kept a share and drew itself as most of the drawing with the rail inside it.)
-    const equal = !this._rightIsOperatorSet && this.isThirdOpen;
+    // THE ROOM'S DECLARED LOAD WIDTH ENDS THE EQUAL SPLIT FOR THAT ROOM (2026-10-03) — the
+    // owner, on the product room: *"We don't do equal split on this because we need more canvas
+    // space than we do chat space."* A room that declares `chatLoadWidth` opens her there; the
+    // composer, which declares nothing, keeps its 2026-09-18 equal pair untouched.
+    const equal = !this._rightIsOperatorSet && this.isThirdOpen && !(this.chatLoadWidth > 0);
     /*
      * HER TWO FORMS, AND WHY THEY NO LONGER TELEPORT INTO EACH OTHER.
      *
@@ -1902,6 +1930,19 @@ export class WorkspaceLayout extends LitElement {
   /** A change to the column's state is also a change to what the panel is told. */
   protected updated(changed: Map<string, unknown>): void {
     if (changed.has('isThirdOpen')) this._syncRightPanel();
+    /*
+     * THE ROOM'S DECLARED LOAD WIDTH LANDS ONCE, BEFORE ANY HAND (see the `chatLoadWidth` note
+     * on the property block): when the declaration arrives and nobody has claimed her column,
+     * it becomes the number her pane is drawn from — the same field a drag writes, so there is
+     * ONE width, whoever set it. A declared 0 is the element's own rule and writes nothing.
+     */
+    if (changed.has('chatLoadWidth') && this.chatLoadWidth > 0 && !this._rightIsOperatorSet) {
+      const declared = Math.round(this.chatLoadWidth);
+      if (this._rightPx !== declared) {
+        this._rightPx = declared;
+        this.requestUpdate();
+      }
+    }
   }
 }
 

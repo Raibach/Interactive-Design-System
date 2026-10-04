@@ -69,6 +69,14 @@ export default defineConfig({
     port: 5001,           // the site — vite serves source LIVE here, never a build
     strictPort: true,     // if 5001 is taken, fail. Never silently use another port.
     hmr: false,
+    // ── THE LAB IS THE SOURCE; THE APP TREE HOLDS SYMLINKS (owner, 2026-10-03) ──────────────
+    // `wireframe-lab/catalogs/<system>/` holds each ingested partition's real files, and
+    // `frontend/src/components/A2UI/catalogs/<system>` is a symlink to it (the decision is
+    // recorded in wireframe-lab/catalogs/README.md). Vite resolves every link to its real path,
+    // which is OUTSIDE this workspace (the root is `frontend/`) — so without this line the dev
+    // server refuses to serve the catalogue JSON read through a link (the room's fetches and
+    // the `import.meta.glob` modules both 403). Builds are unaffected: Rollup follows links.
+    fs: { allow: ['..'] },
     // The in-app browser reuses module responses from its HTTP cache even
     // across reloads and cache-busted URLs, so edits silently never reach
     // the screen. no-store (not no-cache) forbids storing them at all:

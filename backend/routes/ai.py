@@ -87,6 +87,30 @@ DESIGN_TABS = "chat,trace,tools,executions,eval,repair,settings"
 # tab its list names.
 PRODUCT_TABS = "chat,trace,tools"
 
+# THE GOVERNANCE ROOM'S RAIL. The governance role's own declared tabs (`role_caps.py`: trace,
+# approvals) — approvals is where the console operator's review lives, and the governance seat
+# is the only other one that offers it.
+GOVERNANCE_TABS = "trace,approvals"
+
+
+# ── WHO SHE IS IN THE GOVERNANCE ROOM, STATED BY THE ROOM (2026-10-03) ──────────────────────────
+# The owner: *"it's a great way to test our system for me to observe the governance of the
+# system's performance — to see what kind of cost is generated using a pro model from a cloud,
+# because the ultimate objective of the application is to reduce token costs."* Her words here
+# are composed WITH the day's real numbers at assembly time (see the numbers block appended in
+# the branch) — a governance assistant who cannot read the ledger would be a stranger talking
+# about money.
+GOVERNANCE_GRACE_INSTRUCTIONS = """\
+You are Grace, and this is the Governance room — the place where the system accounts for
+itself. The left column is the ledger: every model call the system has made today, with its
+mode, its model, its measured tokens and its latency; a cost appears only when the deployment
+has stated its prices, and an unpriced call says so rather than showing a zero.
+
+You answer about spend: what was called, on which model, at what mode, what it consumed, what
+it cost, and where the cost comes from. You do not change the ledger and you do not change
+models — the record is written where the call happens, and configuration is a person's act.
+"""
+
 
 # ── WHO SHE IS IN EACH ROOM, STATED BY THE ROOM ───────────────────────────────────────────────
 # THE OWNER, 2026-10-01: *"There are no fallbacks in the system."* Until this, only the design room
@@ -435,20 +459,30 @@ You do not write into a prompt from this room. Work on a prompt happens in the C
 package at a time, and this room is how the person finds it.
 """
 
-# THE PRODUCT ROOM'S OWN SCRIPT — the ideation workspace. What she is here the day this room
-# exists: the assistant of a person assembling wireframes out of one design system's approved
-# catalogue, on the stage beside her. THE COMPOSING OFFER (ask → press → the structure lands)
-# is declared with the assembler that backs it, not before — a room must not offer what it
-# cannot do.
+# THE PRODUCT ROOM'S OWN SCRIPT — the ideation workspace. The assistant of a person building
+# web pages out of their own words, on the stage beside her: SHE WRITES THE PAGE (POST
+# /api/ai/build-artifact) and the design is entirely her own (owner, 2026-10-03, clearing the
+# catalogue era out — *"I'm not interested in the carbon UI… those horrible styling kits… let
+# her create her own imaginary designs"*). No offers, no buttons, no catalogue vocabulary: the
+# stage follows the person's message, and she says plainly what she built.
 PRODUCT_GRACE_INSTRUCTIONS = """\
-You are Grace, and this is the product team's ideation workspace. The stage on the left is a
-wireframe the person is assembling out of the approved components of one design system — the
-design-system chooser in your panel names which catalogue it comes from. Nothing on that stage
-is free-hand: every piece of the wireframe is a real, registered component of that catalogue.
+You are Grace, and this is the product team's ideation workspace. The stage on the left is the
+page you are building for the person — real HTML/CSS that YOU write, from their own words. You
+are their development partner: they describe it, you build it, and you say plainly what you
+built.
 
-You do not write code from this room, and you do not change the stage directly. You help the
-person think: what the business requirement is, which catalogue fits it, what the wireframe
-should show, and what is missing from it.
+YOU DO THE BUILDING, BY CONVERSATION — AND THERE IS NO BUTTON. THE STAGE FOLLOWS THE PERSON'S
+MESSAGE: when they describe a page, a section or a change, it is built as they send it. You
+never offer a link, never ask permission, never say "shall I", and never present a button.
+Answer with what was built, plainly, and let them react.
+
+THE DESIGN IS YOURS (owner, 2026-10-03: *"let her create her own imaginary designs"*): the look
+of the page — layout, colour, type, spacing — is yours to imagine, as long as it is real
+HTML/CSS the stage can draw. There is no catalogue and no design system over this room; make
+something that looks genuinely good on your own terms.
+
+SAY WHAT YOU DID, SHORT: one or two plain sentences — what was built, and anything the person
+should know. If a request is ambiguous, make the sensible choice and say which one you made.
 """
 
 
@@ -598,6 +632,126 @@ def _draft_safe_palette(catalogue: dict[str, Any]) -> list[dict[str, str]]:
                 break
         palette.append({"name": name, "description": description})
     return sorted(palette, key=lambda item: item["name"].lower())
+
+
+def _session_catalog_vocabulary(system: str) -> str:
+    """The component list of THE SESSION'S OWN catalogue — a chosen design system's.
+
+    THE WALL, AND WHY THIS EXISTS (owner, 2026-10-03): a session that draws from an ingested
+    design system must be handed THAT SYSTEM'S catalogue, and nothing of the application's. The
+    owner watched the app hand the prompt-composer catalogue to the room's model for a session
+    that had chosen another system, and said so plainly: *"it was loading catalogs from our
+    directory for Grace… The applications catalog cannot be leveraged for this… I want to have
+    this partitioned."* So the session's components are read from ITS OWN catalogue file
+    (`a2ui_catalog_for(system)`), listed by name — the same line shape the app catalogue's
+    vocabulary uses, scoped to the one catalogue this session chose. An empty catalogue raises,
+    named: a session with nothing to draw from is a broken partition, not a shorter list.
+    """
+    components = (a2ui_catalog_for(system) or {}).get("components") or {}
+    if not components:
+        raise RuntimeError(
+            f"the catalogue '{system}' declares no components — refusing to assemble a prompt "
+            "for a session that draws from it. An empty partition is a failure, not a shorter list."
+        )
+    lines: list[str] = []
+    for name in sorted(components):
+        spec = components[name] or {}
+        props: list[str] = []
+        for part in list(spec.get("allOf") or []) + [spec]:
+            for prop, prop_spec in (part.get("properties") or {}).items():
+                if prop == "component":
+                    continue
+                if prop == "children" and isinstance(prop_spec, dict):
+                    slots = list((prop_spec.get("properties") or {}).keys())
+                    props.append(f"children {{{', '.join(slots)}}}" if slots else prop)
+                    continue
+                if prop not in props:
+                    props.append(prop)
+        lines.append(f"- {name}: {', '.join(props) if props else 'no properties'}")
+    return (
+        f"THE SESSION'S OWN DESIGN SYSTEM — '{system}' — its catalogue's components, read "
+        f"from this system's own catalogue file (the application's catalogue is not this "
+        f"session's):\n" + "\n".join(lines)
+    )
+
+
+# ── THE PRODUCT ROOM'S DESIGN SYSTEM — ONE, AND NOBODY SELECTS IT (owner, 2026-10-03, late) ─────
+# *"So I don't want the user to be able to select a catalogue. Let's just pick one that's most
+# compatible and use it. I'm removing that feature — they don't need to select anything."* And
+# earlier the same evening: *"the availability of these individual design systems is really what
+# I want to do. I wanna make that available to the product room's AI model… We can just
+# hardcode."* So there is no chooser, no list and no writer: the room draws from ONE design
+# system, and this is it. The loading is still hers — the room's assembly hands her this system's
+# own catalogue and the compile reads from it.
+#
+# CARBON — FLIPPED TO IT THE SAME NIGHT (owner: *"I really really wanted to use carbon by IBM"*).
+# Kor held the seat for a few hours and STAYS A PARTITION — unseated, not deleted; that is the
+# wall's whole point. Carbon is IBM's own, the modern @carbon/web-components package: real Lit 3,
+# its elements used AS-IS (the vendor's package, not copied source), a catalogue GENERATED from
+# the manifest it ships (scripts/prepare_design_system.mjs), and its theme complete out of the
+# box — the reason the room finally LOOKS like a design system instead of a skeleton.
+#
+# ONE LINE to change: this name. The partition must exist — the palette and vocabulary reads
+# below fail LOUD, with the path named, when it does not (deps.py's own rule).
+#
+# NOTHING of the application's appears in this room: the four system catalogues (prompt-composer,
+# design-artifacts, ecommerce, primitives) serve the application's own work — the partition works
+# both ways (owner, 2026-10-03: *"I can't use one of these other catalogs to work on the harness…
+# I'm restricted to only using the application's design system"*).
+_PRODUCT_ROOM_DESIGN_SYSTEM = "carbon"
+
+# ── THE SIZE LADDER (2026-10-03) ────────────────────────────────────────────────────────────────
+# The owner, watching a contact form render "1 inch wide": *"That's not a form size. Is she not
+# using any of her judgment?"* — she HAD none to use: no component declares a width and rule 2
+# forbids inventing props. So the ladder is the room's own STRUCTURAL vocabulary, riding on the
+# node like `positions` (the things A2UI has no notion of): the compile may set a node's `size`
+# from these four words, the tile renders the width, and pixels are never the model's to name.
+# An off-ladder value is refused BY NAME — the boundary stays closed; judgment gets materials.
+_WIREFRAME_SIZES = ("sm", "md", "lg", "full")
+
+
+def _catalogue_contract(system: str) -> tuple[str, dict[str, set[str]]]:
+    """The chosen system's catalogue as a CONTRACT — one walk, two uses.
+
+    Returns the text the model is given (every component, its declared props with their types,
+    a container's slots) and the same thing as a closed set — component name → the prop names
+    that component declares. The compile's prompt carries the text; the compile's validation
+    checks against the set. They cannot disagree because they are the same read (the drift this
+    repository's catalogue checks exist to catch, avoided by construction).
+
+    The `component` discriminator is skipped — it is the name itself, not an argument — and an
+    empty catalogue RAISES: a session with nothing to build from is a broken partition, not a
+    shorter contract.
+    """
+    components = (a2ui_catalog_for(system) or {}).get("components") or {}
+    if not components:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the catalogue '{system}' declares no components — refusing to "
+                "compile a layout with nothing to build from. An empty partition is a failure, "
+                "not a shorter list."
+            ),
+        )
+    lines: list[str] = []
+    declared: dict[str, set[str]] = {}
+    for name in sorted(components):
+        spec = components[name] or {}
+        props: dict[str, str | None] = {}
+        for part in list(spec.get("allOf") or []) + [spec]:
+            for prop, prop_spec in (part.get("properties") or {}).items():
+                if prop == "component":
+                    continue
+                if prop == "children" and isinstance(prop_spec, dict):
+                    slots = list((prop_spec.get("properties") or {}).keys())
+                    props["children"] = f"{{{', '.join(slots)}}}" if slots else None
+                    continue
+                ptype = (prop_spec or {}).get("type") if isinstance(prop_spec, dict) else None
+                props.setdefault(prop, ptype if isinstance(ptype, str) else None)
+        declared[name] = set(props.keys())
+        rendered = ", ".join(f"{p}: {t}" if t else p for p, t in props.items())
+        lines.append(f"- {name}: {rendered if rendered else 'no properties'}")
+    return "\n".join(lines), declared
 
 
 def _catalog_component_vocabulary() -> str:
@@ -885,6 +1039,7 @@ class AISurfaceRequest(BaseModel):
     Intents:
     - render-console: AI assembles console with cards
     - render-composer: AI assembles blank composer with greeting
+    - render-governance: AI assembles the Governance room (the cost ledger and her seat)
     - render-product:{id}: AI assembles the Product room around one package
     - render-session:{id}: AI assembles existing session
     - render-run[:{id}]: AI assembles the THIRD COLUMN a Run opens (the canvas)
@@ -1069,6 +1224,20 @@ def ai_assemble_surface(
         # ── PERFORMANCE TRACE: Milestone A (Database) ──
         t_a_start = time.perf_counter()
 
+        # ⭐ THE BUILDER'S CARDS, KEPT CURRENT (2026-10-04) — see routes/builder_bridge.py.
+        # The Product room's tool keeps its projects in its own database; this brings the
+        # console's package rows in step with that list BEFORE the cards are read, so a
+        # project built a minute ago is already a card. BEST-EFFORT BY DESIGN: an engine
+        # that is not running must never break the console — the rows that exist render
+        # unchanged, and the next assembly tries again. Import is deferred to here so a
+        # console route that never touches the builder pays nothing for it.
+        try:
+            from routes import builder_bridge
+
+            builder_bridge.sync_builder_packages(uid)
+        except Exception as bridge_error:  # noqa: BLE001 — a skipped sync is a normal event
+            _warn(f"the builder's cards could not be synced, so the console shows what it last knew: {bridge_error}")
+
         # Fetch the FULL prompt package (not lightweight) so each console card is
         # a true index of its entire prompt — sections, output, versions, chat.
         sessions = state.prompt_sessions_api.get_sessions(
@@ -1098,6 +1267,8 @@ def ai_assemble_surface(
         for session in sessions:
             title = (session.get("title") or "").strip()
             description = (session.get("description") or "").strip()
+            session_meta = session.get("metadata") or {}
+            builder_project_id = session_meta.get("builder_project_id")
 
             cards.append({
                 "id": str(session.get("id")),
@@ -1107,7 +1278,21 @@ def ai_assemble_surface(
                 # room that owns the package — a product package opens the Product room,
                 # every other card the Composer. Absent stays absent: a legacy card
                 # routes exactly where it always has.
-                "room_domain": ((session.get("metadata") or {}).get("room_domain") or ""),
+                "room_domain": (session_meta.get("room_domain") or ""),
+                # ⭐ THE BRIDGED PROJECT (2026-10-04): a card for a project in the Product
+                # room's tool carries which project it stands for, so its click opens the
+                # room ON that project (the room is the builder now). A faithful read of the
+                # flat keys the bridge wrote — a card without them is a legacy product
+                # package, and it opens the room's dashboard. See routes/builder_bridge.py.
+                "builder_project": (
+                    {
+                        "project_id": str(builder_project_id),
+                        "preview_url": session_meta.get("builder_preview_url") or "",
+                        "runs": int(session_meta.get("builder_runs") or 0),
+                    }
+                    if builder_project_id
+                    else None
+                ),
                 "category": session.get("category") or "",
                 "status": (session.get("status") or "Active").lower(),
                 "version": session.get("current_version") or 1,
@@ -1558,6 +1743,9 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
                         "design system's approved components."
                     ),
                     room_domain="product",
+                    # BORN DRAWING FROM THE ROOM'S ONE SYSTEM (2026-10-03) — the same act writes
+                    # both facts; the provenance stays readable per package (see the constant).
+                    design_system=_PRODUCT_ROOM_DESIGN_SYSTEM,
                 )
                 session_id = str((created or {}).get("id") or "")
             if not session_id:
@@ -1613,24 +1801,13 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
                 )
             product_draft = stored.get("draft") if stored else None
 
-        # THE CHOSEN DESIGN SYSTEM — the fact the chooser writes and `design_system_of`
-        # reads; absent means this package never chose, which is a real answer.
-        chosen_system = design_system_of(session)
-
-        # THE CHOOSER'S LIST: the partitions that exist on disk, each with its count — the
-        # directory is the truth, so a system that does not exist cannot be offered.
-        catalogues = []
-        try:
-            for name in a2ui_catalog_surfaces():
-                try:
-                    catalogues.append({
-                        "system": name,
-                        "count": len(a2ui_catalog_for(name).get("components", {})),
-                    })
-                except Exception:
-                    catalogues.append({"system": name, "count": None})
-        except Exception as e:
-            _warn(f"the catalogue list could not be read, so the room's chooser offers none: {e}")
+        # THE ROOM'S SYSTEM — THE CONSTANT, AND NOTHING ELSE (the owner removed the chooser,
+        # 2026-10-03 late: the person does not select). The package's metadata fact is no longer
+        # READ here — with no writer there is no reader, and the constant above is the one
+        # authority every read below goes through (the palette, the vocabulary, the compile). The
+        # data model still CARRIES the name — the host reads it to pre-load the system's registry
+        # before the tree names any component — but nothing offers it and nothing writes it.
+        chosen_system = _PRODUCT_ROOM_DESIGN_SYSTEM
 
         # THE TRAY'S OWN LIST — the draft-safe palette of the catalogue this stage draws from,
         # computed by the SAME filter the compiler will read (one reader, two uses: the tray
@@ -1643,6 +1820,32 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
             _warn(f"the draft-safe palette of '{palette_catalog}' could not be read, so the stage's tray offers nothing: {e}")
             palette = []
 
+        # THE VOCABULARY THIS ROOM'S MODEL IS HANDED, AND WHOSE IT IS (2026-10-03 — THE WALL).
+        # A session that chose a design system is handed THAT SYSTEM'S OWN catalogue — its own
+        # file (the owner's correction, measured on his own drive: the app handed him
+        # prompt-composer's catalogue for a session drawing from another system, and the rule
+        # is "the applications catalog cannot be leveraged for this"). With no system chosen,
+        # the app's own catalogue IS the session's catalogue — today's default, a real answer.
+        if chosen_system:
+            vocabulary_block = _session_catalog_vocabulary(chosen_system)
+        else:
+            vocabulary_block = _catalog_component_vocabulary()
+
+        # HER WORDS CARRY THE ROOM'S LIVE FACTS (2026-10-03) — composed per assembly, the design
+        # room's own shape. Measured in the owner's first real conversation with her here: she
+        # asked for the catalogue and the component names on EVERY turn, because the room never
+        # handed them to her. The palette is the list she may act on; and since this evening the
+        # honest limit is GONE — the assembler exists (`POST /api/ai/assemble-wireframe` backs
+        # her [Build that] offer), so what the block carries instead is the capability and THE
+        # ONE RULE: she builds structures from the list above, and the catalogue's look is set.
+        palette_names = ", ".join(item["name"] for item in palette) if palette else "(none)"
+        # ONE SYSTEM, NAMED — the chooser is gone (2026-10-03 late), so the line is the constant.
+        chosen_line = chosen_system
+        # HER SCRIPT IS THE WHOLE CONTEXT (2026-10-03, late): the catalogue/palette facts that
+        # used to ride here belonged to the retired era — she composes from nothing but the
+        # person's words now, so the only thing appended is the script itself.
+        product_grace_context = PRODUCT_GRACE_INSTRUCTIONS
+
         ms_a = (time.perf_counter() - t_a_start) * 1000
 
         # ── THE CONTRACT — the room's whole description, composed by the model ──────
@@ -1654,15 +1857,24 @@ The package is "{session.get('title') or '(untitled)'}".
 
 Assemble the FULL product room surface using A2UI v0.9.1.
 
-{_catalog_component_vocabulary()}
+{vocabulary_block}
 
 REQUIREMENTS:
 1. id "root", component "workspace-layout" — the composer's own container. Its panes are
    NAMED slots, so "children" is an OBJECT keyed by slot name; the array form fills nothing.
-2. "product-stage": "draft-canvas" in slot "left", its layout bound to
-   {{"path": "/session/draft"}} and its palette bound to {{"path": "/session/palette"}} — the
-   tray's list of the draft-safe components. THIS IS THE STAGE — the wireframe a person is
-   assembling out of real catalogue components. It fetches nothing.
+   It carries "chatLoadWidth": 700 — THE ROOM'S DECLARED WIDTH FOR HER COLUMN ON LOAD (owner,
+   2026-10-03: *"We don't do equal split on this because we need more canvas space than we do
+   chat space"* — and 700 is his number: *"that's not a fixed width, that's just a width on
+   load; the user can of course resize it"*). Emit it exactly as written. It is not a clamp:
+   a drag is still the operator's.
+2. "product-stage": "artifact-canvas" in slot "left", bound to the page on the stage:
+   "artifact" carries {{"path": "/session/artifact"}} (null until the first build — the
+   element's own empty state). THE PAGE IS BUILT BY GRACE, FREELY, FROM THE PERSON'S OWN
+   SENTENCE: the artifact is a real HTML document written by her
+   (POST /api/ai/build-artifact), held in-session until Save / Submit lands (a later slice);
+   the stage is simply the window onto it. NO palette and NO movable/grid/clearable flags ride
+   this stage — the Composer's own stage keeps its gestures and its tray; this room's stage is
+   the page. THIS IS THE STAGE. It fetches nothing.
 3. "product-chat": "chat-panel" in slot "right" — the person's seat, bound to this
    package's own conversation: conversationId {{"path": "/session/conversation_id"}},
    conversations {{"path": "/session/conversations"}}, sessionId {{"path": "/session/session_id"}}.
@@ -1672,10 +1884,9 @@ REQUIREMENTS:
    floor with the rail showing, and the rail's Chat button OPENS it on the first click. Do
    NOT send "collapsed" or "rightWidth" on the panel or the container.
 5. "product-chat" carries "allowedTabs": "chat,trace,tools" and "tracePrompt": false. Emit
-   them exactly as written. It carries ONE child in its "view" slot: "system-picker" — the
-   room's context strip, "design-system-picker" bound to /session/catalogues and
-   /session/design_system. The panel draws this one view above her THREAD, the same hole the
-   console's repair rows use.
+   them exactly as written. It carries NO child in its "view" slot — the room has no context
+   strip (the owner removed the catalogue chooser, 2026-10-03: *"they don't need to select
+   anything"*): her panel is her thread, and nothing sits above it.
 6. Short friendly ai_message
 
 Emit nothing else — no greeting, no header, no Text above them.
@@ -1683,10 +1894,9 @@ Emit nothing else — no greeting, no header, no Text above them.
 Output ONLY this exact JSON (no markdown, no extra text):
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "product-stage", "right": "product-chat"}}}},
-    {{"id": "product-stage", "component": "draft-canvas", "draft": {{"path": "/session/draft"}}, "palette": {{"path": "/session/palette"}}}},
-    {{"id": "product-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,trace,tools", "conversationId": {{"path": "/session/conversation_id"}}, "conversations": {{"path": "/session/conversations"}}, "sessionId": {{"path": "/session/session_id"}}, "children": {{"view": "system-picker"}}}},
-    {{"id": "system-picker", "component": "design-system-picker", "catalogues": {{"path": "/session/catalogues"}}, "selected": {{"path": "/session/design_system"}}}}
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "chatLoadWidth": 700, "children": {{"left": "product-stage", "right": "product-chat"}}}},
+    {{"id": "product-stage", "component": "artifact-canvas", "artifact": {{"path": "/session/artifact"}}}},
+    {{"id": "product-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,trace,tools", "conversationId": {{"path": "/session/conversation_id"}}, "conversations": {{"path": "/session/conversations"}}, "sessionId": {{"path": "/session/session_id"}}}}
   ],
   "ai_message": "Your message"
 }}
@@ -1780,7 +1990,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
                         "session": {
                             "session_id": session_id,
                             "conversation_id": product_conversation_id,
-                            "grace_instructions": PRODUCT_GRACE_INSTRUCTIONS,
+                            "grace_instructions": product_grace_context,
                             "conversations": [
                                 {
                                     "id": str(c.get("id")),
@@ -1793,7 +2003,10 @@ Output ONLY this exact JSON (no markdown, no extra text):
                             # package chose. Empty `design_system` = never chose — a real
                             # answer, not an error.
                             "design_system": chosen_system or "",
-                            "catalogues": catalogues,
+                            # (NO "catalogues" LIST — the owner removed the chooser,
+                            # 2026-10-03 late: the person does not select; the room's system
+                            # is the constant, and the host reads `design_system` above to
+                            # pre-load its registry before the tree names components.)
                             # THE TRAY'S LIST, computed by the palette filter above — the
                             # stage draws its + Add picker from it, and the compiler will be
                             # bounded by the same filter (one reader, two uses).
@@ -1802,10 +2015,254 @@ Output ONLY this exact JSON (no markdown, no extra text):
                             # element. None = nothing is drafted yet (the element's empty
                             # state, the truth), never a failed read (that raised).
                             "draft": product_draft,
+                            # THE PAGE ON THE STAGE — the artifact era's fact: the sandbox
+                            # lives in the CLIENT (nothing reaches the database until Save /
+                            # Submit lands, a later slice), so the room always assembles with a
+                            # blank page; the host writes this slot on every build. None =
+                            # nothing built yet (a real answer).
+                            "artifact": None,
                         },
                         "assembly_time_ms": elapsed_ms,
                         "llm_used": True,
                         "usage": dict(LAST_USAGE),  # measured, straight from the provider
+                        "ai_message": ai_message,
+                        "warnings": _drain_warnings(),
+                    }
+                }
+            }
+        ]
+
+    # ═══════════════════════════════════════════════════════════════
+    # INTENT: render-governance — the Governance room
+    #
+    # THE ROOM WHERE THE SYSTEM ACCOUNTS FOR ITSELF (owner, 2026-10-03): *"it's a great way to
+    # test our system for me to observe the governance of the system's performance — to see what
+    # kind of cost is generated using a pro model from a cloud, because the ultimate objective
+    # of the application is to reduce token costs."* The owner redesigns the UI himself and uses
+    # the FEED as the guide; tonight the feed is the point.
+    #
+    # THE FEED: <governance-usage-view> reads its own endpoint — the per-call ledger written at
+    # the request boundary (one row per model call; tokens MEASURED from the provider; a cost
+    # only when the deployment states its prices). Her script composes the day's REAL NUMBERS
+    # below, so she can answer about spend without a lookup.
+    #
+    # NO PACKAGE, NO DOOR: the room is a CONTAINER — the design room's own generic shape, kind
+    # typed, excluded from the console's list (prompt_sessions_api), never a card.
+    # ═══════════════════════════════════════════════════════════════
+    elif intent == "render-governance":
+        if not state.prompt_sessions_api:
+            raise HTTPException(status_code=503, detail="A2UI FAILURE: Database not available")
+
+        t_a_start = time.perf_counter()
+
+        governance_container = state.prompt_sessions_api.get_or_create_design_container(
+            user_id=uid,
+            kind="governance",
+            title="Governance",
+            description="The Governance room's own session — observability, not a prompt package.",
+        )
+        if not governance_container:
+            raise HTTPException(
+                status_code=503,
+                detail="A2UI FAILURE: the governance container did not resolve (not created).",
+            )
+        governance_session_id = str(governance_container["id"])
+        governance_conversation_id = str(governance_container.get("conversation_id") or "")
+
+        governance_conversations = []
+        if state.conversation_api:
+            try:
+                governance_conversations = state.conversation_api.get_conversations_by_session(
+                    governance_session_id, uid
+                )
+            except Exception as e:
+                _warn(f"the governance room's conversation list could not be read: {e}")
+
+        # THE DAY'S NUMBERS, FROM THE LEDGER — composed into her words. An unreachable ledger
+        # yields "could not be read" rather than a zero; a zero means zero calls.
+        spend_note = "The ledger could not be read for this assembly."
+        try:
+            with state.prompt_sessions_api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT COUNT(*)                                                     AS calls,
+                           COALESCE(SUM((metadata->>'prompt_tokens')::bigint), 0)       AS prompt_tokens,
+                           COALESCE(SUM((metadata->>'completion_tokens')::bigint), 0)   AS completion_tokens,
+                           COALESCE(SUM((metadata->>'total_tokens')::bigint), 0)        AS total_tokens,
+                           SUM((metadata->>'est_cost_usd')::numeric)                    AS est_cost_usd,
+                           COUNT(*) FILTER (WHERE metadata->>'est_cost_usd' IS NOT NULL) AS priced_calls
+                    FROM usage_metrics
+                    WHERE metric_type = 'llm_call' AND created_at >= date_trunc('day', now())
+                    """
+                )
+                today = cursor.fetchone() or {}
+                cursor.execute(
+                    """
+                    SELECT metadata->>'model' AS model, COUNT(*) AS calls,
+                           COALESCE(SUM((metadata->>'total_tokens')::bigint), 0) AS total_tokens
+                    FROM usage_metrics
+                    WHERE metric_type = 'llm_call' AND created_at >= date_trunc('day', now())
+                    GROUP BY 1 ORDER BY 2 DESC
+                    """
+                )
+                by_model_rows = cursor.fetchall()
+            calls = int(today.get("calls") or 0)
+            model_lines = "; ".join(
+                f"{b.get('model') or '(unrecorded)'}: {int(b.get('calls') or 0)} calls, "
+                f"{int(b.get('total_tokens') or 0)} tokens"
+                for b in by_model_rows
+            )
+            cost = today.get("est_cost_usd")
+            cost_line = (
+                f"estimated cost ${float(cost):.4f} across {int(today.get('priced_calls') or 0)} of {calls} calls"
+                if cost is not None
+                else "no cost is priced yet (the deployment has not stated its prices)"
+            )
+            spend_note = (
+                f"Today the system has made {calls} model call{'' if calls == 1 else 's'}: "
+                f"{int(today.get('prompt_tokens') or 0)} tokens in, "
+                f"{int(today.get('completion_tokens') or 0)} tokens out, "
+                f"{int(today.get('total_tokens') or 0)} total; {cost_line}."
+                + (f" By model — {model_lines}." if model_lines else "")
+            )
+        except Exception as e:
+            _warn(f"the usage ledger could not be read for the governance assembly: {e}")
+
+        governance_grace_context = GOVERNANCE_GRACE_INSTRUCTIONS + "\n" + spend_note + "\n"
+
+        ms_a = (time.perf_counter() - t_a_start) * 1000
+
+        # ── THE CONTRACT — the room's whole description, composed by the model ──────
+        llm_prompt = f"""You are Grace, the A2UI surface assembler for the governance room.
+{render_tools_block()}
+
+The user opened the Governance room — where the system accounts for what it has spent.
+
+Assemble the FULL governance room surface using A2UI v0.9.1.
+
+{_catalog_component_vocabulary()}
+
+REQUIREMENTS:
+1. id "root", component "workspace-layout" — NAMED slots, "children" an OBJECT.
+2. "usage-view": "governance-usage-view" in slot "left" — THE LEDGER, drawn. It reads its own
+   feed; bind nothing to it. There is no middle slot.
+3. "governance-chat": "chat-panel" in slot "right", bound to this room's own session:
+   sessionId {{"path": "/session/session_id"}}, conversationId {{"path": "/session/conversation_id"}},
+   conversations {{"path": "/session/conversations"}}.
+4. "isThirdOpen": false — the chat column loads CLOSED; do NOT send "collapsed" or "rightWidth".
+5. "governance-chat" carries "allowedTabs": "trace,approvals" and "tracePrompt": false.
+   Emit them exactly as written.
+6. Short friendly ai_message
+
+Emit nothing else. Output ONLY this exact JSON:
+{{
+  "components": [
+    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "usage-view", "right": "governance-chat"}}}},
+    {{"id": "usage-view", "component": "governance-usage-view"}},
+    {{"id": "governance-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "trace,approvals", "sessionId": {{"path": "/session/session_id"}}, "conversationId": {{"path": "/session/conversation_id"}}, "conversations": {{"path": "/session/conversations"}}}}
+  ],
+  "ai_message": "Your message"
+}}
+"""
+
+        ms_b = 0.0
+        ms_c = 0.0
+        t_b_start = time.perf_counter()
+        llm_response = query_llm(
+            question=llm_prompt,
+            mode="surface_assembly",
+            temperature=0.0,
+            prompt_id="surface-assembly-governance"
+            # model intentionally omitted — use the enabled provider's default
+        )
+        ms_b = (time.perf_counter() - t_b_start) * 1000
+
+        if not llm_response or not llm_response.strip():
+            raise HTTPException(
+                status_code=503,
+                detail="A2UI FAILURE: AI did not respond. The AI must be active to render this surface."
+            )
+        if llm_response.strip().startswith("Error:"):
+            raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
+
+        t_c_start = time.perf_counter()
+        response_text = llm_response.strip()
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            parsed = _extract_json_payload(response_text)
+            components = parsed["components"]
+            _seat_tabs(components, GOVERNANCE_TABS)
+            _seat_grace(components, "/session", False)
+            ai_message = parsed.get("ai_message", "The ledger is ready.")
+            if not isinstance(components, list) or len(components) == 0:
+                raise ValueError("components must be non-empty array")
+            ms_c = (time.perf_counter() - t_c_start) * 1000
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
+            print(
+                f"[A2UI Governance] AI RESPONSE PARSE FAILED:\n"
+                f"  error_type: {type(e).__name__}\n"
+                f"  error_message: {e}\n"
+                f"  llm_response_length: {len(response_text)}\n"
+                f"  llm_response_first_500: {response_text[:500]}\n"
+                f"  timestamp: {time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n"
+                f"  FIX: The LLM returned something that isn't valid A2UI JSON. Check the prompt or the model."
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: AI returned invalid JSON for render-governance — {type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
+            )
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        print(f"\n{'='*60}")
+        print(f"[PERF TRACE] POST /api/ai/assemble-surface | intent=render-governance | total={elapsed_ms}ms")
+        print(f"  Milestone A (Database): {ms_a:8.1f}ms")
+        print(f"  Milestone B (LLM):      {ms_b:8.1f}ms")
+        print(f"  Milestone C (Parse):    {ms_c:8.1f}ms")
+        print(f"{'='*60}\n")
+
+        validate_a2ui_components(components)
+        return [
+            {
+                "version": "v0.9.1",
+                "createSurface": {
+                    "surfaceId": "main",
+                    "catalogId": A2UI_CATALOG_ID
+                }
+            },
+            {
+                "version": "v0.9.1",
+                "updateComponents": {
+                    "surfaceId": "main",
+                    "components": components
+                }
+            },
+            {
+                "version": "v0.9.1",
+                "updateDataModel": {
+                    "surfaceId": "main",
+                    "path": "/",
+                    "value": {
+                        "session": {
+                            "session_id": governance_session_id,
+                            "conversation_id": governance_conversation_id,
+                            "grace_instructions": governance_grace_context,
+                            "conversations": [
+                                {
+                                    "id": str(c.get("id")),
+                                    "title": c.get("title") or "(untitled)",
+                                    "tab": c.get("tab") or "chat",
+                                }
+                                for c in governance_conversations
+                            ],
+                        },
+                        "assembly_time_ms": elapsed_ms,
+                        "llm_used": True,
+                        "usage": dict(LAST_USAGE),
                         "ai_message": ai_message,
                         "warnings": _drain_warnings(),
                     }
@@ -2521,6 +2978,9 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # The re-read trigger, on the same channel and for the same reason: the shell bumps
                 # this number after an ingest lands and the tree reads the layers back.
                 "refresh": {"path": "/session/ingest/refresh"},
+                # AND THE IN-FLIGHT FACT, so the column spins while an ingest (or an accept) is
+                # being processed — the SAME busy the form's button reads (one fact, two readers).
+                "busy": {"path": "/session/design_system_ingest/busy"},
             })
             for _c in components:
                 if _c.get("id") != "design-left":
@@ -3517,10 +3977,830 @@ Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
             status_code=400,
             detail=(
                 f"Unknown intent: {intent}. Valid intents: render-console, render-composer, "
-                f"render-design, render-product:{{id}}, render-section:{{id}}, "
+                f"render-design, render-governance, render-product:{{id}}, render-section:{{id}}, "
                 f"render-session:{{id}}, render-run[:{{id}}]"
             )
         )
+
+
+# ── THE COMPILE — "THE PERSON'S ASK BECOMES A WIREFRAME" (2026-10-03 evening, Slice B) ──────────
+# The owner's shape for the product room: *"they're basically prompting Grace and she's doing
+# everything… It only allows them to imagine and vibe-code structure or features — they cannot
+# design in it… It seems like you're vibe coding, but you're not. It's basically a wireframe."*
+# And the one restriction: *"it has to use items from our approved catalogs. They can't invent
+# items."*
+#
+# This route is that compile. Input: the package, and the ask — read from the thread itself (the
+# LAST PERSON TURN; the press answers her offer, and the ask that produced the offer is the
+# newest person message — the compile trusts the thread and nothing else). Context: the session's
+# OWN design system (the room's declared world only) and its catalogue as a CLOSED CONTRACT —
+# every component, every declared prop, and nothing else. Output: a whole wireframe layout —
+# nodes by name with declared props, a positions map, and one line for her to say.
+#
+# THE TRICK, ENFORCED — NOT ASKED FOR. Styling is not a capability this route has: the catalogue
+# has no such vocabulary, so a request for it cannot come back as anything but `say` (the
+# owner's own words for the answer: *"we have set parameters for border sizes… we could just say
+# can't do it forbidden"*). And the model's output is NOT trusted: every component NAME and
+# every PROP is validated against the same closed set the prompt carried — an undeclared one is
+# refused BY NAME (A2UI FAILURE, 503), never dropped, never guessed, never a silently shorter
+# layout.
+#
+# THE ROUTE WRITES NOTHING. It returns the payload; the HOST applies it through the one draft
+# store (PUT /api/conversations/{id}/draft) — the single writer every hand gesture already uses.
+#
+# BORROWED, AND NAMED (MIT — LangChain's Open Canvas, wireframe-lab/open-canvas-main):
+#   · the forced-schema output contract — apps/agents/src/open-canvas/nodes/generate-artifact/
+#     schemas.ts + index.ts: the model emits exactly the schema and nothing else;
+#   · the refusal-biased routing split — nodes/generate-path/prompts.ts ("do not edit unless
+#     clearly requested"): here, a request the catalogue cannot express is a sentence, not a
+#     silent no-op, and her chat side never offers a build for it;
+#   · the full-artifact rewrite + a short followup — nodes/rewrite-artifact + generateFollowup:
+#     the op replaces the whole layout; a short line narrates after (`say`).
+
+
+class AIAssembleWireframeRequest(BaseModel):
+    """Request body for the wireframe compile — the package, and the thread it answers."""
+    session_id: str
+    conversation_id: str = ""
+
+
+@router.post("/api/ai/assemble-wireframe")
+def ai_assemble_wireframe(
+    request: AIAssembleWireframeRequest,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """The compile: the thread's last ask becomes a wireframe layout, bounded by one catalogue.
+
+    Failures fail loud, by name — a compile that cannot honor the catalogue is a 503 a person
+    can read, never a shorter layout.
+    """
+    uid = get_user_id_from_header(x_user_id)
+    if not state.prompt_sessions_api or not state.conversation_api:
+        raise HTTPException(status_code=503, detail="A2UI FAILURE: Database not available")
+    session_id = (request.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="the compile needs the package it builds in — 'session_id' is missing",
+        )
+    session = state.prompt_sessions_api.get_session(user_id=uid, session_id=session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # ── THE SESSION'S OWN WORLD — the same ONE system the room's assembly reads (the owner
+    # removed the chooser, 2026-10-03 late: no selection, no per-package choice, no outside
+    # world to refuse — the constant is the authority and its own reads fail loud without it).
+    chosen_system = _PRODUCT_ROOM_DESIGN_SYSTEM
+
+    # ── THE THREAD, AND THE ASK ──
+    conversation_id = (request.conversation_id or "").strip()
+    if not conversation_id:
+        try:
+            conversations = state.conversation_api.get_conversations_by_session(session_id, uid)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the package's conversations could not be read: {e}",
+            )
+        for c in conversations:
+            if (c.get("tab") or "chat") == "chat":
+                conversation_id = str(c.get("id") or "")
+                break
+        if not conversation_id and conversations:
+            conversation_id = str(conversations[0].get("id") or "")
+    if not conversation_id:
+        raise HTTPException(
+            status_code=400,
+            detail="the compile needs the thread it answers — 'conversation_id' did not resolve",
+        )
+    try:
+        thread = state.conversation_api.get_messages(conversation_id, uid)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"A2UI FAILURE: the thread could not be read: {e}",
+        )
+    ask = ""
+    for message in reversed(thread or []):
+        if (message.get("role") or "") == "user" and str(message.get("content") or "").strip():
+            ask = str(message["content"]).strip()
+            break
+    if not ask:
+        raise HTTPException(
+            status_code=400,
+            detail="the compile found no person turn in this thread — there is nothing to build",
+        )
+
+    # ── THE LAYOUT AS IT STANDS — empty is a real answer (the stage is empty) ──
+    current_draft = None
+    try:
+        stored = state.conversation_api.get_draft(conversation_id, uid)
+        current_draft = stored.get("draft") if stored else None
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the stage's layout could not be read for conversation "
+                f"{conversation_id} — {e}. A failed read is not an empty stage."
+            ),
+        )
+    current_json = (
+        json.dumps(current_draft, ensure_ascii=False, indent=2)
+        if current_draft
+        else "(the stage is empty)"
+    )
+
+    contract_text, declared = _catalogue_contract(chosen_system)
+
+    llm_prompt = f"""You are the wireframe compiler for the product room. You build STRUCTURE, from ONE design system's approved components — nothing else.
+
+THE COMPONENTS THAT EXIST FOR YOU — every one of the design system '{chosen_system}', with the properties each declares (only these; anything else is refused):
+{contract_text}
+
+THE ONLY RULES:
+0. IF THE PERSON'S MESSAGE IS NOT A REQUEST TO BUILD OR CHANGE THE LAYOUT — a question, a greeting, a discussion, a request for something the catalogue cannot express (answer it in "say") — return exactly {{"build": false, "say": "<one short line for the person>"}} and change NOTHING. A question is never a reason to rebuild. THIS IS THE ROUTER (borrowed from the example — their "replyToGeneralInput" split): the room builds as the person speaks, and it must know when NOT to.
+1. Every "component" you emit must be one of the names above, EXACTLY. Do not invent components.
+2. Every prop you emit must be one of that component's declared properties above. Do not invent props. A prop you omit is simply absent — do not guess defaults.
+3. YOU CANNOT CHANGE STYLING. Sizes, spacing, borders, colors and fonts are the design system's own set parameters — not yours. If the request asks for that ("make the border thicker", "smaller", "another color"), do NOT approximate it: build the structural part you can and say the rest in "say", in one honest sentence that names what you can build instead. That is a rule of the system, not a preference.
+4. IF THE REQUEST NEEDS A COMPONENT THE LIST ABOVE DOES NOT CARRY — read the list first; a name is either on it or it is not — do NOT substitute other components for it and do NOT approximate it into something that looks complete: build the part that IS expressible (possibly nothing at all), keep what the request keeps, and name the missing pieces in "say", one honest sentence. A layout of buttons labelled like form fields is a LIE, not a wireframe. AND THE CONVERSE — MEASURED, 2026-10-03: when a component the request needs IS on the list, BUILD WITH IT. A compiler that answers "the catalogue has no inputs" while kor-input stands in the contract is exactly as wrong as one that substitutes a component nobody declared.
+5. ALWAYS CREATE A CONTAINER FIRST — THE ROOM'S RULE (owner, 2026-10-03: "Always create a container first"). The layout's FIRST top-level node is a CONTAINER, and everything the request needs rides INSIDE it as its "children", in reading order — a child is a full node (id + component + props) nested under its container, and children may carry children the same way. THE CONTRACT ABOVE NAMES THE CONTAINER (a component whose entry declares `children` — Carbon's is cds-card, whose contents ride its default slot). Loose tiles beside an empty container are not this room's shape, and a child needs NO position — it flows inside its container.
+6. CENTER IT, AND SIZE IT FROM THE LADDER: the top-level container sits roughly CENTERED on the stage — near x 420, y 60 — and states "size": "lg" (a form or a page block is lg; md for something narrower; sm for a small cluster). Any other node that needs a width states one of the same four words. THE LADDER IS sm | md | lg | full — pixels are not yours to name, and anything else is refused by name.
+7. AND USE YOUR DESIGN JUDGMENT — WITHIN THE CATALOGUE. You know what a proper interface looks like: apply that knowledge to the STRUCTURE. Group related things inside the container, give a form one clear primary action, order things the way a person reads them, and size the pieces so the layout reads as a designed page rather than a pile. The container and the ladder are your materials; the design system supplies the look. Structural judgment is expected of you — styling is not yours.
+
+WHAT TO BUILD (the person's request, verbatim):
+{ask}
+
+THE LAYOUT AS IT STANDS (empty means the stage is empty; keep what the request keeps — those nodes keep their ids and positions; a rebuild replaces the rest; "clear it" is a real request and an empty nodes list is a real answer):
+{current_json}
+
+Emit ONLY this exact JSON (no markdown, no extra text):
+{{"nodes": [{{"id": "n-1", "component": "<THE CONTAINER from the contract above>", "props": {{}}, "size": "lg", "children": [{{"id": "n-2", "component": "<a name from above>", "props": {{"<declared prop>": "<value>"}}}}, {{"id": "n-3", "component": "<a name from above>", "props": {{}}}}]}}], "positions": {{"n-1": {{"x": 420, "y": 60}}}}, "say": "<one short sentence to the person>"}}
+Every node needs a unique id — children's too, and ids are unique ACROSS the whole layout. Only TOP-LEVEL nodes carry a position (the container, centered); children flow inside their container in the order listed (reading order). THE CONTAINER ALWAYS CARRIES "size" FROM THE LADDER — a form or a page block is "lg"; omitting it leaves the layout at natural width, which is the 1-inch form this room already retired."""
+
+    llm_response = query_llm(
+        question=llm_prompt,
+        mode="surface_assembly",  # the strict-JSON system prompt + the assembly budget (grace_gui)
+        temperature=0.0,
+        prompt_id="assemble-wireframe",
+        # model intentionally omitted — use the enabled provider's default
+    )
+    if not llm_response or not llm_response.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="A2UI FAILURE: the compiler did not respond. The AI must be active to build.",
+        )
+    if llm_response.strip().startswith("Error:"):
+        raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
+
+    response_text = llm_response.strip()
+    if "```json" in response_text:
+        response_text = response_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in response_text:
+        response_text = response_text.split("```")[1].split("```")[0].strip()
+    try:
+        parsed = _extract_json_payload(response_text)
+    except ValueError as parse_error:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the compiler returned something that is not the layout JSON — "
+                f"{parse_error}. Raw (first 300 chars): {response_text[:300]}"
+            ),
+        )
+
+    # THE ROUTER'S OTHER HALF (rule 0): the compile may decide this message was not a change at
+    # all — a question, a discussion — and say so. Then NOTHING is built and the stage stands.
+    if isinstance(parsed, dict) and parsed.get("build") is False:
+        return {
+            "build": False,
+            "system": chosen_system,
+            "say": str(parsed.get("say") or "").strip(),
+        }
+    nodes = parsed.get("nodes")
+    positions = parsed.get("positions") or {}
+    say = str(parsed.get("say") or "").strip()
+    if not isinstance(nodes, list):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the compiled layout has no 'nodes' list "
+                f"(got {type(nodes).__name__}). Raw (first 300 chars): {response_text[:300]}"
+            ),
+        )
+    if not isinstance(positions, dict):
+        raise HTTPException(
+            status_code=503,
+            detail="A2UI FAILURE: the compiled layout's 'positions' is not an object.",
+        )
+
+    # THE WHOLE TREE IS VALIDATED, not just the top level — since 2026-10-03 a container's
+    # CONTENTS arrive as nested `children` (the owner's rule: *"Always create a container
+    # first"*), and a child is exactly as untrusted as a tile: its name and props face the same
+    # closed contract, its id joins the same uniqueness set, and an id that is BOTH a child and
+    # a top-level node is refused (each node appears once — that is what makes the payload a
+    # tree). Children carry no positions; a position given for one is dropped, because a flowed
+    # child has no place of its own to be.
+    seen_ids: set[str] = set()
+    top_level_ids: set[str] = set()
+
+    def clean_compiled_node(node: Any, where: str) -> dict[str, Any]:
+        if not isinstance(node, dict):
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the compiled layout's {where} is not an object.",
+            )
+        node_id = str(node.get("id") or "").strip()
+        if not node_id:
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the compiled layout's {where} has no id.",
+            )
+        if node_id in seen_ids:
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the compiled layout uses the id '{node_id}' twice.",
+            )
+        seen_ids.add(node_id)
+        name = str(node.get("component") or "").strip()
+        if name not in declared:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"A2UI FAILURE: the compiler emitted '{name}', which the '{chosen_system}' "
+                    f"catalogue does not declare — the layout may only use what the design "
+                    f"system carries (it carries: {', '.join(sorted(declared))})."
+                ),
+            )
+        node_props = node.get("props") or {}
+        if not isinstance(node_props, dict):
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the compiled node '{node_id}' has a non-object 'props'.",
+            )
+        for prop in node_props:
+            if prop not in declared[name]:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        f"A2UI FAILURE: the compiler emitted the prop '{prop}' on '{name}', "
+                        f"which the '{chosen_system}' catalogue does not declare for it — the "
+                        f"declared props are: {', '.join(sorted(declared[name])) or '(none)'}. "
+                        f"Styling is not a capability of this room."
+                    ),
+                )
+        # THE SIZE LADDER — a node may carry one of the room's four words, and nothing else (see
+        # `_WIREFRAME_SIZES`): judgment gets materials; pixels stay the room's.
+        node_size = node.get("size")
+        if node_size is not None and str(node_size) not in _WIREFRAME_SIZES:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"A2UI FAILURE: the compiled node '{node_id}' states size '{node_size}', "
+                    f"which is not on the room's ladder ({', '.join(_WIREFRAME_SIZES)}) — sizes "
+                    f"are chosen from the ladder; pixels are not the compiler's to name."
+                ),
+            )
+        kids_raw = node.get("children") or []
+        if not isinstance(kids_raw, list):
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the compiled node '{node_id}' has a non-list 'children'.",
+            )
+        clean_kids = [
+            clean_compiled_node(kid, f"child of '{node_id}'") for kid in kids_raw
+        ]
+        clean: dict[str, Any] = {"id": node_id, "component": name, "props": node_props}
+        if node_size is not None:
+            clean["size"] = str(node_size)
+        if clean_kids:
+            clean["children"] = clean_kids
+        return clean
+
+    clean_nodes: list[dict[str, Any]] = []
+    for index, node in enumerate(nodes):
+        cleaned = clean_compiled_node(node, f"node {index}")
+        # A TOP-LEVEL CONTAINER WITH CONTENTS IS FORM-WIDTH UNLESS IT SAYS OTHERWISE — the room's
+        # own default, not a model guess (the owner, watching a 1-inch form: *"That's not a form
+        # size"*): the ladder's `lg` is applied HERE when the compiler states no size, so the
+        # layout is form-sized even when the model forgets. A stated size from the ladder always
+        # wins; the default is the floor, not a cage.
+        if cleaned.get("children") and "size" not in cleaned:
+            cleaned["size"] = "lg"
+        top_level_ids.add(cleaned["id"])
+        clean_nodes.append(cleaned)
+    child_ids = seen_ids - top_level_ids
+    overlap = top_level_ids & child_ids
+    if overlap:  # unreachable by construction, kept as the shape's own statement
+        raise HTTPException(
+            status_code=503,
+            detail=f"A2UI FAILURE: the compiled layout names {sorted(overlap)} as both a tile and a child.",
+        )
+
+    clean_positions: dict[str, dict[str, float]] = {}
+    for key, value in positions.items():
+        if key not in top_level_ids:
+            continue  # only a TOP-LEVEL node has a place of its own (children flow)
+        if not isinstance(value, dict):
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the compiled position for '{key}' is not an object.",
+            )
+        x, y = value.get("x"), value.get("y")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the compiled position for '{key}' is not {{x, y}} numbers.",
+            )
+        clean_positions[key] = {"x": float(x), "y": float(y)}
+
+    print(
+        f"[wireframe] compiled {len(clean_nodes)} node(s) from '{chosen_system}' for "
+        f"session {session_id}, conversation {conversation_id}"
+    )
+    return {
+        "system": chosen_system,
+        "nodes": clean_nodes,
+        "positions": clean_positions,
+        "say": say,
+    }
+
+
+# ── THE SCOPED EDIT — "THIS TILE, NOT THE ROOM" (2026-10-03 late, STOLEN FROM THE EXAMPLE) ──────
+# The owner, after watching the room: *"I think a lot of this functionality is present in our
+# example… if you can just steal what they've done in this folder and implement it."* This route
+# is Open Canvas's `updateArtifact` / `updateHighlightedText` brought over — THEIR chat edits the
+# HIGHLIGHT (the selected block), not the whole document; OURS edits the SELECTED TILE
+# (`draft-select`), not the whole layout. The contract, borrowed and adapted, cited at the source:
+#   · the model receives the layout with the TARGET NODE marked and answers with THE NODE ONLY,
+#     never the whole artifact — their `UPDATE_HIGHLIGHTED_ARTIFACT_PROMPT`: *"ONLY respond with
+#     the updated text, not the entire artifact"* (apps/agents/src/open-canvas/prompts.ts);
+#   · the server SPLICES the answer back — the model never reproduces what it did not touch
+#     (their `updateArtifact.ts` rebuilds `before + answer + after`; ours replaces one node);
+#   · the guards fail LOUD by name, their own shape ("Can not partially regenerate an artifact
+#     without a highlight"): no session, no thread, no layout, or a node that is not in the
+#     layout is a 503 with the fact named;
+#   · the answer is validated against the catalogue's CLOSED CONTRACT exactly like the compile's —
+#     names and props, an undeclared one refused by name.
+#
+# THE ROUTER, HONESTLY MAPPED: their two-stage route (a deterministic flag — the highlight —
+# first, an LLM classifier only for the ambiguous rest) arrives here as the OFFER GRAMMAR: the
+# SELECTION makes her offer `[Edit it]` instead of `[Build that]` (the deterministic half), and
+# deciding between an answer / a build / an edit is hers in one reply (the classified half) — the
+# host owns the routing, so no second model call exists just to pick a lane.
+#
+# THE ROUTE WRITES NOTHING — the host applies the returned layout through the draft store, the
+# same single writer a drag, an add and the whole-layout compile use.
+
+
+class AIEditNodeRequest(BaseModel):
+    """Request body for the scoped edit — which package, which thread, and WHICH TILE."""
+    session_id: str
+    conversation_id: str = ""
+    node_id: str
+
+
+@router.post("/api/ai/edit-node")
+def ai_edit_node(
+    request: AIEditNodeRequest,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """One selected tile changes; everything else is left exactly as it stands."""
+    uid = get_user_id_from_header(x_user_id)
+    if not state.prompt_sessions_api or not state.conversation_api:
+        raise HTTPException(status_code=503, detail="A2UI FAILURE: Database not available")
+    session_id = (request.session_id or "").strip()
+    node_id = (request.node_id or "").strip()
+    if not session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="the edit needs the package it builds in — 'session_id' is missing",
+        )
+    if not node_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "the edit needs the tile it changes — 'node_id' is missing, because no tile is "
+                "selected (click a tile on the stage first)"
+            ),
+        )
+    session = state.prompt_sessions_api.get_session(user_id=uid, session_id=session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # ── THE SESSION'S OWN WORLD — the same ONE system the room and the compile read ──
+    chosen_system = _PRODUCT_ROOM_DESIGN_SYSTEM
+
+    # ── THE THREAD, AND THE ASK — the same rule as the compile: the last person turn IS the
+    # instruction; the button carries no words of its own ──
+    conversation_id = (request.conversation_id or "").strip()
+    if not conversation_id:
+        try:
+            conversations = state.conversation_api.get_conversations_by_session(session_id, uid)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the package's conversations could not be read: {e}",
+            )
+        for c in conversations:
+            if (c.get("tab") or "chat") == "chat":
+                conversation_id = str(c.get("id") or "")
+                break
+        if not conversation_id and conversations:
+            conversation_id = str(conversations[0].get("id") or "")
+    if not conversation_id:
+        raise HTTPException(
+            status_code=400,
+            detail="the edit needs the thread it answers — 'conversation_id' did not resolve",
+        )
+    try:
+        thread = state.conversation_api.get_messages(conversation_id, uid)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"A2UI FAILURE: the thread could not be read: {e}",
+        )
+    ask = ""
+    for message in reversed(thread or []):
+        if (message.get("role") or "") == "user" and str(message.get("content") or "").strip():
+            ask = str(message["content"]).strip()
+            break
+    if not ask:
+        raise HTTPException(
+            status_code=400,
+            detail="the edit found no person turn in this thread — there is nothing to apply",
+        )
+
+    # ── THE LAYOUT AND THE TILE (their guards, by name) ──
+    try:
+        stored = state.conversation_api.get_draft(conversation_id, uid)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the stage's layout could not be read for conversation "
+                f"{conversation_id} — {e}. A failed read is not an empty stage."
+            ),
+        )
+    draft = stored.get("draft") if stored else None
+    if not isinstance(draft, dict) or not isinstance(draft.get("nodes"), list) or not draft["nodes"]:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "A2UI FAILURE: there is no layout in this thread to edit — build one first "
+                "(a scoped edit changes a tile; it never invents the room around it)."
+            ),
+        )
+    index = -1
+    for i, candidate in enumerate(draft["nodes"]):
+        if isinstance(candidate, dict) and candidate.get("id") == node_id:
+            index = i
+            break
+    if index < 0:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the tile '{node_id}' is not in this layout — it may have been "
+                "replaced by an earlier build; click the tile you mean and ask again."
+            ),
+        )
+    node = draft["nodes"][index]
+
+    contract_text, declared = _catalogue_contract(chosen_system)
+    layout_json = json.dumps(draft, ensure_ascii=False, indent=2)
+    target_json = json.dumps(node, ensure_ascii=False, indent=2)
+
+    llm_prompt = f"""You are the wireframe compiler for the product room, editing ONE tile of an existing layout. Everything you are not asked to change stays exactly as it is.
+
+THE COMPONENTS THAT EXIST FOR YOU — every one of the design system '{chosen_system}', with the properties each declares (only these; anything else is refused):
+{contract_text}
+
+THE LAYOUT AS IT STANDS (for context only — do NOT return it):
+{layout_json}
+
+THE TILE TO CHANGE (its id is "{node_id}"; "component" and "props" below are what it is right now):
+{target_json}
+
+THE RULES:
+0. IF THE PERSON'S MESSAGE IS NOT A REQUEST TO CHANGE THE LAYOUT — a question, a greeting, a discussion, or a request the catalogue cannot express — return exactly {{"build": false, "say": "<one short line for the person>"}} and change NOTHING. A question is never a reason to rebuild; the stage stays as it stands.
+1. Answer with THE TILE ONLY — its "component" (a name from the list above) and its "props". Never the whole layout, never the other tiles.
+2. Every prop must be one of that component's declared properties above. Do not invent props or components. Keep every prop the request does not touch exactly as it is.
+3. YOU CANNOT CHANGE STYLING. Sizes, spacing, borders, colours and fonts are the design system's own set parameters — not yours. If the request asks for that ("make the border thicker", "another colour"), keep the tile as it is and say the boundary in "say", in one honest sentence that names what you CAN change instead.
+4. If the request needs a COMPONENT the catalogue does not carry, do NOT substitute one that exists to look complete. Keep the tile and name what is missing in "say".
+
+THE PERSON'S REQUEST (their last message, verbatim):
+{ask}
+
+Emit ONLY this exact JSON (no markdown, no extra text):
+{{"node": {{"component": "<a name from above>", "props": {{"<declared prop>": "<value>"}}}}, "say": "<one short sentence to the person>"}}"""
+
+    llm_response = query_llm(
+        question=llm_prompt,
+        mode="surface_assembly",  # the strict-JSON system prompt + the assembly budget (grace_gui)
+        temperature=0.0,
+        prompt_id="edit-node",
+    )
+    if not llm_response or not llm_response.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="A2UI FAILURE: the editor did not respond. The AI must be active to change a tile.",
+        )
+    if llm_response.strip().startswith("Error:"):
+        raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
+
+    response_text = llm_response.strip()
+    if "```json" in response_text:
+        response_text = response_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in response_text:
+        response_text = response_text.split("```")[1].split("```")[0].strip()
+    try:
+        parsed = _extract_json_payload(response_text)
+    except ValueError as parse_error:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the editor returned something that is not the tile JSON — "
+                f"{parse_error}. Raw (first 300 chars): {response_text[:300]}"
+            ),
+        )
+
+    updated = parsed.get("node") if isinstance(parsed, dict) else None
+    say = str(parsed.get("say") or "").strip() if isinstance(parsed, dict) else ""
+    if not isinstance(updated, dict):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the editor's answer has no 'node' object — it must return the "
+                f"tile only, never the layout. Raw (first 300 chars): {response_text[:300]}"
+            ),
+        )
+    name = str(updated.get("component") or "").strip()
+    if name not in declared:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the editor emitted '{name}', which the '{chosen_system}' "
+                f"catalogue does not declare — the tile may only use what the design system "
+                f"carries (it carries: {', '.join(sorted(declared))})."
+            ),
+        )
+    props = updated.get("props") or {}
+    if not isinstance(props, dict):
+        raise HTTPException(
+            status_code=503,
+            detail="A2UI FAILURE: the editor's tile has a non-object 'props'.",
+        )
+    for prop in props:
+        if prop not in declared[name]:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"A2UI FAILURE: the editor emitted the prop '{prop}' on '{name}', which the "
+                    f"'{chosen_system}' catalogue does not declare for it — the declared props "
+                    f"are: {', '.join(sorted(declared[name])) or '(none)'}. Styling is not a "
+                    f"capability of this room."
+                ),
+            )
+
+    # ── THE SPLICE — the model never reproduces what it did not touch (the example's pattern):
+    # the new layout is the old one with ONE node replaced, its id and its position intact. ──
+    # THE TILE'S OWN THINGS SURVIVE THE EDIT — its place in the tree included: if it is a
+    # container, its children stay its children (the model changed the component and the props
+    # and nothing else; the owner's rule "Always create a container first" makes the subtree
+    # under a tile part of the tile).
+    new_node: dict[str, Any] = {**node, "component": name, "props": props}
+    nodes = list(draft["nodes"])
+    nodes[index] = new_node
+    new_layout = {**draft, "nodes": nodes}
+
+    print(
+        f"[wireframe] edited node {node_id} in '{chosen_system}' for session {session_id}, "
+        f"conversation {conversation_id}"
+    )
+    return {
+        "system": chosen_system,
+        "layout": new_layout,
+        "say": say,
+    }
+
+
+# ── THE ARTIFACT BUILD — "SHE JUST STARTS BUILDING" (2026-10-03, late — the owner's own
+#    sentence: *"I just wanna be able to ask the model to build a webpage or wireframe or
+#    whatever and she will just start doing it. That's all I want."*) ──────────────────────────
+# THE ROOM'S BUILD PATH: the model writes the PAGE — a single self-contained HTML document —
+# from the person's ask; the stage is simply the window onto it. The design system is a GUIDE,
+# not a wall: its stylesheet is served by this app (frontend/public/carbon-styles.css) and
+# linked into every built document, so `cds--*` classes and `--cds-*` tokens are simply
+# available; plain HTML/CSS is equally allowed. (The three samples were weighed and parked the
+# same night: VibeSDK is Cloudflare-only and the owner will not hold an account there; Onlook
+# needs Docker + a local Supabase stack and is an editor, not this loop; Open Canvas is a
+# document editor with the same setup weight. THIS loop needs zero new accounts.)
+#
+# BORROWED, AND NAMED (MIT — LangChain's Open Canvas, wireframe-lab/open-canvas-main): the
+# free-artifact output contract (nodes/generate-artifact/schemas.ts: {type, language, artifact,
+# title} — here a document and a sentence) and the refusal-biased router ("do not edit unless
+# clearly requested" — rule 0 lives on: a question answers in words and the page stands).
+#
+# THE SANDBOX IS IN-SESSION: this route WRITES NOTHING — the client holds the page, and Save /
+# Submit (a named package) is a later slice on the owner's word; no approval machinery now.
+# SCRIPTS ARE NEVER EXECUTED — by construction, not by trust: the stage renders the document
+# in an iframe with no allow-scripts (see artifact-canvas). Nothing here strips anything.
+
+
+def _ensure_document(artifact: str) -> str:
+    """The deterministic half: the model writes the page; the app guarantees the DOCUMENT.
+
+    An empty answer is a real one ("clear the stage") and returns empty. A fragment is wrapped
+    in a minimal document; a full document is passed through UNTOUCHED — no stylesheet is
+    injected, no design system rides along (owner, 2026-10-03: *"I don't wanna ever see them
+    again. Let her create her own imaginary designs"*).
+    """
+    text = artifact.strip()
+    if not text:
+        return ""
+    if "<html" in text.lower():
+        return text
+    return (
+        '<!doctype html><html><head><meta charset="utf-8"></head><body>'
+        + text + "</body></html>"
+    )
+
+
+class AIBuildArtifactRequest(BaseModel):
+    """Request body for the artifact build — the package, the thread, and the page as it stands."""
+    session_id: str
+    conversation_id: str = ""
+    # THE PAGE AS IT STANDS — the client holds the sandbox, so the current document rides back
+    # in with every ask (empty/absent = a blank sandbox, which is where a room starts).
+    artifact: str = ""
+
+
+@router.post("/api/ai/build-artifact")
+def ai_build_artifact(
+    request: AIBuildArtifactRequest,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """The build: the thread's last ask becomes a page, written freely.
+
+    Failures fail loud, by name. The route writes nothing — the sandbox lives in the client
+    until Save / Send-for-approval makes it a package.
+    """
+    uid = get_user_id_from_header(x_user_id)
+    if not state.prompt_sessions_api or not state.conversation_api:
+        raise HTTPException(status_code=503, detail="A2UI FAILURE: Database not available")
+    session_id = (request.session_id or "").strip()
+    if not session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="the build needs the package it builds in — 'session_id' is missing",
+        )
+    session = state.prompt_sessions_api.get_session(user_id=uid, session_id=session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # THE GUIDE'S NAME — the room's one declared system (the design systems are guides now,
+    # not walls; the name reaches the model so its own knowledge of the system is in play).
+    chosen_system = _PRODUCT_ROOM_DESIGN_SYSTEM
+
+    conversation_id = (request.conversation_id or "").strip()
+    if not conversation_id:
+        try:
+            conversations = state.conversation_api.get_conversations_by_session(session_id, uid)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"A2UI FAILURE: the package's conversations could not be read: {e}",
+            )
+        for c in conversations:
+            if (c.get("tab") or "chat") == "chat":
+                conversation_id = str(c.get("id") or "")
+                break
+        if not conversation_id and conversations:
+            conversation_id = str(conversations[0].get("id") or "")
+    if not conversation_id:
+        raise HTTPException(
+            status_code=400,
+            detail="the build needs the thread it answers — 'conversation_id' did not resolve",
+        )
+    try:
+        thread = state.conversation_api.get_messages(conversation_id, uid)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"A2UI FAILURE: the thread could not be read: {e}",
+        )
+    ask = ""
+    for message in reversed(thread or []):
+        if (message.get("role") or "") == "user" and str(message.get("content") or "").strip():
+            ask = str(message["content"]).strip()
+            break
+    if not ask:
+        raise HTTPException(
+            status_code=400,
+            detail="the build found no person turn in this thread — there is nothing to build",
+        )
+
+    current = (request.artifact or "").strip()
+    current_block = (
+        current if current
+        else "(the page is blank — nothing has been built yet; this is the FIRST build)"
+    )
+
+    llm_prompt = f"""You are Grace, the builder in the product team's ideation room. The person talks to you; you turn what they ask for into a real web page — the wireframe or webpage on the stage beside you. You are their development partner: you build what they describe, and you say plainly what you did.
+
+THE OUTPUT — EXACTLY THIS JSON, nothing else (no markdown, no fences):
+{{"artifact": "<the complete HTML document>", "say": "<one short sentence to the person>"}}
+
+THE RULES:
+0. IF THE MESSAGE IS NOT A REQUEST TO BUILD OR CHANGE THE PAGE — a question, a greeting, a discussion — return exactly {{"build": false, "say": "<one short, honest line>"}} and change NOTHING. A question is never a reason to rebuild. ("clear the stage" / "start over" IS a build request: return {{"artifact": "", "say": "..."}} — an empty page is the real answer and the stage empties.)
+1. ONE SELF-CONTAINED HTML DOCUMENT per build: a full document (doctype, html, head, body) with your own CSS in a <style> tag. Semantic HTML — headings, forms, sections, lists, tables — the way a person would structure a real page.
+2. <script> NEVER RUNS (the stage forbids it by construction) — never rely on it. No external images or fonts either (nothing to fetch); draw with CSS and inline SVG when a visual is needed.
+3. THE DESIGN IS YOURS — FREELY, AND BEAUTIFULLY (owner, 2026-10-03: *"I'm not interested in
+   the carbon UI… those horrible styling kits. I don't wanna ever see them again. Let her
+   create her own imaginary designs"*). No catalogue, no design-system classes, no stylesheet is
+   loaded into your page: write the WHOLE document yourself — your own <style>, your own
+   layout, colour, type and spacing. Make it look like a real, modern, considered web page: a
+   deliberate palette, generous spacing, one clear visual hierarchy, the kind of page a good
+   designer would ship. Standard HTML/CSS is all yours; <script> NEVER RUNS (the stage forbids
+   it by construction) and there are no external images or fonts (nothing to fetch — draw with
+   CSS and inline SVG when a visual is needed). Never use cds-- classes or Carbon anything.
+4. KEEP WHAT THE REQUEST KEEPS: the page as it stands is below. Change what the person asked to change; leave the rest of the structure standing. A request to rework everything is a rewrite.
+5. USE YOUR JUDGMENT AS A DESIGNER-DEVELOPER: real spacing, a clear primary action, information in reading order, sensible sizes (a card ~480–720px wide, a page block wider). It should read as a designed page, not a pile of tags.
+6. Say what you did in "say", plainly and briefly — never promise what the document does not show.
+
+WHAT TO BUILD (the person's request, verbatim):
+{ask}
+
+THE PAGE AS IT STANDS (change this as the request asks; keep the rest):
+{current_block if len(current_block) <= 12000 else current_block[:12000] + chr(10) + "(...truncated for length; the client holds the full page and will replace what is built)"}
+"""
+
+    llm_response = query_llm(
+        question=llm_prompt,
+        mode="surface_assembly",  # the strict-JSON system prompt + the assembly budget (grace_gui)
+        temperature=0.0,
+        prompt_id="build-artifact",
+        # model intentionally omitted — use the enabled provider's default
+    )
+    if not llm_response or not llm_response.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="A2UI FAILURE: the builder did not respond. The AI must be active to build.",
+        )
+    if llm_response.strip().startswith("Error:"):
+        raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
+
+    response_text = llm_response.strip()
+    if "```json" in response_text:
+        response_text = response_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in response_text:
+        response_text = response_text.split("```")[1].split("```")[0].strip()
+    try:
+        parsed = _extract_json_payload(response_text)
+    except ValueError as parse_error:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"A2UI FAILURE: the builder returned something that is not the build JSON — "
+                f"{parse_error}. Raw (first 300 chars): {response_text[:300]}"
+            ),
+        )
+    if not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=503,
+            detail="A2UI FAILURE: the builder's answer is not a JSON object.",
+        )
+
+    # THE ROUTER'S OTHER HALF — a question changes nothing (rule 0), same contract as the compile.
+    if parsed.get("build") is False:
+        return {
+            "build": False,
+            "system": chosen_system,
+            "say": str(parsed.get("say") or "").strip(),
+        }
+
+    artifact = parsed.get("artifact")
+    if not isinstance(artifact, str):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "A2UI FAILURE: the builder's answer has no 'artifact' document (the page is "
+                "the build; a missing one is a lie, never a blank). Raw (first 300 chars): "
+                f"{response_text[:300]}"
+            ),
+        )
+    say = str(parsed.get("say") or "").strip()
+    document = _ensure_document(artifact)
+
+    print(
+        f"[artifact] built a {len(document)}-char document from '{chosen_system}' for session "
+        f"{session_id}, conversation {conversation_id}"
+    )
+    return {
+        "build": True,
+        "system": chosen_system,
+        "artifact": document,
+        "say": say,
+    }
 
 
 class AIConfirmExitRequest(BaseModel):

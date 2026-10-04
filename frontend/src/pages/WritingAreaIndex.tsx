@@ -49,6 +49,13 @@ import composerBackground from "@/assets/composer-image-bg.jpg";
 // The artwork is the owner's second pass at it (`images/design-section2-bkg.png`, 2026-09-30); the
 // first file is still in the assets directory and is referenced by nothing.
 import designSectionBackground from "@/assets/design-section2-bkg.png";
+// THE PRODUCT ROOM'S OWN GROUND (owner, 2026-10-03: the wireframe lab's backdrop — its own
+// image, not the composer's). Same shape as the composer's and the design room's: one asset,
+// chosen by the view at the two ground slots below. NOT preloaded in register.ts, deliberately —
+// the same tradeoff the drawing's ground carries: this room is a click away, and 315KB fetched
+// for every page load would be paid by people who never open it.
+import wireframeLabBackground from "@/assets/canvas-wireframe-lab-bkg.png";
+import developmentLabBackground from "@/assets/canvas-development-lab-bkg.png";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/agent-canvas-art.jpg";
@@ -471,6 +478,40 @@ export default function Index({
     { components: [], dataModel: {} },
   );
   const [currentProductSession, setCurrentProductSession] = useState<Record<string, any> | null>(null);
+  /*
+   * WHICH PROJECT THE ROOM IS OPENED ON (2026-10-04) — the bridge's second half. A console
+   * card for a builder project carries `builder_project.project_id` (routes/builder_bridge.py
+   * writes it); a click on that card writes the id HERE and the room's embed loads
+   * `/project/<id>`. null = the tool's dashboard. A direct Product-tab click also lands on
+   * null — the dashboard is the room's home.
+   */
+  const [productRoomProjectId, setProductRoomProjectId] = useState<string | null>(null);
+  /** The builder's engine, up or down — the bridge's /api/builder/health door, read when the room opens. */
+  const [builderEngineDown, setBuilderEngineDown] = useState(false);
+  /*
+   * THE DEVELOPMENT ROOM'S STAGED ASSEMBLY (owner, 2026-10-04: *"I want to create an assembly
+   * effect similar to our other pages with a background … you could use it as a 10 second delay
+   * … and then I wanted to ease in like composer and design"*). It is deliberately staged, not
+   * measured: the gate comes down when BOTH the ten seconds have passed AND the window inside
+   * has finished loading — and the ten is one constant, here, so the owner can shorten what
+   * he asked to be ten. `builder-embed-loaded` is the frame's own announcement (see
+   * builder-embed); both refs reset on every entry, so each visit gets the same opening.
+   */
+  const DEVELOPMENT_GATE_MIN_MS = 10_000;
+  const [developmentGateDown, setDevelopmentGateDown] = useState(false);
+  const developmentMinElapsedRef = useRef(false);
+  const developmentFrameLoadedRef = useRef(false);
+  const developmentGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /*
+   * THE GOVERNANCE ROOM'S STATE (2026-10-03) — the room where the system accounts for what it
+   * spent. The same law as Product's and Design's: this room's assembly writes THESE two, and no
+   * path from Governance writes the Composer's `currentPromptSession`.
+   */
+  const [governanceTree, setGovernanceTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
+    { components: [], dataModel: {} },
+  );
+  const [currentGovernanceSession, setCurrentGovernanceSession] = useState<Record<string, any> | null>(null);
   /* Read by the long-lived drag listener below — a listener registered once keeps the render
      it was registered on, so it reads THROUGH the ref (the file's own rule for Save). */
   const currentProductSessionRef = useRef<Record<string, any> | null>(null);
@@ -481,6 +522,10 @@ export default function Index({
     nodes: Array<Record<string, unknown>>;
     positions?: Record<string, { x: number; y: number }>;
   } | null>(null);
+  /* WHICH TILE IS SELECTED IN THIS ROOM — the stage's own fact (`draft-select`), held here so a
+     scoped edit can name it (the stolen `edit-node` op; see the edit handler's note). Only the
+     VISIBLE stage takes clicks, so no guard is needed to keep the Composer's canvas out. */
+  const productSelectedNodeRef = useRef<string | null>(null);
 
   /*
    * THE ROOM'S CONTAINER, ONCE IT EXISTS — THE TARGET OF THE INJECTION.
@@ -603,6 +648,23 @@ export default function Index({
   const isConsoleView = (headerTab || 'console') === 'console';
   // The Design room is not the console and not the composer: it wears its own canvas.
   const isDesignView = (headerTab || '') === 'design';
+  // THE PRODUCT ROOM WEARS ITS OWN GROUND TOO (owner, 2026-10-03): the wireframe lab's own
+  // backdrop, swapped in with this image — its room, its look, not the composer's image behind
+  // a different tree. One fact, one reader: both ground slots below use the value below.
+  const isProductView = (headerTab || '') === 'product';
+  const workspaceBackground = isDesignView
+    ? designSectionBackground
+    : isProductView
+      ? wireframeLabBackground
+      : composerBackground;
+  // AND THE PRODUCT ROOM'S IMAGE DOES NOT STRETCH (owner, 2026-10-03, watching it distort):
+  // *"this particular background doesn't flex, it's got to be tiled — well, it doesn't have to
+  // be tiled: it's fit to bottom and then it should tile."* So for that room alone: natural
+  // size, anchored to the bottom, tiling to fill. The others keep the stretch they were drawn
+  // for (100% × 100%, top-left, no repeat).
+  const groundSize = isProductView ? 'auto' : '100% 100%';
+  const groundRepeat = isProductView ? 'repeat' : 'no-repeat';
+  const groundPosition = isProductView ? 'bottom left' : 'top left';
   const surfaceComponents = isConsoleView ? consoleTree.components : workspaceTree.components;
   const surfaceDataModel = isConsoleView ? consoleTree.dataModel : workspaceTree.dataModel;
 
@@ -631,19 +693,21 @@ export default function Index({
    * contents are the ingest's rather than the Composer's.
    */
   /*
-   * PRODUCT LEFT THIS LIST (2026-10-03) — the list's own promise, kept: *"the day one of them
-   * is designed it leaves this list and nothing else moves."* Product is a real room now: its
-   * own branch in the tab handler, its own assembly (`render-product`), its own renderer.
-   * Development and Governance remain, exactly as before.
+   * PRODUCT LED THIS LIST (2026-10-03) AND GOVERNANCE FOLLOWED THE SAME DAY — the promise kept:
+   * *"the day one of them is designed it leaves this list and nothing else moves."* Both are
+   * real rooms now: their own branches, `render-product` / `render-governance`, their own
+   * renderers. Development is the one compartment still waiting for its room.
    */
-  const SECTION_TABS = ['development', 'governance'];
+  const SECTION_TABS = ['development'];
   const isSectionShell = SECTION_TABS.includes(headerTab || '');
 
   /*
-   * DEAD TABS — Development and Governance are STUBS, and they are dead on purpose.
-   * (PRODUCT LEFT THIS SET on 2026-10-03: it is a real room now — handler branch,
-   * `render-product`, its own renderer — and a room is not a stub. The instruction below
-   * still holds, word for word, for the two that remain.)
+   * DEAD TABS — Development is the LAST stub, and it is dead on purpose.
+   * (PRODUCT LEFT THIS SET on 2026-10-03, and GOVERNANCE the same day: both are real rooms now —
+   * handler branches, `render-product` / `render-governance`, their own renderers — and a room
+   * is not a stub. This is the mistake that proved it twice: a real room left in this list still
+   * assembles — the click branch runs first — and then draws NOTHING, because the mount checks
+   * this flag. Leaving the list is part of making the room.)
    *
    * The owner, 2026-09-30: *"I want to just disable. We don't have to un-wire it. We just need to
    * make it not display. Just make them dead… product, development and governance should not load
@@ -1000,6 +1064,8 @@ export default function Index({
   const designRendererRef = useRef<any>(null);
   /* AND THE PRODUCT ROOM'S — the same rule, one room further (2026-10-03). */
   const productRendererRef = useRef<any>(null);
+  /* AND GOVERNANCE'S (2026-10-03) — the last room. */
+  const governanceRendererRef = useRef<any>(null);
 
   // Preload the composer background at mount so a transition never paints a
   // half-decoded image in sections. The browser fetches and decodes it eagerly
@@ -1992,14 +2058,39 @@ export default function Index({
   const writeDraftSystem = useCallback((system: string): void => {
     let frames = 0;
     const write = (): void => {
-      const draft = deepFind<HTMLElement & { system?: string }>('draft-canvas');
-      if (draft) {
-        if (draft.system !== system) draft.system = system;
+      // THE VISIBLE ONE — measured 2026-10-03, late, on the owner's small window: with more than
+      // one room's tree mounted, `deepFind` returns the FIRST canvas in the document, and the
+      // write landed on the OTHER room's (hidden) canvas — the product stage stood there with an
+      // empty system while the composer's hidden draft got "carbon". THE CANVAS A PERSON IS
+      // LOOKING AT is the one the room is telling; a hidden tree's canvas draws nothing, so its
+      // box is the honest discriminator.
+      const candidates: Array<HTMLElement & { system?: string }> = [];
+      const walk = (root: ParentNode): void => {
+        root.querySelectorAll('draft-canvas').forEach((el) => candidates.push(el as HTMLElement & { system?: string }));
+        root.querySelectorAll('*').forEach((el) => {
+          const shadow = (el as HTMLElement).shadowRoot;
+          if (shadow) walk(shadow);
+        });
+      };
+      walk(document);
+      const visible = candidates.find((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      }) ?? candidates[0];
+      if (visible) {
+        if (visible.system !== system) visible.system = system;
         return;
       }
-      if (++frames < 40) requestAnimationFrame(write);
+      if (++frames < 60) setTimeout(write, 60);
     };
-    requestAnimationFrame(write);
+    // IMMEDIATE FIRST, THEN TIMER RETRIES — NOT rAF. Measured 2026-10-03, late: rAF does not
+    // fire in a hidden pane (the same fact as the splash's removal in main.tsx), and a write
+    // that waited only on it left the stage resolving against the app's own tables whenever
+    // nobody was looking at the browser. A timer fires in a hidden pane (throttled, not
+    // paused), and the element-upgrade race this loop exists for is measured in frames, not
+    // seconds — 60 × 60ms is the same courtesy with a scheduler that always runs.
+    write();
+    setTimeout(write, 60);
   }, []);
 
   /*
@@ -2025,7 +2116,19 @@ export default function Index({
     const model = (productTree.dataModel ?? {}) as Record<string, any>;
     writeDraftSystem(String((model.session ?? {}).design_system || ''));
     productDraftPayloadRef.current = ((model.session ?? {}).draft ?? null);
+    // the page too — one mirror per fact (see the artifact ref's note)
+    productArtifactRef.current = ((model.session ?? {}).artifact ?? null);
   }, [productTree, writeDraftSystem]);
+
+  /* GOVERNANCE'S OWN RENDERER (2026-10-03) — the same rule, the last room. It carries the
+     ledger element and the seat; nothing outside the tree needs wiring, because the ledger
+     element reads its own feed. */
+  useEffect(() => {
+    const el = governanceRendererRef.current;
+    if (!el) return;
+    el.components = governanceTree.components;
+    el.dataModel = governanceTree.dataModel;
+  }, [governanceTree]);
 
   /**
    * S2'S FRONTEND HALF — THE LOOP THAT MAKES THE DRAFT REMEMBER.
@@ -2136,6 +2239,26 @@ export default function Index({
     });
   }, []);
 
+  /*
+   * THE PAGE ON THE STAGE (2026-10-03, late — the artifact era). `productArtifactRef` mirrors
+   * `session.artifact` in the tree, exactly as the draft ref above mirrors `session.draft`: the
+   * host HOLDS the page — the sandbox is IN-SESSION (nothing reaches the database until Save /
+   * Submit lands, a later slice on the owner's word) — writes it into the tree on every build,
+   * and sends it back with every ask so she can keep what the request keeps. One name for one
+   * fact: the tree's slot is `session.artifact`, written here and nowhere else.
+   */
+  const productArtifactRef = useRef<string | null>(null);
+
+  const writeProductArtifactPayload = useCallback((artifact: string | null): void => {
+    setProductTree((prev) => {
+      const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
+      const session = { ...((model.session ?? {}) as Record<string, any>) };
+      session.artifact = artifact;
+      model.session = session;
+      return { ...prev, dataModel: model };
+    });
+  }, []);
+
   useEffect(() => {
     const onProductDraftNodeMoved = (event: Event) => {
       const detail = ((event as CustomEvent).detail || {}) as {
@@ -2235,13 +2358,330 @@ export default function Index({
         }
       })();
     };
+    /*
+     * AND THE SELECTION IS TRACKED, NOT WRITTEN — the stage's own `draft-select` (one node id,
+     * or null on an empty click) keeps this room's answer to "which tile did the person pick".
+     * It is what a scoped edit names; nothing persists it and nothing draws it (the canvas
+     * already draws its own selection).
+     */
+    const onProductDraftSelect = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { nodeId?: unknown };
+      productSelectedNodeRef.current =
+        typeof detail.nodeId === 'string' && detail.nodeId ? detail.nodeId : null;
+    };
+    /*
+     * AND THE STAGE CAN BE EMPTIED BY HAND — the rail's Clear announces `draft-cleared` and
+     * the HOST writes the empty layout through the same one draft store every other write
+     * goes through (the spoken "clear the stage" already lands there via the compile — one
+     * fact, both hands, one writer). Nothing rides the event: an empty stage is the host's
+     * payload, not the element's opinion. The selection goes with the stage — a stale node id
+     * on an empty stage would make the next scoped action name a tile that no longer exists.
+     */
+    const onProductDraftCleared = () => {
+      const conversationId = String(currentProductSessionRef.current?.conversation_id || '');
+      if (!conversationId) {
+        sayInThread('The stage was not cleared: this wireframe session has no conversation to keep its draft in.');
+        return;
+      }
+      const next: DraftPayloadShape = { nodes: [], positions: {} };
+      productDraftPayloadRef.current = next;
+      productSelectedNodeRef.current = null;
+      writeProductDraftPayload(next);
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(next),
+            },
+          );
+          if (!res.ok) {
+            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
+            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
+          }
+        } catch (err) {
+          sayInThread(
+            'The stage was not cleared: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      })();
+    };
     window.addEventListener('draft-node-moved', onProductDraftNodeMoved);
     window.addEventListener('draft-node-added', onProductDraftNodeAdded);
+    window.addEventListener('draft-select', onProductDraftSelect);
+    window.addEventListener('draft-cleared', onProductDraftCleared);
+    /*
+     * AND THE PAGE CAN BE EMPTIED BY HAND — the artifact stage's rail announces
+     * `artifact-cleared`, and the HOST empties the sandbox (the page is in-session; there is
+     * no store to write). One fact, both hands: the spoken "clear the stage" empties it
+     * through the same build route — an empty artifact.
+     */
+    const onArtifactCleared = () => {
+      productArtifactRef.current = null;
+      writeProductArtifactPayload(null);
+    };
+    window.addEventListener('artifact-cleared', onArtifactCleared);
     return () => {
       window.removeEventListener('draft-node-moved', onProductDraftNodeMoved);
       window.removeEventListener('draft-node-added', onProductDraftNodeAdded);
+      window.removeEventListener('draft-select', onProductDraftSelect);
+      window.removeEventListener('draft-cleared', onProductDraftCleared);
+      window.removeEventListener('artifact-cleared', onArtifactCleared);
     };
-  }, [writeProductDraftPayload, sayInThread]);
+  }, [writeProductDraftPayload, writeProductArtifactPayload, sayInThread]);
+
+  /*
+   * ══ THE BUILD — HER OFFER, THE COMPILE, THE STAGE (2026-10-03 evening, Slice B) ═══════════════
+   *
+   * `[Build that](action:build-wireframe)` from her chair (chat-panel dispatches
+   * `a2ui:build-wireframe`) opens the product room's compile: the host asks
+   * `POST /api/ai/assemble-wireframe` for the layout — the ask is the THREAD's last person turn,
+   * read server-side, so the button carries no words of its own — and applies what comes back
+   * through the ONE draft store (the same PUT every gesture uses; the host stays the single
+   * writer). The stage redraws from the model path the drag handlers already keep, and her `say`
+   * line lands in the thread as a system message — the room's own channel for what happened.
+   *
+   * A REFUSAL IS SPOKEN, THE STAGE UNTOUCHED: every failure — no package open, an undeclared
+   * name, a prop the catalogue does not carry — is the server's words verbatim in her thread
+   * (re-wording it here would be a second authority on the reason), and nothing is written.
+   */
+  useEffect(() => {
+    const onBuildWireframe = () => {
+      const session = currentProductSessionRef.current;
+      const sessionId = String(session?.session_id || '');
+      if (!sessionId) {
+        sayInThread('I cannot build yet: this room has not opened a package.');
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await apiFetch(`${API_BASE}/ai/assemble-wireframe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: sessionId,
+              conversation_id: String(session?.conversation_id || ''),
+            }),
+          });
+          const payload = (await res.json().catch(() => null)) as
+            | { nodes?: unknown; positions?: unknown; say?: unknown; detail?: string }
+            | null;
+          if (!res.ok) {
+            sayInThread(String(payload?.detail || `The build was refused: HTTP ${res.status}`));
+            return;
+          }
+          const base = (productDraftPayloadRef.current as DraftPayloadShape | null) ?? { nodes: [] };
+          const next: DraftPayloadShape = {
+            ...(base.label ? { label: base.label } : {}),
+            nodes: Array.isArray(payload?.nodes) ? (payload?.nodes as DraftPayloadShape['nodes']) : [],
+            positions: (payload?.positions ?? {}) as DraftPayloadShape['positions'],
+          };
+          // The stage follows the build immediately — the payload and the drawing stay one fact.
+          productDraftPayloadRef.current = next;
+          writeProductDraftPayload(next);
+          const target = String(
+            currentProductSessionRef.current?.conversation_id || session?.conversation_id || '',
+          );
+          if (!target) {
+            sayInThread('The build landed here but could not be saved: this session has no conversation to keep its draft in.');
+            return;
+          }
+          const put = await fetch(
+            `${API_BASE}/conversations/${encodeURIComponent(target)}/draft`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(next),
+            },
+          );
+          if (!put.ok) {
+            const refused = (await put.json().catch(() => null)) as { detail?: string } | null;
+            throw new Error(String(refused?.detail || `HTTP ${put.status}`));
+          }
+          const said = String(payload?.say || '').trim();
+          if (said) sayInThread(said);
+        } catch (err) {
+          sayInThread(
+            'The build did not complete: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      })();
+    };
+    window.addEventListener('a2ui:build-wireframe', onBuildWireframe);
+    return () => window.removeEventListener('a2ui:build-wireframe', onBuildWireframe);
+  }, [sayInThread, writeProductDraftPayload]);
+
+  /*
+   * ══ THE SCOPED EDIT — "THIS TILE, NOT THE ROOM" (2026-10-03 late, STOLEN FROM THE EXAMPLE) ════
+   *
+   * `[Edit it](action:edit-node)` from her chair (chat-panel dispatches `a2ui:edit-node`) changes
+   * ONE tile — the one the person selected on the stage (`draft-select`, tracked in
+   * `productSelectedNodeRef`) — and leaves everything else exactly as it stands. This is Open
+   * Canvas's highlight-scoped op brought over (their `updateArtifact`: the model answers with the
+   * fragment only, the server splices; see the route's note for the borrowed contract and its
+   * citations). The host applies the returned layout through the ONE draft store, the same writer
+   * every gesture and the compile use.
+   *
+   * A REFUSAL IS SPOKEN, THE STAGE UNTOUCHED — every guard fails loud with a name a person reads:
+   * no selection here, no package there, a tile that is no longer in the layout. The server's
+   * words arrive verbatim; re-wording them would be a second authority on the reason.
+   */
+  useEffect(() => {
+    const onEditNode = () => {
+      const session = currentProductSessionRef.current;
+      const sessionId = String(session?.session_id || '');
+      const nodeId = String(productSelectedNodeRef.current || '');
+      if (!sessionId) {
+        sayInThread('I cannot change a tile yet: this room has not opened a package.');
+        return;
+      }
+      if (!nodeId) {
+        sayInThread('Click the tile you want changed first — I edit the one you select.');
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await apiFetch(`${API_BASE}/ai/edit-node`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: sessionId,
+              conversation_id: String(session?.conversation_id || ''),
+              node_id: nodeId,
+            }),
+          });
+          const payload = (await res.json().catch(() => null)) as
+            | { layout?: unknown; say?: unknown; detail?: string }
+            | null;
+          if (!res.ok) {
+            sayInThread(String(payload?.detail || `The change was refused: HTTP ${res.status}`));
+            return;
+          }
+          const layout = payload?.layout as DraftPayloadShape | undefined;
+          if (!layout || !Array.isArray(layout.nodes)) {
+            sayInThread('The change came back without a layout — nothing was written.');
+            return;
+          }
+          productDraftPayloadRef.current = layout;
+          writeProductDraftPayload(layout);
+          const target = String(
+            currentProductSessionRef.current?.conversation_id || session?.conversation_id || '',
+          );
+          if (!target) {
+            sayInThread('The change landed here but could not be saved: this session has no conversation to keep its draft in.');
+            return;
+          }
+          const put = await fetch(
+            `${API_BASE}/conversations/${encodeURIComponent(target)}/draft`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(layout),
+            },
+          );
+          if (!put.ok) {
+            const refused = (await put.json().catch(() => null)) as { detail?: string } | null;
+            throw new Error(String(refused?.detail || `HTTP ${put.status}`));
+          }
+          const said = String(payload?.say || '').trim();
+          if (said) sayInThread(said);
+        } catch (err) {
+          sayInThread(
+            'The change did not complete: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      })();
+    };
+    window.addEventListener('a2ui:edit-node', onEditNode);
+    return () => window.removeEventListener('a2ui:edit-node', onEditNode);
+  }, [sayInThread, writeProductDraftPayload]);
+
+  /*
+   * ══ THE ROOM BUILDS AS THE PERSON SPEAKS (2026-10-03, late — the owner's word) ════════════════
+   *
+   * *"we don't need that [Build that button] — just give her a prompt and she starts building."*
+   * So the seat announces every real person turn (`a2ui:person-turn`, fired only after the server
+   * answered AND the thread adoption settled), and THIS room answers it by compiling: the compile
+   * reads the thread's last person message itself, and the ROUTER now lives inside it — rule 0
+   * lets the compile answer `{"build": false}` for a question, a greeting, a request it cannot
+   * express (borrowed from the example's "replyToGeneralInput" split). On a build, the layout
+   * lands through the ONE draft store and her `say` line posts; on a no-op, nothing moves and her
+   * chat reply has already spoken. Only the product room listens — other rooms' hosts have their
+   * own turn handling and no listener here.
+   */
+  useEffect(() => {
+    const onPersonTurn = (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { conversationId?: unknown };
+      const session = currentProductSessionRef.current;
+      const sessionId = String(session?.session_id || '');
+      if (!sessionId) return; // no product package open — another room's turn, or a cold seat
+      const conversationId = String(detail.conversationId || session?.conversation_id || '');
+      void (async () => {
+        // WHAT ACTUALLY HAPPENED — the seat's card may only claim what this records: a page
+        // that landed ('built'), a turn that needed no page ('answered'), or a failure
+        // ('failed'). The card said "Built the page" off the 'building' announcement alone
+        // once (owner, 2026-10-03: *"You've got messages saying page built and there's no
+        // page there"*) — its own bug, fixed at the source.
+        let outcome = 'failed';
+        try {
+          // THE WORK CARD'S FIRST END — the seat's card spans the whole turn (her reply, then
+          // this build); 'building' is the second stage, 'idle' (the finally, with the outcome)
+          // is the end. One name for one fact: `a2ui:grace-status`, scoped to this conversation.
+          window.dispatchEvent(new CustomEvent('a2ui:grace-status', {
+            detail: { state: 'building', conversationId },
+          }));
+          const res = await apiFetch(`${API_BASE}/ai/build-artifact`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: sessionId,
+              conversation_id: conversationId,
+              // THE PAGE AS IT STANDS — the sandbox is IN-SESSION (nothing reaches the
+              // database until Save / Submit lands), so the current document rides back
+              // with every ask and she can keep what the request keeps.
+              artifact: productArtifactRef.current ?? '',
+            }),
+          });
+          const payload = (await res.json().catch(() => null)) as
+            | { build?: unknown; artifact?: unknown; say?: unknown; detail?: string }
+            | null;
+          if (!res.ok) {
+            // A refused build IS spoken — the person asked for something and must hear why the
+            // stage did not move, in the server's own words (never re-worded here).
+            sayInThread(String(payload?.detail || `The build was refused: HTTP ${res.status}`));
+            return;
+          }
+          if (payload?.build === false || typeof payload?.artifact !== 'string') {
+            outcome = 'answered'; // the router said this turn was not a change — her chat reply stands
+            return;
+          }
+          productArtifactRef.current = payload.artifact;
+          writeProductArtifactPayload(payload.artifact);
+          outcome = 'built';
+          const said = String(payload?.say || '').trim();
+          if (said) sayInThread(said);
+        } catch (err) {
+          sayInThread(
+            'The build did not complete: '
+            + `${err instanceof Error ? err.message : String(err)}`,
+          );
+        } finally {
+          // THE WORK CARD'S OTHER END — with the OUTCOME, never just "done": the card's trail
+          // records a page claim only when one landed.
+          window.dispatchEvent(new CustomEvent('a2ui:grace-status', {
+            detail: { state: 'idle', outcome, conversationId },
+          }));
+        }
+      })();
+    };
+    window.addEventListener('a2ui:person-turn', onPersonTurn);
+    return () => window.removeEventListener('a2ui:person-turn', onPersonTurn);
+  }, [sayInThread, writeProductDraftPayload]);
 
   /**
    * The views a column can show in each state.
@@ -4063,6 +4503,12 @@ export default function Index({
   };
 
   const handleOpenPromptFromConsole = async (sessionId: string) => {
+    /* LEAVING THE ROOM IS GUARDED ON EVERY WAY OUT (2026-10-04): a console card may open a
+       composer package or another product project — either one abandons the idea standing. */
+    if (productRoomProjectId) {
+      const mayLeave = await guardProductExit();
+      if (!mayLeave) return;
+    }
     /*
      * A CARD OPENS THE ROOM THAT OWNS IT (2026-10-03). The console's card data carries each
      * package's room (`room_domain`): a product card opens the Product room, and every other
@@ -4071,9 +4517,16 @@ export default function Index({
      */
     const openedCard = assembledConsoleCards?.find((c) => String(c?.id) === String(sessionId));
     if (openedCard?.room_domain === 'product') {
-      console.log(`🤖 [A2UI] Product card → intent: render-product:${sessionId}`);
+      /*
+       * THE ROOM IS THE BUILDER (2026-10-04): a bridged card carries its project, and the
+       * click opens the room ON it — the embed loads that project's workspace. A legacy
+       * product package (no `builder_project`: born before the bridge) opens the room's
+       * dashboard. NOTHING IS ASSEMBLED either way — no surface, no package read.
+       */
+      const builderProjectId = (openedCard as any)?.builder_project?.project_id ?? null;
+      console.log(`🤖 [A2UI] Product card → the builder${builderProjectId ? ` on "${builderProjectId}"` : ' (dashboard)'}`);
+      setProductRoomProjectId(builderProjectId ? String(builderProjectId) : null);
       handleHeaderTabChange('product');
-      await assembleProductSurface(String(sessionId));
       return;
     }
     // ══════════════════════════════════════════════════════════════════════════
@@ -4112,6 +4565,185 @@ export default function Index({
     // Force full re-render to dispatch sections to textareas
     setPromptLoadKey(k => k + 1);
   };
+
+  /**
+   * IS THE TOOL'S ENGINE UP? (2026-10-04) — the bridge's health door (`/api/builder/health`
+   * proxies the engine's own `/health`). The room asks when it opens, because a stopped
+   * engine otherwise reads as a BROKEN TOOL: the Code panel and every build fail with the
+   * tool's own error text, and nothing on screen says the process is missing. This is what
+   * the room's banner says out loud. Best-effort — a failed check reads as "down".
+   */
+  async function checkBuilderEngine(): Promise<void> {
+    try {
+      const res = await fetch(`${API_BASE}/builder/health`);
+      const body = await res.json();
+      setBuilderEngineDown(!body?.ok);
+    } catch {
+      setBuilderEngineDown(true);
+    }
+  }
+
+  /**
+   * A NEW PROJECT, BORN ON THE TAB'S CLICK (owner, 2026-10-04) — the Composer's own act,
+   * translated: *"when I click product just create a new project … this is the same function
+   * as composer."* The tool's engine creates it (`POST /api/builder/new` through the
+   * bridge) and the room opens its workspace. THERE IS NO DASHBOARD ANY MORE in this room
+   * (same evening: *"basically we never want to see the applications dashboard ever"*) —
+   * the room lands in a project, or the banner says why it cannot.
+   */
+  const creatingProductProjectRef = useRef(false);
+  async function createProductProject(): Promise<void> {
+    if (creatingProductProjectRef.current) return;
+    creatingProductProjectRef.current = true;
+    try {
+      const res = await fetch(`${API_BASE}/builder/new`, { method: 'POST' });
+      const body = await res.json();
+      if (body?.ok && body?.project_id) {
+        setBuilderEngineDown(false);
+        setProductRoomProjectId(String(body.project_id));
+      } else {
+        setBuilderEngineDown(true);
+      }
+    } catch {
+      setBuilderEngineDown(true);
+    } finally {
+      creatingProductProjectRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if ((headerTab || '') !== 'product') return;
+    void checkBuilderEngine();
+    // Entering the room with no project — a reload, a restored tab — births one exactly as
+    // a click does. The room may never stand on the dashboard.
+    if (!productRoomProjectId) void createProductProject();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headerTab]);
+
+  /**
+   * THE ROOM'S EXIT GUARD (owner, 2026-10-04) — "publish or discard", asked only where it
+   * means something:
+   *   · no project open          → leave freely;
+   *   · published                → leave freely (its card is the team's business now);
+   *   · unpublished and BLANK    → discarded IN SILENCE (born from a click, never used);
+   *   · unpublished with work    → ASK: publish it to the console, discard it for good, or stay.
+   * The ENGINE is the fact (read through the bridge); an unreadable engine lets the person
+   * leave — a guard that traps someone on a stopped process would be worse than the risk.
+   */
+  const [leavePrompt, setLeavePrompt] = useState<{ projectId: string; settle: (choice: 'publish' | 'discard' | 'stay') => void } | null>(null);
+
+  async function discardProductProject(bridgeProjectId: string): Promise<void> {
+    try {
+      await fetch(`${API_BASE}/builder/discard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: bridgeProjectId }),
+      });
+    } catch { /* the engine is down — there is nothing to discard against */ }
+  }
+
+  async function guardProductExit(): Promise<boolean> {
+    const bridgeProjectId = productRoomProjectId;
+    if (!bridgeProjectId) return true;
+    let published = true;
+    let hasWork = false;
+    try {
+      const res = await fetch(`${API_BASE}/builder/state?project_id=${encodeURIComponent(bridgeProjectId)}`);
+      const body = await res.json();
+      if (body?.ok) {
+        published = Boolean(body.published);
+        hasWork = Boolean(body.has_work);
+      }
+    } catch { /* unreadable → leave freely (see the note above) */ }
+    if (published) return true;
+    if (!hasWork) {
+      await discardProductProject(bridgeProjectId);
+      setProductRoomProjectId(null);
+      return true;
+    }
+    const choice = await new Promise<'publish' | 'discard' | 'stay'>((resolve) => {
+      setLeavePrompt({
+        projectId: bridgeProjectId,
+        settle: (chosen) => {
+          setLeavePrompt(null);
+          resolve(chosen);
+        },
+      });
+    });
+    if (choice === 'stay') return false;
+    if (choice === 'publish') {
+      try {
+        await fetch(`${API_BASE}/builder/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: bridgeProjectId }),
+        });
+      } catch { /* the card simply stays absent until a publish succeeds */ }
+    } else {
+      await discardProductProject(bridgeProjectId);
+    }
+    setProductRoomProjectId(null);
+    return true;
+  }
+
+  /**
+   * THE BUILDER SAID IT PUBLISHED (2026-10-04): the flag is the engine's (the builder's own
+   * proxy wrote it); what is missing is the CARD — so the host syncs now, and the console
+   * has it before anyone looks.
+   */
+  useEffect(() => {
+    const onPublished = () => { void fetch(`${API_BASE}/builder/sync`, { method: 'POST' }); };
+    window.addEventListener('builder-published', onPublished);
+    return () => window.removeEventListener('builder-published', onPublished);
+  }, []);
+
+  /**
+   * THE DEVELOPMENT ROOM'S OPENING (2026-10-04) — the staged assembly's two clocks:
+   * entering the room restarts them (the gate rises again on every visit, like the other
+   * rooms' spinners), the timer is the owner's ten seconds, and the frame's own load event
+   * (builder-embed-loaded) is the other hand. When both have happened, the gate fades and
+   * the window eases in underneath it — one cross-fade, 700ms, the same feel as composer
+   * and design.
+   */
+  useEffect(() => {
+    if ((headerTab || '') !== 'development') return;
+    setDevelopmentGateDown(false);
+    developmentMinElapsedRef.current = false;
+    developmentFrameLoadedRef.current = false;
+    if (developmentGateTimerRef.current) clearTimeout(developmentGateTimerRef.current);
+    developmentGateTimerRef.current = setTimeout(() => {
+      developmentMinElapsedRef.current = true;
+      if (developmentFrameLoadedRef.current) setDevelopmentGateDown(true);
+    }, DEVELOPMENT_GATE_MIN_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headerTab]);
+
+  useEffect(() => {
+    const onFrameLoaded = () => {
+      developmentFrameLoadedRef.current = true;
+      if (developmentMinElapsedRef.current) setDevelopmentGateDown(true);
+    };
+    window.addEventListener('builder-embed-loaded', onFrameLoaded);
+    return () => window.removeEventListener('builder-embed-loaded', onFrameLoaded);
+  }, []);
+
+  /**
+   * THE BUILDER'S BACK ARROW COMES HOME (owner, 2026-10-04): *"there's a back button …
+   * inside the product team area — that back button should go back to the console."*
+   * The frame cannot touch this app; it postMessages, <builder-embed> verifies the sender
+   * and re-announces `builder-back` on window, and this — the host — opens the console.
+   */
+  useEffect(() => {
+    const onBuilderBack = () => {
+      // Through the guard: the back arrow and "My projects" both LEAVE the room (2026-10-04).
+      void (async () => {
+        if (await guardProductExit()) handleHeaderTabChange('console');
+      })();
+    };
+    window.addEventListener('builder-back', onBuilderBack);
+    return () => window.removeEventListener('builder-back', onBuilderBack);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // DELETED: handleLoadPromptSession - was database fallback bypassing AI assembly
   // All session loads MUST go through AI assembly via handleOpenPromptFromConsole
@@ -4265,6 +4897,19 @@ export default function Index({
         headers: {
           'Content-Type': 'application/json',
           'X-User-ID': getStoredUserId(),
+          // THE PACKAGE THIS CALL IS ABOUT (2026-10-03) — the governance ledger attributes a
+          // call by HEADERS, never by reading a body (a body read in that middleware deadlocked
+          // these very POSTs — measured at 12:54, a curl that never came back). The id rides the
+          // context when it names one, and the intent when the intent names one.
+          ...(() => {
+            const fromIntent = typeof intent === 'string' && intent.includes(':') ? intent.split(':')[1].trim() : '';
+            const ctx = context as { session_id?: string; conversation_id?: string } | undefined;
+            const packageSession = String(ctx?.session_id || fromIntent || '');
+            if (!packageSession) return {};
+            const headers: Record<string, string> = { 'X-Package-Session': packageSession };
+            if (ctx?.conversation_id) headers['X-Conversation-Id'] = String(ctx.conversation_id);
+            return headers;
+          })(),
         },
         body: JSON.stringify({ intent, context }),
         signal: controller.signal,
@@ -5033,6 +5678,22 @@ export default function Index({
         throw envelopeRefusalError(read.refusal);
       }
       const reading = read.reading;
+      /*
+       * THE SESSION'S OWN REGISTRY LOADS BEFORE THE TREE NAMES ANY COMPONENT — and since
+       * 2026-10-03 this load is LOAD-BEARING, not a courtesy. By the owner's wall
+       * (PLANS.AGENT/multiple-catalogs.md §10) an ingested system's names are no longer in the
+       * app's allowlist; `resolveTag` reads the CHOSEN system's own table (the partition's
+       * fetched registry.json). Found by driving minutes after the wall went in: the stage drew
+       * *"The catalogue does not know \"ag-select\""* for a session whose own registry maps it —
+       * the map was never fetched on this path (the Composer's draft view has awaited this since
+       * the step that built it; `showDraftColumn`). ABSENT IS A REAL ANSWER — no system chosen
+       * means the app's own tables resolve the draft. A load that FAILS throws BEFORE the tree
+       * is set, so the room never draws a stage whose names it could not resolve.
+       */
+      const chosenSystem = String(
+        ((reading.dataModel as Record<string, any>)?.session?.design_system) || '',
+      );
+      if (chosenSystem) await loadSystemRegistry(chosenSystem);
       setProductTree({
         components: reading.components as any[],
         dataModel: reading.dataModel as Record<string, any>,
@@ -5054,40 +5715,55 @@ export default function Index({
   }, []);
 
   /*
-   * THE STRIP'S WRITE (2026-10-03) — `design-system-chosen` from the Product room. ONE fact,
-   * ONE WRITER: the host writes `metadata.design_system` (the session PUT MERGES jsonb — the
-   * row's other keys, room_domain included, survive), then re-assembles the room so the stage
-   * is re-handed its `system` and its `palette` — the two values that live outside the tree.
-   * A failed write is said in her thread, never swallowed.
+   * THE CHOOSER'S WRITE IS GONE (2026-10-03, late) — REMOVED WITH THE CHOOSER, NOT DISABLED.
+   *
+   * The owner: *"I don't want the user to be able to select a catalogue. Let's just pick one
+   * that's most compatible and use it. I'm removing that feature."* The room's system is now a
+   * server-side constant (`_PRODUCT_ROOM_DESIGN_SYSTEM`), the element that dispatched
+   * `design-system-chosen` is deleted from the app, and this listener went with it: no dispatch,
+   * no PUT, no second writer on `metadata.design_system`. The assembly still CARRIES the name in
+   * its data model — `assembleProductSurface` reads it to pre-load the system's registry before
+   * the tree names any component — but nothing offers it and nothing writes it.
    */
-  useEffect(() => {
-    const onDesignSystemChosen = (event: Event) => {
-      const system = String(((event as CustomEvent).detail || {}).system || '');
-      const sessionId = String((currentProductSessionRef.current?.session_id) || '');
-      if (!system || !sessionId) return;
-      void (async () => {
-        try {
-          const res = await apiFetch(`${API_BASE}/prompt-sessions/${encodeURIComponent(sessionId)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ metadata: { design_system: system } }),
-          });
-          if (!res.ok) {
-            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
-            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
-          }
-          await assembleProductSurface(sessionId);
-        } catch (err) {
-          sayInThread(
-            'That design system was not saved: '
-            + `${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      })();
-    };
-    window.addEventListener('design-system-chosen', onDesignSystemChosen);
-    return () => window.removeEventListener('design-system-chosen', onDesignSystemChosen);
-  }, [assembleProductSurface, sayInThread]);
+
+  /*
+   * THE GOVERNANCE ROOM'S OWN ASSEMBLY (2026-10-03) — the product room's shape, aimed at
+   * `render-governance`. No session id: the room is a CONTAINER (the design room's own kind of
+   * row), not a package — it opens its ledger and its seat, always. It writes `governanceTree`
+   * and `currentGovernanceSession` and nothing else.
+   */
+  const assembleGovernanceSurface = useCallback(async (): Promise<void> => {
+    setIsAIAssembling(true);
+    try {
+      const response = await apiFetch(`${API_BASE}/ai/assemble-surface`, {
+        method: "POST",
+        body: JSON.stringify({ intent: "render-governance" }),
+      });
+      const rawData = await response.json();
+      const read = readA2UIEnvelope(rawData);
+      if (read.ok === false) {
+        console.error(`🤖 [A2UI] ENVELOPE REFUSED for render-governance — ${read.refusal.code}: ${read.refusal.message}`);
+        throw envelopeRefusalError(read.refusal);
+      }
+      const reading = read.reading;
+      setGovernanceTree({
+        components: reading.components as any[],
+        dataModel: reading.dataModel as Record<string, any>,
+      });
+      const governanceSession = (reading.dataModel as Record<string, any>)?.session ?? null;
+      setCurrentGovernanceSession(governanceSession);
+      window.requestAnimationFrame(() => {
+        const kind = governanceSession?.session_id ? 'resume' : 'blank';
+        const forSeat = governanceSession?.session_id ?? null;
+        markArrival(kind, forSeat);
+        window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
+          detail: { kind, sessionId: forSeat },
+        }));
+      });
+    } finally {
+      setIsAIAssembling(false);
+    }
+  }, []);
 
   /*
    * ══ THE INGEST FORM IN THE ROOM, ANSWERED HERE ══════════════════════════════════════════════
@@ -5352,7 +6028,16 @@ export default function Index({
   const [catalogIngestBusy, setCatalogIngestBusy] = useState(false);
 
   const writeDesignSystemIngest = useCallback((patch: { busy?: boolean; message?: string }): void => {
-    setWorkspaceTree((prev) => {
+    /*
+     * THE DESIGN TREE, AND IT WAS THE COMPOSER'S — measured 2026-10-03, the owner's first
+     * upload: the request fired and the server answered 400 TWICE (the access log has both
+     * lines) and the form sat silent, because this wrote the answer into `workspaceTree`
+     * while the room that DRAWS this form is the design room. The Figma form's own writer
+     * (`setDesignIngest` above) targets `setDesignTree` — which is why ITS messages show —
+     * and this now mirrors it exactly: the room that draws the form is the room whose
+     * model carries its words.
+     */
+    setDesignTree((prev) => {
       const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
       const session = { ...((model.session ?? {}) as Record<string, any>) };
       const current = { ...((session.design_system_ingest ?? {}) as Record<string, any>) };
@@ -5397,6 +6082,19 @@ export default function Index({
             + `component${names.length === 1 ? '' : 's'} PROPOSED (draft: false). A person accepts `
             + 'each before the assembler may place it.',
         });
+        /*
+         * AND THE ROOM TURNS TO WHAT JUST LANDED (owner, 2026-10-03): *"the catalog appears in
+         * the list where it was not there before and it DEFAULTS to that catalog you just
+         * ingested and shows the component tree for that catalog, so you can begin working on
+         * it."* One live property write — the rail's own `updated` re-reads on a `pipeline`
+         * change — plus the refresh bump its counts ride. No assembly, no reload, nothing by
+         * hand; and the tree it draws now carries the proposed row with its Accept control.
+         */
+        const rail = deepFind<HTMLElement & { pipeline?: string }>('figma-layers-view');
+        if (rail && payload?.system) {
+          rail.pipeline = String(payload.system);
+        }
+        setDesignIngest({ refresh: Date.now() });
       } catch (err) {
         writeDesignSystemIngest({
           busy: false,
@@ -5409,6 +6107,56 @@ export default function Index({
     window.addEventListener('catalog-ingest-submit', onCatalogIngestSubmit);
     return () => window.removeEventListener('catalog-ingest-submit', onCatalogIngestSubmit);
   }, [catalogIngestBusy, writeDesignSystemIngest]);
+
+  /*
+   * ══ THE ACCEPT ACT, ANSWERED HERE (2026-10-03) ══════════════════════════════════════════════
+   *
+   * The rail announces `catalog-accept {system, name}`; this posts it and says what came back —
+   * the server's words VERBATIM on a refusal (every 404/409 names what is wrong), and on success
+   * the note that the entry is placeable NOW (the room's palette reads the marker the instant the
+   * write lands). The result goes back to BOTH readers: the message line above (the
+   * design-system form's own), and `catalog-accept-settled`, which is what lets the rail's row
+   * change — a row may not flip on its own press; it flips on the write that landed.
+   */
+  useEffect(() => {
+    const onCatalogAccept = async (event: Event) => {
+      const detail = ((event as CustomEvent).detail || {}) as { system?: string; name?: string };
+      const system = String(detail.system || '');
+      const name = String(detail.name || '');
+      if (!system || !name) return;
+      try {
+        const res = await fetch(`${API_BASE}/catalog/${encodeURIComponent(system)}/accept`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        const payload = (await res.json().catch(() => null)) as
+          | { detail?: string; accepted?: { at?: string } }
+          | null;
+        if (!res.ok) {
+          writeDesignSystemIngest({
+            message: String(payload?.detail || `The accept was refused: HTTP ${res.status}`),
+          });
+          window.dispatchEvent(new CustomEvent('catalog-accept-settled', {
+            detail: { system, name, ok: false },
+          }));
+          return;
+        }
+        writeDesignSystemIngest({
+          message: `'${name}' is accepted — placeable in the rooms now (recorded ${payload?.accepted?.at || ''}).`,
+        });
+        window.dispatchEvent(new CustomEvent('catalog-accept-settled', {
+          detail: { system, name, ok: true },
+        }));
+      } catch (err) {
+        writeDesignSystemIngest({
+          message: `The accept request failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    };
+    window.addEventListener('catalog-accept', onCatalogAccept);
+    return () => window.removeEventListener('catalog-accept', onCatalogAccept);
+  }, [writeDesignSystemIngest]);
 
   /*
    * ══ THE TWO RUN TRIGGERS, AND THE COLUMN THEY LAUNCH ═════════════════════════════════════════
@@ -6024,6 +6772,19 @@ export default function Index({
   }, [designTree, setDesignIngest, setDesignPreview]);
 
   const handleTabChangeWithGate = useCallback(async (tabId: string | null) => {
+    /**
+     * ⭐ THE ROOM'S EXIT GUARD COMES FIRST (owner, 2026-10-04: *"you should probably ask the
+     * user if they try to exit the product team area without saving their project if they
+     * want to save it or not … it's called publish at the top, that would publish it to the
+     * console"* — and "don't save" means DISCARD). Leaving the Product room with an open,
+     * unpublished idea asks the question before ANY tab moves; a blank idea is discarded in
+     * silence; a published one leaves freely. See `guardProductExit`.
+     */
+    if (productRoomProjectId) {
+      const mayLeave = await guardProductExit();
+      if (!mayLeave) return;
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     // A2UI v0.9: Tab clicks are AI commands
     // Send document state to AI - AI decides how to handle unsaved changes
@@ -6145,16 +6906,44 @@ export default function Index({
        * create door — never an assembly around nothing.
        */
       handleHeaderTabChange('product');
-      console.log('🤖 [A2UI] Product clicked → intent: render-product (its own process)');
+      console.log('🤖 [A2UI] Product clicked → the builder pane (no assembly: the room IS the builder)');
       /*
-       * THE CLICK IS THE DOOR (owner, 2026-10-03), and the door is the SERVER's — the SAME
-       * get-or-create the console room and the design room use: *"it should mirror how
-       * composer, and how console and how the design also create session packages — those
-       * packages in their structure are critical."* So the frontend asks for the room, and
-       * the server resolves WHICH session (the most recent product package, or one born for
-       * this arrival); no client-side creation, no empty state, no second question.
+       * NOTHING IS ASSEMBLED FOR THIS ROOM ANY MORE (owner, 2026-10-04): *"the product room
+       * will just remove the grace chat."* The pane below this branch mounts <builder-embed>
+       * — the whole local app builder — so there is no surface to ask the server for, no
+       * package get-or-create, and no model call on arrival. `assembleProductSurface` and its
+       * tree/state stay in the file, unwired, rather than deleted: the room they served may
+       * come back, and a deleted door is not a decision this host gets to make alone.
        */
-      void assembleProductSurface();
+      /* THE CLICK IS THE DOOR, AND THE DOOR CREATES (owner, 2026-10-04): *"when I click
+         product just create a new project … this is the same function as composer."* The
+         Composer's tab click births a package; this room's births a PROJECT in the tool —
+         created through the bridge, then opened by the embed. A console card opens an
+         EXISTING project instead; that path belongs to the card (handleOpenPromptFromConsole). */
+      void createProductProject();
+      return;
+    }
+
+    if (tabId === 'governance') {
+      // GOVERNANCE GOES THROUGH ITS OWN PROCESS (2026-10-03) — the product branch's shape: the
+      // room's own assembly is asked, and nothing of the Composer's is called or touched.
+      handleHeaderTabChange('governance');
+      console.log('🤖 [A2UI] Governance clicked → intent: render-governance (its own process)');
+      void assembleGovernanceSurface();
+      return;
+    }
+
+    if (tabId === 'development') {
+      /*
+       * THE DEVELOPMENT TAB IS A ROOM NOW (owner, 2026-10-04: *"you could just drop it right in
+       * there. Can't you under a development tab"*) — bolt.diy (the web-native open app
+       * builder) embedded whole, exactly the Product room's move: no A2UI assembly, no
+       * `render-section`, nothing of the Composer's touched. It was the LAST dead stub
+       * (DEAD_TABS); it stays listed there so the assemble path keeps refusing it, and this
+       * branch — ahead of that path — is what makes it live.
+       */
+      handleHeaderTabChange('development');
+      console.log('🤖 [A2UI] Development clicked → the bolt.diy room (no assembly)');
       return;
     }
 
@@ -6204,7 +6993,7 @@ export default function Index({
 
     // Other tabs - just switch for now (TODO: wire to AI assembly)
     handleHeaderTabChange(tabId);
-  }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab, assembleProductSurface]);
+  }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab, assembleProductSurface, assembleGovernanceSurface]);
 
   // The copilot logo in the chat rail navigates back to the console — the same
   // path the Console header tab uses.
@@ -8769,8 +9558,13 @@ export default function Index({
                      BEHIND this slot and outside the viewport's fade — so the waves run
                      unbroken from the spinner through to the assembled console instead of
                      fading out and back in mid-transition. The composer keeps its image. */}
-                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? 'transparent' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? 'none' : `url(${isDesignView ? designSectionBackground : composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
-                  <div className="w-8 h-8 border-4 border-[#507274] border-t-transparent rounded-full animate-spin"></div>
+                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? 'transparent' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? 'none' : `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
+                  {/* THE GATE'S RING (owner, 2026-10-04: *"we have a spinner on the login gate …
+                      it has a nice spinner with a yellow indicator on it. Can you put those
+                      spinners back to our assembly gates"*). The sign-in gate's amber indicator
+                      — rgba(240,179,35,0.25) ring, solid #F0B323 top — replaces the plain teal
+                      ring, so every assembly gate wears the one look the gate taught. */}
+                  <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
                   <p className="text-[#507274] text-sm font-medium font-['Inter']">{aiAssemblyMessage}</p>
                 </div>
                 {/* slot="console" — shown when header-tab is "console" */}
@@ -8845,7 +9639,7 @@ export default function Index({
                 {/* slot="workspace" — AI-driven Lit tree (A2UI v0.9.1).
                     Slots are the loading contract. AI fills them with prompt blocks.
                     When assembly FAILS, show the error — no hiding. */}
-                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `url(${isDesignView ? designSectionBackground : composerBackground})`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', backgroundPosition: 'top left' }}>
+                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
                   {aiAssemblyFailed ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
                       {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc
@@ -8909,13 +9703,146 @@ export default function Index({
                        three stubs fell through to the COMPOSER's renderer, which would have drawn
                        whatever composer surface happened to be in it: a room showing another
                        room's contents, which is the opposite of "should not load anything". */
-                    !isConsoleView && (isDeadTab
+                    !isConsoleView && (headerTab === 'development'
+                      /* THE DEVELOPMENT ROOM, TAKE TWO (owner, 2026-10-04, late: *"Check it out
+                         — all the other one, bolt, is not gonna cut it… I think this one will
+                         work better"*): **OpenHands' Agent Canvas** — the self-hosted developer
+                         control center for coding agents — replaces bolt.diy here. It is a
+                         REAL WEB APP (its own server on :8090), so it embeds whole, with no
+                         strip and no door: bolt.diy's WebContainer runtime could never boot
+                         inside a frame (`SharedArrayBuffer … crossOriginIsolated`), and this
+                         one asks for no such isolation. Boot it with `agent-canvas -p 8090`
+                         (nginx-style ingress: static frontend + the agent server behind it).
+                         The agent's model is configured in ITS OWN settings; it runs with full
+                         local access in this mode — see wireframe-lab/DEVELOPMENT-ROOM.md. */
+                      ? (
+                        /* THE STAGED OPENING (owner, 2026-10-04): the ground is his own
+                           graph-paper tile (dark, neutral — *"god knows it's gotta be gray"*),
+                           the ring is the assembly gate's amber, the line is plain, and the
+                           window eases in UNDER the gate — one 700ms cross-fade, the same
+                           feel as composer and design. The gate covers the frame from the
+                           first paint, so the white splash the owner caught never shows. */
+                        <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, background: '#2b2635' }}>
+                          <builder-embed
+                            key="openhands-room"
+                            src="http://localhost:8090/"
+                            style={{
+                              display: 'block', width: '100%', height: '100%',
+                              opacity: developmentGateDown ? 1 : 0,
+                              transition: 'opacity 700ms ease',
+                            }}
+                          />
+                          <div
+                            aria-hidden={developmentGateDown}
+                            style={{
+                              position: 'absolute', inset: 0, zIndex: 3,
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                              backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
+                              opacity: developmentGateDown ? 0 : 1,
+                              transition: 'opacity 700ms ease',
+                              pointerEvents: developmentGateDown ? 'none' : 'auto',
+                            }}
+                          >
+                            <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                            <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                              {"Standing up the development workspace\u2026"}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                      : isDeadTab
                       ? null
                       : headerTab === 'design'
                         ? <a2ui-renderer key="design-render" ref={designRendererRef} />
                         : headerTab === 'product'
-                          ? <a2ui-renderer key="product-render" ref={productRendererRef} />
-                          : <a2ui-renderer key="composer-render" ref={composerRendererRef} />)
+                          /* THE PRODUCT ROOM IS THE BUILDER (owner, 2026-10-04): *"just load that
+                             inside of the product area, the product room will just remove the
+                             grace chat."* Nothing is assembled for this room any more — no
+                             surface, no tree, no seat: the whole app builder (prompt box, run
+                             progression, live preview, code) runs in this one pane, served by
+                             the local engine. The Lit catalogue keeps its parts; this room just
+                             stops asking for them.
+                             THE PROJECT COMES FROM THE CARD: a console card for a builder
+                             project sets `productRoomProjectId`, and the embed opens that
+                             project's workspace; with none, the tool's dashboard (the room's home). */
+                          ? (
+                            <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
+                              {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
+                                  once a project does. While one is being born — or while the
+                                  engine is down — the pane is quiet; it is never pointed at the
+                                  tool's project list. The key carries the project id so a new
+                                  project remounts the frame clean rather than reusing one. */}
+                              {productRoomProjectId ? (
+                                <builder-embed
+                                  key={`product-builder-${productRoomProjectId}`}
+                                  src={`http://localhost:3223/project/${encodeURIComponent(productRoomProjectId)}`}
+                                  style={{ display: 'block', width: '100%', height: '100%' }}
+                                />
+                              ) : (
+                                /* THE GATE WEARS THE SAME LAB TEXTURE (owner, 2026-10-04) —
+                                   "no project loaded" is an empty state too, and the room's
+                                   ground image is already this file (`wireframeLabBackground`). */
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#6B7280', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundImage: `url(${wireframeLabBackground})`, backgroundRepeat: 'repeat' }}>
+                                  {/* THE SAME GATE'S RING (2026-10-04): the Product room's own
+                                      opening state is an assembly gate too — it gets the amber
+                                      indicator, not a bare line of text. */}
+                                  {!builderEngineDown && (
+                                    <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                                  )}
+                                  {builderEngineDown ? '' : "Opening a new project\u2026"}
+                                </div>
+                              )}
+                              {/* A STOPPED ENGINE GETS SAID PLAINLY — else the tool's own errors read like broken features. */}
+                              {builderEngineDown && (
+                                <div
+                                  role="status"
+                                  style={{
+                                    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2,
+                                    padding: '8px 12px', background: '#7f1d1d', color: '#ffffff',
+                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12,
+                                  }}
+                                >
+                                  {"The builder's engine isn't running. Start it with: npm run dev:local  (in wireframe-lab/ai-app-builder-open)"}
+                                </div>
+                              )}
+                              {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04): publish the idea
+                                  to the console, discard it for good, or stay. Two explicit
+                                  buttons and no ambiguous "Cancel" — discarding is destructive
+                                  and must be chosen on purpose. */}
+                              {leavePrompt && (
+                                <div
+                                  style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17, 24, 39, 0.45)' }}
+                                  role="dialog"
+                                  aria-modal="true"
+                                  aria-label="Publish this idea"
+                                >
+                                  <div style={{ width: 430, maxWidth: 'calc(100vw - 40px)', background: '#ffffff', borderRadius: 14, padding: '20px 22px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.35)', fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                    <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#111827' }}>Publish this idea?</h3>
+                                    <p style={{ margin: '0 0 18px', fontSize: 13.5, lineHeight: 1.55, color: '#4B5563' }}>
+                                      {"This idea isn't in the console yet. Publishing makes it a card the team can see; discarding removes it for good."}
+                                    </p>
+                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                      <button type="button" onClick={() => leavePrompt.settle('stay')}
+                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #E5E7EB', background: '#ffffff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+                                        Keep working
+                                      </button>
+                                      <button type="button" onClick={() => leavePrompt.settle('discard')}
+                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                        Discard idea
+                                      </button>
+                                      <button type="button" onClick={() => leavePrompt.settle('publish')}
+                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #111827', background: '#111827', color: '#ffffff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                        Publish to console
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                          : headerTab === 'governance'
+                            ? <a2ui-renderer key="governance-render" ref={governanceRendererRef} />
+                            : <a2ui-renderer key="composer-render" ref={composerRendererRef} />)
                   )}
                   {/*
                     ══ THE INJECTION ═══════════════════════════════════════════════════════

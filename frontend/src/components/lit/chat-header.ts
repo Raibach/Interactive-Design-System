@@ -214,8 +214,15 @@ export class ChatHeader extends LitElement {
          that drifted with whatever sat behind it. The owner named the solid colour:
          #ADC7C3 — the very tone the blend rendered — so the shell now paints it
          directly and nothing bleeds through. One value, one place: here, the registry
-         (values.card.fill) and the file's frame fill must all agree. */
-      background: #ADC7C3;
+         (values.card.fill) and the file's frame fill must all agree.
+         ⭐ AND THE OWNER MOVED IT AGAIN, 2026-10-04: *"you changed the wrong thing. You
+         changed the frame around it. What you needed to change was the interior area of
+         grace. Just this one slot. And you'll want to change back the frame to the green"*
+         — his swatch: #F7F8F3. So it is THIS line, and only this line: the card whose slot
+         her words stand in goes to the off-white, the frame around it stays the drawing's
+         #CBE6E3, and the results state keeps its own #F7F8F2 above. Anything else that
+         painted this card's colour on the container is the 2026-09-24 defect again. */
+      background: #F7F8F3;
       /* The drawing strokes all four edges at 1px (#40001119:6318 stroke rgba(117,142,135,0.5)
          w=1); the code drew the bottom edge alone. */
       border: 1px solid rgba(117, 142, 135, 0.5);

@@ -1,0 +1,69 @@
+{
+  "title": "AgnosticUI (proposed)",
+  "catalogId": "https://raibach.net/a2ui/catalogs/agnosticui/v0_9_1/catalog.json",
+  "whatThisFileIs": "Written by the design-system ingest on 2026-10-03T12:25:56 from an uploaded archive. Every entry is PROPOSED (draft: false) until a person accepts it. Components here have no implementation yet — registry.json is empty — so a name that resolves to nothing is drawn as the refusal sentence on a tile.",
+  "components": {
+    "ag-select": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "Proposed by the design-system ingest from AgnosticUI (v2/lib/src/components/Select/core/_Select.ts). NOT REVIEWED: an authorized designer accepts it before the assembler may place it — the palette reads draft: true.",
+          "properties": {
+            "component": {
+              "const": "ag-select"
+            },
+            "size": {
+              "type": "string"
+            },
+            "multiple": {
+              "type": "boolean"
+            },
+            "disabled": {
+              "type": "boolean"
+            },
+            "multipleSize": {
+              "type": "number"
+            },
+            "label": {
+              "type": "string"
+            },
+            "labelPosition": {
+              "type": "string"
+            },
+            "labelHidden": {
+              "type": "boolean"
+            },
+            "noLabel": {
+              "type": "boolean"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "invalid": {
+              "type": "boolean"
+            },
+            "errorMessage": {
+              "type": "string"
+            },
+            "helpText": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "draft": true,
+      "proposed": {
+        "source": "v2/lib/src/components/Select/core/_Select.ts",
+        "at": "2026-10-03T12:25:56"
+      },
+      "accepted": {
+        "at": "2026-10-03T12:31:14",
+        "by": ""
+      }
+    }
+  }
+}
