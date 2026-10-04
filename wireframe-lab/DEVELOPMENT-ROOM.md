@@ -233,9 +233,12 @@ form a next session needs them:
   (the bridge — conversations onto the console as cards) is the open one, and the
   changelog's NEXT PROMPT starts there; item 5 (styling) is done, riding the image.
 
-- **A reviewer's path, as built:** open the demo → the pin → Development → the workspace
-  loads wearing the house ground → the wizard's local-backend step asks for the session
-  key (the one the owner handed out with the pin) → the default agent row reads
-  "Sovereign local model" → the composer shows the seeded profile → a conversation runs
-  on DeepSeek. Every step of that path was walked on the deployed copy, screenshots on
-  file in the session record.
+- **A reviewer's path, as built — AND SHORTENED BY THE OWNER THE SAME NIGHT**
+  (*"we should disable the onboarding setup process … the getting started process"*): open
+  the demo → the pin → Development → the workspace loads wearing the house ground → **the
+  wizard asks for the session key and NOTHING ELSE** (its later steps auto-skip via its own
+  "Skip for now" — the house patch's `--hosted` mode; the key step CANNOT be skipped,
+  because it is the backend registration itself, and with no backend the app renders a
+  white page — measured) → the workspace, checklist gone, telemetry prompt already
+  answered (declined) in the seed → a conversation runs on DeepSeek. Every step of that
+  path was walked on the deployed copy; screenshots on file in the session record.

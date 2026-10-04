@@ -76,6 +76,33 @@ ever needs one. *(Both recorded in `wireframe-lab/DEVELOPMENT-ROOM.md`.)*
 
 ---
 
+**THE FIRST-RUN FLOW, DISABLED — ONE DOOR, THEN THE WORKSPACE (owner, watching the hosted
+room: *"we should disable the onboarding setup process … the getting started process. I
+think we should disable. I don't know how hard that is."*).** Answer, after measuring the
+tool instead of guessing: the wizard's LATER steps can go freely — but its FIRST step cannot
+be skipped, because in `--public` mode "Add a backend" IS the session-key entry (read in the
+code — *"onboarding is responsible for collecting backend connection details"* — then seen
+live: a fresh browser with the flow suppressed and no backend renders a WHITE PAGE). So
+`openhands-patch.sh` grew a `--hosted` mode — the service's Dockerfile passes it, the Mac
+does not, so the owner's workbench keeps its wizard exactly as it was:
+
+- **the key door stays** — the one step a reviewer must walk (the session key, handed out
+  with the pin, typed once per browser);
+- **every step after it auto-skips** via the wizard's own "Skip for now" (the ground
+  script's rule: a backend exists, the modal is open, the heading is not "Add a backend";
+  a `?previewOnboardingStep=` design preview is left alone), and the skip marks the flow
+  completed — nobody meets it twice;
+- **the Getting-started checklist defaults off** (dismissed-if-absent, so the Settings
+  toggle can bring it back);
+- **the telemetry prompt is answered in the seed** (declined; the dialog shows only while
+  the preference is NULL — read in the code), so it never appears and the demo opts into
+  nothing.
+
+The patch script was validated before the push: bash `-n`, every Python heredoc compiled,
+the emitted ground script through `node --check`, and its HTML edit dry-run against a fake
+build. The drift repair (above) stays as the belt to this suspender: with the wizard's LLM
+step unreachable, the seed can still be trampled from Settings, and the loop puts it back.
+
 ## NEXT PROMPT — copy this into a fresh chat
 
 > We are working on the **Development room** of this application — the tab in the top nav that
