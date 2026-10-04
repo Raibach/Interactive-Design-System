@@ -85,7 +85,7 @@ import { autoAdviceOn, declineAutoAdvice } from '@/shared/autoAdvice';
 // The app's one "when" — the same format the Evals feed shows for a run. See shared/when.
 import { formatWhen } from '@/shared/when';
 import { resultsAreTheReading } from '@/shared/chatScroll';
-import { isDemoMode } from '@/shared/demoMode';
+import { isDemoMode } from '@/shared/appConfig';
 import { getStoredUserId } from '@/services/authService';
 
 interface SeatMessage {
