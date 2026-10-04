@@ -9721,8 +9721,13 @@ export default function Index({
                            the ring is the assembly gate's amber, the line is plain, and the
                            window eases in UNDER the gate — one 700ms cross-fade, the same
                            feel as composer and design. The gate covers the frame from the
-                           first paint, so the white splash the owner caught never shows. */
-                        <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, background: '#2b2635' }}>
+                           first paint, so the white splash the owner caught never shows.
+                           ⭐ AND THE PAPER STAYS AFTER (owner, same night): the tile is the
+                           WRAPPER's ground, not just the gate's, and the app inside is
+                           patched to transparent grounds (development/openhands-patch.sh) —
+                           so the lab's graph paper reads as the Development app's own floor,
+                           with its panels (#22202D) floating on it. */
+                        <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                           <builder-embed
                             key="openhands-room"
                             src="http://localhost:8090/"
