@@ -482,3 +482,23 @@ a 3.12 venv, no errors, the full wheel set listed. **Not verified:** the image b
 first boot — still Docker-free on the Mac; the next Northflank build is that test, and the
 deploy's runtime logs (the entrypoint's own sentences) are where the offline cache proves
 complete or names its missing piece.
+
+**THEN THE SECOND BUILD NAMED THE THIRD TRAP — THE LOCKS WERE MAC-ONLY (`37723dc` →
+`purring-steel-5748`, FAILURE).** One step past where the first died:
+*"error: In `--require-hashes` mode, all requirements must be pinned upfront with `==`, but
+found: `secretstorage`"*. `secretstorage` is keyring's Linux-only backend — and it was not in
+either lock because `uv pip compile` WITHOUT `--universal` resolves only for the machine that
+runs it (the Mac), so every `sys_platform == "linux"`/Windows dependency was silently absent;
+the Linux builder then met an unpinned requirement the file never carried. (The handoff's
+"one lockfile covers every platform" was the intent, not what the command did — a dry-run can
+only ever test its own platform unless told otherwise, which is why the Mac-side check passed
+and the Linux build didn't.) Both locks are regenerated **universally** — `agent-server.lock`
+192 → 357 entries, `automation.lock` 167 → 172 — and `agent-server.lock`'s compile command now
+also carries `--no-emit-package openhands-sdk --no-emit-package openhands-tools`, so the
+`-e file://…` lines cannot come back at all; each lock's header records the exact command and
+both traps, so a hand regeneration cannot quietly re-introduce either.
+
+**Verified this time the honest way:** both locks pass `uv pip install --dry-run
+--require-hashes --python-platform x86_64-unknown-linux-gnu` on a 3.12 venv — the Linux
+resolution, hashes and all, which is the platform that failed. **Still not verified:** the
+image build and the first boot; the third Northflank build is that test.
