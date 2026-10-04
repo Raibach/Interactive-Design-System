@@ -229,3 +229,7 @@ development/*
 # …except the Development zone's own records — the clones stay out, these belong in git.
 !development/CHANGELOG.md
 !development/openhands-patch.sh
+# …and the hosted workspace's build (2026-10-05, wireframe-lab/HOST-THE-TOOLS.md): the
+# Development room's tool runs as its own service now, and its Dockerfile + entrypoint are
+# source — the service builds them straight from this branch.
+!development/agent-canvas/

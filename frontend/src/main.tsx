@@ -19,19 +19,19 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { demoModeReady } from "@/shared/demoMode";
+import { appConfigReady } from "@/shared/appConfig";
 import "./index.css";
 
 /*
  * ── FIRST RENDER, AND THE READ THAT NO LONGER BLOCKS IT ────────────────────────
  *
- * `demoModeReady()` STARTS the /api/config read here and is deliberately not awaited:
+ * `appConfigReady()` STARTS the /api/config read here and is deliberately not awaited:
  * the gate does not depend on the flag, so waiting for it before the first paint was
  * paying a round-trip (measured 0.47 s on the deployed demo) for nothing. App awaits
  * the same promise before it draws the authenticated tree — by pin time, long
  * resolved.
  */
-void demoModeReady();
+void appConfigReady();
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />

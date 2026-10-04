@@ -20,7 +20,7 @@ import { LitElement, html, css, nothing } from 'lit';
 // "I meant for that to be the copilot icon. It's at the very top of the chat vertical menu."
 import chatMenuIcon from './assets/chat-logo-bce2fe.png';
 import favoriteIcon from '@/assets/figma-card-favorite.svg';
-import { isDemoMode } from '@/shared/demoMode';
+import { isDemoMode } from '@/shared/appConfig';
 
 // ── Component ──────────────────────────────────────────────────────────────
 

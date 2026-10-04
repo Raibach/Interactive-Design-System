@@ -22,7 +22,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import { designTokens } from '@/shared/design-tokens';
-import { DEMO_DISABLED_SENTENCE, isDemoMode } from '@/shared/demoMode';
+import { DEMO_DISABLED_SENTENCE, isDemoMode } from '@/shared/appConfig';
 
 export class CatalogIngestForm extends LitElement {
   static properties = {

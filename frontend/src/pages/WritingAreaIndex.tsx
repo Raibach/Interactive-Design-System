@@ -105,7 +105,7 @@ import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
-import { DEMO_DISABLED_SENTENCE, isDemoMode } from "@/shared/demoMode";
+import { DEMO_DISABLED_SENTENCE, builderToolUrl, developmentToolUrl, isDemoMode } from "@/shared/appConfig";
 import { IngestModal } from "@/components/IngestModal";
 // The ingest's own URL parser, imported rather than re-written: the form in the room and the form in
 // the modal must read a Figma link the same way, and this is the one place that does.
@@ -498,10 +498,21 @@ export default function Index({
    * builder-embed); both refs reset on every entry, so each visit gets the same opening.
    */
   const DEVELOPMENT_GATE_MIN_MS = 5_000; // the owner, same night: ten was too long — five.
+  /*
+   * AND THE DOOR THAT NEVER OPENS GETS SAID PLAINLY (2026-10-05): the gate waits on the
+   * frame's own load event, which never arrives from a tool that is down — leaving the
+   * spinner turning for ever. This is the second clock's ceiling: not loaded by now means
+   * the honest panel, on the room's own ground. A late frame still wins (the embed stays
+   * mounted underneath; its load event clears the panel), so a cold start costs waiting,
+   * never a false verdict.
+   */
+  const DEVELOPMENT_GATE_MAX_MS = 25_000;
   const [developmentGateDown, setDevelopmentGateDown] = useState(false);
+  const [developmentToolDown, setDevelopmentToolDown] = useState(false);
   const developmentMinElapsedRef = useRef(false);
   const developmentFrameLoadedRef = useRef(false);
   const developmentGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const developmentGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
    * THE GOVERNANCE ROOM'S STATE (2026-10-03) — the room where the system accounts for what it
@@ -4613,11 +4624,17 @@ export default function Index({
 
   useEffect(() => {
     if ((headerTab || '') !== 'product') return;
+    // NO TOOL, NO REQUEST (2026-10-05): with no address configured the room is its panel and
+    // there is nothing to check or birth against — a demo without its builder service.
+    if (!builderToolUrl()) return;
     void checkBuilderEngine();
     // Entering the room with no project — a reload, a restored tab — births one exactly as
-    // a click does. The room may never stand on the dashboard. NOT ON THE DEMO (2026-10-04):
-    // there is no engine to birth one against, and the demo's panel doesn't need one.
-    if (!productRoomProjectId && !isDemoMode()) void createProductProject();
+    // a click does. The room may never stand on the dashboard. ON THE DEMO TOO, from 2026-10-05
+    // (the owner's decision — visitors may run the builder, capped in the tool's engine): the
+    // engine it births against is the HOSTED one, reached through the bridge like everything
+    // else. The old note here said "not on the demo: there is no engine to birth one against" —
+    // there is one now.
+    if (!productRoomProjectId) void createProductProject();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
@@ -4709,6 +4726,7 @@ export default function Index({
   useEffect(() => {
     if ((headerTab || '') !== 'development') return;
     setDevelopmentGateDown(false);
+    setDevelopmentToolDown(false);
     developmentMinElapsedRef.current = false;
     developmentFrameLoadedRef.current = false;
     if (developmentGateTimerRef.current) clearTimeout(developmentGateTimerRef.current);
@@ -4716,17 +4734,33 @@ export default function Index({
       developmentMinElapsedRef.current = true;
       if (developmentFrameLoadedRef.current) setDevelopmentGateDown(true);
     }, DEVELOPMENT_GATE_MIN_MS);
+    // THE CEILING (see DEVELOPMENT_GATE_MAX_MS above): a frame that has not arrived by now reads
+    // as "the tool is down" — the room's panel says so on its own ground, and a late load still
+    // clears it, because the embed stays mounted underneath.
+    if (developmentGateMaxTimerRef.current) clearTimeout(developmentGateMaxTimerRef.current);
+    developmentGateMaxTimerRef.current = setTimeout(() => {
+      if (!developmentFrameLoadedRef.current) setDevelopmentToolDown(true);
+    }, DEVELOPMENT_GATE_MAX_MS);
+    return () => {
+      if (developmentGateMaxTimerRef.current) clearTimeout(developmentGateMaxTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
   useEffect(() => {
+    // Only the DEVELOPMENT tab's frame matters here: the announcement is a bare window event and
+    // the PRODUCT room's embed raises the same one. Re-registered per tab so the guard reads the
+    // current tab, never a stale closure.
     const onFrameLoaded = () => {
+      if ((headerTab || '') !== 'development') return;
       developmentFrameLoadedRef.current = true;
+      setDevelopmentToolDown(false);
       if (developmentMinElapsedRef.current) setDevelopmentGateDown(true);
     };
     window.addEventListener('builder-embed-loaded', onFrameLoaded);
     return () => window.removeEventListener('builder-embed-loaded', onFrameLoaded);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headerTab]);
 
   /**
    * THE BUILDER'S BACK ARROW COMES HOME (owner, 2026-10-04): *"there's a back button …
@@ -9712,50 +9746,46 @@ export default function Index({
                          REAL WEB APP (its own server on :8090), so it embeds whole, with no
                          strip and no door: bolt.diy's WebContainer runtime could never boot
                          inside a frame (`SharedArrayBuffer … crossOriginIsolated`), and this
-                         one asks for no such isolation. Boot it with `agent-canvas -p 8090`
-                         (nginx-style ingress: static frontend + the agent server behind it).
-                         The agent's model is configured in ITS OWN settings; it runs with full
-                         local access in this mode — see wireframe-lab/DEVELOPMENT-ROOM.md. */
+                         one asks for no such isolation. Locally boot it with `agent-canvas -p
+                         8090`; HOSTED (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md) it is its
+                         own Northflank service of the same shape, and this room gets its
+                         address from the server (`/api/config` — shared/appConfig.ts). That is
+                         what ended the hardcoded localhost whose request made every demo
+                         visitor's browser reach for their own machine. */
                       ? (
-                        isDemoMode() ? (
-                          /* THE DEMO'S HONEST PANEL (2026-10-04, the night it went remote): on
-                             the deployed demo the room must not reach for a program on the
-                             VISITOR's own machine — that request is what made Chrome ask
-                             "access other apps and services on this device", a prompt no demo
-                             should raise. Until the workspace is HOSTED as its own service
-                             (the next session — wireframe-lab/HOST-THE-TOOLS.md), the demo
-                             says plainly that it isn't connected. Local runs never take this
-                             branch, so the Mac keeps the full experience. */
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
-                            <p style={{ margin: 0, color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                              {"The development workspace isn't connected to this demo."}
-                            </p>
-                            <p style={{ margin: 0, color: '#8b8b8b', fontSize: 12, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                              {"It runs as a separate tool on its own machine. Hosting it here is the next step."}
-                            </p>
-                          </div>
-                        ) : (
-                        /* THE STAGED OPENING (owner, 2026-10-04): the ground is his own
-                           graph-paper tile (dark, neutral — *"god knows it's gotta be gray"*),
-                           the ring is the assembly gate's amber, the line is plain, and the
-                           window eases in UNDER the gate — one 700ms cross-fade, the same
-                           feel as composer and design. The gate covers the frame from the
-                           first paint, so the white splash the owner caught never shows.
-                           ⭐ AND THE PAPER STAYS AFTER (owner, same night): the tile is the
-                           WRAPPER's ground, not just the gate's, and the app inside is
-                           patched to transparent grounds (development/openhands-patch.sh) —
-                           so the lab's graph paper reads as the Development app's own floor,
-                           with its panels (#22202D) floating on it. */
+                        /* THE ROOM HAS ONE ADDRESS AND TWO STATES (2026-10-05): the tool (gate,
+                           frame, ease-in) when an address exists, and the honest panel when it
+                           does not — an unconfigured demo, or a frame that never arrived by the
+                           ceiling (DEVELOPMENT_GATE_MAX_MS, above). THE FRAME STAYS MOUNTED
+                           under the panel, so a late arrival still wins: its load event clears
+                           the down state. Local runs are unchanged — the address defaults to
+                           the Mac's own :8090 (shared/appConfig.ts owns that default). */
                         <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+                          {developmentToolUrl() && (
                           <builder-embed
                             key="openhands-room"
-                            src="http://localhost:8090/"
+                            src={developmentToolUrl()}
                             style={{
                               display: 'block', width: '100%', height: '100%',
                               opacity: developmentGateDown ? 1 : 0,
                               transition: 'opacity 700ms ease',
                             }}
                           />
+                          )}
+                          {developmentToolUrl() && !developmentToolDown && (
+                          /* THE STAGED OPENING (owner, 2026-10-04): the ground is his own
+                             graph-paper tile (dark, neutral — *"god knows it's gotta be gray"*),
+                             the ring is the assembly gate's amber, the line is plain, and the
+                             window eases in UNDER the gate — one 700ms cross-fade, the same
+                             feel as composer and design. The gate covers the frame from the
+                             first paint, so the white splash the owner caught never shows.
+                             ⭐ AND THE PAPER STAYS AFTER (owner, same night): the tile is the
+                             WRAPPER's ground, not just the gate's, and the app inside is
+                             patched to transparent grounds (development/openhands-patch.sh) —
+                             so the lab's graph paper reads as the Development app's own floor,
+                             with its panels (#22202D) floating on it. AND THE GATE IS OURS,
+                             HOSTED TOO: the patch rides the service's image build, so the
+                             demo's workspace wears the same look. */
                           <div
                             aria-hidden={developmentGateDown}
                             style={{
@@ -9772,8 +9802,22 @@ export default function Index({
                               {"Standing up the development workspace\u2026"}
                             </p>
                           </div>
+                          )}
+                          {(!developmentToolUrl() || developmentToolDown) && (
+                            /* THE FALLBACK PANEL — the honest state, for free (the plan's words):
+                               no address configured, or the frame never arrived. One plain
+                               sentence pair on the room's own ground. A local run sees this
+                               while :8090 is stopped — which the spinning gate never said. */
+                            <div style={{ position: 'absolute', inset: 0, zIndex: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+                              <p style={{ margin: 0, color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                {"The development workspace isn't reachable right now."}
+                              </p>
+                              <p style={{ margin: 0, color: '#8b8b8b', fontSize: 12, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                {"It runs as its own service; it may be starting up. Try again in a moment."}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                        )
                       )
                       : isDeadTab
                       ? null
@@ -9785,38 +9829,44 @@ export default function Index({
                              grace chat."* Nothing is assembled for this room any more — no
                              surface, no tree, no seat: the whole app builder (prompt box, run
                              progression, live preview, code) runs in this one pane, served by
-                             the local engine. The Lit catalogue keeps its parts; this room just
-                             stops asking for them.
+                             the builder — the Mac's own copy locally, the HOSTED service on the
+                             demo (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md; the address
+                             arrives at runtime, shared/appConfig.ts). The Lit catalogue keeps
+                             its parts; this room just stops asking for them.
                              THE PROJECT COMES FROM THE CARD: a console card for a builder
                              project sets `productRoomProjectId`, and the embed opens that
-                             project's workspace; with none, the tool's dashboard (the room's home). */
+                             project's workspace; with none, a new one is born (never the
+                             dashboard — the room's own rule). */
                           ? (
                             <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
                               {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
                                   once a project does. While one is being born — or while the
                                   engine is down — the pane is quiet; it is never pointed at the
                                   tool's project list. The key carries the project id so a new
-                                  project remounts the frame clean rather than reusing one. */}
-                              {isDemoMode() ? (
-                                /* THE DEMO'S HONEST PANEL — the sibling of the development
-                                   room's (2026-10-04): the builder's engine runs on its own
-                                   machine; until it is HOSTED (wireframe-lab/HOST-THE-TOOLS.md)
-                                   the demo says so plainly — instead of pointing the frame at
-                                   a localhost that belongs to each visitor, or showing a banner
-                                   whose copy ("npm run dev:local") reads like a broken feature.
-                                   Local runs never take this branch. */
+                                  project remounts the frame clean rather than reusing one.
+                                  THE ADDRESS IS RUNTIME CONFIG NOW (2026-10-05, HOST-THE-TOOLS):
+                                  `builderToolUrl()` — the hosted builder service on the demo, the
+                                  Mac's own :3223 locally. The FALLBACK panel shows when there is
+                                  no address at all (a demo without its service) or the demo's
+                                  engine reads as down; a local engine down keeps its own forms —
+                                  the quiet opening state plus the red banner below. */}
+                              {!builderToolUrl() || (isDemoMode() && builderEngineDown) ? (
+                                /* THE FALLBACK PANEL — the honest state, for free (2026-10-05).
+                                   The old interim copy ("Hosting it here is the next step") was
+                                   true the night it shipped and is false now that hosting landed;
+                                   this says what a missing or stopped service actually means. */
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundImage: `url(${wireframeLabBackground})`, backgroundRepeat: 'repeat' }}>
                                   <p style={{ margin: 0, color: '#6B7280', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                                    {"The builder isn't connected to this demo."}
+                                    {"The builder isn't reachable right now."}
                                   </p>
                                   <p style={{ margin: 0, color: '#9aa0a6', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                                    {"It runs as a separate engine on its own machine. Hosting it here is the next step."}
+                                    {"It runs as its own service; it may be starting up. Try again in a moment."}
                                   </p>
                                 </div>
                               ) : productRoomProjectId ? (
                                 <builder-embed
                                   key={`product-builder-${productRoomProjectId}`}
-                                  src={`http://localhost:3223/project/${encodeURIComponent(productRoomProjectId)}`}
+                                  src={`${builderToolUrl()}/project/${encodeURIComponent(productRoomProjectId)}`}
                                   style={{ display: 'block', width: '100%', height: '100%' }}
                                 />
                               ) : (

@@ -28,7 +28,7 @@ import { LitElement, html, css, nothing } from 'lit';
 // inspections and the trace wear, so all three compose the same element.
 import './chat-fold';
 import { designTokens } from '@/shared/design-tokens';
-import { isDemoMode } from '@/shared/demoMode';
+import { isDemoMode } from '@/shared/appConfig';
 
 /** One row, as the writer composes it. Nothing here is derived on the client. */
 export interface ChatRepairRow {

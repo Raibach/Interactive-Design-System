@@ -1,6 +1,6 @@
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
-import { isDemoMode } from "@/shared/demoMode";
+import { isDemoMode } from "@/shared/appConfig";
 import { useState, useEffect } from "react";
 import raibachLogo from "../assets/raibach-logo.jpg";
 import { IngestModal } from "./IngestModal";

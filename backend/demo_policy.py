@@ -213,6 +213,19 @@ ALLOWED_MUTATIONS = (
     # refusal as an error. Deny of DELETE stays — a project never goes away.
     ("POST", "/api/projects"),
     ("PUT", "/api/projects/{project_id}"),
+    # The Product room's bridge (2026-10-05 — wireframe-lab/HOST-THE-TOOLS.md): the
+    # builder's engine is HOSTED now, and the owner's decision is that demo visitors
+    # may run the builder — so the room's normal moves go through the bridge like
+    # they do locally: birth a project (`new`), sync the console cards (`sync`),
+    # publish/discard from the exit guard. THE MONEY IS BOUNDED INSIDE THE TOOL
+    # (the hosted engine's own per-visitor and global buckets — the pattern this
+    # file set), and these four are ordinary mutations here, so the per-visitor
+    # mutation bucket covers them too. `/api/builder/health` and `/api/builder/state`
+    # are GETs and pass by default.
+    ("POST", "/api/builder/new"),
+    ("POST", "/api/builder/sync"),
+    ("POST", "/api/builder/publish"),
+    ("POST", "/api/builder/discard"),
 )
 
 # Endpoints that reach the hosted model (or load the local embedder to ping it).

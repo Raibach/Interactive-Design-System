@@ -6,7 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import GateSplash from "@/components/GateSplash";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
-import { demoModeReady, isDemoMode } from "@/shared/demoMode";
+import { appConfigReady, isDemoMode } from "@/shared/appConfig";
 import "./global.css";
 
 /*
@@ -40,7 +40,7 @@ function App() {
   const [demoSettled, setDemoSettled] = useState(false);
   useEffect(() => {
     let alive = true;
-    void demoModeReady().then(() => {
+    void appConfigReady().then(() => {
       if (alive) setDemoSettled(true);
     });
     return () => {

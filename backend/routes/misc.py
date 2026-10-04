@@ -160,14 +160,25 @@ class SourceEvalRequest(BaseModel):
 
 @router.get("/api/config")
 async def api_config():
-    """The public boot config the shell reads once — which build this is.
+    """The public boot config the shell reads once — which build this is, and where its tools live.
 
     `demo_mode` is how the browser knows to hide destructive affordances
-    (frontend/src/shared/demoMode.ts). It is COSMETIC: the server-side lock is
+    (frontend/src/shared/appConfig.ts). It is COSMETIC: the server-side lock is
     demo_policy.py, and a client that lies about this value changes nothing but
     its own buttons. `false` on local runs, where the full system is the point.
+
+    `development_tool_url` / `builder_tool_url` (2026-10-05) are the rooms' tool
+    addresses, runtime config instead of hardcoded localhost: the deployed demo sets
+    them to the hosted tool services (wireframe-lab/HOST-THE-TOOLS.md), a local run
+    leaves them unset and the shell keeps `http://localhost:8090` / `:3223`. The rooms
+    treat an empty value as "not connected" and say so plainly — which is also the
+    honest state on a demo whose tool service is missing.
     """
-    return {"demo_mode": DEMO_MODE}
+    return {
+        "demo_mode": DEMO_MODE,
+        "development_tool_url": os.getenv("DEVELOPMENT_TOOL_URL", "").rstrip("/"),
+        "builder_tool_url": os.getenv("BUILDER_TOOL_URL", "").rstrip("/"),
+    }
 
 
 @router.get("/api/health")
