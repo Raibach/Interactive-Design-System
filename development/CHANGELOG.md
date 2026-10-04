@@ -104,3 +104,17 @@ refresh). The ground keeps the gate's navy #110E1F, and hovers are deliberately 
 the live build and `openhands-patch.sh` carry the new value; verified by the COMPUTED style on
 the running element (`--oh-color-base: #110E1F`, `--oh-color-base-secondary: #22202D`), not by
 reading the file.
+
+**The correction that closed the night — "you must've built it somewhere else":** the owner's
+incognito kept showing the OLD colours after the panel patch, and the bytes said otherwise
+because they were right and I had missed WHERE the staleness lived. The app's own assets are
+served **`public, max-age=31536000, immutable`** — a rule appended to `assets/root-*.css` reaches
+nobody who has ever loaded the page, because the URL never changes and the cache never
+revalidates; the owner's incognito session had fetched the file BEFORE the patch and kept those
+bytes for a year. (The HTML, by contrast, is `no-store` — always fresh.) THE FIX IS A NEW URL:
+the patch now lives in **`assets/house-patch.css`**, a file with no cache history, linked from
+the always-fresh HTML — so the very next ORDINARY reload carries it, in any session, incognito
+included, no hard refresh and no cache to clear. Verified exactly that way: an ordinary reload,
+`linked: true`, computed `--oh-color-base: #110E1F` and `--oh-color-base-secondary: #22202D`,
+logo hidden. `openhands-patch.sh` carries the new mechanism, and the appended block was removed
+from the hashed stylesheet so the patch has ONE home.
