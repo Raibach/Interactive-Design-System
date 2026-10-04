@@ -133,3 +133,42 @@ forced by a three-line inline-important script in index.html, and that script is
 patch, not a hack around it; (2) `house-patch.css` is now linked as `?v=2` — an in-place edit of
 a fixed URL is cached by the same one-year policy this very patch exists to escape, so the patch
 script bumps the number with any content change.
+
+**The closing correction — "even if I open a new tab" (the bad news first, then the whole
+truth):** the `?v=2` mechanism above was itself already burned. The link went into the HTML at
+22:27:27 and the stylesheet's content was AMENDED one minute later, at 22:28:50, under the same
+`?v=2` URL — and the app serves assets `immutable, max-age=1yr`, so any session that loaded the
+page inside that minute keeps the earlier bytes for a year, and a new TAB in the same incognito
+window shares that cache. That alone could hold the owner on old colours. But probing a
+fresh-profile state (the `openhands-color-theme` key deleted — exactly an incognito tab, since
+the app's default is `openhands-neutral`) showed the deeper truth: **the panels were never
+swapped at all.** The neutral theme paints its grays through a whole FAMILY of variables, and
+patch #2 had replaced only two of them — measured on the live shell: base #181818,
+base-secondary #202020, surface #202020, surface-raised #282828, surface-deep #101010, bg-dark
+#181818, bg-light #282828, bg-input #313131, bg-workspace #202020, tertiary #313131. The cards,
+the banner, the composer, the sidebar's New Chat row and the editor chrome all read from the
+ones left alone, so "the old colours are still there" was simply true, cache or no cache. And
+the cascade had one more twist: the active theme re-declares its variables from a runtime
+`<style>` under TWO selectors — the shell `[data-agent-server-ui][data-agent-server-ui]` and an
+inner scope `[data-agent-server-ui] [data-theme][data-theme]` — both DOUBLED to win ties.
+
+**THE FIX, three layers deep and name-stable this time:** (1) `openhands-patch.sh` now installs
+the stylesheet under a CONTENT-HASHED name — `house-patch-<sha>.css` — so changing any byte
+changes the URL with it, and there is no version number left to burn; the `?v=2` file is deleted
+from the build and the script strips any older link form before inserting the new one (idempotent,
+self-upgrading). (2) The stylesheet swaps the WHOLE family on BOTH scopes with a TRIPLED selector
++ `!important` — base/base-secondary → #110E1F/#22202D, surface/raised/light/input/workspace/
+editor-sidebar/editor-active/tertiary → #22202D, surface-deep/bg-dark → #110E1F — and gives
+`div.dark.min-h-screen` (the wrapper that paints its own #181818 ground from OUTSIDE the shell)
+the transparency rule by name. (3) The index.html ground script pins the same variables
+INLINE-IMPORTANT on the shell and every `[data-theme]` scope — inline important beats every
+stylesheet there is, layered or not, so the late-arriving theme <style> can re-inject all it
+likes.
+
+**Verified the way the owner will meet it** — fresh-profile state, ORDINARY reload, nothing
+cleared: remaining neutral grays above 3000px²: ZERO; purple surfaces on the landing: 21; the
+only translucent left is the house purple itself at 50% (`bg-base-secondary/50` on a row state).
+Logo hidden, checklist reading "local sovereign model", and the same page reached through the
+app's own Development tab (screenshot on file: navy frame, purple panels inside the room). The
+law this night earned: **a patch URL is a promise about bytes — if the bytes can change, the
+URL must change with them; never amend what a cache has already learned by heart.**
