@@ -33,11 +33,18 @@ COPY development/openhands-patch.sh /src/development/openhands-patch.sh
 COPY frontend/src/assets/canvas-development-lab-bkg.png /src/frontend/src/assets/canvas-development-lab-bkg.png
 RUN bash /src/development/openhands-patch.sh
 
+# THE AGENT SERVER'S VERSION — THE FIXED ONE, ON PURPOSE (see the entrypoint's header for
+# the full story): at 1.49.6 the SDK's telemetry reads
+# `usage.prompt_tokens_details.cache_creation_tokens` unguarded, and DeepSeek's
+# OpenAI-compatible responses do not carry it — every run died with AttributeError.
+# 1.51.0 guards the read. The launcher pins sdk/tools/workspace to this same number.
+ENV OH_AGENT_SERVER_VERSION=1.51.0
+
 # PRE-WARM uv's CACHE (a Python interpreter + both backends) so a cold container boots
-# without a minute of downloads. These are the launcher's own default pins (its
-# config/defaults.json), run exactly the way it will run them — a build-time hiccup here
-# costs only the warm cache, so it must not fail the image.
-RUN uvx --from openhands-agent-server==1.49.6 python -V || echo "⚠️ agent-server pre-warm skipped"
+# without a minute of downloads. These are the launcher's own invocations, run exactly the
+# way it will run them — a build-time hiccup here costs only the warm cache, so it must
+# not fail the image.
+RUN uvx --from openhands-agent-server==$OH_AGENT_SERVER_VERSION python -V || echo "⚠️ agent-server pre-warm skipped"
 RUN uvx --from openhands-automation==1.15.1 python -V || echo "⚠️ automation pre-warm skipped"
 
 # THE DOOR — public mode (the owner's decision: pin-holders may drive the agent; the key
