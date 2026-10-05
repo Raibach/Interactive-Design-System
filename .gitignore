@@ -216,11 +216,12 @@ frontend/.preview/
 
 # ── THE VENDORED SHELF AND THE DEVELOPMENT CLONES (2026-10-04) ─────────────────────────────
 # Reference material adopted whole, never ours to version: the sample repos under
-# wireframe-lab/ and every clone under development/. The ENGINE that the Product room runs on
-# IS versioned — inside wireframe-lab/ai-app-builder-open's own git repo (it is that copy's
-# local-vcaas/), because it lives beside the app it serves.
+# wireframe-lab/ and every clone under development/.
+# …EXCEPT THE PRODUCT ROOM'S TOOL (owner, 2026-10-05): the builder app AND the engine it runs
+# on (wireframe-lab/ai-app-builder-open/ — its local-vcaas/) ARE this repository's now. They
+# were versioned in a fork of the vendor's repo; the owner's ruling moved them here and
+# retired the fork. The two builder services build from this path.
 wireframe-lab/agent-native/
-wireframe-lab/ai-app-builder-open/
 wireframe-lab/ai-elements-main/
 wireframe-lab/builder-main/
 wireframe-lab/chatbot-main/
