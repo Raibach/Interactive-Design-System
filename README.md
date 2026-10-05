@@ -226,15 +226,16 @@ point its build branch back (`northflank patch service combined` with
 | service | what it is | builds from |
 |---|---|---|
 | `dev-workspace` | the Development room's workspace: the Raibach IDS Agent Canvas (pinned, the house patch applied inside the image), local mode — the session key is injected into the page at startup, so the tool adds its own backend and no visitor is asked for anything | this repo, `/development/agent-canvas/Dockerfile` |
-| `builder` | the Product room's app builder (Next, port 3223) | `Raibach/ai-app-builder-open` (a fork of the upstream vendor repo; the local-vcaas engine and the room's wiring are versioned there) |
-| `builder-engine` | the engine behind the builder (VCaaS-shaped API, DeepSeek, path-form previews, per-visitor + global run budgets). Its `data/` rides a **volume** — the projects store. | the same fork, `/local-vcaas/Dockerfile` |
+| `builder` | the Product room's app builder (Next, port 3223) | this repo, build context `wireframe-lab/ai-app-builder-open` — the tool's whole tree, its local-vcaas engine and the room's wiring included (it lived on a vendor fork until 2026-10-05, when the owner moved it here and retired the fork) |
+| `builder-engine` | the engine behind the builder (VCaaS-shaped API, DeepSeek, path-form previews, per-visitor + global run budgets). Its `data/` rides a **volume** — the projects store. | this repo, build context `wireframe-lab/ai-app-builder-open`, `/local-vcaas/Dockerfile` |
 
 The app service pins the three addresses: `DEVELOPMENT_TOOL_URL` and
 `BUILDER_TOOL_URL` (public, read by `GET /api/config` and handed to the rooms —
 `development/CHANGELOG.md`, 2026-10-04), and `BUILDER_ENGINE_URL` (the engine's
 internal address, `http://builder-engine:4000` — services in one project reach each
 other by service name). The workspace's session key and the DeepSeek key ride the
-services' runtime environments, set through the CLI — never in git.
+services' runtime environments, set through the dashboard (the CLI was revoked,
+2026-10-05) — never in git.
 
 ---
 

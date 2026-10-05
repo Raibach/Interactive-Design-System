@@ -80,6 +80,11 @@ look included — to every visitor.
    `local-vcaas` engine (`server.mjs`) with a **volume for its store** (`projects/` — the JSON
    per-project files + snapshots). The builder's `VCAAS_BASE_URL` env points at the engine's
    address.
+   **WHERE THEY BUILD FROM (owner, 2026-10-05):** this repository — build context
+   `wireframe-lab/ai-app-builder-open/`, which now carries the tool's whole tree (the engine
+   included). They built from `Raibach/ai-app-builder-open`, a fork of the vendor's repo, until
+   the owner's ruling moved the tool here and retired the fork; the local Mac clone under that
+   path remains the working copy, with its full history also safe in a `git bundle`.
 2. **The engine's key** — its AI runs need the DeepSeek key: another service secret.
 3. **The bridge** — set `BUILDER_ENGINE_URL` on the APP service to the engine service's
    address: the console's card sync, publish/discard, and preview URLs then all work remote.
