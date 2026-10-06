@@ -4862,7 +4862,7 @@ export default function Index({
       setProductRoomProjectId(null);
       return true;
     }
-    const choice = await new Promise<'publish' | 'discard' | 'stay'>((resolve) => {
+    const choice = await new Promise<'publish' | 'discard' | 'keep' | 'stay'>((resolve) => {
       setLeavePrompt({
         projectId: bridgeProjectId,
         settle: (chosen) => {
