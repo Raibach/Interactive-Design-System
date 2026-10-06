@@ -46,3 +46,14 @@ Oct-4 duplicate, leftover of the pre-lock sync race; the sync cannot dedupe its 
 because it keys by project id), plus h65's "My new product idea" tile. The duplicate's removal
 is proposed to the owner (exact statement shown before running). Row deletion is self-healing:
 the next console sync recreates exactly one row per published project.
+
+## 2026-10-06 — the engine enters the repository (the backup the owner called for)
+
+Owner: *"the engine is one of the most important things that we just did and it needs to be
+backed up. You can git-ignore DeepSeek credentials and still put the core of the application."*
+The builder app and its engine (`wireframe-lab/ai-app-builder-open/`, `local-vcaas/`) follow
+main's 2026-10-05 ruling onto this branch: the folder leaves the vendored shelf in the parent
+`.gitignore`, the core enters git (a mirror of main's 179-file set — today's engine fix, the
+path-form previews and the slashless redirect, rides along), and the folder's own `.gitignore`
+files keep everything that must not travel: the DeepSeek key (`local-vcaas/.env`), the engine's
+store (`local-vcaas/data/`), and all build output (`node_modules/`, `.next/`).

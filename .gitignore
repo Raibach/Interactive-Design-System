@@ -216,11 +216,16 @@ frontend/.preview/
 
 # ── THE VENDORED SHELF AND THE DEVELOPMENT CLONES (2026-10-04) ─────────────────────────────
 # Reference material adopted whole, never ours to version: the sample repos under
-# wireframe-lab/ and every clone under development/. The ENGINE that the Product room runs on
-# IS versioned — inside wireframe-lab/ai-app-builder-open's own git repo (it is that copy's
-# local-vcaas/), because it lives beside the app it serves.
+# wireframe-lab/ and every clone under development/.
+# …EXCEPT THE PRODUCT ROOM'S TOOL (owner, 2026-10-05 on main; carried onto this branch
+# 2026-10-06 — “the engine is one of the most important things that we just did and it needs
+# to be backed up. You can git-ignore DeepSeek credentials and still put the core of the
+# application.”): the builder app AND the engine it runs on
+# (wireframe-lab/ai-app-builder-open/ — its local-vcaas/) are this repository's now. The
+# credentials and the engine's store stay out through the folder's OWN .gitignore files
+# (local-vcaas/.gitignore: `data/` and `.env`); build output (node_modules/, .next/) was
+# never tracked on main either.
 wireframe-lab/agent-native/
-wireframe-lab/ai-app-builder-open/
 wireframe-lab/ai-elements-main/
 wireframe-lab/builder-main/
 wireframe-lab/chatbot-main/
