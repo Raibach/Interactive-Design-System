@@ -522,8 +522,10 @@ export default function Index({
    * night it was asked; three from 2026-10-06 (*"a small 3 second assembly process"*).
    *
    * AND THE ROOM LOADS AGAIN (2026-10-06, later): the left column carries the workspace once
-   * more — the repo-run copy, telemetry cut — so the gate waits on the SAME two hands as the
-   * Product room: the minimum (three seconds) and the frame's own load announcement.
+   * more — the repo-run copy, telemetry cut — so the gate waits on the SAME THREE hands as the
+   * Product room: the minimum (three seconds), the frame's own load announcement, and the
+   * seat's binding — and it covers the WHOLE room now, both columns, so nothing arrives beside
+   * a workspace that has already revealed (see the seat-settled note below).
    */
   const DEVELOPMENT_GATE_MIN_MS = 3_000;
   /*
@@ -563,9 +565,10 @@ export default function Index({
   /*
    * THE PRODUCT ROOM OPENS THE SAME WAY (2026-10-05): the builder's own first paint is white,
    * and uncovered it flashed between the frame's mount and its content — the same white splash
-   * the Development gate was built to hide. Same two clocks: the gate is up on entry and drops
-   * only when the frame's load event and the minimum have both landed; the ceiling means the
-   * honest panel, with the frame staying mounted underneath so a late arrival still wins.
+   * the Development gate was built to hide. Same three hands, one room over (2026-10-06): the
+   * gate spans the whole room and drops only when the frame's load event, the minimum, and the
+   * seat have all landed; the ceiling means the honest state, with the frame staying mounted
+   * underneath so a late arrival still wins.
    * THE MINIMUM MATCHES THE DEVELOPMENT ROOM'S THREE SECONDS (2026-10-06 — one staged opening,
    * both rooms).
    */
@@ -577,6 +580,57 @@ export default function Index({
   const productFrameLoadedRef = useRef(false);
   const productGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const productGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /*
+   * THE OPENING'S THIRD HAND — THE SEAT (owner, 2026-10-06: *"I had a fade in for product and
+   * development … It was like an assembly process … Right now product and development are
+   * popping in — actually product loads in, the chat doesn't even show up for a delayed few
+   * seconds and then it pops in … put back the assembly illusion … it creates a nice fade into
+   * the application and there's no popping and snapping of components."*). The seat is the last
+   * thing the room draws and it binds on its own clock (the two seat effects below); with the
+   * cover over the left column only, the chat arrived BESIDE a workspace that had already
+   * revealed — the pop. Settled means BOUND OR FAILED: a failed binding leaves the seat on its
+   * honest blank face, and a cover must not go on standing over a chat that will never arrive.
+   */
+  const productSeatSettledRef = useRef(false);
+  const developmentSeatSettledRef = useRef(false);
+  /*
+   * AND THE COVER IS THE WHOLE ROOM'S (owner, same night — the illusion "creates a nice fade
+   * into the application"). It holds until ALL THREE hands have landed — the minimum, the
+   * frame's load, the seat — and then the room eases in under it as one object. Measured
+   * before it (2026-10-06, driving the room cold): the chat column sat frozen at its 104px
+   * rail floor — the layout's declared 600 landed in a render that could not yet measure the
+   * element — until an unrelated re-render unfroze it seconds later; that unfreeze, visible
+   * beside the left-only cover, was the pop. Both crossings live here so no writer can drop
+   * the cover on two hands and forget the third.
+   */
+  const dropProductGateWhenAllLanded = useCallback(() => {
+    if (productMinElapsedRef.current && productFrameLoadedRef.current && productSeatSettledRef.current) {
+      setProductGateDown(true);
+    }
+  }, []);
+  const dropDevelopmentGateWhenAllLanded = useCallback(() => {
+    if (developmentMinElapsedRef.current && developmentFrameLoadedRef.current && developmentSeatSettledRef.current) {
+      setDevelopmentGateDown(true);
+    }
+  }, []);
+  /*
+   * THE PANE'S WIDTH, ASSERTED WHERE IT CAN BE MEASURED. The room declares her column's load
+   * width (`chatLoadWidth`, below) and the layout lands it once — but that landing render can
+   * run before the room has been laid out, and `_columnWidth()` clamps the declared 600 into
+   * the room's then-unmeasurable box: the pane then holds its 104px floor until something
+   * else re-renders the element (measured 2026-10-06: nothing did, for the whole entry, until
+   * an unrelated package effect). A `requestUpdate` is the element's own door: its state
+   * already says 600, and one forced render picks the real width back up. Idempotent — a
+   * settled room re-renders the same style and nothing moves.
+   */
+  const assertPaneWidth = useCallback((el: WorkspaceLayout | null) => {
+    try {
+      el?.requestUpdate?.();
+    } catch {
+      /* not an upgraded element yet — the next beat asserts again */
+    }
+  }, []);
 
   /*
    * THE STAGE'S REFRESH KEY (2026-10-06 — the chat absorption). `a2ui:person-turn` fires only
@@ -4923,11 +4977,12 @@ export default function Index({
 
   /**
    * THE DEVELOPMENT ROOM'S OPENING (2026-10-04; loading again 2026-10-06) — the staged
-   * assembly's two clocks: entering the room restarts them (the gate rises again on every
-   * visit, like the other rooms' spinners), the minimum is three seconds, and the frame's
-   * own load event (builder-embed-loaded) is the other hand. When both have happened, the
-   * gate fades and the window eases in underneath it — one cross-fade, 700ms, the same feel
-   * as composer and design.
+   * assembly's THREE hands: entering the room restarts them (the gate rises again on every
+   * visit, like the other rooms' spinners), the minimum is three seconds, the frame's own
+   * load event (builder-embed-loaded) is the second, and the seat's binding (the seat effect
+   * below) is the third. The gate spans the WHOLE room — both columns — and drops only when
+   * all three have landed, or at its ceiling; then it fades and the room eases in underneath
+   * it — one cross-fade, 700ms, the same feel as composer and design.
    */
   useEffect(() => {
     if ((headerTab || '') !== 'development') return;
@@ -4935,17 +4990,23 @@ export default function Index({
     setDevelopmentToolDown(false);
     developmentMinElapsedRef.current = false;
     developmentFrameLoadedRef.current = false;
+    developmentSeatSettledRef.current = false;
     if (developmentGateTimerRef.current) clearTimeout(developmentGateTimerRef.current);
     developmentGateTimerRef.current = setTimeout(() => {
       developmentMinElapsedRef.current = true;
-      if (developmentFrameLoadedRef.current) setDevelopmentGateDown(true);
+      dropDevelopmentGateWhenAllLanded();
     }, DEVELOPMENT_GATE_MIN_MS);
     // THE CEILING (see DEVELOPMENT_GATE_MAX_MS above): a frame that has not arrived by now reads
     // as "the tool is down" — the room's panel says so on its own ground, and a late load still
     // clears it, because the embed stays mounted underneath.
+    // AND THE COVER NEVER OUTLIVES THE CEILING — a frame that arrived but a seat binding that
+    // never settles must not leave the spinner standing: the room reveals on its honest blank
+    // seat instead (the no-fallback rule; a spinner may claim an assembly only while one can
+    // still land within its ceiling).
     if (developmentGateMaxTimerRef.current) clearTimeout(developmentGateMaxTimerRef.current);
     developmentGateMaxTimerRef.current = setTimeout(() => {
       if (!developmentFrameLoadedRef.current) setDevelopmentToolDown(true);
+      setDevelopmentGateDown(true);
     }, DEVELOPMENT_GATE_MAX_MS);
     return () => {
       if (developmentGateMaxTimerRef.current) clearTimeout(developmentGateMaxTimerRef.current);
@@ -4953,21 +5014,26 @@ export default function Index({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
-  /** THE PRODUCT ROOM'S OWN TWO CLOCKS — the Development effect above, mirrored exactly. */
+  /** THE PRODUCT ROOM'S OWN THREE HANDS — the Development effect above, mirrored exactly. */
   useEffect(() => {
     if ((headerTab || '') !== 'product') return;
     setProductGateDown(false);
     setProductToolDown(false);
     productMinElapsedRef.current = false;
     productFrameLoadedRef.current = false;
+    productSeatSettledRef.current = false;
     if (productGateTimerRef.current) clearTimeout(productGateTimerRef.current);
     productGateTimerRef.current = setTimeout(() => {
       productMinElapsedRef.current = true;
-      if (productFrameLoadedRef.current) setProductGateDown(true);
+      dropProductGateWhenAllLanded();
     }, PRODUCT_GATE_MIN_MS);
     if (productGateMaxTimerRef.current) clearTimeout(productGateMaxTimerRef.current);
     productGateMaxTimerRef.current = setTimeout(() => {
       if (!productFrameLoadedRef.current) setProductToolDown(true);
+      // THE COVER NEVER OUTLIVES THE CEILING — see the development effect above: a seat
+      // binding that never settles reveals the room on its honest blank seat, never a
+      // spinner standing for an assembly that stopped being possible.
+      setProductGateDown(true);
     }, PRODUCT_GATE_MAX_MS);
     return () => {
       if (productGateMaxTimerRef.current) clearTimeout(productGateMaxTimerRef.current);
@@ -5001,6 +5067,18 @@ export default function Index({
        opens, so the seat's very first render already knows the room it belongs to. */
     const seat = productSeatRef.current;
     if (seat) seat.productRoom = true;
+    /* THE WIDTH IS ASSERTED ON THE ENTRY FRAMES (see `assertPaneWidth`): the declared 600 can
+       land in a render that cannot measure the element yet, and the pane then holds its 104px
+       rail floor until an unrelated re-render unfreezes it — measured, and it was the pop.
+       Three frames cover the measured case; the frame-load and seat-settle beats assert again
+       if the window closes early. */
+    let frames = 0;
+    let raf = requestAnimationFrame(function assertWidth() {
+      assertPaneWidth(productLayoutRef.current);
+      frames += 1;
+      if (frames < 3) raf = requestAnimationFrame(assertWidth);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [headerTab]);
 
   /**
@@ -5032,7 +5110,15 @@ export default function Index({
         const room = (await roomRes.json().catch(() => null)) as
           | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
           | null;
-        if (!room?.ok || !room.session_id || !room.conversation_id) return;
+        if (!room?.ok || !room.session_id || !room.conversation_id) {
+          /* THE CARRIER SAID NO — SETTLED, so the cover can lift onto the honest blank seat
+             (see the seat-settled note at the refs). */
+          if (!cancelled) {
+            productSeatSettledRef.current = true;
+            dropProductGateWhenAllLanded();
+          }
+          return;
+        }
         const convRes = await fetch(
           `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/conversation`,
         );
@@ -5104,10 +5190,20 @@ export default function Index({
         if (unreported.length) {
           console.warn(`[product seat] unreported bindings: ${unreported.join(', ')}`);
         }
+        /* THE SEAT IS UP — the third hand lands, and the pane's width is asserted once more
+           from a beat where the room is certainly measurable (see `assertPaneWidth`). */
+        productSeatSettledRef.current = true;
+        assertPaneWidth(productLayoutRef.current);
+        dropProductGateWhenAllLanded();
       } catch {
         /* A FAILED CARRIER FETCH LEAVES THE SEAT INVISIBLE, NOT DEFAULTED (owner, 2026-10-06 —
            no fallbacks): with `productRoom` set and no binding landed, the seat draws NOTHING —
-           the v.4b face never returns — and the next entry tries again. */
+           the v.4b face never returns — and the next entry tries again. Settled all the same:
+           a cover must not go on standing over a chat that will never arrive. */
+        if (!cancelled) {
+          productSeatSettledRef.current = true;
+          dropProductGateWhenAllLanded();
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -5416,7 +5512,14 @@ export default function Index({
         const body = (await res.json().catch(() => null)) as
           | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
           | null;
-        if (cancelled || !body?.ok || !body.session_id || !body.conversation_id) return;
+        if (cancelled) return;
+        if (!body?.ok || !body.session_id || !body.conversation_id) {
+          /* THE ROOM SAID NO — SETTLED, so the cover can lift (the seat-settled note at the
+             refs): the seat stands as it is, and the cover never outlives the honest state. */
+          developmentSeatSettledRef.current = true;
+          dropDevelopmentGateWhenAllLanded();
+          return;
+        }
         const unreported = assignProps(seat, {
           sessionId: body.session_id,
           conversationId: body.conversation_id,
@@ -5437,8 +5540,17 @@ export default function Index({
         if (unreported.length) {
           console.warn(`[development seat] unreported bindings: ${unreported.join(', ')}`);
         }
+        /* THE SEAT IS UP — the third hand lands (see the seat-settled note at the refs). */
+        developmentSeatSettledRef.current = true;
+        dropDevelopmentGateWhenAllLanded();
       } catch {
-        /* a failed room fetch leaves the seat as it stands — the next entry tries again */
+        /* a failed room fetch leaves the seat as it stands — the next entry tries again.
+           Settled all the same: the cover must not keep standing over a chat that will never
+           arrive. */
+        if (!cancelled) {
+          developmentSeatSettledRef.current = true;
+          dropDevelopmentGateWhenAllLanded();
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -5454,13 +5566,16 @@ export default function Index({
       if (tab === 'development') {
         developmentFrameLoadedRef.current = true;
         setDevelopmentToolDown(false);
-        if (developmentMinElapsedRef.current) setDevelopmentGateDown(true);
+        dropDevelopmentGateWhenAllLanded();
         return;
       }
       if (tab === 'product') {
         productFrameLoadedRef.current = true;
         setProductToolDown(false);
-        if (productMinElapsedRef.current) setProductGateDown(true);
+        /* THE FRAME IS UP — assert the pane's width from a beat where the room is standing
+           (see `assertPaneWidth`): the declared 600 lands before the cover can lift. */
+        assertPaneWidth(productLayoutRef.current);
+        dropProductGateWhenAllLanded();
       }
     };
     window.addEventListener('builder-embed-loaded', onFrameLoaded);
@@ -10433,6 +10548,13 @@ export default function Index({
                               same seat node carries Product's conversation into Development, and
                               the layout keeps the previous room's pane state. The keys force each
                               room to mount its own instance. */}
+                          {/* THE ROOM'S OWN RELATIVE GROUND — THE COVER'S FRAME (2026-10-06): the
+                              staged opening spans the WHOLE room now (both columns — see the gate
+                              states above), so it cannot live inside the left column's box. This
+                              wrapper is layout-neutral: a flex column handing the layout the same
+                              box the sandbox's viewport gave it, and clipping it as that viewport
+                              did. */}
+                          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
                           <workspace-layout key="development-room" ref={developmentLayoutRef} className="flex-1 min-h-0">
                             {/* THE ROOM'S WORKSPACE + THE STAGED OPENING (2026-10-06): the
                                 left column loads the repo-run workspace — the modified copy
@@ -10450,29 +10572,6 @@ export default function Index({
                               transition: 'opacity 700ms ease',
                             }}
                           />
-                          )}
-                          {developmentToolUrl() && !developmentToolDown && (
-                          /* THE STAGED OPENING (owner, 2026-10-04; three seconds from 2026-10-06):
-                             the ground is his own graph-paper tile (dark, neutral — *"god knows
-                             it's gotta be gray"*), the ring is the assembly gate's amber, the
-                             line is plain, and the window eases in UNDER the gate — one 700ms
-                             cross-fade, the same feel as composer and design. */
-                          <div
-                            aria-hidden={developmentGateDown}
-                            style={{
-                              position: 'absolute', inset: 0, zIndex: 3,
-                              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                              backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
-                              opacity: developmentGateDown ? 0 : 1,
-                              transition: 'opacity 700ms ease',
-                              pointerEvents: developmentGateDown ? 'none' : 'auto',
-                            }}
-                          >
-                            <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                            <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                              {"Standing up the development workspace\u2026"}
-                            </p>
-                          </div>
                           )}
                           {(!developmentToolUrl() || developmentToolDown) && (
                             /* THE FALLBACK PANEL — the honest state: no address configured, or the
@@ -10500,6 +10599,38 @@ export default function Index({
                                 Versions (DEVELOPMENT_SEAT_TABS). */}
                             <chat-panel key="development-seat" slot="right" ref={developmentSeatRef}></chat-panel>
                           </workspace-layout>
+                          {developmentToolUrl() && !developmentToolDown && (
+                          /* THE STAGED OPENING — THE WHOLE ROOM'S NOW (owner, 2026-10-04; three
+                             seconds from 2026-10-06; both columns and the seat hand the same
+                             night: *"put back the assembly illusion … it creates a nice fade
+                             into the application and there's no popping and snapping of
+                             components."*). The ground is his own graph-paper tile (dark,
+                             neutral — *"god knows it's gotta be gray"*), the ring is the
+                             assembly gate's amber, and the room eases in UNDER the gate — one
+                             700ms cross-fade. It spans BOTH columns because the seat binds on
+                             its own clock: covered only as far as the left, the chat arrived
+                             beside a standing workspace — measured 2026-10-06 — which is the
+                             pop this cover exists to remove. It drops when all three hands
+                             have landed (the minimum, the frame, the seat — see the clocks
+                             above), or at the ceiling, honestly. */
+                          <div
+                            aria-hidden={developmentGateDown}
+                            style={{
+                              position: 'absolute', inset: 0, zIndex: 3,
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                              backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
+                              opacity: developmentGateDown ? 0 : 1,
+                              transition: 'opacity 700ms ease',
+                              pointerEvents: developmentGateDown ? 'none' : 'auto',
+                            }}
+                          >
+                            <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                            <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                              {"Standing up the development workspace\u2026"}
+                            </p>
+                          </div>
+                          )}
+                          </div>
                         </>
                       )
                       : isDeadTab
@@ -10512,8 +10643,9 @@ export default function Index({
                              — remove the cards, drop the builder in there where the cards are."*
                              So the room wears the CONSOLE'S container — `workspace-layout`, the
                              composer's own frame element, never a copy of it — with the whole app
-                             builder as its left column (unchanged inside: the frame, the staged
-                             gate, the stopped-engine banner) and the platform chat seat as its
+                             builder as its left column (unchanged inside: the frame and the
+                             stopped-engine banner; the staged gate now spans the whole room,
+                             see the cover below) and the platform chat seat as its
                              right column, CLOSED on entry (the gripper strip and the rail — the
                              console's own behaviour, because it is the console's container).
                              THE SEAT IS THE ONE ELEMENT THE CONSOLE AND COMPOSER USE, and it
@@ -10538,6 +10670,13 @@ export default function Index({
                                   style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }}
                                 />
                               )}
+                              {/* THE ROOM'S OWN RELATIVE GROUND — THE COVER'S FRAME (2026-10-06): the
+                                  staged gate spans the WHOLE room now (both columns — see the gate
+                                  states above), so it cannot live inside the left column's box.
+                                  The wrapper is layout-neutral: a flex column handing the layout
+                                  the same box the sandbox's viewport gave it, and clipping it as
+                                  that viewport did. */}
+                              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
                               <workspace-layout key="product-room" ref={productLayoutRef} className="flex-1 min-h-0">
                                 <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                               {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
@@ -10583,32 +10722,6 @@ export default function Index({
                                   {builderEngineDown ? '' : "Opening the project\u2026"}
                                 </div>
                               )}
-                              {builderToolUrl() && !productToolDown && !builderEngineDown && (
-                              /* THE SAME STAGED GATE AS DEVELOPMENT (2026-10-05) — up from the
-                                 room's first paint, over the frame and over the opening state,
-                                 and dropped only when the frame's load event and the 5s minimum
-                                 have both landed (see the two clocks above): one 700ms
-                                 cross-fade, and the builder's white first paint never shows.
-                                 NEVER WHILE THE ENGINE IS DOWN (owner, 2026-10-06): nothing is
-                                 standing up, and a spinner claiming otherwise is the same lie
-                                 the seat's old face told — the banner below says the real state. */
-                              <div
-                                aria-hidden={productGateDown}
-                                style={{
-                                  position: 'absolute', inset: 0, zIndex: 3,
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                                  backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
-                                  opacity: productGateDown ? 0 : 1,
-                                  transition: 'opacity 700ms ease',
-                                  pointerEvents: productGateDown ? 'none' : 'auto',
-                                }}
-                              >
-                                <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                                <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                  {"Standing up the builder\u2026"}
-                                </p>
-                              </div>
-                              )}
                               {/* A STOPPED ENGINE GETS SAID PLAINLY — else the tool's own errors read
                                   like broken features. NEVER ON THE DEMO (2026-10-04): its copy names
                                   the repo's own start script, which is developer text, and on the
@@ -10639,6 +10752,36 @@ export default function Index({
                                     just be a blank page than have a fallback."*). */}
                                 <chat-panel key="product-seat" slot="right" ref={productSeatRef}></chat-panel>
                               </workspace-layout>
+                              {builderToolUrl() && !productToolDown && !builderEngineDown && (
+                              /* THE SAME STAGED GATE AS DEVELOPMENT (2026-10-05) — now over the
+                                 WHOLE room (2026-10-06): the chat column here sat frozen at its
+                                 104px rail floor until an unrelated re-render unfroze it, and
+                                 beside a left-only gate that unfreeze WAS the pop. The cover
+                                 spans both columns and drops only when the minimum, the
+                                 frame's load, and the seat have all landed (see the clocks
+                                 above): one 700ms cross-fade, and neither the builder's white
+                                 first paint nor the chat's late face ever shows alone.
+                                 NEVER WHILE THE ENGINE IS DOWN (owner, 2026-10-06): nothing is
+                                 standing up, and a spinner claiming otherwise is the same lie
+                                 the seat's old face told — the banner below says the real state. */
+                              <div
+                                aria-hidden={productGateDown}
+                                style={{
+                                  position: 'absolute', inset: 0, zIndex: 3,
+                                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                                  backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
+                                  opacity: productGateDown ? 0 : 1,
+                                  transition: 'opacity 700ms ease',
+                                  pointerEvents: productGateDown ? 'none' : 'auto',
+                                }}
+                              >
+                                <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                                <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                  {"Standing up the builder\u2026"}
+                                </p>
+                              </div>
+                              )}
+                              </div>
                               {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04; its save-as-draft
                                   door, 2026-10-06: *"You must save this before we can continue
                                   or offer them a saved draft option."*). ONE LEVEL UP since the
