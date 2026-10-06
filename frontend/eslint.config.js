@@ -10,7 +10,6 @@ export default defineConfig([
   globalIgnores([
     'dist',
     '.vite',
-    'storybook-static',
     'coverage',
     'src/imports',
   ]),

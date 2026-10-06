@@ -35,7 +35,6 @@ import sys
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-
 # The pairs §7 asks about: a package with a conversation, and no row for the conversation's own user.
 # Read from `conversations` and NOT from a list of ids, so a package created after this was written is
 # included the next time it runs rather than needing an edit here.

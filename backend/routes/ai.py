@@ -3,7 +3,7 @@ import asyncio
 import json
 import os
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -13,10 +13,8 @@ import services as state
 from deps import (
     A2UI_CATALOG_ID,
     a2ui_catalog,
-    a2ui_catalog_id,
     a2ui_catalog_for,
-    a2ui_catalog_surfaces,
-    design_system_of,
+    a2ui_catalog_id,
     get_user_id_from_header,
     user_is_admin,
     validate_a2ui_components,
@@ -873,14 +871,14 @@ def _activity_at_ms(at: Any) -> float:
     value is 0 — the feed's own "unknown" — and never the current time, which would be a claim
     about when it happened that nothing measured.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if isinstance(at, (int, float)):
         return float(at)
     try:
         return (
             datetime.strptime(str(at), "%Y-%m-%dT%H:%M:%SZ")
-            .replace(tzinfo=timezone.utc)
+            .replace(tzinfo=UTC)
             .timestamp()
             * 1000
         )
@@ -1831,16 +1829,9 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
         else:
             vocabulary_block = _catalog_component_vocabulary()
 
-        # HER WORDS CARRY THE ROOM'S LIVE FACTS (2026-10-03) — composed per assembly, the design
-        # room's own shape. Measured in the owner's first real conversation with her here: she
-        # asked for the catalogue and the component names on EVERY turn, because the room never
-        # handed them to her. The palette is the list she may act on; and since this evening the
-        # honest limit is GONE — the assembler exists (`POST /api/ai/assemble-wireframe` backs
-        # her [Build that] offer), so what the block carries instead is the capability and THE
-        # ONE RULE: she builds structures from the list above, and the catalogue's look is set.
-        palette_names = ", ".join(item["name"] for item in palette) if palette else "(none)"
-        # ONE SYSTEM, NAMED — the chooser is gone (2026-10-03 late), so the line is the constant.
-        chosen_line = chosen_system
+        # (TWO DEAD LINES WERE HERE — `palette_names` and `chosen_line`, computed on every assembly
+        # from 2026-10-03 and read by nothing: what the block carries is the script alone, below.
+        # Removed 2026-10-04, with the rest of the retired era's leftovers.)
         # HER SCRIPT IS THE WHOLE CONTEXT (2026-10-03, late): the catalogue/palette facts that
         # used to ride here belonged to the retired era — she composes from nothing but the
         # person's words now, so the only thing appended is the script itself.
@@ -2929,29 +2920,10 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 "busy": {"path": "/session/ingest/busy"},
                 "message": {"path": "/session/ingest/message"},
             })
-            # ── THE RAIL'S SECOND FORM: ADD A DESIGN SYSTEM, BESIDE THE FIGMA ONE ────────
-            #
-            # THE OWNER, 2026-10-02: Design *"will manage the input and control of catalogs and
-            # design system resources… we can add that ingest function to our current Figma ingest
-            # function."* So the rail carries BOTH tools: the Figma form, then this one, then the
-            # tree (see the `children` wiring below).
-            #
-            # THE SAME DIVISION AS THE FORM ABOVE, AND THE SAME TWO LAWS. The element draws the label
-            # field, the archive field and Submit, and dispatches `catalog-ingest-submit`; the SHELL
-            # posts `POST /api/catalog/ingest` and says what came back. Its two values travel as
-            # BOUND PATHS for the same reason the Figma form's do — the renderer re-applies props on
-            # a data-model change and returns early on a components change — under this form's OWN
-            # keys, because two ingests in one rail must not write one message line.
-            #
-            # IT CANNOT NAME AN EXISTING CATALOGUE: the partition's name is the manifest's id, the
-            # server refuses one that exists, and no field here offers a name to overwrite — the
-            # system catalogues are not ingest targets by construction.
-            components.append({
-                "id": "left-system-form",
-                "component": "catalog-ingest-form",
-                "busy": {"path": "/session/design_system_ingest/busy"},
-                "message": {"path": "/session/design_system_ingest/message"},
-            })
+            # (THE RAIL'S SECOND FORM WAS HERE — ADD A DESIGN SYSTEM, emitted beside the Figma form
+            # from 2026-10-02 and removed 2026-10-04 at the owner's word: no catalogue is installed
+            # from the front end. The rail is the Figma form over the tree, as it was before it.
+            # The endpoint itself is untouched.)
             # ── THE FIRST TRANSLATION: THE CATALOGUE'S NAME, IN THE INGESTED CONTAINER ────
             #
             # THE OWNER, 2026-09-30: *"I want you to do your first transition — I want you to take
@@ -2978,9 +2950,11 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # The re-read trigger, on the same channel and for the same reason: the shell bumps
                 # this number after an ingest lands and the tree reads the layers back.
                 "refresh": {"path": "/session/ingest/refresh"},
-                # AND THE IN-FLIGHT FACT, so the column spins while an ingest (or an accept) is
-                # being processed — the SAME busy the form's button reads (one fact, two readers).
-                "busy": {"path": "/session/design_system_ingest/busy"},
+                # (THE IN-FLIGHT FACT WAS BOUND HERE — `/session/design_system_ingest/busy`, the
+                # same fact the add-design-system form's button read. The form and the writer are
+                # both gone (2026-10-04), so the tree's `busy` has nothing to read and the binding
+                # went with them. An accept flow that wants the column to spin binds a path it
+                # also writes.)
             })
             for _c in components:
                 if _c.get("id") != "design-left":
@@ -2991,7 +2965,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                     _c["children"] = _kids
                 # A slot takes one child OR a list of them (the Composer ships a list), so both
                 # halves are named rather than one replacing the other.
-                _kids["left"] = ["left-form", "left-system-form", "left-rail"]
+                _kids["left"] = ["left-form", "left-rail"]
                 break
 
             # ── AND THE GATE IS THIS SURFACE'S OWN ──────────────────────────────────────
@@ -3054,10 +3028,18 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             design_grace_instructions = (
                 "You are the design system's assistant, and you are with the designer. You built the "
                 "Lit components of this design system from Figma. The left column "
-                "holds the catalogue and the ingest tool — what has been measured, what was "
-                "written, and the checks that did not pass. The middle column shows the component "
-                "being reviewed. Answer the designer's question about it directly, in a few "
-                "sentences, and say plainly what to change when something is wrong."
+                "holds the catalogue — what has been measured, what was written, and the checks "
+                "that did not pass. The middle column shows the component being reviewed. "
+                "WHEN YOU GREET, OR WHEN YOU ARE ASKED SOMETHING YOU HAVE NO MATERIAL FOR, SAY "
+                "THIS AND NOTHING ELSE: \"I'm your design system assistant — I built these Lit "
+                "components from Figma, and I'm here to help you review and shape them. What would "
+                "you like to work on?\" "
+                "SAY IT ONCE AND STOP. Do not summarise the catalogue, count its components, list "
+                "open findings, or offer a menu of things you could do next — no \"I could …\" "
+                "lists and no \"which one would you like\". She has already been answered "
+                "\"no thanks\" once, and a second offer is the same offer. "
+                "Answer the designer's question directly, in a few sentences, and say plainly what "
+                "to change when something is wrong."
             )
             # ── THE BAR'S TITLE IS THE CATALOGUE, NOT "Design" ───────────────────────────
             #
@@ -3193,8 +3175,8 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
 
             # ── WHAT SHE KNOWS WHEN SHE SPEAKS: THE SECTION'S OWN RECORD ────────────────
             #
-            # The owner, 2026-09-30: *"she's not talking about anything because she doesn't know
-            # what the fuck is going on. She manages all of this — she can remove things, add
+            # The owner, 2026-09-30 — she was not talking about anything, because she did not
+            # know what was going on. She manages all of this: she can remove things, add
             # things, edit that list on the left-hand side — she has to be able to go through that
             # database to understand what the metadata is."*
             #

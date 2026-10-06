@@ -9,23 +9,32 @@ wrong for a public URL — the same endpoints that let the owner work let a
 stranger permanently delete packages, overwrite source through `/api/repair/apply`,
 install catalogues through `/api/catalog/ingest`, and spend the DeepSeek key.
 
-So the demo is enforced HERE, where a curl cannot argue with it. The browser pass
-(`frontend/src/shared/demoMode.ts`) only hides affordances; THIS is the lock.
+So the demo's limits are enforced HERE, where a curl cannot argue with it. The
+browser pass (`frontend/src/shared/demoMode.ts`) only hides affordances; THIS is
+the lock — and as of 2026-10-04 it follows the IDENTITY, not the instance: the
+pin/dev path resolves to the demo sandbox (deps.py maps the default id to
+DEMO_USER_ID) and gets this policy; a signed-up beta account keeps its own id
+and passes untouched. One build, two paths.
 
 HOW IT DECIDES
 ──────────────
 Every `/api/` request, in this order:
 
-  1. RATE LIMIT — before everything, because `GET /api/health` is a *paid*
-     DeepSeek ping (routes/misc.py) and a pass-list checked first would leave the
-     one endpoint that costs money unthrottled. The global bucket is the money
-     backstop; the per-key bucket is fairness between visitors.
-  2. PASS-LIST — the few endpoints that need no policy: login, health, the
-     shell's own config, and `/api/auth/me`.
-  3. POLICY — GETs pass except a denylist of infrastructure/source/oracle reads;
+  1. IDENTITY — who is at the door. Anyone whose resolved identity is not the
+     demo sandbox passes everything below untouched: the policy and its buckets
+     exist for the shared demo identity alone.
+  2. RATE LIMIT — the demo identity's money, first, because `GET /api/health`
+     is a *paid* DeepSeek ping (routes/misc.py) and a pass-list checked first
+     would leave the one endpoint that costs money unthrottled. The global
+     bucket is the money backstop; the per-key bucket is fairness between demo
+     visitors.
+  3. PASS-LIST — the doors that need no policy: login, signup, verify, the
+     resend, health, the shell's own config, and `/api/auth/me`. The beta door
+     is open for everyone.
+  4. POLICY — GETs pass except a denylist of infrastructure/source/oracle reads;
      every mutating verb (POST/PUT/PATCH/DELETE) is DENIED unless it is on the
      allowlist. Deny-by-default: a route added tomorrow is locked to the demo
-     until someone writes it into the allowlist on purpose.
+     identity until someone writes it into the allowlist on purpose.
 
 THE ALLOWLIST NAMES ROUTES BY THEIR OWN TEMPLATES
 ─────────────────────────────────────────────────
@@ -46,11 +55,12 @@ at import and matched against `request.url.path`.
 
 WHAT THIS FILE DELIBERATELY DOES NOT DO
 ───────────────────────────────────────
-It does not verify identity — `deps.get_user_id_from_header` pins every demo
-request to `DEMO_USER_ID`, headers ignored. It does not rate-limit outbound tool
-calls the model makes inside `/api/teacher/query`; the endpoint's own bucket
-bounds those. And all demo visitors share one identity and one sandbox by
-design: they see each other's edits until `seed_demo_data.py --reset` runs.
+It does not authenticate — identity still arrives as the `X-User-ID` header,
+the app's existing session model; this file only decides which identity is
+limited (the demo sandbox) and which is not. It does not rate-limit outbound
+tool calls the model makes inside `/api/teacher/query`; the endpoint's own
+bucket bounds those. And all demo visitors share one identity and one sandbox
+by design: they see each other's edits until `seed_demo_data.py --reset` runs.
 """
 import os
 import re
@@ -59,7 +69,7 @@ import time
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from deps import DEMO_MODE
+from deps import DEMO_MODE, DEMO_USER_ID, get_user_id_from_header
 
 
 # ── THE RATE LIMITS ────────────────────────────────────────────────────────
@@ -138,6 +148,13 @@ PASS_LIST = {
     ("GET", "/api/config"),
     ("POST", "/api/auth/login"),
     ("GET", "/api/auth/me"),
+    # THE BETA DOOR IS OPEN FOR EVERYONE (2026-10-04): signup, the code
+    # check, and the resend are how a visitor becomes an account — they
+    # must never be refused by the demo policy, or the two-path gate the
+    # owner designed cannot exist on the deployed build.
+    ("POST", "/api/auth/signup"),
+    ("POST", "/api/auth/verify"),
+    ("POST", "/api/auth/resend-code"),
 }
 
 # ── THE GET DENYLIST ───────────────────────────────────────────────────────
@@ -298,14 +315,24 @@ async def demo_policy_dispatch(request: Request, call_next):
     # GET's policy, not the mutation deny-by-default.
     policy_method = "GET" if method == "HEAD" else method
 
-    # ── 1. THE MONEY, FIRST ────────────────────────────────────────────────
-    if path in LLM_PATHS:
+    # ── 0. WHO IS AT THE DOOR ──────────────────────────────────────────────
+    # THE TWO PATHS LIVE IN ONE BUILD (2026-10-04): the pin/dev identity
+    # resolves to the demo sandbox (deps.get_user_id_from_header maps it) and
+    # gets the limits below; a signed-up account keeps its own id and passes
+    # through untouched. The policy follows the identity, not the instance.
+    identity = get_user_id_from_header(request.headers.get("X-User-ID"))
+    limited = identity == DEMO_USER_ID
+
+    # ── 1. THE MONEY, FIRST — AND ONLY THE DEMO IDENTITY'S. The buckets bound
+    # the shared sandbox's spend; a beta account is the product and is not
+    # throttled by demo limits. ────────────────────────────────────────────
+    if limited and path in LLM_PATHS:
         _prune_buckets()
         if not _consume(_client_key(request), "llm", *_LLM_PER_KEY):
             return _throttled(" for this visitor")
         if not _consume("global", "llm_global", *_LLM_GLOBAL):
             return _throttled(" for this deployment")
-    elif method in _MUTATING_METHODS:
+    elif limited and method in _MUTATING_METHODS:
         _prune_buckets()
         if not _consume(_client_key(request), "mutations", *_MUTATION_PER_KEY):
             return _throttled(" for this visitor")
@@ -314,7 +341,11 @@ async def demo_policy_dispatch(request: Request, call_next):
     if (policy_method, path) in PASS_LIST:
         return await call_next(request)
 
-    # ── 3. THE POLICY ──────────────────────────────────────────────────────
+    # ── 3. EVERYONE ELSE PASSES ────────────────────────────────────────────
+    if not limited:
+        return await call_next(request)
+
+    # ── 4. THE POLICY, FOR THE DEMO IDENTITY ONLY ──────────────────────────
     if policy_method == "GET":
         if path.startswith(GET_DENYLIST_PREFIXES) and not path.startswith(GET_DENY_EXCEPTIONS):
             return _forbidden(_DENIED_GET)

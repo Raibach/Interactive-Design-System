@@ -17,9 +17,6 @@
     "deploy": "gh-pages -d dist",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
-    "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build",
-    "chromatic": "npx chromatic --project-token=${CHROMATIC_PROJECT_TOKEN}",
     "typecheck": "tsc -b --noEmit",
     "catalog:check": "node scripts/catalog-check.mjs",
     "catalog:tree": "node scripts/catalog-tree.mjs"
@@ -46,7 +43,6 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@chromatic-com/storybook": "^5.3.0",
     "@custom-elements-manifest/analyzer": "^0.11.0",
     "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
     "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
@@ -79,11 +75,6 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@storybook/addon-a11y": "^10.0.0",
-    "@storybook/addon-designs": "^11.1.4",
-    "@storybook/addon-docs": "^10.0.0",
-    "@storybook/addon-onboarding": "^10.0.0",
-    "@storybook/react-vite": "^10.0.0",
     "@swc/core": "^1.13.3",
     "@tailwindcss/postcss": "^4.2.0",
     "@tailwindcss/typography": "^0.5.16",
@@ -114,7 +105,6 @@
     "prettier": "^3.6.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "storybook": "^10.0.0",
     "stream-browserify": "^3.0.0",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",

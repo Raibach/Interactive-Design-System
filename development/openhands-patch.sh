@@ -43,63 +43,30 @@
 #      the locale file; the TITLE is not a string in the build at all — the wizard renders each
 #      row's name from the backend's agent metadata (`display_name`) — so the row title is
 #      relabeled in-page by the ground script, exact-match only, inside the wizard container.
-#      THE FIRST-RUN FLOW IS DOOR-SCOPED (2026-10-04, last): the wizard is the REGISTERED
-#      door's way in and nobody else's — *"That process is not supposed to exist for the pin
-#      gate. It's only available if you click the register for the beta."* The pin door (and
-#      a hosted visitor with no marker) opens on the working model: the flow is preset
-#      completed (openhands-onboarded) and the getting-started checklist dismissed, with the
-#      "Skip for now" backstop should the wizard ever appear anyway. The registered walk
-#      stays honest — every step visible, nothing skipped — which is the zero-trust ruling
-#      that deleted the pass-through, kept exactly where it applied. The ground script's
-#      block above `run(set)` holds the door switch.
+#      THE FIRST-RUN FLOW IS THE TOOL'S OWN, NOWHERE SUPPRESSED (2026-10-04, late). There was
+#      a hosted-only suppression layer here — the flow preset completed, an auto-clicker for
+#      the wizard's "Skip for now", a modal that passed the LLM/parameters slide through —
+#      built in response to the owner's earlier "nobody is asked for anything" ruling. The
+#      owner then caught it from the outside and named it for what it was: *"we worked very
+#      hard on creating the onboarding screen … then skip the third step to avoid showing the
+#      parameters screen … We did a lot of work to suppress an error. Skip this process makes
+#      me suspicious that it's not working correct."* — *"That's error suppression … It has
+#      to fail hard. You can't skip things for convenience. This is a zero-trust
+#      application."* The layer is DELETED (the block in the ground script says where), and
+#      the wizard stands everywhere exactly as the tool ships it: every step visible, every
+#      save kept; skipping a step is the visitor's own choice through the vendor's own
+#      control. What remains hosted-only is provisioning, not suppression: the entrypoint
+#      still injects the session key (the backend is present when a page loads) and seeds
+#      the provided model — a visitor has no key to type, and the seed is what makes the
+#      workspace usable after the walk.
 #   6. THE TAB TITLE (2026-10-04): the vendor's name is in <title> — visible in every tab and
 #      every bookmark, and the one branding no stylesheet can reach — so it is rewritten to the
 #      house title ("Raibach — Agent Canvas", the same pattern as the site's own). Forced on
 #      every run; a rebuild cannot leave it unpatched for long.
-#   7. THE BETA NOTICE MODAL (2026-10-04): a click on an agent tile in "Choose your agent"
-#      opens the notice on the hosted beta and goes no further — no advance, no skip (the
-#      pass-through stays deleted). Hosted only, and the registered door's walk is the only
-#      walk that reaches it: every other door is preset completed (item 5).
-#   8. THE SIDEBAR STARTS COLLAPSED (owner, 2026-10-05): the left navigation opens as its
-#      icon rail. The app's sidebar store (`src/stores/sidebar-store.ts`) reads its choice
-#      from `openhands-sidebar` and carries a one-shot migration from the older raw key
-#      `openhands-sidebar-collapsed`; the ground script seeds that older key BEFORE the
-#      bundle boots (inline script parses first — module scripts are deferred), and stops
-#      the moment the app has a key of its own: the first toggle writes it and the person's
-#      choice rules from then on — default, not forced. Every door alike (a layout default
-#      is not the wizard's business). Lives in the ground script because index.html is
-#      served no-store — no hashed asset edit, so the immutable cache cannot hide it.
-#   9. THE WASH — THE LIBRARY CARD'S FILL AT HALF STRENGTH, TWO PASSES (owner, 2026-10-05):
-#      FIRST the settings and automate views' transparent state boxes — "No MCP servers
-#      installed yet.", "No apps are installed on this backend.", the Automate dashboard's
-#      "No automations configured" (774×450) — the library card's own colour (#22202D) at
-#      50%: rgba(34, 32, 45, 0.5), so the assembly tile still reads through. THEN the owner's
-#      second pass — "keep what you've done, don't undo anything … now we need to do the
-#      wrapper that goes around all of them, same opacity same color. It will double the
-#      layers that are already done, which will make them a little darker, which will make
-#      them stand out, so that's fine" — the same wash on the wrapper column each settings /
-#      automate view draws its whole content in, and on the settings sub-nav's own column
-#      beside it ("the same thing you would do with this one it has its own container").
-#      The wrappers are square, so they take the owner's 10px corners; the boxes were
-#      already rounded (12px), so nothing is re-rounded there. THE DOUBLE LAYER IS
-#      INTENDED — a filled box on the filled wrapper reads darker, which is the point.
-#      The chat surfaces match none of the selectors (scanned clean 2026-10-05 — chat
-#      landing: 0 wrappers, 0 asides, 0 boxes; MCP and Automate: 1 of each), so the
-#      homepage stays clean by construction. THIRD PASS, same evening — "add ten pixel
-#      padding to anything that's sitting next to a border or an edge — most of those last
-#      ones could use a 10 pixel padding": the wrapper and the sub-nav take 10px padding so
-#      their content sits clear of the fill's edge (both were flush at 0); the boxes keep
-#      their own p-8 (32px), which was already breathing.
-#  10. THE ONBOARDING IS PARKED — EVERY DOOR (owner, 2026-10-06): *"The development room app
-#      keeps reverting to the wizard for dev@local through the pin gate. I want to make this
-#      work. … Maybe we can move the onboarding and the wizard until I am ready to use it for
-#      real accounts."* While PARK_ONBOARDING is true (ground script, below), the first-run
-#      flow is preset completed for EVERY door — registered included — and the registered
-#      door's once-only re-arm (`house_welcome_granted`) is suspended, so no profile can land
-#      back in the wizard. RE-INTRODUCTION IS ONE SWITCH: set PARK_ONBOARDING = false and
-#      re-run this script — the door logic then behaves exactly as items 5/7 describe
-#      (registered walks with the beta notice; dev and hosted preset completed). The wizard
-#      code in the tool is untouched: parked, not lost.
+#   7. THE BETA NOTICE MODAL (2026-10-04) — DELETED WITH THE SUPPRESSIONS, same night: it was
+#      the visible half of the pass-through in item 5 (tiles intercepted, one modal instead
+#      of a choice, the LLM panel slid past). Item 5's note carries the owner's words; the
+#      wizard's own panels are what a visitor meets now, on every door.
 set -euo pipefail
 
 HOSTED=0
@@ -191,37 +158,6 @@ div[class*="bg-black"][class*="opacity-60"]{ background-color: transparent !impo
 __HOUSE_PATCH_HTML_BG__
 body, [data-agent-server-ui]{ background: transparent !important; }
 .pt-\[max\(4rem\,28vh\)\]{ padding-top: max(4rem, calc(28vh - 100px)) !important; }
-/* THE WASH — THE LIBRARY CARD'S FILL AT HALF STRENGTH (owner, 2026-10-05, two passes).
-   PART 1, THE BOXES: "fill these containers … at 50% opacity so that I can see a little bit
-   of the background" — the transparent state boxes (`rounded-xl border border-border`;
-   measured: MCP servers, Apps, Automate dashboard 774×450). PART 2, THE WRAPPERS: "keep what
-   you've done, don't undo anything … now we need to do the wrapper that goes around all of
-   them, same opacity same color. It will double the layers that are already done, which will
-   make them a little darker, which will make them stand out, so that's fine" — the centered
-   wrapper column each settings/automate view draws everything in, plus the settings sub-nav
-   column ("the same thing you would do with this one it has its own container"). THE DOUBLE
-   LAYER IS INTENDED: a box on the wrapper reads darker by design. The wrappers are square,
-   so they take the owner's 10px corners. The chat surfaces are excluded by construction —
-   scanned clean 2026-10-05: chat landing 0 wrappers / 0 asides / 0 boxes; MCP and Automate
-   1 of each. The :not([class*="bg-"]) guards mean these two rules can never repaint an
-   element that already carries its own background. AND THE FILLED BLOCKS TAKE 10px PADDING
-   (owner, 2026-10-05, third pass: "add ten pixel padding to anything that's sitting next to
-   a border or an edge — most of those last ones could use a 10 pixel padding") — the
-   wrapper and the sub-nav were flush at 0, so their content sat against the fill's edge;
-   the boxes keep their own p-8 (32px), already breathing. */
-[data-agent-server-ui] [class~="rounded-xl"][class~="border"][class~="border-border"]{
-  background-color: rgba(34, 32, 45, 0.5) !important;
-}
-[data-agent-server-ui] :is([class~="max-w-200"],[class~="max-w-275"])[class~="mx-auto"][class~="flex-col"][class~="gap-6"]:not([class*="bg-"]){
-  background-color: rgba(34, 32, 45, 0.5) !important;
-  border-radius: 10px !important;
-  padding: 10px !important;
-}
-[data-agent-server-ui] aside[class~="md:w-65"]:not([class*="bg-"]){
-  background-color: rgba(34, 32, 45, 0.5) !important;
-  border-radius: 10px !important;
-  padding: 10px !important;
-}
 CSS
 
 # The tile: copied in beside the stylesheet under its own content hash (the room's assembly
@@ -301,20 +237,11 @@ script = '''<script id="house-patch-ground">
        own workbench keeps its wizard exactly as it was. */
     var HOSTED = __HOUSE_HOSTED__;
     /* WHICH DOOR THIS PAGE WAS REACHED THROUGH (2026-10-04): 'registered' (a signed-up beta
-       user) or 'dev' (the pin) or "" (older sessions). builder-embed.ts appends it, and the
-       door-dependent pieces below read it: the pin door opens on the working model — no
-       wizard — while the registered door walks the wizard, which is the beta's way in. */
+       user) or 'dev' (the pin) or "" (older sessions). builder-embed.ts appends it. Nothing
+       door-dependent remains in this script — the suppressions that read it are deleted
+       (see the block above `run(set)`) — and the variable stays as the page's record of
+       where its visitor came from, for whatever the next door-dependent piece needs. */
     var DOOR = (location.search.match(/[?&]house_door=([a-z]+)/) || [])[1] || "";
-    /* ── THE ONBOARDING IS PARKED — EVERY DOOR (owner, 2026-10-06) ──────────────────────────
-       *"The development room app keeps reverting to the wizard for dev@local through the pin
-       gate. I want to make this work. … Maybe we can move the onboarding and the wizard until
-       I am ready to use it for real accounts."* While PARK_ONBOARDING is true the flow NEVER
-       appears for anyone: preseedFirstRun (below) presets completion for every door, and the
-       registered door's once-only re-arm is suspended. RE-INTRODUCTION (one switch): set this
-       to false and re-run the patch — the registered door walks again (with the beta notice),
-       the pin and hosted doors are preset completed, exactly as the script header's items 5
-       and 7 describe. The wizard code in the tool is never touched. */
-    var PARK_ONBOARDING = true;
     /* ── THE BETA MODEL POP-UP — RESTORED, WITHOUT THE SKIP (owner, 2026-10-04, last) ────────
        Owner, walking the beta: *"Whenever somebody selects a model whether it's local or
        whether it's in the cloud, it's supposed to show a little pop-up [that] says there is
@@ -389,7 +316,6 @@ script = '''<script id="house-patch-ground">
     };
     var betaNotice = function () {
       if (!HOSTED) return;
-      if (DOOR !== "registered") return; /* the notice is the beta's — every other door is preset completed */
       if (window.__houseBetaNoticeHooked) return;
       window.__houseBetaNoticeHooked = true;
       document.addEventListener("click", function (event) {
@@ -433,109 +359,34 @@ script = '''<script id="house-patch-ground">
         }
       }
     };
-    /* ── THE PIN DOOR OPENS ON THE WORKING MODEL — NO WIZARD (owner, 2026-10-04, last) ─────
-       The wizard is the REGISTERED door's way in and nobody else's: *"That process is not
-       supposed to exist for the pin gate. It's only available if you click the register for
-       the beta."* The earlier cut deleted these two functions so the wizard walked for every
-       door; they return here, door-scoped, and the beta's own walk stays honest — the
-       zero-trust ruling that deleted the pass-through still stands for it.
-       1. THE FLOW IS COMPLETED — `openhands-onboarded` is what the app writes when the flow
-          is finished or skipped; seeding it means the wizard never appears. Safe only
-          because the service injects its key (local mode — the entrypoint's job 1); a
-          `--public` service must not preseed.
-       2. THE GETTING-STARTED CHECKLIST DEFAULTS OFF — dismissed-if-absent. */
-    var preseedFirstRun = function () {
-      try {
-        /* PARKED (owner, 2026-10-06 — see PARK_ONBOARDING above): every door gets the
-           completed preset; the registered re-arm stays suspended until the owner is ready
-           for real accounts. */
-        if (PARK_ONBOARDING) {
-          if (localStorage.getItem("openhands-onboarded") === null) {
-            localStorage.setItem("openhands-onboarded", "1");
-          }
-          if (localStorage.getItem("openhands-sidebar-onboarding-checklist-dismissed") === null) {
-            localStorage.setItem("openhands-sidebar-onboarding-checklist-dismissed", "true");
-          }
-          return;
-        }
-        var door = DOOR;
-        if (door === "registered") {
-          /* the wizard IS the registered user's way in: undo a stale completed-preset ONCE
-             (a browser that carries it from the demo), after which the wizard's own completion
-             marker rules. Re-arm by deleting `house_welcome_granted`. */
-          if (localStorage.getItem("house_welcome_granted") === null) {
-            localStorage.removeItem("openhands-onboarded");
-            localStorage.setItem("house_welcome_granted", "1");
-          }
-          return;
-        }
-        if (!HOSTED && door !== "dev") return; /* the Mac workbench, opened directly, keeps its wizard */
-        if (localStorage.getItem("openhands-onboarded") === null) {
-          localStorage.setItem("openhands-onboarded", "1");
-        }
-        if (localStorage.getItem("openhands-sidebar-onboarding-checklist-dismissed") === null) {
-          localStorage.setItem("openhands-sidebar-onboarding-checklist-dismissed", "true");
-        }
-      } catch (e) {}
-    };
-    var skipSetupSteps = function () {
-      /* THE BACKSTOP FOR THE PIN DOOR ALONE — WIDENED WHILE PARKED (owner, 2026-10-06):
-         should the wizard ever appear anyway (a hand-cleared store, a future build), its
-         steps after the first click the wizard's own "Skip for now": hosted and the pin
-         door as before, and while PARK_ONBOARDING every door including the registered
-         walk — the parked state promises nobody meets the wizard; never during a
-         `?previewOnboardingStep=` design preview. */
-      if (!PARK_ONBOARDING) {
-        if (!HOSTED) return;
-        if (DOOR === "registered") return;
-      }
-      if (location.search.indexOf("previewOnboardingStep") !== -1) return;
-      var hasBackend = false;
-      try { hasBackend = localStorage.getItem("openhands-backends") !== null; } catch (e) { return; }
-      if (!hasBackend) return;
-      var wiz = document.querySelector("div.fixed.inset-0.flex.items-center.justify-center");
-      if (!wiz) return;
-      var heading = wiz.querySelector("h1,h2,h3");
-      var title = heading ? heading.textContent : "";
-      if (title.indexOf("Add a backend") !== -1) return;
-      var buttons = wiz.querySelectorAll("button");
-      for (var b = 0; b < buttons.length; b++) {
-        if (buttons[b].textContent.trim() === "Skip for now") { buttons[b].click(); return; }
-      }
-    };
-    /* 3. THE SIDEBAR STARTS COLLAPSED (owner, 2026-10-05): the left navigation opens as its
-       icon rail, not the expanded menu. The app's sidebar store keeps its choice under
-       `openhands-sidebar` and carries a one-shot migration from the older raw key
-       `openhands-sidebar-collapsed` (src/stores/sidebar-store.ts): it seeds the store from
-       that older key ONCE, and only while the new key is absent. So this seeds the older
-       key before the bundle boots — and then gets out of the way: the first toggle writes
-       `openhands-sidebar`, and the person's choice rules from then on ("default", not
-       "forced"). NOT door-scoped — a layout default is not the wizard's business; every
-       door gets the same rail. No hashed asset is touched: index.html is served no-store,
-       so unlike the stylesheet this cannot hide behind a year of immutable cache. */
-    var preseedSidebar = function () {
-      try {
-        if (localStorage.getItem("openhands-sidebar") !== null) return;
-        if (localStorage.getItem("openhands-sidebar-collapsed") === null) {
-          localStorage.setItem("openhands-sidebar-collapsed", "true");
-        }
-      } catch (e) {}
-    };
+    /* ── THE SUPPRESSIONS ARE GONE (owner, 2026-10-04, late) ────────────────────────────────
+       The owner, watching the hosted workspace: *"we worked very hard on creating the
+       onboarding screen … then skip the third step to avoid showing the parameters screen
+       for APIs. We did a lot of work to suppress an error. Skip this process makes me
+       suspicious that it's not working correct."* And, plainly: *"That's error suppression.
+       … It has to fail hard. You can't skip things for convenience. This is a zero-trust
+       application."* So the hosted copy no longer:
+         · presets the first-run flow as completed (preseedFirstRun — deleted);
+         · auto-clicks the wizard's "Skip for now" (skipSetupSteps — deleted);
+         · intercepts the agent tiles and passes the LLM/parameters slide through behind a
+           modal, restoring the profile afterwards (the beta-notice machinery — deleted,
+           including its "third step" skip and the snapshot/repair that papered over the
+           save that pass-through made).
+       The wizard now walks exactly as the tool ships it — every step visible, every save
+       kept; a step a visitor skips is that visitor's own choice, through the vendor's own
+       control. The records promised this re-introduction ("the onboarding was parked, not
+       lost"); this deletes exactly the switches they named. The chrome patches — palette,
+       logo, tile, labels — are untouched: they are looks, not skips. */
     /* EVERY ENTRY GUARDED ON ITS OWN (2026-10-04). Measured: one throw anywhere in this list
        aborted everything after it — and the later the entry, the quieter the loss. So no
-       step may take another down. The door-switch entries are idempotent and self-healing
-       (preseedFirstRun re-asserts the preset; the listeners hook once behind their flags). */
-    var run = function (fn) { try { fn(); } catch (e) { console.error("[house-patch]", e); } };
+       step may take another down. What runs below is chrome only: the ground, the labels. */
+    var run = function (fn) { try { fn(); } catch (e) {} };
     run(set); setTimeout(function () { run(set); }, 600);
     setTimeout(function () { run(set); }, 2200); setTimeout(function () { run(set); }, 4000);
     run(relabel); setTimeout(function () { run(relabel); }, 600);
-    run(preseedFirstRun);
-    run(preseedSidebar);
     run(betaNotice); setTimeout(function () { run(betaNotice); }, 1000);
-    run(skipSetupSteps); setTimeout(function () { run(skipSetupSteps); }, 600);
-    setTimeout(function () { run(skipSetupSteps); }, 2200); setTimeout(function () { run(skipSetupSteps); }, 4000);
     setTimeout(function () { run(relabel); }, 2200); setTimeout(function () { run(relabel); }, 4000);
-    new MutationObserver(function () { run(relabel); run(betaNotice); run(skipSetupSteps); }).observe(document.documentElement, { childList: true, subtree: true });
+    new MutationObserver(function () { run(relabel); run(betaNotice); }).observe(document.documentElement, { childList: true, subtree: true });
   })();
 </script>'''
 script = script.replace("__HOUSE_HOSTED__", "true" if hosted == "1" else "false")

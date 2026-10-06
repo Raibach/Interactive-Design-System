@@ -20,7 +20,14 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { appConfigReady } from "@/shared/appConfig";
+import { retireLegacyAuthFlags } from "@/shared/session";
 import "./index.css";
+
+/* THE LEGACY DOOR CACHE DIES AT BOOT (owner, 2026-10-04): pre-sessionStorage sign-ins lived
+   in localStorage, so a returning browser skipped the gate. index.html already deletes them
+   at parse; this is the belt to that suspender for any environment where the inline script
+   did not run — after it, only sessionStorage can say a sign-in exists. */
+retireLegacyAuthFlags();
 
 /*
  * ── FIRST RENDER, AND THE READ THAT NO LONGER BLOCKS IT ────────────────────────
@@ -44,7 +51,7 @@ createRoot(document.getElementById("root")!).render(
  * can knock on. A signed-in boot removes it one frame after React commits, and the page
  * behind it is the same #110E1F, so the swap cannot flash white.
  */
-if (localStorage.getItem("grace_is_authenticated") === "true") {
+if (sessionStorage.getItem("grace_is_authenticated") === "true") {
   // SYNCHRONOUS, AND THAT IS A FIX — measured 2026-10-03, late: this removal was scheduled on
   // requestAnimationFrame, and rAF DOES NOT FIRE IN A HIDDEN PANE (the in-app browser behind
   // another window, a backgrounded tab). The splash then stayed over a fully-rendered app until

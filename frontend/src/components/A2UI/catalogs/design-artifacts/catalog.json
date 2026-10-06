@@ -2211,42 +2211,6 @@
      "unevaluatedProperties": false
     }
    ]
-  },
-  "catalog-ingest-form": {
-   "type": "object",
-   "allOf": [
-    {
-     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-    },
-    {
-     "$ref": "#/$defs/CatalogComponentCommon"
-    },
-    {
-     "type": "object",
-     "description": "ADD DESIGN SYSTEM — the Design room's second ingest tool, beside the Figma form: a packaged design system (a .zip carrying system.json and components.json) becomes a walled-off catalogue partition. Implemented by <catalog-ingest-form> in src/components/lit/catalog-ingest-form.ts. It is a VIEW and fetches nothing: on Submit it dispatches `catalog-ingest-submit` and the shell posts POST /api/catalog/ingest. Its two values are host-set bindings (busy, message). It cannot name an existing catalogue: the partition's name is the manifest's id and the server refuses one that exists.",
-     "properties": {
-      "component": {
-       "const": "catalog-ingest-form"
-      },
-      "busy": {
-       "type": "boolean",
-       "description": "True while an ingest is in flight. SET BY THE HOST, never by the element: the fields lock and Submit reads 'Ingesting…', and only the caller that made the call knows when it finished."
-      },
-      "message": {
-       "type": "string",
-       "description": "What the server answered — the created partition, or the refusal verbatim. Host-written."
-      },
-      "label": {
-       "type": "string",
-       "description": "The design system's label, typed by the person. Empty means the manifest's own label is used; a disagreement with it is refused."
-      }
-     },
-     "required": [
-      "component"
-     ]
-    }
-   ],
-   "unevaluatedProperties": false
   }
  },
  "$defs": {

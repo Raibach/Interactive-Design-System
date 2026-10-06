@@ -22,7 +22,7 @@ export interface AuthState {
 }
 
 /**
- * Get stored API key from localStorage
+ * Get stored API key from sessionStorage
  * NOTE: API key authentication removed - Railway handles authentication
  * This function returns null to indicate no API key is needed
  */
@@ -32,25 +32,25 @@ export const getStoredApiKey = (): string | null => {
 };
 
 /**
- * Store API key in localStorage
+ * Store API key in sessionStorage
  */
 export const storeApiKey = (apiKey: string): void => {
   try {
-    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+    sessionStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
   } catch (error) {
     console.error("Failed to store API key:", error);
   }
 };
 
 /**
- * Remove API key from localStorage (logout)
+ * Remove API key from sessionStorage (logout)
  */
 export const clearApiKey = (): void => {
   try {
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    localStorage.removeItem(USER_ID_STORAGE_KEY);
-    localStorage.removeItem("grace_is_admin");
-    localStorage.removeItem(USER_ROLE_STORAGE_KEY);
+    sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+    sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+    sessionStorage.removeItem("grace_is_admin");
+    sessionStorage.removeItem(USER_ROLE_STORAGE_KEY);
   } catch (error) {
     console.error("Failed to clear API key:", error);
   }
@@ -76,7 +76,7 @@ export const getStoredUserId = (): string => {
     Sentry.setUser({ id: DEFAULT_USER_ID });
     return DEFAULT_USER_ID;
   } catch {
-    console.error("[auth] localStorage unavailable — cannot persist user session.");
+    console.error("[auth] sessionStorage unavailable — cannot persist user session.");
     return DEFAULT_USER_ID;
   }
 };
@@ -89,7 +89,7 @@ export const storeUserId = (_userId: string): void => {
     // The identity is a constant — see getStoredUserId(). A credential-row id must never
     // land under this key: the old chat panel read it first and posted it as X-User-ID,
     // which is how the owner's own conversations started answering "not writable by user".
-    localStorage.setItem(USER_ID_STORAGE_KEY, DEFAULT_USER_ID);
+    sessionStorage.setItem(USER_ID_STORAGE_KEY, DEFAULT_USER_ID);
   } catch (error) {
     console.error("Failed to store user ID:", error);
   }
@@ -102,17 +102,19 @@ export const storeUserId = (_userId: string): void => {
  */
 export const getAuthState = (): AuthState => {
   const userId = getStoredUserId(); // Always returns a user ID (default if none stored)
-  const isAdmin = localStorage.getItem("grace_is_admin") === "true";
-  const role = localStorage.getItem(USER_ROLE_STORAGE_KEY) || "student";
+  const isAdmin = sessionStorage.getItem("grace_is_admin") === "true";
+  const role = sessionStorage.getItem(USER_ROLE_STORAGE_KEY) || "student";
   const isTeacher = role === "teacher";
   const isStudent = role === "student";
 
-  // Always return authenticated - Railway handles authentication
-  // FORCE AUTHENTICATION FOR DEVELOPMENT - bypass login screen
+  // THE FLAG IS REPORTED AS IT IS (owner, 2026-10-04): this used to FORCE `true` — "bypass
+  // login screen" — which is the shortcut the owner caught while testing (*"I'm just seeing
+  // shortcuts … it's like it's cached"*). What the gate's session wrote is what this reports;
+  // the gate itself, not this function, is what verifies a pin.
   return {
     apiKey: null, // No longer used
     userId,
-    isAuthenticated: true, // FORCE authenticated to bypass login
+    isAuthenticated: sessionStorage.getItem("grace_is_authenticated") === "true",
     isAdmin,
     role,
     isTeacher,
@@ -218,7 +220,7 @@ export const validateApiKey = async (
  */
 export const clearInvalidUserIds = (): void => {
   try {
-    const userId = localStorage.getItem(USER_ID_STORAGE_KEY);
+    const userId = sessionStorage.getItem(USER_ID_STORAGE_KEY);
     if (userId) {
       // Check if it's a valid UUID format
       const uuidRegex =
@@ -229,8 +231,8 @@ export const clearInvalidUserIds = (): void => {
           "⚠️ Clearing invalid user ID format from storage:",
           userId,
         );
-        localStorage.removeItem(USER_ID_STORAGE_KEY);
-        localStorage.removeItem("grace_is_admin");
+        sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+        sessionStorage.removeItem("grace_is_admin");
       }
 
       // NOTE: The admin user ID '994cf308-b467-4a48-ab6a-dbbcdb81e4e4' is now VALID
@@ -240,8 +242,8 @@ export const clearInvalidUserIds = (): void => {
       // Also clear any user_1, default_user, etc.
       if (userId.startsWith("user_") || userId === "default_user") {
         console.warn("⚠️ Clearing old invalid user ID:", userId);
-        localStorage.removeItem(USER_ID_STORAGE_KEY);
-        localStorage.removeItem("grace_is_admin");
+        sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+        sessionStorage.removeItem("grace_is_admin");
       }
     }
   } catch (error) {
@@ -273,9 +275,9 @@ export const login = async (
   // This prevents using cached invalid IDs that cause foreign key violations
   clearInvalidUserIds();
   // Also force clear any cached user ID to ensure fresh login
-  localStorage.removeItem(USER_ID_STORAGE_KEY);
-  localStorage.removeItem("grace_is_admin");
-  localStorage.removeItem(USER_ROLE_STORAGE_KEY);
+  sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+  sessionStorage.removeItem("grace_is_admin");
+  sessionStorage.removeItem(USER_ROLE_STORAGE_KEY);
 
   try {
     const API_BASE_URL = import.meta.env.VITE_API_URL || "";
@@ -298,11 +300,17 @@ export const login = async (
     );
 
     if (!response.ok) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ error: response.statusText }));
+      // `detail` first — FastAPI's key. Same defect as the signup block above had: reading only
+      // `error` erased the server's sentence and left "Login failed" in its place.
+      const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
       console.error("❌ Login failed:", errorData);
-      return { success: false, error: errorData.error || "Login failed" };
+      const detail =
+        typeof errorData.detail === "string"
+          ? errorData.detail
+          : typeof errorData.error === "string"
+            ? errorData.error
+            : "";
+      return { success: false, error: detail || `Sign-in failed (HTTP ${response.status}).` };
     }
 
     const data = await response.json();
@@ -328,17 +336,17 @@ export const login = async (
 
         // Store admin status if applicable
         if (data.is_admin || data.isAdmin) {
-          localStorage.setItem("grace_is_admin", "true");
+          sessionStorage.setItem("grace_is_admin", "true");
         } else {
-          localStorage.removeItem("grace_is_admin");
+          sessionStorage.removeItem("grace_is_admin");
         }
 
         // Store user role
         if (data.role) {
-          localStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
+          sessionStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
           console.log("✅ Stored user role:", data.role);
         } else {
-          localStorage.setItem(USER_ROLE_STORAGE_KEY, "student");
+          sessionStorage.setItem(USER_ROLE_STORAGE_KEY, "student");
         }
 
         return {
@@ -383,9 +391,9 @@ export const logout = (): void => {
   clearApiKey();
   clearInvalidUserIds(); // Clear any invalid user IDs
   // Also clear any cached user ID to force fresh login
-  localStorage.removeItem(USER_ID_STORAGE_KEY);
-  localStorage.removeItem("grace_is_admin");
-  localStorage.removeItem(USER_ROLE_STORAGE_KEY);
+  sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+  sessionStorage.removeItem("grace_is_admin");
+  sessionStorage.removeItem(USER_ROLE_STORAGE_KEY);
   // Redirect to login will be handled by App.tsx
 };
 
@@ -403,6 +411,19 @@ export const signup = async (
   email?: string;
   name?: string;
   role?: string;
+  /**
+   * Whether the verification mail actually left the server. The account is created either way —
+   * `routes/auth.py` commits the row before it tries to send, so a mail failure is reported
+   * rather than dressed up as a signup failure. The screen shows this, because "check your
+   * email" is a lie when nothing was sent.
+   */
+  verificationEmailSent?: boolean;
+  /**
+   * True when the server refused because that address already has an account (HTTP 409).
+   * The wizard reads this to offer the way forward — the code step — rather than leaving the
+   * person at a red sentence with nothing to do about it.
+   */
+  alreadyExists?: boolean;
   error?: string;
 }> => {
   if (!email || !password) {
@@ -426,10 +447,21 @@ export const signup = async (
     });
 
     if (!response.ok) {
-      const errorData = await response
-        .json()
-        .catch(() => ({ error: response.statusText }));
-      return { success: false, error: errorData.error || "Signup failed" };
+      // FastAPI puts a refusal's sentence in `detail`. Reading only `error` here is what turned
+      // every specific reason the server gave — "An account with that email already exists",
+      // the password rule, a database that is down — into the same three words, "Signup failed".
+      const errorData = await response.json().catch(() => ({} as Record<string, unknown>));
+      const detail =
+        typeof errorData.detail === "string"
+          ? errorData.detail
+          : typeof errorData.error === "string"
+            ? errorData.error
+            : "";
+      return {
+        success: false,
+        error: detail || `The server refused the signup (HTTP ${response.status}).`,
+        alreadyExists: response.status === 409,
+      };
     }
 
     const data = await response.json();
@@ -439,7 +471,7 @@ export const signup = async (
       if (data.user_id) {
         storeUserId(data.user_id);
         if (data.role) {
-          localStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
+          sessionStorage.setItem(USER_ROLE_STORAGE_KEY, data.role);
         }
       }
 
@@ -449,17 +481,26 @@ export const signup = async (
         email: data.email,
         name: data.name,
         role: data.role,
+        // Straight from the server: whether the verification mail actually LEFT. The account
+        // exists either way — `routes/auth.py` commits the row before it tries to send — so the
+        // screen can either say "check your email" or admit that nothing went, and only this
+        // value knows which is true.
+        verificationEmailSent: Boolean(data.verification_email_sent),
       };
     }
 
     return { success: false, error: data.error || "Signup failed" };
   } catch (error: any) {
     console.error("❌ Signup error:", error);
+    // A fetch that never reached the server throws `TypeError: Failed to fetch`, whose own
+    // message names nothing a person can act on — so the connection case gets its own sentence
+    // instead of that one being shown to them.
     return {
       success: false,
       error:
-        error.message ||
-        "Failed to connect to server. Please check your connection and try again.",
+        error instanceof TypeError
+          ? "The server could not be reached. Check the connection and try again."
+          : error?.message || "The signup did not complete.",
     };
   }
 };
@@ -475,25 +516,70 @@ export const getApiKey = (): string | null => {
 };
 
 /**
- * Initialize authentication for development - ensure user is always authenticated
- * This bypasses the login screen for development purposes
+ * VERIFY THE EMAIL — the code from the mail, checked by the server.
+ *
+ * NOTHING IS COMPARED HERE. The code is posted and the server's answer is reported; the
+ * comparison and the expiry check both live in `routes/auth.py`, because a check made in the
+ * browser is a check the browser can lie about. This function's whole job is to carry two
+ * strings and bring back a sentence.
  */
-export const initializeDevAuth = (): void => {
+export const verifyEmail = async (
+  email: string,
+  code: string,
+): Promise<{ success: boolean; alreadyVerified?: boolean; error?: string }> => {
+  if (!email || !code) {
+    return { success: false, error: "Email and code are required" };
+  }
   try {
-    // Ensure we have a valid user ID stored
-    const userId = getStoredUserId();
-    console.log("🔑 Dev Auth: Using user ID:", userId);
-    
-    // Mark as authenticated
-    localStorage.setItem("grace_is_authenticated", "true");
-    
-    // Set a default role if none exists
-    if (!localStorage.getItem(USER_ROLE_STORAGE_KEY)) {
-      localStorage.setItem(USER_ROLE_STORAGE_KEY, "student");
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+    const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      // The server's own words, not a re-wording: it already refuses a bad code in a sentence
+      // written for the person reading it.
+      return {
+        success: false,
+        error: data?.detail || `Verification failed (HTTP ${response.status})`,
+      };
     }
-    
-    console.log("✅ Development authentication initialized - login screen bypassed");
+    return { success: true, alreadyVerified: Boolean(data?.already_verified) };
   } catch (error) {
-    console.error("❌ Failed to initialize dev auth:", error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+/**
+ * ASK FOR ANOTHER CODE.
+ *
+ * THE REPLY GIVES NOTHING AWAY, and this function does not try to. The server answers the same
+ * way whether the address exists, does not, or is already verified — a deliberate choice made
+ * so this endpoint cannot be used to ask "is this email registered here?" one address at a
+ * time. A client that reported a difference would undo that on its own.
+ */
+export const resendVerificationCode = async (
+  email: string,
+): Promise<{ success: boolean; error?: string }> => {
+  if (!email) return { success: false, error: "Email is required" };
+  try {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+    const response = await fetch(`${API_BASE_URL}/api/auth/resend-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        error: data?.detail || `Could not resend the code (HTTP ${response.status})`,
+      };
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 };

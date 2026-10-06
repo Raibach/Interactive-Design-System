@@ -858,6 +858,13 @@ COLUMN_MIGRATIONS = [
     # to 'basic' without a word, and every account ran as the least-privileged
     # persona. 'basic' is that fallback written down.
     ("users", "prompt_role", "VARCHAR(20) DEFAULT 'basic'"),
+    # WHEN THE VERIFICATION CODE STOPS BEING GOOD. `users.email_verification_token` and
+    # `email_verified` have existed since the table was written and nothing ever set or read
+    # either of them — the pair was designed for a verification flow that was never built, and
+    # the flow arrived 2026-10-04 (routes/auth.py: signup sends a six-digit code, /verify
+    # accepts it). A code with no expiry is a code that works forever, which is the one thing
+    # a short numeric code must not be.
+    ("users", "email_verification_expires", "TIMESTAMP"),
     # user_memories table
     ("user_memories", "title", "VARCHAR(500)"),
     ("user_memories", "source_url", "TEXT"),

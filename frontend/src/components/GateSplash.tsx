@@ -4,7 +4,8 @@
  * WHY IT EXISTS. The sign-in gate is interactive as soon as its OWN JavaScript has
  * arrived; the application is not, and the two waits are different waits:
  *
- *   · a session already signed in (the flag is in localStorage) skips the gate — App
+ *   · a session already signed in (the flag is in sessionStorage — the browsing session's
+ *     own sign-in; see src/shared/session.ts) skips the gate — App
  *     draws the console, and the console's chunk is the app (registrations, the
  *     surface, the pages). That is a real wait on a first load.
  *   · the demo flag (`/api/config`) settles in under a round-trip, but the tree must

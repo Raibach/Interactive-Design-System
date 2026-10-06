@@ -36,6 +36,8 @@ you are locked out, when you last got in and from where: all of it is recorded
 here, in the row, where it survives a refresh, a different machine, and a
 different day.
 """
+import asyncio
+import secrets
 import sys
 from datetime import datetime, timedelta
 
@@ -50,8 +52,25 @@ from deps import (
     get_user_id_from_header,
     user_is_admin,
 )
+from emailer import send_verification_code
 
 router = APIRouter()
+
+# HOW LONG A VERIFICATION CODE IS GOOD FOR. Fifteen minutes, the same span the lockout above
+# uses, because a person who has just asked for a code and a person who has just been locked
+# out are both staring at the same inbox in the same mood.
+VERIFICATION_MINUTES = 15
+
+
+def _verification_code() -> str:
+    """Six digits, from `secrets` and not `random`.
+
+    `random` is seeded to be predictable, which is a fine property for a game and a fatal one
+    for the thing standing between a stranger and someone else's account. `secrets` draws from
+    the OS entropy pool. The range is zero-padded so every code is the same width — a code that
+    is sometimes five digits teaches people to mistype.
+    """
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 # Five wrong passwords locks the row for fifteen minutes. These live in the
 # schema as `failed_login_attempts` and `locked_until` — they were written for
@@ -343,28 +362,208 @@ async def signup(request: SignupRequest):
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="An account with that email already exists")
 
+        # THE CODE IS MINTED WITH THE ROW, not after it: a person who never receives the mail
+        # still has a code in the database that can be read out, and a commit that succeeded is
+        # never followed by a second write that might not.
+        code = _verification_code()
         cursor.execute(
             """
-            INSERT INTO users (email, password_hash, full_name, status, role, prompt_role)
-            VALUES (%s, %s, %s, 'active', %s, 'basic')
+            INSERT INTO users (email, password_hash, full_name, status, role, prompt_role,
+                               email_verification_token, email_verification_expires)
+            VALUES (%s, %s, %s, 'active', %s, 'basic', %s, NOW() + %s * INTERVAL '1 minute')
             RETURNING id, email, full_name
             """,
-            (email, _hash_password(request.password), request.full_name, account_role),
+            (
+                email,
+                _hash_password(request.password),
+                request.full_name,
+                account_role,
+                code,
+                VERIFICATION_MINUTES,
+            ),
         )
         row = cursor.fetchone()
         conn.commit()
+
+        # THE MAIL GOES OUT AFTER THE COMMIT, AND IN A THREAD. After, because a mail server that
+        # hangs must not hold a database transaction open behind it. In a thread, because
+        # smtplib blocks and this endpoint is serving everyone else at the same time.
+        #
+        # A SEND THAT FAILS DOES NOT UNDO THE ACCOUNT. The row is real and committed, and the
+        # person can ask for another code — reporting it as their signup failing would be a lie
+        # about which thing went wrong. So the truth travels in the response and in the log
+        # rather than being dressed up as a different failure.
+        sent, detail = await asyncio.to_thread(send_verification_code, email, code)
+        if not sent:
+            print(f"⚠️  [auth] the verification mail for {email} was not sent: {detail}")
+
         return {
             "success": True,
             "user_id": str(row["id"]),
             "email": row["email"],
             "name": row.get("full_name") or row["email"],
             "role": "basic",
+            "verification_email_sent": sent,
         }
     except HTTPException:
         raise
     except Exception as exc:
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Signup error: {exc}")
+    finally:
+        conn.close()
+
+
+class VerifyRequest(BaseModel):
+    """The two things a person can type into the verification step."""
+
+    email: str
+    code: str
+
+
+class ResendRequest(BaseModel):
+    email: str
+
+
+@router.post("/api/auth/verify")
+async def verify_email(request: VerifyRequest):
+    """THE CODE, CHECKED — and the only thing that makes an account verified.
+
+    WHAT IT IS NOT: it does not log anyone in and it does not touch their password. It marks one
+    row as having proved it owns that mailbox, which is what `users.email_verified` has been
+    waiting for since the column was written.
+
+    A WRONG CODE AND AN EXPIRED ONE GET THE SAME ANSWER, on purpose: replying "that code
+    expired" to someone guessing tells them they found a real code. The lookup does not
+    separate the two and neither does the reply.
+
+    THE COMPARISON IS `secrets.compare_digest`, NOT `==`. Two strings compared with `==` stop at
+    the first character that differs, and how long that takes is a signal. Six digits is a small
+    enough space that the signal matters.
+
+    THE EXPIRY IS CHECKED BY THE DATABASE, in the same query that fetches the row, so the clock
+    that wrote `email_verification_expires` is the clock that compares it. Comparing a Python
+    `datetime.now()` against a timestamp this database wrote is the kind of mismatch that works
+    on one machine and fails on the next.
+    """
+    conn = _db()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    email = (request.email or "").strip().lower()
+    code = (request.code or "").strip()
+    if not email or not code:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email and code are required")
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id,
+                   email_verified,
+                   email_verification_token,
+                   (email_verification_expires IS NOT NULL
+                    AND email_verification_expires > NOW()) AS code_is_live
+            FROM users
+            WHERE lower(email) = %s AND deleted_at IS NULL
+            """,
+            (email,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="No account with that email")
+
+        if row["email_verified"]:
+            return {"success": True, "already_verified": True, "email": email}
+
+        stored = row["email_verification_token"] or ""
+        if not stored or not row["code_is_live"] or not secrets.compare_digest(stored, code):
+            raise HTTPException(
+                status_code=400,
+                detail="That code is not valid. Ask for a new one and try again.",
+            )
+
+        cursor.execute(
+            """
+            UPDATE users
+               SET email_verified = TRUE,
+                   email_verification_token = NULL,
+                   email_verification_expires = NULL,
+                   updated_at = NOW()
+             WHERE id = %s
+            """,
+            (row["id"],),
+        )
+        conn.commit()
+        return {"success": True, "already_verified": False, "email": email}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Verification error: {exc}")
+    finally:
+        conn.close()
+
+
+@router.post("/api/auth/resend-code")
+async def resend_code(request: ResendRequest):
+    """Mint a new code and send it again — the door for a code that never arrived.
+
+    A NEW CODE EACH TIME, replacing the old rather than joining it: two live codes for one
+    account doubles the guessing surface each time somebody clicks, and there is no reason to
+    keep a code the person has told you they cannot use.
+
+    AN ALREADY-VERIFIED ACCOUNT IS NOT AN ERROR and gets the same reply as an account that does
+    not exist — answering differently would turn this endpoint into a way to ask "is this email
+    registered here?" one address at a time. That question is answered by the signup route's 409,
+    where it is unavoidable, and not twice.
+    """
+    conn = _db()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    email = (request.email or "").strip().lower()
+    if not email:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    generic = {"success": True, "detail": "If that address has an unverified account, a new code is on its way."}
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email_verified FROM users WHERE lower(email) = %s AND deleted_at IS NULL",
+            (email,),
+        )
+        row = cursor.fetchone()
+
+        # The same answer on every path below — the account exists, does not exist, or is already
+        # verified. Only the WORK differs.
+        if not row or row["email_verified"]:
+            return generic
+
+        code = _verification_code()
+        cursor.execute(
+            """
+            UPDATE users
+               SET email_verification_token = %s,
+                   email_verification_expires = NOW() + %s * INTERVAL '1 minute',
+                   updated_at = NOW()
+             WHERE id = %s
+            """,
+            (code, VERIFICATION_MINUTES, row["id"]),
+        )
+        conn.commit()
+
+        sent, detail = await asyncio.to_thread(send_verification_code, email, code)
+        if not sent:
+            print(f"⚠️  [auth] the resent code for {email} was not sent: {detail}")
+        return generic
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Resend error: {exc}")
     finally:
         conn.close()
 

@@ -93,6 +93,7 @@ from routes import (
     agent_rpc,
     ai,
     auth,
+    billing,
     builder_bridge,
     conversations,
     figma,
@@ -108,7 +109,7 @@ from routes import (
 )
 
 for _m in (misc, conversations, projects, teacher, memory,
-           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, governance,
+           prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, billing, governance,
            figma_intake, builder_bridge):
     app.include_router(_m.router)
 

@@ -657,9 +657,8 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None) -> dic
     replayed, because the class a layer gets decides which rule the check reads and a second
     naming rule would be a second answer.
     """
-    from routes.figma import _figma_spec_for_model
-
     from design_renderer import ACCEPTED_UNRENDERED
+    from routes.figma import _figma_spec_for_model
 
     spec = _figma_spec_for_model(raw_document)
     source = render_spec(spec, tag or "f-fidelity", {})
