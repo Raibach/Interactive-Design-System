@@ -179,7 +179,11 @@ def _sync_builder_packages_locked(user_id: str) -> dict:
             seen.add(project_id)
             unpublished_row = existing.get(project_id)
             if unpublished_row is None:
-                continue  # no row yet — nothing to persist for it
+                # No row to stamp. A project born in the room no longer lands here — its row
+                # is stamped HELD at birth (`builder_holding`, see `builder_room_open`); this
+                # skip is for projects born through other doors (the tool's own), which
+                # persist when someone keeps or publishes them.
+                continue
             with api.get_db() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SET app.current_user_id = %s", (user_id,))
@@ -231,8 +235,8 @@ def _sync_builder_packages_locked(user_id: str) -> dict:
             "builder_preview_url": preview_url,
             "builder_runs": str(runs),
         }
-        # PUBLISHED: THE CARD SHOWS — the draft/unpublished marks come off with the same
-        # write that keeps the card's fields in step (publishing is the commit).
+        # PUBLISHED: THE CARD SHOWS — the holding and draft/unpublished marks come off with
+        # the same write that keeps the card's fields in step (publishing is the commit).
         moved = (
             row["title"] != title
             or row["description"] != description
@@ -246,7 +250,7 @@ def _sync_builder_packages_locked(user_id: str) -> dict:
                 UPDATE prompt_sessions
                 SET title = %s, description = %s, category = %s,
                     current_version = %s, is_archived = FALSE,
-                    metadata = (COALESCE(metadata, '{}'::jsonb) - 'draft' - 'builder_unpublished') || %s::jsonb,
+                    metadata = (COALESCE(metadata, '{}'::jsonb) - 'draft' - 'builder_unpublished' - 'builder_holding') || %s::jsonb,
                     updated_at = NOW()
                 WHERE id = %s AND user_id = %s
                 """,
@@ -427,15 +431,121 @@ def builder_publish(
     return {"ok": True, "project_id": project_id, "card": sync}
 
 
+@router.post("/projects/{project_id}/keep")
+def builder_project_keep(project_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")) -> dict:
+    """SAVE AS DRAFT — settle a held project into the person's packages (owner, 2026-10-06:
+    *"You must save this before we can continue or offer them a saved draft option."*).
+
+    THE HOLD ENDS HERE: `builder_holding` comes off the row and the same `draft` +
+    `builder_unpublished` marks every not-ready package wears stay on — the console keeps
+    hiding it (cards are for published work), while the package, its conversations and its
+    return visits persist like every kept package. A project with no row yet (born before
+    holding existed, or entered through another door) is given its row now, settled.
+    Idempotent by construction: settling twice is settling once. The engine is read
+    best-effort for the row's birth facts and is NOT required — saving must not fail because
+    the tool is down.
+    """
+    user_id = get_user_id_from_header(x_user_id)
+    api = state.prompt_sessions_api
+    if not api:
+        return {"ok": False, "error": "database unavailable"}
+
+    label = DEFAULT_PROJECT_LABEL
+    preview_url = ""
+    runs = 0
+    try:
+        for project in _engine_projects():
+            if str(project.get("projectId")) == project_id:
+                label = (project.get("label") or "").strip() or label
+                preview_url = str(project.get("previewUrl") or "")
+                runs = int(project.get("runs") or 0)
+                break
+    except Exception as engine_error:  # noqa: BLE001 — the row does not need the engine
+        print(f"[builder] keep: engine list not read ({engine_error})")
+
+    with _ROOM_LOCK:  # the room ensure's own lock — the same row, the same shape of race
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT id FROM prompt_sessions "
+                "WHERE user_id = %s AND metadata->>'builder_project_id' = %s",
+                (user_id, project_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                cursor.execute(
+                    "UPDATE prompt_sessions SET "
+                    "metadata = COALESCE(metadata, '{}'::jsonb) - 'builder_holding', "
+                    "updated_at = NOW() WHERE id = %s",
+                    (str(row["id"]),),
+                )
+                conn.commit()
+                return {"ok": True, "project_id": project_id, "session_id": str(row["id"]), "created": False}
+
+        session = api.create_session(
+            user_id=user_id,
+            title=label,
+            description=PLACEHOLDER_DESCRIPTION,
+            room_domain="product",
+            builder_project_id=project_id,
+            builder_preview_url=preview_url,
+            builder_runs=runs,
+        )
+        session_id = str(session["id"])
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            _ensure_category(cursor)
+            cursor.execute(
+                "UPDATE prompt_sessions SET category = %s, current_version = %s, "
+                "metadata = COALESCE(metadata, '{}'::jsonb) || "
+                "'{\"draft\": \"true\", \"builder_unpublished\": \"true\"}'::jsonb "
+                "WHERE id = %s",
+                (CATEGORY_NAME, max(1, runs), session_id),
+            )
+            conn.commit()
+    return {"ok": True, "project_id": project_id, "session_id": session_id, "created": True}
+
+
 @router.post("/discard")
-def builder_discard(payload: dict) -> dict:
+def builder_discard(
+    payload: dict,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+) -> dict:
     """DISCARD AN IDEA — the exit guard's "no" (the owner chose DISCARD for "don't save").
-    It is the same act as deleting the card's project (`delete_builder_project`): the idea
-    was never a package, so there is no row to remove — the project is the whole thing."""
+
+    It is the same act as deleting the card's project (`delete_builder_project`), AND the
+    carrier row goes with it (2026-10-06 — measured live: the discard deleted the project
+    but left the held row behind, so the next room entry RESUMED the deleted project and
+    the tool drew its "Project not found" page; the owner: *"when you delete the project
+    it should just load a blank project. It shouldn't be loading that page at all."*). The
+    row existed to carry the conversation — with the idea discarded there is nothing left
+    for it to carry. A project the engine cannot remove KEEPS its row, the same rule as
+    every cleanup in this file: the next entry retries rather than losing the pointer.
+    """
     project_id = str((payload or {}).get("project_id") or "").strip()
     if not project_id:
         return {"ok": False, "error": "project_id is required"}
-    return delete_builder_project(project_id)
+    result = delete_builder_project(project_id)
+    if not result.get("ok"):
+        return result
+    user_id = get_user_id_from_header(x_user_id)
+    api = state.prompt_sessions_api
+    if api:
+        with _ROOM_LOCK:
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "SELECT id FROM prompt_sessions "
+                    "WHERE user_id = %s AND metadata->>'builder_project_id' = %s",
+                    (user_id, project_id),
+                )
+                rows = cursor.fetchall()
+            for row in rows:
+                api.delete_session(str(row["id"]), user_id, permanent=True)
+    return result
 
 
 # ── THE ROOM'S SEAT — THE CONVERSATION IS THE PROJECT'S (2026-10-06) ──────────────────────────
@@ -665,6 +775,7 @@ def builder_project_room(project_id: str, x_user_id: str | None = Header(None, a
     engine_label: str | None = None
     preview_url = ""
     runs = 0
+    published_flag: bool | None = None
     try:
         for project in _engine_projects():
             if str(project.get("projectId")) == project_id:
@@ -673,6 +784,7 @@ def builder_project_room(project_id: str, x_user_id: str | None = Header(None, a
                     label = engine_label
                 preview_url = str(project.get("previewUrl") or "")
                 runs = int(project.get("runs") or 0)
+                published_flag = project.get("published") is not False
                 break
     except Exception as engine_error:  # noqa: BLE001 — the carrier does not need the engine
         print(f"[builder] room: engine list not read ({engine_error})")
@@ -721,10 +833,31 @@ def builder_project_room(project_id: str, x_user_id: str | None = Header(None, a
                 cursor = conn.cursor()
                 cursor.execute("SET app.current_user_id = %s", (user_id,))
                 _ensure_category(cursor)
-                cursor.execute(
-                    "UPDATE prompt_sessions SET category = %s, current_version = %s WHERE id = %s",
-                    (CATEGORY_NAME, max(1, runs), session_id),
+                # A CARRIER BORN FOR AN UNPUBLISHED PROJECT WEARS THE HIDDEN MARKS AT BIRTH —
+                # `draft` + `builder_unpublished`, the sync's own vocabulary (cards are for
+                # published work; the Development room's birth set the pattern). Unknown (the
+                # engine was down or the project absent from its list) wears them too: the
+                # next sync strips them if the project turns out published — a hidden row
+                # self-heals, a wrong card would not.
+                stamp = (
+                    {"draft": "true", "builder_unpublished": "true"}
+                    if published_flag is not True
+                    else {}
                 )
+                cursor.execute(
+                    "UPDATE prompt_sessions SET category = %s, current_version = %s, "
+                    "metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb WHERE id = %s",
+                    (CATEGORY_NAME, max(1, runs), json.dumps(stamp), session_id),
+                )
+                # create_session births the conversation too — read the row's own back (see
+                # the full note in `builder_room_open`); the explicit create below fires only
+                # for a row that somehow has none.
+                cursor.execute(
+                    "SELECT conversation_id FROM prompt_sessions WHERE id = %s", (session_id,)
+                )
+                fresh = cursor.fetchone()
+                if fresh and fresh["conversation_id"]:
+                    conversation_id = str(fresh["conversation_id"])
                 conn.commit()
 
         if not conversation_id:
@@ -753,15 +886,23 @@ def builder_project_room(project_id: str, x_user_id: str | None = Header(None, a
 
 @router.post("/room")
 def builder_room_open(x_user_id: str | None = Header(None, alias="X-User-ID")) -> dict:
-    """OPEN THE PRODUCT ROOM — RESUME THE PROJECT LAST TOUCHED, OR BIRTH THE FIRST ONE.
+    """OPEN THE PRODUCT ROOM — REOPEN THE HELD PROJECT, OR BIRTH A NEW ONE.
 
-    Owner, 2026-10-06 (the confirmed package model): *"user will come in and create an idea in
-    their project/package and then they may come back and want to do something different to it
-    … five different edit processes over a month to one project."* So entering the room REOPENS
-    the project whose conversations moved last (its package persists now — the sync keeps it,
-    hidden from the console's cards until published) and births one only when there is none to
-    resume. The engine is required only to BIRTH; a resume opens even with the engine down (the
-    embed says what it finds).
+    Clicking Product is CREATING A NEW PROJECT/PACKAGE (owner, 2026-10-06: *"that's what
+    you're doing when you click on … product tab … you're creating a new project. Which or a
+    new package."*) — a fresh project is born here, and it is born HELD: its package row
+    exists from the first moment (the room's chat needs a package and a conversation to have
+    context under — *"it might be necessary for them to create a temporary draft package in
+    order to have context"*), wearing the hidden marks, with `builder_holding` as the
+    unsettled flag the exit guard resolves — *"it's going to be in a holding position until
+    the user navigates away or they click publish"*: save-as-draft settles it in place,
+    publish makes it a card, discard takes it away.
+
+    The ONE case this does not birth: a HELD project with work already done in it — a reload,
+    a restored tab, a browser that closed mid-experiment. That project is reopened (owner,
+    2026-10-06: *"entering is coming back, not starting over"*). A held project with NO work
+    is noise (an untouched room's reload) and is discarded in silence before the new one is
+    born. Published packages are never resumed here — their door is the console card.
 
     Returns `{ok, session_id, conversation_id, project_id, label, resumed}`.
     """
@@ -770,6 +911,10 @@ def builder_room_open(x_user_id: str | None = Header(None, alias="X-User-ID")) -
     if not api:
         return {"ok": False, "error": "database unavailable"}
 
+    # THE HELD PROJECT, IF ANY — one at a time in every real flow, because every exit resolves
+    # it (save-as-draft / publish / discard). Only `builder_holding` rows count for a click: a
+    # settled package is never auto-reopened here, and published ones never are (their door is
+    # the console card).
     with _ROOM_LOCK:
         with api.get_db() as conn:
             cursor = conn.cursor()
@@ -779,59 +924,98 @@ def builder_room_open(x_user_id: str | None = Header(None, alias="X-User-ID")) -
                 SELECT s.id, s.title, s.conversation_id,
                        s.metadata->>'builder_project_id' AS project_id
                 FROM prompt_sessions s
-                WHERE s.user_id = %s AND s.metadata ? 'builder_project_id'
-                -- THE CONVERSATIONS DECIDE, NOT THE ROW'S TICK (2026-10-06, measured):
-                -- the console's sync updates every package row it sees, which bumps
-                -- `updated_at` on ALL of them in the same second — a GREATEST(pkg, conv)
-                -- ranking then TIES, and the room opened whichever row the tie-break
-                -- happened to hit (the owner's: *"it's loading a card. Product team
-                -- ideation: wireless headphones"* — an old project, not the one he last
-                -- worked in). So the last CONVERSATION's mark is the primary fact; the
-                -- row's own tick only breaks a tie (and a never-spoken package falls
-                -- back to its birth).
-                ORDER BY COALESCE(
-                    (SELECT MAX(c.updated_at) FROM conversations c WHERE c.session_id = s.id),
-                    s.created_at
-                ) DESC, s.updated_at DESC
+                WHERE s.user_id = %s
+                  AND s.metadata->>'builder_project_id' IS NOT NULL
+                  AND s.metadata->>'builder_holding' = 'true'
+                ORDER BY s.created_at DESC, s.updated_at DESC
                 LIMIT 1
                 """,
                 (user_id,),
             )
             row = cursor.fetchone()
 
-        if row and row["project_id"]:
-            session_id = str(row["id"])
-            project_id = str(row["project_id"])
-            label = str(row["title"] or DEFAULT_PROJECT_LABEL)
-            conversation_id = str(row["conversation_id"]) if row["conversation_id"] else None
-            if not conversation_id:
-                if not state.conversation_api:
-                    return {"ok": False, "error": "database unavailable"}
-                conversation_id = str(
-                    state.conversation_api.create_conversation(
-                        user_id,
-                        project_id=None,
-                        title=label,
-                        metadata=None,
-                        session_id=session_id,
+    if row and row["project_id"]:
+        project_id = str(row["project_id"])
+        # DOES THE HELD PROJECT HAVE WORK? The engine's own fact (`hasWork`: files, versions,
+        # or any spoken message — its own comment: *"even if the build failed"*). On doubt —
+        # engine down, project absent from its list — treat it as WORK: reopening is the
+        # direction that never destroys anything, and the exit guard asks again when the
+        # engine can answer.
+        held_has_work = True
+        project_gone = False
+        try:
+            response = httpx.get(
+                f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}", timeout=SYNC_TIMEOUT_SECONDS
+            )
+            payload = response.json()
+            data = payload.get("data") or {}
+            if response.status_code == 200 and data:
+                held_has_work = bool(data.get("hasWork"))
+            else:
+                # THE ENGINE ANSWERED — AND THE PROJECT IS NOT THERE (2026-10-06, the
+                # owner's discard: a held row outlived its project, the next entry
+                # "resumed" it, and the tool drew "Project not found" instead of a blank
+                # room). NOT doubt: the engine spoke, and it said the project is gone —
+                # the row is a stale carrier to settle below, and the birth that follows
+                # makes the fresh blank project the owner asked for.
+                held_has_work = False
+                project_gone = True
+        except Exception as engine_error:  # noqa: BLE001 — resume on doubt
+            print(f"[builder] room: engine not read — a held project stays held ({engine_error})")
+
+        if held_has_work:
+            # COMING BACK (owner, 2026-10-06: *"entering is coming back, not starting over"*).
+            with _ROOM_LOCK:
+                session_id = str(row["id"])
+                label = str(row["title"] or DEFAULT_PROJECT_LABEL)
+                conversation_id = str(row["conversation_id"]) if row["conversation_id"] else None
+                if not conversation_id:
+                    if not state.conversation_api:
+                        return {"ok": False, "error": "database unavailable"}
+                    conversation_id = str(
+                        state.conversation_api.create_conversation(
+                            user_id,
+                            project_id=None,
+                            title=label,
+                            metadata=None,
+                            session_id=session_id,
+                        )
                     )
+                    with api.get_db() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SET app.current_user_id = %s", (user_id,))
+                        cursor.execute(
+                            "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                            (conversation_id, session_id),
+                        )
+                        conn.commit()
+                return {
+                    "ok": True,
+                    "session_id": session_id,
+                    "conversation_id": conversation_id,
+                    "project_id": project_id,
+                    "label": label,
+                    "resumed": True,
+                }
+
+        # A HELD PROJECT WITH NOTHING IN IT IS NOISE — the untouched room's own reload. The
+        # person never did anything here (*"nothing's happened yet"*), so it is discarded in
+        # silence, exactly as the exit guard does for a blank project, and the click births
+        # the new one below. The project goes FIRST (this file's one law); a project the
+        # engine cannot remove keeps its row and is retried at the next entry.
+        if project_gone:
+            # ALREADY GONE — NOTHING TO DELETE IN THE ENGINE. Settle the stale row in
+            # silence and fall through to the birth (see `project_gone` above).
+            api.delete_session(str(row["id"]), user_id, permanent=True)
+        else:
+            cleanup = delete_builder_project(project_id)
+            if cleanup.get("ok"):
+                api.delete_session(str(row["id"]), user_id, permanent=True)
+            else:
+                print(
+                    f"[builder] room: blank held project {project_id} not discarded "
+                    f"({cleanup.get('error')}) — its row stays for the next try"
                 )
-                with api.get_db() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SET app.current_user_id = %s", (user_id,))
-                    cursor.execute(
-                        "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
-                        (conversation_id, session_id),
-                    )
-                    conn.commit()
-            return {
-                "ok": True,
-                "session_id": session_id,
-                "conversation_id": conversation_id,
-                "project_id": project_id,
-                "label": label,
-                "resumed": True,
-            }
 
     # NO PROJECT YET — birth the first one, in the tool's own image (the same act as the tab's
     # first click ever was). The engine is the writer; a stopped engine is the room's banner.
@@ -853,30 +1037,52 @@ def builder_room_open(x_user_id: str | None = Header(None, alias="X-User-ID")) -
             cursor = conn.cursor()
             cursor.execute("SET app.current_user_id = %s", (user_id,))
             _ensure_category(cursor)
+            # THE PROJECT IS BORN HELD — the row exists from its first moment (the room's
+            # chat needs a package and a conversation to have context under; THE HOLDING
+            # POSITION, owner, 2026-10-06), wearing the hidden marks every not-ready package
+            # wears, plus `builder_holding` — the unsettled flag the exit guard resolves with
+            # save-as-draft / publish / discard.
             cursor.execute(
-                "UPDATE prompt_sessions SET category = %s WHERE id = %s",
+                "UPDATE prompt_sessions SET category = %s, "
+                "metadata = COALESCE(metadata, '{}'::jsonb) || "
+                "'{\"draft\": \"true\", \"builder_unpublished\": \"true\", \"builder_holding\": \"true\"}'::jsonb "
+                "WHERE id = %s",
                 (CATEGORY_NAME, session_id),
             )
-            conn.commit()
-        if not state.conversation_api:
-            return {"ok": False, "error": "database unavailable"}
-        conversation_id = str(
-            state.conversation_api.create_conversation(
-                user_id,
-                project_id=None,
-                title=DEFAULT_PROJECT_LABEL,
-                metadata=None,
-                session_id=session_id,
-            )
-        )
-        with api.get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            # create_session BIRTHS THE CONVERSATION TOO — its DB function inserts the session
+            # AND its conversation in one act (measured 2026-10-06, after two conversations
+            # 10ms apart appeared under one session; `create_prompt_session`'s source was
+            # read — session INSERT, then conversations INSERT on the session FK). The room's
+            # own explicit create here used to fire on top of the built-in one, orphaning it;
+            # that was latent while this path rarely ran, and the holding model made birth
+            # the every-click path. Read the row's own conversation back and create one
+            # explicitly ONLY when it has none.
             cursor.execute(
-                "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
-                (conversation_id, session_id),
+                "SELECT conversation_id FROM prompt_sessions WHERE id = %s", (session_id,)
             )
+            fresh = cursor.fetchone()
             conn.commit()
+        conversation_id = str(fresh["conversation_id"]) if fresh and fresh["conversation_id"] else None
+        if not conversation_id:
+            if not state.conversation_api:
+                return {"ok": False, "error": "database unavailable"}
+            conversation_id = str(
+                state.conversation_api.create_conversation(
+                    user_id,
+                    project_id=None,
+                    title=DEFAULT_PROJECT_LABEL,
+                    metadata=None,
+                    session_id=session_id,
+                )
+            )
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                    (conversation_id, session_id),
+                )
+                conn.commit()
     return {
         "ok": True,
         "session_id": session_id,
@@ -990,6 +1196,15 @@ def builder_development_room(x_user_id: str | None = Header(None, alias="X-User-
                     "UPDATE prompt_sessions SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb WHERE id = %s",
                     (json.dumps({"dev_room": "true", "draft": "true"}), session_id),
                 )
+                # create_session births the conversation too — read the row's own back (see
+                # the full note in `builder_room_open`); the explicit create below fires only
+                # for a row that somehow has none.
+                cursor.execute(
+                    "SELECT conversation_id FROM prompt_sessions WHERE id = %s", (session_id,)
+                )
+                fresh = cursor.fetchone()
+                if fresh and fresh["conversation_id"]:
+                    conversation_id = str(fresh["conversation_id"])
                 conn.commit()
 
         if not conversation_id:
@@ -1050,6 +1265,11 @@ def builder_project_conversation(project_id: str) -> dict:
     started = status.get("startedAt") or status.get("runStartedAt")
     if started:
         payload["runStartedAt"] = started
+    # THE ENGINE'S OWN ESTIMATE — the app's `agent/status.expectedMinutes`, verbatim: the
+    # bar fills against it while the run is inside it, and climbs its ladder after it.
+    expected = status.get("expectedMinutes")
+    if isinstance(expected, (int, float)) and expected > 0:
+        payload["expectedMinutes"] = int(expected)
     return payload
 
 

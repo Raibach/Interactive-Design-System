@@ -38,7 +38,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* iframe - no URL bar here, it's in the header now */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden relative" style={{ background: "#2b2635 url(/canvas-development-lab-bkg.png) repeat" }}>
+      <div className="flex-1 flex items-center justify-center overflow-hidden relative" style={{ background: "#2b2635 url(/canvas-development-lab-bkg.jpg) repeat" }}>
         {/* Cached snapshot indicator: shown when the dev server is not active and
             we're displaying the cachedDevelopmentUrl static snapshot */}
         {previewUrl && cached && (

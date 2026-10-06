@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import AliasChoices, BaseModel, Field
 
 import services as state
@@ -182,7 +183,17 @@ async def api_teacher_query(request: TeacherQueryRequest):
         try:
             from routes.builder_bridge import builder_turn_reply
 
-            builder_reply = builder_turn_reply(uid, request.session_id, conv_id, request.question)
+            # ⚠️ THE RUN'S WAIT RUNS OFF THIS THREAD (2026-10-06 — measured live). The bridge
+            # holds this turn open for the WHOLE build (up to RUN_WAIT_SECONDS). Called
+            # directly from this `async def` it blocked the ONE event loop — every other
+            # request queued behind it and the product room's own poller starved for the
+            # entire run, so the chat showed nothing until the build was over (the owner's
+            # exact report: "it's thinking … then everything lands at once"). In the
+            # threadpool the wait costs a worker thread, never the server: polls keep being
+            # answered mid-run and the seat's thread fills LIVE, exactly like the app's.
+            builder_reply = await run_in_threadpool(
+                builder_turn_reply, uid, request.session_id, conv_id, request.question
+            )
         except Exception as builder_error:  # noqa: BLE001 — a broken bridge must not break chat
             builder_reply = None
             print(f"⚠️  builder bridge check failed: {builder_error}")

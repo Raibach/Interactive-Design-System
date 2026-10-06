@@ -459,8 +459,9 @@ export class ChatNavigationBar extends LitElement {
       height: 66px;
       width: 100%;
       /* Figma "logo-of-chat-model-slected" #40001085:2680 — 74×66 with px 3px,
-         so the mark itself is 68 wide. The slot was stretching the artwork to
-         the full 74×66 with object-fit: cover. */
+         so the slot is 68 wide. The slot was stretching the artwork to the full
+         74×66 with object-fit: cover; the mark box is SQUARE now (50×50, owner,
+         2026-10-06 — see the ::slotted(img) rule below). */
       padding: 0 3px;
       box-sizing: border-box;
       overflow: clip;
@@ -486,7 +487,10 @@ export class ChatNavigationBar extends LitElement {
       font-weight: 700;
       font-family: 'Inter', system-ui, sans-serif;
     }
-    /* The mark as the design draws it: 68×58, centred in the 74×66 slot. */
+    /* THE MARK BOX IS SQUARE (owner, 2026-10-06: *"actually make 50x50"* — superseding
+       his 58×58 a minute earlier; his eye read the old 68×58 box as wider than tall — the
+       artwork itself is square). object-fit: contain fits the square canvas to the box:
+       the star paints at 50 × (156/171) ≈ 45.6px. Centred in the 74×66 slot. */
     ::slotted(img) {
       position: absolute;
       top: 50%;
@@ -495,8 +499,8 @@ export class ChatNavigationBar extends LitElement {
       max-width: none;
       object-fit: contain;
       pointer-events: none;
-      width: 68px;
-      height: 58px;
+      width: 50px;
+      height: 50px;
     }
 
     /* ── Tab button ───────────────────────────────────────────────────── */
@@ -834,7 +838,7 @@ export class ChatNavigationBar extends LitElement {
   // Tab click handler
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /** The copilot mark navigates back to the console, like the Console header tab. */
+  /** The mark navigates back to the console, like the Console header tab. */
   private _onLogoClick(): void {
     window.dispatchEvent(new CustomEvent('navigate-console'));
   }

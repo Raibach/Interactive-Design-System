@@ -91,10 +91,77 @@ function ladderRatio(elapsedMs: number): number {
   return PROGRESS_CEILING;
 }
 
+/* ── the engine-sized estimate (agent-progress.ts: `runProgress` / `expectedRunProgress`) ──
+ *
+ * THE APP HAS TWO ARITHMETICS AND IT PICKS BY FACT, NOT BY WISH: when the engine sent an
+ * estimate (`agent/status.expectedMinutes`) the bar fills against THAT and hands over to the
+ * ladder at 90 % when the estimate runs out; when it did not, the fixed ladder decides alone.
+ * Both return the same five facts the label and the bar read, so the two can never disagree.
+ */
+
+const EXPECTED_HANDOFF_RATIO = 0.9;
+
+interface RunProgressShape {
+  ratio: number;
+  percent: number;
+  overrun: boolean;
+  estimateMs: number;
+  previousEstimateMs: number;
+}
+
+/** The app's `runProgress(elapsedMs)` — no engine estimate: the ladder decides everything. */
+function ladderRunProgress(elapsedMs: number): RunProgressShape {
+  const elapsed = Math.max(0, elapsedMs);
+  const { estimateMs, previousMs } = runEstimateAt(elapsed);
+  const overrun = elapsed >= estimateMs;
+  const ratio = overrun ? PROGRESS_CEILING : Math.min(PROGRESS_CEILING, ladderRatio(elapsed));
+  return { ratio, percent: Math.round(ratio * 100), overrun, estimateMs, previousEstimateMs: previousMs };
+}
+
+/** The app's `expectedRunProgress(elapsedMs, expectedMs)` — the engine sent an estimate. */
+function expectedRunProgress(elapsedMs: number, expectedMs: number): RunProgressShape {
+  const elapsed = Math.max(0, elapsedMs);
+  // Floored at two minutes so the range copy never reads "0 to 1".
+  const expected = Math.max(2 * MINUTE, expectedMs);
+
+  if (elapsed < expected) {
+    const ratio = EXPECTED_HANDOFF_RATIO * (elapsed / expected);
+    return {
+      ratio,
+      percent: Math.round(ratio * 100),
+      overrun: false,
+      estimateMs: expected,
+      // Same shape of range as the default "4 to 10 minutes".
+      previousEstimateMs: expected * (RUN_ESTIMATE_MIN_MS / RUN_ESTIMATE_MS),
+    };
+  }
+
+  // Past the estimate: the same ladder every other run climbs.
+  const { estimateMs: ladderEstimate, previousMs } = runEstimateAt(elapsed);
+  const ladderEndMs = LADDER[LADDER.length - 1].estimateMs;
+  const overrun = elapsed >= ladderEstimate;
+  const ratio =
+    overrun || ladderEndMs <= expected
+      ? PROGRESS_CEILING
+      : EXPECTED_HANDOFF_RATIO +
+        ((PROGRESS_CEILING - EXPECTED_HANDOFF_RATIO) * (elapsed - expected)) / (ladderEndMs - expected);
+
+  return {
+    ratio,
+    percent: Math.round(ratio * 100),
+    overrun,
+    estimateMs: Math.max(expected, ladderEstimate),
+    previousEstimateMs: elapsed < LADDER[0].atMs ? expected : Math.max(expected, previousMs),
+  };
+}
+
 function formatDuration(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(total / 60);
+  const hours = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
+  // The app gains the hour field rather than letting the minutes grow forever ("1:12:14").
+  if (hours > 0) return `${hours}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
@@ -105,6 +172,8 @@ const chevronDown = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const checkIcon = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`;
 const alertIcon = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`;
 const spinnerIcon = svg`<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+// Lucide's `bot` — the glyph on the app's own empty state (see `_emptyState`).
+const botIcon = svg`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>`;
 
 /* ── FormattedText: the app's own text rules, ported ─────────────────────────── */
 
@@ -198,11 +267,15 @@ export class ChatProductThread extends LitElement {
     running: { type: Boolean },
     /** When the in-flight run started (ms) — the app's own run clock. */
     runStartedAt: { type: Number, attribute: 'run-started-at' },
+    /** The engine's estimate for the in-flight run, whole minutes (`agent/status.expectedMinutes`);
+     * 0/absent means none, and the app's fixed ladder applies instead. */
+    expectedMinutes: { type: Number, attribute: 'expected-minutes' },
   };
 
   declare messages: ThreadMessage[];
   declare running: boolean;
   declare runStartedAt: number | null;
+  declare expectedMinutes: number;
 
   /** Expanded build groups, by group index. */
   private _expanded = new Set<number>();
@@ -215,6 +288,7 @@ export class ChatProductThread extends LitElement {
     this.messages = [];
     this.running = false;
     this.runStartedAt = null;
+    this.expectedMinutes = 0;
   }
 
   connectedCallback(): void {
@@ -259,7 +333,7 @@ export class ChatProductThread extends LitElement {
           : nothing}
         ${isLong
           ? html`<button class="see-all" @click=${() => this._toggleSeeAll(seeAllKey)}>
-              ${expanded ? chevronDown : chevronRight}
+              <span class="chev ${expanded ? 'up' : ''}">${chevronDown}</span>
               ${expanded ? 'Show less' : html`See all <span class="dim">· ${text.length.toLocaleString()} characters</span>`}
             </button>`
           : nothing}
@@ -276,7 +350,7 @@ export class ChatProductThread extends LitElement {
       ${hasBuildMsgs
         ? html`<button class="steps-toggle" @click=${() => this._toggleGroup(index)}>
             ${expanded ? chevronDown : chevronRight}
-            ${isComplete ? `${group.buildMsgs!.length} build steps` : html`Building… (${group.buildMsgs!.length})`}
+            ${isComplete ? `${group.buildMsgs!.length} build steps` : html`Building... (${group.buildMsgs!.length})`}
             ${!isComplete ? spinnerIcon : nothing}
           </button>`
         : nothing}
@@ -302,13 +376,30 @@ export class ChatProductThread extends LitElement {
     </div>`;
   }
 
+  /**
+   * THE APP'S OWN EMPTY STATE (`ChatPanel.tsx`): a bot badge, "What do you want to build?",
+   * "Describe your idea below" — drawn while the thread holds nothing and no run is live.
+   * It stands where a greeting would: the room's voice is the builder's, never a welcome
+   * of ours (owner, 2026-10-06: *"take out grace … I want to use app builder"*).
+   */
+  private _emptyState(): TemplateResult {
+    return html`<div class="empty-state">
+      <div class="empty-badge">${botIcon}</div>
+      <p class="empty-title">What do you want to build?</p>
+      <p class="empty-sub">Describe your idea below</p>
+    </div>`;
+  }
+
   private _buildingRow(): TemplateResult {
     const elapsed = this.runStartedAt ? Date.now() - this.runStartedAt : 0;
-    const { estimateMs, previousMs } = runEstimateAt(elapsed);
-    const ratio = ladderRatio(elapsed);
-    const percent = Math.round(ratio * 100);
-    const overrun = elapsed >= LADDER[LADDER.length - 1].estimateMs;
-    const from = Math.round(previousMs / MINUTE);
+    // The app's own fork in the road: the engine's estimate when it sent one, the ladder otherwise.
+    const expectedMs =
+      typeof this.expectedMinutes === 'number' && this.expectedMinutes > 0
+        ? this.expectedMinutes * MINUTE
+        : 0;
+    const { ratio, percent, overrun, estimateMs, previousEstimateMs } =
+      expectedMs > 0 ? expectedRunProgress(elapsed, expectedMs) : ladderRunProgress(elapsed);
+    const from = Math.round(previousEstimateMs / MINUTE);
     const minutes = Math.round(estimateMs / MINUTE);
     return html`<div class="building-row">
       <div class="dots-line">
@@ -322,8 +413,17 @@ export class ChatProductThread extends LitElement {
           <span class="estimate">${from} to ${minutes} minutes</span>
           <span class="pct ${overrun ? 'overrun' : ''}">${overrun ? 'Longer than usual' : `${percent}%`}</span>
         </div>
-        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${overrun ? nothing : percent}>
-          <div class="bar-fill ${overrun ? 'bar-overrun' : ''}" style=${`width: ${Math.max(2, ratio * 100)}%`}></div>
+        <div
+          class="bar"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow=${overrun ? nothing : percent}
+          aria-label="How long this run has been going"
+        >
+          <div class="bar-fill ${overrun ? 'bar-overrun' : ''}" style=${`width: ${Math.max(2, ratio * 100)}%`}>
+            <span class="shine" aria-hidden="true"></span>
+          </div>
         </div>
       </div>
     </div>`;
@@ -332,6 +432,7 @@ export class ChatProductThread extends LitElement {
   render() {
     const groups = groupMessages(this.messages || []);
     return html`
+      ${!groups.length && !this.running ? this._emptyState() : nothing}
       ${groups.map((group, index) => {
         if (group.type === 'build-group') return this._group(group, index);
         const msg = group.messages[0];
@@ -346,6 +447,18 @@ export class ChatProductThread extends LitElement {
     :host {
       display: block;
     }
+    /* ── the empty thread (the app's "What do you want to build?") ── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; min-height: 240px; text-align: center; padding: 0 16px;
+    }
+    .empty-badge {
+      width: 40px; height: 40px; border-radius: 999px; background: #f3f4f6;
+      display: flex; align-items: center; justify-content: center; margin-bottom: 12px;
+    }
+    .empty-badge svg { width: 20px; height: 20px; color: #9ca3af; }
+    .empty-title { margin: 0 0 4px; font-size: 15px; color: #6b7280; }
+    .empty-sub { margin: 0; font-size: 14px; color: #9ca3af; }
     .group, .single-agent, .user-row { margin-bottom: 16px; }
     .group > * + * { margin-top: 4px; }
 
@@ -381,6 +494,8 @@ export class ChatProductThread extends LitElement {
     }
     .see-all:hover { color: #374151; }
     .see-all svg { width: 12px; height: 12px; }
+    .see-all .chev { display: inline-flex; }
+    .see-all .chev.up { transform: rotate(180deg); }
     .dim { color: #9ca3af; }
 
     /* ── the steps card (the app's BuildGroup) ── */
@@ -441,6 +556,8 @@ export class ChatProductThread extends LitElement {
 
     /* ── FormattedText (the app's rules) ── */
     .ft { font-size: 15px; color: #374151; line-height: 1.625; }
+    /* The app's space-y-1 rhythm between everything it draws — 4px on tops of siblings only. */
+    .ft > *:not(:first-child) { margin-top: 4px; }
     .ft > p { margin: 0; }
     .ft h3 { margin: 8px 0 0; font-size: 16px; font-weight: 600; }
     .ft h4 { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
@@ -478,29 +595,50 @@ export class ChatProductThread extends LitElement {
     .dots { display: flex; gap: 4px; }
     .dots i {
       width: 6px; height: 6px; border-radius: 999px; background: #9ca3af;
-      animation: bounce 1.2s infinite;
+      animation: bounce 1s infinite;
     }
     .dots i:nth-child(2) { animation-delay: 150ms; }
     .dots i:nth-child(3) { animation-delay: 300ms; }
-    @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
-    .progress { margin-top: 6px; }
-    .progress-labels {
-      display: flex; align-items: baseline; gap: 6px;
-      font-size: 11px; color: #9ca3af;
+    /* Tailwind's animate-bounce — the app's dot animation: same duration, same curve. */
+    @keyframes bounce {
+      0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
+      50% { transform: translateY(0); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
     }
-    .elapsed { color: #374151; font-weight: 500; font-variant-numeric: tabular-nums; }
-    .sep { margin: 0 2px; }
+    .progress { margin-top: 6px; }
+    /* text-2xs in the app: 11px / 16px, a hair of letter-spacing, muted. */
+    .progress-labels {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 11px; line-height: 16px; letter-spacing: 0.01em; color: oklch(0.556 0 0);
+    }
+    /* The app's own theme values (globals.css, light): foreground, warning, primary, border. */
+    .elapsed { color: oklch(0.145 0 0); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .sep { margin: 0 4px; }
     .pct { margin-left: auto; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-    .pct.overrun { color: #b45309; font-weight: 500; }
+    .pct.overrun { color: oklch(0.562 0.138 58); font-weight: 500; }
     .bar {
       margin-top: 4px; height: 3px; border-radius: 999px; overflow: hidden;
-      background: rgba(15, 23, 42, 0.08);
+      background: oklch(0.922 0 0 / 70%); /* the app's bg-border/70 */
     }
     .bar-fill {
-      position: relative; height: 100%; border-radius: 999px; background: #111827;
+      position: relative; height: 100%; border-radius: 999px;
+      background: oklch(0.45 0.18 230); /* the app's bg-primary, light theme */
       transition: width 1s linear;
     }
-    .bar-overrun { background: #d97706; }
+    .bar-overrun { background: oklch(0.762 0.152 76); } /* the app's bg-warning, light theme */
+    /* The breathing head of the app's bar — tp-run-shine, globals.css, verbatim curve. */
+    .shine { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
+    @media (prefers-reduced-motion: no-preference) {
+      .shine::after {
+        content: '';
+        position: absolute; inset: 0; width: 34%;
+        background: linear-gradient(90deg, transparent 0%, color-mix(in oklab, white 55%, transparent) 50%, transparent 100%);
+        animation: run-shine 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      @keyframes run-shine {
+        from { transform: translateX(-120%); }
+        to { transform: translateX(400%); }
+      }
+    }
   `;
 }
 

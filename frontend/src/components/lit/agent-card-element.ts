@@ -16,9 +16,9 @@
  * with status, likes with the heart). No author section — the design has none.
  */
 import { LitElement, html, css, nothing } from 'lit';
-// THE CHAT'S COPILOT MARK, the logo its column's header carries — the owner, 2026-09-19:
+// THE CHAT'S MARK, the logo its column's header carries — the owner, 2026-09-19:
 // "I meant for that to be the copilot icon. It's at the very top of the chat vertical menu."
-import chatMenuIcon from './assets/chat-logo-bce2fe.png';
+import chatMenuIcon from './assets/chat-logo-gemini.png';
 import favoriteIcon from '@/assets/figma-card-favorite.svg';
 import { isDemoMode } from '@/shared/appConfig';
 
@@ -150,9 +150,12 @@ export class AgentCardElement extends LitElement {
     .card-logo {
       flex: 0 0 39px;
       width: 39px;
-      height: 35px;
+      height: 39px;
       display: block;
-      /* FORCED INTO THE BOX, not resized to it — the box stays the design's 39x35. */
+      /* THE BOX IS SQUARE BECAUSE THE MARK IS (owner, 2026-10-06: *"It's square, make the
+         card box square."*). It was 39x35 — the old mark's slightly-wide ratio — and the
+         square Gemini mark rendered wider than tall in it. Same width, squared height;
+         nothing else about the card moves. */
       object-fit: fill;
     }
     /* THE CATEGORY LINE IS GONE from the card — the owner, 2026-09-19: "just remove the

@@ -38,32 +38,8 @@
       // visitor never sees the form flash by. No catch: a read that throws leaves the
       // authed class unset and the form on screen — and the submit path below reports a
       // storage failure loudly, in the gate's own error line. No fallback door.
-      //
-      // `?signup` IS THE REGISTRATION DOOR (2026-10-04), and its class is deliberately NOT
-      // `authed`. That class means "signed in, so hide the form and show Preparing… while the
-      // app boots behind it" — it KEEPS the card and swaps what is inside. Pointing sign-up at
-      // it did exactly that, and since the card sits at the maximum z-index the spinner stood in
-      // front of the sign-up wizard. Sign-up is not the signed-in view; it is the card gone.
-      //
-      // IT CHANGES NOTHING FOR ANYONE ELSE. Every other URL behaves exactly as it did, and the
-      // door closes the moment the line naming it goes.
-      //
-      // ── THE SESSION'S DOOR, AND THE LEGACY CACHE'S RETIREMENT (owner, 2026-10-04) ──────────
-      // The flag lives in sessionStorage now, not localStorage: the sign-in covers the gate's
-      // own reload and this tab's life, and a NEW visit lands on the gate as if for the first
-      // time — the honest landing the owner asked for (*"load every single time as if it's
-      // landed on for the first time"*). The localStorage copies are DELETED here, at parse,
-      // before any bundle exists: a browser that has been skipping the gate since before this
-      // change meets the gate on the very next load. (The same keys and the same reason are in
-      // src/shared/session.ts, which the bundle uses.)
-      try {
-        ['grace_is_authenticated', 'grace_user_id', 'grace_user_role', 'grace_door', 'grace_is_admin']
-          .forEach(function (key) { localStorage.removeItem(key); });
-      } catch (e) { /* no storage — nothing was cached to retire */ }
-      if (sessionStorage.getItem('grace_is_authenticated') === 'true') {
+      if (localStorage.getItem('grace_is_authenticated') === 'true') {
         document.documentElement.classList.add('authed');
-      } else if (new URLSearchParams(location.search).has('signup')) {
-        document.documentElement.classList.add('signup');
       }
     </script>
     <style>
@@ -108,21 +84,6 @@
       }
       #splash .splash-sub { font-weight: 500; font-size: 14px; color: rgba(245, 240, 232, 0.35); margin-top: 4px; }
       #splash .splash-tag { font-size: 13px; color: rgba(245, 240, 232, 0.55); margin-top: 6px; }
-      /* THE REGISTRATION DOOR — below the sign-in button, and quieter than it on purpose: the
-         pin is for the people who already have one, and this is for the people who do not yet
-         exist here. A REAL LINK WITH A REAL ADDRESS (`?signup`), so it can be opened in a fresh
-         window and shared — and it is not a way past the pin, it is a way to become someone the
-         pin was never going to be given to. */
-      #splash .splash-register {
-        display: inline-block;
-        margin-top: 18px;
-        font-size: 13px;
-        color: rgba(212, 160, 238, 0.85);
-        text-decoration: none;
-        border-bottom: 1px solid rgba(212, 160, 238, 0.25);
-        padding-bottom: 1px;
-      }
-      #splash .splash-register:hover { color: #D4A0EE; border-bottom-color: #D4A0EE; }
       #splash .splash-rule {
         width: 40px;
         height: 2px;
@@ -192,12 +153,6 @@
       html.authed #splash .splash-form { display: none; }
       html.authed #splash .splash-spinner { display: block; }
       html.authed #splash .splash-preparing { display: block; }
-      /* THE SIGN-UP VIEW: the card is not for them at all, so it goes ENTIRELY. This is NOT the
-         treatment above — `authed` deliberately KEEPS the card and swaps the form for the
-         preparing spinner, and pointing sign-up at that class is exactly what put a spinner in
-         front of the wizard: the card sits at the maximum z-index, so "Preparing…" covered the
-         sign-up screen the whole time. Two different facts, two different classes. */
-      html.signup #splash { display: none; }
       @keyframes splash-spin { to { transform: rotate(360deg); } }
     </style>
   </head>
@@ -228,9 +183,6 @@
           <p class="splash-error" id="splash-error" role="alert"></p>
           <button class="splash-button" type="submit">Sign in</button>
         </form>
-        <!-- Register link retired (owner, 2026-10-06: *"scrub the register for beta link on
-             the pin gate"*). The `?signup` door itself still exists — whoever is handed the
-             address can still open it. -->
         <div class="splash-spinner" aria-hidden="true"></div>
         <div class="splash-preparing">Preparing…</div>
       </div>
@@ -256,16 +208,9 @@
             return;
           }
           try {
-            sessionStorage.setItem('grace_user_id', '00000000-0000-0000-0000-000000000001');
-            sessionStorage.setItem('grace_user_role', 'student');
-            sessionStorage.setItem('grace_is_authenticated', 'true');
-            /* WHICH DOOR (2026-10-04): this is the dev@local / demo door — it CLEARS any
-               earlier 'registered' marker so the Development room keeps its current behavior
-               (no onboarding wizard) for this identity, and builder-embed consequently passes
-               no door marker to the frame. Written at the only place the pin succeeds, so the
-               marker stays honest across mixed use of one browser. Session-scoped with the
-               sign-in itself (see the retirement note above). */
-            sessionStorage.setItem('grace_door', 'dev');
+            localStorage.setItem('grace_user_id', '00000000-0000-0000-0000-000000000001');
+            localStorage.setItem('grace_user_role', 'student');
+            localStorage.setItem('grace_is_authenticated', 'true');
           } catch (storageError) {
             error.textContent =
               'This browser will not store the session (' + storageError + ') — the gate cannot open here.';

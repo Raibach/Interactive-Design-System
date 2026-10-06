@@ -55,7 +55,7 @@ import './chat-product-thread';
 import './error-banner';
 import './chat-navigation-bar';
 import './prompt-input/prompt-textarea';
-import logoAsset from './assets/chat-logo-bce2fe.png';
+import logoAsset from './assets/chat-logo-gemini.png';
 // The app's own logger. A turn warning from the server is written here as well as drawn in
 // the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
 // owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).
@@ -263,6 +263,19 @@ export class ChatPanel extends LitElement {
      * room's binding: every other seat keeps the tray, untouched.
      */
     productTools: { type: Boolean, attribute: 'product-tools' },
+    /**
+     * THE PRODUCT ROOM'S MARKER — AND ITS NO-FALLBACK RULE (owner, 2026-10-06, after the engine
+     * died under the room and the seat fell back to the v.4b tray: *"no fallbacks in this
+     * application … I want all of the fallbacks all the dumb shit out … I would rather it just
+     * be a blank page than have a fallback."*). The room sets this where its column opens; while
+     * it is set and `productTools` has not landed, the seat draws NOTHING (the guard in
+     * `render`). It is structural, not cosmetic: this element's default face is every OTHER
+     * seat's real UI — the v.4b tray at the foot (the catalog's own five marks) and the old
+     * messages list — and a seat whose product binding never arrived must go BLANK, never wear
+     * another room's face. Set ONLY by the product room; every other seat never sets it and
+     * renders exactly as before.
+     */
+    productRoom: { type: Boolean, attribute: 'product-room' },
     /** The builder's connection facts, mirrored from its own `ids:tool-state` messages — the foot's dots. */
     productFigmaConnected: { type: Boolean, attribute: 'product-figma-connected' },
     productGithubConnected: { type: Boolean, attribute: 'product-github-connected' },
@@ -272,6 +285,9 @@ export class ChatPanel extends LitElement {
     productRunning: { type: Boolean, attribute: 'product-running' },
     /** When the in-flight run started (ms) — the app's own run clock, host-fed. */
     productRunStartedAt: { type: Number, attribute: 'product-run-started-at' },
+    /** The engine's estimate for the in-flight run, whole minutes (`agent/status.expectedMinutes`) —
+     * the app's bar fills against it; 0 means none, and the fixed ladder applies. */
+    productExpectedMinutes: { type: Number, attribute: 'product-expected-minutes' },
   };
 
   // `declare` — NOT a class field. With `useDefineForClassFields` true, a plain field
@@ -283,11 +299,14 @@ export class ChatPanel extends LitElement {
   declare messages: SeatMessage[];
   /** See the `productTools` note in `static properties` — the product room's binding alone. */
   declare productTools: boolean;
+  /** See the `productRoom` note in `static properties` — blank until the product binding lands. */
+  declare productRoom: boolean;
   declare productFigmaConnected: boolean;
   declare productGithubConnected: boolean;
   declare productVisualEditActive: boolean;
   declare productRunning: boolean;
   declare productRunStartedAt: number;
+  declare productExpectedMinutes: number;
   /**
    * THE GOVERNANCE REPORTS, TAKEN OUT OF THE THREAD. The inspector files a report into this
    * conversation with metadata kind='inspection'; the owner, 2026-09-19: they belong "under
@@ -709,6 +728,11 @@ export class ChatPanel extends LitElement {
       },
     ];
     this.requestUpdate();
+    // A HOST LINE IS THE THREAD GROWING — follow it exactly as history, a sent turn and a
+    // reply already do (the rule `_scrollThreadToBottom` states; the live build's steps and
+    // the run's bar arrive by this door). Measured 2026-10-06: without this the column held
+    // its scroll while the run's lines landed below the fold — the app follows every line.
+    this._scrollThreadToBottom();
   };
 
   /**
@@ -1917,42 +1941,6 @@ export class ChatPanel extends LitElement {
     chat-input { flex-shrink: 0; }
     chat-footer { flex-shrink: 0; }
     chat-plugin-tray { flex-shrink: 0; }
-    /* ── THE PRODUCT COMPOSER — THE APP BUILDER'S OWN, PORTED (owner, 2026-10-06: *"the
-       input at the bottom and the sand button … just like the app builder") ── */
-    .pa-wrap { flex-shrink: 0; padding: 8px 12px 12px; }
-    .pa-card {
-      border-radius: 16px;
-      background: var(--textarea-bg, #f3f1ee);
-      overflow: hidden;
-      transition: box-shadow 0.15s;
-    }
-    .pa-card:focus-within { box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.35); }
-    .pa-card prompt-textarea { display: block; width: 100%; }
-    .pa-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 8px 8px;
-    }
-    .pa-row chat-product-tools { flex-shrink: 0; }
-    .pa-send, .pa-stop {
-      width: 32px;
-      height: 32px;
-      border-radius: 999px;
-      border: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background 0.12s;
-    }
-    .pa-send { background: #111827; color: #ffffff; }
-    .pa-send:disabled { background: #d1d5db; cursor: default; }
-    .pa-send:not(:disabled):hover { background: #1f2937; }
-    .pa-stop { background: #ef4444; color: #ffffff; }
-    .pa-stop:hover { background: #dc2626; }
-    .pa-stop.armed { background: #b91c1c; font-size: 11px; font-weight: 600; }
     /* A seat handed over by the host fills the column. The empty modifier is display:none rather
        than a zero-height box on purpose: an empty flex child with flex-grow would take the space
        the element's own pieces are supposed to have. */
@@ -4050,31 +4038,6 @@ export class ChatPanel extends LitElement {
     this._forwardProductAttach(files);
   };
 
-  /** The stop button's arm state — the app's stop confirmation, ours as a two-click arm. */
-  private _stopArmed = false;
-  private _stopArmTimer: number | null = null;
-
-  private _onProductStop = (): void => {
-    if (!this._stopArmed) {
-      this._stopArmed = true;
-      if (this._stopArmTimer !== null) window.clearTimeout(this._stopArmTimer);
-      this._stopArmTimer = window.setTimeout(() => {
-        this._stopArmed = false;
-        this._stopArmTimer = null;
-        this.requestUpdate();
-      }, 2500);
-      this.requestUpdate();
-      return;
-    }
-    if (this._stopArmTimer !== null) window.clearTimeout(this._stopArmTimer);
-    this._stopArmTimer = null;
-    this._stopArmed = false;
-    this.requestUpdate();
-    // THE ROOM ANSWERS: it posts the engine's own `agent/stop` through the bridge — the
-    // app's Stop button, one room over.
-    this.dispatchEvent(new CustomEvent('product-stop', { bubbles: true, composed: true }));
-  };
-
   /**
    * START THIS SEAT OVER — an empty thread, ready for the next run.
    *
@@ -4940,6 +4903,14 @@ export class ChatPanel extends LitElement {
   }
 
   render() {
+    /*
+     * A SEAT MARKED `productRoom` HAS NO OTHER FACE (owner, 2026-10-06: *"no fallbacks in this
+     * application … I would rather it just be a blank page than have a fallback."*). Until the
+     * product binding lands — `productTools: true`, set by the room once the engine's carrier
+     * answers — this seat draws NOTHING: no tray, no messages branch, no chrome. Every other
+     * seat has `productRoom` unset and renders fully as before.
+     */
+    if (this.productRoom && !this.productTools) return html``;
     const seated = this._seatSlotted();
     const usage = this.usage ?? {};
     const attributed = Boolean(this.conversationId);
@@ -5001,7 +4972,7 @@ export class ChatPanel extends LitElement {
               @tab-change=${this._onTabChange}
               @collapse-toggle=${this._onCollapseToggle}
             >
-              <img slot="logo" src=${logoAsset} width="66" height="62" alt="Copilot" />
+              <img slot="logo" src=${logoAsset} width="50" height="50" alt="Grace" />
             </chat-navigation-bar>
             <div class="panel tab-${this.activeTab || 'none'} ${this.collapsed ? 'collapsed' : ''}">
               <!-- The listener sits on the WRAPPER so it hears conversation-select
@@ -5194,6 +5165,7 @@ export class ChatPanel extends LitElement {
                             .messages=${this._thread}
                             ?running=${this.productRunning}
                             .runStartedAt=${this.productRunStartedAt || 0}
+                            .expectedMinutes=${this.productExpectedMinutes || 0}
                           ></chat-product-thread>`
                         : html`<chat-messages
                             .messages=${this._thread}
@@ -5251,44 +5223,6 @@ export class ChatPanel extends LitElement {
                 </chat-header>
               </div>
               <div class="chat-input-wrapper">
-                ${this.productTools
-                  ? html`
-                      <div class="pa-wrap">
-                        <div class="pa-card" @keydown=${this._onComposerKey}>
-                          <prompt-textarea
-                            placeholder=${this._sending ? 'Agent is working…' : 'Ask anything…'}
-                            @value-input=${this._onDraftInput}
-                            @paste=${this._onProductPaste}
-                          ></prompt-textarea>
-                          <div class="pa-row">
-                            <chat-product-tools
-                              style="padding: 0;"
-                              .figmaConnected=${this.productFigmaConnected}
-                              .githubConnected=${this.productGithubConnected}
-                              .visualEditActive=${this.productVisualEditActive}
-                              @product-attach=${(e: CustomEvent<{ files: File[] }>) =>
-                                this._forwardProductAttach(e.detail.files)}
-                              @product-tool=${(e: CustomEvent<{ tool: string }>) =>
-                                this._forwardProductTool(e.detail.tool)}
-                            ></chat-product-tools>
-                            ${this._sending
-                              ? html`<button
-                                  class="pa-stop ${this._stopArmed ? 'armed' : ''}"
-                                  title=${this._stopArmed ? 'Click again to stop the run' : 'Stop the run'}
-                                  @click=${this._onProductStop}
-                                >${this._stopArmed
-                                  ? 'Stop?'
-                                  : html`<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>`}</button>`
-                              : html`<button
-                                  class="pa-send"
-                                  title="Send"
-                                  ?disabled=${!this._draft.trim()}
-                                  @click=${this._onSendCommand}
-                                ><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>`}
-                          </div>
-                        </div>
-                      </div>`
-                  : html`
                 <chat-action-bar
                   model-label=${this.modelLabel ?? 'Models'}
                   trailing=${this._seatIsConsole === false ? 'console' : 'agent'}
@@ -5317,10 +5251,24 @@ export class ChatPanel extends LitElement {
                      a live FUNCTION, and a function does not leave with a drawing, so they
                      move onto this bar and take its treatment — the same move that put them
                      on the navy bar when the #CFD7D5 bar it replaced went away. -->
-                <chat-plugin-tray
-                  .placed=${this._trayPlaced}
-                  @conversation-new=${this._onConversationNew}
-                ></chat-plugin-tray>`}
+                <!-- v.4b's foot, OR THE PRODUCT ROOM'S OWN TOOLS (owner, 2026-10-06:
+                     "all of these stubs go. And you're gonna put the products wiring
+                     down."). The flag is the product room's binding alone — every other
+                     seat keeps the tray, exactly as it was. See <chat-product-tools>. -->
+                ${this.productTools
+                  ? html`<chat-product-tools
+                      .figmaConnected=${this.productFigmaConnected}
+                      .githubConnected=${this.productGithubConnected}
+                      .visualEditActive=${this.productVisualEditActive}
+                      @product-attach=${(e: CustomEvent<{ files: File[] }>) =>
+                        this._forwardProductAttach(e.detail.files)}
+                      @product-tool=${(e: CustomEvent<{ tool: string }>) =>
+                        this._forwardProductTool(e.detail.tool)}
+                    ></chat-product-tools>`
+                  : html`<chat-plugin-tray
+                      .placed=${this._trayPlaced}
+                      @conversation-new=${this._onConversationNew}
+                    ></chat-plugin-tray>`}
               </div>
             </div>
           `}

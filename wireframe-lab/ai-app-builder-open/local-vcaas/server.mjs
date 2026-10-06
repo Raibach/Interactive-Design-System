@@ -317,7 +317,6 @@ Rules:
 - No external network assets: no CDN scripts, no web fonts, no remote images. Inline what you need; draw images with CSS or inline SVG.
 - The app must work when served as static files from a plain file server: relative links only, no absolute "/" paths except for links back to index.html ("index.html" or "./").
 - Keep it clean and readable: sensible structure, comments only where they carry meaning.
-- If the person's message is a QUESTION, a discussion, or is not a request to build or change something: return the files UNCHANGED and answer in "say".
 - If the person asks to start over or clear: return {"say": "...", "files": [{"path": "index.html", "content": "<a minimal honest placeholder page>"}]}.`;
 
 function buildAgentInput(project, prompt) {
@@ -350,7 +349,13 @@ async function callDeepSeek(project, prompt, signal) {
       ],
       response_format: { type: "json_object" },
       temperature: 0.4,
-      max_tokens: 16000,
+      // 32k, NOT 16k (2026-10-06): deepseek-flash's reasoning and answer SHARE this budget,
+      // and reasoning alone measured up to 16,000 tokens on single calls — so the cap was hit
+      // with an EMPTY answer (finish_reason=length) and larger prompts died on it (measured
+      // live today: "The model did not return JSON — an empty response came back"). 32,000 is
+      // the value that carried the owner's own ask through in the diagnostic run (11,619
+      // used, 35.6s, 3 files); the API accepts up to 65,536. Still one model, no retry.
+      max_tokens: 32000,
     }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(RUN_TIMEOUT_MS)]),
   });
@@ -361,7 +366,18 @@ async function callDeepSeek(project, prompt, signal) {
   const payload = await res.json();
   const content = payload?.choices?.[0]?.message?.content || "";
   let parsed;
-  try { parsed = JSON.parse(content); } catch { throw new Error("The model did not return JSON."); }
+  try { parsed = JSON.parse(content); } catch {
+    // A HARD FAIL, SAID IN FULL (owner, 2026-10-06: "one model, if it fails I want an error
+    // message on a loud hard fail — no fallback"). The reason rides the error: an empty
+    // response, a truncation, or prose that is not JSON are different failures, and the
+    // thread's error line must name which one it was. There is deliberately no retry and
+    // no second model.
+    const finish = payload?.choices?.[0]?.finish_reason || "unknown";
+    const detail = content
+      ? `${content.length} chars came back that do not parse (finish_reason=${finish})`
+      : `an empty response came back (finish_reason=${finish})`;
+    throw new Error(`The model did not return JSON — ${detail}.`);
+  }
   const files = Array.isArray(parsed.files) ? parsed.files : [];
   const clean = {};
   for (const f of files) {
@@ -370,9 +386,28 @@ async function callDeepSeek(project, prompt, signal) {
     if (path.includes("..") || path.startsWith("/")) continue;
     clean[path] = f.content.slice(0, 400_000);
   }
-  if (!clean["index.html"]) throw new Error("The model returned no index.html.");
+  /**
+   * ═══ A REPLY THAT CARRIES NO FILES IS AN ANSWER, NOT A FAILED BUILD (2026-10-06) ═══
+   *
+   * ⚠️ NOBODY PRIMES THE MODEL FOR THIS ONE (owner, 2026-10-06: *"Take this stuff out —
+   * we don't want to tell the model anything like that … every model is trained to
+   * answer a question"*). Asked something conversational, the model answers in words;
+   * on a project with no files yet there is nothing for those words to change, so the
+   * reply comes back as { say, files: [] } — and the old unconditional
+   * `if (!clean["index.html"]) throw` turned every such reply into
+   * "Run failed: The model returned no index.html." (the owner typed "How are you
+   * today?" and got exactly that, 2026-10-06).
+   *
+   * So the rule is split by what the model actually did:
+   *   · files returned  ⇒ it is a build, and a build WITHOUT a root index.html is
+   *     malformed — still a loud hard fail, no guessing;
+   *   · NO files        ⇒ it is a conversation turn — the `say` IS the answer.
+   * One model, no retry, no fallback.
+   */
+  const isConversation = Object.keys(clean).length === 0;
+  if (!isConversation && !clean["index.html"]) throw new Error("The model returned no index.html.");
   const usage = payload?.usage ? `${payload.usage.completion_tokens} tokens` : "usage unknown";
-  return { say: typeof parsed.say === "string" ? parsed.say : "Done.", files: clean, usage };
+  return { say: typeof parsed.say === "string" ? parsed.say : "Done.", files: clean, usage, isConversation };
 }
 
 async function runAgent(projectId, prompt) {
@@ -410,25 +445,48 @@ async function runAgent(projectId, prompt) {
     if (run.aborted) {
       appendMessage(fresh, { author: "agent", message: "Stopped.", messageType: "error" });
     } else {
-      const versionId = `v${(fresh.versions || []).length + 1}-${Date.now().toString(36)}`;
-      fresh.versions = fresh.versions || [];
-      fresh.versions.push({
-        _id: versionId, name: `Run ${fresh.versions.length + 1}`, prompt,
-        createdAt: nowIso(), commitSha: versionId, commitMessage: result.say,
-        /**
-         * ⚠️ THE SNAPSHOT IS THE STATE THIS VERSION *IS* — the run's own output — not the
-         * state it replaced. It used to hold the PREVIOUS files, which made a version's
-         * diff show the run before it and made "restore v1" restore an empty project.
-         */
-        files: result.files,
-      });
-      fresh.currentFiles = result.files;
+      /**
+       * ⚠️ A CONVERSATION TURN CREATES NO VERSION AND TOUCHES NO FILES — there is
+       * nothing to snapshot; only a build writes a version and replaces the files.
+       * Both outcomes still write the same completion pair (the spoken line, then
+       * "Finished in Ns.") so every turn in the chat wears the identical shape —
+       * see `isConversation` in `callDeepSeek`.
+       */
+      let versionId = null;
+      if (!result.isConversation) {
+        versionId = `v${(fresh.versions || []).length + 1}-${Date.now().toString(36)}`;
+        fresh.versions = fresh.versions || [];
+        fresh.versions.push({
+          _id: versionId, name: `Run ${fresh.versions.length + 1}`, prompt,
+          createdAt: nowIso(), commitSha: versionId, commitMessage: result.say,
+          /**
+           * ⚠️ THE SNAPSHOT IS THE STATE THIS VERSION *IS* — the run's own output — not the
+           * state it replaced. It used to hold the PREVIOUS files, which made a version's
+           * diff show the run before it and made "restore v1" restore an empty project.
+           */
+          files: result.files,
+        });
+        fresh.currentFiles = result.files;
+      }
       appendMessage(fresh, { author: "agent", message: result.say, messageType: "building" });
-      appendMessage(fresh, { author: "agent", message: `Finished in ${seconds}s.`, messageType: "finished", versionId });
+      appendMessage(fresh, {
+        author: "agent",
+        message: `Finished in ${seconds}s.`,
+        messageType: "finished",
+        ...(versionId ? { versionId } : {}),
+      });
       fresh.logs = fresh.logs || [];
-      fresh.logs.push(`[${nowIso()}] run "${prompt.slice(0, 80)}" \u2192 ${Object.keys(result.files).length} file(s) in ${seconds}s (${result.usage})`);
+      fresh.logs.push(
+        result.isConversation
+          ? `[${nowIso()}] conversation reply "${prompt.slice(0, 80)}" in ${seconds}s (${result.usage})`
+          : `[${nowIso()}] run "${prompt.slice(0, 80)}" \u2192 ${Object.keys(result.files).length} file(s) in ${seconds}s (${result.usage})`
+      );
       if (fresh.logs.length > 200) fresh.logs = fresh.logs.slice(-200);
-      console.log(`[agent] ${projectId}: ${Object.keys(result.files).length} file(s) in ${seconds}s (${result.usage})`);
+      console.log(
+        result.isConversation
+          ? `[agent] ${projectId}: conversation reply in ${seconds}s (${result.usage})`
+          : `[agent] ${projectId}: ${Object.keys(result.files).length} file(s) in ${seconds}s (${result.usage})`
+      );
     }
     fresh.agentProcessStatus = "done";
     delete fresh.runStartedAt;
@@ -691,22 +749,6 @@ async function handleApi(req, res, path, query, body) {
       writeProject(project);
       return ok(res, { path, bytesWritten: Buffer.byteLength(content, "utf8"), created, rebuildRequired: true });
     }
-    /**
-     * DELETE A FILE — the room's reset door (owner, 2026-10-06: the stage's proof card made
-     * way for the builder's own splash, and an EMPTY project is the only state that serves
-     * it — see `emptyProjectPage`). The app never had a delete; this is the tool's own write
-     * path doing it, and versions keep every run's files, so anything removed here is
-     * recoverable from the history (`POST /versions/{id}/recover`).
-     */
-    if (sub[1] === "content" && req.method === "DELETE") {
-      const path = String(query.get("path") || "").replace(/^\.?\//, "");
-      if (!path || path.includes("..")) return fail(res, "VALIDATION", "Invalid path.");
-      if (!(path in files)) return fail(res, "VALIDATION", `No file "${path}".`, 404);
-      delete project.currentFiles[path];
-      project.lastModifiedAt = nowIso();
-      writeProject(project);
-      return ok(res, { path, deleted: true, filesRemaining: Object.keys(project.currentFiles).length });
-    }
     if (sub[1] === "upload") return fail(res, "VALIDATION", "Attachments are not supported by the local engine.");
     return fail(res, "VALIDATION", `Unknown files endpoint ${sub.join("/")}.`, 404);
   }
@@ -833,20 +875,23 @@ function emptyProjectPage(project) {
   .card { max-width: 460px; padding: 50px; text-align: center; background: #ffffff;
          border: 1px solid rgba(15, 23, 42, 0.07); border-radius: 18px;
          box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12); }
-  .glyph { width: 44px; height: 44px; margin: 0 auto 18px; border-radius: 12px; display: grid; place-items: center;
-           background: #111827; color: #fff; font-size: 20px; }
+  /* THE STAGE'S LOGO IS THE OWNER'S (2026-10-06): the R from the nav, not the builder's sparkle
+     glyph (owner: *"I want it switched with my logo, which is in the top left corner of the
+     side in the R"*). The image is self-contained — its own dark ground with the white R — so
+     it holds in both themes and needs no theme-dependent background of its own. */
+  .glyph { width: 44px; height: 44px; margin: 0 auto 18px; border-radius: 12px; display: block; object-fit: cover; }
   h1 { margin: 0 0 8px; font-size: 17px; font-weight: 600; color: #111827; word-break: break-all; }
   p { margin: 0; color: #6B7280; font-size: 13.5px; }
   .hint { margin-top: 18px; font-size: 12.5px; color: #9CA3AF; }
   @media (prefers-color-scheme: dark) {
-    body { background: #2b2635 url('/assets/canvas-development-lab-bkg.png') repeat; } h1 { color: #ffffff; } .glyph { background: #ffffff; color: #111827; }
+    body { background: #2b2635 url('/assets/canvas-development-lab-bkg.jpg') repeat; } h1 { color: #ffffff; }
     .card { background: #1b1b1f; border-color: #2c2c31; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); }
   }
 </style>
 </head>
 <body>
   <div class="card">
-    <div class="glyph" aria-hidden="true">&#10022;</div>
+    <img class="glyph" src="/assets/raibach-logo.jpg" alt="" aria-hidden="true" />
     <h1>${safeId}</h1>
     <p>Nothing is built here yet. Describe the page you want in the chat, and it will appear on this stage.</p>
     <p class="hint">This stands in for the preview until the first build lands \u2014 it is not a file in the project.</p>

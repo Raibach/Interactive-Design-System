@@ -107,7 +107,7 @@ export default function LeftColumnHeader({
      *
      * PRODUCT AND GOVERNANCE (2026-10-03) LEFT THIS SET first; DEVELOPMENT LEFT IT 2026-10-04 —
      * the owner: *"you could just drop it right in there. Can't you under a development tab"* —
-     * and it is now bolt.diy's room, embedded whole the way the Product room embeds the app
+     * and it is now a room of its own, embedded whole the way the Product room embeds the app
      * builder. No stubs remain.
      */
     { id: 'product', label: 'Product' },

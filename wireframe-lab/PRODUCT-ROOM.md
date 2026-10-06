@@ -633,45 +633,35 @@ the address is the last resort, per the platform's own semantics. Driven whole: 
 "My new product idea" → the splash shows it → publish → the console card is titled it → scratch
 removed.
 
-**§11 addendum 14, same evening (the Development tab is a room: bolt.diy):** *"you could just drop
-it right in there. Can't you under a development tab."* It was the LAST dead stub
+**§11 addendum 14, same evening (the Development tab is a room: its first tool):** *"you could
+just drop it right in there. Can't you under a development tab."* It was the LAST dead stub
 (`SECTION_TABS = ['development']`, `disabled: true` in the nav, the assemble path refusing it on
-purpose) — and it is now a room, the Product room's move one tab over: bolt.diy (MIT, the
-web-native open app builder) cloned to `development/bolt.diy/`, installed, running on
-**localhost:3230** (`npx remix vite:dev --port 3230` — the `pnpm run dev` script chain mangles a
-trailing `--port`, so the direct CLI is the command; the stale Sep-27 vite of this app's own
-frontend held 5173 and was cleared). The host wiring is three small edits: the nav entry loses
-`disabled`, the tab handler gains a `development` branch (no A2UI assembly — nothing touches the
-Composer), and the renderer branch mounts `<builder-embed src="http://localhost:3230/">` ahead of
-the dead-tab check. Frontend `tsc` exit 0; bolt.diy serves 200 ("Bolt").
+purpose) — and it became a room, the Product room's move one tab over: a candidate web-native
+app builder (MIT) cloned into `development/`, installed, running on its own port. The host
+wiring is three small edits: the nav entry loses `disabled`, the tab handler gains a
+`development` branch (no A2UI assembly — nothing touches the Composer), and the renderer branch
+mounts `<builder-embed>` ahead of the dead-tab check. Frontend `tsc` exit 0.
 
-**THE HONEST CATCH, found before it surprises anyone:** bolt.diy ships
+**THE HONEST CATCH, found before it surprises anyone:** the candidate ships
 `Cross-Origin-Embedder-Policy: require-corp` + `Cross-Origin-Opener-Policy: same-origin` — the
-isolation its in-browser runtime (WebContainers) needs. A nested document can only be
-cross-origin-isolated if the TOP page is too, and this app is not, so the UI should render in the
-room while the WebContainer runtime may refuse to boot inside the frame. THE LIVE TEST IS THE
-OWNER'S: click Development. If the app-preview inside misbehaves, the fallback is one line —
-have that tab open :3230 in its own tab instead of embedding it, where bolt.diy runs whole. Its
-model keys are configured in ITS OWN settings (bring-your-own; DeepSeek among the providers), not
-by our engine — a different shape of key story from the builder's.
+isolation its in-browser runtime needs. A nested document can only be cross-origin-isolated if
+the TOP page is too, and this app is not, so the UI should render in the room while the in-frame
+runtime may refuse to boot. THE LIVE TEST WAS THE OWNER'S, and it came back measured.
 
 **§11 addendum 15, same evening (the Development room's two truths, from its own console):** the
 owner's console dump settled both open questions. (1) **The isolation catch is REAL, and now
-measured**: `DataCloneError: SharedArrayBuffer transfer requires self.crossOriginIsolated` —
-bolt.diy's WebContainer runtime cannot boot inside the frame (a nested document cannot be
-cross-origin-isolated unless the top page is), so the room keeps bolt.diy's UI in the frame and
-adds one honest door: a slim strip — *"bolt.diy builds and previews apps with WebContainers, which
-need their own window"* — with an **Open bolt.diy ↗** button (localhost:3230, its own tab), where
-it runs whole. (2) **The API gate is gone without anyone typing a key**: `development/bolt.diy/.env.local`
-carries the house DeepSeek key AND the OpenAI-Like provider pointed at the hosted API
-(`OPENAI_LIKE_API_BASE_URL` + the real model names, since bolt.diy's built-in `deepseek-chat`
-line predates the v4 models this world serves). Driven through bolt.diy's own server: a real
-completion came back (`finishReason: stop`, `deepseek-v4-pro`) — so its chat works and the
-"enter your API key" screen has nothing to ask for. Also fixed while in there: the owner's
-`npm run catalog:check` flagged `README.md:114` claiming 62 trusted components against the
-catalog's 63 (the count moved when `builder-embed` landed) — both claims now say 63 and the
-doc-claim-drift finding is gone (the other four blocking findings are pre-existing: the design
-room's components against the prompt-composer catalogue).
+measured**: `DataCloneError: SharedArrayBuffer transfer requires self.crossOriginIsolated` — the
+candidate's in-browser runtime cannot boot inside the frame (a nested document cannot be
+cross-origin-isolated unless the top page is), so the room kept the candidate's UI in the frame
+and added one honest door: a slim strip with an open-in-its-own-tab button, where it ran whole.
+(2) **The API gate is gone without anyone typing a key**: the candidate's own `.env.local`
+carried the house DeepSeek key and its OpenAI-Like provider pointed at the hosted API — driven
+through its own server, a real completion came back (`finishReason: stop`, `deepseek-v4-pro`),
+so its chat worked and the "enter your API key" screen had nothing to ask for. Also fixed while
+in there: the owner's `npm run catalog:check` flagged `README.md:114` claiming 62 trusted
+components against the catalog's 63 (the count moved when `builder-embed` landed) — both claims
+now say 63 and the doc-claim-drift finding is gone (the other four blocking findings are
+pre-existing: the design room's components against the prompt-composer catalogue).
 
 **§11 addendum 16, same evening (the seat's green goes, permanently):** *"I am getting sick of
 the green on the grace chat for composer design and console just the output area where she just
@@ -715,13 +705,13 @@ frontend (this card), registry.json parses, chat-header parses, frontend `tsc` e
 dev server serves the change. Two records of the same lesson in two days is enough: when this
 owner says interior, the file's own 2026-09-24 comment is the measured case to read first.
 
-**§11 addendum 18, the same night's last act (the Development room changes tools):** *"bolt is not
-gonna cut it — it's not designed properly for what I want … I think this one will work better"* —
-so the Development tab embedded a self-hosted developer control center (coding agents on
-local/Docker/VM/cloud backends) instead of bolt.diy. Driven: installed globally, booted on its
+**§11 addendum 18, the same night's last act (the Development room changes tools):** *"not
+designed properly for what I want … I think this one will work better"* — so the Development tab
+embedded a self-hosted developer control center (coding agents on
+local/Docker/VM/cloud backends) instead of the first candidate. Driven: installed globally, booted on its
 own port (8000 is this app's backend), serving 200, and the room repointed plain — no strip, no
-door, because this one needed no cross-origin isolation (the wall that fenced bolt.diy). Frontend
-`tsc` exit 0.
+door, because this one needed no cross-origin isolation (the wall that had fenced the first
+candidate). Frontend `tsc` exit 0.
 
 **RETIRED 2026-10-06:** that tool was removed from the project in full at the owner's direction;
 the room stands without it, and everything the removal carried out was archived outside the

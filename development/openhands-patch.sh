@@ -161,11 +161,13 @@ body, [data-agent-server-ui]{ background: transparent !important; }
 CSS
 
 # The tile: copied in beside the stylesheet under its own content hash (the room's assembly
-# image, straight from the app's assets — same file, same repeat).
-TILE_SRC="$(cd "$(dirname "$0")" && pwd)/../frontend/src/assets/canvas-development-lab-bkg.png"
+# image, straight from the app's assets — same file, same repeat; 2026-10-06: the artwork is
+# now the owner's JPEG, and the extension follows the source).
+TILE_SRC="$(cd "$(dirname "$0")" && pwd)/../frontend/src/assets/canvas-development-lab-bkg.jpg"
 TILE_NAME=""
 if [ -f "$TILE_SRC" ]; then
-  TILE_NAME="house-patch-tile-$(shasum -a 256 "$TILE_SRC" | cut -c1-10).png"
+  TILE_EXT="${TILE_SRC##*.}"
+  TILE_NAME="house-patch-tile-$(shasum -a 256 "$TILE_SRC" | cut -c1-10).${TILE_EXT}"
   HTML_BG_RULE="html{ background: transparent url($TILE_NAME) repeat !important; }"
 else
   HTML_BG_RULE="html{ background: transparent !important; }"

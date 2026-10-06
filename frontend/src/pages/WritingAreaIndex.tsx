@@ -53,7 +53,7 @@ import designSectionBackground from "@/assets/design-section2-bkg.png";
 // composer's ground now (see the workspaceBackground block below), and the wireframe-named
 // duplicate of this tile left the tree with the retirement (2026-10-05 — one image for the lab
 // ground; `canvas-wireframe-lab-bkg.png` deleted, referenced by nothing).
-import developmentLabBackground from "@/assets/canvas-development-lab-bkg.png";
+import developmentLabBackground from "@/assets/canvas-development-lab-bkg.jpg";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/room-embed-art.jpg";
@@ -584,6 +584,22 @@ export default function Index({
    * this key remounts the embed so the stage re-reads the project. See the handler below.
    */
   const [productStageKey, setProductStageKey] = useState(0);
+
+  /*
+   * THE GRIP'S SAFETY NET (owner, 2026-10-06: *"On product, I cannot resize the browser with the
+   * gripper… it's not resizable. It needs to be movable… apply that gripper and slide effects
+   * that we have on console and the other seats to the chat gripper inside of product."*).
+   *
+   * THE ROOM'S GEOMETRY IS WHY: the chat strip's whole gesture rides DOCUMENT-level moves (the
+   * seat's own measured design — pointer capture was tried and rejected: "it hangs onto your
+   * cursor"), and the strip's LEFT NEIGHBOUR in this room is the builder IFRAME — the moment the
+   * hand crosses from the strip into the frame, the frame's document swallows every move and the
+   * drag freezes (console has no iframe beside it, which is why the same strip works there).
+   * While this flag is true the room draws a transparent fixed overlay — the builder app's own
+   * resize draws the same (`fixed inset-0 z-50`) — so every move of the gesture stays in THIS
+   * document. PRODUCT-ONLY, ROOM-SIDE: the seat element is untouched.
+   */
+  const [productGripActive, setProductGripActive] = useState(false);
 
   /*
    * THE GOVERNANCE ROOM'S STATE (2026-10-03) — the room where the system accounts for what it
@@ -4779,9 +4795,11 @@ export default function Index({
     // there is nothing to check or birth against — a demo without its builder service.
     if (!builderToolUrl()) return;
     void checkBuilderEngine();
-    // Entering the room with no project open — a reload, a restored tab — REOPENS the project
-    // last touched (the bridge resumes; it births only when there is none — owner, 2026-10-06:
-    // entering is coming back, not starting over). ON THE DEMO TOO, from 2026-10-04 (the
+    // Entering the room with no project open HANDS THE DECISION TO THE BRIDGE, whose rule is
+    // the holding position (owner, 2026-10-06: *"that's what you're doing when you click on …
+    // product tab … you're creating a new project"*): a HELD project with work in it is
+    // reopened (a reload, a restored tab — *"entering is coming back, not starting over"*);
+    // anything else births a new project/package. ON THE DEMO TOO, from 2026-10-04 (the
     // owner's decision — visitors may run the builder, capped in the tool's engine): the
     // engine it births against is the HOSTED one, reached through the bridge like everything
     // else. The old note here said "not on the demo: there is no engine to birth one against" —
@@ -4791,22 +4809,28 @@ export default function Index({
   }, [headerTab]);
 
   /**
-   * THE ROOM'S EXIT GUARD (owner, 2026-10-04) — "publish or discard", asked only where it
-   * means something:
+   * THE ROOM'S EXIT GUARD (owner, 2026-10-04; the save-as-draft door, 2026-10-06: *"You must
+   * save this before we can continue or offer them a saved draft option."*) — asked only
+   * where it means something:
    *   · no project open          → leave freely;
    *   · published                → leave freely (its card is the team's business now);
    *   · unpublished and BLANK    → discarded IN SILENCE (born from a click, never used);
-   *   · unpublished with work    → ASK: publish it to the console, discard it for good, or stay.
+   *   · unpublished with work    → ASK: save it as a draft, publish it to the console, discard
+   *                                it for good, or stay. Save-as-draft SETTLES the held
+   *                                project into the person's packages — private and resumable,
+   *                                still off the console until published.
    * The ENGINE is the fact (read through the bridge); an unreadable engine lets the person
    * leave — a guard that traps someone on a stopped process would be worse than the risk.
    */
-  const [leavePrompt, setLeavePrompt] = useState<{ projectId: string; settle: (choice: 'publish' | 'discard' | 'stay') => void } | null>(null);
+  const [leavePrompt, setLeavePrompt] = useState<{ projectId: string; settle: (choice: 'publish' | 'discard' | 'keep' | 'stay') => void } | null>(null);
 
   async function discardProductProject(bridgeProjectId: string): Promise<void> {
     try {
       await fetch(`${API_BASE}/builder/discard`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // X-User-ID rides every builder call (keep, publish, upload) — the discard's own
+        // carrier-row cleanup is user-scoped, so this door names its user too (2026-10-06).
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
         body: JSON.stringify({ project_id: bridgeProjectId }),
       });
     } catch { /* the engine is down — there is nothing to discard against */ }
@@ -4825,9 +4849,16 @@ export default function Index({
         hasWork = Boolean(body.has_work);
       }
     } catch { /* unreadable → leave freely (see the note above) */ }
-    if (published) return true;
+    // A PUBLISHED PROJECT IS SAFE — its card holds everything — and a BLANK one is dropped in
+    // silence. Either way nothing remains unsaved, and the exit gate's same ref is told so
+    // (see the beforeunload effect): the room and the Composer keep ONE truth.
+    if (published) {
+      hasUnsavedChangesRef.current = false;
+      return true;
+    }
     if (!hasWork) {
       await discardProductProject(bridgeProjectId);
+      hasUnsavedChangesRef.current = false;
       setProductRoomProjectId(null);
       return true;
     }
@@ -4849,9 +4880,18 @@ export default function Index({
           body: JSON.stringify({ project_id: bridgeProjectId }),
         });
       } catch { /* the card simply stays absent until a publish succeeds */ }
+    } else if (choice === 'keep') {
+      try {
+        await fetch(`${API_BASE}/builder/projects/${encodeURIComponent(bridgeProjectId)}/keep`, {
+          method: 'POST',
+          headers: { 'X-User-ID': getStoredUserId() },
+        });
+      } catch { /* the project stays held — the next room entry reopens it; nothing is lost */ }
     } else {
       await discardProductProject(bridgeProjectId);
     }
+    // SAVED AS A DRAFT, PUBLISHED, OR DISCARDED — resolved; nothing is at risk anymore.
+    hasUnsavedChangesRef.current = false;
     setProductRoomProjectId(null);
     return true;
   }
@@ -4871,7 +4911,12 @@ export default function Index({
    * has it before anyone looks.
    */
   useEffect(() => {
-    const onPublished = () => { void fetch(`${API_BASE}/builder/sync`, { method: 'POST' }); };
+    const onPublished = () => {
+      // PUBLISHED = RESOLVED — the exit gate's same ref comes down (see the beforeunload
+      // effect): a published project has nothing left to lose, in the room or the browser.
+      hasUnsavedChangesRef.current = false;
+      void fetch(`${API_BASE}/builder/sync`, { method: 'POST' });
+    };
     window.addEventListener('builder-published', onPublished);
     return () => window.removeEventListener('builder-published', onPublished);
   }, []);
@@ -4931,23 +4976,31 @@ export default function Index({
   }, [headerTab]);
 
   /**
-   * THE PRODUCT ROOM'S CHAT LOADS OPEN AT 550 (owner, 2026-10-06: *"load the chat open by
-   * default at 5:50 pixels"* — 550). This supersedes the room's 2026-10-05 open-closed
-   * rule: `chatLoadWidth = 550` is the layout's OWN declared load width — the element
-   * documents it ("a room that declares a width opens her THERE instead") and it only says
-   * where she STANDS on load; a drag is still the operator's and the saved-width path is
-   * untouched. `isThirdOpen = true` opens her on entry. Both are PROPERTIES through the ref,
-   * never JSX attributes (Lit's boolean converter reads any present attribute as true). From
-   * there the gripper keeps opening and closing her exactly as it does in every other
-   * section — open or closed belongs to the element that owns the width. `useLayoutEffect`,
-   * so the first paint is already the open column.
+   * THE PRODUCT ROOM'S CHAT LOADS OPEN AT 600 (owner, 2026-10-06, revised the same night:
+   * *"make the chat window size on load default to 600 instead of 550"* — superseding his
+   * own earlier 550). This supersedes the room's 2026-10-05 open-closed rule:
+   * `chatLoadWidth = 600` is the layout's OWN declared load width — the element documents
+   * it ("a room that declares a width opens her THERE instead") and it only says where she
+   * STANDS on load; a drag is still the operator's and the saved-width path is untouched.
+   * `isThirdOpen = true` opens her on entry. Both are PROPERTIES through the ref, never JSX
+   * attributes (Lit's boolean converter reads any present attribute as true). From there the
+   * gripper keeps opening and closing her exactly as it does in every other section — open or
+   * closed belongs to the element that owns the width. `useLayoutEffect`, so the first paint
+   * is already the open column.
    */
   useLayoutEffect(() => {
     if ((headerTab || '') !== 'product') return;
     const el = productLayoutRef.current;
     if (!el) return;
-    el.chatLoadWidth = 550;
+    el.chatLoadWidth = 600;
     el.isThirdOpen = true;
+    /* THE SEAT IS MARKED AS THE ROOM'S OWN BEFORE ITS FIRST PAINT (owner, 2026-10-06 — the
+       no-fallback rule, quoted in chat-panel's `productRoom` note): an unbound product seat
+       must draw NOTHING, never the v.4b tray or the old messages list — the seat's default
+       face is every other room's UI. A PROPERTY through the ref, set here, where the column
+       opens, so the seat's very first render already knows the room it belongs to. */
+    const seat = productSeatRef.current;
+    if (seat) seat.productRoom = true;
   }, [headerTab]);
 
   /**
@@ -5000,16 +5053,14 @@ export default function Index({
             content: String(m.content),
             messageType: (m as { messageType?: string | null }).messageType ?? null,
           }));
-        // ONE WELCOME, THEN ONLY THE APPLICATION. Owner, 2026-10-06 — his own words for the
-        // line, dictated the same day: *"maybe add a little conversation to it saying hi.
-        // Welcome product team. Let's get some ideas wireframed today. What's on your mind?"*
-        // — *"I like the feeling of her offering assistance instead of sitting there like a
-        // blank page. But I don't want to change any of the products process."* Drawn ONLY
-        // while the project's thread is empty — the moment the first build lands, the
-        // engine's own words are the room's voice and this line is gone.
-        const messages = thread.length
-          ? thread
-          : [{ role: 'assistant', content: "Hi. Welcome product team. Let's get some ideas wireframed today. What's on your mind?" }];
+        // NO VOICE BUT THE BUILDER'S (owner, 2026-10-06: *"take out grace … She is not
+        // supposed to be involved in this conversation. It's a conversation with the
+        // product team and their design and I want to use app builder not grace"*). The
+        // earlier greeting — a welcome drawn over a blank thread — is gone. While the
+        // thread is empty the seat's thread draws the APP'S OWN empty state ("What do you
+        // want to build?" / "Describe your idea below", see `chat-product-thread`), and
+        // every word in this conversation afterwards is the engine's own.
+        const messages = thread;
         const unreported = assignProps(seat, {
           sessionId: room.session_id,
           conversationId: room.conversation_id,
@@ -5054,7 +5105,9 @@ export default function Index({
           console.warn(`[product seat] unreported bindings: ${unreported.join(', ')}`);
         }
       } catch {
-        /* a failed carrier fetch leaves the seat as it stands — the next entry tries again */
+        /* A FAILED CARRIER FETCH LEAVES THE SEAT INVISIBLE, NOT DEFAULTED (owner, 2026-10-06 —
+           no fallbacks): with `productRoom` set and no binding landed, the seat draws NOTHING —
+           the v.4b face never returns — and the next entry tries again. */
       }
     })();
     return () => { cancelled = true; };
@@ -5120,6 +5173,16 @@ export default function Index({
     if ((headerTab || '') !== 'product') return;
     const seat = productSeatRef.current;
     if (!seat) return;
+    /*
+     * AND THE GRIP'S SAFETY NET RIDES HERE (see `productGripActive`): the layout's own
+     * `resize-start`/`resize-end` — dispatched on itself when the chat strip's gesture begins and
+     * ends — raise and lower the room's transparent drag overlay.
+     */
+    const layout = productLayoutRef.current;
+    const onGripStart = () => setProductGripActive(true);
+    const onGripEnd = () => setProductGripActive(false);
+    layout?.addEventListener('resize-start', onGripStart);
+    layout?.addEventListener('resize-end', onGripEnd);
     const onTool = (e: Event) => {
       const tool = (e as CustomEvent<{ tool?: string }>).detail?.tool;
       if (!tool) return;
@@ -5166,6 +5229,9 @@ export default function Index({
       seat.removeEventListener('product-attach', onAttach);
       seat.removeEventListener('product-stop', onProductStop);
       window.removeEventListener('builder-tool-state', onToolState);
+      layout?.removeEventListener('resize-start', onGripStart);
+      layout?.removeEventListener('resize-end', onGripEnd);
+      setProductGripActive(false);
     };
   }, [headerTab, productRoomProjectId, uploadProductAttachment]);
 
@@ -5186,11 +5252,26 @@ export default function Index({
     if (!productRoomProjectId) return;
     let cancelled = false;
     let seen = -1; // baseline on the first successful read
+    /*
+     * THE POLLER RIDES ITS OWN CHANNEL (owner, 2026-10-06 — the live run must show exactly
+     * like the app's; ROOT CAUSE FOUND AND MEASURED LIVE). The seat's send holds
+     * `/api/teacher/query` open for the WHOLE build (the bridge waits the run out), and on
+     * the dev origin a second request QUEUES BEHIND it: measured tonight, a probe fetch
+     * waited 4.1 SECONDS behind a 4-second run, while the ticks should have come every 2.5.
+     * So the poller never read `init` during a seat-run, the building row never armed, and
+     * the whole thread landed at once on completion (the owner's exact report: "it's
+     * thinking … then 2 build steps / Finished in 47s. / Completed"). On the local stack the
+     * polls therefore ask the backend DIRECTLY — CORS already allows http://localhost:5001
+     * (backend/main.py) — while every other door keeps the proxy; on the deployed site the
+     * relative path IS the single origin, which is why this is the demo-safe branch. Same
+     * values, unqueued. PRODUCT-ONLY: this poller is the product room's alone.
+     */
+    const POLL_BASE = isDemoMode() ? API_BASE : 'http://localhost:8000/api';
     const timer = window.setInterval(() => {
       void (async () => {
         try {
           const res = await fetch(
-            `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/conversation`,
+            `${POLL_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/conversation`,
           );
           const body = (await res.json().catch(() => null)) as
             | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
@@ -5204,8 +5285,14 @@ export default function Index({
           if (pollSeat) {
             const status = String((body as { status?: string }).status || 'idle');
             const started = (body as { runStartedAt?: string }).runStartedAt;
+            // THE ENGINE'S OWN ESTIMATE RIDES EACH POLL TOO (2026-10-06, the app-design port):
+            // the app's RunProgress fills against `agent/status.expectedMinutes` when the
+            // engine sent one, and climbs its ladder when it did not — same field, same rule.
+            const expected = (body as { expectedMinutes?: number }).expectedMinutes;
             pollSeat.productRunning = status === 'init';
             pollSeat.productRunStartedAt = started ? (Date.parse(started) || 0) : 0;
+            pollSeat.productExpectedMinutes =
+              typeof expected === 'number' && expected > 0 ? expected : 0;
           }
           const msgs = (body.messages || []).filter((m) => String(m.content || '').trim());
           // ENTRY CANNOT LEAVE AN EMPTY SEAT (2026-10-06, measured live): the room binds the
@@ -5224,6 +5311,10 @@ export default function Index({
             seen = healTick ? 0 : msgs.length;
             if (!healTick) return;
           }
+          // DID THIS TICK BRING A NEW PERSON'S TURN? — the delta since the last read (on the
+          // heal tick, the whole history). That is the product's "content changed": the moment
+          // the exit gate's same ref must be consulted (below).
+          const newUserTurn = msgs.slice(seen).some((m) => String(m.role || '') === 'user');
           // EVERY NEW AGENT MESSAGE RIDES IN WITH ITS OWN TYPE (2026-10-06, the app-design
           // port): the thread groups by `messageType`, so the poller no longer hand-picks
           // two transient lines — it hands the seat exactly what the engine wrote, in order.
@@ -5245,6 +5336,25 @@ export default function Index({
             );
           }
           if (msgs.length > seen) seen = msgs.length;
+          // THE GATE'S SAME REF, RAISED FROM THE ENGINE'S OWN FACTS — the Composer's rule (see
+          // the beforeunload effect): a spoken turn is unsaved work until the project resolves
+          // (save-as-draft / publish / discard; `guardProductExit` clears the same ref on every
+          // resolution). The guard's own endpoint answers whether anything is at risk — a
+          // published project has nothing left to lose — and it is asked ONLY on ticks that
+          // brought a new person's turn, so quiet ticks make no requests.
+          if (newUserTurn) {
+            void (async () => {
+              try {
+                const st = await fetch(
+                  `${POLL_BASE}/builder/state?project_id=${encodeURIComponent(productRoomProjectId)}`,
+                );
+                const s = (await st.json().catch(() => null)) as
+                  | { ok?: boolean; published?: boolean; has_work?: boolean }
+                  | null;
+                if (s?.ok && !s.published && s.has_work) hasUnsavedChangesRef.current = true;
+              } catch { /* unreadable → the exit guard asks again on the way out */ }
+            })();
+          }
         } catch {
           /* engine down or a transient read — the next tick tries again */
         }
@@ -7458,14 +7568,14 @@ export default function Index({
     if (tabId === 'development') {
       /*
        * THE DEVELOPMENT TAB IS A ROOM NOW (owner, 2026-10-04: *"you could just drop it right in
-       * there. Can't you under a development tab"*) — bolt.diy (the web-native open app
-       * builder) embedded whole, exactly the Product room's move: no A2UI assembly, no
-       * `render-section`, nothing of the Composer's touched. It was the LAST dead stub
-       * (DEAD_TABS); it stays listed there so the assemble path keeps refusing it, and this
-       * branch — ahead of that path — is what makes it live.
+       * there. Can't you under a development tab"*) — the development workspace embedded
+       * whole, exactly the Product room's move: no A2UI assembly, no `render-section`,
+       * nothing of the Composer's touched. It was the LAST dead stub (DEAD_TABS); it stays
+       * listed there so the assemble path keeps refusing it, and this branch — ahead of that
+       * path — is what makes it live.
        */
       handleHeaderTabChange('development');
-      console.log('🤖 [A2UI] Development clicked → the bolt.diy room (no assembly)');
+      console.log('🤖 [A2UI] Development clicked → the development room (no assembly)');
       return;
     }
 
@@ -7517,7 +7627,7 @@ export default function Index({
     handleHeaderTabChange(tabId);
   }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab, assembleProductSurface, assembleGovernanceSurface]);
 
-  // The copilot logo in the chat rail navigates back to the console — the same
+  // The chat rail's mark navigates back to the console — the same
   // path the Console header tab uses.
   useEffect(() => {
     const onNavigateConsole = () => { void handleTabChangeWithGate('console'); };
@@ -10416,14 +10526,20 @@ export default function Index({
                              dashboard — the room's own rule). */
                           ? (
                             <>
+                              {/* THE GRIP'S SAFETY NET — up only while the chat strip has a live
+                                  gesture (the layout's own resize-start/resize-end). Transparent
+                                  and fixed over the whole window, so the hand's moves keep
+                                  reaching THIS document even while the pointer is over the
+                                  builder frame beside the strip (see `productGripActive`).
+                                  The builder app's own resize already draws the same thing. */}
+                              {productGripActive && (
+                                <div
+                                  aria-hidden="true"
+                                  style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }}
+                                />
+                              )}
                               <workspace-layout key="product-room" ref={productLayoutRef} className="flex-1 min-h-0">
-                                {/* THE PRODUCT STAGE'S GROUND IS TRANSPARENT (owner, 2026-10-06:
-                                    *"I asked to make the background of the stage, transparent"*
-                                    — the room's own ground shows through, never a painted
-                                    tile). The white image overlays at 50% the moment its
-                                    file lands in the repo — the earlier attachment never
-                                    reached disk, so nothing is painted here meanwhile. */}
-                                <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: 'transparent' }}>
+                                <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                               {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
                                   once a project does. While one is being born — or while the
                                   engine is down — the pane is quiet; it is never pointed at the
@@ -10431,24 +10547,18 @@ export default function Index({
                                   project remounts the frame clean rather than reusing one.
                                   THE ADDRESS IS RUNTIME CONFIG NOW (2026-10-04, HOST-THE-TOOLS):
                                   `builderToolUrl()` — the hosted builder service on the demo, the
-                                  Mac's own :3223 locally. The FALLBACK panel shows when there is
-                                  no address at all (a demo without its service) or the demo's
-                                  engine reads as down; a local engine down keeps its own forms —
-                                  the quiet opening state plus the red banner below. */}
-                              {!builderToolUrl() || (isDemoMode() && builderEngineDown) || productToolDown ? (
-                                /* THE FALLBACK PANEL — the honest state, for free (2026-10-04).
-                                   The old interim copy ("Hosting it here is the next step") was
-                                   true the night it shipped and is false now that hosting landed;
-                                   this says what a missing or stopped service actually means. */
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundColor: '#F7F5F1' }}>
-                                  <p style={{ margin: 0, color: '#4b5563', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                                    {"The builder isn't reachable right now."}
-                                  </p>
-                                  <p style={{ margin: 0, color: '#6b7280', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                                    {"It runs as its own service; it may be starting up. Try again in a moment."}
-                                  </p>
-                                </div>
-                              ) : productRoomProjectId ? (
+                                  Mac's own :3223 locally. The states the old fallback panel drew
+                                  (no address at all, the demo's engine unreadable) draw NOTHING
+                                  now — see the note under this block; a stopped local engine
+                                  keeps the red banner below. */}
+                              {/* THE FALLBACK PANEL IS GONE (owner, 2026-10-06: *"I want all of
+                                  the fallbacks all the dumb shit out … I would rather it just
+                                  be a blank page than have a fallback."*). Every state it drew —
+                                  no address configured, the demo's engine unreadable, a frame
+                                  that never arrived — draws NOTHING now: the pane keeps its own
+                                  ground. A stopped LOCAL engine still gets its red banner below,
+                                  which names the real process and the command that starts it. */}
+                              {!builderToolUrl() || (isDemoMode() && builderEngineDown) || productToolDown ? null : productRoomProjectId ? (
                                 <builder-embed
                                   key={`product-builder-${productRoomProjectId}-${productStageKey}`}
                                   src={`${builderToolUrl()}/project/${encodeURIComponent(productRoomProjectId)}`}
@@ -10459,10 +10569,11 @@ export default function Index({
                                   }}
                                 />
                               ) : (
-                                /* THE GATE WEARS THE STAGE'S OWN GROUND (owner, 2026-10-06):
-                                   the lab tile left with the stage's white — "no project
-                                   loaded" is an empty state too. */
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#6b7280', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundColor: '#F7F5F1' }}>
+                                /* THE GATE WEARS THE SAME LAB TEXTURE (owner, 2026-10-04) —
+                                   "no project loaded" is an empty state too, and the gate's
+                                   ground image is this file (`developmentLabBackground`);
+                                   the ROOM's own ground is the composer's now (2026-10-05). */
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#c9c9c9', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                                   {/* THE SAME GATE'S RING (2026-10-04): the Product room's own
                                       opening state is an assembly gate too — it gets the amber
                                       indicator, not a bare line of text. */}
@@ -10472,25 +10583,28 @@ export default function Index({
                                   {builderEngineDown ? '' : "Opening the project\u2026"}
                                 </div>
                               )}
-                              {builderToolUrl() && !productToolDown && (
+                              {builderToolUrl() && !productToolDown && !builderEngineDown && (
                               /* THE SAME STAGED GATE AS DEVELOPMENT (2026-10-05) — up from the
                                  room's first paint, over the frame and over the opening state,
                                  and dropped only when the frame's load event and the 5s minimum
                                  have both landed (see the two clocks above): one 700ms
-                                 cross-fade, and the builder's white first paint never shows. */
+                                 cross-fade, and the builder's white first paint never shows.
+                                 NEVER WHILE THE ENGINE IS DOWN (owner, 2026-10-06): nothing is
+                                 standing up, and a spinner claiming otherwise is the same lie
+                                 the seat's old face told — the banner below says the real state. */
                               <div
                                 aria-hidden={productGateDown}
                                 style={{
                                   position: 'absolute', inset: 0, zIndex: 3,
                                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                                  backgroundColor: '#F7F5F1',
+                                  backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
                                   opacity: productGateDown ? 0 : 1,
                                   transition: 'opacity 700ms ease',
                                   pointerEvents: productGateDown ? 'none' : 'auto',
                                 }}
                               >
                                 <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                                <p style={{ color: '#6b7280', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
                                   {"Standing up the builder\u2026"}
                                 </p>
                               </div>
@@ -10514,21 +10628,26 @@ export default function Index({
                                 </div>
                                 {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the console
                                     and composer mount, in the container's right pane. CLOSED on
-                                    entry: the product clocks effect sets `isThirdOpen = false`
+                                    entry: the product room's own effect sets the column open
                                     as a PROPERTY (never the attribute — Lit's boolean converter
                                     reads the string "false" as true), so the gripper strip and
-                                    the rail are what show, and the panel's settings arrive from
-                                    the Composer's loaded chat (the seat effect below). Until
-                                    then nothing is bound — an empty seat, never another room's. */}
+                                    the rail are what show, and the panel's binding arrives from
+                                    the engine's carrier (the seat effect below). Until that
+                                    binding lands the seat draws NOTHING AT ALL — `productRoom`,
+                                    set where the column opens: never an empty chat, never
+                                    another room's face (owner, 2026-10-06: *"I would rather it
+                                    just be a blank page than have a fallback."*). */}
                                 <chat-panel key="product-seat" slot="right" ref={productSeatRef}></chat-panel>
                               </workspace-layout>
-                              {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04) — ONE LEVEL UP
-                                  since the column arrived (2026-10-05): it must cover the WHOLE
-                                  room, and a fixed overlay inside a transformed pane would be
-                                  positioned against that pane, not the window. Publish the idea
-                                  to the console, discard it for good, or stay. Two explicit
-                                  buttons and no ambiguous "Cancel" — discarding is destructive
-                                  and must be chosen on purpose. */}
+                              {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04; its save-as-draft
+                                  door, 2026-10-06: *"You must save this before we can continue
+                                  or offer them a saved draft option."*). ONE LEVEL UP since the
+                                  column arrived (2026-10-05): it must cover the WHOLE room, and
+                                  a fixed overlay inside a transformed pane would be positioned
+                                  against that pane, not the window. Save as a draft, publish
+                                  the idea to the console, discard it for good, or keep
+                                  working. Explicit buttons and no ambiguous "Cancel" —
+                                  discarding is destructive and must be chosen on purpose. */}
                               {leavePrompt && (
                                 <div
                                   style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17, 24, 39, 0.45)' }}
@@ -10537,14 +10656,18 @@ export default function Index({
                                   aria-label="Publish this idea"
                                 >
                                   <div style={{ width: 430, maxWidth: 'calc(100vw - 40px)', background: '#ffffff', borderRadius: 14, padding: '20px 22px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.35)', fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                    <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#111827' }}>Publish this idea?</h3>
+                                    <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#111827' }}>What should happen to this idea?</h3>
                                     <p style={{ margin: '0 0 18px', fontSize: 13.5, lineHeight: 1.55, color: '#4B5563' }}>
-                                      {"This idea isn't in the console yet. Publishing makes it a card the team can see; discarding removes it for good."}
+                                      {"This idea isn't in the console yet — it's held in the room. Saving it as a draft keeps it as your private package; publishing makes it a card the team can see; discarding removes it for good."}
                                     </p>
                                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                                       <button type="button" onClick={() => leavePrompt.settle('stay')}
                                         style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #E5E7EB', background: '#ffffff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
                                         Keep working
+                                      </button>
+                                      <button type="button" onClick={() => leavePrompt.settle('keep')}
+                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #111827', background: '#ffffff', color: '#111827', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                        Save as draft
                                       </button>
                                       <button type="button" onClick={() => leavePrompt.settle('discard')}
                                         style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>

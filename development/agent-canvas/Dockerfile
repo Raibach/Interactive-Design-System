@@ -106,7 +106,7 @@ ENV OH_AGENT_SERVER_VERSION=1.51.0
 # wizard relabel, locale strings, and the assembly tile painted into the tool's own canvas.
 # Idempotent by design; content-hashed file names, so no cache can hold an old look.
 COPY development/openhands-patch.sh /src/development/openhands-patch.sh
-COPY frontend/src/assets/canvas-development-lab-bkg.png /src/frontend/src/assets/canvas-development-lab-bkg.png
+COPY frontend/src/assets/canvas-development-lab-bkg.jpg /src/frontend/src/assets/canvas-development-lab-bkg.jpg
 RUN bash /src/development/openhands-patch.sh --hosted
 
 # THE DOOR — local mode (the key is injected into the served page at startup, so no visitor is
