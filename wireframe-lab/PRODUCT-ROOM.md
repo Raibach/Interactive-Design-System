@@ -717,12 +717,12 @@ owner says interior, the file's own 2026-09-24 comment is the measured case to r
 
 **§11 addendum 18, the same night's last act (the Development room changes tools):** *"bolt is not
 gonna cut it — it's not designed properly for what I want … I think this one will work better"* —
-so the Development tab now embeds **OpenHands' Agent Canvas** (the self-hosted developer control
-center: OpenHands/Claude Code/Codex/Gemini agents, local/Docker/VM/cloud backends) instead of
-bolt.diy. Driven: installed globally (`npm install -g @openhands/agent-canvas`, Node 24 + `uv`
-both present), booted on **:8090** (8000 is this app's backend), serving 200 `<title>OpenHands</title>`,
-and the room repointed plain — no strip, no door, because this one needs no cross-origin
-isolation (the wall that fenced bolt.diy). Frontend `tsc` exit 0. The room's own record and
-forward plan live in **`DEVELOPMENT-ROOM.md`** — including the one real decision waiting there:
-the agent currently runs in LOCAL mode with full filesystem access, and the contained Docker
-sandbox needs Docker Desktop installed before anyone but the owner uses that room.
+so the Development tab embedded a self-hosted developer control center (coding agents on
+local/Docker/VM/cloud backends) instead of bolt.diy. Driven: installed globally, booted on its
+own port (8000 is this app's backend), serving 200, and the room repointed plain — no strip, no
+door, because this one needed no cross-origin isolation (the wall that fenced bolt.diy). Frontend
+`tsc` exit 0.
+
+**RETIRED 2026-10-06:** that tool was removed from the project in full at the owner's direction;
+the room stands without it, and everything the removal carried out was archived outside the
+repository — the record is `development/CHANGELOG.md`, 2026-10-06.

@@ -11,7 +11,7 @@
  * WHY IT IS BACK, and why it was absent. The previous checker was deleted from the project
  * (the audit and `catalog:check` both went with it), so this endpoint answered
  * `CATALOG_AUDIT_UNAVAILABLE` — "No audit report … This is NOT a clean result" — and nothing
- * checked the drift that then accumulated: measured 2026-09-23, `AgentCanvas.children`
+ * checked the drift that then accumulated: measured 2026-09-23, `RoomEmbed.children`
  * declared `{flow, seat}` while the element renders `{header, flow, footer}` and no seat slot
  * at all, so the application's OWN payload was invalid against its OWN catalog and nothing
  * said so.

@@ -4,7 +4,7 @@
  * Owner, 2026-10-02: "you can disable sentry, I'm not really using it. And we don't
  * really need it if it's causing any delay at all — disable it."
  *
- * WHY IT COST MORE THAN IT GAVE. The @sentry/react family (replay, tracing,
+ * WHY IT COST MORE THAN IT GAVE. Sentry's React family (replay, tracing,
  * profiling, the router integration) was the single biggest weight in the boot
  * bundle — the majority of a 723 KB vendor chunk, on the critical path the sign-in
  * gate waits for. And session replay UPLOADED continuously: 10% of all sessions,
@@ -16,7 +16,7 @@
  * the same members the call sites use, as no-ops, so every `Sentry.captureException`
  * and `Sentry.setUser` in the codebase still compiles and still does the LOCAL half
  * of its job (the logger writes; the error boundary shows its fallback and calls
- * onError). Zero `@sentry/*` imports live in the frontend now — that is the point:
+ * onError). Zero Sentry imports live in the frontend now — that is the point:
  * with no imports the package leaves the bundle, so no byte of it is downloaded and
  * no event, breadcrumb or replay is ever uploaded. `isSentryReady()` is false, and
  * nothing treats that as a failure any more — main.tsx's old degraded-guard is gone,

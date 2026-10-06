@@ -4,7 +4,7 @@
  * WHAT THIS DRAWS, AND WHY IT IS NOT A TREE OF COMPONENTS. A catalog.json is a JSON
  * Schema document, not a containment tree. Its entries under `components` are siblings,
  * and the only nesting the file names is through property schemas — a `$ref` to ChildList
- * (Row, Column, DecisionDialog) or an inline `children` (AgentCanvas, workspace-layout,
+ * (Row, Column, DecisionDialog) or an inline `children` (RoomEmbed, workspace-layout,
  * prompt-container, chat-header). So the levels drawn here are the FILE'S OWN: the
  * document, its keys, `components`, each entry, that entry's schema block, its
  * `properties`, and each property's schema. Five levels of real structure, not five
@@ -29,7 +29,7 @@
  *
  * READS: the catalogues under src/components/A2UI/catalogs/, lazily — import.meta.glob, so
  * the main bundle never carries a catalogue nobody opened. That is the same reasoning that
- * keeps <agent-flow> and <agent-canvas> out of main.tsx until a Run asks for them.
+ * keeps <agent-flow> and <room-embed> out of main.tsx until a Run asks for them.
  * WRITES: nothing. The element has no events, no setters for the data, and no path to disk.
  *
  * A2UI Catalog ID: none. This element is the catalogue's own READER; it is not itself a

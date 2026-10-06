@@ -1382,8 +1382,8 @@ export const TAG_REGISTRY = {
       'an absent cost is drawn as absent ("not priced"), and a partial sum names how many calls it covers — never a zero standing in for an unknown',
     ],
   },
-  'agent-canvas': {
-    tag: 'agent-canvas',
+  'room-embed': {
+    tag: 'room-embed',
     surface: 'composer',
     column: 'middle',
     description:

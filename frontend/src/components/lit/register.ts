@@ -122,7 +122,7 @@ import "@/components/lit/eval-feed";
 // name and the slot would stay empty, silently.
 import "@/components/lit/chat-repair-actions";
 /*
- * <agent-flow> AND <agent-canvas> ARE NOT IMPORTED HERE, ON PURPOSE — and this is the one
+ * <agent-flow> AND <room-embed> ARE NOT IMPORTED HERE, ON PURPOSE — and this is the one
  * place above that breaks the rule the comments state. They were imported here, and it cost
  * every page load the drawing's code and its artwork for a column that is not on screen: a
  * person opening a package sees two columns, the prompt and her, and the third appears when
@@ -132,7 +132,7 @@ import "@/components/lit/chat-repair-actions";
  *
  * The Run path fetches them BEFORE it swaps the column (loadCanvasElements, in
  * WritingAreaIndex), which is what keeps the rule the deleted comment was about: the surface
- * names AgentCanvas, and a tag nothing defines draws an empty middle column with no error
+ * names RoomEmbed, and a tag nothing defines draws an empty middle column with no error
  * anywhere. The drawing's own ground is fetched at the same moment, so the image is
  * decoded before a person sees the pane (the anti-flash fix, kept — see below).
  */

@@ -2047,7 +2047,7 @@ export class ChatPanel extends LitElement {
     // The light DOM covers what slotting does not report: jsdom's slotting is thin,
     // and the surface's child may be appended after this element's first render.
     // A SLOT ELEMENT IS NOT A VIEW. When a host sits between this panel and the
-    // surface — <agent-canvas> re-projects the surface's children into these slots —
+    // surface — <room-embed> re-projects the surface's children into these slots —
     // the children seen here are `slot` elements, which PROJECT content rather than
     // being it. Counting them claimed a view was slotted when the host had none, and
     // the waiting line was suppressed for a view that was never coming.

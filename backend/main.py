@@ -1,9 +1,9 @@
 # ruff: noqa: E402 — THIS FILE'S IMPORTS ARE STAGED ON PURPOSE, and the check cannot see why.
 #
 # `load_dotenv()` has to run BEFORE anything reads the environment, and several of the modules
-# imported below read it at import time: `sentry_sdk.init()` two lines down takes its DSN from
-# `os.getenv("SENTRY_DSN")`, and `grace_gui` and the routers under it resolve configuration the
-# same way. That forces a shape the linter reads as a mistake — an import placed after a call —
+# imported below read it at import time (grace_gui and the routers under it resolve their
+# configuration from the environment the same way). That forces a shape the linter reads as a
+# mistake — an import placed after a call —
 # when the order IS the correctness. Moving these imports to the top would read the environment
 # before it is loaded and quietly hand the application empty values.
 #
@@ -19,20 +19,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
-
-sentry_sdk.init(
-    dsn=os.getenv("SENTRY_DSN", ""),
-    environment=os.getenv("ENVIRONMENT", "production"),
-    traces_sample_rate=0.3,
-    enable_tracing=True,
-    integrations=[
-        StarletteIntegration(transaction_style="url"),
-        FastApiIntegration(transaction_style="url"),
-    ],
-)
+# SENTRY IS GONE (owner, 2026-10-06: nothing connected that is not local or Northflank). The
+# init block that stood here read SENTRY_DSN and — on any deployment where that variable was
+# set — shipped errors and traces to sentry.io. The frontend's reporter was retired 2026-10-02;
+# this removes the backend half. Its call sites went with it (routes/misc.py's degraded-health
+# message, routes/teacher.py's turn tags): no reporting is possible from this build, and no
+# environment variable can turn one back on.
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware

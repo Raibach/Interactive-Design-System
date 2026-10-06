@@ -188,7 +188,7 @@ def _spec_value(spec_node: dict[str, Any], path: str) -> Any:
 def _states(raw_node: dict[str, Any], key: str) -> bool:
     """Whether Figma states this fact on this node — the first question, and the gate on a row.
 
-    A ROW IS ONLY WORTH PRINTING WHEN THE DESIGN SAID SOMETHING. Three ways a key can be present
+    A ROW IS ONLY WORTH PRINTING WHEN THE DESIGN SAID SOMETHING. Four ways a key can be present
     and still be saying nothing, each of which produced noise when it was not handled:
 
       * an empty list or object — `fills: []` and `effects: []` mean "this layer has none", which
@@ -196,10 +196,14 @@ def _states(raw_node: dict[str, Any], key: str) -> bool:
       * a boolean that is already the drawing's default — `clipsContent: false` is a frame that
         does not clip, and reporting it as a lost fact is the instrument lying;
       * a fact that only means something alongside another — a `strokeWeight` with no `strokes` is
-        Figma's default on a layer that has no border to weigh.
+        Figma's default on a layer that has no border to weigh;
+      * a PAINT SWITCHED OFF — `strokes: [{visible: false}]` is a border the designer hid, and the
+        ingest's own spec builder carries only paints with `visible: true`; this function did not
+        ask, so a hidden leftover read as "stated and never reached the spec" and refused a whole
+        ingest on 2026-10-05 (measured on `prompt-textarea-container-system`).
 
-    `visible: false` is the exception that keeps its weight, because a hidden layer must be drawn
-    hidden, and `rotation: 0` was already filtered by the spec builder.
+    `visible: false` ON THE LAYER is the exception that keeps its weight, because a hidden layer
+    must be drawn hidden, and `rotation: 0` was already filtered by the spec builder.
     """
     if key in TRUNCATION_KEYS:
         return raw_node.get(key) is not None or (raw_node.get("style") or {}).get(key) is not None
@@ -208,6 +212,15 @@ def _states(raw_node: dict[str, Any], key: str) -> bool:
     if key == "characters":
         return raw_node.get("characters") is not None
     if key in STROKE_DEPENDENT and not _stroke_present(raw_node):
+        return False
+    # A PAINT NOBODY CAN SEE ASKS FOR NO DECLARATION (2026-10-05). The spec builder carries only
+    # visible paints, so an all-hidden paint list is a fact the drawing already decided — the
+    # check must decide it the same way or it invents a loss. Where the fix draws its boundary:
+    # a VISIBLE stroke the renderer cannot draw (a gradient border, measured) still states its
+    # fact and still blocks.
+    if key in ("strokes", "fills") and not any(
+        p.get("visible", True) for p in raw_node.get(key) or []
+    ):
         return False
     if key in SHAPE_ONLY and (raw_node.get("type") or "").upper() not in SHAPE_TYPES:
         return False

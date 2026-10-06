@@ -79,20 +79,19 @@ function draftDocument(draft: DraftPreviewState): string {
     '<meta http-equiv="Content-Security-Policy" content="' +
     "default-src 'none'; " +
     "script-src 'self' blob: 'unsafe-inline'; " +
-    "style-src 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src https://fonts.gstatic.com; " +
+    "style-src 'unsafe-inline' 'self'; " +
+    "font-src 'self'; " +
     'img-src data: blob:; ' +
     "connect-src 'none'; " +
     "frame-src 'none'; " +
     "base-uri 'none'; " +
     "form-action 'none'" +
     '">' +
-    // The app loads Inter at 500-700 only; a design's measured weight can be outside that (800 on
-    // the first node tested), so the preview loads the whole range and the measured weight actually
-    // renders instead of being synthesised.
-    '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">' +
+    // The app uses the house weights only; a design's measured weight can be outside them (800 on
+    // the first node tested), and /fonts/inter.css carries the whole 100–900 range — SELF-HOSTED
+    // (owner, 2026-10-06): this document reaches no other origin. The absolute URL is deliberate:
+    // a srcdoc document's relative URLs do not resolve (see the import-map note below).
+    '<link href="' + window.location.origin + '/fonts/inter.css" rel="stylesheet">' +
     // THE CODE IS DRAWN EXACTLY AS THE INGEST WROTE IT, bare import and all. A blob module has no
     // hierarchy, so a root-relative specifier inside it cannot resolve ("Invalid relative url or
     // base scheme isn't hierarchical" — the error that named this). An import map resolves against

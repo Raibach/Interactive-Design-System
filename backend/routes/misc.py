@@ -167,12 +167,12 @@ async def api_config():
     demo_policy.py, and a client that lies about this value changes nothing but
     its own buttons. `false` on local runs, where the full system is the point.
 
-    `development_tool_url` / `builder_tool_url` (2026-10-04) are the rooms' tool
-    addresses, runtime config instead of hardcoded localhost: the deployed demo sets
-    them to the hosted tool services (wireframe-lab/HOST-THE-TOOLS.md), a local run
-    leaves them unset and the shell keeps `http://localhost:8090` / `:3223`. The rooms
-    treat an empty value as "not connected" and say so plainly — which is also the
-    honest state on a demo whose tool service is missing.
+    `development_tool_url` / `builder_tool_url` are the rooms' tool addresses,
+    runtime config instead of hardcoded localhost: a local run leaves them unset
+    and the shell keeps `http://localhost:8090` / `:3223`; a deployed demo sets
+    them to hosted services, or leaves them empty and the rooms say so plainly.
+    (The Development room's workspace returned 2026-10-06, run from this repo
+    with its reporting channel stripped — development/CHANGELOG.md.)
     """
     return {
         "demo_mode": DEMO_MODE,
@@ -267,15 +267,8 @@ async def api_health():
     if critical_failures:
         health_data["status"] = "degraded"
         health_data["degraded_services"] = critical_failures
-        # Also send to Sentry so we know
-        try:
-            import sentry_sdk
-            sentry_sdk.capture_message(
-                f"Health check degraded: {', '.join(critical_failures)}",
-                level="warning"
-            )
-        except Exception:
-            pass
+        # (The Sentry capture that stood here was removed 2026-10-06 — reporting is off at the
+        # init site; the response itself is the report.)
 
     return health_data
 

@@ -613,7 +613,7 @@ def _draft_safe_palette(catalogue: dict[str, Any]) -> list[dict[str, str]]:
     THE MARKER IS THE AUTHORITY, NEVER AN INFERENCE: an entry is placeable when its own
     declaration says `"draft": true` (top level on the entry — the same key the design-system
     ingest writes `false` for a proposal). PLAN.md §4's invariant: a catalogue contains
-    components a draft must never host — `chat-panel` is a second Grace, `agent-canvas` is a
+    components a draft must never host — `chat-panel` is a second Grace, `room-embed` is a
     nested surface, the canvas's own furniture is a control that does nothing — and that wall
     is a declared fact, not a rule anyone re-derives.
 
@@ -793,7 +793,7 @@ def _catalog_component_vocabulary() -> str:
                 # A CONTAINER'S SLOTS COME FROM THE CATALOG TOO, and they did not until
                 # 2026-09-23: the list named the `children` PROPERTY and nothing about the
                 # slots inside it, so a prompt could only guess which names a container
-                # fills by. The guess that was made — {flow, seat} for AgentCanvas, whose
+                # fills by. The guess that was made — {flow, seat} for RoomEmbed, whose
                 # element renders {header, flow, footer} and no seat at all — is the drift
                 # the catalog check reported as blocking. The names are in the schema
                 # (`children.properties`), so they are read from it here rather than
@@ -3763,7 +3763,7 @@ Output ONLY this JSON (no markdown):
     # against this catalog, in this endpoint — and the shell applies what it is given.
     #
     # WHAT THIS REPLACES, MEASURED 2026-09-23 (READ-ME/CONTINUE-HERE.md §00c): the host wrote
-    # the components itself. `setOutputColumn('flow')` built `AgentCanvas` with its three
+    # the components itself. `setOutputColumn('flow')` built `RoomEmbed` with its three
     # slots and pushed `AgentFlow`, `OutputControls` and `CanvasFooter` straight into the
     # live component list, in TypeScript, on the Run — so the one surface a person watches
     # most closely was the one the protocol did not build. The owner's charge: "if those
@@ -3832,7 +3832,7 @@ THE SURFACE YOU ARE UPDATING — read this as a fact, not as a suggestion:
   where the canvas goes: keep that id, and give it the canvas's three slots.
 
 REQUIREMENTS (a Run's column, drawn against the catalog):
-1. The middle component becomes AgentCanvas with "theme": "dark" — a Run's picture is shown
+1. The middle component becomes RoomEmbed with "theme": "dark" — a Run's picture is shown
    dark — and its "children" filled BY NAME: header, flow, footer. Those three slot names
    are the whole of it; this element renders no other slot.
 2. header: OutputControls — the column's own controls, with "outputType": "Agent Flow".
@@ -3852,7 +3852,7 @@ Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
 {{
   "components": [
     {{"id": "{layout_id}", "component": "workspace-layout", "children": {{...the slots above..., "middle": "{middle_id}"}}}},
-    {{"id": "{middle_id}", "component": "AgentCanvas", "theme": "dark", "children": {{"header": "{middle_id}-header", "flow": "{middle_id}-flow", "footer": "{middle_id}-footer"}}}},
+    {{"id": "{middle_id}", "component": "RoomEmbed", "theme": "dark", "children": {{"header": "{middle_id}-header", "flow": "{middle_id}-flow", "footer": "{middle_id}-footer"}}}},
     {{"id": "{middle_id}-header", "component": "OutputControls", "outputType": "Agent Flow"}},
     {{"id": "{middle_id}-flow", "component": "AgentFlow", "theme": "dark", "flow": {{"path": "/session/middle_column/flow"}}}},
     {{"id": "{middle_id}-footer", "component": "CanvasFooter", "theme": "dark"}}

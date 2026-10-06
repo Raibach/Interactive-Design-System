@@ -3,7 +3,7 @@
 // waits for forty elements it cannot draw yet (2026-10-02; the rule it protects — a tag
 // nothing defines draws nothing — is documented in components/lit/register.ts).
 import "@/components/lit/register";
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, useBlocker } from "react-router-dom";
 // THE ONE WAY THROUGH THE BOUNDARY. The design room's container is drawn by the design
 // renderer INSIDE ITS SHADOW ROOT, and the ingest's three regions are React elements the
@@ -49,16 +49,14 @@ import composerBackground from "@/assets/composer-image-bg.jpg";
 // The artwork is the owner's second pass at it (`images/design-section2-bkg.png`, 2026-09-30); the
 // first file is still in the assets directory and is referenced by nothing.
 import designSectionBackground from "@/assets/design-section2-bkg.png";
-// THE PRODUCT ROOM'S OWN GROUND (owner, 2026-10-03: the wireframe lab's backdrop — its own
-// image, not the composer's). Same shape as the composer's and the design room's: one asset,
-// chosen by the view at the two ground slots below. NOT preloaded in register.ts, deliberately —
-// the same tradeoff the drawing's ground carries: this room is a click away, and 315KB fetched
-// for every page load would be paid by people who never open it.
-import wireframeLabBackground from "@/assets/canvas-wireframe-lab-bkg.png";
+// THE PRODUCT ROOM'S OWN GROUND RETIRED (2026-10-03 → 2026-10-05): the room wears the
+// composer's ground now (see the workspaceBackground block below), and the wireframe-named
+// duplicate of this tile left the tree with the retirement (2026-10-05 — one image for the lab
+// ground; `canvas-wireframe-lab-bkg.png` deleted, referenced by nothing).
 import developmentLabBackground from "@/assets/canvas-development-lab-bkg.png";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
-import canvasArt from "@/assets/agent-canvas-art.jpg";
+import canvasArt from "@/assets/room-embed-art.jpg";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 
 /**
@@ -112,7 +110,17 @@ import { IngestModal } from "@/components/IngestModal";
 import { parseFigmaUrl } from "@/utils/figmaUrl";
 // The renderer's own resolver, imported rather than re-implemented: the shell asks the same
 // authority the renderer will use, so "what can be drawn" has one answer.
-import { resolveTag } from "@/components/lit/a2ui-renderer";
+// AND ITS PROP PIPELINE, for the Product room's seat (2026-10-05): `componentProps` resolves a
+// component's settings against a surface's data model, `assignProps` writes them onto the
+// element — the same two steps the renderer's own `_assign` runs. The room's chat column is
+// host-mounted (written in its JSX, not drawn by any surface), so those steps have to be
+// callable from here; both functions' behaviour is unchanged.
+import { resolveTag, componentProps, assignProps } from "@/components/lit/a2ui-renderer";
+// TYPE-ONLY, and both elements are already REGISTERED by `@/components/lit/register` (the
+// first import above) — these two lines are only the refs' types, never a second runtime
+// import of the elements themselves.
+import type { WorkspaceLayout } from "@/components/lit/workspace-layout";
+import type { ChatPanel } from "@/components/lit/chat-panel";
 import { markArrival } from "@/shared/arrival";
 import { CORE_ROLE_LABELS, seatIdOf } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
@@ -200,7 +208,7 @@ interface WritingAreaIndexProps {
  *      deployed site, 2026-09-23: "a very ugly purple paint"), and a Run gives it the whole
  *      dock to arrive in;
  *   2. the elements are imported, and the caller swaps the column only once they are defined,
- *      because the surface names AgentCanvas and a tag nothing defines draws an empty box with
+ *      because the surface names RoomEmbed and a tag nothing defines draws an empty box with
  *      no error anywhere.
  *
  * ONE PROMISE PER SESSION, held at module scope so a re-render cannot start a second fetch.
@@ -228,7 +236,7 @@ function loadCanvasElements(): Promise<void> {
   if (ground.decode) ground.decode().catch(() => {});
   canvasElements = Promise.all([
     import('@/components/lit/agent-flow'),
-    import('@/components/lit/agent-canvas'),
+    import('@/components/lit/room-embed'),
   ])
     .then(() => undefined)
     .catch((err: unknown) => {
@@ -236,6 +244,25 @@ function loadCanvasElements(): Promise<void> {
       throw err;
     });
   return canvasElements;
+}
+
+/**
+ * THE LAB GROUND, WARMED AT LANDING (owner, 2026-10-05: *"an awful paint progressive JPEG
+ * effect … load those backgrounds early somewhere else in the application, maybe after the
+ * user lands"*). The Development room paints this tile the moment it opens — and since the
+ * park (2026-10-06) it is the room's whole ground — so fetched cold it visibly paints itself
+ * in while the room is already on screen. ONE image (the wireframe-named duplicate was
+ * retired 2026-10-05: *"we need to have just one of those images"*), so this is one fetch,
+ * decoded. Deliberately not awaited, and failure-is-nothing: the room still fetches the tile
+ * itself if this never ran; all this buys is that the usual path spends no time on it.
+ */
+let labGroundWarmed = false;
+function warmLabGrounds(): void {
+  if (labGroundWarmed) return;
+  labGroundWarmed = true;
+  const img = new Image();
+  img.src = developmentLabBackground;
+  if (img.decode) img.decode().catch(() => {});
 }
 
 /**
@@ -491,28 +518,56 @@ export default function Index({
   /*
    * THE DEVELOPMENT ROOM'S STAGED ASSEMBLY (owner, 2026-10-04: *"I want to create an assembly
    * effect similar to our other pages with a background … you could use it as a 10 second delay
-   * … and then I wanted to ease in like composer and design"*). It is deliberately staged, not
-   * measured: the gate comes down when BOTH the ten seconds have passed AND the window inside
-   * has finished loading — and the ten is one constant, here, so the owner can shorten what
-   * he asked to be ten. `builder-embed-loaded` is the frame's own announcement (see
-   * builder-embed); both refs reset on every entry, so each visit gets the same opening.
+   * … and then I wanted to ease in like composer and design"*). The ten became five the same
+   * night it was asked; three from 2026-10-06 (*"a small 3 second assembly process"*).
+   *
+   * AND THE ROOM LOADS AGAIN (2026-10-06, later): the left column carries the workspace once
+   * more — the repo-run copy, telemetry cut — so the gate waits on the SAME two hands as the
+   * Product room: the minimum (three seconds) and the frame's own load announcement.
    */
-  const DEVELOPMENT_GATE_MIN_MS = 5_000; // the owner, same night: ten was too long — five.
+  const DEVELOPMENT_GATE_MIN_MS = 3_000;
   /*
-   * AND THE DOOR THAT NEVER OPENS GETS SAID PLAINLY (2026-10-04): the gate waits on the
-   * frame's own load event, which never arrives from a tool that is down — leaving the
-   * spinner turning for ever. This is the second clock's ceiling: not loaded by now means
-   * the honest panel, on the room's own ground. A late frame still wins (the embed stays
-   * mounted underneath; its load event clears the panel), so a cold start costs waiting,
-   * never a false verdict.
+   * AND THE DOOR THAT NEVER OPENS GETS SAID PLAINLY (2026-10-04; kept at 2026-10-06): not
+   * loaded by the ceiling means the honest panel, with the frame staying mounted underneath
+   * so a late arrival still wins.
    */
   const DEVELOPMENT_GATE_MAX_MS = 25_000;
+  /*
+   * THE ROOM'S OWN RAIL LIST (owner, 2026-10-05): *"Remove versions from the chat rail menu
+   * on the right column … development section."* The rail's rule for an EMPTY list is "show
+   * everything" — and this seat starts empty, so Versions was drawn by default, by nobody's
+   * decision. This is every drawable tab of the rail (chat-navigation-bar's own vocabulary;
+   * the nav bar decides the order, this list only decides membership) with Versions left
+   * out: the rail the room had, one button shorter. It lands twice — as the seat's first
+   * fill (the closed-on-entry layout effect) and as the rule over the Composer's bound list
+   * (the seat effect; an empty bound list is the rail's "everything", which through this
+   * room's rule is THIS list, never the full rail with Versions back on).
+   */
+  const DEVELOPMENT_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
   const [developmentGateDown, setDevelopmentGateDown] = useState(false);
   const [developmentToolDown, setDevelopmentToolDown] = useState(false);
   const developmentMinElapsedRef = useRef(false);
   const developmentFrameLoadedRef = useRef(false);
   const developmentGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const developmentGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /*
+   * THE PRODUCT ROOM OPENS THE SAME WAY (2026-10-05): the builder's own first paint is white,
+   * and uncovered it flashed between the frame's mount and its content — the same white splash
+   * the Development gate was built to hide. Same two clocks: the gate is up on entry and drops
+   * only when the frame's load event and the minimum have both landed; the ceiling means the
+   * honest panel, with the frame staying mounted underneath so a late arrival still wins.
+   * THE MINIMUM MATCHES THE DEVELOPMENT ROOM'S THREE SECONDS (2026-10-06 — one staged opening,
+   * both rooms).
+   */
+  const PRODUCT_GATE_MIN_MS = 3_000;
+  const PRODUCT_GATE_MAX_MS = 25_000;
+  const [productGateDown, setProductGateDown] = useState(false);
+  const [productToolDown, setProductToolDown] = useState(false);
+  const productMinElapsedRef = useRef(false);
+  const productFrameLoadedRef = useRef(false);
+  const productGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const productGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
    * THE GOVERNANCE ROOM'S STATE (2026-10-03) — the room where the system accounts for what it
@@ -659,23 +714,39 @@ export default function Index({
   const isConsoleView = (headerTab || 'console') === 'console';
   // The Design room is not the console and not the composer: it wears its own canvas.
   const isDesignView = (headerTab || '') === 'design';
-  // THE PRODUCT ROOM WEARS ITS OWN GROUND TOO (owner, 2026-10-03): the wireframe lab's own
-  // backdrop, swapped in with this image — its room, its look, not the composer's image behind
-  // a different tree. One fact, one reader: both ground slots below use the value below.
-  const isProductView = (headerTab || '') === 'product';
+  // The Development room is a two-column tool room now too (owner, 2026-10-05) — and, like
+  // Product, its ground has to sit at room level for the chat column's strip to show it.
+  const isDevelopmentView = (headerTab || '') === 'development';
+  // THE PRODUCT ROOM WEARS THE COMPOSER'S GROUND NOW (owner, 2026-10-05): the room gains the
+  // console's chat column with its rail closed on entry, and the gripper strip beside the rail
+  // is transparent — so the room's own ground is what shows in that strip, and the owner's
+  // word is that it is the composer's: dark #582846 plus the composer's image, stretched. The
+  // wireframe-lab backdrop retired with it (2026-10-03 → 2026-10-05).
+  //
+  // AND THE DEVELOPMENT ROOM KEEPS ITS OWN (owner, 2026-10-05): the same container, the same
+  // strip — but this room's floor is its lab tile (`developmentLabBackground` over #2b2635),
+  // the look its tool was given on 2026-10-04. Same reasoning, one room over: the strip shows
+  // the room's ground, and the room is the tile.
+  //
+  // WHY IT SITS AT ROOM LEVEL RATHER THAN ON THE CHAT PANEL: while the column is closed the
+  // container keeps the panel at its OPEN width and slides it out of view, so a ground painted
+  // on the panel itself would travel with the panel and stretch across the tool area whenever
+  // the column is closed. One fact, one reader: both ground slots below use the values below.
   const workspaceBackground = isDesignView
     ? designSectionBackground
-    : isProductView
-      ? wireframeLabBackground
+    : isDevelopmentView
+      ? developmentLabBackground
       : composerBackground;
-  // AND THE PRODUCT ROOM'S IMAGE DOES NOT STRETCH (owner, 2026-10-03, watching it distort):
-  // *"this particular background doesn't flex, it's got to be tiled — well, it doesn't have to
-  // be tiled: it's fit to bottom and then it should tile."* So for that room alone: natural
-  // size, anchored to the bottom, tiling to fill. The others keep the stretch they were drawn
-  // for (100% × 100%, top-left, no repeat).
-  const groundSize = isProductView ? 'auto' : '100% 100%';
-  const groundRepeat = isProductView ? 'repeat' : 'no-repeat';
-  const groundPosition = isProductView ? 'bottom left' : 'top left';
+  // THE ROOM'S GROUND COLOUR — one fact with two readers (the two ground slots below).
+  // Product stands on the composer purple; Development stands on its own dark grey, the
+  // colour its tool's wrapper has always painted under the tile.
+  const workspaceGroundColor = isDevelopmentView ? '#2b2635' : '#582846';
+  // AND EVERY OTHER ROOM'S GROUND STRETCHES (100% × 100%, top-left, no repeat). The product
+  // room's tiling era ended with its own image; DEVELOPMENT is the exception — a graph-paper
+  // tile is drawn to REPEAT at natural size, and it inherits this room's own floor.
+  const groundSize = isDevelopmentView ? 'auto' : '100% 100%';
+  const groundRepeat = isDevelopmentView ? 'repeat' : 'no-repeat';
+  const groundPosition = 'top left';
   const surfaceComponents = isConsoleView ? consoleTree.components : workspaceTree.components;
   const surfaceDataModel = isConsoleView ? consoleTree.dataModel : workspaceTree.dataModel;
 
@@ -1077,6 +1148,27 @@ export default function Index({
   const productRendererRef = useRef<any>(null);
   /* AND GOVERNANCE'S (2026-10-03) — the last room. */
   const governanceRendererRef = useRef<any>(null);
+  /* THE PRODUCT ROOM'S TWO COLUMNS (2026-10-05): the container's handle — so the room can
+     settle it closed on entry (its `isThirdOpen` is set as a PROPERTY, never as a JSX
+     attribute: Lit's boolean converter reads any present attribute, "false" included, as
+     true) — and the seat's, so the Composer's loaded chat can be handed to it. Plain refs:
+     neither value is state and nothing re-renders on their account. */
+  const productLayoutRef = useRef<WorkspaceLayout | null>(null);
+  const productSeatRef = useRef<ChatPanel | null>(null);
+  /* AND THE DEVELOPMENT ROOM'S (owner, 2026-10-05) — the same pair for the same job: the
+     canvas tool's container (settled closed on entry the same way) and the room's seat. */
+  const developmentLayoutRef = useRef<WorkspaceLayout | null>(null);
+  const developmentSeatRef = useRef<ChatPanel | null>(null);
+  /*
+   * THE COLUMN THE RUN ASSEMBLED, KEPT FOR THE STATE (owner, 2026-10-05). The model composes
+   * the third column on every Run; the components it returns are what the drawing IS, and
+   * before this nothing kept them — so a package that had run reopened as a package that had
+   * not (its saved state said `leftCollapsed: false` and nothing else, measured on the
+   * Insurance card). The Run writes them here as soon as they arrive; the open puts a saved
+   * column back; the state reads (readWorkspaceState) carry them into `metadata.workspace`
+   * so opening a run card is a READ of the run, never a second model call.
+   */
+  const assembledRunColumnRef = useRef<unknown[] | null>(null);
 
   // Preload the composer background at mount so a transition never paints a
   // half-decoded image in sections. The browser fetches and decodes it eagerly
@@ -1687,7 +1779,7 @@ export default function Index({
    * THE THIRD COLUMN IS ASSEMBLED, NOT INSERTED — the RUN's one model call.
    *
    * WHAT THIS REPLACES, measured 2026-09-23 (READ-ME/CONTINUE-HERE.md §00c): this file wrote
-   * the components itself. `setOutputColumn('flow')` built `AgentCanvas` with its three slots
+   * the components itself. `setOutputColumn('flow')` built `RoomEmbed` with its three slots
    * and pushed `AgentFlow`, `OutputControls` and `CanvasFooter` straight into the live
    * component list, in TypeScript, on every Run — so the one surface a person watches most
    * closely was the one the protocol did not build, while the console's own cards, the same
@@ -1731,7 +1823,7 @@ export default function Index({
      * of its own; the update adds it and the layout's pointer is the model's.
      */
     const middleId = (slots.middle as string | undefined)
-      ?? components.find((c: any) => c?.component === 'compiled-output-viewer' || c?.component === 'AgentCanvas')?.id
+      ?? components.find((c: any) => c?.component === 'compiled-output-viewer' || c?.component === 'RoomEmbed')?.id
       ?? '';
     delete slots.middle; // it is the column being assembled; the model returns it filled
 
@@ -1939,7 +2031,7 @@ export default function Index({
   const setCanvasHolding = useCallback((holding: boolean): void => {
     let frames = 0;
     const write = (): void => {
-      const canvas = deepFind<HTMLElement & { holding?: boolean }>('agent-canvas');
+      const canvas = deepFind<HTMLElement & { holding?: boolean }>('room-embed');
       if (canvas) {
         // Lit's own property, so the attribute and the style follow it. Written every time,
         // including the `false` that ends the hold: the element may have been built while the
@@ -2759,13 +2851,13 @@ export default function Index({
       const next = comps.slice();
       /*
        * THE DRAFT TAKES THE DRAWING'S SLOT, NOT THE COLUMN — and that distinction WAS the defect.
-       * Measured 2026-10-02: replacing the column's body replaced the CONTAINER (`AgentCanvas` —
+       * Measured 2026-10-02: replacing the column's body replaced the CONTAINER (`RoomEmbed` —
        * the header and the foot are its slots), so choosing Draft took the header with it: the
        * selector, the label, and every way back, leaving a column with no furniture. The draft is a
        * view INSIDE the column: the container, its header and its foot stay; only the `flow` child
        * changes.
        */
-      const container = next.find((c: any) => c?.component === 'AgentCanvas');
+      const container = next.find((c: any) => c?.component === 'RoomEmbed');
       const flowId = (container?.children as Record<string, unknown> | undefined)?.flow;
       const j = typeof flowId === 'string' ? next.findIndex((c: any) => c?.id === flowId) : -1;
       if (j < 0) {
@@ -2850,7 +2942,7 @@ export default function Index({
         (childMap.middle as string | undefined) ??
         next.find((c: any) =>
           c?.component === 'compiled-output-viewer'
-          || c?.component === 'AgentCanvas'
+          || c?.component === 'RoomEmbed'
           || c?.component === 'draft-canvas')?.id;
       const i = middleId ? next.findIndex((c: any) => c?.id === middleId) : -1;
       if (i < 0) return prev;
@@ -3255,6 +3347,134 @@ export default function Index({
     await assembleSurfaceThenRepairs('render-composer');
   };
 
+  /**
+   * THE PLACE, AS THE OPERATOR LEFT IT — read off the elements that own it, ONCE, for both
+   * writers of `metadata.workspace`: the Save (which sends it with everything else) and the
+   * Run's own state write (saveRunState — owner, 2026-10-05: *"it has already RUN and that
+   * state should save on run"*).
+   *
+   * READ OFF THE ELEMENTS — the left column from <workspace-layout>, her seat and the
+   * drawing's pan and zoom from <room-embed>, the drawing itself from <agent-flow>. Not a
+   * new event and not a new prop: the components already publish these (leftCollapsed is a
+   * property; the plug-in answers workspaceState()), and a save is a read, not a gesture. A
+   * piece that is not on screen is simply absent, and the server keeps what it had
+   * (metadata merges key-by-key at the top; see update_session).
+   *
+   * AND IT IS A SHADOW-PIERCING READ, which was the correction: `document.querySelector`
+   * reaches nothing here — the shell draws the surface INSIDE the renderer's shadow root —
+   * so both of these were null on every save and the place never travelled, silently.
+   * A null was indistinguishable from "the view is not open", which is why it took the
+   * same helper the flow's link needed to make the two reads real.
+   */
+  const readWorkspaceState = (): Record<string, unknown> | undefined => {
+    const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
+    const canvas = deepFind<HTMLElement & { workspaceState?: () => Record<string, unknown> }>('room-embed');
+    const state: Record<string, unknown> = {};
+    if (layout) state.leftCollapsed = !!layout.leftCollapsed;
+    const canvasState = canvas?.workspaceState?.();
+    if (canvasState) Object.assign(state, canvasState);
+    // WHICH MIDDLE VIEW THE PACKAGE WAS LEFT ON — a package saved while the canvas was
+    // up reopens on the canvas; one saved on the output reopens on the output. The
+    // element's presence is the fact: Run mounts the canvas, Reset unmounts it.
+    if (canvas) state.middle = 'flow';
+    else if (deepFind('compiled-output-viewer')) state.middle = 'output';
+    // THE DRAWING AS IT WAS LEFT — the element's drawn graph carries the person's own
+    // edits (positions dragged, nodes added, edges rewired), which the published model
+    // does not. The label and the not-drawn lists come from the model the element holds.
+    //
+    // `drawn` IS A GETTER, NOT A METHOD (agent-flow.ts). This read used to call it —
+    // `flowEl?.drawn?.()` — which threw "flowEl.drawn is not a function" out of the save
+    // handler on EVERY save that had a canvas on screen, so the save never sent and the
+    // toast said exactly that. A value is read; it is not called.
+    const flowEl = deepFind<HTMLElement & {
+      flow?: { label?: string; unresolved?: string[]; absent?: unknown[] };
+      drawn?: { nodes: unknown[]; edges: unknown[] };
+    }>('agent-flow');
+    const drawn = flowEl?.drawn;
+    if (drawn) {
+      state.graph = {
+        label: flowEl?.flow?.label ?? '',
+        nodes: drawn.nodes,
+        edges: drawn.edges,
+        unresolved: flowEl?.flow?.unresolved ?? [],
+        absent: flowEl?.flow?.absent ?? [],
+      };
+    }
+    /*
+     * THE COLUMN THE RUN ASSEMBLED — the drawing's own components, kept WITH the state that
+     * shows them (owner, 2026-10-05). The saved `middle` says WHICH view; the graph says
+     * what the picture holds; this says what the picture is MADE OF — the five components a
+     * Run's assembly put in the middle column. Without it a reopened package can know it
+     * has run and still draw nothing (the column only ever arrived from a Run's model call),
+     * and re-drawing it would be a fresh model call per open — the second call per Run this
+     * app already paid for and removed. The ref is fed by the Run the moment its column
+     * arrives, and by the open the moment a saved column is put back.
+     */
+    const runColumn = assembledRunColumnRef.current;
+    if (Array.isArray(runColumn) && runColumn.length) {
+      state.run_column = { components: runColumn };
+    }
+    return Object.keys(state).length ? state : undefined;
+  };
+
+  /**
+   * THE RUN'S STATE, WRITTEN THE MOMENT THE RUN IS — the narrow write (owner, 2026-10-05:
+   * *"it has already RUN and that state should save on run"*).
+   *
+   * IT WRITES ONLY `metadata.workspace`. Not the sections, not the output, not the
+   * description: content stays the operator's Save to make (the owner's rule, 2026-09-18),
+   * and the full save path pays for a model summary — the second model call per Run this
+   * app already paid for once and removed (see the note where the old answer-save was
+   * deleted, below). What nothing used to write down is the state OF THE RUN — the folded
+   * prompt, the middle marker, the drawing and the column it is made of — which is why the
+   * Insurance card, measured 2026-10-05, carried `{ leftCollapsed: false }` and nothing
+   * else after it had run.
+   *
+   * A CARD, NOT A SCRATCH PROMPT: the write needs a session id. An unsaved prompt has no
+   * row for a state to live in; its manual Save still carries the same state when made.
+   *
+   * THE DRAWING IS WAITED FOR, BOUNDED, ON A REAL CONDITION. The answer and the assembly
+   * are two independent waits (two model calls), so the response can land before the canvas
+   * mounts; a write at that moment would store "ran, nothing to show" — the half-record
+   * this change exists to prevent. The wait ends when the state HAS its drawing (middle
+   * 'flow' + a graph), or when the bound runs out — and a bound that runs out is said, in
+   * the trace, never swallowed.
+   *
+   * FAILURES ARE SAID, NOT SWALLOWED (logger → the Trace tab): a state write that fails
+   * silently is the reopened package that "forgot" it ran.
+   */
+  const saveRunState = async (): Promise<void> => {
+    const sessionId = currentPromptSessionRef.current;
+    if (!sessionId) return;
+    const deadline = Date.now() + 25_000;
+    let workspace = readWorkspaceState();
+    while (
+      (!workspace || workspace.middle !== 'flow' || !workspace.graph)
+      && Date.now() < deadline
+    ) {
+      await new Promise((r) => setTimeout(r, 250));
+      workspace = readWorkspaceState();
+    }
+    if (!workspace || workspace.middle !== 'flow' || !workspace.graph) {
+      logger.error('the run state never formed, so nothing was saved for it', { sessionId });
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/prompt-sessions/${sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
+        body: JSON.stringify({ metadata: { workspace } }),
+      });
+      if (!res.ok) {
+        logger.error('the run state could not be saved on the package', { sessionId, status: res.status });
+        return;
+      }
+      console.log('[run] state saved on the package —', JSON.stringify(Object.keys(workspace)));
+    } catch (e) {
+      logger.error('the run state write never reached the backend', { sessionId, error: String(e) });
+    }
+  };
+
   const handleSavePrompt = async (
     compiledOutput?: string,
     providedSections?: any[],
@@ -3378,53 +3598,13 @@ export default function Index({
 
       // ── The place, as the operator left it ──
       //
-      // READ OFF THE ELEMENTS THAT OWN IT — the left column from <workspace-layout>, her
-      // column and the drawing's pan and zoom from <agent-canvas>. Not a new event and not a
-      // new prop: the components already publish these (leftCollapsed is a property; the
-      // plug-in answers workspaceState()), and a save is a read, not a gesture. A piece that
-      // is not on screen is simply absent, and the server keeps what it had.
-      //
-      // AND IT IS A SHADOW-PIERCING READ, which is the correction: `document.querySelector`
-      // reaches nothing here — the shell draws the surface INSIDE the renderer's shadow root —
-      // so both of these were null on every save and the place never travelled, silently.
-      // A null was indistinguishable from "the view is not open", which is why it took the
-      // same helper the flow's link needed to make the two reads real.
-      const workspace = (() => {
-        const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
-        const canvas = deepFind<HTMLElement & { workspaceState?: () => Record<string, unknown> }>('agent-canvas');
-        const state: Record<string, unknown> = {};
-        if (layout) state.leftCollapsed = !!layout.leftCollapsed;
-        const canvasState = canvas?.workspaceState?.();
-        if (canvasState) Object.assign(state, canvasState);
-        // WHICH MIDDLE VIEW THE PACKAGE WAS LEFT ON — a package saved while the canvas was
-        // up reopens on the canvas; one saved on the output reopens on the output. The
-        // element's presence is the fact: Run mounts the canvas, Reset unmounts it.
-        if (canvas) state.middle = 'flow';
-        else if (deepFind('compiled-output-viewer')) state.middle = 'output';
-        // THE DRAWING AS IT WAS LEFT — the element's drawn graph carries the person's own
-        // edits (positions dragged, nodes added, edges rewired), which the published model
-        // does not. The label and the not-drawn lists come from the model the element holds.
-        //
-        // `drawn` IS A GETTER, NOT A METHOD (agent-flow.ts). This read used to call it —
-        // `flowEl?.drawn?.()` — which threw "flowEl.drawn is not a function" out of the save
-        // handler on EVERY save that had a canvas on screen, so the save never sent and the
-        // toast said exactly that. A value is read; it is not called.
-        const flowEl = deepFind<HTMLElement & {
-          flow?: { label?: string; unresolved?: string[]; absent?: unknown[] };
-          drawn?: { nodes: unknown[]; edges: unknown[] };
-        }>('agent-flow');
-        const drawn = flowEl?.drawn;
-        if (drawn) {
-          state.graph = {
-            label: flowEl?.flow?.label ?? '',
-            nodes: drawn.nodes,
-            edges: drawn.edges,
-            unresolved: flowEl?.flow?.unresolved ?? [],
-            absent: flowEl?.flow?.absent ?? [],
-          };
-        }
-        return Object.keys(state).length ? state : undefined;
-      })();
+      // READ BY ITS ONE READER (readWorkspaceState, above the save) — the Run's own state
+      // write (saveRunState) reads the same facts through the same code, so the two writers
+      // of `metadata.workspace` cannot drift apart. It reads the live elements: the layout's
+      // left column, the canvas's seat and pan/zoom, the drawing's graph, and the column a
+      // Run assembled (run_column, owner 2026-10-05) — each present only when it is on
+      // screen, so a half-record cannot rearrange anything the server already holds.
+      const workspace = readWorkspaceState();
 
       const savePayload = {
         session_id: isValidSessionId ? sessionId : undefined,
@@ -4235,6 +4415,14 @@ export default function Index({
       }
       void refreshEvaluations();
     }
+
+    /*
+     * AND THE STATE IS WRITTEN AGAIN WITH THE VERDICT (owner, 2026-10-05 — see saveRunState):
+     * a repair's last word is the check's, and the graph a reopened card draws must carry it.
+     * The write is narrow and idempotent — the run's-end write stood without it, and this one
+     * supersedes it the moment the verdict exists.
+     */
+    void saveRunState();
   };
 
   /**
@@ -4705,6 +4893,15 @@ export default function Index({
   }
 
   /**
+   * THE LAB GROUND WARMS HERE — ONCE THE WORKSPACE HAS LANDED (see `warmLabGrounds` above).
+   * By the time Development is clicked, the tile is fetched and decoded, and the room's first
+   * paint is the finished ground instead of the arriving one.
+   */
+  useEffect(() => {
+    warmLabGrounds();
+  }, []);
+
+  /**
    * THE BUILDER SAID IT PUBLISHED (2026-10-04): the flag is the engine's (the builder's own
    * proxy wrote it); what is missing is the CARD — so the host syncs now, and the console
    * has it before anyone looks.
@@ -4716,12 +4913,12 @@ export default function Index({
   }, []);
 
   /**
-   * THE DEVELOPMENT ROOM'S OPENING (2026-10-04) — the staged assembly's two clocks:
-   * entering the room restarts them (the gate rises again on every visit, like the other
-   * rooms' spinners), the timer is the owner's ten seconds, and the frame's own load event
-   * (builder-embed-loaded) is the other hand. When both have happened, the gate fades and
-   * the window eases in underneath it — one cross-fade, 700ms, the same feel as composer
-   * and design.
+   * THE DEVELOPMENT ROOM'S OPENING (2026-10-04; loading again 2026-10-06) — the staged
+   * assembly's two clocks: entering the room restarts them (the gate rises again on every
+   * visit, like the other rooms' spinners), the minimum is three seconds, and the frame's
+   * own load event (builder-embed-loaded) is the other hand. When both have happened, the
+   * gate fades and the window eases in underneath it — one cross-fade, 700ms, the same feel
+   * as composer and design.
    */
   useEffect(() => {
     if ((headerTab || '') !== 'development') return;
@@ -4747,15 +4944,140 @@ export default function Index({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
+  /** THE PRODUCT ROOM'S OWN TWO CLOCKS — the Development effect above, mirrored exactly. */
   useEffect(() => {
-    // Only the DEVELOPMENT tab's frame matters here: the announcement is a bare window event and
-    // the PRODUCT room's embed raises the same one. Re-registered per tab so the guard reads the
-    // current tab, never a stale closure.
+    if ((headerTab || '') !== 'product') return;
+    setProductGateDown(false);
+    setProductToolDown(false);
+    productMinElapsedRef.current = false;
+    productFrameLoadedRef.current = false;
+    if (productGateTimerRef.current) clearTimeout(productGateTimerRef.current);
+    productGateTimerRef.current = setTimeout(() => {
+      productMinElapsedRef.current = true;
+      if (productFrameLoadedRef.current) setProductGateDown(true);
+    }, PRODUCT_GATE_MIN_MS);
+    if (productGateMaxTimerRef.current) clearTimeout(productGateMaxTimerRef.current);
+    productGateMaxTimerRef.current = setTimeout(() => {
+      if (!productFrameLoadedRef.current) setProductToolDown(true);
+    }, PRODUCT_GATE_MAX_MS);
+    return () => {
+      if (productGateMaxTimerRef.current) clearTimeout(productGateMaxTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headerTab]);
+
+  /**
+   * THE PRODUCT ROOM'S CONTAINER LOADS CLOSED (owner, 2026-10-05) — the console's own rule,
+   * and it lives on the CONTAINER only: `isThirdOpen: false`, set as a PROPERTY through the
+   * ref, never as a JSX attribute (Lit's boolean converter reads any present attribute as
+   * true — the string "false" included). At false the right pane sits at its designed
+   * collapsed floor with the rail showing — the gripper strip and the rail — and the
+   * container tells the panel it is collapsed so the rail's Chat button OPENS it on the
+   * first click. NO `collapsed` and NO `rightWidth` are written from here: a pinned width
+   * jumps the column to half the screen, and a payload-style flag would snap it shut again
+   * after the operator opened it — open or closed belongs to the element that owns the
+   * width. `useLayoutEffect`, so the first paint is already the closed column.
+   */
+  useLayoutEffect(() => {
+    if ((headerTab || '') !== 'product') return;
+    const el = productLayoutRef.current;
+    if (el) el.isThirdOpen = false;
+  }, [headerTab]);
+
+  /**
+   * THE PRODUCT ROOM'S SEAT READS THE COMPOSER'S LOADED CHAT (owner, 2026-10-05): whenever
+   * the Composer tab has loaded a chat, this room hands its own seat the SAME settings the
+   * composer's seat carries, resolved from that loaded tree — the conversation identifier,
+   * the session identifier, Grace's instructions, the tab list and the package title (the
+   * owner's list), plus the seat's other own bindings, including the live-context flag a
+   * speaking seat refuses without and the conversation list the composer binds. So the two
+   * seats are the same conversation: a message sent here appears in the Composer's thread,
+   * and the other way round. No backend, no database, no new conversation — a client-side
+   * read of the tree the Composer already loaded (`componentProps` resolves it against that
+   * tree's data model, `assignProps` writes it onto the seat: the renderer's own two steps,
+   * exported for exactly this).
+   *
+   * THE LIMITATION, STATED: the application knows which conversation this is only after the
+   * Composer has been opened once in the session. Opened later, the seat reads the tree then
+   * (this effect re-runs on `workspaceTree`); never opened, the rail is there and the thread
+   * is empty. Nothing is created and nothing is lost either way.
+   */
+  useEffect(() => {
+    if ((headerTab || '') !== 'product') return;
+    const seat = productSeatRef.current;
+    if (!seat) return;
+    const comp = (Array.isArray(workspaceTree.components) ? workspaceTree.components : [])
+      .find((c: { component?: string } | null) => c?.component === 'chat-panel');
+    if (!comp) return;
+    assignProps(seat, componentProps(comp, workspaceTree.dataModel || {}));
+  }, [headerTab, workspaceTree]);
+
+  /**
+   * THE DEVELOPMENT ROOM'S CONTAINER LOADS CLOSED — the Product pair's mirror (owner,
+   * 2026-10-05), one room over and for the same reasons, stated once above: `isThirdOpen`
+   * is set as a PROPERTY through the ref (never a JSX attribute — Lit's boolean converter
+   * reads any present attribute, "false" included, as true), nothing is written on the
+   * panel, and `useLayoutEffect` so the first paint is already the closed column. The same
+   * first paint settles the rail's list (DEVELOPMENT_SEAT_TABS, above).
+   */
+  useLayoutEffect(() => {
+    if ((headerTab || '') !== 'development') return;
+    const el = developmentLayoutRef.current;
+    if (el) el.isThirdOpen = false;
+    /* The rail's opening state (see DEVELOPMENT_SEAT_TABS): written only while the seat
+       carries no list — an empty list is the rail's "everything", and the seat effect below
+       never leaves it empty once the Composer's chat is bound, so this fills the room's
+       own answer, never overrides a loaded one. */
+    const seat = developmentSeatRef.current;
+    if (seat && !seat.allowedTabs) seat.allowedTabs = DEVELOPMENT_SEAT_TABS;
+  }, [headerTab]);
+
+  /**
+   * AND ITS SEAT READS THE COMPOSER'S LOADED CHAT — the Product effect's mirror (owner,
+   * 2026-10-05): the same settings, from the same source, with the same limitation (the
+   * application knows the conversation only after the Composer has been opened once in the
+   * session; opened later, this effect re-runs on `workspaceTree`; never opened, the rail
+   * is there and the thread is empty — nothing is created and nothing is lost either way).
+   *
+   * EXCEPT THE TAB LIST, AND ONLY VERSIONS (owner, 2026-10-05 — DEVELOPMENT_SEAT_TABS above):
+   * the bound list is kept as-is minus `versions` — the room does not offer that button
+   * whichever way the rail is filled — and a bound list that is EMPTY (the rail's "show
+   * everything") resolves to the room's own list, never back to the full rail.
+   */
+  useEffect(() => {
+    if ((headerTab || '') !== 'development') return;
+    const seat = developmentSeatRef.current;
+    if (!seat) return;
+    const comp = (Array.isArray(workspaceTree.components) ? workspaceTree.components : [])
+      .find((c: { component?: string } | null) => c?.component === 'chat-panel');
+    if (!comp) return;
+    assignProps(seat, componentProps(comp, workspaceTree.dataModel || {}));
+    const tabs = (seat.allowedTabs || '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .filter((t) => t !== 'versions');
+    seat.allowedTabs = tabs.length ? tabs.join(',') : DEVELOPMENT_SEAT_TABS;
+  }, [headerTab, workspaceTree]);
+
+  useEffect(() => {
+    // BOTH ROOMS' FRAMES ANNOUNCE THEMSELVES HERE (2026-10-05; Development's half is back,
+    // 2026-10-06): the announcement is a bare window event and either embed raises it, so the
+    // guard reads the CURRENT tab — never a stale closure — and routes it to that room's clocks.
+    // Re-registered per tab.
     const onFrameLoaded = () => {
-      if ((headerTab || '') !== 'development') return;
-      developmentFrameLoadedRef.current = true;
-      setDevelopmentToolDown(false);
-      if (developmentMinElapsedRef.current) setDevelopmentGateDown(true);
+      const tab = headerTab || '';
+      if (tab === 'development') {
+        developmentFrameLoadedRef.current = true;
+        setDevelopmentToolDown(false);
+        if (developmentMinElapsedRef.current) setDevelopmentGateDown(true);
+        return;
+      }
+      if (tab === 'product') {
+        productFrameLoadedRef.current = true;
+        setProductToolDown(false);
+        if (productMinElapsedRef.current) setProductGateDown(true);
+      }
     };
     window.addEventListener('builder-embed-loaded', onFrameLoaded);
     return () => window.removeEventListener('builder-embed-loaded', onFrameLoaded);
@@ -6143,6 +6465,8 @@ export default function Index({
     return () => window.removeEventListener('catalog-ingest-submit', onCatalogIngestSubmit);
   }, [catalogIngestBusy, writeDesignSystemIngest]);
 
+
+
   /*
    * ══ THE ACCEPT ACT, ANSWERED HERE (2026-10-03) ══════════════════════════════════════════════
    *
@@ -6521,7 +6845,7 @@ export default function Index({
        */
       const row = rowsOf().find((r) => r.id === tag || r.name === tag || r.key === tag);
       // WHAT THIS SURFACE CAN DRAW, SAID RATHER THAN LEFT AS A HOLE. The Composer's canvas pair
-      // (`AgentFlow` / `AgentCanvas`) are catalogue entries of the design system but not elements
+      // (`AgentFlow` / `RoomEmbed`) are catalogue entries of the design system but not elements
       // of this interface — its drawings belong to the Composer's run view and are not loaded here
       // on purpose. A row like that gets its facts and one sentence, which is the truth about it;
       // an empty frame would read as a failure and a renderer error would read as a bug.
@@ -7830,7 +8154,7 @@ export default function Index({
          * reader" (READ-ME/CONTINUE-HERE.md §4).
          */
         const takesTheme = (c: any) =>
-          c?.component === 'AgentCanvas'
+          c?.component === 'RoomEmbed'
           || c?.component === 'AgentFlow'
           || c?.component === 'CanvasFooter';
         const next = comps.map((c: any) => (takesTheme(c) ? { ...c, theme } : c));
@@ -7993,6 +8317,16 @@ export default function Index({
     const savedNodes = stored?.graph?.nodes;
     carriedPositionsRef.current = Array.isArray(savedNodes) ? savedNodes : [];
     /*
+     * AND THE RUN'S COLUMN RIDES WITH IT (owner, 2026-10-05 — see readWorkspaceState): a
+     * package opened on its drawing carries the same column forward, so a manual Save made
+     * on the reopened picture re-writes it — `metadata.workspace` is replaced whole by a
+     * save (jsonb merges only its top level), so a field read live but not re-fed here
+     * would be dropped by the next Save. Cleared on every open: a package with no saved run
+     * must never inherit the previous package's column.
+     */
+    const storedRunColumn = stored?.run_column?.components;
+    assembledRunColumnRef.current = Array.isArray(storedRunColumn) ? storedRunColumn : null;
+    /*
      * THE PROMPT IS ON SCREEN WHEN A PACKAGE OPENS, AND THAT DOES NOT DEPEND ON A SAVE.
      *
      * Above the `stored` guard on purpose: an unsaved package, or one whose workspace was never
@@ -8032,36 +8366,75 @@ export default function Index({
       requestAnimationFrame(open);
     }
     if (!stored) return;
-    // THE GRAPH COMES BACK; THE DRAWING DOES NOT — NOT UNTIL A RUN SHOWS IT.
-    //
-    // The owner, 2026-09-22: "the canvas is not supposed to appear until you click run."
-    //
-    // This used to swap the middle column to the canvas on open whenever the stored
-    // workspace carried a graph — and a package saved before the `middle` marker existed
-    // carries one whenever the canvas had ever been open. So a saved package reopened with
-    // the drawing already up, and the drawing brings its own control cluster, which then sat
-    // over her column before the operator had asked for anything.
-    //
-    // `middle` is still honoured as far as the DATA goes: the graph is written into the
-    // model, so a Run draws it immediately and nothing about the package is lost. What is no
-    // longer done here is SHOWING it. A package whose save says 'output' has no graph and is
-    // untouched either way.
-    //
-    // CONSEQUENCE, deliberate: the stored VIEW (seat width, zoom, pan) is applied by
-    // applyWorkspaceState below, which needs the canvas mounted to receive it. With no canvas
-    // on open that call finds nothing and the retry loop gives up quietly — which is what it
-    // was written to do ("an element that never appears is a view that is not open, not an
-    // error"). A reopened package therefore draws at the default view, and the arrangement
-    // is re-established by the operator's own Run.
-    //
-    // AND THE PLACES COME BACK WITH IT. Position is the drawing's one own fact, so the nodes
-    // this graph carries are held (carriedPositionsRef, above) rather than shown: the Run that
-    // builds the next graph is handed them, and it draws the person's own layout instead of the
-    // default ring on top of it. Nothing is applied to an element here, so the rule above holds
-    // — the canvas appears when it is asked for, and it appears where it was left.
+    /*
+     * THE GRAPH COMES BACK — AND THE DRAWING WITH IT WHEN THE PACKAGE HAS RUN (owner,
+     * 2026-10-05; the 2026-09-22 rule below NARROWS, it is not contradicted).
+     *
+     * The owner, 2026-10-05: *"that state should save on run and all card opens after that
+     * open a collapsed left rail 'Agent prompt' and reveals the run state."* The 2026-09-22
+     * ruling stays whole for a package that has NEVER run — *"the canvas is not supposed to
+     * appear until you click run"*: with no saved run there is no drawing to show, and the
+     * prompt stands open as the only thing to look at. A package whose saved state carries
+     * the run's own column HAS run; opening it is the read that state was saved for: the
+     * prompt on its "Agent Prompt" rail, the drawing between the columns, her output beside
+     * it — the state the owner drew. The column comes from `run_column` in the save, never
+     * from a fresh model call: a model call per open would be the second call per run this
+     * app already paid for once and removed.
+     *
+     * `middle` and the graph are honoured as facts either way: the graph is written into
+     * the model, so a Run draws it immediately and nothing about the package is lost. A
+     * package whose save says 'output' has no graph and is untouched.
+     */
     const graph = stored.graph;
     if (stored.middle !== 'output' && graph && graph.nodes?.length) {
       writeFlowToSurface(graph);
+      const runColumn = stored.run_column?.components;
+      if (Array.isArray(runColumn) && runColumn.length) {
+        void (async () => {
+          try {
+            // The canvas's own code — fetched on the way in, only when a drawing is
+            // actually coming (the same rule a Run follows).
+            await loadCanvasElements();
+          } catch (err) {
+            // NOTHING IS SUBSTITUTED: the prompt stays open on the output column, and the
+            // trace carries the reason — a missing canvas is not a state to draw.
+            logger.error('the canvas code could not be loaded, so the saved run opens on its output', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return;
+          }
+          // ONE COMMIT: the saved column replaces the output viewer in the middle — the ids
+          // are the house names both assemblies share ("root", "middle-column"), so this is
+          // the same update a Run makes, replayed — and the column's header is told which
+          // view it stands on.
+          setWorkspaceTree((prev) => ({
+            ...prev,
+            components: applyComponentUpdate(prev.components, runColumn),
+          }));
+          setColumnView('flow', COLUMN_VIEWS_RUN);
+          /*
+           * THE PROMPT FOLDS ONLY ONCE THE DRAWING IS REALLY THERE. A folded prompt with an
+           * empty middle is the "prompt text areas are not loading" state (2026-09-23) — so
+           * this waits for the canvas element itself: the collapse and the drawing arrive
+           * together, or the prompt stays out. `openPrompt` above has handed the pane's
+           * ownership back, so the property write lands.
+           */
+          let frames = 0;
+          const settle = () => {
+            const canvas = deepFind<HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean }>('room-embed');
+            if (!canvas?.applyWorkspaceState) {
+              if (++frames < 90) requestAnimationFrame(settle);
+              return;
+            }
+            const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
+            if (layout) layout.leftCollapsed = true;
+            // HER SEAT AND THE DRAWING'S PAN AND ZOOM — the rest of the place, put back by
+            // the element that owns it (room-embed.applyWorkspaceState re-reads `stored`).
+            canvas.applyWorkspaceState(stored);
+          };
+          requestAnimationFrame(settle);
+        })();
+      }
     }
     let frames = 0;
     let applied = false;
@@ -8070,19 +8443,18 @@ export default function Index({
       // THE SAME SHADOW-PIERCING READ AS THE SAVE'S (see there): `document.querySelector`
       // finds neither element in this shell, so both writes below were no-ops and a package
       // "reopened where it was left" only in the record.
-      const canvas = deepFind<HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean }>('agent-canvas');
+      const canvas = deepFind<HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean }>('room-embed');
       if (canvas?.applyWorkspaceState) {
         canvas.applyWorkspaceState(stored);
         applied = true;
       }
       /*
-       * THE PROMPT IS NOT RESTORED FOLDED — see `openThePrompt` above, which has already put it
-       * back. `leftCollapsed: true` is in a package's save because a RUN docked the prompt, and
-       * a package being opened is not a run: there is no drawing on screen to watch instead, so
-       * the prompt is the only thing there is to look at. This is the owner's own rule for the
-       * other column, applied to this one — "the canvas is not supposed to appear until you
-       * click run" (2026-09-22): a save records what a run looked like, and a reopened package
-       * does not inherit a run.
+       * THE PROMPT IS NOT RESTORED FOLDED WITHOUT A DRAWING — see `openThePrompt` above and
+       * the run-state block above it. `leftCollapsed: true` is in a package's save because a
+       * RUN docked the prompt; a package with no saved run has no drawing to watch instead,
+       * so its prompt stays out, exactly as the owner asked on 2026-09-23 ("it makes me
+       * think that the prompt text areas are not loading"). A package WITH a saved run folds
+       * to its rail in the run-state block, and only once the canvas is really on screen.
        */
       if (!applied && ++frames < 40) requestAnimationFrame(apply);
     };
@@ -8675,6 +9047,15 @@ export default function Index({
       const [, assembled] = await Promise.all([loadCanvasElements(), assembleThirdColumn()]);
 
       /*
+       * AND THE COLUMN IS KEPT WHERE THE STATE WILL FIND IT (owner, 2026-10-05) — see
+       * assembledRunColumnRef. The components the model just returned ARE the drawing; the
+       * run's own state write (saveRunState) and every later manual Save persist them with
+       * the rest of the place, so a reopened card draws this exact column instead of paying
+       * a model for it again.
+       */
+      assembledRunColumnRef.current = Array.isArray(assembled.components) ? (assembled.components as unknown[]) : null;
+
+      /*
        * THE DOORS OPEN WHEN THE COLUMN IS READY — NOT BEFORE, AND THAT IS THE ORDER THAT KEEPS THE
        * RUN BUTTON ON SCREEN.
        *
@@ -9062,6 +9443,23 @@ export default function Index({
             : "the tool call returned no design, so the file was left alone."),
         );
       }
+
+      /*
+       * AND THE RUN'S STATE IS WRITTEN DOWN — HERE, WHERE EVERYTHING THE RUN MADE IS MADE
+       * (owner, 2026-10-05: *"it has already RUN and that state should save on run"*).
+       *
+       * THIS IS THE SPOT THE OLD ANSWER-SAVE WAS DELETED FROM (see the note above): it used
+       * to send the output through the full AI save — a second model call per Run — and the
+       * cure for that cost was to save nothing automatic at all, which left the RUN's state
+       * unwritten: the drawing, the folded prompt, the column it is made of. saveRunState
+       * writes exactly that state and nothing else — no sections, no output, no model call —
+       * so the rule that made the old save wrong ("people need to save manually") and the
+       * rule this answers to ("that state should save on run") hold at the same time.
+       *
+       * A repair writes it once more when the check settles (settleRepair): the verdict is
+       * the repair's last word, and the graph the card reopens on must carry it.
+       */
+      void saveRunState();
     } catch (err: any) {
       console.error('[WritingAreaIndex] Run execution failed', err);
       // Name the call. "Failed to fetch" on its own says nothing about WHICH
@@ -9593,7 +9991,7 @@ export default function Index({
                      BEHIND this slot and outside the viewport's fade — so the waves run
                      unbroken from the spinner through to the assembled console instead of
                      fading out and back in mid-transition. The composer keeps its image. */}
-                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? 'transparent' : '#582846', paddingBottom: '200px', backgroundImage: isConsoleView ? 'none' : `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
+                <div slot="spinner" className="flex flex-col items-center justify-center gap-5 size-full" style={{ backgroundColor: isConsoleView ? 'transparent' : workspaceGroundColor, paddingBottom: '200px', backgroundImage: isConsoleView ? 'none' : `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
                   {/* THE GATE'S RING (owner, 2026-10-04: *"we have a spinner on the login gate …
                       it has a nice spinner with a yellow indicator on it. Can you put those
                       spinners back to our assembly gates"*). The sign-in gate's amber indicator
@@ -9674,7 +10072,7 @@ export default function Index({
                 {/* slot="workspace" — AI-driven Lit tree (A2UI v0.9.1).
                     Slots are the loading contract. AI fills them with prompt blocks.
                     When assembly FAILS, show the error — no hiding. */}
-                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: '#582846', backgroundImage: `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
+                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: workspaceGroundColor, backgroundImage: `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
                   {aiAssemblyFailed ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
                       {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc
@@ -9739,31 +10137,33 @@ export default function Index({
                        whatever composer surface happened to be in it: a room showing another
                        room's contents, which is the opposite of "should not load anything". */
                     !isConsoleView && (headerTab === 'development'
-                      /* THE DEVELOPMENT ROOM, TAKE TWO (owner, 2026-10-04, late: *"Check it out
-                         — all the other one, bolt, is not gonna cut it… I think this one will
-                         work better"*): **OpenHands' Agent Canvas** — the self-hosted developer
-                         control center for coding agents — replaces bolt.diy here. It is a
-                         REAL WEB APP (its own server on :8090), so it embeds whole, with no
-                         strip and no door: bolt.diy's WebContainer runtime could never boot
-                         inside a frame (`SharedArrayBuffer … crossOriginIsolated`), and this
-                         one asks for no such isolation. Locally boot it with `agent-canvas -p
-                         8090`; HOSTED (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md) it is its
-                         own Northflank service of the same shape, and this room gets its
-                         address from the server (`/api/config` — shared/appConfig.ts). That is
-                         what ended the hardcoded localhost whose request made every demo
-                         visitor's browser reach for their own machine. */
+                      /* THE DEVELOPMENT ROOM IS THE CONSOLE'S CONTAINER + THE WORKSPACE
+                         (owner, 2026-10-06: *"show the modified open hands application that we
+                         just made sovereign"*). The shape is yesterday's (owner, 2026-10-05):
+                         the room wears the console's container — `workspace-layout` — with the
+                         room's own workspace as its left column and the platform chat seat as
+                         its right column, CLOSED on entry. The seat is the one element the
+                         console and composer use, and — like Product's — it reads the
+                         COMPOSER'S loaded chat (the seat effect beside the development clocks
+                         below); no surface is assembled for this room and no new conversation
+                         is created.
+                         THE WORKSPACE IS THE REPO-RUN COPY (development/dev-tool, :8090 —
+                         started by RESTART-LOCAL.sh), telemetry cut so nothing reaches any
+                         other server (development/CHANGELOG.md, 2026-10-06). The staged
+                         opening (DEVELOPMENT_GATE_MIN_MS, above) covers the load so nothing
+                         pops; a stopped workspace gets the honest panel below. */
                       ? (
-                        /* THE ROOM HAS ONE ADDRESS AND TWO STATES (2026-10-04): the tool (gate,
-                           frame, ease-in) when an address exists, and the honest panel when it
-                           does not — an unconfigured demo, or a frame that never arrived by the
-                           ceiling (DEVELOPMENT_GATE_MAX_MS, above). THE FRAME STAYS MOUNTED
-                           under the panel, so a late arrival still wins: its load event clears
-                           the down state. Local runs are unchanged — the address defaults to
-                           the Mac's own :8090 (shared/appConfig.ts owns that default). */
-                        <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+                        <>
+                          <workspace-layout ref={developmentLayoutRef} className="flex-1 min-h-0">
+                            {/* THE ROOM'S WORKSPACE + THE STAGED OPENING (2026-10-06): the
+                                left column loads the repo-run workspace — the modified copy
+                                whose telemetry is cut (development/CHANGELOG.md) — covered by
+                                the three-second gate so nothing pops; a stopped workspace
+                                gets the honest panel on the room's own ground. */}
+                            <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                           {developmentToolUrl() && (
                           <builder-embed
-                            key="openhands-room"
+                            key="dev-workspace"
                             src={developmentToolUrl()}
                             style={{
                               display: 'block', width: '100%', height: '100%',
@@ -9773,19 +10173,11 @@ export default function Index({
                           />
                           )}
                           {developmentToolUrl() && !developmentToolDown && (
-                          /* THE STAGED OPENING (owner, 2026-10-04): the ground is his own
-                             graph-paper tile (dark, neutral — *"god knows it's gotta be gray"*),
-                             the ring is the assembly gate's amber, the line is plain, and the
-                             window eases in UNDER the gate — one 700ms cross-fade, the same
-                             feel as composer and design. The gate covers the frame from the
-                             first paint, so the white splash the owner caught never shows.
-                             ⭐ AND THE PAPER STAYS AFTER (owner, same night): the tile is the
-                             WRAPPER's ground, not just the gate's, and the app inside is
-                             patched to transparent grounds (development/openhands-patch.sh) —
-                             so the lab's graph paper reads as the Development app's own floor,
-                             with its panels (#22202D) floating on it. AND THE GATE IS OURS,
-                             HOSTED TOO: the patch rides the service's image build, so the
-                             demo's workspace wears the same look. */
+                          /* THE STAGED OPENING (owner, 2026-10-04; three seconds from 2026-10-06):
+                             the ground is his own graph-paper tile (dark, neutral — *"god knows
+                             it's gotta be gray"*), the ring is the assembly gate's amber, the
+                             line is plain, and the window eases in UNDER the gate — one 700ms
+                             cross-fade, the same feel as composer and design. */
                           <div
                             aria-hidden={developmentGateDown}
                             style={{
@@ -9804,41 +10196,59 @@ export default function Index({
                           </div>
                           )}
                           {(!developmentToolUrl() || developmentToolDown) && (
-                            /* THE FALLBACK PANEL — the honest state, for free (the plan's words):
-                               no address configured, or the frame never arrived. One plain
-                               sentence pair on the room's own ground. A local run sees this
-                               while :8090 is stopped — which the spinning gate never said. */
+                            /* THE FALLBACK PANEL — the honest state: no address configured, or the
+                               frame never arrived by the ceiling. One plain sentence pair on the
+                               room's own ground. */
                             <div style={{ position: 'absolute', inset: 0, zIndex: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                               <p style={{ margin: 0, color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
                                 {"The development workspace isn't reachable right now."}
                               </p>
                               <p style={{ margin: 0, color: '#8b8b8b', fontSize: 12, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                {"It runs as its own service; it may be starting up. Try again in a moment."}
+                                {"It runs from this repository — start it with RESTART-LOCAL.sh."}
                               </p>
                             </div>
                           )}
-                        </div>
+                            </div>
+                            {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the console and
+                                composer mount, in the container's right pane. CLOSED on entry:
+                                the development clocks effect sets `isThirdOpen = false` as a
+                                PROPERTY (never the attribute — Lit's boolean converter reads
+                                the string "false" as true), so the gripper strip and the rail
+                                are what show, and the panel's settings arrive from the
+                                Composer's loaded chat (the seat effect below). Until then
+                                nothing is bound — an empty seat, never another room's. Its
+                                rail is the room's own list: every drawable tab except
+                                Versions (DEVELOPMENT_SEAT_TABS). */}
+                            <chat-panel slot="right" ref={developmentSeatRef}></chat-panel>
+                          </workspace-layout>
+                        </>
                       )
                       : isDeadTab
                       ? null
                       : headerTab === 'design'
                         ? <a2ui-renderer key="design-render" ref={designRendererRef} />
                         : headerTab === 'product'
-                          /* THE PRODUCT ROOM IS THE BUILDER (owner, 2026-10-04): *"just load that
-                             inside of the product area, the product room will just remove the
-                             grace chat."* Nothing is assembled for this room any more — no
-                             surface, no tree, no seat: the whole app builder (prompt box, run
-                             progression, live preview, code) runs in this one pane, served by
-                             the builder — the Mac's own copy locally, the HOSTED service on the
-                             demo (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md; the address
-                             arrives at runtime, shared/appConfig.ts). The Lit catalogue keeps
-                             its parts; this room just stops asking for them.
+                          /* THE PRODUCT ROOM IS THE CONSOLE'S CONTAINER + THE BUILDER (owner,
+                             2026-10-05): *"just dropping the app iframe into a copy of the console
+                             — remove the cards, drop the builder in there where the cards are."*
+                             So the room wears the CONSOLE'S container — `workspace-layout`, the
+                             composer's own frame element, never a copy of it — with the whole app
+                             builder as its left column (unchanged inside: the frame, the staged
+                             gate, the stopped-engine banner) and the platform chat seat as its
+                             right column, CLOSED on entry (the gripper strip and the rail — the
+                             console's own behaviour, because it is the console's container).
+                             THE SEAT IS THE ONE ELEMENT THE CONSOLE AND COMPOSER USE, and it
+                             reads the COMPOSER'S loaded chat — same conversation, same thread;
+                             no surface is assembled for this room and no new conversation is
+                             created (see the seat effect beside the product clocks below).
                              THE PROJECT COMES FROM THE CARD: a console card for a builder
                              project sets `productRoomProjectId`, and the embed opens that
                              project's workspace; with none, a new one is born (never the
                              dashboard — the room's own rule). */
                           ? (
-                            <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
+                            <>
+                              <workspace-layout ref={productLayoutRef} className="flex-1 min-h-0">
+                                <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                               {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
                                   once a project does. While one is being born — or while the
                                   engine is down — the pane is quiet; it is never pointed at the
@@ -9850,16 +10260,16 @@ export default function Index({
                                   no address at all (a demo without its service) or the demo's
                                   engine reads as down; a local engine down keeps its own forms —
                                   the quiet opening state plus the red banner below. */}
-                              {!builderToolUrl() || (isDemoMode() && builderEngineDown) ? (
+                              {!builderToolUrl() || (isDemoMode() && builderEngineDown) || productToolDown ? (
                                 /* THE FALLBACK PANEL — the honest state, for free (2026-10-04).
                                    The old interim copy ("Hosting it here is the next step") was
                                    true the night it shipped and is false now that hosting landed;
                                    this says what a missing or stopped service actually means. */
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundImage: `url(${wireframeLabBackground})`, backgroundRepeat: 'repeat' }}>
-                                  <p style={{ margin: 0, color: '#6B7280', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+                                  <p style={{ margin: 0, color: '#c9c9c9', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                                     {"The builder isn't reachable right now."}
                                   </p>
-                                  <p style={{ margin: 0, color: '#9aa0a6', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                  <p style={{ margin: 0, color: '#8b8b8b', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                                     {"It runs as its own service; it may be starting up. Try again in a moment."}
                                   </p>
                                 </div>
@@ -9867,13 +10277,18 @@ export default function Index({
                                 <builder-embed
                                   key={`product-builder-${productRoomProjectId}`}
                                   src={`${builderToolUrl()}/project/${encodeURIComponent(productRoomProjectId)}`}
-                                  style={{ display: 'block', width: '100%', height: '100%' }}
+                                  style={{
+                                    display: 'block', width: '100%', height: '100%',
+                                    opacity: productGateDown ? 1 : 0,
+                                    transition: 'opacity 700ms ease',
+                                  }}
                                 />
                               ) : (
                                 /* THE GATE WEARS THE SAME LAB TEXTURE (owner, 2026-10-04) —
-                                   "no project loaded" is an empty state too, and the room's
-                                   ground image is already this file (`wireframeLabBackground`). */
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#6B7280', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundImage: `url(${wireframeLabBackground})`, backgroundRepeat: 'repeat' }}>
+                                   "no project loaded" is an empty state too, and the gate's
+                                   ground image is this file (`developmentLabBackground`);
+                                   the ROOM's own ground is the composer's now (2026-10-05). */
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#c9c9c9', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                                   {/* THE SAME GATE'S RING (2026-10-04): the Product room's own
                                       opening state is an assembly gate too — it gets the amber
                                       indicator, not a bare line of text. */}
@@ -9882,6 +10297,29 @@ export default function Index({
                                   )}
                                   {builderEngineDown ? '' : "Opening a new project\u2026"}
                                 </div>
+                              )}
+                              {builderToolUrl() && !productToolDown && (
+                              /* THE SAME STAGED GATE AS DEVELOPMENT (2026-10-05) — up from the
+                                 room's first paint, over the frame and over the opening state,
+                                 and dropped only when the frame's load event and the 5s minimum
+                                 have both landed (see the two clocks above): one 700ms
+                                 cross-fade, and the builder's white first paint never shows. */
+                              <div
+                                aria-hidden={productGateDown}
+                                style={{
+                                  position: 'absolute', inset: 0, zIndex: 3,
+                                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                                  backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
+                                  opacity: productGateDown ? 0 : 1,
+                                  transition: 'opacity 700ms ease',
+                                  pointerEvents: productGateDown ? 'none' : 'auto',
+                                }}
+                              >
+                                <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                                <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                  {"Standing up the builder\u2026"}
+                                </p>
+                              </div>
                               )}
                               {/* A STOPPED ENGINE GETS SAID PLAINLY — else the tool's own errors read
                                   like broken features. NEVER ON THE DEMO (2026-10-04): its copy names
@@ -9899,7 +10337,21 @@ export default function Index({
                                   {"The builder's engine isn't running. Start it with: npm run dev:local  (in wireframe-lab/ai-app-builder-open)"}
                                 </div>
                               )}
-                              {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04): publish the idea
+                                </div>
+                                {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the console
+                                    and composer mount, in the container's right pane. CLOSED on
+                                    entry: the product clocks effect sets `isThirdOpen = false`
+                                    as a PROPERTY (never the attribute — Lit's boolean converter
+                                    reads the string "false" as true), so the gripper strip and
+                                    the rail are what show, and the panel's settings arrive from
+                                    the Composer's loaded chat (the seat effect below). Until
+                                    then nothing is bound — an empty seat, never another room's. */}
+                                <chat-panel slot="right" ref={productSeatRef}></chat-panel>
+                              </workspace-layout>
+                              {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04) — ONE LEVEL UP
+                                  since the column arrived (2026-10-05): it must cover the WHOLE
+                                  room, and a fixed overlay inside a transformed pane would be
+                                  positioned against that pane, not the window. Publish the idea
                                   to the console, discard it for good, or stay. Two explicit
                                   buttons and no ambiguous "Cancel" — discarding is destructive
                                   and must be chosen on purpose. */}
@@ -9932,7 +10384,7 @@ export default function Index({
                                   </div>
                                 </div>
                               )}
-                            </div>
+                            </>
                           )
                           : headerTab === 'governance'
                             ? <a2ui-renderer key="governance-render" ref={governanceRendererRef} />

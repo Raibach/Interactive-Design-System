@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T16:44:59.302Z",
+  "generatedAt": "2026-10-06T12:13:16.404Z",
   "system": {
     "id": "primitives",
     "catalogId": "https://raibach.net/a2ui/catalogs/primitives/v0_9_1/catalog.json",
@@ -26,7 +26,7 @@
     "figmaLayersNote": "Figma layers are not drawn: they need the design file and an API token. The Figma node each element came from is shown instead (registry.json), and the ingest ledger for it.",
     "gate": null,
     "gateNote": "no audit has been run for this catalogue (frontend/catalog-audit/primitives.json is absent)",
-    "removalNote": "6 removal record(s) in backend/logs/figma-ingest.jsonl, and not one names a node or a tag. The ledger says a removal happened and what the audit counted afterwards; it does not say what was removed. The counts in those verdicts are the only trace (58 components before 01:10:49Z, 57 after 01:11:58Z).",
+    "removalNote": "35 removal record(s) in backend/logs/figma-ingest.jsonl, and not one names a node or a tag. The ledger says a removal happened and what the audit counted afterwards; it does not say what was removed. The counts in those verdicts are the only trace (58 components before 01:10:49Z, 57 after 01:11:58Z).",
     "duplicateTags": []
   },
   "groups": [
@@ -501,7 +501,12 @@
               "collapsed",
               "allowedTabs",
               "tracePrompt",
+              "graceLiveContext",
+              "instructions",
               "_sending",
+              "_workActive",
+              "_workStage",
+              "_workTimer",
               "_offerOnly",
               "_historyChecked",
               "_greeted",
@@ -541,6 +546,8 @@
               "_hasStatusLine",
               "_statusLine",
               "_onComposerOpened",
+              "_onGraceStatus",
+              "_onComposerKey",
               "_toggleConversations",
               "_onConversationsKey",
               "_onConversationRemove"
@@ -553,8 +560,11 @@
               "command-received"
             ],
             "dispatched": [
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -578,8 +588,11 @@
               "set-prompt-title"
             ],
             "dispatchedNotListed": [
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -632,8 +645,11 @@
             "events": [
               "message-sent",
               "command-received",
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -686,11 +702,6 @@
       "file": "src/components/lit/a2ui-renderer.ts"
     },
     {
-      "tag": "agent-canvas",
-      "className": "AgentCanvas",
-      "file": "src/components/lit/agent-canvas.ts"
-    },
-    {
       "tag": "agent-card-element",
       "className": "AgentCardElement",
       "file": "src/components/lit/agent-card-element.ts"
@@ -706,9 +717,29 @@
       "file": "src/components/lit/ai-surface-sandbox.ts"
     },
     {
+      "tag": "artifact-canvas",
+      "className": "ArtifactCanvas",
+      "file": "src/components/lit/artifact-canvas.ts"
+    },
+    {
+      "tag": "builder-embed",
+      "className": "BuilderEmbed",
+      "file": "src/components/lit/builder-embed.ts"
+    },
+    {
       "tag": "canvas-footer",
       "className": "CanvasFooter",
       "file": "src/components/lit/canvas-footer.ts"
+    },
+    {
+      "tag": "catalog-ingest-form",
+      "className": "CatalogIngestForm",
+      "file": "src/components/lit/catalog-ingest-form.ts"
+    },
+    {
+      "tag": "catalog-schema-view",
+      "className": "CatalogSchemaView",
+      "file": "src/components/lit/catalog-schema-view.ts"
     },
     {
       "tag": "chat-action-bar",
@@ -761,9 +792,34 @@
       "file": "src/components/lit/compiled-output-viewer.ts"
     },
     {
+      "tag": "component-preview",
+      "className": "ComponentPreview",
+      "file": "src/components/lit/component-preview.ts"
+    },
+    {
       "tag": "control-bar",
       "className": "ControlBar",
       "file": "src/components/lit/control-bar.ts"
+    },
+    {
+      "tag": "design-left-panel",
+      "className": "DesignLeftPanel",
+      "file": "src/components/lit/design-left-panel.ts"
+    },
+    {
+      "tag": "design-middle-container",
+      "className": "DesignMiddleContainer",
+      "file": "src/components/lit/design-middle-container.ts"
+    },
+    {
+      "tag": "draft-canvas",
+      "className": "DraftCanvas",
+      "file": "src/components/lit/draft-canvas.ts"
+    },
+    {
+      "tag": "draft-preview",
+      "className": "DraftPreview",
+      "file": "src/components/lit/draft-preview.ts"
     },
     {
       "tag": "error-banner",
@@ -774,6 +830,46 @@
       "tag": "eval-feed",
       "className": "EvalFeed",
       "file": "src/components/lit/eval-feed.ts"
+    },
+    {
+      "tag": "f-40001204-5752",
+      "className": "F400012045752",
+      "file": "src/components/lit/f-40001204-5752.ts"
+    },
+    {
+      "tag": "f-40001206-2888",
+      "className": "LayoutIdComponent",
+      "file": "src/components/lit/f-40001206-2888.ts"
+    },
+    {
+      "tag": "f-40001206-3423",
+      "className": "CatalogNode",
+      "file": "src/components/lit/f-40001206-3423.ts"
+    },
+    {
+      "tag": "f-40001207-3497",
+      "className": "CatalogComponentNodeRaibachIds",
+      "file": "src/components/lit/f-40001207-3497.ts"
+    },
+    {
+      "tag": "f-40001207-3559",
+      "className": "CatalogNodeRaibachIds",
+      "file": "src/components/lit/f-40001207-3559.ts"
+    },
+    {
+      "tag": "figma-ingest-form",
+      "className": "FigmaIngestForm",
+      "file": "src/components/lit/figma-ingest-form.ts"
+    },
+    {
+      "tag": "figma-layers-view",
+      "className": "FigmaLayersView",
+      "file": "src/components/lit/figma-layers-view.ts"
+    },
+    {
+      "tag": "governance-usage-view",
+      "className": "GovernanceUsageView",
+      "file": "src/components/lit/governance-usage-view.ts"
     },
     {
       "tag": "left-column-header",
@@ -799,6 +895,11 @@
       "tag": "prompt-section-editor",
       "className": "PromptSectionEditor",
       "file": "src/components/lit/prompt-section-editor.ts"
+    },
+    {
+      "tag": "room-embed",
+      "className": "RoomEmbed",
+      "file": "src/components/lit/room-embed.ts"
     },
     {
       "tag": "small-dropdown",
@@ -869,14 +970,44 @@
       "tag": "status-bar-prompt-input",
       "className": "StatusBarPromptInput",
       "file": "src/components/lit/prompt-input/status-bar-prompt-input.ts"
+    },
+    {
+      "tag": "kor-button",
+      "className": "korButton",
+      "file": "src/components/lit/kor/components/button/kor-button.ts"
+    },
+    {
+      "tag": "kor-card",
+      "className": "korCard",
+      "file": "src/components/lit/kor/components/card/kor-card.ts"
+    },
+    {
+      "tag": "kor-icon",
+      "className": "korIcon",
+      "file": "src/components/lit/kor/components/icon/kor-icon.ts"
+    },
+    {
+      "tag": "kor-input",
+      "className": "korInput",
+      "file": "src/components/lit/kor/components/input/kor-input.ts"
+    },
+    {
+      "tag": "kor-text",
+      "className": "korText",
+      "file": "src/components/lit/kor/components/text/kor-text.ts"
+    },
+    {
+      "tag": "ag-select",
+      "className": "Select",
+      "file": "src/components/lit/agnosticui/components/Select/core/_Select.ts"
     }
   ],
   "ledgerOnly": [
     {
       "nodeId": "40001185:2176",
       "nodeName": "Frame 886987",
-      "records": 28,
-      "history": "ingested×19 · approved×9",
+      "records": 36,
+      "history": "ingested×23 · approved×13",
       "firstAt": "2026-09-28T00:32:27Z",
       "timeline": [
         {
@@ -986,14 +1117,99 @@
           "n": 1,
           "first": "2026-09-28T15:45:36Z",
           "last": "2026-09-28T15:45:36Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T17:33:44Z",
+          "last": "2026-09-28T17:33:44Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T17:33:50Z",
+          "last": "2026-09-28T17:33:50Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T18:11:54Z",
+          "last": "2026-09-28T18:11:54Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T18:12:01Z",
+          "last": "2026-09-28T18:12:01Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T18:20:21Z",
+          "last": "2026-09-28T18:20:21Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T18:20:23Z",
+          "last": "2026-09-28T18:20:23Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T19:36:29Z",
+          "last": "2026-09-28T19:36:29Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T19:36:44Z",
+          "last": "2026-09-28T19:36:44Z"
         }
       ],
       "tags": [
         "f-40001185-2176"
       ],
       "inAnyCatalogue": false,
-      "lastAt": "2026-09-28T15:45:36Z",
-      "lastVerdict": "catalog-check: 58 components, 13 finding(s), 1 blocking. Report: catalog-audit/prompt-composer.json"
+      "lastAt": "2026-09-28T19:36:44Z",
+      "lastVerdict": "catalog-check: 58 components, 13 finding(s), 1 blocking. Report: catalog-audit/prompt-composer.json — reported, not enforced."
+    },
+    {
+      "nodeId": "40001207:3503",
+      "nodeName": "chevron-blue-open",
+      "records": 11,
+      "history": "ingested×9 · discarded×1 · ingest-failed×1",
+      "firstAt": "2026-09-29T13:39:28Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-29T13:39:28Z",
+          "last": "2026-09-29T13:39:28Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-29T13:40:21Z",
+          "last": "2026-09-29T13:40:21Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 8,
+          "first": "2026-09-29T14:03:52Z",
+          "last": "2026-09-29T14:39:09Z"
+        },
+        {
+          "kind": "ingest-failed",
+          "n": 1,
+          "first": "2026-09-29T14:58:51Z",
+          "last": "2026-09-29T14:58:51Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T14:58:51Z",
+      "lastVerdict": null
     },
     {
       "nodeId": "40001114:4012",
@@ -1066,6 +1282,31 @@
       "tags": [],
       "inAnyCatalogue": false,
       "lastAt": "2026-09-28T00:40:51Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001207:3555",
+      "nodeName": "chevron-blue-closed",
+      "records": 6,
+      "history": "ingested×5 · discarded×1",
+      "firstAt": "2026-09-29T13:46:55Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 5,
+          "first": "2026-09-29T13:46:55Z",
+          "last": "2026-09-29T13:56:19Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-29T14:02:52Z",
+          "last": "2026-09-29T14:02:52Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T14:02:52Z",
       "lastVerdict": null
     },
     {
@@ -1204,13 +1445,84 @@
       "inAnyCatalogue": false,
       "lastAt": "2026-09-28T01:45:58Z",
       "lastVerdict": null
+    },
+    {
+      "nodeId": "40001206:3422",
+      "nodeName": "catalog-node-raibach-ids",
+      "records": 2,
+      "history": "ingested×1 · approved×1",
+      "firstAt": "2026-09-29T12:52:11Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-29T12:52:11Z",
+          "last": "2026-09-29T12:52:11Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-29T12:52:32Z",
+          "last": "2026-09-29T12:52:32Z"
+        }
+      ],
+      "tags": [
+        "f-40001206-3422"
+      ],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T12:52:32Z",
+      "lastVerdict": "catalog-check: 54 components, 13 finding(s), 1 blocking. Report: catalog-audit/prompt-composer.json — reported, not enforced."
+    },
+    {
+      "nodeId": "40001207:6557",
+      "nodeName": "chevron-blue-closed",
+      "records": 2,
+      "history": "ingested×2",
+      "firstAt": "2026-09-29T15:55:22Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-09-29T15:55:22Z",
+          "last": "2026-09-29T15:57:41Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T15:57:41Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001177:2476",
+      "nodeName": "prompt-textarea-container-system",
+      "records": 2,
+      "history": "ingested×1 · discarded×1",
+      "firstAt": "2026-10-05T16:27:12Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-05T16:27:12Z",
+          "last": "2026-10-05T16:27:12Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-05T16:27:26Z",
+          "last": "2026-10-05T16:27:26Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-10-05T16:27:26Z",
+      "lastVerdict": null
     }
   ],
   "ledgerNote": {
-    "records": 70,
+    "records": 427,
     "unreadable": 0,
     "sessionRecords": 5,
-    "removalRecords": 6,
+    "removalRecords": 35,
     "path": "backend/logs/figma-ingest.jsonl"
   }
 }

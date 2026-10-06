@@ -5,7 +5,6 @@ import re
 import time
 from typing import Any
 
-import sentry_sdk
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -217,18 +216,8 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 print(f"❌ Package check failed for conversation {conv_id}: {e}")
                 conv_id = None
 
-        # ── Sentry AI monitoring: tag span with conversation + user ──
-        sentry_sdk.set_user({"id": uid})
-        if conv_id:
-            sentry_sdk.set_tag("gen_ai.conversation.id", conv_id)
-        sentry_sdk.set_tag("ai.model", "deepseek-chat")
-        sentry_sdk.set_tag("ai.provider", "deepseek")
-        sentry_sdk.set_tag("ai.mode", request.mode)
-        sentry_sdk.set_tag("ai.temperature", str(request.temperature))
-        if request.project_id:
-            sentry_sdk.set_tag("project.id", request.project_id)
-        if request.reasoning:
-            sentry_sdk.set_tag("ai.reasoning_style", request.reasoning_style)
+        # (The Sentry tags that stood here were removed 2026-10-06 — reporting is off at the
+        # init site; see main.py's own note.)
 
         # ── Persistent conversation ──────────────────────────────────
         # Every chat turn must persist. `conversations.session_id` is NOT NULL,

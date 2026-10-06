@@ -1,5 +1,5 @@
 /**
- * <agent-canvas> — THE PLUG-IN, AS A CONTAINER: the drawing and her seat, as one place.
+ * <room-embed> — THE PLUG-IN, AS A CONTAINER: the drawing and her seat, as one place.
  *
  * A CONTAINER, NOT A WRAPPER. Its template holds SLOTS and nothing else, and the
  * ENVELOPE supplies what goes in them — the column's header into "header", the drawing
@@ -54,7 +54,7 @@ const SEAT_OPEN_PX = 650;
 /** The widest a drag may take her, as a share of this element's own box. */
 const SEAT_MAX_SHARE = 0.7;
 
-export class AgentCanvas extends LitElement {
+export class RoomEmbed extends LitElement {
   static properties = {
     /** The drawing's tone. Empty is the mid-tone this design is drawn in; "dark" is the
      *  reference's near-black surface. It reaches the ground her column stands on, and
@@ -604,22 +604,22 @@ export class AgentCanvas extends LitElement {
   ];
 }
 
-if (!customElements.get('agent-canvas')) customElements.define('agent-canvas', AgentCanvas);
+if (!customElements.get('room-embed')) customElements.define('room-embed', RoomEmbed);
 
 declare global {
   interface HTMLElementTagNameMap {
-    'agent-canvas': AgentCanvas;
+    'room-embed': RoomEmbed;
   }
 }
 
 declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
-      'agent-canvas': React.DetailedHTMLProps<
-        React.HTMLAttributes<AgentCanvas> & {
-          ref?: React.Ref<AgentCanvas>;
+      'room-embed': React.DetailedHTMLProps<
+        React.HTMLAttributes<RoomEmbed> & {
+          ref?: React.Ref<RoomEmbed>;
         },
-        AgentCanvas
+        RoomEmbed
       >;
     }
   }

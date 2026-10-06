@@ -96,7 +96,7 @@ reader, two uses.
 ## §4 — The palette is a SUBSET, and that is the one genuinely new invariant
 
 Not every registered component may be instantiated in a draft. The catalog contains `chat-panel`
-("one Grace — a surface mounts this OR a bare chat-panel, never both"), `agent-canvas` (the plug-in
+("one Grace — a surface mounts this OR a bare chat-panel, never both"), `room-embed` (the plug-in
 itself), `canvas-footer` (the canvas's own furniture), `model-selector-button` (a declared
 placeholder). A wireframe node hosting any of those would be a second Grace, a nested surface, or a
 control that does nothing — all three forbidden.

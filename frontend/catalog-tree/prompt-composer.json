@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T16:44:59.357Z",
+  "generatedAt": "2026-10-06T12:13:16.567Z",
   "system": {
     "id": "prompt-composer",
     "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
@@ -12,13 +12,13 @@
     "owner": null,
     "ownerNote": "The catalogue declares no owner field. Nothing in the repository says who owns a catalogue.",
     "counts": {
-      "declared": 57,
-      "annotated": 53,
-      "built": 51,
-      "inManifest": 51,
-      "allowlisted": 44,
-      "mapped": 21,
-      "inTheFigmaMap": 27
+      "declared": 63,
+      "annotated": 59,
+      "built": 63,
+      "inManifest": 63,
+      "allowlisted": 49,
+      "mapped": 26,
+      "inTheFigmaMap": 32
     },
     "tokens": null,
     "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
@@ -26,14 +26,14 @@
     "figmaLayersNote": "Figma layers are not drawn: they need the design file and an API token. The Figma node each element came from is shown instead (registry.json), and the ingest ledger for it.",
     "gate": {
       "status": "partial",
-      "generatedAt": "2026-09-28T15:53:43.989Z",
-      "findings": 13,
-      "blocking": 1,
+      "generatedAt": "2026-10-06T11:45:11.919Z",
+      "findings": 19,
+      "blocking": 5,
       "fileKey": null,
       "report": "frontend/catalog-audit/prompt-composer.json"
     },
     "gateNote": null,
-    "removalNote": "6 removal record(s) in backend/logs/figma-ingest.jsonl, and not one names a node or a tag. The ledger says a removal happened and what the audit counted afterwards; it does not say what was removed. The counts in those verdicts are the only trace (58 components before 01:10:49Z, 57 after 01:11:58Z).",
+    "removalNote": "35 removal record(s) in backend/logs/figma-ingest.jsonl, and not one names a node or a tag. The ledger says a removal happened and what the audit counted afterwards; it does not say what was removed. The counts in those verdicts are the only trace (58 components before 01:10:49Z, 57 after 01:11:58Z).",
     "duplicateTags": [
       {
         "tag": "trace-feed",
@@ -60,10 +60,10 @@
         "declaredPropsDiffer": true
       },
       {
-        "tag": "agent-canvas",
+        "tag": "room-embed",
         "names": [
-          "AgentCanvas",
-          "agent-canvas"
+          "RoomEmbed",
+          "room-embed"
         ],
         "declaredPropsDiffer": true
       },
@@ -185,11 +185,18 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-09-29T00:41:12Z",
+                "last": "2026-09-29T00:41:12Z"
+              }
+            ],
+            "lastAt": "2026-09-29T00:41:12Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
@@ -222,7 +229,13 @@
               "text"
             ],
             "inManifest": [
-              "text"
+              "text",
+              "expanded",
+              "_lineEl",
+              "_overflowing",
+              "_toggle",
+              "_onKey",
+              "_ro"
             ],
             "inManifestNote": null
           },
@@ -320,11 +333,18 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-28T21:46:07Z",
+                "last": "2026-09-28T21:46:07Z"
+              }
+            ],
+            "lastAt": "2026-09-28T21:46:07Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
@@ -386,11 +406,18 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-28T21:46:07Z",
+                "last": "2026-09-28T21:46:07Z"
+              }
+            ],
+            "lastAt": "2026-09-28T21:46:07Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
@@ -453,11 +480,18 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-09-29T00:41:12Z",
+                "last": "2026-09-29T00:41:12Z"
+              }
+            ],
+            "lastAt": "2026-09-29T00:41:12Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
@@ -620,7 +654,12 @@
               "collapsed",
               "allowedTabs",
               "tracePrompt",
+              "graceLiveContext",
+              "instructions",
               "_sending",
+              "_workActive",
+              "_workStage",
+              "_workTimer",
               "_offerOnly",
               "_historyChecked",
               "_greeted",
@@ -660,6 +699,8 @@
               "_hasStatusLine",
               "_statusLine",
               "_onComposerOpened",
+              "_onGraceStatus",
+              "_onComposerKey",
               "_toggleConversations",
               "_onConversationsKey",
               "_onConversationRemove"
@@ -672,8 +713,11 @@
               "command-received"
             ],
             "dispatched": [
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -697,8 +741,11 @@
               "set-prompt-title"
             ],
             "dispatchedNotListed": [
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -751,8 +798,11 @@
             "events": [
               "message-sent",
               "command-received",
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -888,8 +938,8 @@
               "check": "events",
               "level": "advisory",
               "owner": "pipeline",
-              "what": "<chat-panel> dispatches \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:usage\", \"a2ui:run-blocked\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" and the tag registry does not list it. The registry's `events` is read as EMITS by some callers and as a LISTENS-FOR list by others, which is why an unlisted dispatch is a gap and not an error.",
-              "fix": "List \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:usage\", \"a2ui:run-blocked\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" on chat-panel in the registry — and say which direction the list means."
+              "what": "<chat-panel> dispatches \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" and the tag registry does not list it. The registry's `events` is read as EMITS by some callers and as a LISTENS-FOR list by others, which is why an unlisted dispatch is a gap and not an error.",
+              "fix": "List \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" on chat-panel in the registry — and say which direction the list means."
             }
           ],
           "props": {
@@ -897,7 +947,9 @@
               "component",
               "conversationId",
               "conversations",
-              "id"
+              "graceLiveContext",
+              "id",
+              "instructions"
             ],
             "inManifest": [
               "conversationId",
@@ -948,7 +1000,12 @@
               "collapsed",
               "allowedTabs",
               "tracePrompt",
+              "graceLiveContext",
+              "instructions",
               "_sending",
+              "_workActive",
+              "_workStage",
+              "_workTimer",
               "_offerOnly",
               "_historyChecked",
               "_greeted",
@@ -988,6 +1045,8 @@
               "_hasStatusLine",
               "_statusLine",
               "_onComposerOpened",
+              "_onGraceStatus",
+              "_onComposerKey",
               "_toggleConversations",
               "_onConversationsKey",
               "_onConversationRemove"
@@ -1000,8 +1059,11 @@
               "command-received"
             ],
             "dispatched": [
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -1025,8 +1087,11 @@
               "set-prompt-title"
             ],
             "dispatchedNotListed": [
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -1079,8 +1144,11 @@
             "events": [
               "message-sent",
               "command-received",
+              "a2ui:build-wireframe",
               "a2ui:console-command",
+              "a2ui:edit-node",
               "a2ui:fix-all",
+              "a2ui:person-turn",
               "a2ui:run-approved",
               "a2ui:run-blocked",
               "a2ui:system-message",
@@ -1388,9 +1456,9 @@
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 13,
-        "annotated": 13,
-        "findings": 1
+        "elements": 16,
+        "annotated": 16,
+        "findings": 0
       },
       "elements": [
         {
@@ -1425,6 +1493,7 @@
               "theme",
               "mode",
               "panning",
+              "running",
               "viewportInset",
               "selectedId",
               "zoom",
@@ -1555,6 +1624,7 @@
               "theme",
               "mode",
               "panning",
+              "running",
               "viewportInset",
               "selectedId",
               "zoom",
@@ -1656,11 +1726,11 @@
           ]
         },
         {
-          "name": "AgentCanvas",
-          "tag": "agent-canvas",
+          "name": "RoomEmbed",
+          "tag": "room-embed",
           "tagNote": null,
-          "className": "AgentCanvas",
-          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/agent-canvas.ts",
+          "className": "RoomEmbed",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/room-embed.ts",
           "registration": {
             "declared": true,
             "annotated": true,
@@ -1671,20 +1741,10 @@
             "mapped": false
           },
           "marks": [
-            "⚠",
             "●",
             "⇄"
           ],
-          "findings": [
-            {
-              "id": "slots:AgentCanvas:seat",
-              "check": "slots",
-              "level": "blocking",
-              "owner": "designer",
-              "what": "The catalog declares a \"seat\" slot on AgentCanvas and the element renders no slot by that name (it has a default slot, which the envelope never fills by name). A payload written to this catalog therefore draws that child nowhere.",
-              "fix": "Change the catalog's children to the slots the element renders (header, flow, footer), or render a \"seat\" slot."
-            }
-          ],
+          "findings": [],
           "props": {
             "declared": [
               "collapsed",
@@ -1705,7 +1765,8 @@
               "_onCollapseToggle",
               "_onTabChange",
               "_onFlowSelect",
-              "_onTurnClick"
+              "_onTurnClick",
+              "_onAskGrace"
             ],
             "inManifestNote": null
           },
@@ -1755,15 +1816,15 @@
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
-            "agent-canvas"
+            "room-embed"
           ]
         },
         {
-          "name": "agent-canvas",
-          "tag": "agent-canvas",
+          "name": "room-embed",
+          "tag": "room-embed",
           "tagNote": null,
-          "className": "AgentCanvas",
-          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/agent-canvas.ts",
+          "className": "RoomEmbed",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/room-embed.ts",
           "registration": {
             "declared": true,
             "annotated": true,
@@ -1796,7 +1857,8 @@
               "_onCollapseToggle",
               "_onTabChange",
               "_onFlowSelect",
-              "_onTurnClick"
+              "_onTurnClick",
+              "_onAskGrace"
             ],
             "inManifestNote": null
           },
@@ -1841,142 +1903,8 @@
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
-            "AgentCanvas"
+            "RoomEmbed"
           ]
-        },
-        {
-          "name": "output-panel",
-          "tag": "output-panel",
-          "tagNote": null,
-          "className": null,
-          "file": null,
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": false,
-            "rendererOwned": false,
-            "built": false,
-            "mapped": false
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "component",
-              "content",
-              "model",
-              "status",
-              "tokens"
-            ],
-            "inManifest": null,
-            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
-          },
-          "events": {
-            "allowlisted": [
-              "copy-output"
-            ],
-            "dispatched": [],
-            "dispatchedNotListed": [],
-            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [],
-            "declaredNotRendered": [],
-            "bareSlot": null
-          },
-          "children": {
-            "slot": [],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "copy-output"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": null,
-          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
-        },
-        {
-          "name": "version-trace",
-          "tag": "version-trace",
-          "tagNote": null,
-          "className": null,
-          "file": null,
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": false,
-            "rendererOwned": false,
-            "built": false,
-            "mapped": false
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "activeVersion",
-              "component",
-              "sessionId"
-            ],
-            "inManifest": null,
-            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
-          },
-          "events": {
-            "allowlisted": [
-              "version-select",
-              "version-compare"
-            ],
-            "dispatched": [],
-            "dispatchedNotListed": [],
-            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [],
-            "declaredNotRendered": [],
-            "bareSlot": null
-          },
-          "children": {
-            "slot": [],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "version-select",
-              "version-compare"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": null,
-          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
         {
           "name": "CompiledOutput",
@@ -2306,15 +2234,24 @@
               "outputType"
             ],
             "inManifest": [
-              "outputType"
+              "outputType",
+              "view",
+              "views",
+              "_menuOpen",
+              "_onTileClick",
+              "_closeMenu"
             ],
             "inManifestNote": null
           },
           "events": {
-            "allowlisted": [],
-            "dispatched": [],
+            "allowlisted": [
+              "view-change"
+            ],
+            "dispatched": [
+              "view-change"
+            ],
             "dispatchedNotListed": [],
-            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+            "note": null
           },
           "slots": {
             "declared": [],
@@ -2330,7 +2267,9 @@
             "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
           },
           "actions": {
-            "events": [],
+            "events": [
+              "view-change"
+            ],
             "binding": null,
             "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
           },
@@ -2374,7 +2313,267 @@
               "id"
             ],
             "inManifest": [
-              "outputType"
+              "outputType",
+              "view",
+              "views",
+              "_menuOpen",
+              "_onTileClick",
+              "_closeMenu"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "view-change"
+            ],
+            "dispatched": [
+              "view-change"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "model-selector-button"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "view-change"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "OutputControls"
+          ]
+        },
+        {
+          "name": "draft-canvas",
+          "tag": "draft-canvas",
+          "tagNote": null,
+          "className": "DraftCanvas",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/draft-canvas.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "clearable",
+              "component",
+              "draft",
+              "grid",
+              "id",
+              "movable",
+              "palette",
+              "system",
+              "theme"
+            ],
+            "inManifest": [
+              "draft",
+              "theme",
+              "system",
+              "palette",
+              "movable",
+              "grid",
+              "clearable",
+              "selectedId",
+              "_vue",
+              "_vueHost",
+              "_pos",
+              "_drag",
+              "_pan",
+              "_zoom",
+              "_panX",
+              "_panY",
+              "_pickerOpen",
+              "_onSurfaceDown",
+              "_onMove",
+              "_onUp",
+              "_onWheel",
+              "_togglePicker",
+              "_clear",
+              "_onResize"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "draft-select",
+              "draft-node-moved",
+              "draft-node-added",
+              "draft-cleared"
+            ],
+            "dispatched": [
+              "draft-cleared",
+              "draft-node-added",
+              "draft-node-moved",
+              "draft-select"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "draft-select",
+              "draft-node-moved",
+              "draft-node-added",
+              "draft-cleared"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "artifact-canvas",
+          "tag": "artifact-canvas",
+          "tagNote": null,
+          "className": "ArtifactCanvas",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/artifact-canvas.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "artifact",
+              "component",
+              "id"
+            ],
+            "inManifest": [
+              "artifact",
+              "_clear"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "artifact-cleared"
+            ],
+            "dispatched": [
+              "artifact-cleared"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "artifact-cleared"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "governance-usage-view",
+          "tag": "governance-usage-view",
+          "tagNote": null,
+          "className": "GovernanceUsageView",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/governance-usage-view.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id",
+              "refresh"
+            ],
+            "inManifest": [
+              "refresh",
+              "_feed",
+              "_state",
+              "_error",
+              "_reload"
             ],
             "inManifestNote": null
           },
@@ -2392,9 +2591,7 @@
           },
           "children": {
             "slot": [],
-            "composed": [
-              "model-selector-button"
-            ],
+            "composed": [],
             "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
           },
           "actions": {
@@ -2411,10 +2608,152 @@
           },
           "ledgerNote": "the ledger holds no record naming this component",
           "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
-          "duplicateOf": [
-            "OutputControls"
-          ]
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "component-preview",
+          "tag": "component-preview",
+          "tagNote": null,
+          "className": "ComponentPreview",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/component-preview.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "busy",
+              "component",
+              "message",
+              "preview"
+            ],
+            "inManifest": [
+              "preview",
+              "busy",
+              "message",
+              "_confirmingRemove"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "preview-approve",
+              "preview-discard",
+              "preview-remove",
+              "preview-collision-answer"
+            ],
+            "dispatched": [
+              "preview-collision-answer"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [
+              "draw"
+            ],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [
+              "draw"
+            ],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "preview-approve",
+              "preview-discard",
+              "preview-remove",
+              "preview-collision-answer"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "draft-preview",
+          "tag": "draft-preview",
+          "tagNote": null,
+          "className": "DraftPreview",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/draft-preview.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "draft"
+            ],
+            "inManifest": [
+              "draft"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
         {
           "name": "CanvasFooter",
@@ -2609,6 +2948,7 @@
               "headerTab",
               "consoleVideoSrc",
               "_committedSlot",
+              "_committedTab",
               "_fadePhase",
               "_fadeTimer",
               "_fadeClass",
@@ -2837,8 +3177,8 @@
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 13,
-        "annotated": 9,
+        "elements": 14,
+        "annotated": 10,
         "findings": 0
       },
       "elements": [
@@ -3201,6 +3541,105 @@
           },
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "agent-card",
+          "tag": "agent-card-element",
+          "tagNote": null,
+          "className": "AgentCardElement",
+          "file": "frontend/src/components/lit/agent-card-element.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": false,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "category",
+              "category_color",
+              "category_text_color",
+              "category_title_color",
+              "component",
+              "description",
+              "function",
+              "id",
+              "likes",
+              "status",
+              "title",
+              "version"
+            ],
+            "inManifest": [
+              "id",
+              "title",
+              "category",
+              "function",
+              "description",
+              "version",
+              "status",
+              "likes",
+              "categoryColor",
+              "categoryTitleColor",
+              "categoryTextColor",
+              "headerLabel",
+              "_deleteArmed",
+              "_deleteTimer",
+              "LEAVING_MS",
+              "_leaving"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [
+              "card-delete"
+            ],
+            "dispatchedNotListed": [
+              "card-delete"
+            ],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "card-delete"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "console-card-design-system",
+            "figmaNodeId": "40001114:5813",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
           "ledger": {
             "records": 0,
             "timeline": [],
@@ -3639,307 +4078,15 @@
       ]
     },
     {
-      "title": "console column",
-      "derived": true,
-      "declared": null,
-      "counts": {
-        "elements": 3,
-        "annotated": 3,
-        "findings": 0
-      },
-      "elements": [
-        {
-          "name": "agent-card",
-          "tag": "agent-card",
-          "tagNote": null,
-          "className": null,
-          "file": null,
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": false,
-            "rendererOwned": false,
-            "built": false,
-            "mapped": false
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "category",
-              "category_color",
-              "category_text_color",
-              "category_title_color",
-              "component",
-              "description",
-              "function",
-              "id",
-              "likes",
-              "status",
-              "title",
-              "version"
-            ],
-            "inManifest": null,
-            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
-          },
-          "events": {
-            "allowlisted": [
-              "card-open",
-              "card-delete"
-            ],
-            "dispatched": [],
-            "dispatchedNotListed": [],
-            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [],
-            "declaredNotRendered": [],
-            "bareSlot": null
-          },
-          "children": {
-            "slot": [],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "card-open",
-              "card-delete"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": null,
-          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
-        },
-        {
-          "name": "filter-pill",
-          "tag": "filter-pill",
-          "tagNote": null,
-          "className": null,
-          "file": null,
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": false,
-            "rendererOwned": false,
-            "built": false,
-            "mapped": false
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "active",
-              "category",
-              "component",
-              "label"
-            ],
-            "inManifest": null,
-            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
-          },
-          "events": {
-            "allowlisted": [
-              "filter-toggle"
-            ],
-            "dispatched": [],
-            "dispatchedNotListed": [],
-            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [],
-            "declaredNotRendered": [],
-            "bareSlot": null
-          },
-          "children": {
-            "slot": [],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "filter-toggle"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": null,
-          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
-        },
-        {
-          "name": "search-bar",
-          "tag": "search-bar",
-          "tagNote": null,
-          "className": null,
-          "file": null,
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": false,
-            "rendererOwned": false,
-            "built": false,
-            "mapped": false
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "component",
-              "placeholder",
-              "value"
-            ],
-            "inManifest": null,
-            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
-          },
-          "events": {
-            "allowlisted": [
-              "search-change",
-              "search-submit"
-            ],
-            "dispatched": [],
-            "dispatchedNotListed": [],
-            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [],
-            "declaredNotRendered": [],
-            "bareSlot": null
-          },
-          "children": {
-            "slot": [],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "search-change",
-              "search-submit"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": null,
-          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
-        }
-      ]
-    },
-    {
       "title": "left column",
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 12,
-        "annotated": 12,
-        "findings": 1
+        "elements": 13,
+        "annotated": 13,
+        "findings": 2
       },
       "elements": [
-        {
-          "name": "prompt-section",
-          "tag": "prompt-section",
-          "tagNote": null,
-          "className": null,
-          "file": null,
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": false,
-            "rendererOwned": false,
-            "built": false,
-            "mapped": false
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "component",
-              "content",
-              "order",
-              "state",
-              "type"
-            ],
-            "inManifest": null,
-            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
-          },
-          "events": {
-            "allowlisted": [
-              "section-update",
-              "section-remove",
-              "section-reorder"
-            ],
-            "dispatched": [],
-            "dispatchedNotListed": [],
-            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [],
-            "declaredNotRendered": [],
-            "bareSlot": null
-          },
-          "children": {
-            "slot": [],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "section-update",
-              "section-remove",
-              "section-reorder"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": null,
-          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
-        },
         {
           "name": "SectionEditor",
           "tag": "prompt-section-editor",
@@ -4262,7 +4409,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 2,
+            "records": 6,
             "timeline": [
               {
                 "kind": "(untyped)",
@@ -4272,12 +4419,12 @@
               },
               {
                 "kind": "ingested",
-                "n": 1,
+                "n": 5,
                 "first": "2026-09-27T22:58:27Z",
-                "last": "2026-09-27T22:58:27Z"
+                "last": "2026-09-29T00:01:43Z"
               }
             ],
-            "lastAt": "2026-09-27T22:58:27Z"
+            "lastAt": "2026-09-29T00:01:43Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -4376,7 +4523,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 2,
+            "records": 7,
             "timeline": [
               {
                 "kind": "(untyped)",
@@ -4386,12 +4533,24 @@
               },
               {
                 "kind": "ingested",
-                "n": 1,
+                "n": 3,
                 "first": "2026-09-27T22:58:27Z",
-                "last": "2026-09-27T22:58:27Z"
+                "last": "2026-09-28T23:54:02Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T23:55:34Z",
+                "last": "2026-09-28T23:55:34Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-09-28T23:56:05Z",
+                "last": "2026-09-29T00:01:43Z"
               }
             ],
-            "lastAt": "2026-09-27T22:58:27Z"
+            "lastAt": "2026-09-29T00:01:43Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -4542,16 +4701,16 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 1,
+            "records": 3,
             "timeline": [
               {
                 "kind": "ingested",
-                "n": 1,
+                "n": 3,
                 "first": "2026-09-27T22:58:27Z",
-                "last": "2026-09-27T22:58:27Z"
+                "last": "2026-09-29T00:01:43Z"
               }
             ],
-            "lastAt": "2026-09-27T22:58:27Z"
+            "lastAt": "2026-09-29T00:01:43Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -4702,16 +4861,28 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 1,
+            "records": 7,
             "timeline": [
               {
                 "kind": "(untyped)",
                 "n": 1,
                 "first": "2026-09-27T19:23:44Z",
                 "last": "2026-09-27T19:23:44Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 5,
+                "first": "2026-09-28T16:55:19Z",
+                "last": "2026-10-05T16:27:12Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-05T16:27:26Z",
+                "last": "2026-10-05T16:27:26Z"
               }
             ],
-            "lastAt": "2026-09-27T19:23:44Z"
+            "lastAt": "2026-10-05T16:27:26Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -4804,6 +4975,222 @@
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
         {
+          "name": "figma-layers-view",
+          "tag": "figma-layers-view",
+          "tagNote": null,
+          "className": "FigmaLayersView",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/figma-layers-view.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "⚠",
+            "●"
+          ],
+          "findings": [
+            {
+              "id": "props:figma-layers-view:busy",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"busy\" on figma-layers-view and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"busy\" on figma-layers-view in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            }
+          ],
+          "props": {
+            "declared": [
+              "component",
+              "inline",
+              "nodeId",
+              "open",
+              "pipeline",
+              "refresh",
+              "reset",
+              "selected",
+              "showHead"
+            ],
+            "inManifest": [
+              "pipeline",
+              "nodeId",
+              "inline",
+              "refresh",
+              "busy",
+              "reset",
+              "selected",
+              "open",
+              "showHead",
+              "_state",
+              "_reason",
+              "_doc",
+              "_catalog",
+              "_catalogError",
+              "_catalogues",
+              "_cataloguesError",
+              "_catalogFrom",
+              "_figmaNames",
+              "_figmaNodeIds",
+              "_componentsByNode",
+              "_usage",
+              "_usageError",
+              "_findings",
+              "_mapFrom",
+              "_figmaNamesError",
+              "_drawn",
+              "_lastApproved",
+              "_lastApprovedNote",
+              "_toggled",
+              "_collapsed",
+              "_expandedDeclared",
+              "_firstUpdate",
+              "_onWake",
+              "_acceptedThisSession",
+              "_onAcceptSettled",
+              "_loadToken"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "catalog-change",
+              "open-component",
+              "open-layer",
+              "open-function",
+              "catalog-accept"
+            ],
+            "dispatched": [
+              "catalog-accept",
+              "catalog-change",
+              "open-component",
+              "open-function",
+              "open-layer"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [
+              "f-40001207-3497",
+              "f-40001207-3559"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "catalog-change",
+              "open-component",
+              "open-layer",
+              "open-function",
+              "catalog-accept"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-01T01:56:49Z",
+                "last": "2026-10-01T01:56:49Z"
+              }
+            ],
+            "lastAt": "2026-10-01T01:56:49Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "figma-ingest-form",
+          "tag": "figma-ingest-form",
+          "tagNote": null,
+          "className": "FigmaIngestForm",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/figma-ingest-form.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "busy",
+              "component",
+              "message",
+              "notes",
+              "url"
+            ],
+            "inManifest": [
+              "url",
+              "notes",
+              "busy",
+              "message"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "ingest-submit"
+            ],
+            "dispatched": [
+              "ingest-submit"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "ingest-submit"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
           "name": "left-column-header",
           "tag": "left-column-header",
           "tagNote": null,
@@ -4836,6 +5223,8 @@
               "version",
               "promptId",
               "editing",
+              "showMeta",
+              "editable",
               "_draft",
               "_onKey"
             ],
@@ -4913,6 +5302,8 @@
               "version",
               "promptId",
               "editing",
+              "showMeta",
+              "editable",
               "_draft",
               "_onKey"
             ],
@@ -4967,8 +5358,8 @@
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 2,
-        "annotated": 2,
+        "elements": 6,
+        "annotated": 6,
         "findings": 1
       },
       "elements": [
@@ -4993,6 +5384,14 @@
           ],
           "findings": [
             {
+              "id": "props:workspace-layout:title",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"title\" on workspace-layout and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"title\" on workspace-layout in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
               "id": "props:workspace-layout:isThirdOpen",
               "check": "props",
               "level": "advisory",
@@ -5003,10 +5402,12 @@
           ],
           "props": {
             "declared": [
+              "chatLoadWidth",
               "component",
               "id"
             ],
             "inManifest": [
+              "chatLoadWidth",
               "_leftCollapsed",
               "_leftOwnedByOperator",
               "leftCollapsed",
@@ -5042,6 +5443,7 @@
               "_onCollapseToggle",
               "_onTabChange",
               "_onGripStart",
+              "_onGripMove",
               "_onGripEnd",
               "_dockTimer",
               "_onRunClick",
@@ -5050,6 +5452,7 @@
               "_dockNow",
               "_runInFlight",
               "_onFlowViewReady",
+              "_onDesignRun",
               "_rightOverDrawing",
               "CONSOLE_CHAT_MAX_PX",
               "_onGripDown",
@@ -5192,7 +5595,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 22,
+            "records": 35,
             "timeline": [
               {
                 "kind": "(untyped)",
@@ -5202,12 +5605,1515 @@
               },
               {
                 "kind": "ingested",
-                "n": 20,
+                "n": 32,
                 "first": "2026-09-28T00:32:27Z",
-                "last": "2026-09-28T15:45:30Z"
+                "last": "2026-09-28T23:54:02Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T00:44:19Z",
+                "last": "2026-09-29T00:44:19Z"
               }
             ],
-            "lastAt": "2026-09-28T15:45:30Z"
+            "lastAt": "2026-09-29T00:44:19Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "f-40001204-5752",
+          "tag": "f-40001204-5752",
+          "tagNote": null,
+          "className": "F400012045752",
+          "file": "frontend/src/components/lit/f-40001204-5752.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "content",
+              "disabled"
+            ],
+            "inManifest": [],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "System_Role",
+            "figmaNodeId": "40001204:5752",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 32,
+            "timeline": [
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T18:20:21Z",
+                "last": "2026-09-28T18:20:21Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T18:20:23Z",
+                "last": "2026-09-28T18:20:23Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T19:36:29Z",
+                "last": "2026-09-28T19:36:29Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T19:36:44Z",
+                "last": "2026-09-28T19:36:44Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T20:09:38Z",
+                "last": "2026-09-28T20:09:38Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T20:11:15Z",
+                "last": "2026-09-28T20:11:15Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-28T20:13:21Z",
+                "last": "2026-09-28T20:13:21Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T20:13:46Z",
+                "last": "2026-09-28T20:13:46Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T20:14:00Z",
+                "last": "2026-09-28T20:14:00Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-28T20:15:09Z",
+                "last": "2026-09-28T20:15:09Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T20:15:45Z",
+                "last": "2026-09-28T20:15:45Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T20:16:11Z",
+                "last": "2026-09-28T20:16:11Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-28T20:30:32Z",
+                "last": "2026-09-28T20:30:32Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T20:33:42Z",
+                "last": "2026-09-28T20:33:42Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T20:33:52Z",
+                "last": "2026-09-28T20:33:52Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-28T20:42:25Z",
+                "last": "2026-09-28T20:42:25Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T22:05:24Z",
+                "last": "2026-09-28T22:05:24Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-28T22:05:31Z",
+                "last": "2026-09-28T22:05:31Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T22:08:07Z",
+                "last": "2026-09-28T22:08:07Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T22:08:13Z",
+                "last": "2026-09-28T22:08:13Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-28T23:04:41Z",
+                "last": "2026-09-28T23:04:41Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T23:05:52Z",
+                "last": "2026-09-28T23:05:52Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T23:06:02Z",
+                "last": "2026-09-28T23:06:02Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-28T23:54:02Z",
+                "last": "2026-09-28T23:54:02Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-28T23:55:34Z",
+                "last": "2026-09-28T23:55:34Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 6,
+                "first": "2026-09-28T23:56:05Z",
+                "last": "2026-09-29T16:41:54Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T16:42:52Z",
+                "last": "2026-09-29T16:42:52Z"
+              }
+            ],
+            "lastAt": "2026-09-29T16:42:52Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "f-40001207-3497",
+          "tag": "f-40001207-3497",
+          "tagNote": null,
+          "className": "CatalogComponentNodeRaibachIds",
+          "file": "frontend/src/components/lit/f-40001207-3497.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component"
+            ],
+            "inManifest": [],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "chevron-toggle"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "chevron-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "catalog-component-node-raibach-ids",
+            "figmaNodeId": "40001207:3497",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 181,
+            "timeline": [
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T13:29:34Z",
+                "last": "2026-09-29T13:29:34Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T13:32:24Z",
+                "last": "2026-09-29T13:32:24Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T13:38:33Z",
+                "last": "2026-09-29T13:38:33Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T13:38:44Z",
+                "last": "2026-09-29T13:38:44Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T13:38:52Z",
+                "last": "2026-09-29T13:38:52Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T13:45:31Z",
+                "last": "2026-09-29T13:45:31Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T13:45:59Z",
+                "last": "2026-09-29T13:45:59Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T13:46:21Z",
+                "last": "2026-09-29T13:46:21Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T13:46:46Z",
+                "last": "2026-09-29T13:46:46Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T14:53:08Z",
+                "last": "2026-09-29T14:53:08Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T14:53:35Z",
+                "last": "2026-09-29T14:53:35Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 4,
+                "first": "2026-09-29T14:55:14Z",
+                "last": "2026-09-29T15:02:00Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:02:02Z",
+                "last": "2026-09-29T15:02:02Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-09-29T15:03:07Z",
+                "last": "2026-09-29T15:08:37Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:14:41Z",
+                "last": "2026-09-29T15:14:41Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:16:02Z",
+                "last": "2026-09-29T15:16:02Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:16:05Z",
+                "last": "2026-09-29T15:16:05Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:17:20Z",
+                "last": "2026-09-29T15:17:20Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:17:43Z",
+                "last": "2026-09-29T15:17:43Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-09-29T15:21:33Z",
+                "last": "2026-09-29T15:23:57Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:24:18Z",
+                "last": "2026-09-29T15:24:18Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:34:35Z",
+                "last": "2026-09-29T15:34:35Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:35:23Z",
+                "last": "2026-09-29T15:35:23Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:36:20Z",
+                "last": "2026-09-29T15:36:20Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:36:33Z",
+                "last": "2026-09-29T15:36:33Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-09-29T15:38:02Z",
+                "last": "2026-09-29T15:39:13Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:39:16Z",
+                "last": "2026-09-29T15:39:16Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:39:42Z",
+                "last": "2026-09-29T15:39:42Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:40:31Z",
+                "last": "2026-09-29T15:40:31Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:41:29Z",
+                "last": "2026-09-29T15:41:29Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T15:47:02Z",
+                "last": "2026-09-29T15:47:02Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:47:47Z",
+                "last": "2026-09-29T15:47:47Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T15:47:49Z",
+                "last": "2026-09-29T15:47:49Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:48:54Z",
+                "last": "2026-09-29T15:48:54Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:49:04Z",
+                "last": "2026-09-29T15:49:04Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T15:49:44Z",
+                "last": "2026-09-29T15:49:44Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:50:10Z",
+                "last": "2026-09-29T15:50:10Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:51:15Z",
+                "last": "2026-09-29T15:51:15Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T15:51:30Z",
+                "last": "2026-09-29T15:51:30Z"
+              },
+              {
+                "kind": "ingest-failed",
+                "n": 1,
+                "first": "2026-09-29T15:52:22Z",
+                "last": "2026-09-29T15:52:22Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 6,
+                "first": "2026-09-29T15:53:06Z",
+                "last": "2026-09-29T16:14:30Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T16:14:35Z",
+                "last": "2026-09-29T16:14:35Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 7,
+                "first": "2026-09-29T16:15:30Z",
+                "last": "2026-09-29T16:28:32Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T16:29:51Z",
+                "last": "2026-09-29T16:29:51Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 7,
+                "first": "2026-09-29T16:29:58Z",
+                "last": "2026-09-29T16:43:56Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T16:44:37Z",
+                "last": "2026-09-29T16:44:37Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T16:47:43Z",
+                "last": "2026-09-29T16:47:43Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 6,
+                "first": "2026-09-29T16:47:50Z",
+                "last": "2026-09-29T20:17:19Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T20:17:26Z",
+                "last": "2026-09-29T20:17:26Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:07:02Z",
+                "last": "2026-09-30T20:07:02Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-30T20:07:08Z",
+                "last": "2026-09-30T20:07:08Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:08:14Z",
+                "last": "2026-09-30T20:08:14Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-30T20:08:20Z",
+                "last": "2026-09-30T20:08:20Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:09:02Z",
+                "last": "2026-09-30T20:09:02Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-30T20:09:06Z",
+                "last": "2026-09-30T20:09:06Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:20:56Z",
+                "last": "2026-09-30T20:20:56Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-30T20:23:28Z",
+                "last": "2026-09-30T20:23:28Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:23:46Z",
+                "last": "2026-09-30T20:23:46Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T20:24:15Z",
+                "last": "2026-09-30T20:24:15Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:30:07Z",
+                "last": "2026-09-30T20:30:07Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T20:31:03Z",
+                "last": "2026-09-30T20:31:03Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:32:27Z",
+                "last": "2026-09-30T20:32:27Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T20:33:02Z",
+                "last": "2026-09-30T20:33:02Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:55:22Z",
+                "last": "2026-09-30T20:55:22Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T20:57:22Z",
+                "last": "2026-09-30T20:57:22Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T20:58:05Z",
+                "last": "2026-09-30T20:58:05Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T20:58:51Z",
+                "last": "2026-09-30T20:58:51Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T21:07:14Z",
+                "last": "2026-09-30T21:07:14Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T21:07:49Z",
+                "last": "2026-09-30T21:07:49Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T22:08:03Z",
+                "last": "2026-09-30T22:08:03Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-30T22:10:51Z",
+                "last": "2026-09-30T22:10:51Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T22:31:30Z",
+                "last": "2026-09-30T22:31:30Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-30T22:31:36Z",
+                "last": "2026-09-30T22:31:36Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T22:59:11Z",
+                "last": "2026-09-30T22:59:11Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T23:00:24Z",
+                "last": "2026-09-30T23:00:24Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 4,
+                "first": "2026-09-30T23:22:43Z",
+                "last": "2026-09-30T23:25:05Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T23:25:57Z",
+                "last": "2026-09-30T23:25:57Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-30T23:32:06Z",
+                "last": "2026-09-30T23:32:06Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-30T23:35:47Z",
+                "last": "2026-09-30T23:35:47Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-09-30T23:57:44Z",
+                "last": "2026-10-01T00:02:40Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:09:28Z",
+                "last": "2026-10-01T00:09:28Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-10-01T00:12:04Z",
+                "last": "2026-10-01T00:12:30Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T00:12:31Z",
+                "last": "2026-10-01T00:12:31Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T00:15:37Z",
+                "last": "2026-10-01T00:15:37Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:16:25Z",
+                "last": "2026-10-01T00:16:25Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T00:17:41Z",
+                "last": "2026-10-01T00:17:41Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:21:10Z",
+                "last": "2026-10-01T00:21:10Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-10-01T00:22:45Z",
+                "last": "2026-10-01T00:33:52Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:34:31Z",
+                "last": "2026-10-01T00:34:31Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-10-01T00:34:39Z",
+                "last": "2026-10-01T00:38:46Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:40:38Z",
+                "last": "2026-10-01T00:40:38Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T00:40:47Z",
+                "last": "2026-10-01T00:40:47Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:41:14Z",
+                "last": "2026-10-01T00:41:14Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T00:42:31Z",
+                "last": "2026-10-01T00:42:31Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:43:08Z",
+                "last": "2026-10-01T00:43:08Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 4,
+                "first": "2026-10-01T00:43:11Z",
+                "last": "2026-10-01T00:48:55Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:49:08Z",
+                "last": "2026-10-01T00:49:08Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-10-01T00:49:12Z",
+                "last": "2026-10-01T00:56:24Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:56:48Z",
+                "last": "2026-10-01T00:56:48Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T00:57:32Z",
+                "last": "2026-10-01T00:57:32Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T00:57:36Z",
+                "last": "2026-10-01T00:57:36Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T00:59:59Z",
+                "last": "2026-10-01T00:59:59Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T01:00:49Z",
+                "last": "2026-10-01T01:00:49Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-10-01T01:00:50Z",
+                "last": "2026-10-01T01:02:29Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T01:03:18Z",
+                "last": "2026-10-01T01:03:18Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:03:22Z",
+                "last": "2026-10-01T01:03:22Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T01:06:27Z",
+                "last": "2026-10-01T01:06:27Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-10-01T01:06:30Z",
+                "last": "2026-10-01T01:12:45Z"
+              },
+              {
+                "kind": "ingest-failed",
+                "n": 1,
+                "first": "2026-10-01T01:36:05Z",
+                "last": "2026-10-01T01:36:05Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-10-01T01:37:16Z",
+                "last": "2026-10-01T01:43:31Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T01:43:58Z",
+                "last": "2026-10-01T01:43:58Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:44:07Z",
+                "last": "2026-10-01T01:44:07Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T01:44:19Z",
+                "last": "2026-10-01T01:44:19Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:44:28Z",
+                "last": "2026-10-01T01:44:28Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T01:44:32Z",
+                "last": "2026-10-01T01:44:32Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:45:05Z",
+                "last": "2026-10-01T01:45:05Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T01:45:09Z",
+                "last": "2026-10-01T01:45:09Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:51:45Z",
+                "last": "2026-10-01T01:51:45Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T01:51:55Z",
+                "last": "2026-10-01T01:51:55Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:52:15Z",
+                "last": "2026-10-01T01:52:15Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T01:52:21Z",
+                "last": "2026-10-01T01:52:21Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-10-01T01:52:36Z",
+                "last": "2026-10-01T01:52:55Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T01:52:59Z",
+                "last": "2026-10-01T01:52:59Z"
+              },
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-01T01:56:49Z",
+                "last": "2026-10-01T01:56:49Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:59:01Z",
+                "last": "2026-10-01T01:59:01Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T01:59:14Z",
+                "last": "2026-10-01T01:59:14Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T01:59:29Z",
+                "last": "2026-10-01T01:59:29Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T01:59:34Z",
+                "last": "2026-10-01T01:59:34Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T02:02:49Z",
+                "last": "2026-10-01T02:02:49Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T02:02:59Z",
+                "last": "2026-10-01T02:02:59Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-01T02:08:42Z",
+                "last": "2026-10-01T02:08:42Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-01T02:08:46Z",
+                "last": "2026-10-01T02:08:46Z"
+              }
+            ],
+            "lastAt": "2026-10-01T02:08:46Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "f-40001207-3559",
+          "tag": "f-40001207-3559",
+          "tagNote": null,
+          "className": "CatalogNodeRaibachIds",
+          "file": "frontend/src/components/lit/f-40001207-3559.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "align",
+              "catalogId",
+              "component",
+              "content",
+              "count",
+              "description",
+              "justify",
+              "name"
+            ],
+            "inManifest": [
+              "name",
+              "count",
+              "catalogId",
+              "description"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "catalog-node-raibach-ids",
+            "figmaNodeId": "40001207:3559",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 70,
+            "timeline": [
+              {
+                "kind": "ingested",
+                "n": 6,
+                "first": "2026-09-29T11:52:10Z",
+                "last": "2026-09-29T12:24:16Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T12:26:06Z",
+                "last": "2026-09-29T12:26:06Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-09-29T12:26:18Z",
+                "last": "2026-09-29T12:36:41Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 4,
+                "first": "2026-09-29T12:37:57Z",
+                "last": "2026-09-29T12:38:38Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T12:40:33Z",
+                "last": "2026-09-29T12:40:33Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T12:46:03Z",
+                "last": "2026-09-29T12:46:03Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T12:47:51Z",
+                "last": "2026-09-29T12:47:51Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T12:47:58Z",
+                "last": "2026-09-29T12:47:58Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T12:48:44Z",
+                "last": "2026-09-29T12:48:44Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T12:50:48Z",
+                "last": "2026-09-29T12:50:48Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T12:52:11Z",
+                "last": "2026-09-29T12:52:11Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T12:52:32Z",
+                "last": "2026-09-29T12:52:32Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-09-29T13:10:51Z",
+                "last": "2026-09-29T13:15:08Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T13:15:45Z",
+                "last": "2026-09-29T13:15:45Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-09-29T13:16:47Z",
+                "last": "2026-09-29T13:17:09Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T13:17:25Z",
+                "last": "2026-09-29T13:17:25Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T13:29:34Z",
+                "last": "2026-09-29T13:29:34Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T13:32:24Z",
+                "last": "2026-09-29T13:32:24Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T13:47:06Z",
+                "last": "2026-09-29T13:47:06Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 8,
+                "first": "2026-09-29T14:03:22Z",
+                "last": "2026-09-29T14:12:40Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T14:16:53Z",
+                "last": "2026-09-29T14:16:53Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 4,
+                "first": "2026-09-29T14:19:30Z",
+                "last": "2026-09-29T14:41:53Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T14:43:41Z",
+                "last": "2026-09-29T14:43:41Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T14:43:52Z",
+                "last": "2026-09-29T14:43:52Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T14:43:58Z",
+                "last": "2026-09-29T14:43:58Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T14:45:25Z",
+                "last": "2026-09-29T14:45:25Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T14:45:36Z",
+                "last": "2026-09-29T14:45:36Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-09-29T14:45:48Z",
+                "last": "2026-09-29T15:07:54Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T15:08:00Z",
+                "last": "2026-09-29T15:08:00Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T15:47:07Z",
+                "last": "2026-09-29T15:47:07Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T16:45:49Z",
+                "last": "2026-09-29T16:45:49Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T16:45:55Z",
+                "last": "2026-09-29T16:45:55Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T16:46:02Z",
+                "last": "2026-09-29T16:46:02Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T16:46:06Z",
+                "last": "2026-09-29T16:46:06Z"
+              },
+              {
+                "kind": "removed",
+                "n": 1,
+                "first": "2026-09-29T16:48:04Z",
+                "last": "2026-09-29T16:48:04Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-09-29T18:40:34Z",
+                "last": "2026-09-29T20:17:48Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T20:17:55Z",
+                "last": "2026-09-29T20:17:55Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 8,
+                "first": "2026-09-30T19:10:20Z",
+                "last": "2026-10-01T01:37:25Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-01T01:41:40Z",
+                "last": "2026-10-01T01:41:40Z"
+              }
+            ],
+            "lastAt": "2026-10-01T01:41:40Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "f-40001206-2888",
+          "tag": "f-40001206-2888",
+          "tagNote": null,
+          "className": "LayoutIdComponent",
+          "file": "frontend/src/components/lit/f-40001206-2888.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "align",
+              "component",
+              "content",
+              "justify"
+            ],
+            "inManifest": [],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "layout-id-component",
+            "figmaNodeId": "40001206:2888",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 4,
+            "timeline": [
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T20:33:53Z",
+                "last": "2026-09-29T20:33:53Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-09-29T20:34:18Z",
+                "last": "2026-09-29T20:34:18Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-09-29T20:34:38Z",
+                "last": "2026-09-29T20:34:38Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-09-29T20:53:07Z",
+                "last": "2026-09-29T20:53:07Z"
+              }
+            ],
+            "lastAt": "2026-09-29T20:53:07Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -5223,9 +7129,19 @@
       "file": "src/components/lit/a2ui-renderer.ts"
     },
     {
-      "tag": "agent-card-element",
-      "className": "AgentCardElement",
-      "file": "src/components/lit/agent-card-element.ts"
+      "tag": "builder-embed",
+      "className": "BuilderEmbed",
+      "file": "src/components/lit/builder-embed.ts"
+    },
+    {
+      "tag": "catalog-ingest-form",
+      "className": "CatalogIngestForm",
+      "file": "src/components/lit/catalog-ingest-form.ts"
+    },
+    {
+      "tag": "catalog-schema-view",
+      "className": "CatalogSchemaView",
+      "file": "src/components/lit/catalog-schema-view.ts"
     },
     {
       "tag": "chat-action-bar",
@@ -5258,6 +7174,21 @@
       "file": "src/components/lit/chat-plugin-tray.ts"
     },
     {
+      "tag": "design-left-panel",
+      "className": "DesignLeftPanel",
+      "file": "src/components/lit/design-left-panel.ts"
+    },
+    {
+      "tag": "design-middle-container",
+      "className": "DesignMiddleContainer",
+      "file": "src/components/lit/design-middle-container.ts"
+    },
+    {
+      "tag": "f-40001206-3423",
+      "className": "CatalogNode",
+      "file": "src/components/lit/f-40001206-3423.ts"
+    },
+    {
       "tag": "small-dropdown",
       "className": "SmallDropdown",
       "file": "src/components/lit/small-dropdown.ts"
@@ -5271,14 +7202,44 @@
       "tag": "prompt-input-section-system-role",
       "className": "PromptInputSectionSystemRole",
       "file": "src/components/lit/prompt-input/prompt-input-section-system-role.ts"
+    },
+    {
+      "tag": "kor-button",
+      "className": "korButton",
+      "file": "src/components/lit/kor/components/button/kor-button.ts"
+    },
+    {
+      "tag": "kor-card",
+      "className": "korCard",
+      "file": "src/components/lit/kor/components/card/kor-card.ts"
+    },
+    {
+      "tag": "kor-icon",
+      "className": "korIcon",
+      "file": "src/components/lit/kor/components/icon/kor-icon.ts"
+    },
+    {
+      "tag": "kor-input",
+      "className": "korInput",
+      "file": "src/components/lit/kor/components/input/kor-input.ts"
+    },
+    {
+      "tag": "kor-text",
+      "className": "korText",
+      "file": "src/components/lit/kor/components/text/kor-text.ts"
+    },
+    {
+      "tag": "ag-select",
+      "className": "Select",
+      "file": "src/components/lit/agnosticui/components/Select/core/_Select.ts"
     }
   ],
   "ledgerOnly": [
     {
       "nodeId": "40001185:2176",
       "nodeName": "Frame 886987",
-      "records": 28,
-      "history": "ingested×19 · approved×9",
+      "records": 36,
+      "history": "ingested×23 · approved×13",
       "firstAt": "2026-09-28T00:32:27Z",
       "timeline": [
         {
@@ -5388,14 +7349,99 @@
           "n": 1,
           "first": "2026-09-28T15:45:36Z",
           "last": "2026-09-28T15:45:36Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T17:33:44Z",
+          "last": "2026-09-28T17:33:44Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T17:33:50Z",
+          "last": "2026-09-28T17:33:50Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T18:11:54Z",
+          "last": "2026-09-28T18:11:54Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T18:12:01Z",
+          "last": "2026-09-28T18:12:01Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T18:20:21Z",
+          "last": "2026-09-28T18:20:21Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T18:20:23Z",
+          "last": "2026-09-28T18:20:23Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-28T19:36:29Z",
+          "last": "2026-09-28T19:36:29Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-28T19:36:44Z",
+          "last": "2026-09-28T19:36:44Z"
         }
       ],
       "tags": [
         "f-40001185-2176"
       ],
       "inAnyCatalogue": false,
-      "lastAt": "2026-09-28T15:45:36Z",
-      "lastVerdict": "catalog-check: 58 components, 13 finding(s), 1 blocking. Report: catalog-audit/prompt-composer.json"
+      "lastAt": "2026-09-28T19:36:44Z",
+      "lastVerdict": "catalog-check: 58 components, 13 finding(s), 1 blocking. Report: catalog-audit/prompt-composer.json — reported, not enforced."
+    },
+    {
+      "nodeId": "40001207:3503",
+      "nodeName": "chevron-blue-open",
+      "records": 11,
+      "history": "ingested×9 · discarded×1 · ingest-failed×1",
+      "firstAt": "2026-09-29T13:39:28Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-29T13:39:28Z",
+          "last": "2026-09-29T13:39:28Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-29T13:40:21Z",
+          "last": "2026-09-29T13:40:21Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 8,
+          "first": "2026-09-29T14:03:52Z",
+          "last": "2026-09-29T14:39:09Z"
+        },
+        {
+          "kind": "ingest-failed",
+          "n": 1,
+          "first": "2026-09-29T14:58:51Z",
+          "last": "2026-09-29T14:58:51Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T14:58:51Z",
+      "lastVerdict": null
     },
     {
       "nodeId": "40001114:4012",
@@ -5468,6 +7514,31 @@
       "tags": [],
       "inAnyCatalogue": false,
       "lastAt": "2026-09-28T00:40:51Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001207:3555",
+      "nodeName": "chevron-blue-closed",
+      "records": 6,
+      "history": "ingested×5 · discarded×1",
+      "firstAt": "2026-09-29T13:46:55Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 5,
+          "first": "2026-09-29T13:46:55Z",
+          "last": "2026-09-29T13:56:19Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-09-29T14:02:52Z",
+          "last": "2026-09-29T14:02:52Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T14:02:52Z",
       "lastVerdict": null
     },
     {
@@ -5606,13 +7677,84 @@
       "inAnyCatalogue": false,
       "lastAt": "2026-09-28T01:45:58Z",
       "lastVerdict": null
+    },
+    {
+      "nodeId": "40001206:3422",
+      "nodeName": "catalog-node-raibach-ids",
+      "records": 2,
+      "history": "ingested×1 · approved×1",
+      "firstAt": "2026-09-29T12:52:11Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-09-29T12:52:11Z",
+          "last": "2026-09-29T12:52:11Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-09-29T12:52:32Z",
+          "last": "2026-09-29T12:52:32Z"
+        }
+      ],
+      "tags": [
+        "f-40001206-3422"
+      ],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T12:52:32Z",
+      "lastVerdict": "catalog-check: 54 components, 13 finding(s), 1 blocking. Report: catalog-audit/prompt-composer.json — reported, not enforced."
+    },
+    {
+      "nodeId": "40001207:6557",
+      "nodeName": "chevron-blue-closed",
+      "records": 2,
+      "history": "ingested×2",
+      "firstAt": "2026-09-29T15:55:22Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-09-29T15:55:22Z",
+          "last": "2026-09-29T15:57:41Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-09-29T15:57:41Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001177:2476",
+      "nodeName": "prompt-textarea-container-system",
+      "records": 2,
+      "history": "ingested×1 · discarded×1",
+      "firstAt": "2026-10-05T16:27:12Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-05T16:27:12Z",
+          "last": "2026-10-05T16:27:12Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-05T16:27:26Z",
+          "last": "2026-10-05T16:27:26Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-10-05T16:27:26Z",
+      "lastVerdict": null
     }
   ],
   "ledgerNote": {
-    "records": 70,
+    "records": 427,
     "unreadable": 0,
     "sessionRecords": 5,
-    "removalRecords": 6,
+    "removalRecords": 35,
     "path": "backend/logs/figma-ingest.jsonl"
   }
 }

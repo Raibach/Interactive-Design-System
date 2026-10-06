@@ -177,7 +177,7 @@
     "component"
    ]
   },
-  "AgentCanvas": {
+  "RoomEmbed": {
    "type": "object",
    "allOf": [
     {
@@ -188,10 +188,10 @@
     },
     {
      "type": "object",
-     "description": "THE PLUG-IN — the drawing and Grace's seat as one place, implemented as a CONTAINER by <agent-canvas> in src/components/lit/agent-canvas.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings — those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
+     "description": "THE PLUG-IN — the drawing and Grace's seat as one place, implemented as a CONTAINER by <room-embed> in src/components/lit/room-embed.ts. It declares two slots and the ENVELOPE fills them: the drawing in \"flow\", her seat in \"seat\" — the same model workspace-layout uses for its columns, and the only one this protocol allows, because children come from the adjacency list and never from a component's own template (surfaces cannot nest). It owns behaviour around its slots: the seat's column (width, motion, the gripper and its release) and the link between the halves. It does NOT own her bindings — those are the envelope's bindings on her seat, which is what makes her a surface seat. Sheet: AGENTIC_EDITOR/11-THE-PLUGIN.md.",
      "properties": {
       "component": {
-       "const": "AgentCanvas"
+       "const": "RoomEmbed"
       },
       "theme": {
        "type": "string",
@@ -225,12 +225,12 @@
     }
    ]
   },
-  "agent-canvas": {
+  "room-embed": {
    "type": "object",
-   "description": "The same component as AgentCanvas, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps AgentCanvas to <agent-canvas>), while the allowlist and the catalog audit name the TAG. The slots are described on the AgentCanvas entry.",
+   "description": "The same component as RoomEmbed, under its element tag. Both names are listed on purpose: the renderer resolves them to one element (COMPOSITE_MAP in a2ui-renderer.ts maps RoomEmbed to <room-embed>), while the allowlist and the catalog audit name the TAG. The slots are described on the RoomEmbed entry.",
    "properties": {
     "component": {
-     "const": "agent-canvas"
+     "const": "room-embed"
     },
     "id": {
      "type": "string"
@@ -2297,10 +2297,10 @@
      "$ref": "#/components/agent-flow"
     },
     {
-     "$ref": "#/components/AgentCanvas"
+     "$ref": "#/components/RoomEmbed"
     },
     {
-     "$ref": "#/components/agent-canvas"
+     "$ref": "#/components/room-embed"
     },
     {
      "$ref": "#/components/gripper-prompt-input"

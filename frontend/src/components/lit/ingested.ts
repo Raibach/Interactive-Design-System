@@ -31,7 +31,7 @@
  * again because it is no longer a step.
  *
  * EAGER, AND WHAT THAT COSTS. Eager loads these with the application rather than on demand,
- * which is the opposite of the choice made for `<agent-flow>`/`<agent-canvas>` in `main.tsx`.
+ * which is the opposite of the choice made for `<agent-flow>`/`<room-embed>` in `main.tsx`.
  * It is right while the generated components are few and are drawn in columns that are already
  * on screen. It becomes wrong when there are hundreds, and the seam for that day is written
  * here so it is a decision and not a discovery: drop `eager`, keep the map the glob returns,

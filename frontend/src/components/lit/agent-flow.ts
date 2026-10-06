@@ -55,7 +55,7 @@ import { mountVueFlowCanvas, type VueFlowCanvas } from './canvas/vueFlowCanvas';
 // which is how the drawing "worked in the page but not in the element". One stylesheet, adopted
 // where the drawing lives.
 import vfStyle from '@vue-flow/core/dist/style.css?inline';
-import canvasArt from '@/assets/agent-canvas-art.jpg';
+import canvasArt from '@/assets/room-embed-art.jpg';
 
 /*
  * THE LABEL BLOCK USED TO BE 54, HERE. It is NODE_FOOTPRINT's other half now, in

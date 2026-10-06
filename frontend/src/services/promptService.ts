@@ -80,7 +80,7 @@ export interface ColumnWidths {
 export interface WorkspaceState {
   /** The left column, folded away or not (workspace-layout). */
   leftCollapsed?: boolean;
-  /** Her column: whether it stood open, and how wide it was in px (agent-canvas). */
+  /** Her column: whether it stood open, and how wide it was in px (room-embed). */
   seat?: { open?: boolean; width?: number };
   /** Where the drawing was left: pan and zoom (agent-flow). */
   flow?: { zoom?: number; panX?: number; panY?: number } | null;
@@ -88,6 +88,15 @@ export interface WorkspaceState {
   middle?: 'flow' | 'output';
   /** The drawing as it was saved — the graph the canvas showed, the person's edits included. */
   graph?: FlowGraph;
+  /**
+   * THE COLUMN THE RUN ASSEMBLED (owner, 2026-10-05) — the middle's own components, kept
+   * with the state that shows them. The saved `middle` says which view; the `graph` says
+   * what the picture holds; this says what the picture is MADE OF. Without it a reopened
+   * package can know it has run and still draw nothing — the column only ever arrived from
+   * a run's model call — and redrawing would cost a fresh model call per open: the second
+   * call per run this app already paid for once and removed.
+   */
+  run_column?: { components?: unknown[] };
 }
 
 export interface PromptSession {
@@ -110,7 +119,7 @@ export interface PromptSession {
   /**
    * The place as the operator left it, saved WITH the package: the left column's collapse,
    * her column's width and whether it stood open, and the drawing's pan and zoom. The
-   * elements hold these while a package is open (see agent-canvas.workspaceState) and the
+   * elements hold these while a package is open (see room-embed.workspaceState) and the
    * server keeps them in the row's metadata; this is the shape they travel in.
    */
   workspace?: WorkspaceState;

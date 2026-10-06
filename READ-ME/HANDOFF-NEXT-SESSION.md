@@ -84,7 +84,7 @@ auto-deploys on push.
   static domain in the ngrok dashboard and add `--domain=...` to the tunnel command. The Mac
   must stay awake. The tunnel command used: `nohup ngrok http 1234 --log=stdout > /tmp/ngrok-model.log 2>&1 &`.
 - **Tests**: 510 passing, typecheck clean, build clean. Catalog gate: ONE pre-existing blocking
-  finding (AgentCanvas declares a `seat` slot the element doesn't render) — unrelated, untouched.
+  finding (RoomEmbed declares a `seat` slot the element doesn't render) — unrelated, untouched.
 
 ## Local dev, for the next chat
 

@@ -596,7 +596,7 @@ export class WorkspaceLayout extends LitElement {
    * IS THERE ANYTHING IN THE RIGHT PANE? Read from the slot, like the middle's own flag.
    *
    * A pane with nothing in it must not be DRAWN, and it must not take width either. That
-   * matters because her panel can MOVE: the flow view composes <agent-canvas> in the
+   * matters because her panel can MOVE: the flow view composes <room-embed> in the
    * middle column and puts the same chat panel inside it, so the right slot is left empty
    * — and an empty pane still reserved its floor, which measured 104px of dead column on
    * the right of the drawing (2026-09-18). The middle column has always answered this
@@ -736,7 +736,7 @@ export class WorkspaceLayout extends LitElement {
    * IS THIS THE SPACER'S GESTURE, OR THE INPUT AREA'S? Both grips inside her panel raise
    * these three names — the spacer that drags this column's edge, and the grip under her
    * composer that resizes the input area. Only the spacer carries a horizontal position,
-   * so that is the test, and it is the SAME test the container hosts (agent-canvas had it
+   * so that is the test, and it is the SAME test the container hosts (room-embed had it
    * while this element, which owns the width, did not — the wrong way round). Answering
    * the input grip here started a right-column drag from a drag of the input area: it set
    * `dragging` on the whole layout, which suspends every pane's motion, and on a collapsed
@@ -936,7 +936,7 @@ export class WorkspaceLayout extends LitElement {
   private get _rightOverDrawing(): boolean {
     const middleSlot = this.shadowRoot?.querySelector('slot[name="middle"]') as HTMLSlotElement | null;
     const middleEl = (middleSlot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
-    return this._hasRight && !!middleEl && middleEl.tagName.toLowerCase() === 'agent-canvas';
+    return this._hasRight && !!middleEl && middleEl.tagName.toLowerCase() === 'room-embed';
   }
 
   /*
@@ -1467,7 +1467,7 @@ export class WorkspaceLayout extends LitElement {
      * HER LAYER OVER THE DRAWING, KEPT — and the jerk it used to cause is fixed by ORDER, not by
      * taking the layer away.
      *
-     * She is position:absolute with a width whenever an <agent-canvas> stands in the middle, so
+     * She is position:absolute with a width whenever an <room-embed> stands in the middle, so
      * the drawing runs UNDER her: the file's own rule, "the canvas does not respond to anything on
      * the right-hand side. It always covers it", and the z-index below is what keeps the drawing's
      * controls behind her. The overlay is the design — a panel that slides back and still hangs
@@ -1553,7 +1553,7 @@ export class WorkspaceLayout extends LitElement {
       gap: 18px;
       pointer-events: none;
       /* IN THE DOM ALWAYS, MOVED BY CSS, so the two cross instead of swapping: the canvas fades up
-         on its own mount (agent-canvas, canvas-arrives) and this fades out underneath it over the
+         on its own mount (room-embed, canvas-arrives) and this fades out underneath it over the
          same 760ms. Removed from the DOM instead, it would vanish in the frame the canvas mounted
          and leave the room empty for the length of that fade. Visibility is delayed on the way out
          for the same reason it is in the chat panel's collapse: the fade must be SEEN. */
@@ -1719,7 +1719,7 @@ export class WorkspaceLayout extends LitElement {
     const rightWidth = this.isThirdOpen ? this._columnWidth() : WorkspaceLayout.MIN_RIGHT_PX;
     /*
      * SHE IS A LAYER ONLY OVER A DRAWING — and "there is a drawing" is read off the ELEMENT in
-     * the middle: the plug-in that draws it (<agent-canvas>), which is what the flow view puts
+     * the middle: the plug-in that draws it (<room-embed>), which is what the flow view puts
      * there. A console, or a prompt that has not run, has no such element: there she is a PANE,
      * exactly as she has always been, and the two columns divide the shell between them.
      *
@@ -1770,7 +1770,7 @@ export class WorkspaceLayout extends LitElement {
      * "It should be pushing the agent prompt slider to the left and reducing the size of the
      * chat on the right." What she is over is the thing being worked: the drawing is the
      * primary surface of a Run and the conversation is what a node has to say when a person
-     * touches one (agent-canvas's own note). At half, the canvas was composed into a box it
+     * touches one (room-embed's own note). At half, the canvas was composed into a box it
      * shared with her and the brain landed on the seam between them — measured: a 1535px box
      * with 768px visible. A third leaves the drawing two thirds, and the drawing now fits
      * itself to exactly this share (agent-flow's viewportInset, which the host measures).

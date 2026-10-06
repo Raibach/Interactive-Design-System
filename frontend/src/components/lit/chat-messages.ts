@@ -458,6 +458,21 @@ export class ChatMessages extends LitElement {
    * the answer reads from its beginning below — the rule the results already had ("A RUN'S
    * RESULTS OPEN AT THEIR HEAD"), applied to the conversational thread. No user turn at all
    * (a results-only or brand-new thread) keeps the old behaviour: the newest words in view.
+   *
+   * AND THE NEWEST WORDS ARE NEVER LEFT BELOW THE FOLD (owner, 2026-10-05). Measured on a
+   * Run review: her blockers arrive as SEVERAL messages after ONE question — the person's
+   * click was the question, every reply followed it — and this re-seated that same question
+   * each time a message landed. The first seat showed the first reply; the second, third
+   * and fourth appended BELOW the viewport while the question was already parked at the
+   * top, so the move was a no-op and *"the chat scroll did not roll up to the message so
+   * the user never saw it"*. Every reply was arriving; all of them were out of view.
+   *
+   * So the question keeps the head of the viewport ONLY WHILE THE NEWEST TURN'S FIRST LINE
+   * STILL FITS UNDER IT — the same "newest message in front of them" test the scroll policy
+   * has always stated (see shared/chatScroll, "the replies were arriving. They were out of
+   * view."). The moment it would not fit, the NEWEST turn takes the top instead: still read
+   * from its beginning, which is what the question-at-top rule was for, and it can no
+   * longer be missed.
    */
   seatConversation(): void {
     const thread = this.renderRoot?.querySelector('.thread');
@@ -469,9 +484,49 @@ export class ChatMessages extends LitElement {
       if (root) root.scrollTop = root.scrollHeight;
       return;
     }
-    const reduce = typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    /*
+     * A HIDDEN PANE GETS THE PLAIN JUMP (measured 2026-10-05). A smooth scroll is driven by
+     * animation frames, and a background tab has none: the seating below ran, moved nothing
+     * (scrollTop 0 while the newest message sat 2816px down), and the person returning to
+     * the tab found her newest words parked out of view — the exact "it's not loading the
+     * conversation" a reader concludes. An instant jump needs no frames and lands even while
+     * hidden; reduced motion has always taken it for the same class of reason.
+     */
+    const reduce = (typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+      || document.hidden;
+    const turns = thread.querySelectorAll('.turn');
+    const newest = turns.length ? (turns[turns.length - 1] as HTMLElement) : null;
+    if (newest && newest !== last) {
+      const scroller = this._scrollableAncestor();
+      if (scroller) {
+        // Where the newest turn would land once the question sits at the scroller's top —
+        // a content distance, so it is the same number whichever way the scroll sits now.
+        const landed = newest.getBoundingClientRect().top - last.getBoundingClientRect().top;
+        if (landed >= scroller.clientHeight) {
+          newest.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+          return;
+        }
+      }
+    }
     last.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }
+
+  /**
+   * THE ONE ELEMENT THAT SCROLLS ABOVE THIS THREAD — chat-panel's `.content-scroll`, the
+   * card's body ("The column's one scroller"), one shadow root up from here; `parentElement`
+   * stops at the shadow boundary, so the walk climbs through `getRootNode().host`. The
+   * first ancestor whose box can actually scroll is the element `scrollIntoView` would
+   * move — and the element whose height decides whether the newest turn then fits.
+   */
+  private _scrollableAncestor(): HTMLElement | null {
+    let el: Element | null = this.parentElement
+      ?? ((this.getRootNode() as ShadowRoot)?.host as Element | null);
+    while (el) {
+      if (el.scrollHeight > el.clientHeight + 1) return el as HTMLElement;
+      el = el.parentElement ?? ((el.getRootNode() as ShadowRoot)?.host as Element | null);
+    }
+    return null;
   }
 
   /**
@@ -537,42 +592,21 @@ export class ChatMessages extends LitElement {
     if (changed.has('messages')) {
       const list = this.messages ?? [];
       /*
-       * A RUN'S RESULTS OPEN AT THEIR HEAD, NOT AT THEIR TAIL. When the thread's
-       * newest turn is a result (the run's conversation just loaded, or the results
-       * just landed in a seat with no package), the top of the first result turn —
-       * the "Your Results" line — is the top of the reading, and a long answer is
-       * scrolled so it opens the viewport with the rest below as a normal scroll
-       * (the owner, 2026-09-24: "the output should be visible at the top and then
-       * the user can scroll to see the rest"). A short thread fits the column
-       * anyway, so there is nothing to move — the guard reads the real heights.
-       *
-       * THE RULE ENDS THE MOMENT THE PERSON SPEAKS: their turn, or her reply, is a
-       * conversational turn, and the thread follows it to the bottom exactly as it
-       * always has — answering the results reverts to the normal flow.
+       * A RUN'S RESULTS OPEN AT THEIR HEAD, AND THERE IS NOTHING TO SEAT. When the thread's
+       * newest turn is a result, the scroller's natural position — the top — is already the
+       * head of that reading, so the seat below is skipped outright rather than applied and
+       * then taken back. A thread that is not showing results follows the ordinary rule
+       * (owner, 2026-09-24: "the output should be visible at the top and then the user can
+       * scroll to see the rest").
        */
-      if (resultsAreTheReading(list)) {
-        /*
-         * NOTHING IS MOVED, AND THAT IS THE WHOLE OF THE RULE.
-         *
-         * The results are the FIRST content of that conversation, so the scroller's natural
-         * position — the top — is already the head of the results. Reaching for it with a scroll
-         * is what turned "open at the top" into a clamp: every effort to hold the view there also
-         * stopped the person moving it, and every re-render re-applied it. The owner, 2026-09-24:
-         * "why you put a fucking clamp on it… unbelievable." There is nothing to place, so this
-         * does nothing — and the person scrolls the results like any other text.
-         *
-         * THE RULE ENDS THE MOMENT THE PERSON SPEAKS: their turn, or her reply, is a conversational
-         * turn, and the thread follows it to the bottom exactly as it always has.
-         */
-        return;
-      }
+      const resultsShowing = resultsAreTheReading(list);
       // THE CURRENT EXCHANGE OPENS AT ITS HEAD (2026-10-03) — the question to the top, the
       // answer read from its beginning; see `seatConversation`. SEATED ON GROWTH ONLY: a
       // streaming answer is never re-yanked to the top while it is being read, and
       // content-only updates leave the view where the person put it (the clamp lesson,
       // 2026-09-24). No user turn anywhere falls back to the oldest behaviour — newest
       // words in view.
-      if (list.length !== this._seatCount) {
+      if (!resultsShowing && list.length !== this._seatCount) {
         this._seatCount = list.length;
         this.seatConversation();
       }

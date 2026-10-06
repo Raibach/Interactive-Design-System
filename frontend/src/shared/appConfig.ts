@@ -2,26 +2,27 @@
  * appConfig — the shell's mirror of the server's boot config (GET /api/config), read once at boot.
  *
  * TWO FACTS LIVE HERE, and they are the same fact's two halves — "which build am I standing in,
- * and where do its tools live":
+ * and where its tool lives":
  *
  * 1. THE DEMO FLAG, unchanged since 2026-10-02. On the deployed demo the server refuses
  *    destructive actions (backend/demo_policy.py), so a visible Delete button is a button that
  *    always errors. This flag lets the shell HIDE those affordances instead, so the demo never
  *    offers a door it will not open.
  *
- * 2. THE ROOMS' TOOL ADDRESSES (2026-10-04 — wireframe-lab/HOST-THE-TOOLS.md). The Development
- *    room embeds OpenHands' Agent Canvas and the Product room embeds the app builder; both used
- *    to be hardcoded `http://localhost:…`, which on a deployed site means THE VISITOR'S OWN
- *    COMPUTER — the night the demo went remote, that is exactly what raised Chrome's
- *    local-network permission box. The server (env-driven on the app service) now names the
- *    addresses at runtime; this module carries them to the rooms.
+ * 2. THE ROOMS' TOOL ADDRESSES (Product 2026-10-04; Development restored 2026-10-06 — the
+ *    local workspace, run from this repo with its reporting channel stripped;
+ *    development/CHANGELOG.md). Both embeds used to be hardcoded `http://localhost:…`, which
+ *    on a deployed site means THE VISITOR'S OWN COMPUTER — the night the demo went remote,
+ *    that is exactly what raised Chrome's local-network permission box. The server
+ *    (env-driven on the app service) can now name the addresses at runtime; this module
+ *    carries them to the rooms.
  *
  * THE DEFAULT IS THE LOCAL MACHINE, AND THE DEFAULT LIVES HERE, ONCE. With nothing configured a
- * local run keeps `http://localhost:8090` / `http://localhost:3223` exactly as before. ONLY on
- * the demo — where localhost would be the visitor's computer — an unset value becomes the EMPTY
- * STRING, and the rooms read that as "not connected" and show their honest panel. So the rooms
- * never branch on demo-ness for their tool address; they ask this module for an address and
- * render either the tool or the fallback.
+ * local run keeps `http://localhost:3223` exactly as before. ONLY on the demo — where localhost
+ * would be the visitor's computer — an unset value becomes the EMPTY STRING, and the room reads
+ * that as "not connected" and shows its honest panel. So the room never branches on demo-ness
+ * for its tool address; it asks this module for an address and renders either the tool or the
+ * fallback.
  *
  * IT ENFORCES NOTHING, and that is deliberate. A client that lies about any of this changes its
  * own buttons and nothing else — the gate is on the server and never consults these values.
@@ -31,7 +32,7 @@
  * entry's parse instead of blocking the first render) and returned to App, which awaits the same
  * promise before drawing the authenticated tree — by pin time it has long resolved. On any
  * failure — offline, old server, malformed body — the demo flag stays false and the tool
- * addresses stay local, which is the full-power local default: a missed hide is cosmetic, and
+ * address stays local, which is the full-power local default: a missed hide is cosmetic, and
  * the server still refuses the action.
  */
 let demoMode = false;
@@ -46,8 +47,8 @@ let builderTool = LOCAL_BUILDER_TOOL;
 export const isDemoMode = (): boolean => demoMode;
 
 /**
- * The Development room's tool (OpenHands Agent Canvas). Empty string = not connected —
- * the room shows its honest panel instead of reaching anywhere.
+ * The Development room's workspace (the repo-run development tool). Empty string = not
+ * connected — the room says so plainly instead of reaching anywhere.
  */
 export const developmentToolUrl = (): string => developmentTool;
 

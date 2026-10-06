@@ -1,6 +1,53 @@
 {
-  "generatedAt": "2026-09-28T16:44:59.248Z",
+  "generatedAt": "2026-10-06T12:13:16.112Z",
   "catalogs": [
+    {
+      "id": "design-artifacts",
+      "catalogId": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
+      "title": "Design Artifacts",
+      "counts": {
+        "declared": 63,
+        "annotated": 59,
+        "built": 63,
+        "inManifest": 63,
+        "allowlisted": 49,
+        "mapped": 26,
+        "inTheFigmaMap": 32
+      },
+      "gate": null,
+      "groups": [
+        {
+          "title": "right column",
+          "elements": 11,
+          "derived": true
+        },
+        {
+          "title": "middle column",
+          "elements": 14,
+          "derived": true
+        },
+        {
+          "title": "surface: both",
+          "elements": 3,
+          "derived": true
+        },
+        {
+          "title": "not in the allowlist",
+          "elements": 14,
+          "derived": true
+        },
+        {
+          "title": "left column",
+          "elements": 15,
+          "derived": true
+        },
+        {
+          "title": "surface: composer",
+          "elements": 6,
+          "derived": true
+        }
+      ]
+    },
     {
       "id": "ecommerce",
       "catalogId": "https://raibach.net/a2ui/catalogs/ecommerce/v0_9_1/catalog.json",
@@ -8,37 +55,32 @@
       "counts": {
         "declared": 38,
         "annotated": 34,
-        "built": 32,
-        "inManifest": 32,
-        "allowlisted": 25,
-        "mapped": 17,
-        "inTheFigmaMap": 21
+        "built": 33,
+        "inManifest": 33,
+        "allowlisted": 19,
+        "mapped": 18,
+        "inTheFigmaMap": 22
       },
       "gate": null,
       "groups": [
         {
           "title": "not in the allowlist",
-          "elements": 13,
-          "derived": true
-        },
-        {
-          "title": "console column",
-          "elements": 3,
-          "derived": true
-        },
-        {
-          "title": "left column",
-          "elements": 10,
-          "derived": true
-        },
-        {
-          "title": "middle column",
-          "elements": 5,
+          "elements": 19,
           "derived": true
         },
         {
           "title": "surface: both",
           "elements": 2,
+          "derived": true
+        },
+        {
+          "title": "left column",
+          "elements": 9,
+          "derived": true
+        },
+        {
+          "title": "middle column",
+          "elements": 3,
           "derived": true
         },
         {
@@ -85,19 +127,19 @@
       "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
       "title": "Raibach Prompt Composer Catalog",
       "counts": {
-        "declared": 57,
-        "annotated": 53,
-        "built": 51,
-        "inManifest": 51,
-        "allowlisted": 44,
-        "mapped": 21,
-        "inTheFigmaMap": 27
+        "declared": 63,
+        "annotated": 59,
+        "built": 63,
+        "inManifest": 63,
+        "allowlisted": 49,
+        "mapped": 26,
+        "inTheFigmaMap": 32
       },
       "gate": {
         "status": "partial",
-        "generatedAt": "2026-09-28T15:53:43.989Z",
-        "findings": 13,
-        "blocking": 1,
+        "generatedAt": "2026-10-06T11:45:11.919Z",
+        "findings": 19,
+        "blocking": 5,
         "fileKey": null,
         "report": "frontend/catalog-audit/prompt-composer.json"
       },
@@ -109,7 +151,7 @@
         },
         {
           "title": "middle column",
-          "elements": 13,
+          "elements": 16,
           "derived": true
         },
         {
@@ -119,22 +161,17 @@
         },
         {
           "title": "not in the allowlist",
-          "elements": 13,
-          "derived": true
-        },
-        {
-          "title": "console column",
-          "elements": 3,
+          "elements": 14,
           "derived": true
         },
         {
           "title": "left column",
-          "elements": 12,
+          "elements": 13,
           "derived": true
         },
         {
           "title": "surface: composer",
-          "elements": 2,
+          "elements": 6,
           "derived": true
         }
       ]
