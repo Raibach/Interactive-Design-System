@@ -47,17 +47,19 @@ export class BuilderEmbed extends LitElement {
   }
 
   /**
-   * THE BUILDER'S TWO CALLS HOME (2026-10-04): its back arrow postMessages `builder-back`
-   * (leave the room), and its Publish control `builder-published` (the engine flag is set —
-   * the host's job is to sync the card). This element — the thing that owns the frame and
-   * knows its origin — verifies the sender is the builder and re-announces the message on
-   * `window` as a DOM event of the same name, which the room's host listens for
-   * (WritingAreaIndex). Both messages are bare constants; nothing else crosses in this
-   * direction.
+   * THE BUILDER'S CALLS HOME (2026-10-04; the third added 2026-10-06): its back arrow
+   * postMessages `builder-back` (leave the room), its Publish control `builder-published`
+   * (the engine flag is set — the host's job is to sync the card), and — for the product
+   * foot's dots — `ids:tool-state` (its Figma/GitHub/visual-editor states, mirrored home so
+   * the room can show them without guessing). This element — the thing that owns the frame
+   * and knows its origin — verifies the sender is the builder and re-announces the message
+   * on `window`, which the room's host listens for (WritingAreaIndex): `builder-back` and
+   * `builder-published` under their own names, the tool states as `builder-tool-state`.
    */
   private _onMessage = (event: MessageEvent): void => {
-    const type = (event.data as { type?: string } | null)?.type;
-    if (type !== 'builder-back' && type !== 'builder-published') return;
+    const data = (event.data || {}) as { type?: string; [key: string]: unknown };
+    const type = data.type;
+    if (type !== 'builder-back' && type !== 'builder-published' && type !== 'ids:tool-state') return;
     let frameOrigin: string;
     try {
       frameOrigin = new URL(this._embeddedSrc()).origin;
@@ -65,8 +67,30 @@ export class BuilderEmbed extends LitElement {
       return;
     }
     if (event.origin !== frameOrigin) return;
-    window.dispatchEvent(new CustomEvent(type));
+    window.dispatchEvent(
+      new CustomEvent(type === 'ids:tool-state' ? 'builder-tool-state' : type, { detail: data }),
+    );
   };
+
+  /**
+   * THE HOST'S OWN CALL INTO THE BUILDER (2026-10-06) — one method, one direction.
+   *
+   * The product room's foot asks the builder to do what the builder's own tool row does:
+   * open its Figma or GitHub modal, toggle its visual editor (`{type:'ids:product-tool',
+   * tool}`). The room cannot reach into the frame; this element owns it, so the message
+   * leaves from here, aimed at the frame's OWN origin — never `*`.
+   */
+  postToBuilder(message: Record<string, unknown>): void {
+    const frame = this.renderRoot?.querySelector('iframe') as HTMLIFrameElement | null;
+    if (!frame?.contentWindow) return;
+    let origin: string;
+    try {
+      origin = new URL(this._embeddedSrc()).origin;
+    } catch {
+      return;
+    }
+    frame.contentWindow.postMessage(message, origin);
+  }
 
   connectedCallback() {
     super.connectedCallback();

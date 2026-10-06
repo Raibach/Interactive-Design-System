@@ -37,9 +37,40 @@ working branch — 179 files, mirroring main's import — with the DeepSeek key
 (`local-vcaas/.env`), the engine's store (`data/`) and build output kept out. Commit `6bf8d0b`,
 pushed to `origin/pre-removal-build`.
 
-**Next (agreed in discussion; not yet built).** Absorb the builder's chat into Grace — the
-thread is the product's conversation, named by the product idea. Then the room's simple
-remainder as catalog components (`product-*` tags, `surface: 'product'`): the My Projects
-button and its modal. **The handoff sheet — "IDs for Design" — lands in this folder once those
-elements are built**, carrying the real IDs, bindings and declared events for the drawing
-side (owner, 2026-10-06: *"may need to be done after you've built it"*).
+## 2026-10-06 — the room's chat runs the application (absorbed, verified live)
+
+Owner, 2026-10-06: *"I want to absorb that chat into our chat … I don't want two different
+chat setting side-by-side."* And, settling the shape the same day: *"we're not taking Grace's
+behavior in the chat. We're using the application's behavior in the chat"* — *"just a styling
+treatment to the existing capabilities."* The room's one chat now carries the application's
+own behavior on the existing chat capabilities: the person's turn is a prompt to the local app
+builder, the thread drawn is the engine's conversation, the reply is the builder's own
+sentence. The engine stays the record; the platform row is a disposable CARRIER (mechanics and
+the three defects the first live send found: `wireframe-lab/CHANGELOG.md`, same date).
+
+**Verified live:** a habit tracker built from a turn typed in the room ("Habits from the
+room" on the stage); a follow-up turn answered by the builder without touching the files
+("Already in place — …"); a cold-start turn built a reading-list page; the stage remounts on
+each finished build. The room's rail is reduced to Chat/Trace/Tools/Approve/Evals/Settings
+(stubs as agreed); "Agent" waits for its My Projects replacement.
+
+## 2026-10-06 — projects persist like packages (the room comes back to what you left)
+
+Confirmed with the owner and verified live: a product project IS a package — its
+conversations are your return visits ("five different edit processes over a month to one
+project"). Entering the room now REOPENS the project last touched instead of birthing one per
+click; the package persists (hidden from the console's cards until published — the same draft
+rule every package follows); renaming writes the builder's label and the package title
+together; an unnamed visit takes its first prompt as its name; and an empty project shows one
+welcome line before the application takes over. Verified on `product-idea-hyj` (kept after a
+sync, marked draft, resumed by the room) with the published cards (h65, product-idea)
+unchanged. Mechanics: `wireframe-lab/CHANGELOG.md`, same date.
+
+**Next (agreed in discussion; not yet built).** The room's chrome and styling pass: the
+builder app's real buttons/icons on the controls the wireframe draws; text colours fixed for
+the white ground; the rename control; the door for starting a NEW idea; the remaining rail
+stubs (Trace/Tools/Approve/Evals). No separate projects surface — the package's own
+conversations are the projects (owner, 2026-10-06). **The handoff sheet — "IDs for Design" —
+lands in this folder once those elements are built**, carrying the real IDs, bindings and
+declared events for the drawing side (owner, 2026-10-06: *"may need to be done after you've
+built it"*).

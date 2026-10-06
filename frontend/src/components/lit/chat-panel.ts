@@ -50,6 +50,7 @@ import historyIcon from '@/assets/figma-chat-history-icon.svg';
 // #40001124:7096 and its size moved to 20 in the drawing (2026-09-20).
 import readoutModelMark from '@/assets/figma-readout-model-mark.svg';
 import './chat-plugin-tray';
+import './chat-product-tools';
 import './error-banner';
 import './chat-navigation-bar';
 import './prompt-input/prompt-textarea';
@@ -246,6 +247,19 @@ export class ChatPanel extends LitElement {
      * for it — see there. Set by `_seat_grace` in routes/ai.py, never by a model.
      */
     graceLiveContext: { type: Boolean, attribute: 'grace-live-context' },
+    /**
+     * THE PRODUCT ROOM'S FOOT — THE APPLICATION'S OWN TOOLS (owner, 2026-10-06: *"all of
+     * these stubs go. And you're gonna put the products wiring down"*). TRUE swaps the
+     * v.4b tray for <chat-product-tools> — the builder's own attach · Figma · GitHub ·
+     * visual-edit row — and lets the seat forward ⌘V files. Set ONLY by the product
+     * room's binding: every other seat keeps the tray, untouched.
+     */
+    productTools: { type: Boolean, attribute: 'product-tools' },
+    /** The builder's connection facts, mirrored from its own `ids:tool-state` messages — the foot's dots. */
+    productFigmaConnected: { type: Boolean, attribute: 'product-figma-connected' },
+    productGithubConnected: { type: Boolean, attribute: 'product-github-connected' },
+    /** The visual editor's own state, mirrored the same way — the pencil's pressed state. */
+    productVisualEditActive: { type: Boolean, attribute: 'product-visual-edit-active' },
   };
 
   // `declare` — NOT a class field. With `useDefineForClassFields` true, a plain field
@@ -255,6 +269,11 @@ export class ChatPanel extends LitElement {
   declare conversationId?: string;
   /** The package's history, as the server loaded it. Bound from /session/right_column/messages. */
   declare messages: SeatMessage[];
+  /** See the `productTools` note in `static properties` — the product room's binding alone. */
+  declare productTools: boolean;
+  declare productFigmaConnected: boolean;
+  declare productGithubConnected: boolean;
+  declare productVisualEditActive: boolean;
   /**
    * THE GOVERNANCE REPORTS, TAKEN OUT OF THE THREAD. The inspector files a report into this
    * conversation with metadata kind='inspection'; the owner, 2026-09-19: they belong "under
@@ -1329,10 +1348,13 @@ export class ChatPanel extends LitElement {
     this._dragStartY = typeof d.startY === 'number' ? d.startY : 0;
     this._dragStartHeight = this.inputHeight || 100;
     const bar = this.renderRoot?.querySelector('chat-action-bar') as HTMLElement | null;
-    // THE TRAY, not <chat-footer>: the drawing's foot replaces it, so the bar the input
-    // height must reserve is the tray's block — the design's own 97px (#40001123:6689),
-    // which is what the fallback carries if the element is not up yet.
-    const footer = this.renderRoot?.querySelector('chat-plugin-tray') as HTMLElement | null;
+    // THE TRAY (or the product room's tools row), not <chat-footer>: the drawing's foot
+    // replaces it, so the bar the input height must reserve is the foot's block — the
+    // design's own 97px (#40001123:6689), which is what the fallback carries if the
+    // element is not up yet.
+    const footer = this.renderRoot?.querySelector(
+      'chat-plugin-tray, chat-product-tools',
+    ) as HTMLElement | null;
     this._barHeight = bar?.getBoundingClientRect().height || 82;
     this._footerHeight = footer?.getBoundingClientRect().height || 97;
   }
@@ -3928,18 +3950,41 @@ export class ChatPanel extends LitElement {
     const text = String(this._draft ?? '').trim();
     if (!text) return;
     e.preventDefault();
-    // THE KEY CLEARS THE BOX LIKE THE SEND BUTTON DOES. Measured 2026-10-06 in the Product
-    // room: after Enter, the sentence was still standing in the input while its turn was
-    // already running — an invitation to send it twice. `_onSendCommand` ("Send input to
-    // model") clears the box and the draft before sending; Enter is the same act, so it
-    // clears the same two things before the same call.
-    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
-      (HTMLElement & { value: string }) | null;
-    if (textarea) textarea.value = '';
-    this._draft = '';
-    this._syncBarText();
     void this._send(text);
   }
+
+  /**
+   * THE PRODUCT FOOT'S TWO CALLS — forwarded as the SEAT's own (bubbling, composed), so
+   * the room that bound this seat is the one listener and no other surface hears them.
+   * The foot only ASKS; what an attach or a tool does is the room's — see <chat-product-tools>.
+   */
+  private _forwardProductAttach(files: File[]): void {
+    this.dispatchEvent(
+      new CustomEvent('product-attach', { detail: { files }, bubbles: true, composed: true }),
+    );
+  }
+
+  private _forwardProductTool(tool: string): void {
+    this.dispatchEvent(
+      new CustomEvent('product-tool', { detail: { tool }, bubbles: true, composed: true }),
+    );
+  }
+
+  /**
+   * ⌘V ATTACHES WHAT IS ON THE CLIPBOARD — the app's own rule, product room only.
+   * ONLY WHEN THE CLIPBOARD IS NOT REALLY TEXT (the app's `filesFromClipboard` rule): a
+   * Word or Excel paste carries its own image payload, and attaching a picture of what
+   * the person meant to type is worse than doing nothing.
+   */
+  private _onProductPaste = (e: ClipboardEvent): void => {
+    if (!this.productTools) return;
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    if (text.trim()) return; // a real paste is text — never turn it into a picture
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (!files.length) return;
+    e.preventDefault();
+    this._forwardProductAttach(files);
+  };
 
   /**
    * START THIS SEAT OVER — an empty thread, ready for the next run.
@@ -5129,6 +5174,7 @@ export class ChatPanel extends LitElement {
                   <prompt-textarea
                     placeholder="chat input"
                     @value-input=${this._onDraftInput}
+                    @paste=${this._onProductPaste}
                   ></prompt-textarea>
                 </chat-input>
                 <!-- THE TRAY IS v.4b's FOOT. The navy <chat-footer> that stood here is
@@ -5138,10 +5184,24 @@ export class ChatPanel extends LitElement {
                      a live FUNCTION, and a function does not leave with a drawing, so they
                      move onto this bar and take its treatment — the same move that put them
                      on the navy bar when the #CFD7D5 bar it replaced went away. -->
-                <chat-plugin-tray
-                  .placed=${this._trayPlaced}
-                  @conversation-new=${this._onConversationNew}
-                ></chat-plugin-tray>
+                <!-- v.4b's foot, OR THE PRODUCT ROOM'S OWN TOOLS (owner, 2026-10-06:
+                     "all of these stubs go. And you're gonna put the products wiring
+                     down."). The flag is the product room's binding alone — every other
+                     seat keeps the tray, exactly as it was. See <chat-product-tools>. -->
+                ${this.productTools
+                  ? html`<chat-product-tools
+                      .figmaConnected=${this.productFigmaConnected}
+                      .githubConnected=${this.productGithubConnected}
+                      .visualEditActive=${this.productVisualEditActive}
+                      @product-attach=${(e: CustomEvent<{ files: File[] }>) =>
+                        this._forwardProductAttach(e.detail.files)}
+                      @product-tool=${(e: CustomEvent<{ tool: string }>) =>
+                        this._forwardProductTool(e.detail.tool)}
+                    ></chat-product-tools>`
+                  : html`<chat-plugin-tray
+                      .placed=${this._trayPlaced}
+                      @conversation-new=${this._onConversationNew}
+                    ></chat-plugin-tray>`}
               </div>
             </div>
           `}

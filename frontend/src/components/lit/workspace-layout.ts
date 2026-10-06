@@ -318,6 +318,12 @@ export class WorkspaceLayout extends LitElement {
 
   private _dragging: 'left' | 'right' | null = null;
 
+  /** Observes THIS element's width — see the element-size note in connectedCallback. */
+  private _sizeObserver: ResizeObserver | null = null;
+
+  /** The width the last observer callback saw, so only real width changes re-clamp. */
+  private _observedWidth = -1;
+
   constructor() {
     super();
     this.isThirdOpen = true;
@@ -374,6 +380,24 @@ export class WorkspaceLayout extends LitElement {
   connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener('resize', this._onWindowResize);
+    /*
+     * AND A RESIZE THAT IS NOT THE WINDOW'S. The listener above re-clamps when the WINDOW
+     * moves, but `_columnWidth` measures THIS ELEMENT — and a tree that mounts a beat before
+     * its box lands at true size (a room mounting while its container is still settling, a
+     * tab becoming visible) computes its clamp from that first, wrong width and then has no
+     * event to recompute it: measured 2026-10-06 in the product room — the declared 550px
+     * load width sat in `_rightPx` while the pane stayed frozen at the 104px floor the
+     * zero-width first render computed, for the whole session. The observer re-renders when
+     * the width this arithmetic actually reads has changed — only then, so a drag inside
+     * (which never resizes this element) still triggers nothing extra.
+     */
+    this._sizeObserver = new ResizeObserver((entries) => {
+      const width = entries[entries.length - 1]?.contentRect.width ?? 0;
+      if (Math.abs(width - this._observedWidth) < 0.5) return;
+      this._observedWidth = width;
+      this.requestUpdate();
+    });
+    this._sizeObserver.observe(this);
     document.addEventListener('mousemove', this._onMouseMove as EventListener);
     document.addEventListener('mouseup', this._onMouseUp as EventListener);
     // The release is caught on more than one channel on purpose. A mousedown that
@@ -519,6 +543,8 @@ export class WorkspaceLayout extends LitElement {
     document.removeEventListener('mouseover', this._onPointerBoundary as EventListener);
     window.removeEventListener('theme-change', this._readColumnGround as EventListener);
     this._groundObserver?.disconnect();
+    this._sizeObserver?.disconnect();
+    this._sizeObserver = null;
     this.removeEventListener('collapse-toggle', this._onCollapseToggle as EventListener);
     this.removeEventListener('tab-change', this._onTabChange as EventListener);
     this.removeEventListener('run-click', this._onRunClick as EventListener);

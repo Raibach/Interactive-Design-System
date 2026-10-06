@@ -4739,24 +4739,31 @@ export default function Index({
   }
 
   /**
-   * A NEW PROJECT, BORN ON THE TAB'S CLICK (owner, 2026-10-04) — the Composer's own act,
-   * translated: *"when I click product just create a new project … this is the same function
-   * as composer."* The tool's engine creates it (`POST /api/builder/new` through the
-   * bridge) and the room opens its workspace. THERE IS NO DASHBOARD ANY MORE in this room
-   * (same evening: *"basically we never want to see the applications dashboard ever"*) —
-   * the room lands in a project, or the banner says why it cannot.
+   * OPEN THE ROOM — RESUME THE PROJECT LAST TOUCHED, OR BIRTH THE FIRST ONE (owner,
+   * 2026-10-06 — the confirmed package model: *"user will come in and create an idea in their
+   * project/package and then they may come back and want to do something different to it …
+   * five different edit processes over a month to one project."*). Entering Product no longer
+   * births a project on every click: the bridge's `/builder/room` reopens the project whose
+   * conversations moved last — its package PERSISTS now (hidden from the console's cards
+   * until published, the way every draft package is) — and births one only when there is
+   * none to resume. The seat's own conversations list is the project's return visits.
+   * THERE IS NO DASHBOARD, EVER (2026-10-04, unchanged): the room lands in a project, or the
+   * banner says why it cannot.
    */
   const creatingProductProjectRef = useRef(false);
-  async function createProductProject(): Promise<void> {
+  async function openProductRoom(): Promise<void> {
     if (creatingProductProjectRef.current) return;
     creatingProductProjectRef.current = true;
     try {
-      const res = await fetch(`${API_BASE}/builder/new`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/builder/room`, {
+        method: 'POST',
+        headers: { 'X-User-ID': getStoredUserId() },
+      });
       const body = await res.json();
       if (body?.ok && body?.project_id) {
         setBuilderEngineDown(false);
         setProductRoomProjectId(String(body.project_id));
-      } else {
+      } else if (body?.error === 'engine unreachable') {
         setBuilderEngineDown(true);
       }
     } catch {
@@ -4772,13 +4779,14 @@ export default function Index({
     // there is nothing to check or birth against — a demo without its builder service.
     if (!builderToolUrl()) return;
     void checkBuilderEngine();
-    // Entering the room with no project — a reload, a restored tab — births one exactly as
-    // a click does. The room may never stand on the dashboard. ON THE DEMO TOO, from 2026-10-04
-    // (the owner's decision — visitors may run the builder, capped in the tool's engine): the
+    // Entering the room with no project open — a reload, a restored tab — REOPENS the project
+    // last touched (the bridge resumes; it births only when there is none — owner, 2026-10-06:
+    // entering is coming back, not starting over). ON THE DEMO TOO, from 2026-10-04 (the
+    // owner's decision — visitors may run the builder, capped in the tool's engine): the
     // engine it births against is the HOSTED one, reached through the bridge like everything
     // else. The old note here said "not on the demo: there is no engine to birth one against" —
     // there is one now.
-    if (!productRoomProjectId) void createProductProject();
+    if (!productRoomProjectId) void openProductRoom();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
@@ -4923,21 +4931,23 @@ export default function Index({
   }, [headerTab]);
 
   /**
-   * THE PRODUCT ROOM'S CONTAINER LOADS CLOSED (owner, 2026-10-05) — the console's own rule,
-   * and it lives on the CONTAINER only: `isThirdOpen: false`, set as a PROPERTY through the
-   * ref, never as a JSX attribute (Lit's boolean converter reads any present attribute as
-   * true — the string "false" included). At false the right pane sits at its designed
-   * collapsed floor with the rail showing — the gripper strip and the rail — and the
-   * container tells the panel it is collapsed so the rail's Chat button OPENS it on the
-   * first click. NO `collapsed` and NO `rightWidth` are written from here: a pinned width
-   * jumps the column to half the screen, and a payload-style flag would snap it shut again
-   * after the operator opened it — open or closed belongs to the element that owns the
-   * width. `useLayoutEffect`, so the first paint is already the closed column.
+   * THE PRODUCT ROOM'S CHAT LOADS OPEN AT 550 (owner, 2026-10-06: *"load the chat open by
+   * default at 5:50 pixels"* — 550). This supersedes the room's 2026-10-05 open-closed
+   * rule: `chatLoadWidth = 550` is the layout's OWN declared load width — the element
+   * documents it ("a room that declares a width opens her THERE instead") and it only says
+   * where she STANDS on load; a drag is still the operator's and the saved-width path is
+   * untouched. `isThirdOpen = true` opens her on entry. Both are PROPERTIES through the ref,
+   * never JSX attributes (Lit's boolean converter reads any present attribute as true). From
+   * there the gripper keeps opening and closing her exactly as it does in every other
+   * section — open or closed belongs to the element that owns the width. `useLayoutEffect`,
+   * so the first paint is already the open column.
    */
   useLayoutEffect(() => {
     if ((headerTab || '') !== 'product') return;
     const el = productLayoutRef.current;
-    if (el) el.isThirdOpen = false;
+    if (!el) return;
+    el.chatLoadWidth = 550;
+    el.isThirdOpen = true;
   }, [headerTab]);
 
   /**
@@ -4977,9 +4987,29 @@ export default function Index({
           | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
           | null;
         if (cancelled) return;
-        const messages = (conv?.messages || [])
+        const thread = (conv?.messages || [])
           .filter((m) => String(m.content || '').trim())
+          // THE TRANSIENT LINES STAY OUT OF THE RECORD (2026-10-06). "Starting a new run…" and
+          // "Writing the app…" are the application's LIVE progress — the app's own chat shows
+          // them while they happen and keeps the answer as the record. The room mirrors them
+          // live (the progress effect below, the same application behavior); a reopened thread
+          // shows the person's prompt, the builder's words, and that it finished — not the
+          // machinery in between.
+          .filter(
+            (m) =>
+              String(m.content) !== 'Starting a new run…' && String(m.content) !== 'Writing the app…',
+          )
           .map((m) => ({ role: String(m.role || 'assistant'), content: String(m.content) }));
+        // ONE WELCOME, THEN ONLY THE APPLICATION. Owner, 2026-10-06 — his own words for the
+        // line, dictated the same day: *"maybe add a little conversation to it saying hi.
+        // Welcome product team. Let's get some ideas wireframed today. What's on your mind?"*
+        // — *"I like the feeling of her offering assistance instead of sitting there like a
+        // blank page. But I don't want to change any of the products process."* Drawn ONLY
+        // while the project's thread is empty — the moment the first build lands, the
+        // engine's own words are the room's voice and this line is gone.
+        const messages = thread.length
+          ? thread
+          : [{ role: 'assistant', content: "Hi. Welcome product team. Let's get some ideas wireframed today. What's on your mind?" }];
         const unreported = assignProps(seat, {
           sessionId: room.session_id,
           conversationId: room.conversation_id,
@@ -5004,6 +5034,21 @@ export default function Index({
           // append an empty block. The live facts here are the engine's (the project and its
           // conversation), which arrive as the bound thread above, not through her workspace.
           graceLiveContext: false,
+          // A TAB CLICK IS NOT A TURN — PRODUCT-ROOM BINDING ONLY. Owner, 2026-10-06: "this
+          // chat is not universal. It belongs to product only." The seat's default is
+          // `tracePrompt: true`, so a Trace-tab click sends its trace script as a turn —
+          // measured live today: the click filed a turn and, on a dead carrier, Grace
+          // answered in the room. False: tabs switch views and nothing more; only the
+          // person's own words are prompts. Stated HERE, in the room's own binding, so every
+          // other seat keeps its behavior untouched.
+          tracePrompt: false,
+          // THE PRODUCT FOOT IS THE APPLICATION'S OWN TOOLS (owner, 2026-10-06: *"all of
+          // these stubs go. And you're gonna put the products wiring down"*): the seat swaps
+          // its v.4b tray for the app's own attach · Figma · GitHub · visual-edit row —
+          // wired by the effect below into the product's real doors (the engine's upload
+          // endpoint, the embedded builder's own modals and visual editor). Product-room
+          // binding only: every other seat keeps the tray.
+          productTools: true,
         });
         if (unreported.length) {
           console.warn(`[product seat] unreported bindings: ${unreported.join(', ')}`);
@@ -5013,6 +5058,148 @@ export default function Index({
       }
     })();
     return () => { cancelled = true; };
+  }, [headerTab, productRoomProjectId]);
+
+  /**
+   * THE ATTACH DOOR — THE ENGINE'S OWN UPLOAD ENDPOINT, THE ENGINE'S OWN ANSWER.
+   *
+   * The app's paperclip uploads to `{engine}/projects/{id}/files/upload` through its own
+   * proxy; this is the same door, reached through the bridge (one hop, same endpoint, the
+   * same multipart the app sends). The answer is handed back VERBATIM as a chat line —
+   * including the local engine's honest refusal ("Attachments are not supported by the
+   * local engine."), which is exactly what a person clicking attach on the app's own chat
+   * gets locally. SUCCESS IS THE FUTURE'S PATH, not a fake: when the engine supports
+   * uploads, this same call attaches for real and says so.
+   */
+  const uploadProductAttachment = useCallback(async (file: File) => {
+    if (!productRoomProjectId) return;
+    const line = (content: string) =>
+      window.dispatchEvent(new CustomEvent('a2ui:system-message', { detail: { role: 'assistant', content } }));
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(
+        `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/files/upload`,
+        { method: 'POST', body: form, headers: { 'X-User-ID': getStoredUserId() } },
+      );
+      const body = (await res.json().catch(() => null)) as
+        | { errors?: { errorMessage?: string }; error?: string; message?: string; data?: unknown }
+        | null;
+      const refused = !res.ok || !!body?.errors || !!body?.error;
+      if (!refused) {
+        line(`Attached \u201c${file.name}\u201d to the project.`);
+        return;
+      }
+      line(
+        body?.errors?.errorMessage ||
+          body?.error ||
+          body?.message ||
+          `The engine refused \u201c${file.name}\u201d (HTTP ${res.status}).`,
+      );
+    } catch {
+      line(`The engine did not answer the upload of \u201c${file.name}\u201d.`);
+    }
+  }, [productRoomProjectId]);
+
+  /**
+   * THE PRODUCT FOOT'S WIRING (owner, 2026-10-06: *"all of these stubs go. And you're gonna
+   * put the products wiring down"*). The foot only asks; this room answers, and both wires
+   * end at THE PRODUCT'S OWN DOORS:
+   *
+   *   attach    → `uploadProductAttachment` above (the engine's upload endpoint).
+   *   figma /   → `postToBuilder` INTO the embedded builder, which opens ITS own modal
+   *   github      / toggles ITS own visual editor — the product's functions with the
+   *   visual-edit   product's own answers (its local-mode truths included).
+   *
+   * AND THE APP TALKS BACK: `ids:tool-state` rides out of the frame, <builder-embed>
+   * re-announces it as `builder-tool-state`, and its three facts land on the seat's own
+   * props — the foot's dots and the pencil's pressed state mirror the APP, never a guess.
+   * PRODUCT-ONLY: the guard is the tab, the listeners live on this room's seat element.
+   */
+  useEffect(() => {
+    if ((headerTab || '') !== 'product') return;
+    const seat = productSeatRef.current;
+    if (!seat) return;
+    const onTool = (e: Event) => {
+      const tool = (e as CustomEvent<{ tool?: string }>).detail?.tool;
+      if (!tool) return;
+      const embed = document.querySelector('builder-embed') as
+        | (HTMLElement & { postToBuilder?: (message: Record<string, unknown>) => void })
+        | null;
+      embed?.postToBuilder?.({ type: 'ids:product-tool', tool });
+    };
+    const onAttach = (e: Event) => {
+      const files = (e as CustomEvent<{ files?: File[] }>).detail?.files || [];
+      for (const file of files) void uploadProductAttachment(file);
+    };
+    const onToolState = (e: Event) => {
+      const d =
+        (e as CustomEvent<{ figmaConnected?: boolean; githubConnected?: boolean; visualEditActive?: boolean }>)
+          .detail || {};
+      seat.productFigmaConnected = !!d.figmaConnected;
+      seat.productGithubConnected = !!d.githubConnected;
+      seat.productVisualEditActive = !!d.visualEditActive;
+    };
+    seat.addEventListener('product-tool', onTool);
+    seat.addEventListener('product-attach', onAttach);
+    window.addEventListener('builder-tool-state', onToolState);
+    return () => {
+      seat.removeEventListener('product-tool', onTool);
+      seat.removeEventListener('product-attach', onAttach);
+      window.removeEventListener('builder-tool-state', onToolState);
+    };
+  }, [headerTab, productRoomProjectId, uploadProductAttachment]);
+
+  /**
+   * LIVE BUILD PROGRESS — THE APPLICATION'S OWN CHAT BEHAVIOR (owner, 2026-10-06: *"wire up
+   * all of the product applications functions that it had in its chat … to load inside of our
+   * chat frame"*). The app's chat shows the run AS IT HAPPENS — "Starting a new run…",
+   * "Writing the app…" — and so does this room now: while a project is open, the room polls
+   * the engine's own transcript and hands each NEW progress line to the seat's display
+   * channel (`a2ui:system-message`, the shape the seat already draws — role + content).
+   * PRODUCT-ONLY and room-side: the seat element is untouched, no other room's chat can see
+   * any of this, and the person's turn and the builder's reply still ride the one route.
+   * The FIRST successful read is the baseline — a reopened thread's history is the bound
+   * record's business, never replayed as live lines.
+   */
+  useEffect(() => {
+    if ((headerTab || '') !== 'product') return;
+    if (!productRoomProjectId) return;
+    let cancelled = false;
+    let seen = -1; // baseline on the first successful read
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/conversation`,
+          );
+          const body = (await res.json().catch(() => null)) as
+            | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
+            | null;
+          if (cancelled || !body?.ok) return;
+          const msgs = (body.messages || []).filter((m) => String(m.content || '').trim());
+          if (seen < 0) {
+            seen = msgs.length;
+            return;
+          }
+          for (let i = seen; i < msgs.length; i++) {
+            const content = String(msgs[i].content || '');
+            if (content === 'Starting a new run…' || content === 'Writing the app…') {
+              window.dispatchEvent(
+                new CustomEvent('a2ui:system-message', { detail: { role: 'assistant', content } }),
+              );
+            }
+          }
+          if (msgs.length > seen) seen = msgs.length;
+        } catch {
+          /* engine down or a transient read — the next tick tries again */
+        }
+      })();
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [headerTab, productRoomProjectId]);
 
   /**
@@ -5036,32 +5223,62 @@ export default function Index({
   }, [headerTab]);
 
   /**
-   * AND ITS SEAT READS THE COMPOSER'S LOADED CHAT — the Product effect's mirror (owner,
-   * 2026-10-05): the same settings, from the same source, with the same limitation (the
-   * application knows the conversation only after the Composer has been opened once in the
-   * session; opened later, this effect re-runs on `workspaceTree`; never opened, the rail
-   * is there and the thread is empty — nothing is created and nothing is lost either way).
+   * THE DEVELOPMENT ROOM HAS ITS OWN CHAT NOW — ITS OWN PACKAGE, ITS OWN CONVERSATIONS
+   * (owner, 2026-10-06: *"developers are going to have a package, they're gonna have chats
+   * related to the conversation ID … development processes that are [not] shared … only for
+   * development."* — after watching the room borrow another room's seat: *"It doesn't seem
+   * to own its own chat. It seems to be borrowing a chat from product … un-bind those."*).
    *
-   * EXCEPT THE TAB LIST, AND ONLY VERSIONS (owner, 2026-10-05 — DEVELOPMENT_SEAT_TABS above):
-   * the bound list is kept as-is minus `versions` — the room does not offer that button
-   * whichever way the rail is filled — and a bound list that is EMPTY (the rail's "show
-   * everything") resolves to the room's own list, never back to the full rail.
+   * This effect USED to read the Composer's loaded tree — so the room showed ANOTHER room's
+   * conversation whenever the Composer had been opened. That borrow is gone: the bridge
+   * ensures the room's OWN package (a `prompt_sessions` row marked `dev_room`, hidden from
+   * the console's cards) with its own conversation, and the seat binds THAT — the same
+   * per-room isolation Product keeps. The rail is the room's own list
+   * (`DEVELOPMENT_SEAT_TABS`, Versions never offered). Where a development turn should GO
+   * once sent (the platform assistant today, exactly as in the Composer; the tool's own
+   * agent someday) is the owner's call — not guessed here.
    */
   useEffect(() => {
     if ((headerTab || '') !== 'development') return;
     const seat = developmentSeatRef.current;
     if (!seat) return;
-    const comp = (Array.isArray(workspaceTree.components) ? workspaceTree.components : [])
-      .find((c: { component?: string } | null) => c?.component === 'chat-panel');
-    if (!comp) return;
-    assignProps(seat, componentProps(comp, workspaceTree.dataModel || {}));
-    const tabs = (seat.allowedTabs || '')
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .filter((t) => t !== 'versions');
-    seat.allowedTabs = tabs.length ? tabs.join(',') : DEVELOPMENT_SEAT_TABS;
-  }, [headerTab, workspaceTree]);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/builder/development/room`, {
+          method: 'POST',
+          headers: { 'X-User-ID': getStoredUserId() },
+        });
+        const body = (await res.json().catch(() => null)) as
+          | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
+          | null;
+        if (cancelled || !body?.ok || !body.session_id || !body.conversation_id) return;
+        const unreported = assignProps(seat, {
+          sessionId: body.session_id,
+          conversationId: body.conversation_id,
+          packageTitle: String(body.label || 'Development'),
+          allowedTabs: DEVELOPMENT_SEAT_TABS,
+          // THE ROOM'S REQUIRED SCRIPT — PLUMBING, NOT A VOICE (the product room's rule, one
+          // room over). The seat refuses a room that binds no words; these words are the
+          // room's facts. What ANSWERS a development turn today is the platform's own
+          // assistant, exactly as in the Composer — stated so, not dressed up.
+          instructions:
+            'The Development room carries the development team\'s own conversations. Answer briefly and about the work in front of the person.',
+          // The seat's third state — omitted is REFUSED, not defaulted (see chat-panel's
+          // `_gracePrompt`). False: this room binds no workspace seats for her to read.
+          graceLiveContext: false,
+          // A tab click is not a turn (the product room's measurement, one room over).
+          tracePrompt: false,
+        });
+        if (unreported.length) {
+          console.warn(`[development seat] unreported bindings: ${unreported.join(', ')}`);
+        }
+      } catch {
+        /* a failed room fetch leaves the seat as it stands — the next entry tries again */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [headerTab]);
 
   useEffect(() => {
     // BOTH ROOMS' FRAMES ANNOUNCE THEMSELVES HERE (2026-10-05; Development's half is back,
@@ -7277,12 +7494,12 @@ export default function Index({
        * tree/state stay in the file, unwired, rather than deleted: the room they served may
        * come back, and a deleted door is not a decision this host gets to make alone.
        */
-      /* THE CLICK IS THE DOOR, AND THE DOOR CREATES (owner, 2026-10-04): *"when I click
-         product just create a new project … this is the same function as composer."* The
-         Composer's tab click births a package; this room's births a PROJECT in the tool —
-         created through the bridge, then opened by the embed. A console card opens an
-         EXISTING project instead; that path belongs to the card (handleOpenPromptFromConsole). */
-      void createProductProject();
+      /* THE CLICK IS THE DOOR — AND THE DOOR NOW RESUMES (owner, 2026-10-06, the confirmed
+         package model): entering Product reopens the project last touched (*"they may come
+         back and want to do something different to it"*), birthing one only when there is
+         none — see `openProductRoom`. A console card opens an EXISTING project instead;
+         that path belongs to the card (handleOpenPromptFromConsole). */
+      void openProductRoom();
       return;
     }
 
@@ -10157,7 +10374,13 @@ export default function Index({
                          pops; a stopped workspace gets the honest panel below. */
                       ? (
                         <>
-                          <workspace-layout ref={developmentLayoutRef} className="flex-1 min-h-0">
+                          {/* KEY: A ROOM IS ITS OWN INSTANCE (2026-10-06 — owner: "It seems to be
+                              borrowing a chat from product … un-bind those."). Without these keys,
+                              React reconciles Product's and Development's frames as ONE subtree: the
+                              same seat node carries Product's conversation into Development, and
+                              the layout keeps the previous room's pane state. The keys force each
+                              room to mount its own instance. */}
+                          <workspace-layout key="development-room" ref={developmentLayoutRef} className="flex-1 min-h-0">
                             {/* THE ROOM'S WORKSPACE + THE STAGED OPENING (2026-10-06): the
                                 left column loads the repo-run workspace — the modified copy
                                 whose telemetry is cut (development/CHANGELOG.md) — covered by
@@ -10222,7 +10445,7 @@ export default function Index({
                                 nothing is bound — an empty seat, never another room's. Its
                                 rail is the room's own list: every drawable tab except
                                 Versions (DEVELOPMENT_SEAT_TABS). */}
-                            <chat-panel slot="right" ref={developmentSeatRef}></chat-panel>
+                            <chat-panel key="development-seat" slot="right" ref={developmentSeatRef}></chat-panel>
                           </workspace-layout>
                         </>
                       )
@@ -10250,7 +10473,7 @@ export default function Index({
                              dashboard — the room's own rule). */
                           ? (
                             <>
-                              <workspace-layout ref={productLayoutRef} className="flex-1 min-h-0">
+                              <workspace-layout key="product-room" ref={productLayoutRef} className="flex-1 min-h-0">
                                 <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                               {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
                                   once a project does. While one is being born — or while the
@@ -10298,7 +10521,7 @@ export default function Index({
                                   {!builderEngineDown && (
                                     <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
                                   )}
-                                  {builderEngineDown ? '' : "Opening a new project\u2026"}
+                                  {builderEngineDown ? '' : "Opening the project\u2026"}
                                 </div>
                               )}
                               {builderToolUrl() && !productToolDown && (
@@ -10349,7 +10572,7 @@ export default function Index({
                                     the rail are what show, and the panel's settings arrive from
                                     the Composer's loaded chat (the seat effect below). Until
                                     then nothing is bound — an empty seat, never another room's. */}
-                                <chat-panel slot="right" ref={productSeatRef}></chat-panel>
+                                <chat-panel key="product-seat" slot="right" ref={productSeatRef}></chat-panel>
                               </workspace-layout>
                               {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04) — ONE LEVEL UP
                                   since the column arrived (2026-10-05): it must cover the WHOLE

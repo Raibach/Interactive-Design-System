@@ -1402,6 +1402,55 @@ export default function WorkspacePage() {
   }
 
   /**
+   * THE PRODUCT FOOT'S TOOLS, ARRIVING FROM THE ROOM (owner, 2026-10-06: *"all of these
+   * stubs go. And you're gonna put the products wiring down"*). The room's seat carries the
+   * app's own tool row now, and each button asks THIS page to do what the app's own row
+   * does: open its Figma or GitHub modal, toggle its visual editor (whose own honest
+   * refusals — busy, starting — stand). Requests arrive from the host window only;
+   * standalone, nothing listens and nothing changes.
+   */
+  useEffect(() => {
+    if (!isEmbeddedInRoom) return;
+    const onHostMessage = (e: MessageEvent) => {
+      if (e.source !== window.parent) return;
+      const data = (e.data || {}) as { type?: string; tool?: string };
+      if (data.type !== "ids:product-tool") return;
+      switch (data.tool) {
+        case "figma":
+          setOpenModal("figma");
+          break;
+        case "github":
+          setOpenModal("github");
+          break;
+        case "visual-edit":
+          handleToggleVisualEdit();
+          break;
+      }
+    };
+    window.addEventListener("message", onHostMessage);
+    return () => window.removeEventListener("message", onHostMessage);
+  }, [isEmbeddedInRoom, handleToggleVisualEdit]);
+
+  /**
+   * AND THE TOOLS' OWN STATE GOES HOME — the foot's dots and the pencil's pressed state
+   * mirror THIS app, never a guess: figmaConnected/githubConnected are the same facts the
+   * modals write, visualEditActive is `visualEditorOpen`. Posted on every change (and once
+   * on mount); the room hands them to the seat's props.
+   */
+  useEffect(() => {
+    if (!isEmbeddedInRoom) return;
+    window.parent.postMessage(
+      {
+        type: "ids:tool-state",
+        figmaConnected,
+        githubConnected,
+        visualEditActive: visualEditorOpen,
+      },
+      "*",
+    );
+  }, [isEmbeddedInRoom, figmaConnected, githubConnected, visualEditorOpen]);
+
+  /**
    * SAVE THE NAME — writes the LABEL through the builder's own proxy (`projects.patch`),
    * the platform's own contract: the id is the address and cannot change, the label is the
    * name people read. Enter or leaving the field saves; an emptied field clears the label

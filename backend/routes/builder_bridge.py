@@ -32,7 +32,8 @@ import threading
 import time
 
 import httpx
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Request
+from fastapi.responses import JSONResponse
 
 import services as state
 from deps import get_user_id_from_header
@@ -163,11 +164,33 @@ def _sync_builder_packages_locked(user_id: str) -> dict:
         project_id = str(project.get("projectId") or "").strip()
         if not project_id:
             continue
-        # THE COMMIT RULE (owner, 2026-10-04): a card exists only for a PUBLISHED project —
-        # Publish is the builder's commit (the room's exit guard asks the same question), and
-        # an unpublished project is the sandbox's business alone. Skipping it here also means
-        # phase 3 reaps any row it once had (absent from `seen`), which is the discard path.
+        # ── THE COMMIT RULE, AMENDED 2026-10-06. The owner confirmed the package model: a
+        #    project's package PERSISTS like a Composer package, and its conversations are the
+        #    person's return visits — "five different edit processes over a month to one
+        #    project … capture all of that history inside of that project." So an unpublished
+        #    project is KEPT, not reaped: the row joins `seen` (phase 3 no longer deletes it)
+        #    and wears the same mark every not-ready package wears — `draft`, which the
+        #    console's card read already hides (`metadata->>'draft' IS NULL`) — plus a plain
+        #    `builder_unpublished` flag so the state is legible. A card still exists only for
+        #    a PUBLISHED project: publish is the builder's commit (the room's exit guard asks
+        #    the same question), and discard — the project really gone from the engine —
+        #    still reaps through phase 3.
         if project.get("published") is False:
+            seen.add(project_id)
+            unpublished_row = existing.get(project_id)
+            if unpublished_row is None:
+                continue  # no row yet — nothing to persist for it
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "UPDATE prompt_sessions "
+                    "SET is_archived = FALSE, "
+                    "    metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb "
+                    "WHERE id = %s AND user_id = %s",
+                    (json.dumps({"draft": "true", "builder_unpublished": "true"}), unpublished_row["id"], user_id),
+                )
+                conn.commit()
             continue
         seen.add(project_id)
 
@@ -208,6 +231,8 @@ def _sync_builder_packages_locked(user_id: str) -> dict:
             "builder_preview_url": preview_url,
             "builder_runs": str(runs),
         }
+        # PUBLISHED: THE CARD SHOWS — the draft/unpublished marks come off with the same
+        # write that keeps the card's fields in step (publishing is the commit).
         moved = (
             row["title"] != title
             or row["description"] != description
@@ -221,7 +246,7 @@ def _sync_builder_packages_locked(user_id: str) -> dict:
                 UPDATE prompt_sessions
                 SET title = %s, description = %s, category = %s,
                     current_version = %s, is_archived = FALSE,
-                    metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb,
+                    metadata = (COALESCE(metadata, '{}'::jsonb) - 'draft' - 'builder_unpublished') || %s::jsonb,
                     updated_at = NOW()
                 WHERE id = %s AND user_id = %s
                 """,
@@ -475,6 +500,48 @@ def _engine_say(status: dict, prompt: str) -> str | None:
     return None
 
 
+# The default names a conversation wears until it is spoken in — ours at creation, the
+# seat's own for a person's "new conversation" click ('New Chat', 'Untitled Prompt').
+_DEFAULT_CONVERSATION_TITLES = (DEFAULT_PROJECT_LABEL, "New Chat", "Untitled Prompt", "")
+
+
+def _label_default_conversation(user_id: str, conversation_id: str | None, prompt: str) -> None:
+    """Give a default-named conversation its first prompt as a label — best-effort, PRODUCT-ONLY.
+
+    Owner, 2026-10-06: *"they may have five different edit processes over a month to one
+    project."* Each return visit is a conversation, and a list of "My new product idea" rows
+    tells the person nothing. The first prompt says what the visit was about — the engine's own
+    convention for descriptions, mirrored for the list the person actually reads. Only the
+    DEFAULT is replaced; a title someone set is never touched. Scoped to conversations under a
+    builder-backed package, so no other room's conversations can ever be relabeled here.
+    """
+    api = state.prompt_sessions_api
+    if not api or not conversation_id:
+        return
+    excerpt = " ".join(str(prompt or "").split())[:60].strip()
+    if not excerpt:
+        return
+    try:
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                """
+                UPDATE conversations SET title = %s, updated_at = NOW()
+                WHERE id = %s
+                  AND COALESCE(BTRIM(title), '') IN %s
+                  AND session_id IN (
+                      SELECT id FROM prompt_sessions
+                      WHERE user_id = %s AND metadata ? 'builder_project_id'
+                  )
+                """,
+                (excerpt, conversation_id, _DEFAULT_CONVERSATION_TITLES, user_id),
+            )
+            conn.commit()
+    except Exception as error:  # noqa: BLE001 — labeling is best-effort; the run is not
+        print(f"[builder] conversation label skipped ({error})")
+
+
 def resolve_builder_project_id(user_id: str, session_id: str | None, conversation_id: str | None) -> str | None:
     """The builder project a seat conversation belongs to, or None — never a guess."""
     api = state.prompt_sessions_api
@@ -528,6 +595,10 @@ def builder_turn_reply(user_id, session_id, conversation_id, question):
     prompt = str(question or "").strip()
     if not prompt:
         return {"conversation_id": conversation_id, "error": "The turn was empty — nothing was sent to the builder."}
+    # THE RETURN VISIT NAMES ITSELF (owner, 2026-10-06: "five different edit processes over a
+    # month to one project"). A conversation still wearing its default name takes the first
+    # prompt as its label; a titled one is never touched. See the helper for the scoping.
+    _label_default_conversation(user_id, conversation_id, prompt)
     try:
         response = httpx.post(
             f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}/agent/start",
@@ -591,12 +662,15 @@ def builder_project_room(project_id: str, x_user_id: str | None = Header(None, a
         return {"ok": False, "error": "database unavailable"}
 
     label = DEFAULT_PROJECT_LABEL
+    engine_label: str | None = None
     preview_url = ""
     runs = 0
     try:
         for project in _engine_projects():
             if str(project.get("projectId")) == project_id:
-                label = (project.get("label") or DEFAULT_PROJECT_LABEL).strip() or DEFAULT_PROJECT_LABEL
+                engine_label = (project.get("label") or "").strip() or None
+                if engine_label:
+                    label = engine_label
                 preview_url = str(project.get("previewUrl") or "")
                 runs = int(project.get("runs") or 0)
                 break
@@ -618,8 +692,19 @@ def builder_project_room(project_id: str, x_user_id: str | None = Header(None, a
             if row:
                 session_id = str(row["id"])
                 conversation_id = str(row["conversation_id"]) if row["conversation_id"] else None
-                if row["title"]:
+                # THE ENGINE'S LABEL IS THE NAME (2026-10-06 — the owner's confirmed package
+                # model). The builder page's rename field writes the engine label; the rename
+                # route below writes both; so the ROOM prefers the engine's label and keeps
+                # the package title in step here — one name for the header, the card and the
+                # tool. The package title remains the fallback when the engine cannot answer.
+                if not engine_label and row["title"]:
                     label = str(row["title"])
+                if engine_label and str(row["title"] or "") != engine_label:
+                    cursor.execute(
+                        "UPDATE prompt_sessions SET title = %s, updated_at = NOW() WHERE id = %s",
+                        (engine_label, session_id),
+                    )
+                    conn.commit()
 
         if session_id is None:
             session = api.create_session(
@@ -666,6 +751,265 @@ def builder_project_room(project_id: str, x_user_id: str | None = Header(None, a
     return {"ok": True, "session_id": session_id, "conversation_id": conversation_id, "label": label}
 
 
+@router.post("/room")
+def builder_room_open(x_user_id: str | None = Header(None, alias="X-User-ID")) -> dict:
+    """OPEN THE PRODUCT ROOM — RESUME THE PROJECT LAST TOUCHED, OR BIRTH THE FIRST ONE.
+
+    Owner, 2026-10-06 (the confirmed package model): *"user will come in and create an idea in
+    their project/package and then they may come back and want to do something different to it
+    … five different edit processes over a month to one project."* So entering the room REOPENS
+    the project whose conversations moved last (its package persists now — the sync keeps it,
+    hidden from the console's cards until published) and births one only when there is none to
+    resume. The engine is required only to BIRTH; a resume opens even with the engine down (the
+    embed says what it finds).
+
+    Returns `{ok, session_id, conversation_id, project_id, label, resumed}`.
+    """
+    user_id = get_user_id_from_header(x_user_id)
+    api = state.prompt_sessions_api
+    if not api:
+        return {"ok": False, "error": "database unavailable"}
+
+    with _ROOM_LOCK:
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                """
+                SELECT s.id, s.title, s.conversation_id,
+                       s.metadata->>'builder_project_id' AS project_id
+                FROM prompt_sessions s
+                WHERE s.user_id = %s AND s.metadata ? 'builder_project_id'
+                ORDER BY GREATEST(
+                    s.updated_at,
+                    COALESCE(
+                        (SELECT MAX(c.updated_at) FROM conversations c WHERE c.session_id = s.id),
+                        s.updated_at
+                    )
+                ) DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+
+        if row and row["project_id"]:
+            session_id = str(row["id"])
+            project_id = str(row["project_id"])
+            label = str(row["title"] or DEFAULT_PROJECT_LABEL)
+            conversation_id = str(row["conversation_id"]) if row["conversation_id"] else None
+            if not conversation_id:
+                if not state.conversation_api:
+                    return {"ok": False, "error": "database unavailable"}
+                conversation_id = str(
+                    state.conversation_api.create_conversation(
+                        user_id,
+                        project_id=None,
+                        title=label,
+                        metadata=None,
+                        session_id=session_id,
+                    )
+                )
+                with api.get_db() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SET app.current_user_id = %s", (user_id,))
+                    cursor.execute(
+                        "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                        (conversation_id, session_id),
+                    )
+                    conn.commit()
+            return {
+                "ok": True,
+                "session_id": session_id,
+                "conversation_id": conversation_id,
+                "project_id": project_id,
+                "label": label,
+                "resumed": True,
+            }
+
+    # NO PROJECT YET — birth the first one, in the tool's own image (the same act as the tab's
+    # first click ever was). The engine is the writer; a stopped engine is the room's banner.
+    born = builder_new_project()
+    if not born.get("ok") or not born.get("project_id"):
+        return {"ok": False, "error": born.get("error") or "the engine refused"}
+    project_id = str(born["project_id"])
+
+    with _ROOM_LOCK:
+        session = api.create_session(
+            user_id=user_id,
+            title=DEFAULT_PROJECT_LABEL,
+            description=PLACEHOLDER_DESCRIPTION,
+            room_domain="product",
+            builder_project_id=project_id,
+        )
+        session_id = str(session["id"])
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            _ensure_category(cursor)
+            cursor.execute(
+                "UPDATE prompt_sessions SET category = %s WHERE id = %s",
+                (CATEGORY_NAME, session_id),
+            )
+            conn.commit()
+        if not state.conversation_api:
+            return {"ok": False, "error": "database unavailable"}
+        conversation_id = str(
+            state.conversation_api.create_conversation(
+                user_id,
+                project_id=None,
+                title=DEFAULT_PROJECT_LABEL,
+                metadata=None,
+                session_id=session_id,
+            )
+        )
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                (conversation_id, session_id),
+            )
+            conn.commit()
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "conversation_id": conversation_id,
+        "project_id": project_id,
+        "label": DEFAULT_PROJECT_LABEL,
+        "resumed": False,
+    }
+
+
+@router.post("/projects/{project_id}/rename")
+def builder_project_rename(
+    project_id: str,
+    payload: dict,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+) -> dict:
+    """RENAME A PROJECT — ONE NAME, WRITTEN TO BOTH HOMES.
+
+    The project's name lives in two places by design: the tool's label (the engine) and the
+    platform's package title (the console card, the room's header). Renaming writes the ENGINE
+    first (it is the tool's own field) and the package second; the room's entry read keeps the
+    pair in step the same direction (engine → package), so they cannot drift. Trimmed, and
+    empty is refused — a project without a name is a defect, not a state.
+    """
+    user_id = get_user_id_from_header(x_user_id)
+    name = str((payload or {}).get("name") or "").strip()
+    if not name:
+        return {"ok": False, "error": "a name is required"}
+    if len(name) > 120:
+        name = name[:120]
+    try:
+        response = httpx.patch(
+            f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}",
+            json={"label": name},
+            timeout=SYNC_TIMEOUT_SECONDS,
+        )
+        body = response.json()
+        if response.status_code != 200 or (body.get("errors")):
+            return {
+                "ok": False,
+                "error": ((body.get("errors") or {}).get("errorMessage")) or f"HTTP {response.status_code}",
+            }
+    except Exception as error:  # noqa: BLE001 — down is the answer
+        print(f"[builder] engine unreachable — could not rename {project_id} ({error})")
+        return {"ok": False, "error": "engine unreachable"}
+    api = state.prompt_sessions_api
+    if api:
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "UPDATE prompt_sessions SET title = %s, updated_at = NOW() "
+                "WHERE user_id = %s AND metadata->>'builder_project_id' = %s",
+                (name, user_id, project_id),
+            )
+            conn.commit()
+    return {"ok": True, "project_id": project_id, "name": name}
+
+
+@router.post("/development/room")
+def builder_development_room(x_user_id: str | None = Header(None, alias="X-User-ID")) -> dict:
+    """ENSURE THE DEVELOPMENT ROOM'S OWN PACKAGE — its own chat, never another room's.
+
+    Owner, 2026-10-06: *"developers are going to have a package, they're gonna have chats
+    related to the conversation ID … development processes that are [not] shared … only for
+    development,"* after watching the room borrow the Composer's (then Product's) seat:
+    *"It doesn't seem to own its own chat … un-bind those."* This is the room's identity
+    door: one package per user (marked `dev_room`), one conversation ensured under it — the
+    same package/conversation shape every room keeps, scoped to Development alone. The row
+    wears `draft` so it never surfaces as a console card.
+    """
+    user_id = get_user_id_from_header(x_user_id)
+    api = state.prompt_sessions_api
+    if not api:
+        return {"ok": False, "error": "database unavailable"}
+    label = "Development"
+
+    with _ROOM_LOCK:
+        session_id = None
+        conversation_id = None
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT id, conversation_id, title FROM prompt_sessions "
+                "WHERE user_id = %s AND metadata->>'dev_room' = 'true' "
+                "ORDER BY created_at ASC LIMIT 1",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                session_id = str(row["id"])
+                conversation_id = str(row["conversation_id"]) if row["conversation_id"] else None
+                if row["title"]:
+                    label = str(row["title"])
+
+        if session_id is None:
+            if not state.conversation_api:
+                return {"ok": False, "error": "database unavailable"}
+            session = api.create_session(
+                user_id=user_id,
+                title=label,
+                description="The development team's room \u2014 its own package and conversations.",
+                room_domain="development",
+            )
+            session_id = str(session["id"])
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "UPDATE prompt_sessions SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb WHERE id = %s",
+                    (json.dumps({"dev_room": "true", "draft": "true"}), session_id),
+                )
+                conn.commit()
+
+        if not conversation_id:
+            if not state.conversation_api:
+                return {"ok": False, "error": "database unavailable"}
+            conversation_id = str(
+                state.conversation_api.create_conversation(
+                    user_id,
+                    project_id=None,
+                    title=label,
+                    metadata=None,
+                    session_id=session_id,
+                )
+            )
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                    (conversation_id, session_id),
+                )
+                conn.commit()
+
+    return {"ok": True, "session_id": session_id, "conversation_id": conversation_id, "label": label}
+
+
 @router.get("/projects/{project_id}/conversation")
 def builder_project_conversation(project_id: str) -> dict:
     """THE THREAD, FROM THE ENGINE — the room maps it to the seat's `messages` at entry."""
@@ -685,3 +1029,49 @@ def builder_project_conversation(project_id: str) -> dict:
             }
         )
     return {"ok": True, "status": str(status.get("status") or "idle"), "messages": messages}
+
+
+@router.post("/projects/{project_id}/files/upload")
+async def builder_project_upload(project_id: str, request: Request) -> JSONResponse:
+    """THE ATTACH DOOR — FORWARDED TO THE ENGINE, ANSWER AND ALL (owner, 2026-10-06:
+    *"all of these stubs go. And you're gonna put the products wiring down"*).
+
+    The builder app's paperclip posts its multipart (field `file`) to the engine's own
+    `/projects/{id}/files/upload`; the product room's foot asks the same door, one hop
+    through here so the browser never crosses origins. Nothing is invented: the engine's
+    payload — including its honest local-mode refusal, "Attachments are not supported by
+    the local engine." — is returned verbatim with the engine's own status.
+    """
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        return JSONResponse(
+            {
+                "errors": {"errorCode": "VALIDATION", "errorMessage": "No file in the upload."},
+                "data": None,
+            },
+            status_code=400,
+        )
+    content = await upload.read()
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}/files/upload",
+            files={
+                "file": (
+                    upload.filename or "file",
+                    content,
+                    upload.content_type or "application/octet-stream",
+                )
+            },
+        )
+    try:
+        payload = response.json()
+    except Exception:
+        payload = {
+            "errors": {
+                "errorCode": "ENGINE",
+                "errorMessage": response.text or f"The engine answered {response.status_code}.",
+            },
+            "data": None,
+        }
+    return JSONResponse(payload, status_code=response.status_code)
