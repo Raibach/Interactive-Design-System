@@ -38,7 +38,12 @@
       // visitor never sees the form flash by. No catch: a read that throws leaves the
       // authed class unset and the form on screen — and the submit path below reports a
       // storage failure loudly, in the gate's own error line. No fallback door.
-      if (localStorage.getItem('grace_is_authenticated') === 'true') {
+      //
+      // SESSION-SCOPED, MATCHING THE APP (2026-10-06): the bundle (session.ts, main.tsx,
+      // authService) reads and writes sessionStorage and retires the old localStorage
+      // copies at boot — a gate that wrote localStorage signed every fresh visitor OUT
+      // behind a "Preparing…" splash, because the bundle deleted what the gate had just set.
+      if (sessionStorage.getItem('grace_is_authenticated') === 'true') {
         document.documentElement.classList.add('authed');
       }
     </script>
@@ -208,9 +213,13 @@
             return;
           }
           try {
-            localStorage.setItem('grace_user_id', '00000000-0000-0000-0000-000000000001');
-            localStorage.setItem('grace_user_role', 'student');
-            localStorage.setItem('grace_is_authenticated', 'true');
+            sessionStorage.setItem('grace_user_id', '00000000-0000-0000-0000-000000000001');
+            sessionStorage.setItem('grace_user_role', 'student');
+            sessionStorage.setItem('grace_is_authenticated', 'true');
+            // THE DOOR MARKER (builder-embed.ts reads it): 'dev' keeps the dev tool's
+            // current behavior for this identity — the same key App.tsx writes
+            // 'registered' for on the beta path.
+            sessionStorage.setItem('grace_door', 'dev');
           } catch (storageError) {
             error.textContent =
               'This browser will not store the session (' + storageError + ') — the gate cannot open here.';
