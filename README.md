@@ -1,26 +1,37 @@
 # Interactive Design System Manager
 
-> **Deterministic runtime protocols, data schemas, and governance architectures — One surface. Any payload. AI fills the slots.**
+> **Deterministic runtime protocols, data schemas, and governance architectures - One surface. Any payload. AI fills the slots.**
 
 **Raibach Interactive Design Studio** · John Holt  
-Version **0.9.1** · A2UI Protocol Compliant · 2026-10-02
+Version **0.9.1** · A2UI Protocol Compliant · 2026-10-06
 
-A prompt-package lifecycle workspace built on the A2UI (Agent-to-User Interface)
-protocol: the AI assembles every screen at runtime from a trusted component catalog —
-no static pages, no hardcoded layouts — and every component in a payload is validated
-against that catalog before anything renders. This repository is the reference
-implementation: the protocol, the runtime, the catalog, and the surface that draws
-them.
+> ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
+> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+>
+> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
 
-## Demo: Wireframe interactive prototype
+---
 
-The hosted demo is **shared privately with reviewers** — the URL and pin come from
-the owner, not from this page. It is **locked, server-side**: the pin is a doorman,
-not the lock. Whoever gets past it lands in a sandbox seat that can chat, assemble,
-and edit its own cloned packages — and cannot delete, publish, ingest, or reach
-anything of the owner's, because the backend refuses those calls outright. On a local
-run the lock is off and the full system is the point; the mechanisms, the sandbox,
-and the environment are in [The Demo's Lock](#the-demos-lock-demomode) below.
+## The Six Seats — One Level, On Purpose
+
+The workspace is a cockpit with six seats, all on the same axis:
+
+| Seat | The room |
+|------|----------|
+| **Console** | Where the work lands: every package is a card, and the portfolio is one grid. |
+| **Composer** | Where a package is written and run: sections, conversation, execution, trace — one lifecycle in one place. |
+| **Design** | The design room: the component catalog, the Figma source, the drawings the system is built from. |
+| **Product** | The product room: the app builder itself, absorbed whole — its build conversation runs inside the platform's own chat. |
+| **Development** | The development seat: the sovereign workspace — agents, code, review — bounded to its own room. |
+| **Governance** | The observation seat: a high-level read of performance across every other seat, built for the people who answer for the company. |
+
+**It is the CEO. It is the people paying the bills — that is their room. Everybody has a room, and that is the point.** The seats sit at the same level because the company they describe has no translation layers. Traditionally, information bubbles up through management until it reaches the executive suite, losing signal at every hop; here the executive looks horizontally, at the same cockpit everyone else works in. Design, development and governance are adjacent — the handoff is the next room, not the next meeting. The layout is the metaphor: flattened, shared context, no gatekeepers.
+
+## Governance — the Observer Seat
+
+**"You can't let the fox manage the henhouse."** Compliance owned by the function it judges is not compliance: engineering and design, auditing themselves, will eventually rationalize whatever makes their timelines look good. So Governance is a separate, executive-facing seat — CTO and CEO level — whose whole job is observation: performance, risk and the honest state of the system, measured where the work actually happens, and surfaced at the top instead of filtered on the way up.
+
+**And every department may carry its own governance lens.** A design department's governance measures the design — front-end performance, interaction friction, component adoption — everything third-party analytics used to be bolted on to do, measured natively inside the architecture instead. Development's measures the system: runtime, load, regressions. The executive layer reads them all, clean and unspun, on the same flat axis.
 
 ---
 
@@ -55,19 +66,11 @@ A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interf
 
 Cost here follows from the design. Assembly does not need a model that thinks; it needs a model that moves, and what allows that is a closed answer space: a fixed catalog, a fixed set of seats, and values bound by path.
 
-**The mechanism.** A model produces the next token from a set of candidates, and the constraint decides how many candidates are in that set. At each step it sits at the edge of a choice. With the catalog fixed and values bound by path, the set holds one or two items, so the model copies rather than chooses. Reasoning tokens are what it spends when the set is wide. This describes the measurements below; it is not a claim about what the model experiences, which is nothing anybody can observe from outside.
+**The mechanism.** A model produces the next token from a set of candidates, and the constraint decides how many candidates are in that set. With the catalog fixed and values bound by path, the set holds one or two items — the model copies rather than chooses. Reasoning tokens are what it spends when the set is wide.
 
-**The measurement.** With reasoning turned off for surfaces, the same prompt returned the same valid JSON: 251 completion tokens instead of 460, 1.53 seconds instead of 6.05. If the model were deciding anything, removing the reasoning would have changed the answer.
+**The measurement.** With reasoning turned off for surfaces, the same prompt returned the same valid JSON: 251 completion tokens instead of 460, 1.53 seconds instead of 6.05. One assembly call per console load at 3,551 tokens replaced three calls of about 3,760 each — roughly half a cent per load, before counting the failures that no longer occur.
 
-**Where invention enters.** The structure carries the answer and the model moves it forward. Where the structure has a gap, the model fills it by guessing, and that guess is where invention enters. An unannotated control is a gap of this kind, and so is a field no check covers.
-
-**Per console load.** One assembly call at 3,551 tokens. Before the change: three calls at about 3,760 tokens each, 23 of 86 requests returning an error, and two attempts spent on each failure. Saving: 7,700 tokens per load, about half a cent at commodity model prices, not counting the failures that no longer occur.
-
-**Volume.** Half a cent per load, multiplied by the number of loads. At five dollars per thousand loads, one hundred million loads a year is about half a million dollars — around 300,000 loads a day. Below that volume the token figure is smaller. The remaining savings are behavioral: failures that no longer occur, and the wait per assembly, 6 seconds to 1.5 on the same prompt.
-
-**On-premise.** On owned hardware the limiting resource is GPU seconds, not dollars per token, so a two-thirds reduction in tokens and a four-fold reduction in latency is fewer machines. Assembly runs on a small local model because the catalog fixes the answer space and every value is checked. The conversation runs on a larger model; it is the only mode with reasoning enabled.
-
-**Limits.** Power is the operating cost, not the total cost; hardware and staffing are additional. The conversation needs a capable model and assembly does not. The constraint is a live property: each entry added to the catalog, and each field no check covers, gives the model something to decide again.
+**The limit.** The constraint is a live property, not a slogan: each entry added to the catalog, and each field no check covers, gives the model something to decide again.
 
 ---
 
@@ -84,7 +87,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 │  │  (left)     │  │   (middle)      │  │     (right)      │     │
 │  └────────────┘  └─────────────────┘  └───────────────────┘     │
 │                                                                  │
-│  Intents: render-console · render-composer · render-session:{id} │
+│  One surface. Six seats. Any payload. AI fills the slots.        │
 │  Envelope: createSurface → updateComponents → updateDataModel    │
 └──────────────────────────────────────────────────────────────────┘
          │                    │                     │
@@ -101,7 +104,6 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 | **Shell Always Visible** | The deterministic React shell renders unconditionally — nav, frame, error states, slot containers. The user never stares at a blank page. AI failure = shell shows the failure, not nothing. |
 | **AI Fills Slots** | Slots are the loading contract (left/middle/right). AI decides which prompt blocks, data, and chat populate them. It does not create or remove slots. |
 | **Zero-Trust Catalog** | Every component validated against `catalogs/<pipeline>/catalog.json`. Unknown → HTTP 503. No silent failures. |
-| **The Server Is the Lock** | The demo's restrictions live in the backend (`demo_policy.py`), never in the browser. The frontend only hides the affordances the gate already refuses; a client that lies about the demo changes its own buttons and nothing else. |
 | **Fail Loud** | Invalid AI responses → 503 with diagnostics. Database down → 503. Empty Figma spec → 503 with exact reason. Never silently degrade. |
 | **No Executable Code** | `eval()` eliminated. `innerHTML` blocked. Buttons dispatch declarative `a2ui:action` events only. |
 | **Package-First** | A composer creates the draft package row on mount. Chat is scoped from keystroke one. |
@@ -111,28 +113,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-63 trusted components — 17 A2UI Basic Catalog primitives + 45 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 63 trusted components`).
-
-```
-A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
-                SectionEditor · DecisionDialog · ConsoleCardGrid
-                CompiledOutput · ChatPanel · TraceFeed · AgentFlow
-                AgentCanvas · OutputControls · CanvasFooter
-Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer · draft-canvas · design-system-picker
-                chat-panel · chat-header · trace-feed · agent-flow · agent-canvas · output-controls · canvas-footer · chat-repair-actions
-                version-trace · token-cost-readout · status-readout
-                output-panel · search-bar
-                filter-pill · footer-bar · chat-navigation-bar · agent-card
-                prompt-section · control-bar · add-section-button
-                ai-surface-sandbox · error-banner · prompt-container
-                prompt-input-section · gripper-prompt-input · role-dropdown
-                role-tile · status-bar-prompt-input · prompt-textarea
-                model-selector-button · user-response-bubble
-Design room:    design-left-panel · design-middle-container · component-preview · draft-preview
-                figma-ingest-form · catalog-ingest-form · figma-layers-view
-```
-
-The Design room keeps its **own** catalogue (`catalogs/design-artifacts/`, 63 components) — one catalogue per surface, each the gate for its own payloads, resolved at ask-time from the directory itself (`deps.a2ui_catalog_for`).
+Every component a payload may name is validated against the pipeline's own `catalog.json` — unknown tag, HTTP 503. Components are typed with `ChildList` / `DynamicString` per the validator rules, the live count is printed at backend startup, and `npm run catalog:check` compares the docs against the catalog (it reports drift and never gates). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ---
 
@@ -141,52 +122,19 @@ The Design room keeps its **own** catalogue (`catalogs/design-artifacts/`, 63 co
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · npm · Tailwind · TypeScript |
-| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · DeepSeek hosted API — one model for every mode |
+| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM providers (Z.ai GLM primary, DeepSeek) |
 | **Components** | Lit Web Components (Shadow DOM) · Figma API spec-driven |
-| **Deploy** | Docker · Northflank (`semantic-design-systems`, `nf-europe-west`) |
+| **Deploy** | Docker · Northflank (us-central) · Cloudflare Tunnel |
 
 ---
 
 ## Repository Layout
 
 ```
-backend/
-├── main.py              # App setup, startup, router includes, the demo gate's registration
-├── deps.py              # A2UI catalog loader, shared helpers, the demo identity pin
-├── demo_policy.py       # The demo lock: deny-by-default policy tables + rate buckets
-├── check_demo_policy.py # Policy-vs-routes drift check (run before a deploy)
-├── seed_demo_data.py    # Seeds / resets the demo sandbox (clones, project, user)
-├── services.py          # Database service startup
-├── figma_service.py     # Figma API → Lit spec extractor
-├── grace_gui.py         # AI system prompts & assembly logic
-└── routes/              # 14 topic routers
-    ├── ai.py                # Manifest, assemble-surface, save, audit
-    ├── conversations.py    # Conversation + message CRUD
-    ├── prompt_sessions.py  # Packages, versions, permissions
-    ├── projects.py         # Project CRUD
-    ├── memory.py           # Memory storage (dictation)
-    ├── figma.py            # Figma API proxy, catalogue ingest
-    ├── figma_intake.py     # Governance intake runs
-    ├── milvus.py           # Zilliz/Milvus vectors
-    ├── agent_rpc.py        # JSON-RPC 2.0 agent integration
-    ├── teacher.py          # Teacher query, model ensure
-    ├── auth.py             # Login, signup, users
-    ├── governance.py       # Inspection runs
-    ├── misc.py             # Health, config, news, PDF, reasoning
-    └── files.py            # Documentation file I/O, repair read/apply
-
-frontend/
-├── index.html               # The shell — carries a static twin of the sign-in gate
-│                            #   (drawn before any JS; main.tsx removes it on mount)
-├── src/
-│   ├── App.tsx              # Root app with routes
-│   ├── components/
-│   │   ├── A2UI/            # A2UI surface container + per-surface catalogs
-│   │   └── lit/             # Lit web components (agent-card, workspace-layout, …)
-│   ├── pages/               # WritingAreaIndex (main surface)
-│   ├── hooks/               # React hooks
-│   └── shared/              # Surface contract, tag registry, demo flag (demoMode.ts)
-└── scripts/                  # Manifest generator, Figma sync, catalog check
+backend/        FastAPI app · A2UI catalog loader · Figma extractor · AI assembly · topic routers
+frontend/       React shell + Lit component library (Shadow DOM, Figma-driven) · the surface host
+wireframe-lab/  The sovereign tooling: the app builder and its local engine, the dev workspace, the room docs
+READ-ME/        The doctrine: the conformance specification, THE_METHOD, the audits
 ```
 
 ---
@@ -204,133 +152,23 @@ bash RESTART-LOCAL.sh
 open http://localhost:5001
 ```
 
-- **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}` (a real, paid model ping — not a free liveness probe)
-- **Sign-in gate:** the local gate takes the team pin — the same one shared privately with the demo's reviewers
-- **Local runs the full system:** with `DEMO_MODE` unset the identity pin and the policy gate are inert — `GET /api/config` answers `{"demo_mode": false}` — and a request's `X-User-ID` header is honored exactly as before
-- **Caching:** the shell (`index.html`) is never cached; the hashed assets are cached immutable — a deploy takes effect on the next load with no hard refresh
+- **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}`
 
 ---
 
 ## Deployment
 
-Docker on **Northflank** — project `semantic-design-system`, cluster `nf-europe-west`.
-The app service is `semantic-design-systems` (builds from branch **`demo-mode`**,
-redeploys on every push to it; `main` is untouched). The image is a **multi-stage
-build**: the frontend compiles inside a Node stage (including the catalog audit report),
-so no build artifacts live in the repository. To return the service to plain `main`,
-point its build branch back (`northflank patch service combined` with
-`vcsData.projectBranch: main`).
-
-**The rooms' tools are services of their own** (2026-10-04 — `wireframe-lab/HOST-THE-TOOLS.md`):
-
-| service | what it is | builds from |
-|---|---|---|
-| `dev-workspace` | the Development room's workspace: the Raibach IDS Agent Canvas (pinned, the house patch applied inside the image), local mode — the session key is injected into the page at startup, so the tool adds its own backend and no visitor is asked for anything | this repo, `/development/agent-canvas/Dockerfile` |
-| `builder` | the Product room's app builder (Next, port 3223) | this repo, build context `wireframe-lab/ai-app-builder-open` — the tool's whole tree, its local-vcaas engine and the room's wiring included (it lived on a vendor fork until 2026-10-05, when the owner moved it here and retired the fork) |
-| `builder-engine` | the engine behind the builder (VCaaS-shaped API, DeepSeek, path-form previews, per-visitor + global run budgets). Its `data/` rides a **volume** — the projects store. | this repo, build context `wireframe-lab/ai-app-builder-open`, `/local-vcaas/Dockerfile` |
-
-The app service pins the three addresses: `DEVELOPMENT_TOOL_URL` and
-`BUILDER_TOOL_URL` (public, read by `GET /api/config` and handed to the rooms —
-`development/CHANGELOG.md`, 2026-10-04), and `BUILDER_ENGINE_URL` (the engine's
-internal address, `http://builder-engine:4000` — services in one project reach each
-other by service name). The workspace's session key and the DeepSeek key ride the
-services' runtime environments, set through the dashboard (the CLI was revoked,
-2026-10-05) — never in git.
-
----
-
-## The Demo's Lock (DEMO_MODE)
-
-The public demo is one switch: `DEMO_MODE=1`, set only on the deployed service. Every
-mechanism below is inert without it, and a local run never sets it — local is the
-full system, on purpose.
-
-**The identity pin.** `deps.get_user_id_from_header()` ignores `X-User-ID` entirely
-when the switch is on and resolves every request to the demo user (`DEMO_USER_ID`).
-The frontend still sends its constant; the server never reads it. That is also what
-repairs `/api/teacher/query`, which called the resolver with no argument and
-therefore wrote every demo chat turn as the owner.
-
-**The gate** (`backend/demo_policy.py`, registered in `main.py`). Order: rate limit →
-pass-list → policy. Mutations are **deny-by-default** against an allowlist named by
-the app's own route templates (the chat turn, assembly, the demo's own packages and
-their versions, the conversation writes, project create/rename) — prefixes are
-deliberately not used, because `startswith("/api/prompt-sessions/")` reads as "the
-demo may use its packages" and actually permits their deletion. GETs pass except a
-denylist (the unscoped Milvus dump, source files, the reasoning trace, admin,
-governance, and the Figma endpoints that dial the API or write source), with three
-exceptions kept for the design rail: `/api/figma/activity`, `/api/figma/catalog`,
-`/api/figma/config`. Refusals are 403s with a sentence a person can read.
-`backend/check_demo_policy.py` asserts the tables still match `app.routes` — an
-allowlist entry whose route was renamed is drift, named — and prints every mutating
-route's demo disposition.
-
-**The money.** In-process token buckets: the LLM-backed endpoints (`teacher/query`,
-`assemble-surface`, `save-surface`, `confirm-exit`, `health`) are capped per visitor
-(20 per 10 min by default) and **globally** (300 per hour — the backstop that bounds
-the DeepSeek bill), other mutations 120 per hour per visitor. `GET /api/health` is
-throttled *before* the pass-list precisely because it is a paid model ping. Limits
-are environment-tunable (`DEMO_RATE_LLM_PER_KEY`, `DEMO_RATE_LLM_GLOBAL`,
-`DEMO_RATE_MUTATION_PER_KEY`; format `N/seconds`).
-
-**The sandbox.** The demo user owns cloned copies of packages the owner chooses:
-`DEMO_SEED_SESSION_IDS` names the originals, `seed_demo_data.py` clones them
-(versions, conversations, messages, the owner permission row, every pointer
-remapped), and `--reset` throws the copies away and re-clones. The originals are
-unreachable — the ownership predicates scope every list and read to the demo's own
-rows — and a project row ("Demo Workspace") exists so the shell's first load finds
-one instead of trying to create it.
-
-```bash
-python seed_demo_data.py                     # what it would do (dry run)
-python seed_demo_data.py --apply             # create user/project, clone the sources
-python seed_demo_data.py --reset --apply     # wipe the sandbox, re-clone
-python seed_demo_data.py --list-sources      # the cards the console would draw, as a paste-ready id list
-# inside the deployed container:
-northflank exec service --cmd 'python seed_demo_data.py --reset --apply' \
-    --project semantic-design-system --service semantic-design-systems
-```
-
-**Cards come from saved packages only.** The console reads its list with
-`exclude_drafts=True` ("unsigned composer drafts never litter the console"), so an
-unsaved draft never draws a card however many the sandbox holds — which is why
-`--list-sources` prints exactly the set that renders, and why the seeded-count and
-the card-count can legitimately differ.
-
-**The shell side is cosmetic.** `GET /api/config` says which build this is; the
-frontend (`shared/demoMode.ts`) reads it once before the first render and hides the
-affordances the gate refuses (card/menu/chat deletes, Repair, the ingest forms, the
-debug routes). A client that lies about the flag changes its own buttons and nothing
-else — the server consults it never.
-
-**No blank page, down to the first byte.** The shell's oldest rule takes its
-strongest form here: `index.html` carries a static twin of the sign-in gate —
-colours, logo (inline data URI), the fixed `dev@local` — so the first paint *is* the
-gate, never a white screen while the bundle streams (measured before the fix: 2.2 MB
-of JS, about 3 seconds of white). `main.tsx` removes the twin one frame after React
-commits.
-
-**And the gate's JavaScript is its own small bundle** (2026-10-02). The entry used to
-carry the whole application — every Lit registration, the surface, the pages — so the
-gate could not be *typed into* until ~2.5 s of script had arrived. The registrations
-live in `components/lit/register` (imported by the app's own page, still before any
-surface assembles), the pages are lazy, the composer's ground travels with them, and
-`manualChunks` keeps the React family in the entry while every other dependency rides
-behind the pin. Whatever waits — the config read, the app chunk for a session already
-signed in — shows `GateSplash`, the same card, so the whole boot reads as one slow
-gate that becomes typeable.
-
-Service environment: `DEMO_MODE=1`, `DEMO_USER_ID`, `ADMIN_USER_IDS` (the admin stub
-is allow-all when unset), `DEMO_SEED_SESSION_IDS`; optionally `DEMO_USER_EMAIL` and
-the three rate-limit variables — plus the rooms' tool addresses (`DEVELOPMENT_TOOL_URL`,
-`BUILDER_TOOL_URL`, `BUILDER_ENGINE_URL`) described in Deployment above.
+Docker on **Northflank** (`prompt-composer-console`, us-central). Production deploys via git push to `main` (CI/CD) or the local `DEPLOY-NORTHFLANK.sh` runbook. The image is a **multi-stage build**: the frontend compiles inside a Node stage (including manifest generation), so no build artifacts live in the repository.
 
 ---
 
 ## Documentation
 
+- [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
+- [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
 - [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
-- [`CHANGELOG.md`](CHANGELOG.md) — Release history
+- [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
+- [`FIGMA/CONSOLE_CONTRACTS.md`](FIGMA/CONSOLE_CONTRACTS.md) — Console surface data contract
 
 ---
 

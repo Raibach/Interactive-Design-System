@@ -780,13 +780,19 @@ def builder_room_open(x_user_id: str | None = Header(None, alias="X-User-ID")) -
                        s.metadata->>'builder_project_id' AS project_id
                 FROM prompt_sessions s
                 WHERE s.user_id = %s AND s.metadata ? 'builder_project_id'
-                ORDER BY GREATEST(
-                    s.updated_at,
-                    COALESCE(
-                        (SELECT MAX(c.updated_at) FROM conversations c WHERE c.session_id = s.id),
-                        s.updated_at
-                    )
-                ) DESC
+                -- THE CONVERSATIONS DECIDE, NOT THE ROW'S TICK (2026-10-06, measured):
+                -- the console's sync updates every package row it sees, which bumps
+                -- `updated_at` on ALL of them in the same second — a GREATEST(pkg, conv)
+                -- ranking then TIES, and the room opened whichever row the tie-break
+                -- happened to hit (the owner's: *"it's loading a card. Product team
+                -- ideation: wireless headphones"* — an old project, not the one he last
+                -- worked in). So the last CONVERSATION's mark is the primary fact; the
+                -- row's own tick only breaks a tie (and a never-spoken package falls
+                -- back to its birth).
+                ORDER BY COALESCE(
+                    (SELECT MAX(c.updated_at) FROM conversations c WHERE c.session_id = s.id),
+                    s.created_at
+                ) DESC, s.updated_at DESC
                 LIMIT 1
                 """,
                 (user_id,),
@@ -1012,7 +1018,15 @@ def builder_development_room(x_user_id: str | None = Header(None, alias="X-User-
 
 @router.get("/projects/{project_id}/conversation")
 def builder_project_conversation(project_id: str) -> dict:
-    """THE THREAD, FROM THE ENGINE — the room maps it to the seat's `messages` at entry."""
+    """THE THREAD, FROM THE ENGINE — with the facts the app's chat design groups by.
+
+    The conversation is the app's OWN record, so the room carries it VERBATIM in the
+    engine's own vocabulary: every message keeps its `messageType` (`regular` for the
+    person's prompt, `starting` / `building` for a run's steps, `finished` for the
+    completed card, `error` for stops and failures) and its `versionId` — the exact keys
+    `groupMessages` in the builder reads. The run clock (`startedAt`) rides too, for the
+    progress line under a live run.
+    """
     status = _engine_conversation(project_id)
     if status is None:
         return {"ok": False, "error": "engine unreachable"}
@@ -1026,9 +1040,37 @@ def builder_project_conversation(project_id: str) -> dict:
                 "role": "user" if str(message.get("author")) == "user" else "assistant",
                 "content": text,
                 "createdAt": message.get("createdAt"),
+                # THE APP'S GROUPING KEYS, PASSED THROUGH UNTOUCHED (see the docstring).
+                "messageType": message.get("messageType") or None,
+                "versionId": message.get("versionId") or None,
             }
         )
-    return {"ok": True, "status": str(status.get("status") or "idle"), "messages": messages}
+    payload = {"ok": True, "status": str(status.get("status") or "idle"), "messages": messages}
+    # THE RUN CLOCK — the same fact the app's RunProgress reads (its `startedAt`).
+    started = status.get("startedAt") or status.get("runStartedAt")
+    if started:
+        payload["runStartedAt"] = started
+    return payload
+
+
+@router.post("/projects/{project_id}/stop")
+def builder_project_stop(project_id: str) -> dict:
+    """THE APP'S OWN STOP — forwarded to the engine's own `agent/stop` (its real abort).
+
+    The builder's Stop button calls exactly this endpoint on its own engine. Wired here
+    so the room's chat can offer the same act with the same effect: the run's AbortController
+    fires, the engine appends its "Stopped." message, and the turn closes honestly.
+    """
+    try:
+        response = httpx.post(
+            f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}/agent/stop",
+            timeout=SYNC_TIMEOUT_SECONDS,
+        )
+        payload = response.json() if response.content else {}
+    except Exception as exc:  # noqa: BLE001 - the honest answer is the failure's own words
+        return {"ok": False, "error": f"engine unreachable: {exc}"}
+    data = payload.get("data") or {}
+    return {"ok": True, "stopped": bool(data.get("stopped", True))}
 
 
 @router.post("/projects/{project_id}/files/upload")

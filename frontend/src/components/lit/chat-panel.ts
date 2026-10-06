@@ -51,6 +51,7 @@ import historyIcon from '@/assets/figma-chat-history-icon.svg';
 import readoutModelMark from '@/assets/figma-readout-model-mark.svg';
 import './chat-plugin-tray';
 import './chat-product-tools';
+import './chat-product-thread';
 import './error-banner';
 import './chat-navigation-bar';
 import './prompt-input/prompt-textarea';
@@ -101,6 +102,13 @@ interface SeatMessage {
   alert?: boolean;
   /** A run's result, drawn as output (rich text, 14px). See <chat-messages>. */
   result?: boolean;
+  /**
+   * THE ENGINE'S OWN MESSAGE VOCABULARY (2026-10-06) — the Product room's port of the
+   * app builder's thread groups by this: `regular` (the person's prompt), `starting` /
+   * `building` (a run's steps), `finished` (the completed card), `error` (stops and
+   * failures). Carried through from the bridge; other rooms never set it.
+   */
+  messageType?: string | null;
 }
 
 /**
@@ -260,6 +268,10 @@ export class ChatPanel extends LitElement {
     productGithubConnected: { type: Boolean, attribute: 'product-github-connected' },
     /** The visual editor's own state, mirrored the same way — the pencil's pressed state. */
     productVisualEditActive: { type: Boolean, attribute: 'product-visual-edit-active' },
+    /** A run is in flight — the product thread draws the app's building row while it is. */
+    productRunning: { type: Boolean, attribute: 'product-running' },
+    /** When the in-flight run started (ms) — the app's own run clock, host-fed. */
+    productRunStartedAt: { type: Number, attribute: 'product-run-started-at' },
   };
 
   // `declare` — NOT a class field. With `useDefineForClassFields` true, a plain field
@@ -274,6 +286,8 @@ export class ChatPanel extends LitElement {
   declare productFigmaConnected: boolean;
   declare productGithubConnected: boolean;
   declare productVisualEditActive: boolean;
+  declare productRunning: boolean;
+  declare productRunStartedAt: number;
   /**
    * THE GOVERNANCE REPORTS, TAKEN OUT OF THE THREAD. The inspector files a report into this
    * conversation with metadata kind='inspection'; the owner, 2026-09-19: they belong "under
@@ -672,6 +686,7 @@ export class ChatPanel extends LitElement {
   private _onHostSay = (e: Event) => {
     const detail = ((e as CustomEvent).detail || {}) as {
       role?: string; content?: string; nodeId?: string; label?: string; alert?: boolean; result?: boolean;
+      messageType?: string | null;
     };
     if (!detail.content) return;  // an empty bubble reads as having said nothing on purpose
     this._local = [
@@ -687,6 +702,10 @@ export class ChatPanel extends LitElement {
         // A host that says "this is a run's result" is believed: the drawing of it is
         // chat-messages' business (rich text, 14px), the fact is the host's.
         result: detail.result === true,
+        // THE ENGINE'S TYPE, when the host states it (the Product room's live run lines
+        // ride in with their own `starting` / `building` / `finished` / `error` stamps —
+        // the thread element groups by exactly this).
+        messageType: detail.messageType ?? null,
       },
     ];
     this.requestUpdate();
@@ -1898,6 +1917,42 @@ export class ChatPanel extends LitElement {
     chat-input { flex-shrink: 0; }
     chat-footer { flex-shrink: 0; }
     chat-plugin-tray { flex-shrink: 0; }
+    /* ── THE PRODUCT COMPOSER — THE APP BUILDER'S OWN, PORTED (owner, 2026-10-06: *"the
+       input at the bottom and the sand button … just like the app builder") ── */
+    .pa-wrap { flex-shrink: 0; padding: 8px 12px 12px; }
+    .pa-card {
+      border-radius: 16px;
+      background: var(--textarea-bg, #f3f1ee);
+      overflow: hidden;
+      transition: box-shadow 0.15s;
+    }
+    .pa-card:focus-within { box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.35); }
+    .pa-card prompt-textarea { display: block; width: 100%; }
+    .pa-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 8px;
+    }
+    .pa-row chat-product-tools { flex-shrink: 0; }
+    .pa-send, .pa-stop {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      border: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.12s;
+    }
+    .pa-send { background: #111827; color: #ffffff; }
+    .pa-send:disabled { background: #d1d5db; cursor: default; }
+    .pa-send:not(:disabled):hover { background: #1f2937; }
+    .pa-stop { background: #ef4444; color: #ffffff; }
+    .pa-stop:hover { background: #dc2626; }
+    .pa-stop.armed { background: #b91c1c; font-size: 11px; font-weight: 600; }
     /* A seat handed over by the host fills the column. The empty modifier is display:none rather
        than a zero-height box on purpose: an empty flex child with flex-grow would take the space
        the element's own pieces are supposed to have. */
@@ -3742,13 +3797,22 @@ export class ChatPanel extends LitElement {
         // from the tag, and the tag has already been stripped from the prose.
         silentVerdict = this._reviewingRun && this._runVerdict === 'ok';
         if (reply && !silentVerdict) {
-          this._local = [
-            ...this._local,
-            // HER VERDICT IS DRAWN AS WHAT IT IS. A reply that stopped a Run is an ALERT — the
-            // person pressed a button and is owed a stop sign, not another remark in the
-            // conversation. See ChatMessage.alert and the turn's own outline rule.
-            { role: 'assistant', content: reply, alert: this._reviewingRun && this._runVerdict === 'blocked' },
-          ];
+          if (!this.productTools) {
+            this._local = [
+              ...this._local,
+              // HER VERDICT IS DRAWN AS WHAT IT IS. A reply that stopped a Run is an ALERT — the
+              // person pressed a button and is owed a stop sign, not another remark in the
+              // conversation. See ChatMessage.alert and the turn's own outline rule.
+              { role: 'assistant', content: reply, alert: this._reviewingRun && this._runVerdict === 'blocked' },
+            ];
+          }
+          /*
+           * THE PRODUCT ROOM DOES NOT ECHO THIS REPLY (2026-10-06, the app-design port):
+           * the record is the ENGINE's, and every line of it — the builder's spoken steps
+           * and the `Finished in Ns.` that carries the ✓ — arrives through the room's live
+           * poll of the engine's own conversation with its `messageType` intact. Appending
+           * this route's reply here would draw the same sentence twice.
+           */
         }
         answered = true;
       }
@@ -3984,6 +4048,31 @@ export class ChatPanel extends LitElement {
     if (!files.length) return;
     e.preventDefault();
     this._forwardProductAttach(files);
+  };
+
+  /** The stop button's arm state — the app's stop confirmation, ours as a two-click arm. */
+  private _stopArmed = false;
+  private _stopArmTimer: number | null = null;
+
+  private _onProductStop = (): void => {
+    if (!this._stopArmed) {
+      this._stopArmed = true;
+      if (this._stopArmTimer !== null) window.clearTimeout(this._stopArmTimer);
+      this._stopArmTimer = window.setTimeout(() => {
+        this._stopArmed = false;
+        this._stopArmTimer = null;
+        this.requestUpdate();
+      }, 2500);
+      this.requestUpdate();
+      return;
+    }
+    if (this._stopArmTimer !== null) window.clearTimeout(this._stopArmTimer);
+    this._stopArmTimer = null;
+    this._stopArmed = false;
+    this.requestUpdate();
+    // THE ROOM ANSWERS: it posts the engine's own `agent/stop` through the bridge — the
+    // app's Stop button, one room over.
+    this.dispatchEvent(new CustomEvent('product-stop', { bubbles: true, composed: true }));
   };
 
   /**
@@ -5100,14 +5189,20 @@ export class ChatPanel extends LitElement {
                       ${this._historyError
                         ? html`<p class="conversation-none" role="alert">${this._historyError}</p>`
                         : nothing}
-                      <chat-messages
-                        .messages=${this._thread}
-                        .sending=${this._workActive}
-                        .stage=${this._workStage}
-                        .spentActions=${[...this._spent]}
-                        .spentTurn=${this._spentTurn}
-                        .doneActions=${this._stepsDone()}
-                      ></chat-messages>`
+                      ${this.productTools
+                        ? html`<chat-product-thread
+                            .messages=${this._thread}
+                            ?running=${this.productRunning}
+                            .runStartedAt=${this.productRunStartedAt || 0}
+                          ></chat-product-thread>`
+                        : html`<chat-messages
+                            .messages=${this._thread}
+                            .sending=${this._workActive}
+                            .stage=${this._workStage}
+                            .spentActions=${[...this._spent]}
+                            .spentTurn=${this._spentTurn}
+                            .doneActions=${this._stepsDone()}
+                          ></chat-messages>`}`
                     : this.activeTab === 'trace'
                       ? html`<div class="fold-wrap">
                           <chat-fold
@@ -5156,6 +5251,44 @@ export class ChatPanel extends LitElement {
                 </chat-header>
               </div>
               <div class="chat-input-wrapper">
+                ${this.productTools
+                  ? html`
+                      <div class="pa-wrap">
+                        <div class="pa-card" @keydown=${this._onComposerKey}>
+                          <prompt-textarea
+                            placeholder=${this._sending ? 'Agent is working…' : 'Ask anything…'}
+                            @value-input=${this._onDraftInput}
+                            @paste=${this._onProductPaste}
+                          ></prompt-textarea>
+                          <div class="pa-row">
+                            <chat-product-tools
+                              style="padding: 0;"
+                              .figmaConnected=${this.productFigmaConnected}
+                              .githubConnected=${this.productGithubConnected}
+                              .visualEditActive=${this.productVisualEditActive}
+                              @product-attach=${(e: CustomEvent<{ files: File[] }>) =>
+                                this._forwardProductAttach(e.detail.files)}
+                              @product-tool=${(e: CustomEvent<{ tool: string }>) =>
+                                this._forwardProductTool(e.detail.tool)}
+                            ></chat-product-tools>
+                            ${this._sending
+                              ? html`<button
+                                  class="pa-stop ${this._stopArmed ? 'armed' : ''}"
+                                  title=${this._stopArmed ? 'Click again to stop the run' : 'Stop the run'}
+                                  @click=${this._onProductStop}
+                                >${this._stopArmed
+                                  ? 'Stop?'
+                                  : html`<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>`}</button>`
+                              : html`<button
+                                  class="pa-send"
+                                  title="Send"
+                                  ?disabled=${!this._draft.trim()}
+                                  @click=${this._onSendCommand}
+                                ><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>`}
+                          </div>
+                        </div>
+                      </div>`
+                  : html`
                 <chat-action-bar
                   model-label=${this.modelLabel ?? 'Models'}
                   trailing=${this._seatIsConsole === false ? 'console' : 'agent'}
@@ -5184,24 +5317,10 @@ export class ChatPanel extends LitElement {
                      a live FUNCTION, and a function does not leave with a drawing, so they
                      move onto this bar and take its treatment — the same move that put them
                      on the navy bar when the #CFD7D5 bar it replaced went away. -->
-                <!-- v.4b's foot, OR THE PRODUCT ROOM'S OWN TOOLS (owner, 2026-10-06:
-                     "all of these stubs go. And you're gonna put the products wiring
-                     down."). The flag is the product room's binding alone — every other
-                     seat keeps the tray, exactly as it was. See <chat-product-tools>. -->
-                ${this.productTools
-                  ? html`<chat-product-tools
-                      .figmaConnected=${this.productFigmaConnected}
-                      .githubConnected=${this.productGithubConnected}
-                      .visualEditActive=${this.productVisualEditActive}
-                      @product-attach=${(e: CustomEvent<{ files: File[] }>) =>
-                        this._forwardProductAttach(e.detail.files)}
-                      @product-tool=${(e: CustomEvent<{ tool: string }>) =>
-                        this._forwardProductTool(e.detail.tool)}
-                    ></chat-product-tools>`
-                  : html`<chat-plugin-tray
-                      .placed=${this._trayPlaced}
-                      @conversation-new=${this._onConversationNew}
-                    ></chat-plugin-tray>`}
+                <chat-plugin-tray
+                  .placed=${this._trayPlaced}
+                  @conversation-new=${this._onConversationNew}
+                ></chat-plugin-tray>`}
               </div>
             </div>
           `}

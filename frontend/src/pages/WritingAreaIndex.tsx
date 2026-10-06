@@ -4987,19 +4987,19 @@ export default function Index({
           | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
           | null;
         if (cancelled) return;
+        // THE ENGINE'S OWN VOCABULARY, CARRIED THROUGH (2026-10-06): the app's chat design
+        // groups BY `messageType` — `regular` (the person's prompt), `starting` / `building`
+        // (a run's steps), `finished` (the completed card with its ✓), `error` (stops and
+        // failures). The transient filter that used to live here is GONE with the port: the
+        // steps ARE the design now — "Starting a new run…", "Writing the app…", the
+        // builder's spoken lines — exactly as the app's own thread draws them.
         const thread = (conv?.messages || [])
           .filter((m) => String(m.content || '').trim())
-          // THE TRANSIENT LINES STAY OUT OF THE RECORD (2026-10-06). "Starting a new run…" and
-          // "Writing the app…" are the application's LIVE progress — the app's own chat shows
-          // them while they happen and keeps the answer as the record. The room mirrors them
-          // live (the progress effect below, the same application behavior); a reopened thread
-          // shows the person's prompt, the builder's words, and that it finished — not the
-          // machinery in between.
-          .filter(
-            (m) =>
-              String(m.content) !== 'Starting a new run…' && String(m.content) !== 'Writing the app…',
-          )
-          .map((m) => ({ role: String(m.role || 'assistant'), content: String(m.content) }));
+          .map((m) => ({
+            role: String(m.role || 'assistant'),
+            content: String(m.content),
+            messageType: (m as { messageType?: string | null }).messageType ?? null,
+          }));
         // ONE WELCOME, THEN ONLY THE APPLICATION. Owner, 2026-10-06 — his own words for the
         // line, dictated the same day: *"maybe add a little conversation to it saying hi.
         // Welcome product team. Let's get some ideas wireframed today. What's on your mind?"*
@@ -5140,12 +5140,31 @@ export default function Index({
       seat.productGithubConnected = !!d.githubConnected;
       seat.productVisualEditActive = !!d.visualEditActive;
     };
+    // THE STOP — THE APP'S OWN ACT, THROUGH THE BRIDGE (2026-10-06): the seat's red stop
+    // button asks; this posts the engine's own `agent/stop` (the exact endpoint the app's
+    // Stop button calls), and the engine appends its "Stopped." message — which the poller
+    // then draws as the group's error finish. Nothing to fake: the run really ends.
+    const onProductStop = () => {
+      if (!productRoomProjectId) return;
+      void (async () => {
+        try {
+          await fetch(
+            `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/stop`,
+            { method: 'POST', headers: { 'X-User-ID': getStoredUserId() } },
+          );
+        } catch {
+          /* the poller shows the run's own end when it comes */
+        }
+      })();
+    };
     seat.addEventListener('product-tool', onTool);
     seat.addEventListener('product-attach', onAttach);
+    seat.addEventListener('product-stop', onProductStop);
     window.addEventListener('builder-tool-state', onToolState);
     return () => {
       seat.removeEventListener('product-tool', onTool);
       seat.removeEventListener('product-attach', onAttach);
+      seat.removeEventListener('product-stop', onProductStop);
       window.removeEventListener('builder-tool-state', onToolState);
     };
   }, [headerTab, productRoomProjectId, uploadProductAttachment]);
@@ -5177,18 +5196,53 @@ export default function Index({
             | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
             | null;
           if (cancelled || !body?.ok) return;
-          const msgs = (body.messages || []).filter((m) => String(m.content || '').trim());
-          if (seen < 0) {
-            seen = msgs.length;
-            return;
+          // THE RUN'S OWN FACTS RIDE EACH POLL (2026-10-06, the app-design port): the
+          // engine's status + start clock become the seat's `productRunning` /
+          // `productRunStartedAt` — the thread's building row and its estimate ladder read
+          // them exactly as the app's RunProgress reads the same fields from its engine.
+          const pollSeat = productSeatRef.current;
+          if (pollSeat) {
+            const status = String((body as { status?: string }).status || 'idle');
+            const started = (body as { runStartedAt?: string }).runStartedAt;
+            pollSeat.productRunning = status === 'init';
+            pollSeat.productRunStartedAt = started ? (Date.parse(started) || 0) : 0;
           }
+          const msgs = (body.messages || []).filter((m) => String(m.content || '').trim());
+          // ENTRY CANNOT LEAVE AN EMPTY SEAT (2026-10-06, measured live): the room binds the
+          // thread once at entry, and ONE failed read there left the chat empty for the whole
+          // visit — the seat held nothing while the engine held the whole record (the owner's
+          // "the product tab is not loading the seat"). So the poller heals it: if the first
+          // successful read finds the seat's bound thread EMPTY while the engine has messages,
+          // the entire history is delivered now — the person's prompts included, because the
+          // seat has no local copy of history to echo. After that it is the normal feed.
+          const seatEmpty =
+            pollSeat !== null &&
+            (pollSeat.messages?.length ?? 0) === 0 &&
+            (((pollSeat as unknown as { _thread?: unknown[] })._thread?.length) ?? 0) === 0;
+          const healTick = seen < 0 && seatEmpty && msgs.length > 0;
+          if (seen < 0) {
+            seen = healTick ? 0 : msgs.length;
+            if (!healTick) return;
+          }
+          // EVERY NEW AGENT MESSAGE RIDES IN WITH ITS OWN TYPE (2026-10-06, the app-design
+          // port): the thread groups by `messageType`, so the poller no longer hand-picks
+          // two transient lines — it hands the seat exactly what the engine wrote, in order.
+          // The person's own prompts are skipped: the seat echoes those the moment they are
+          // sent (a 2.5s-late echo of your own sentence is not the app's behavior).
           for (let i = seen; i < msgs.length; i++) {
-            const content = String(msgs[i].content || '');
-            if (content === 'Starting a new run…' || content === 'Writing the app…') {
-              window.dispatchEvent(
-                new CustomEvent('a2ui:system-message', { detail: { role: 'assistant', content } }),
-              );
-            }
+            const m = msgs[i] as { role?: string; content?: string; messageType?: string | null };
+            if (String(m.role || 'assistant') === 'user' && !healTick) continue;
+            window.dispatchEvent(
+              new CustomEvent('a2ui:system-message', {
+                detail: {
+                  // On a heal tick the REAL role rides (history includes the person's own
+                  // prompts); in the live feed users are skipped — the seat echoed them.
+                  role: healTick && String(m.role) === 'user' ? 'user' : 'assistant',
+                  content: String(m.content || ''),
+                  messageType: m.messageType ?? null,
+                },
+              }),
+            );
           }
           if (msgs.length > seen) seen = msgs.length;
         } catch {
@@ -10363,7 +10417,13 @@ export default function Index({
                           ? (
                             <>
                               <workspace-layout key="product-room" ref={productLayoutRef} className="flex-1 min-h-0">
-                                <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+                                {/* THE PRODUCT STAGE'S GROUND IS TRANSPARENT (owner, 2026-10-06:
+                                    *"I asked to make the background of the stage, transparent"*
+                                    — the room's own ground shows through, never a painted
+                                    tile). The white image overlays at 50% the moment its
+                                    file lands in the repo — the earlier attachment never
+                                    reached disk, so nothing is painted here meanwhile. */}
+                                <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: 'transparent' }}>
                               {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
                                   once a project does. While one is being born — or while the
                                   engine is down — the pane is quiet; it is never pointed at the
@@ -10380,11 +10440,11 @@ export default function Index({
                                    The old interim copy ("Hosting it here is the next step") was
                                    true the night it shipped and is false now that hosting landed;
                                    this says what a missing or stopped service actually means. */
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
-                                  <p style={{ margin: 0, color: '#c9c9c9', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: '100%', backgroundColor: '#F7F5F1' }}>
+                                  <p style={{ margin: 0, color: '#4b5563', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                                     {"The builder isn't reachable right now."}
                                   </p>
-                                  <p style={{ margin: 0, color: '#8b8b8b', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                  <p style={{ margin: 0, color: '#6b7280', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                                     {"It runs as its own service; it may be starting up. Try again in a moment."}
                                   </p>
                                 </div>
@@ -10399,11 +10459,10 @@ export default function Index({
                                   }}
                                 />
                               ) : (
-                                /* THE GATE WEARS THE SAME LAB TEXTURE (owner, 2026-10-04) —
-                                   "no project loaded" is an empty state too, and the gate's
-                                   ground image is this file (`developmentLabBackground`);
-                                   the ROOM's own ground is the composer's now (2026-10-05). */
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#c9c9c9', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+                                /* THE GATE WEARS THE STAGE'S OWN GROUND (owner, 2026-10-06):
+                                   the lab tile left with the stage's white — "no project
+                                   loaded" is an empty state too. */
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#6b7280', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundColor: '#F7F5F1' }}>
                                   {/* THE SAME GATE'S RING (2026-10-04): the Product room's own
                                       opening state is an assembly gate too — it gets the amber
                                       indicator, not a bare line of text. */}
@@ -10424,14 +10483,14 @@ export default function Index({
                                 style={{
                                   position: 'absolute', inset: 0, zIndex: 3,
                                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                                  backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
+                                  backgroundColor: '#F7F5F1',
                                   opacity: productGateDown ? 0 : 1,
                                   transition: 'opacity 700ms ease',
                                   pointerEvents: productGateDown ? 'none' : 'auto',
                                 }}
                               >
                                 <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                                <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                <p style={{ color: '#6b7280', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
                                   {"Standing up the builder\u2026"}
                                 </p>
                               </div>

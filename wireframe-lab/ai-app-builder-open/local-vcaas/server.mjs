@@ -691,6 +691,22 @@ async function handleApi(req, res, path, query, body) {
       writeProject(project);
       return ok(res, { path, bytesWritten: Buffer.byteLength(content, "utf8"), created, rebuildRequired: true });
     }
+    /**
+     * DELETE A FILE — the room's reset door (owner, 2026-10-06: the stage's proof card made
+     * way for the builder's own splash, and an EMPTY project is the only state that serves
+     * it — see `emptyProjectPage`). The app never had a delete; this is the tool's own write
+     * path doing it, and versions keep every run's files, so anything removed here is
+     * recoverable from the history (`POST /versions/{id}/recover`).
+     */
+    if (sub[1] === "content" && req.method === "DELETE") {
+      const path = String(query.get("path") || "").replace(/^\.?\//, "");
+      if (!path || path.includes("..")) return fail(res, "VALIDATION", "Invalid path.");
+      if (!(path in files)) return fail(res, "VALIDATION", `No file "${path}".`, 404);
+      delete project.currentFiles[path];
+      project.lastModifiedAt = nowIso();
+      writeProject(project);
+      return ok(res, { path, deleted: true, filesRemaining: Object.keys(project.currentFiles).length });
+    }
     if (sub[1] === "upload") return fail(res, "VALIDATION", "Attachments are not supported by the local engine.");
     return fail(res, "VALIDATION", `Unknown files endpoint ${sub.join("/")}.`, 404);
   }
