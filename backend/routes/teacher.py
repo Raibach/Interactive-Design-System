@@ -172,6 +172,23 @@ async def api_teacher_query(request: TeacherQueryRequest):
         # reporting with a crash of its own.
         warnings: list[str] = []
 
+        # ── THE PRODUCT ROOM'S TURNS ARE BUILDS (2026-10-06) ─────────────────────────────
+        #
+        # The Product room absorbed the builder's chat into Grace's seat (owner, 2026-10-06:
+        # *"I want to absorb that chat into our chat”*). A conversation that carries a builder
+        # project is therefore served by the engine, through the bridge — this route is the ONE
+        # wire the seat sends on, so this is where a turn becomes a build. Not a builder
+        # conversation: the bridge returns None and Grace answers exactly as before.
+        try:
+            from routes.builder_bridge import builder_turn_reply
+
+            builder_reply = builder_turn_reply(uid, request.session_id, conv_id, request.question)
+        except Exception as builder_error:  # noqa: BLE001 — a broken bridge must not break chat
+            builder_reply = None
+            print(f"⚠️  builder bridge check failed: {builder_error}")
+        if builder_reply is not None:
+            return builder_reply
+
         # ── A CLOSED CONVERSATION TAKES NO MORE TURNS ─────────────────────────
         #
         # A seat holds the id it adopted, and an update settles (closes) the conversation it

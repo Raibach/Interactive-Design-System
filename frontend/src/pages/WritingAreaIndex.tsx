@@ -544,6 +544,15 @@ export default function Index({
    * room's rule is THIS list, never the full rail with Versions back on).
    */
   const DEVELOPMENT_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
+
+  /*
+   * THE PRODUCT ROOM'S OWN RAIL LIST (owner, 2026-10-06 — the wireframe's list, nothing more):
+   * Chat, Trace, Tools, Approve, Evals — the menu items carry through; their VIEWS are stubs
+   * for a later phase (owner: *"some of those are stubs … that's a whole 'nother phase where I
+   * have to build out each one of those views"*). Settings stays for the panel's gear;
+   * Versions, States and Repairs are not offered in this room.
+   */
+  const PRODUCT_SEAT_TABS = 'chat,trace,tools,approvals,eval,settings';
   const [developmentGateDown, setDevelopmentGateDown] = useState(false);
   const [developmentToolDown, setDevelopmentToolDown] = useState(false);
   const developmentMinElapsedRef = useRef(false);
@@ -568,6 +577,13 @@ export default function Index({
   const productFrameLoadedRef = useRef(false);
   const productGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const productGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /*
+   * THE STAGE'S REFRESH KEY (2026-10-06 — the chat absorption). `a2ui:person-turn` fires only
+   * after the server answered, which for this room means the ENGINE'S BUILD LANDED; bumping
+   * this key remounts the embed so the stage re-reads the project. See the handler below.
+   */
+  const [productStageKey, setProductStageKey] = useState(0);
 
   /*
    * THE GOVERNANCE ROOM'S STATE (2026-10-03) — the room where the system accounts for what it
@@ -2709,82 +2725,22 @@ export default function Index({
    *
    * *"we don't need that [Build that button] — just give her a prompt and she starts building."*
    * So the seat announces every real person turn (`a2ui:person-turn`, fired only after the server
-   * answered AND the thread adoption settled), and THIS room answers it by compiling: the compile
-   * reads the thread's last person message itself, and the ROUTER now lives inside it — rule 0
-   * lets the compile answer `{"build": false}` for a question, a greeting, a request it cannot
-   * express (borrowed from the example's "replyToGeneralInput" split). On a build, the layout
-   * lands through the ONE draft store and her `say` line posts; on a no-op, nothing moves and her
-   * chat reply has already spoken. Only the product room listens — other rooms' hosts have their
-   * own turn handling and no listener here.
+   * answered AND the thread adoption settled). THE DRAFT-ERA COMPILE THAT USED TO ANSWER THIS
+   * RETIRED 2026-10-06: the room builds IN THE ENGINE now — the seat's turn IS the build (the
+   * bridge hands builder conversations to the engine; see routes/builder_bridge.py), so by the
+   * time this event fires the build has already landed. The host's whole job here is to let the
+   * STAGE show what was written: bumping the key remounts the embed, which re-reads the project
+   * and paints the new files. The work card is the seat's own (it opens on send, ends on the
+   * reply) — there is no second stage for the host to announce. Only the product room listens.
    */
   useEffect(() => {
-    const onPersonTurn = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as { conversationId?: unknown };
-      const session = currentProductSessionRef.current;
-      const sessionId = String(session?.session_id || '');
-      if (!sessionId) return; // no product package open — another room's turn, or a cold seat
-      const conversationId = String(detail.conversationId || session?.conversation_id || '');
-      void (async () => {
-        // WHAT ACTUALLY HAPPENED — the seat's card may only claim what this records: a page
-        // that landed ('built'), a turn that needed no page ('answered'), or a failure
-        // ('failed'). The card said "Built the page" off the 'building' announcement alone
-        // once (owner, 2026-10-03: *"You've got messages saying page built and there's no
-        // page there"*) — its own bug, fixed at the source.
-        let outcome = 'failed';
-        try {
-          // THE WORK CARD'S FIRST END — the seat's card spans the whole turn (her reply, then
-          // this build); 'building' is the second stage, 'idle' (the finally, with the outcome)
-          // is the end. One name for one fact: `a2ui:grace-status`, scoped to this conversation.
-          window.dispatchEvent(new CustomEvent('a2ui:grace-status', {
-            detail: { state: 'building', conversationId },
-          }));
-          const res = await apiFetch(`${API_BASE}/ai/build-artifact`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id: sessionId,
-              conversation_id: conversationId,
-              // THE PAGE AS IT STANDS — the sandbox is IN-SESSION (nothing reaches the
-              // database until Save / Submit lands), so the current document rides back
-              // with every ask and she can keep what the request keeps.
-              artifact: productArtifactRef.current ?? '',
-            }),
-          });
-          const payload = (await res.json().catch(() => null)) as
-            | { build?: unknown; artifact?: unknown; say?: unknown; detail?: string }
-            | null;
-          if (!res.ok) {
-            // A refused build IS spoken — the person asked for something and must hear why the
-            // stage did not move, in the server's own words (never re-worded here).
-            sayInThread(String(payload?.detail || `The build was refused: HTTP ${res.status}`));
-            return;
-          }
-          if (payload?.build === false || typeof payload?.artifact !== 'string') {
-            outcome = 'answered'; // the router said this turn was not a change — her chat reply stands
-            return;
-          }
-          productArtifactRef.current = payload.artifact;
-          writeProductArtifactPayload(payload.artifact);
-          outcome = 'built';
-          const said = String(payload?.say || '').trim();
-          if (said) sayInThread(said);
-        } catch (err) {
-          sayInThread(
-            'The build did not complete: '
-            + `${err instanceof Error ? err.message : String(err)}`,
-          );
-        } finally {
-          // THE WORK CARD'S OTHER END — with the OUTCOME, never just "done": the card's trail
-          // records a page claim only when one landed.
-          window.dispatchEvent(new CustomEvent('a2ui:grace-status', {
-            detail: { state: 'idle', outcome, conversationId },
-          }));
-        }
-      })();
+    const onPersonTurn = () => {
+      if ((headerTab || '') !== 'product') return; // another room's turn — not this stage's
+      setProductStageKey((k) => k + 1);
     };
     window.addEventListener('a2ui:person-turn', onPersonTurn);
     return () => window.removeEventListener('a2ui:person-turn', onPersonTurn);
-  }, [sayInThread, writeProductDraftPayload]);
+  }, [headerTab]);
 
   /**
    * The views a column can show in each state.
@@ -4985,32 +4941,79 @@ export default function Index({
   }, [headerTab]);
 
   /**
-   * THE PRODUCT ROOM'S SEAT READS THE COMPOSER'S LOADED CHAT (owner, 2026-10-05): whenever
-   * the Composer tab has loaded a chat, this room hands its own seat the SAME settings the
-   * composer's seat carries, resolved from that loaded tree — the conversation identifier,
-   * the session identifier, Grace's instructions, the tab list and the package title (the
-   * owner's list), plus the seat's other own bindings, including the live-context flag a
-   * speaking seat refuses without and the conversation list the composer binds. So the two
-   * seats are the same conversation: a message sent here appears in the Composer's thread,
-   * and the other way round. No backend, no database, no new conversation — a client-side
-   * read of the tree the Composer already loaded (`componentProps` resolves it against that
-   * tree's data model, `assignProps` writes it onto the seat: the renderer's own two steps,
-   * exported for exactly this).
+   * THE PRODUCT ROOM'S SEAT IS THE BUILDER'S (2026-10-06 — the absorption: owner, *"I want to
+   * absorb that chat into our chat … I don't want two different chat setting side-by-side"*).
    *
-   * THE LIMITATION, STATED: the application knows which conversation this is only after the
-   * Composer has been opened once in the session. Opened later, the seat reads the tree then
-   * (this effect re-runs on `workspaceTree`); never opened, the rail is there and the thread
-   * is empty. Nothing is created and nothing is lost either way.
+   * The seat no longer borrows the Composer's loaded chat. Its thread is THE PROJECT'S
+   * conversation, read from the engine through the bridge; its identity is the room's CARRIER
+   * — a package row + conversation the seat's own guards require (a conversation must belong
+   * to its package for a send to leave). The carrier is DISPOSABLE: the engine keeps the
+   * transcript; nothing of substance is ever written to the platform side. The send needs no
+   * room-side code at all — the seat posts its turn the one way it always does, and the
+   * TEACHER ROUTE hands builder conversations to the engine (`builder_turn_reply`); the reply
+   * that lands in the thread is the builder's own sentence. `messages` is bound ONCE per entry
+   * — live turns ride the seat's own thread, so a rebind after every run would draw each turn
+   * twice.
    */
   useEffect(() => {
     if ((headerTab || '') !== 'product') return;
     const seat = productSeatRef.current;
-    if (!seat) return;
-    const comp = (Array.isArray(workspaceTree.components) ? workspaceTree.components : [])
-      .find((c: { component?: string } | null) => c?.component === 'chat-panel');
-    if (!comp) return;
-    assignProps(seat, componentProps(comp, workspaceTree.dataModel || {}));
-  }, [headerTab, workspaceTree]);
+    if (!seat || !productRoomProjectId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const roomRes = await fetch(
+          `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/room`,
+          { method: 'POST', headers: { 'X-User-ID': getStoredUserId() } },
+        );
+        const room = (await roomRes.json().catch(() => null)) as
+          | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
+          | null;
+        if (!room?.ok || !room.session_id || !room.conversation_id) return;
+        const convRes = await fetch(
+          `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/conversation`,
+        );
+        const conv = (await convRes.json().catch(() => null)) as
+          | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
+          | null;
+        if (cancelled) return;
+        const messages = (conv?.messages || [])
+          .filter((m) => String(m.content || '').trim())
+          .map((m) => ({ role: String(m.role || 'assistant'), content: String(m.content) }));
+        const unreported = assignProps(seat, {
+          sessionId: room.session_id,
+          conversationId: room.conversation_id,
+          packageTitle: String(room.label || ''),
+          allowedTabs: PRODUCT_SEAT_TABS,
+          messages,
+          // THE SEAT'S REQUIRED SCRIPT — PLUMBING, NOT A VOICE. Owner, 2026-10-06: "we're
+          // not taking Grace's behavior in the chat. We're using the application's behavior
+          // in the chat" — "just a styling treatment to the existing capabilities." The seat
+          // refuses sends into a room that binds no `instructions` (chat-panel's
+          // `_gracePrompt`), so the room must state something; on the builder path this text
+          // never reaches any model — the seam runs the engine on the person's own words and
+          // answers with the builder's. It is written as the room's facts, not as a script
+          // for her to speak.
+          instructions:
+            'The Product room\'s chat carries the local app builder\'s own conversation: the person\'s turns are prompts to the builder, and the replies are the builder\'s own words.',
+          // AND THE ROOM STATES WHERE HER LIVE FACTS COME FROM. The seat's third state:
+          // `undefined` is refused outright ("a surface that omits it is refused by the seat
+          // rather than defaulted" — the catalogs say it, `_gracePrompt` enforces it). FALSE
+          // is the product room's truth: the room's script carries what she needs, and this
+          // room binds no workspace seats for `_buildWorkspaceContext()` to read — TRUE would
+          // append an empty block. The live facts here are the engine's (the project and its
+          // conversation), which arrive as the bound thread above, not through her workspace.
+          graceLiveContext: false,
+        });
+        if (unreported.length) {
+          console.warn(`[product seat] unreported bindings: ${unreported.join(', ')}`);
+        }
+      } catch {
+        /* a failed carrier fetch leaves the seat as it stands — the next entry tries again */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [headerTab, productRoomProjectId]);
 
   /**
    * THE DEVELOPMENT ROOM'S CONTAINER LOADS CLOSED — the Product pair's mirror (owner,
@@ -10275,7 +10278,7 @@ export default function Index({
                                 </div>
                               ) : productRoomProjectId ? (
                                 <builder-embed
-                                  key={`product-builder-${productRoomProjectId}`}
+                                  key={`product-builder-${productRoomProjectId}-${productStageKey}`}
                                   src={`${builderToolUrl()}/project/${encodeURIComponent(productRoomProjectId)}`}
                                   style={{
                                     display: 'block', width: '100%', height: '100%',

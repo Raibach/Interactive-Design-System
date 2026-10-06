@@ -29,6 +29,7 @@ renders every card row that already exists, and the next assembly tries again.
 import json
 import os
 import threading
+import time
 
 import httpx
 from fastapi import APIRouter, Header
@@ -410,3 +411,277 @@ def builder_discard(payload: dict) -> dict:
     if not project_id:
         return {"ok": False, "error": "project_id is required"}
     return delete_builder_project(project_id)
+
+
+# ── THE ROOM'S SEAT — THE CONVERSATION IS THE PROJECT'S (2026-10-06) ──────────────────────────
+#
+# THE ABSORPTION (owner, 2026-10-06: *"I want to absorb that chat into our chat … I don't want
+# two different chat setting side-by-side"*). The Product room's <chat-panel> seat draws THE
+# BUILDER PROJECT'S conversation and sends into the engine. The platform row + conversation are
+# the room's CARRIER — identity for the seat's own guards — and never the transcript: the engine
+# stays the record, the same ONE RULE as everything else in this file. A carrier may carry an
+# un-published project; the sync reaps un-published rows the same as it always has (cards are for
+# published work), and the next room entry re-ensures a carrier — nothing of substance can be
+# lost with it, because nothing of substance lives in it.
+
+# How long a seated turn waits for its build before answering with an honest failure. The
+# engine's own runs land in seconds locally; the cap exists so a wedged run cannot hold the
+# browser's request open forever.
+RUN_WAIT_SECONDS = 150.0
+
+# After the run's status flips off 'init', the engine may still be WRITING the final messages
+# in the same tick — measured 2026-10-06: status 'done' and the builder's sentence both stamped
+# 15:42:25.349, and a read that beat the write answered 'finished without a written reply' while
+# the build had in fact finished. This grace window re-reads for the sentence before saying no.
+SAY_GRACE_SECONDS = 12.0
+
+# The engine's progress slips — written about itself, never a reply. Spelled out so the say can
+# be told apart from them by its words alone: the say shares their `messageType` ('building'),
+# so the type is not a discriminator.
+_ENGINE_PROGRESS = (
+    "Starting a new run…",
+    "Writing the app…",
+)
+
+
+def _engine_say(status: dict, prompt: str) -> str | None:
+    """The builder's sentence for THIS turn, or None while it has not been written yet.
+
+    TWO MEASURED FACTS SHAPE THIS (2026-10-06, product-idea-nxu):
+
+    1. The engine's model speaks as author `"agent"` — not `"assistant"` (the first seated
+       run answered 'finished without a written reply' while this conversation held the
+       sentence, because the read looked for the wrong author).
+    2. The reply is scoped to THIS prompt: candidates are the messages AFTER the last user
+       message equal to the prompt. That keeps a stale `done` status (read before the new
+       run begins) from answering with the PREVIOUS run's sentence.
+    """
+    conversation = status.get("realtimeConversation") or []
+    last_user_index = None
+    for index, message in enumerate(conversation):
+        if str(message.get("author")) == "user" and str(message.get("message") or "").strip() == prompt:
+            last_user_index = index
+    if last_user_index is None:
+        return None
+    for message in reversed(conversation[last_user_index + 1 :]):
+        if str(message.get("author")) == "user":
+            continue
+        content = str(message.get("message") or "").strip()
+        if not content or content in _ENGINE_PROGRESS:
+            continue
+        if str(message.get("messageType")) == "finished":
+            continue  # "Finished in 29s." — the engine's log line, not the builder
+        return content
+    return None
+
+
+def resolve_builder_project_id(user_id: str, session_id: str | None, conversation_id: str | None) -> str | None:
+    """The builder project a seat conversation belongs to, or None — never a guess."""
+    api = state.prompt_sessions_api
+    if not api:
+        return None
+    try:
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            if session_id:
+                cursor.execute(
+                    "SELECT metadata->>'builder_project_id' AS pid FROM prompt_sessions WHERE id = %s AND user_id = %s",
+                    (session_id, user_id),
+                )
+                row = cursor.fetchone()
+                if row and row["pid"]:
+                    return str(row["pid"])
+            if conversation_id:
+                cursor.execute(
+                    "SELECT metadata->>'builder_project_id' AS pid FROM prompt_sessions WHERE conversation_id = %s AND user_id = %s",
+                    (conversation_id, user_id),
+                )
+                row = cursor.fetchone()
+                if row and row["pid"]:
+                    return str(row["pid"])
+    except Exception as error:  # noqa: BLE001 — "not a builder turn" is the answer
+        print(f"[builder] room check failed ({error})")
+    return None
+
+
+def _engine_conversation(project_id: str):
+    """The engine's live conversation + status, or None when the engine cannot answer."""
+    try:
+        payload = httpx.get(f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}/agent/status", timeout=5).json()
+        return payload.get("data") or None
+    except Exception:  # noqa: BLE001 — None is the answer, the caller says so
+        return None
+
+
+def builder_turn_reply(user_id, session_id, conversation_id, question):
+    """A seated turn in a builder conversation IS a build.
+
+    Returns the teacher-shaped reply (`{"conversation_id", "content"}` — or `"error"` when the
+    run cannot land) or None when this conversation is not a builder's — the caller then falls
+    through to Grace exactly as before. This is the one wire the seat sends on; the branch lives
+    beside it in routes/teacher.py.
+    """
+    project_id = resolve_builder_project_id(user_id, session_id, conversation_id)
+    if not project_id:
+        return None
+    prompt = str(question or "").strip()
+    if not prompt:
+        return {"conversation_id": conversation_id, "error": "The turn was empty — nothing was sent to the builder."}
+    try:
+        response = httpx.post(
+            f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}/agent/start",
+            json={"prompt": prompt},
+            timeout=8.0,
+        )
+        body = response.json()
+        started = bool((body.get("data") or {}).get("started"))
+        if not started:
+            refusal = ((body.get("errors") or {}).get("errorMessage")) or "the engine refused the run"
+            return {"conversation_id": conversation_id, "error": refusal}
+    except Exception as error:  # noqa: BLE001 — down is an answer the person can read
+        print(f"[builder] engine unreachable — seated run for {project_id} ({error})")
+        return {"conversation_id": conversation_id, "error": "The builder engine is unreachable — the turn was not sent."}
+
+    print(f"[builder] seated run: {project_id} · {prompt[:60]!r}")
+    deadline = time.time() + RUN_WAIT_SECONDS
+    say = None
+    while time.time() < deadline:
+        status = _engine_conversation(project_id)
+        if status is not None and str(status.get("status")) != "init":
+            say = _engine_say(status, prompt)
+            if say is None:
+                # The flip and the sentence share a tick (see SAY_GRACE_SECONDS): re-read
+                # for the write instead of answering with a failure the engine never gave.
+                grace_deadline = time.time() + SAY_GRACE_SECONDS
+                while say is None and time.time() < grace_deadline:
+                    time.sleep(0.6)
+                    status = _engine_conversation(project_id)
+                    if status is not None:
+                        say = _engine_say(status, prompt)
+            break
+        time.sleep(1.2)
+    if say is None:
+        return {
+            "conversation_id": conversation_id,
+            "error": "The build did not finish, or finished without a written reply — open the builder to see why.",
+        }
+    return {"conversation_id": conversation_id, "content": say}
+
+
+# ONE ENSURE AT A TIME, PER PROCESS — the same fix as _SYNC_LOCK, for the same shape of race.
+# The room's entry effect runs TWICE in dev (React StrictMode double-mounts), and both calls
+# read `conversation_id IS NULL` before either wrote — measured live 2026-10-06: one fresh
+# project's carrier showed '2 Conversations', the second conversation empty. With the lock, the
+# second caller waits and then finds the first caller's pointer.
+_ROOM_LOCK = threading.Lock()
+
+
+@router.post("/projects/{project_id}/room")
+def builder_project_room(project_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")) -> dict:
+    """ENSURE THE ROOM'S CARRIER — the package row and conversation the seat's guards need.
+
+    Returns the ids the ROOM binds (`session_id`, `conversation_id`) and the project's label.
+    Creating one is idempotent: an existing row (published or not) is used as it stands, and
+    the ensure is serialized (`_ROOM_LOCK`) so concurrent entries cannot each create one.
+    """
+    user_id = get_user_id_from_header(x_user_id)
+    api = state.prompt_sessions_api
+    if not api:
+        return {"ok": False, "error": "database unavailable"}
+
+    label = DEFAULT_PROJECT_LABEL
+    preview_url = ""
+    runs = 0
+    try:
+        for project in _engine_projects():
+            if str(project.get("projectId")) == project_id:
+                label = (project.get("label") or DEFAULT_PROJECT_LABEL).strip() or DEFAULT_PROJECT_LABEL
+                preview_url = str(project.get("previewUrl") or "")
+                runs = int(project.get("runs") or 0)
+                break
+    except Exception as engine_error:  # noqa: BLE001 — the carrier does not need the engine
+        print(f"[builder] room: engine list not read ({engine_error})")
+
+    with _ROOM_LOCK:
+        session_id = None
+        conversation_id = None
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT id, conversation_id, title FROM prompt_sessions "
+                "WHERE user_id = %s AND metadata->>'builder_project_id' = %s",
+                (user_id, project_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                session_id = str(row["id"])
+                conversation_id = str(row["conversation_id"]) if row["conversation_id"] else None
+                if row["title"]:
+                    label = str(row["title"])
+
+        if session_id is None:
+            session = api.create_session(
+                user_id=user_id,
+                title=label,
+                description=PLACEHOLDER_DESCRIPTION,
+                room_domain="product",
+                builder_project_id=project_id,
+                builder_preview_url=preview_url,
+                builder_runs=runs,
+            )
+            session_id = str(session["id"])
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                _ensure_category(cursor)
+                cursor.execute(
+                    "UPDATE prompt_sessions SET category = %s, current_version = %s WHERE id = %s",
+                    (CATEGORY_NAME, max(1, runs), session_id),
+                )
+                conn.commit()
+
+        if not conversation_id:
+            if not state.conversation_api:
+                return {"ok": False, "error": "database unavailable"}
+            conversation_id = str(
+                state.conversation_api.create_conversation(
+                    user_id,
+                    project_id=None,
+                    title=label,
+                    metadata=None,
+                    session_id=session_id,
+                )
+            )
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                    (conversation_id, session_id),
+                )
+                conn.commit()
+
+    return {"ok": True, "session_id": session_id, "conversation_id": conversation_id, "label": label}
+
+
+@router.get("/projects/{project_id}/conversation")
+def builder_project_conversation(project_id: str) -> dict:
+    """THE THREAD, FROM THE ENGINE — the room maps it to the seat's `messages` at entry."""
+    status = _engine_conversation(project_id)
+    if status is None:
+        return {"ok": False, "error": "engine unreachable"}
+    messages = []
+    for message in status.get("realtimeConversation") or []:
+        text = str(message.get("message") or "")
+        if not text.strip():
+            continue
+        messages.append(
+            {
+                "role": "user" if str(message.get("author")) == "user" else "assistant",
+                "content": text,
+                "createdAt": message.get("createdAt"),
+            }
+        )
+    return {"ok": True, "status": str(status.get("status") or "idle"), "messages": messages}

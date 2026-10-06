@@ -3928,6 +3928,16 @@ export class ChatPanel extends LitElement {
     const text = String(this._draft ?? '').trim();
     if (!text) return;
     e.preventDefault();
+    // THE KEY CLEARS THE BOX LIKE THE SEND BUTTON DOES. Measured 2026-10-06 in the Product
+    // room: after Enter, the sentence was still standing in the input while its turn was
+    // already running — an invitation to send it twice. `_onSendCommand` ("Send input to
+    // model") clears the box and the draft before sending; Enter is the same act, so it
+    // clears the same two things before the same call.
+    const textarea = this.renderRoot?.querySelector('prompt-textarea') as
+      (HTMLElement & { value: string }) | null;
+    if (textarea) textarea.value = '';
+    this._draft = '';
+    this._syncBarText();
     void this._send(text);
   }
 
