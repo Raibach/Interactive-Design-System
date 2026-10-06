@@ -57,3 +57,18 @@ main's 2026-10-05 ruling onto this branch: the folder leaves the vendored shelf 
 path-form previews and the slashless redirect, rides along), and the folder's own `.gitignore`
 files keep everything that must not travel: the DeepSeek key (`local-vcaas/.env`), the engine's
 store (`local-vcaas/data/`), and all build output (`node_modules/`, `.next/`).
+
+## 2026-10-06 — the room absorbs the chat (step 1: the builder's own chat column retires)
+
+Owner, 2026-10-06: *"I want to absorb that chat into our chat … I don't want two different
+chat setting side-by-side."* The agreed shape: the room's seat (`<chat-panel>`) takes the
+builder project's conversation as DATA — the thread is a bound prop, sends ride the one route
+`/api/teacher/query`, and the backend seam answers that route for builder-backed conversations
+by running the engine (the engine stays the transcript of record).
+
+**Step 1, landed and verified live:** when the project page IS the room's embed
+(`?embedded=console` + inside a frame), its chat column, its resize grip and the mobile
+Chat switch are not drawn at all — the stage takes the width. Source:
+`src/app/project/[projectId]/page.tsx` (`isEmbeddedInRoom`) — standalone :3223 keeps its chat
+exactly as before. Verified in the room: the frame's composer and textareas are gone; only the
+header and the stage remain.

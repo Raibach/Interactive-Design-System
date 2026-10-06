@@ -1330,6 +1330,20 @@ export default function WorkspacePage() {
   const btnBorder = darkMode ? "border-gray-700/60" : "border-gray-200/60";
 
   /**
+   * IS THIS PAGE THE PRODUCT ROOM'S EMBED? (owner, 2026-10-06 — the room absorbs this chat:
+   * *"I don't want two different chat setting side-by-side … absorb the applications chat"*.)
+   * Every page <builder-embed> loads carries `?embedded=console`; inside a frame that IS the
+   * room. State, not a render-time read, for the same reason `handleBack` reads the flag at
+   * call time: it lives in `window.location`, and the first server paint has no window.
+   * WHEN TRUE, THE CHAT COLUMN IS NOT DRAWN — the room's Grace seat owns the conversation.
+   */
+  const [isEmbeddedInRoom, setIsEmbeddedInRoom] = useState(false);
+  useEffect(() => {
+    const embeddedTo = new URLSearchParams(window.location.search).get("embedded");
+    setIsEmbeddedInRoom(embeddedTo === "console" && window.parent !== window);
+  }, []);
+
+  /**
    * THE BACK ARROW KNOWS WHERE IT CAME FROM (owner, 2026-10-04): *"there's a back button at
    * the top left corner … inside the product team area — that back button should go back to
    * the console."*
@@ -1722,23 +1736,30 @@ export default function WorkspacePage() {
             </div>
           )}
           {/* THE CHAT COLUMN — the right-hand side, matching the app's own pattern:
-              the workspace reads [preview | grip | chat]. */}
-          {!chatCollapsed && (
-            <div className="flex w-1 hover:w-1.5 bg-transparent hover:bg-gray-200 dark:hover:bg-[#22202D] cursor-col-resize transition-all items-center justify-center shrink-0" onMouseDown={handleResizeStart}>
-              <div className="w-0.5 h-8 bg-gray-200 dark:bg-[#2b2635] rounded-full" />
-            </div>
+              the workspace reads [preview | grip | chat]. IN THE PRODUCT ROOM'S EMBED IT IS
+              NOT DRAWN (owner, 2026-10-06 — the room absorbs this chat into Grace: *"I don't
+              want two different chat setting side-by-side"*): the stage takes the width, the
+              room's own seat owns the conversation, and sending happens there. */}
+          {!isEmbeddedInRoom && (
+            <>
+              {!chatCollapsed && (
+                <div className="flex w-1 hover:w-1.5 bg-transparent hover:bg-gray-200 dark:hover:bg-[#22202D] cursor-col-resize transition-all items-center justify-center shrink-0" onMouseDown={handleResizeStart}>
+                  <div className="w-0.5 h-8 bg-gray-200 dark:bg-[#2b2635] rounded-full" />
+                </div>
+              )}
+              <div className={`flex flex-col shrink-0 transition-all ${chatCollapsed ? "w-0 overflow-hidden" : ""}`} style={chatCollapsed ? {} : { width: chatWidth, background: cardBg }}>
+                <ChatPanel
+                  messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets}
+                  runStartedAt={runStartedAt} expectedMinutes={expectedMinutes}
+                  {...composerProps}
+                  visualEditAvailable
+                  visualEditActive={visualEditorOpen}
+                  visualEditBusy={visualLocked}
+                  onToggleVisualEdit={handleToggleVisualEdit}
+                />
+              </div>
+            </>
           )}
-          <div className={`flex flex-col shrink-0 transition-all ${chatCollapsed ? "w-0 overflow-hidden" : ""}`} style={chatCollapsed ? {} : { width: chatWidth, background: cardBg }}>
-            <ChatPanel
-              messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets}
-              runStartedAt={runStartedAt} expectedMinutes={expectedMinutes}
-              {...composerProps}
-              visualEditAvailable
-              visualEditActive={visualEditorOpen}
-              visualEditBusy={visualLocked}
-              onToggleVisualEdit={handleToggleVisualEdit}
-            />
-          </div>
         </div>
       </div>
 
@@ -1771,9 +1792,10 @@ export default function WorkspacePage() {
           </div>
         )}
 
-        {/* Mobile content area */}
+        {/* Mobile content area — IN THE ROOM'S EMBED the chat view is not drawn at all
+            (owner, 2026-10-06): the room's seat owns the conversation. */}
         <div className="flex-1 overflow-hidden" style={{ background: cardBg }}>
-          {mobileTab === "chat" ? (
+          {!isEmbeddedInRoom && mobileTab === "chat" ? (
             <div className="flex flex-col h-full">
               {/* ⚠️ No pencil here: the visual editor is a desktop surface (see the frame-ref note). */}
               <ChatPanel messages={messages} isBuilding={isBuilding} prompt={prompt} setPrompt={setPrompt} onSend={handleSendPrompt} onStop={handleStopAgent} sending={sending} projectId={projectId} projectSecrets={project?.secrets} runStartedAt={runStartedAt} expectedMinutes={expectedMinutes} {...composerProps} />
@@ -1787,13 +1809,16 @@ export default function WorkspacePage() {
           )}
         </div>
 
-        {/* Fixed switch: Preview / Chat */}
+        {/* Fixed switch: Preview / Chat — hidden in the room's embed, where the chat lives in
+            the room's own seat (owner, 2026-10-06). */}
+        {!isEmbeddedInRoom && (
         <div className="shrink-0 flex items-center justify-center py-2 px-4" style={{ background: pageBg }}>
           <div className="flex bg-gray-100 dark:bg-[#22202D] rounded-full p-1 w-full max-w-xs">
             <button onClick={() => setMobileTab("panel")} className={`w-1/2 py-2 rounded-full text-sm font-medium text-center transition-colors ${mobileTab === "panel" ? "bg-white dark:bg-[#22202D] shadow text-gray-900 dark:text-white" : "text-gray-500"}`}>{"Preview"}</button>
             <button onClick={() => setMobileTab("chat")} className={`w-1/2 py-2 rounded-full text-sm font-medium text-center transition-colors ${mobileTab === "chat" ? "bg-white dark:bg-[#22202D] shadow text-gray-900 dark:text-white" : "text-gray-500"}`}>{"Chat"}</button>
           </div>
         </div>
+        )}
       </div>
 
       {/*
