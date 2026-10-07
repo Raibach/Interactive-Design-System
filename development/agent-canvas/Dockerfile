@@ -109,6 +109,14 @@ COPY development/openhands-patch.sh /src/development/openhands-patch.sh
 COPY frontend/src/assets/canvas-development-lab-bkg.jpg /src/frontend/src/assets/canvas-development-lab-bkg.jpg
 RUN bash /src/development/openhands-patch.sh --hosted
 
+# ── THE IDENTITY — THE SDK'S OWN SOUL.md (owner, 2026-10-06/07) ──────────────────────────────
+# The agent SDK reads SOUL.md from the persistence directory and, when present, it REPLACES the
+# default identity in the system prompt — so the agent introduces itself as Raibach IDS, not the
+# vendor's name. The launcher points the agent server at exactly this directory (dev-safe.mjs:
+# "Parent of stateDir (= ~/.openhands) so settings/secrets match Docker"), and this image runs
+# as root, so the file lives here. The Mac's copy is seeded by RESTART-LOCAL.sh §8c.
+COPY development/agent-canvas/SOUL.md /root/.openhands/SOUL.md
+
 # THE DOOR — local mode (the key is injected into the served page at startup, so no visitor is
 # asked for anything) and the model seed. See the script's own header.
 COPY development/agent-canvas/entrypoint.sh /usr/local/bin/house-entrypoint.sh

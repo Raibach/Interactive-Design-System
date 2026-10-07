@@ -519,6 +519,18 @@ if d.get(k2) != v2:
     print("✅ wizard description patched →", v2)
 else:
     print("⏭  wizard description already patched")
+# THE GREETING (owner, 2026-10-06/07): the canned initial message names the vendor; the
+# harness's name is what it says now. The MODEL'S own introduction comes from the soul file
+# (development/agent-canvas/SOUL.md, placed at ~/.openhands/SOUL.md by the Mac's launcher and
+# by the hosted image) — this string is only the canned fallback beside it.
+k3 = "CHAT_INTERFACE$INITIAL_MESSAGE"
+v3 = "Hi! I'm Raibach IDS, an AI Software Engineer. What would you like to build with me today?"
+if d.get(k3) != v3:
+    d[k3] = v3
+    changed = True
+    print("✅ greeting patched →", v3)
+else:
+    print("⏭  greeting already patched")
 if changed:
     json.dump(d, open(p, "w"), indent=1, ensure_ascii=False)
 PY
