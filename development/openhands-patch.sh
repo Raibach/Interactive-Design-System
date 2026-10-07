@@ -63,10 +63,33 @@
 #      every bookmark, and the one branding no stylesheet can reach — so it is rewritten to the
 #      house title ("Raibach — Agent Canvas", the same pattern as the site's own). Forced on
 #      every run; a rebuild cannot leave it unpatched for long.
-#   7. THE BETA NOTICE MODAL (2026-10-04) — DELETED WITH THE SUPPRESSIONS, same night: it was
-#      the visible half of the pass-through in item 5 (tiles intercepted, one modal instead
-#      of a choice, the LLM panel slid past). Item 5's note carries the owner's words; the
-#      wizard's own panels are what a visitor meets now, on every door.
+#   7. THE BETA NOTICE (2026-10-04): deleted with the suppressions that night, then restored
+#      the same hour — the notice without the skip (the ground script's block carries the
+#      ruling). Since item 8 the wizard never opens for visitors, so the notice has nothing
+#      to intercept; its code stays as the guard it always was.
+#   8. THE WIZARD IS OFF (owner, 2026-10-06: *"we don't need the wizard you can disable the
+#      wizard. It was a part of the demo process."*). The first-run modal is not part of this
+#      product: a dedicated block — `house-patch-firstrun` — writes `openhands-onboarded`
+#      (the exact completion state the wizard itself writes) before any of the app's own
+#      scripts can run, so the modal never mounts, for every visitor, on both runs (the same
+#      script is applied to the Mac's build and to the hosted image alike). It cannot live
+#      in the ground script: that runs at the end of the body, and the app's bundle is an
+#      async module — on a warm cache it can execute first. It lives INSTEAD in the head's
+#      TRAILING ZONE — the last nodes before </head>, together with the stylesheet link —
+#      and the zone is the #418 lesson below.
+#      WHY THE TRAILING ZONE (measured 2026-10-06): with the house nodes among the elements
+#      the app's own hydration walks, the console ran React's #418 on EVERY load — the full
+#      arrangement 6/6 reloads; the flag at the top of <head> (css link absent) 3/3; the
+#      css link right after the root css link, alone, 3/3; with every house node absent,
+#      clean. Moved into the trailing zone — after everything the app renders, before
+#      </head>, the zone the launcher's own injected session script lands in — the page
+#      hydrated clean: reload after reload, plus a fresh-profile simulation. The head keeps
+#      the app's order; the house keeps to its back.
+#      This is NOT the 2026-10-04 suppression returning: nothing is clicked, skipped
+#      mid-flow, or papered over — the flow never starts; a real failure still fails loud
+#      on its own surface. The vendor's design door stays open:
+#      ?previewOnboardingStep=<0-3> still opens the flow for review without persisting
+#      completion — the preview path bypasses the gate and never reads this preset.
 set -euo pipefail
 
 HOSTED=0
@@ -196,20 +219,13 @@ build, name, hosted = sys.argv[1], sys.argv[2], sys.argv[3]
 p = os.path.join(build, "index.html")
 src = open(p).read()
 
-# The stylesheet link: strip any older house-patch link (any name, with or without ?v=) and
-# insert exactly one, right after the app's own root css link.
+# The stylesheet link: strip any older house-patch link (any name, with or without ?v=).
+# The fresh link is written last, in the head's TRAILING ZONE — together with the first-run
+# flag, immediately before </head>. Why there and not after the app's root css link (its old
+# home): the #418 measurement of 2026-10-06 — see the note above the combined insertion at
+# the bottom of this script.
 link = f'<link rel="stylesheet" href="/assets/{name}"/>'
 src2 = re.sub(r'\s*<link rel="stylesheet" href="/assets/house-patch[^"]*"/>', '', src)
-if link in src2:
-    src2 = src2  # canonical link already present
-else:
-    root = re.search(r'<link rel="stylesheet" href="/assets/root-[^"]+\.css"/>', src2)
-    if root:
-        src2 = src2[:root.end()] + "\n    " + link + src2[root.end():]
-    else:
-        src2 = src2.replace("</head>", "    " + link + "\n</head>", 1)
-if link not in src2:
-    raise SystemExit("❌ could not place the stylesheet link")
 
 # THE TAB TITLE (2026-10-04): the vendor's name lives in <title> — the one branding no stylesheet
 # can reach — so it is rewritten to the house title. Forced every run (any title is replaced),
@@ -235,8 +251,10 @@ script = '''<script id="house-patch-ground">
                  "--oh-bg-input": "#22202D", "--oh-bg-workspace": "#22202D",
                  "--oh-color-tertiary": "#22202D" };
     /* HOSTED OR NOT — the flag the patch script was run with (the service's Dockerfile says
-       --hosted; the Mac does not). It gates the first-run-flow changes below, so the owner's
-       own workbench keeps its wizard exactly as it was. */
+       --hosted; the Mac does not). It gates the beta notice below (the beta is the hosted
+       service's own story — see its block). It does NOT gate THE WIZARD IS OFF: the owner
+       ruled the first-run flow out of the product on BOTH runs (2026-10-06), and that flag
+       is written by its own block at the end of <head>, before anything can read it. */
     var HOSTED = __HOUSE_HOSTED__;
     /* WHICH DOOR THIS PAGE WAS REACHED THROUGH (2026-10-04): 'registered' (a signed-up beta
        user) or 'dev' (the pin) or "" (older sessions). builder-embed.ts appends it. Nothing
@@ -244,6 +262,13 @@ script = '''<script id="house-patch-ground">
        (see the block above `run(set)`) — and the variable stays as the page's record of
        where its visitor came from, for whatever the next door-dependent piece needs. */
     var DOOR = (location.search.match(/[?&]house_door=([a-z]+)/) || [])[1] || "";
+    /* ── THE WIZARD IS OFF — written at the end of <head>, not in this script ────────────────
+       (house-patch-firstrun). The first-run flag must be down before ANY of the app's scripts
+       can run, and this script sits at the end of the body: the app's bundle is an ASYNC
+       module, so on a warm cache it can execute before a write placed here would land. The
+       flag's block is deliberately in the head's TRAILING ZONE (its note carries the
+       owner's ruling, the mechanics, what the flag is not, and why the zone is what it
+       is). Nothing below depends on this script writing it. */
     /* ── THE BETA MODEL POP-UP — RESTORED, WITHOUT THE SKIP (owner, 2026-10-04, last) ────────
        Owner, walking the beta: *"Whenever somebody selects a model whether it's local or
        whether it's in the cloud, it's supposed to show a little pop-up [that] says there is
@@ -256,7 +281,11 @@ script = '''<script id="house-patch-ground">
        controls simply close it. NO ADVANCE, NO PINNING, NO PROFILE REPAIR: the wizard stays
        exactly where the visitor left it, and walking the rest of it — the LLM parameters
        screen included — is theirs to do through the vendor's own steps. (The pass-through
-       that used to follow Confirm stays deleted; the owner's zero-trust ruling above is why.) */
+       that used to follow Confirm stays deleted; the owner's zero-trust ruling above is why.)
+       NOTE (2026-10-06): the wizard no longer opens for visitors (THE WIZARD IS OFF — the
+       house-patch-firstrun block, in the head's trailing zone), so nothing reaches this
+       notice on a normal visit; it stays as written for any surface that ever shows the
+       flow again (the design preview). */
     var BETA_MESSAGE =
       "This beta runs on the hosted service with the provided model; sovereignty — your own " +
       "models, local or cloud, on your own machine — arrives with the installed suite.";
@@ -374,11 +403,18 @@ script = '''<script id="house-patch-ground">
            modal, restoring the profile afterwards (the beta-notice machinery — deleted,
            including its "third step" skip and the snapshot/repair that papered over the
            save that pass-through made).
-       The wizard now walks exactly as the tool ships it — every step visible, every save
-       kept; a step a visitor skips is that visitor's own choice, through the vendor's own
+       The wizard then walked exactly as the tool ships it — every step visible, every save
+       kept; a step a visitor skipped was that visitor's own choice through the vendor's own
        control. The records promised this re-introduction ("the onboarding was parked, not
        lost"); this deletes exactly the switches they named. The chrome patches — palette,
-       logo, tile, labels — are untouched: they are looks, not skips. */
+       logo, tile, labels — are untouched: they are looks, not skips.
+       UPDATE (2026-10-06): the wizard itself is now off for everyone — see THE WIZARD IS
+       OFF, the house-patch-firstrun block (in the head's trailing zone; it is not
+       written in this script — why: that block's note). It starts nothing and skips
+       nothing: it writes the completion state before first paint, so the flow never begins.
+       The distinction is kept on purpose — the 2026-10-04 cut removed clicks and
+       pass-throughs that hid a RUNNING process; the 2026-10-06 ruling removed the process
+       from the product. Failures still fail loud. */
     /* EVERY ENTRY GUARDED ON ITS OWN (2026-10-04). Measured: one throw anywhere in this list
        aborted everything after it — and the later the entry, the quieter the loss. So no
        step may take another down. What runs below is chrome only: the ground, the labels. */
@@ -394,9 +430,65 @@ script = '''<script id="house-patch-ground">
 script = script.replace("__HOUSE_HOSTED__", "true" if hosted == "1" else "false")
 src2 = src2.replace("</body>", script + "\n  </body>", 1)
 
+# ── THE HEAD'S TRAILING ZONE — the stylesheet link + the first-run flag (2026-10-06) ─────────
+# BOTH house head nodes go in here, in this order — the css link, then the flag — immediately
+# before </head>, after every element the app itself renders. Still the head, so still before
+# any body script: the app's bundle is an async module in the body, and the flag must be down
+# before the first render can read it. WHY NOT THE OLD HOMES (flag at the top of <head>, link
+# after the root css link): the #418 measurement of 2026-10-06 — with those nodes among the
+# app's own head elements the console ran React's #418 hydration failure on EVERY load of
+# the dev tool (full arrangement 6/6 reloads; flag at the top, link absent: 3/3; link alone,
+# mid-head: 3/3; with every house node absent: clean). In the trailing zone — the zone the
+# launcher's own injected session script lands in — the page hydrated clean: every reload,
+# plus a fresh-flag simulation. Same discipline as everything else here: strip-if-present,
+# insert only here, and FAIL HARD if either node or the anchor cannot be placed.
+src2 = re.sub(r'\s*<script id="house-patch-firstrun">.*?</script>', '', src2, flags=re.S)
+firstrun = '''<script id="house-patch-firstrun">
+  /* ── THE WIZARD IS OFF (owner, 2026-10-06) ───────────────────────────────────────────────
+     The owner, meeting the first-run modal again on a fresh browser: *"we don't need the
+     wizard you can disable the wizard. It was a part of the demo process."* The vendor's
+     onboarding modal is not part of this product, so the completion state it writes when
+     it finishes is written HERE — in the head's TRAILING ZONE (the last nodes in the
+     head, after everything the app itself renders — the #418 measurement of 2026-10-06
+     put it here; see the patch script). Any <head> script runs before any body script, and
+     the app's bundle is an async module in the body — so this write is always down before
+     the first render can read it, which an end-of-body write cannot promise on a warm
+     cache. For every visitor, on both runs (the same script is applied to the Mac's build
+     and to the hosted image alike). The modal then never mounts. NOT one of the switches
+     deleted on 2026-10-04 coming back: nothing is clicked, skipped mid-flow, or papered
+     over — the
+     flow never starts; a real failure still fails loud on its own surfaces (seed, settings,
+     conversations). The vendor's design door stays open: ?previewOnboardingStep=<0-3> still
+     opens the flow for review without persisting completion. ⚠️ ASSUMES LOCAL MODE — the
+     backend is already present when a page loads (the hosted entrypoint injects its session
+     key; the Mac's run is the same mechanism). With NO backend at all, the workspace has
+     nothing to show and no wizard would offer to add one — revisit this preset if the tool
+     ever runs `--public`. */
+  try {
+    if (localStorage.getItem("openhands-onboarded") === null) {
+      localStorage.setItem("openhands-onboarded", "1");
+    }
+  } catch (e) {}
+</script>'''
+if "</head>" not in src2:
+    raise SystemExit("❌ could not place the head's trailing zone (no </head> in index.html)")
+tail = "\n    " + link + "\n    " + firstrun + "\n  "
+src2 = re.sub(r'\s*</head>', lambda m: tail + "</head>", src2, count=1)
+if link not in src2 or '<script id="house-patch-firstrun">' not in src2:
+    raise SystemExit("❌ could not place the stylesheet link / first-run flag")
+# SINGULARITY GUARD (learned the hard way, 2026-10-06): the launcher injects its session
+# script at the FIRST closing-head tag it finds — a stray one written inside a comment up
+# in the head (exactly this happened: this block's own comment mentioned it) made the
+# launcher inject INTO that script and broke the page ("Invalid or unexpected token").
+# So: house nodes singular, closing tags unique. FAIL HARD otherwise.
+if (src2.count("</head>") != 1 or src2.count("</body>") != 1
+        or src2.count('<script id="house-patch-firstrun">') != 1
+        or src2.count('<script id="house-patch-ground">') != 1 or src2.count(link) != 1):
+    raise SystemExit("❌ index.html: house nodes / closing tags must each be exactly one")
+
 if src2 != src:
     open(p, "w").write(src2)
-    print("✅ index.html: link + ground script in canonical form")
+    print("✅ index.html: link + first-run flag + ground script in canonical form")
 else:
     print("⏭  index.html already canonical")
 PY
