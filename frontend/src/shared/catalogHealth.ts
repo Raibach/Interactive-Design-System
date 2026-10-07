@@ -60,6 +60,15 @@ export async function fetchCatalogHealth(): Promise<CatalogHealth> {
 }
 
 /**
+ * True when there is NO audit in this build — the disabled state above, not a failure.
+ * The audit's callers read this and do nothing at all: no repair lookup, no "the check
+ * did not answer" line, no talking. Owner, 2026-10-06, late, watching the deployed
+ * console: *"the catalog check shouldn't even be loading on this page."*
+ */
+export const isCatalogAuditDisabled = (h: CatalogHealth): boolean =>
+  h.state === 'unavailable' && h.reason === 'Catalog audit disabled.';
+
+/**
  * Map the health union to the nav bar's badge state, and to the count it may
  * carry. Both live here, beside the union itself, so the meaning of "not ok" has
  * exactly one home.

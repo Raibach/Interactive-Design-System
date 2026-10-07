@@ -182,6 +182,7 @@ import { actionLink, fillFieldAction } from "@/shared/actionLink";
 // deriving the finding. See shared/catalogHealth.ts.
 import {
   fetchCatalogHealth,
+  isCatalogAuditDisabled,
   queuedRepair,
   reconcileRepairs,
   settleRepairs,
@@ -4381,6 +4382,9 @@ export default function Index({
    */
   const settleRepair = async (findingId: string) => {
     const health = await fetchCatalogHealth();
+    // No audit in this build — nothing to settle against, and nothing to say about it
+    // (see isCatalogAuditDisabled). Silent, on the owner's design.
+    if (isCatalogAuditDisabled(health)) return;
     if (health.state !== 'ok') {
       console.warn(`[repair] the check did not answer — ${findingId} stays in repair`);
       // Said out loud, in plain words. The verdict is the whole point of pressing Run,
@@ -6263,6 +6267,10 @@ export default function Index({
   const loadCatalogFindings = useCallback(async () => {
     try {
       const health = await fetchCatalogHealth();
+      // NO AUDIT, NO NOISE (owner, 2026-10-06, late): with the audit disabled by design
+      // there is nothing to read and nothing to report — this used to log "the check did
+      // not answer" into every console, which read as breakage on a page that was fine.
+      if (isCatalogAuditDisabled(health)) return;
       if (health.state !== 'ok') {
         // Said out loud. With no findings the repair list has nothing to resolve
         // against, and an empty list looks exactly like a clean catalog.

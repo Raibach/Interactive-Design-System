@@ -12,7 +12,10 @@
          outside the app's three); the narrowing to the house weights is enforced by the app's
          own styles. Owner, 2026-09-18, unchanged: "All fonts should be medium weight. Inter
          has medium, and it has semi bold, and it has bold. Those are the only three I use." -->
-    <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-var-latin.woff2" crossorigin>
+    <!-- THE PRELOAD IS GONE (owner, 2026-10-06, late: *"I don't want preloading fonts that is
+         slowing down the load."* — and the browser warned on every navigation that the preloaded
+         face went unused within its window). The stylesheet loads the face when the styles that
+         need it arrive; nothing is warmed ahead of being needed. -->
     <link rel="stylesheet" href="/fonts/inter.css">
     <title>Raibach — Interactive Design</title>
     <!--
