@@ -17,12 +17,13 @@
  *    (env-driven on the app service) can now name the addresses at runtime; this module
  *    carries them to the rooms.
  *
- * THE DEFAULT IS THE LOCAL MACHINE, AND THE DEFAULT LIVES HERE, ONCE. With nothing configured a
- * local run keeps `http://localhost:3223` exactly as before. ONLY on the demo — where localhost
- * would be the visitor's computer — an unset value becomes the EMPTY STRING, and the room reads
- * that as "not connected" and shows its honest panel. So the room never branches on demo-ness
- * for its tool address; it asks this module for an address and renders either the tool or the
- * fallback.
+ * THE DEFAULT IS THE LOCAL MACHINE, AND ONLY WHEN THE PAGE IS ON THE LOCAL MACHINE. With
+ * nothing configured a local run keeps `http://localhost:3223` exactly as before. On any
+ * DEPLOYED origin — where localhost would be the visitor's computer — an unset value becomes
+ * the EMPTY STRING, and the room reads that as "not connected" and draws NOTHING (no
+ * fallbacks — the owner's law: *"there is no fallback ever"*). So the room never branches on
+ * demo-ness for its tool address; it asks this module for an address and renders either the
+ * tool or nothing.
  *
  * IT ENFORCES NOTHING, and that is deliberate. A client that lies about any of this changes its
  * own buttons and nothing else — the gate is on the server and never consults these values.
@@ -72,10 +73,15 @@ export function appConfigReady(): Promise<void> {
       demoMode = body?.demo_mode === true;
       const development = typeof body?.development_tool_url === "string" ? body.development_tool_url.trim() : "";
       const builder = typeof body?.builder_tool_url === "string" ? body.builder_tool_url.trim() : "";
-      // Unset is local localhost when this is a full run, and "not connected" on the demo —
-      // see the header's "DEFAULT IS THE LOCAL MACHINE" note.
-      developmentTool = development || (demoMode ? "" : LOCAL_DEVELOPMENT_TOOL);
-      builderTool = builder || (demoMode ? "" : LOCAL_BUILDER_TOOL);
+      // UNCONFIGURED MEANS LOCAL ONLY ON A LOOPBACK HOST, AND THIS IS THE SHIPPED PAGE'S LAW
+      // (2026-10-06, late): a deployed page may never reach a visitor's loopback. The old
+      // branch keyed this on the demo flag — when the demo went off, a deployed page with an
+      // unset value fell to `http://localhost:…` (the visitor's machine). Unset on localhost →
+      // the local ports; unset on any deployed origin → "" ("not connected"; the room draws
+      // nothing).
+      const onLocalhost = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+      developmentTool = development || (onLocalhost ? LOCAL_DEVELOPMENT_TOOL : "");
+      builderTool = builder || (onLocalhost ? LOCAL_BUILDER_TOOL : "");
     } catch {
       // Leave the local defaults — see the header note.
     } finally {

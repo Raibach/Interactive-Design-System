@@ -529,9 +529,11 @@ export default function Index({
    */
   const DEVELOPMENT_GATE_MIN_MS = 3_000;
   /*
-   * AND THE DOOR THAT NEVER OPENS GETS SAID PLAINLY (2026-10-04; kept at 2026-10-06): not
-   * loaded by the ceiling means the honest panel, with the frame staying mounted underneath
-   * so a late arrival still wins.
+   * AND THE DOOR THAT NEVER OPENS DRAWS NOTHING (2026-10-04; the panel retired 2026-10-06,
+   * late: *"there's not supposed to be any fallbacks in this application … there is no
+   * fallback ever"*). Not loaded by the ceiling: the cover comes down and the pane keeps its
+   * own ground — no panel, no sentence. The frame stays mounted underneath, so a late
+   * arrival still wins when it comes.
    */
   const DEVELOPMENT_GATE_MAX_MS = 25_000;
   /*
@@ -567,8 +569,9 @@ export default function Index({
    * and uncovered it flashed between the frame's mount and its content — the same white splash
    * the Development gate was built to hide. Same three hands, one room over (2026-10-06): the
    * gate spans the whole room and drops only when the frame's load event, the minimum, and the
-   * seat have all landed; the ceiling means the honest state, with the frame staying mounted
-   * underneath so a late arrival still wins.
+   * seat have all landed. The ceiling takes the cover down and the pane draws NOTHING — no
+   * fallbacks (the owner's law); the frame is unmounted with the ceiling (see the pane's own
+   * rule below), and the next entry asks again.
    * THE MINIMUM MATCHES THE DEVELOPMENT ROOM'S THREE SECONDS (2026-10-06 — one staged opening,
    * both rooms).
    */
@@ -5358,11 +5361,24 @@ export default function Index({
      * the whole thread landed at once on completion (the owner's exact report: "it's
      * thinking … then 2 build steps / Finished in 47s. / Completed"). On the local stack the
      * polls therefore ask the backend DIRECTLY — CORS already allows http://localhost:5001
-     * (backend/main.py) — while every other door keeps the proxy; on the deployed site the
-     * relative path IS the single origin, which is why this is the demo-safe branch. Same
-     * values, unqueued. PRODUCT-ONLY: this poller is the product room's alone.
+     * (backend/main.py) — while every other door keeps the proxy; on a deployed origin the
+     * relative path IS the single origin. Same values, unqueued. PRODUCT-ONLY: this poller
+     * is the product room's alone.
+     *
+     * AND THE SWITCH IS THE PAGE'S LOCATION, NOT THE DEMO FLAG (2026-10-06, late — found
+     * live on production: the deployed page was polling http://localhost:8000 — the
+     * VISITOR'S machine — "Access to fetch at 'http://localhost:8000/…' … blocked by CORS
+     * policy" every 2.5s in the console, and Chrome's "wants to access other apps and
+     * services on this device" box on the owner's screen). The old branch read "demo →
+     * relative, otherwise → the Mac" — true while the only states were the deployed demo
+     * and a local run; the moment the demo flag went off, production fell to the local
+     * branch. NO DEPLOYED PAGE MAY EVER PHONE A VISITOR'S MACHINE: a loopback-host page
+     * asks the backend directly (the queue reason above); every deployed origin keeps the
+     * relative path.
      */
-    const POLL_BASE = isDemoMode() ? API_BASE : 'http://localhost:8000/api';
+    const POLL_BASE = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+      ? 'http://localhost:8000/api'
+      : API_BASE;
     const timer = window.setInterval(() => {
       void (async () => {
         try {
@@ -10539,7 +10555,8 @@ export default function Index({
                          started by RESTART-LOCAL.sh), telemetry cut so nothing reaches any
                          other server (development/CHANGELOG.md, 2026-10-06). The staged
                          opening (DEVELOPMENT_GATE_MIN_MS, above) covers the load so nothing
-                         pops; a stopped workspace gets the honest panel below. */
+                         pops; a stopped workspace draws NOTHING — the fallback panel is gone
+                         (owner: *"there is no fallback ever"*). */
                       ? (
                         <>
                           {/* KEY: A ROOM IS ITS OWN INSTANCE (2026-10-06 — owner: "It seems to be
@@ -10560,7 +10577,7 @@ export default function Index({
                                 left column loads the repo-run workspace — the modified copy
                                 whose telemetry is cut (development/CHANGELOG.md) — covered by
                                 the three-second gate so nothing pops; a stopped workspace
-                                gets the honest panel on the room's own ground. */}
+                                draws NOTHING (no fallback — the owner's law). */}
                             <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                           {developmentToolUrl() && (
                           <builder-embed
@@ -10573,19 +10590,14 @@ export default function Index({
                             }}
                           />
                           )}
-                          {(!developmentToolUrl() || developmentToolDown) && (
-                            /* THE FALLBACK PANEL — the honest state: no address configured, or the
-                               frame never arrived by the ceiling. One plain sentence pair on the
-                               room's own ground. */
-                            <div style={{ position: 'absolute', inset: 0, zIndex: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
-                              <p style={{ margin: 0, color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                {"The development workspace isn't reachable right now."}
-                              </p>
-                              <p style={{ margin: 0, color: '#8b8b8b', fontSize: 12, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                {"It runs from this repository — start it with RESTART-LOCAL.sh."}
-                              </p>
-                            </div>
-                          )}
+                          {/* THE FALLBACK PANEL IS GONE (owner, 2026-10-06, late: *"there's
+                              not supposed to be any fallbacks in this application. You should
+                              remove the fallbacks … there is no fallback ever."*). It drew
+                              "The development workspace isn't reachable right now. / It runs
+                              from this repository — start it with RESTART-LOCAL.sh." — an
+                              excuse worn where the workspace goes. No address, or a frame
+                              that never arrived: the pane keeps its own ground and draws
+                              NOTHING, exactly as the Product room does. */}
                             </div>
                             {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the console and
                                 composer mount, in the container's right pane. CLOSED on entry:
