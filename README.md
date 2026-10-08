@@ -25,6 +25,27 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 
 **Non-negotiable: the user must never stare at a blank page.** The deterministic shell always renders — navigation, frame, error states, slot containers — regardless of what the AI does or doesn't do. The AI fills slots *inside* a shell that already exists. If the AI fails, the shell shows the failure. If the AI is slow, the shell shows a loading state. The shell is never absent.
 
+GOVERNANCE
+
+The AI governance question — drift and grounding
+LLM observability (or AI evaluation & monitoring). 
+
+Drift — watch the system's behavior/output distribution shift away from a baseline over time.
+Grounding / faithfulness — is the answer actually supported by what it read? (Hallucination detection is the inverse measure.)
+Quality & regression evals — score answers, catch version-to-version regressions.
+Plus cost/latency/trace logging.
+It exists because for open-ended generative systems you can't enumerate the possible outputs — so you watch statistics forever.
+
+Why that layer is largely not needed here — and what remains. My own ARCHITECTURE-IS-THE-GOVERNANCE.md already draws this line: the model composes only from the human-curated catalogue, and a name outside it gets a loud 503 — so "drift" stops being a statistical thing to watch and becomes a binary violation to reject. For structure, classical drift monitoring is obsolete as a method. The document itself names the pots it does not cover — and one of them is exactly what you're circling: it says the evals / model-risk pots "are different purchases."
+
+What remains genuinely real — and already exists in your system, measured tonight:
+
+Grounding is already judged, per run, in plain English. The run_evaluations table holds 53 judged runs right now (32 failed / 21 cleared), each with the judge's written sentence — rows like "it explicitly did not read them and instead restated headline-level summaries." That is a grounding verdict, stored as a database row. It's written by the house's own evaluation-judge and surfaced as the Eval tab's feed in the seat.
+Cost ledger: usage_metrics — per-call, priced, cache-split aware.
+Provenance: memory_provenance + vector ids into the local store (the Milvus tie-in).
+Conformance: the deterministic stand-ins for structure-drift — catalogue gate, catalog:check, fidelity gate.
+So the honest shape of an "AI governance level" for this system: structure is governed by the boundary (binary), and the free-text layer is governed by the per-run judge — which is already writing rows. Those rows are also why your queue item #1 was run_evaluations: I verified its semantics tonight (writer, routes, judge, surface) — the next step per the queue is to own / describe / test that chain inside the room, so the AI ledger is curated content, not just ingested tables.
+
 ---
 
 ## Systems Overview: MCP Pipelines and Independent Model Governance

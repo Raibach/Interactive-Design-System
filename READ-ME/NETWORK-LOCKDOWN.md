@@ -64,3 +64,26 @@ FONTS.md §8). Nothing at RUNTIME fetches any of it again.
 - **Backend restart** — the local `:8000` process predates the `/docs` change; restart activates it.
 - **Push** — the hosted services run the last pushed build; everything above takes effect there
   on the next push (all four services rebuild; the dev-workspace image runs the patch at build).
+
+## 6. The proof-layer engine (Evidently 0.7.20) — audited BEFORE install (2026-10-08)
+
+- **The audit (wheel scanned in /tmp before anything installed).** Telemetry EXISTS in the
+  package: `evidently/telemetry.py` would POST to `35.232.253.5:8000` with a baked token —
+  gated by `enabled=lambda: os.environ.get("DO_NOT_TRACK") is None`. Other hosts in the
+  source: `archive.ics.uci.edu` (the vendor's UI **demo datasets** — never fetched; no
+  demos run) and `app.evidently.cloud` (explicit cloud-workbench opt-in — never used; the
+  engine's UI stays off). The version is pinned to the audited wheel (0.7.20).
+- **The cut, by construction.** `governance/engine/run_report.py` sets `DO_NOT_TRACK` before
+  evidently is imported, and installs a socket guard that **blocks and records** every
+  non-loopback connect. First-run receipt (2026-10-08): **external connect attempts: 0.**
+- **Runtime: no external calls (the report path).** The engine reads the local Postgres over
+  its unix socket (read-only use, product database) and writes local files plus its own
+  database (`governance_engine`). **Install-time**: PyPI for the pinned wheel — the §4
+  build-time exception; nothing at runtime re-fetches.
+- **`run_process_bind.py` (Stage 2) — ONE declared endpoint.** The pool-performance runner
+  calls `api.deepseek.com` (the §2 declared model call, mirrored from the platform's own
+  provider config) and NOTHING else: its socket guard allowlists loopback + that one host
+  and **blocks and records everything else**. First-run receipt (2026-10-08): declared
+  connection 1 (pooled), **undeclared attempts: 0**. `run_report.py` (Evidently) remains
+  zero-egress.
+- **Re-audit trigger**: ANY version bump — the pin IS the audited artifact.

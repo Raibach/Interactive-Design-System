@@ -595,15 +595,60 @@ export default function Index({
      `embedded=console` + `house_door` parameters it always adds — and every
      destination is a path inside the tool's own origin, reached the same way the
      tool's own navigation reached it. A malformed address changes nothing. */
+  /* WHICH SEAT THE FRAME IS PROVISIONED AS (2026-10-08): travels as the `house_seat`
+     query parameter the frame's own login script reads (the house patch's item 6).
+     Default admin; the nav's seat switcher writes the others. Carried on every
+     navigation, so a reload can never silently drop the room back to admin. */
+  const governanceIdentityRef = useRef<'admin' | 'product' | 'designer'>('admin');
+  /* THE ENTRY ADDRESS CARRIES THE SEAT TOO (2026-10-08 night, after the sign-in screen
+     stood in the room): the frame's FIRST load must already name its seat — before
+     this, the mount src had no house_seat, and the frame's login script had nothing to
+     treat as the active identity on the very first boot. Every later address is written
+     by navigateGovernanceTool / switchGovernanceSeat, which always carry it. */
+  const governanceEntryUrl = (): string => {
+    /* THE LANDING IS THE VENDOR APPLICATION — RESTORED (2026-10-08 night). The room was
+       briefly pointed at our own page (/govnav/dashboard.html) without the owner's word;
+       he saw the application disappear under him and ordered the rollback ("roll
+       everything back… I'm not seeing the interface anymore") — correctly. The house
+       dashboard page stays PARKED at /govnav/dashboard.html; making it the landing
+       happens only on the owner's explicit word (and stays a one-line change: point
+       this base at it). */
+    const base = governanceToolUrl();
+    if (!base) return base;
+    try {
+      const url = new URL(base);
+      url.searchParams.set('house_seat', governanceIdentityRef.current);
+      return url.toString();
+    } catch {
+      return base;
+    }
+  };
   const navigateGovernanceTool = (path: string) => {
     const base = governanceToolUrl();
     if (!base) return;
     try {
-      const url = new URL(path, base).toString();
-      governanceEmbedRef.current?.setAttribute('src', url);
+      const url = new URL(path, base);
+      url.searchParams.set('house_seat', governanceIdentityRef.current);
+      governanceEmbedRef.current?.setAttribute('src', url.toString());
     } catch {
       /* unreachable in practice — URL() only throws on an unparseable base, and the
          base was just checked for emptiness; kept so a bad edit can never throw here */
+    }
+  };
+  /* THE SEAT SWITCH (2026-10-08): the nav's switcher asks; the shell re-provisions the
+     frame as that seat — the same one-attribute write, the current page kept; the frame's
+     own login script does the rest. */
+  const switchGovernanceSeat = (seat: string) => {
+    if (seat !== 'admin' && seat !== 'product' && seat !== 'designer') return;
+    governanceIdentityRef.current = seat;
+    const current = governanceEmbedRef.current?.getAttribute('src') || governanceToolUrl() || '';
+    if (!current) return;
+    try {
+      const url = new URL(current);
+      url.searchParams.set('house_seat', seat);
+      governanceEmbedRef.current?.setAttribute('src', url.toString());
+    } catch {
+      /* same guard as above */
     }
   };
   const [governanceToolDown, setGovernanceToolDown] = useState(false);
@@ -11070,13 +11115,13 @@ export default function Index({
                                     (public/govnav -> governance/nav-copy — one source of truth, no copy to
                                     drift). */}
                                 {governanceToolUrl() && (
-                                <GovernanceNavFrame onNavigate={navigateGovernanceTool} />
+                                <GovernanceNavFrame onNavigate={navigateGovernanceTool} onSeat={switchGovernanceSeat} />
                                 )}
                                 {governanceToolUrl() && (
                                 <builder-embed
                                   key="governance-workspace"
                                   ref={governanceEmbedRef}
-                                  src={governanceToolUrl()}
+                                  src={governanceEntryUrl()}
                                   style={{
                                     display: 'block', flex: '1 1 0%', minWidth: 0, height: '100%',
                                     opacity: governanceGateDown ? 1 : 0,

@@ -24,24 +24,28 @@ import { useEffect, useState } from 'react';
 interface GovernanceNavFrameProps {
   /** Writes a path onto the room's embedded tool (navigateGovernanceTool). */
   onNavigate: (path: string) => void;
+  /** Re-provisions the room's frame as the chosen seat (the nav's seat switcher). */
+  onSeat?: (seat: string) => void;
 }
 
-export default function GovernanceNavFrame({ onNavigate }: GovernanceNavFrameProps) {
+export default function GovernanceNavFrame({ onNavigate, onSeat }: GovernanceNavFrameProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      const d = e.data as { type?: string; href?: string; collapsed?: boolean } | null;
+      const d = e.data as { type?: string; href?: string; collapsed?: boolean; seat?: string } | null;
       if (!d || typeof d !== 'object') return;
       if (d.type === 'gov-nav-go' && typeof d.href === 'string') {
         onNavigate(d.href);
+      } else if (d.type === 'gov-nav-seat' && typeof d.seat === 'string') {
+        onSeat?.(d.seat);
       } else if (d.type === 'gov-nav-width') {
         setCollapsed(!!d.collapsed);
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [onNavigate]);
+  }, [onNavigate, onSeat]);
 
   const width = collapsed ? 60 : 300;
 
