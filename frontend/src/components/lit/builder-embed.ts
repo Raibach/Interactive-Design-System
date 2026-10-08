@@ -1,11 +1,10 @@
 /**
- * <builder-embed> — THE PRODUCT ROOM IS THE BUILDER NOW (owner, 2026-10-04).
+ * <builder-embed> — THE PRODUCT ROOM IS THE BUILDER NOW (2026-10-04).
  *
- * THE OWNER'S SENTENCES: *"just load that inside of the product area … the product room will
- * just remove the grace chat."* The whole app builder runs INSIDE this room — its own prompt
- * box, the run's progression, the live preview and the code panel — served by this machine's
- * own engine (`wireframe-lab/ai-app-builder-open/local-vcaas/server.mjs`, DeepSeek behind it,
- * no Totalum account).
+ * The whole app builder runs INSIDE this room — its own prompt box, the run's progression,
+ * the live preview and the code panel — served by this machine's own engine
+ * (`wireframe-lab/ai-app-builder-open/local-vcaas/server.mjs`, DeepSeek behind it, no
+ * Totalum account).
  *
  * A PLAIN IFRAME, UNLIKE <artifact-canvas> — and the difference is the trust level, not a
  * detail to tidy away: the artifact stage draws a document the MODEL wrote, so it is dead by
@@ -31,9 +30,9 @@ export class BuilderEmbed extends LitElement {
 
   /**
    * EVERY PAGE IS LOADED WITH `?embedded=console` — the header the builder's back arrow
-   * reads to know it is standing inside the Product room (owner, 2026-10-04: *"that back
-   * button should go back to the console"*). Appended here, once, so the room's JSX carries
-   * plain addresses and the contract lives in one place.
+   * reads to know it is standing inside the Product room, so the back control returns to
+   * the console. Appended here, once, so the room's JSX carries plain addresses and the
+   * contract lives in one place.
    */
   private _embeddedSrc(): string {
     const base = this.src ?? 'http://localhost:3223/';
@@ -137,21 +136,29 @@ export class BuilderEmbed extends LitElement {
       min-height: 0;
     }
 
+    /* THE FRAME IS A WINDOW, NOT A SHEET. This was background #ffffff — a white sheet
+       behind every page the frame loads. Each room paints its own ground BEHIND this
+       element (the Development room its lab tile, the Governance room its wave) and the
+       embedded documents carry transparent grounds so that ground is the floor (the
+       Development tool by openhands-patch.sh; OpenMetadata by the house patch §2). A white
+       sheet here blocks all of it: transparent grounds would show #ffffff, not the room.
+       Transparent: the room's ground is what the app stands on, and during a load it paints
+       there too — never a white beat. */
     .frame {
       display: block;
       width: 100%;
       height: 100%;
       border: 0;
-      background: #ffffff;
+      background: transparent;
     }
   `;
 
   render() {
     /**
-     * NO DEFAULT ADDRESS (owner, 2026-10-04): the element used to fall back to the tool's
-     * dashboard. The rule for the Product room — *"basically we never want to see the
-     * applications dashboard ever"* — makes that fallback a destination nobody may reach,
-     * so with no `src` this draws NOTHING. A blank pane is honest; a project list is not.
+     * NO DEFAULT ADDRESS (2026-10-04): the element used to fall back to the tool's
+     * dashboard. The rule for the Product room — the applications dashboard is never shown
+     * — makes that fallback a destination nobody may reach, so with no `src` this draws
+     * NOTHING. A blank pane is honest; a project list is not.
      */
     if (!this.src) return nothing;
     return html`

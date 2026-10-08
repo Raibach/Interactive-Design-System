@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import Any
 
 # Where a browser may be, in the order worth trying. A path that does not exist is skipped; the
@@ -47,6 +48,52 @@ def find_browser() -> str | None:
     return None
 
 
+# ── THE FONTS ARE THE APP'S OWN, READ FROM THIS DISK (owner, 2026-10-07) ─────────────────────
+# This page used to link Google's font hosts for Inter, so every render of a component reached
+# fonts.googleapis.com. The owner's rule for the product — "Use our fonts only - no API calls" —
+# holds for the render too: a fidelity screenshot drawn in substitute faces is a FALSE verdict
+# about the component (the comparison's whole value is that it shows what the component draws),
+# so the page now carries the same sheet the app serves — frontend/public/fonts/fonts.css — with
+# its /fonts/ urls resolved to the files on this disk.
+FONTS_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "public", "fonts")
+)
+
+
+def _font_faces() -> str:
+    """The app's font sheet, url('…') rewritten to file:// paths — or a REFUSED render.
+
+    No fallback: if the sheet or any file it names is missing, the screenshot would draw faces
+    the app never draws, and this module's own rule applies — a render that cannot be honest
+    must not be used. The caller turns this into {"ok": False, "error": …} naming the path;
+    it never becomes a silent system font.
+    """
+    sheet = os.path.join(FONTS_DIR, "fonts.css")
+    if not os.path.exists(sheet):
+        raise RuntimeError(
+            f"the local fonts are missing: {sheet} does not exist — the render would draw "
+            "substitute faces, so it is refused (the sheet lives in frontend/public/fonts/)"
+        )
+    with open(sheet, encoding="utf-8") as f:
+        css = f.read()
+    base = Path(FONTS_DIR).resolve().as_uri()  # file:///… — absolute, percent-encoded
+    spelled = css.count("url('/fonts/")
+    rewritten = css.replace("url('/fonts/", f"url('{base}/")
+    if spelled == 0 or rewritten.count(base) != spelled:
+        raise RuntimeError(
+            f"{sheet} no longer spells its font urls as url('/fonts/…') — a file:// page "
+            "cannot resolve them, so the render is refused rather than drawn in wrong faces"
+        )
+    for name in re.findall(re.escape(base) + r"/([^']+)", rewritten):
+        font_file = os.path.join(FONTS_DIR, name)
+        if not os.path.exists(font_file):
+            raise RuntimeError(
+                f"the local font file is missing: {font_file} — the render would draw a "
+                "substitute face, so it is refused"
+            )
+    return rewritten
+
+
 def document_for(
     code: str,
     tag: str,
@@ -62,6 +109,11 @@ def document_for(
     template are lifted verbatim. Nothing is added that the component does not carry — no reset, no
     margin, no font-size — because the comparison's whole value is that it shows what the component
     draws, and a helpful stylesheet here would be a thumb on the scale.
+
+    THE ONE THING THE PAGE SUPPLIES IS ITS FONTS, and it supplies the app's own (see
+    `_font_faces` above): a component cannot provision faces by itself, and the Google link that
+    stood here until 2026-10-07 was both an external call and a different set of bytes than the
+    app serves.
     """
     styles = ""
     match = re.search(r"css`(.*?)`", code, re.DOTALL)
@@ -75,10 +127,8 @@ def document_for(
 
     return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        "<link rel='preconnect' href='https://fonts.googleapis.com'>"
-        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
-        "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap' rel='stylesheet'>"
         "<style>"
+        f"{_font_faces()}"
         "html, body { margin: 0; padding: 0; background: transparent; }"
         f"body {{ width: {width}px; height: {height}px; }}"
         f"#{tag} {{ display: block; width: {host_width or width}px; height: {host_height or height}px; }}"

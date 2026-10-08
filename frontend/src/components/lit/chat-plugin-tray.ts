@@ -31,9 +31,10 @@
  * emits `conversation-new`, which the seat hears and turns into the three writes.
  *
  * TYPE: the drawing sets the label in Arial Rounded MT Bold 400 / 12px and the credit in
- * Inter 700 / 9px. Both are below the owner's floor and the label is not Inter, so both
- * take the house treatment — Inter, 700, 13px — and this comment is the record of the
- * deviation rather than a silent retune.
+ * Inter 700 / 9px. The owner's face ruling, 2026-10-07 — "Arial or rounded fonts -> becomes
+ * Nunito (found in chat interfaces for Grace)... Use our fonts only - no API calls" — draws
+ * the label's rounded face as Nunito at the drawing's own 12/400; the credit and the
+ * readouts keep the application face (.block's Inter).
  *
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
@@ -217,7 +218,10 @@ export class ChatPluginTray extends LitElement {
     }
     .label {
       color: #3D515B;
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+      /* NUNITO, per the owner's face ruling, 2026-10-07 — "Arial or rounded fonts -> becomes
+         Nunito... Use our fonts only - no API calls"; this label is chat furniture and keeps
+         the drawing's rounded face, drawn locally. */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-size: 12px;
       font-weight: 400;
       white-space: pre-line;

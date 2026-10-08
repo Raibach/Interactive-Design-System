@@ -44,6 +44,7 @@ import { LitElement, html, css, nothing } from 'lit';
 // The readout's model mark — the drawing's "ml-model--reference 1" #40001123:6751,
 // 26x26 in #507274, at the card's trailing edge.
 import modelMark from '@/assets/figma-readout-model-mark.svg';
+import { figureStyles, figures } from '@/shared/figures';
 
 export class ChatHeader extends LitElement {
   static properties = {
@@ -107,8 +108,11 @@ export class ChatHeader extends LitElement {
        card draws 22. One size for every card was my guess and the drawing does not have
        one size — read per card, never assumed. */
     iconSize: { type: Number, attribute: 'icon-size' },
-    /* THE CARD'S TEXT FAMILY. The readout card's line is Arial Rounded; the conversations
-       card's line is DM Sans 600. Two cards, two families. */
+    /* THE CARD'S VOICE. In the drawing the readout card's line is Arial Rounded and the
+       conversations card's line is DM Sans 600 — two cards, two families. The owner's face
+       ruling (2026-10-07) draws both in Nunito, so this flag now separates the treatments by
+       size/weight alone (14/600 against 12/400); it stays a flag because which card this is
+       remains a fact of the composition, not of the face. */
     dmSans: { type: Boolean, attribute: 'dm-sans' },
     tokens: { type: Number },
     inTokens: { type: Number, attribute: 'in-tokens' },
@@ -156,7 +160,7 @@ export class ChatHeader extends LitElement {
   declare gripDots: string;
   declare iconSize: number;
   declare dmSans: boolean;
-  static styles = css`
+  static styles = [figureStyles, css`
     :host { display: block; }
     /* THE BLOCK'S GROUND — "output-header-area" #40001119:6308: #CBE6E3, padding
        10px 20px 2px, column, gap 7. This is new in v.4b; the older node this
@@ -253,8 +257,12 @@ export class ChatHeader extends LitElement {
       gap: 10px;
       padding: 7px 10px;
       /* #40001123:6750 — Arial Rounded 400 at 14px in #3D515B. The code carried 13px at
-         weight 500 in #485954. */
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+         weight 500 in #485954.
+         THE FACE IS NUNITO — the owner's ruling, 2026-10-07: "Arial or rounded fonts ->
+         becomes Nunito (found in chat interfaces for Grace)... Use our fonts only - no API
+         calls." The drawing's Arial Rounded is substituted by the local rounded family; the
+         line's figures (tokens, calls, durations, QA) render Inter via the figures helper. */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 400;
       line-height: normal;
@@ -276,8 +284,9 @@ export class ChatHeader extends LitElement {
       position: relative;
       /* The card's body takes the drawing's own treatment for the text it holds — the
          user-response-bubble line, #40001123:6984: Arial Rounded 400 at 13/20 in #3D515B.
-         The code carried weight 500 and #171717, neither of which is in the file. */
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+         The code carried weight 500 and #171717, neither of which is in the file.
+         Drawn in Nunito, per the owner's face ruling — see .status above. */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 400;
       line-height: 20px;
@@ -347,10 +356,13 @@ export class ChatHeader extends LitElement {
        Stated on the readout's own element rather than on .status, because the conversations
        line shares .status and keeps 14. */
     .readout { flex: 1 1 auto; min-width: 0; font-size: 12px; }
-    /* #40001123:6744 — the conversations line is DM Sans 600 at 14/22, not the rounded face
-       the other cards use. Its 14 is declared here so the readout's 12 does not take it. */
+    /* #40001123:6744 — the conversations line is DM Sans 600 at 14/22 in the drawing. Its 14
+       is declared here so the readout's 12 does not take it.
+       THE OWNER MOVED THE FACE TOO, 2026-10-07: asked which local family replaces DM Sans,
+       he ruled NUNITO — so both chat cards draw one rounded family, and 14/600 against the
+       readout's 12 is what separates them now. */
     .readout.dm {
-      font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-weight: 600;
       font-size: 14px;
     }
@@ -360,7 +372,8 @@ export class ChatHeader extends LitElement {
       height: 26px;
       flex: 0 0 auto;
     }
-  `;
+  `,
+  ];
 
   /** The frame's slot line — #40001123:6750: "Analyzing: Session 222 | supportCustomerSession
    *  Duration: 28.495s | Closed QA: 89.38%". Pipes between the readouts; the state leads. */
@@ -440,7 +453,7 @@ export class ChatHeader extends LitElement {
     return html`
       <div class="output-area ${this.variant === 'lead' ? 'lead' : ''} ${this.variant === 'tall' ? 'tall' : ''}" data-node-id=${this.blockNode || nothing}>
         <div class="status shell ${this.variant === 'tall' ? 'tall' : ''}" data-node-id=${this.barNode || nothing} role="status">
-          <span class="readout ${this.dmSans ? 'dm' : ''}" data-node-id=${this.textNode || nothing}>${line}</span>
+          <span class="readout ${this.dmSans ? 'dm' : ''}" data-node-id=${this.textNode || nothing}>${figures(line)}</span>
           ${this.icon
             ? html`<img class="model-mark" style=${`width: ${this.iconSize || 22}px; height: ${this.iconSize || 22}px`} data-node-id=${this.iconNode || ''} src=${this.icon} alt="" />`
             : this.hasAttribute('tokens')

@@ -385,9 +385,13 @@ async def figma_intake_page():
 <head>
 <meta charset="utf-8" />
 <title>Figma intake — the model's handoff</title>
+<link rel="stylesheet" href="/fonts/fonts.css" />
 <style>
-  /* Inter only, the three weights this app has, nothing below 13px (AGENTS.md). */
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap');
+  /* Inter only, the three weights this app has, nothing below 13px (AGENTS.md).
+     THE FONT IS SELF-HOSTED (owner, 2026-10-07): the Google @import that stood here is gone —
+     /fonts/fonts.css is this origin's own sheet (frontend/public/fonts/, served by the Vite
+     dev server on 5001 and by main.py's /fonts mount on every origin this page is opened
+     from), so this page reaches no font host at all. */
   :root {{ color-scheme: light; }}
   body {{ font-family: Inter, system-ui, sans-serif; font-weight: 500; font-size: 13px;
          margin: 0; padding: 32px; background: #F4F7F6; color: #3D515B; }}

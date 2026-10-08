@@ -21,6 +21,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import chatMenuIcon from './assets/chat-logo-gemini.png';
 import favoriteIcon from '@/assets/figma-card-favorite.svg';
 import { isDemoMode } from '@/shared/appConfig';
+import { figureStyles, figures } from '@/shared/figures';
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ export class AgentCardElement extends LitElement {
     this._deleteArmed = false;
   }
 
-  static styles = css`
+  static styles = [figureStyles, css`
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :host {
@@ -128,7 +129,10 @@ export class AgentCardElement extends LitElement {
          clickable (owner, 2026-09-18). A clickable area without a hand reads as a
          picture, on every platform that draws one. */
       cursor: pointer;
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+      /* THE FACE RULING, 2026-10-07: "Arial or rounded fonts -> becomes Nunito (found in
+         chat interfaces for Grace)... Use our fonts only - no API calls." The card's rounded
+         face draws as Nunito; its figures (Version 4, the like count) render Inter. */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
     }
     /* The hover IS the border: the rail's teal, on the card that has the hand. */
     .card:hover { border-color: #1FACC2; }
@@ -322,6 +326,10 @@ export class AgentCardElement extends LitElement {
       font-weight: 700;
       font-size: 13px;
       line-height: 20px;
+      /* A FIGURE, SO INTER — the owner's numbers ruling, 2026-10-07: "Numbers -> Inter."
+         This slot is a count and nothing else, so the whole element is a figure; the card's
+         words around it keep Nunito. */
+      font-family: 'Inter', system-ui, sans-serif;
       /* SECONDARY LIKE THE REST — the owner, 2026-09-19: "do the same thing with the count
          that sits next to the heart." Faint at rest, full under the hand. */
       color: rgba(255, 255, 255, 0.35);
@@ -384,13 +392,15 @@ export class AgentCardElement extends LitElement {
       border-color: #FFFFFF;
     }
     .card-delete-label {
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+      /* Nunito, per the owner's face ruling — see .card above. */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.04em;
       line-height: 1;
     }
-  `;
+  `,
+  ];
 
   private _validateColor(val: string): string {
     if (!val) return '';
@@ -537,7 +547,7 @@ export class AgentCardElement extends LitElement {
         <!-- footer-details -->
         <div class="footer-details">
           <div class="version-pill">
-            <div class="version-text">Version ${Math.min(v, 99)} |</div>
+            <div class="version-text">Version ${figures(String(Math.min(v, 99)))} |</div>
             <div class="status-text ${String(safeStatus).toLowerCase() === 'completed' ? 'completed' : ''}">${safeStatus}</div>
           </div>
           <div class="likes">

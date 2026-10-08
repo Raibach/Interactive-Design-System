@@ -386,6 +386,9 @@ def _create_fastapi_instance(config: Config) -> FastAPI:
     Returns:
         Basic FastAPI application with title, description, and lifespan.
     """
+    # THE CDN PAGES ARE OFF (owner's lockdown, 2026-10-07): FastAPI's default /docs and
+    # /redoc pull swagger-ui / redoc bundles from cdn.jsdelivr.net on open — an external
+    # call this repository no longer makes. The API itself is unchanged.
     return FastAPI(
         title="OpenHands Agent Server",
         version=version("openhands-agent-server"),
@@ -394,6 +397,8 @@ def _create_fastapi_instance(config: Config) -> FastAPI:
         ),
         lifespan=api_lifespan,
         root_path=_get_root_path(config),
+        docs_url=None,
+        redoc_url=None,
     )
 
 

@@ -1231,6 +1231,90 @@ def builder_development_room(x_user_id: str | None = Header(None, alias="X-User-
     return {"ok": True, "session_id": session_id, "conversation_id": conversation_id, "label": label}
 
 
+@router.post("/governance/room")
+def builder_governance_room(x_user_id: str | None = Header(None, alias="X-User-ID")) -> dict:
+    """ENSURE THE GOVERNANCE ROOM'S OWN PACKAGE — its own chat, never another room's.
+
+    Owner, 2026-10-07 (the room became the frame: OpenMetadata in the left pane, the
+    platform's seat in the right). The Development endpoint's rule, one room over: one
+    package per user (marked `governance_room`), one conversation ensured under it — the
+    same package/conversation shape every room keeps, scoped to Governance alone. The row
+    wears `draft` so it never surfaces as a console card.
+    """
+    user_id = get_user_id_from_header(x_user_id)
+    api = state.prompt_sessions_api
+    if not api:
+        return {"ok": False, "error": "database unavailable"}
+    label = "Governance"
+
+    with _ROOM_LOCK:
+        session_id = None
+        conversation_id = None
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT id, conversation_id, title FROM prompt_sessions "
+                "WHERE user_id = %s AND metadata->>'governance_room' = 'true' "
+                "ORDER BY created_at ASC LIMIT 1",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                session_id = str(row["id"])
+                conversation_id = str(row["conversation_id"]) if row["conversation_id"] else None
+                if row["title"]:
+                    label = str(row["title"])
+
+        if session_id is None:
+            if not state.conversation_api:
+                return {"ok": False, "error": "database unavailable"}
+            session = api.create_session(
+                user_id=user_id,
+                title=label,
+                description="The governance room's own package \u2014 its own conversations.",
+                room_domain="governance",
+            )
+            session_id = str(session["id"])
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "UPDATE prompt_sessions SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb WHERE id = %s",
+                    (json.dumps({"governance_room": "true", "draft": "true"}), session_id),
+                )
+                cursor.execute(
+                    "SELECT conversation_id FROM prompt_sessions WHERE id = %s", (session_id,)
+                )
+                fresh = cursor.fetchone()
+                if fresh and fresh["conversation_id"]:
+                    conversation_id = str(fresh["conversation_id"])
+                conn.commit()
+
+        if not conversation_id:
+            if not state.conversation_api:
+                return {"ok": False, "error": "database unavailable"}
+            conversation_id = str(
+                state.conversation_api.create_conversation(
+                    user_id,
+                    project_id=None,
+                    title=label,
+                    metadata=None,
+                    session_id=session_id,
+                )
+            )
+            with api.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                    (conversation_id, session_id),
+                )
+                conn.commit()
+
+    return {"ok": True, "session_id": session_id, "conversation_id": conversation_id, "label": label}
+
+
 @router.get("/projects/{project_id}/conversation")
 def builder_project_conversation(project_id: str) -> dict:
     """THE THREAD, FROM THE ENGINE — with the facts the app's chat design groups by.

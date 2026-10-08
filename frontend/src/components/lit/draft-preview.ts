@@ -88,10 +88,10 @@ function draftDocument(draft: DraftPreviewState): string {
     "form-action 'none'" +
     '">' +
     // The app uses the house weights only; a design's measured weight can be outside them (800 on
-    // the first node tested), and /fonts/inter.css carries the whole 100–900 range — SELF-HOSTED
+    // the first node tested), and /fonts/fonts.css carries the whole 100–900 range — SELF-HOSTED
     // (owner, 2026-10-06): this document reaches no other origin. The absolute URL is deliberate:
     // a srcdoc document's relative URLs do not resolve (see the import-map note below).
-    '<link href="' + window.location.origin + '/fonts/inter.css" rel="stylesheet">' +
+    '<link href="' + window.location.origin + '/fonts/fonts.css" rel="stylesheet">' +
     // THE CODE IS DRAWN EXACTLY AS THE INGEST WROTE IT, bare import and all. A blob module has no
     // hierarchy, so a root-relative specifier inside it cannot resolve ("Invalid relative url or
     // base scheme isn't hierarchical" — the error that named this). An import map resolves against

@@ -11,15 +11,13 @@
  * - Session/custom events: Only sent after user grants consent via the consent modal.
  * - Users can opt out of all future tracking by declining consent.
  *
- * AD BLOCKER BYPASS:
- * By default, telemetry is routed through OpenHands' reverse proxy (z.openhands.dev)
- * to avoid being blocked by ad blockers. Library consumers can override this with:
- * - VITE_POSTHOG_HOST: Custom proxy URL or direct PostHog URL
- * - VITE_POSTHOG_UI_HOST: PostHog UI host (defaults to https://us.posthog.com)
- *
- * IMPORTANT: By default, telemetry is sent to the OpenHands PostHog project.
- * Source builds can override this with VITE_POSTHOG_API_KEY. Precompiled
- * library consumers can pass the same settings to configureTelemetry().
+ * LOCKDOWN (owner, 2026-10-07: "no API call to any external anything"):
+ * In this tree the vendor's reverse proxy (z.openhands.dev) and the UI host are DEAD
+ * defaults — the hosts below point at a closed loopback port and the baked key is
+ * blanked in config/defaults.json — so nothing telemetry-shaped reaches any host, with
+ * or without the consent flags. Explicit configuration (VITE_POSTHOG_HOST /
+ * VITE_POSTHOG_UI_HOST / VITE_POSTHOG_API_KEY, or configureTelemetry()) is the only
+ * way to route telemetry anywhere, and it is always a deliberate act.
  *
  * Users can disable all telemetry (including install tracking) via:
  * - Setting VITE_DO_NOT_TRACK=1 environment variable
@@ -69,16 +67,19 @@ const DEFAULT_POSTHOG_API_KEY: string =
   (import.meta.env.VITE_POSTHOG_API_KEY as string | undefined) ||
   defaults.telemetry.posthogApiKey;
 
-// Default to OpenHands' reverse proxy to bypass ad blockers.
-// The proxy at z.openhands.dev routes to PostHog's US region.
-// Library consumers can override this with their own proxy or direct PostHog URL.
+// LOCKDOWN (owner, 2026-10-07: "no API call to any external anything") — the vendor's
+// reverse proxy (z.openhands.dev → PostHog US) and the UI host are DEAD in this tree: the
+// defaults point at a closed loopback port and the baked key is blanked in
+// config/defaults.json, so nothing telemetry-shaped can reach any host even if the consent
+// flags the launcher sets were ever lost. Library consumers can still override with their
+// own proxy or direct PostHog URL — explicitly, never by default.
 const DEFAULT_POSTHOG_HOST =
-  import.meta.env.VITE_POSTHOG_HOST || "https://z.openhands.dev";
+  import.meta.env.VITE_POSTHOG_HOST || "http://127.0.0.1:9";
 
 // UI host is needed for PostHog features like toolbar to work correctly
-// when using a reverse proxy. Defaults to US region.
+// when using a reverse proxy; dead here for the lockdown above.
 const DEFAULT_POSTHOG_UI_HOST =
-  import.meta.env.VITE_POSTHOG_UI_HOST || "https://us.posthog.com";
+  import.meta.env.VITE_POSTHOG_UI_HOST || "http://127.0.0.1:9";
 
 export interface TelemetryConfig {
   /** PostHog project key. Useful for precompiled library consumers. */

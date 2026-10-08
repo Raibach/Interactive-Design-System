@@ -405,11 +405,11 @@ describe("buildAgentServerTelemetryEnv", () => {
   };
 
   it("configures PostHog telemetry by default without seeding consent", () => {
+    // LOCKDOWN 2026-10-07: the defaults are blank/dead in this tree (see config/defaults.json).
     expect(buildAgentServerTelemetryEnv({})).toEqual({
       OH_TELEMETRY_EXPORTER: "posthog",
-      OH_TELEMETRY_POSTHOG_API_KEY:
-        "phc_kBtz5nKmxVRRQ7HtPwr2QX9eMC5j65zE86QKocVNwb4U",
-      OH_TELEMETRY_POSTHOG_HOST: "https://us.i.posthog.com",
+      OH_TELEMETRY_POSTHOG_API_KEY: "",
+      OH_TELEMETRY_POSTHOG_HOST: "http://127.0.0.1:9",
     });
   });
 

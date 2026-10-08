@@ -1,5 +1,20 @@
 # The Development zone — record
 
+## 2026-10-07 — the tool's Google Fonts go; nothing is fetched to draw it
+
+The owner's font ruling — *"Arial or rounded fonts -> becomes Nunito … Inter -> everywhere else. Numbers -> Inter. Use our fonts only - no API calls."* — lands in this room as a pure subtraction: the vendor sheet opened with two `@import` lines pulling **Outfit** and **IBM Plex Mono** from `fonts.googleapis.com`, and nothing in the build references either family (every stack resolves through the system vars `--font-sans` / `--font-mono`), so the imports were two calls out of the machine per cold load that drew nothing.
+
+- `openhands-patch.sh` item 9 strips them, copies the stripped sheet to a content-hashed house url (`house-root-<sha>.css`) and repoints the `<link>` — the vendor file is served `immutable, max-age=1yr` on :8090 (measured), so an in-place edit alone never reaches a browser that has already loaded it. The manifest's own reference keeps the vendor filename; that file is stripped in place, so any fetch of it is clean too. Idempotent: a re-run after an update re-strips, re-hashes, re-points.
+- Verified after applying: the served root sheet carries zero `fonts.googleapis` mentions and zero `@import`; the repointed stylesheet answers 200 (~429 KB) with zero mentions; the page's link resolves to the house name. The tool's faces are unchanged — they were always the system stacks.
+
+**The same day — the rest of the lockdown lands in this tool** (owner: *"no API call to any external anything … This is a secure lockdown enterprise repo"*). Full register: `READ-ME/NETWORK-LOCKDOWN.md`.
+
+- **Item 10 — the icon CDN is deadened.** The integrations catalog's 186 `cdn.simpleicons.org` URLs (loaded by the browser whenever those surfaces draw) are rewritten to a closed loopback port across the whole `@openhands` build scope — sibling packages included, sourcemaps too, so an update cannot leave a live URL behind. Bundled marks still draw; remote-only icons fail to draw — cosmetic and deliberate. The catalog component's comment records the substitution.
+- **Item 11 — telemetry has nothing to say.** The baked PostHog key is blanked in `config/defaults.json` and the source clone's `telemetry.ts` defaults now point at `http://127.0.0.1:9` with the lockdown stated in the module docstring; the built tree is rewritten the same way; the three `dev-*.test.ts` script tests expect the blank/dead pair. What remains inside the installed `posthog-js` library is inert: no key, consent denied at launch, disable flag set.
+- **Both Python halves stop loading docs from a CDN.** `docs_url=None, redoc_url=None` in the agent server and the automation app — travels to the hosted image.
+- **The msw analytics handlers stay, as blockers.** They intercept the real endpoints so mock-mode builds cannot send; an interceptor never fetches.
+- **The patch now applies itself.** `RESTART-LOCAL.sh` §8c runs `openhands-patch.sh` against the built canvas after every start — installs, updates, and restarts all land on the cut build without a manual step.
+
 ## 2026-10-06 — the Development room's tool was removed from the project, in full
 
 At the owner's direction (*"Remove OpenHands entirely from this codebase. We are NOT using it
@@ -671,3 +686,10 @@ no per-visitor choice reaches the shared configuration) and BOTH controls simply
 No advance, no pinning, no profile repair; the wizard stays where the visitor left it and the
 LLM parameters screen is theirs to walk. Verified in the emitted page (build-copy run):
 the modal is present, `run(betaNotice)` is wired, and no pass-through function exists.
+
+**2026-10-07 (night) — THE FIRST-RUN CHECKLIST AND THE OPEN MENU ARE OUT FOR EVERY BROWSER (the vendor renamed its keys).**
+The owner, meeting a cleared browser (Chrome, cache emptied): *"See how the left navigation now opens and it's got Getting started section. How does that even come back? … I want to know how that happens."* — then: *"We gotta take that memory feature out."*
+THE MECHANISM, measured in the tool's own modules (2026-10-07): the 10-06 tool update renamed the first-run keys. The checklist dismissal now lives at `openhands-sidebar-onboarding-checklist-dismissed` (the literal string `"true"`), and the menu state at the vendor's `openhands-sidebar` store, whose migration key `openhands-sidebar-collapsed` it reads once and consumes when that store is absent (the vendor's own code). The house patch — rebuilt on the 6th — wrote ONLY the wizard flag; the older checklist/sidebar seeds named keys the new build never reads. So every browser without a hand-dismissal met first-run defaults (checklist visible, menu open) while browsers that had dismissed it by hand looked clean — same app, per-browser memory.
+THE FIX (`development/openhands-patch.sh` only — the `house-patch-firstrun` block in the head's trailing zone, before any app script can read): it now also writes the CURRENT keys — checklist dismissed (`"true"`, forced when not already true) and menu collapsed through the vendor's own migration key (written only when no stored choice exists; a person's later toggle still wins). Re-applied to the build; the served page carries all three writes.
+VERIFIED THROUGH THE REAL PATH (the owner's same-night law: testing the tool load-ed raw, outside the React shell, *"is cheating … a shortcut … a way of suppressing errors"* — these tests are in-frame): inside the shell's Development room, twice — in the working browser, and in a brand-new browser taken through the sign-in gate into the room. Both frames: the embedded URL (`?embedded=console&house_door=dev`), checklist absent, `openhands-sidebar` = `{"state":{"collapsed":true},"version":0}`, dismissal `"true"`.
+LEFT ALONE, SAID PLAINLY: the vendor's "New Version Available" notice still ships from the bundle (flagged to the owner, not cut).

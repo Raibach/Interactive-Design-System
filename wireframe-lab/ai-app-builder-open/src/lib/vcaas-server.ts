@@ -13,12 +13,24 @@
  * Base URL for every Totalum API endpoint. Single source of truth.
  * 📖 API reference: https://www.totalum.app/totalum-api.md
  *
- * ⚠️ OVERRIDABLE FOR THE LOCAL ENGINE (see `local-vcaas/server.mjs`): with no
- * Totalum account, `VCAAS_BASE_URL` points here at a same-shape server on this
- * machine whose agent is a DeepSeek key. Unset, this is the hosted API.
+ * ⚠️ THE HOSTED FALLBACK IS GONE (owner's lockdown, 2026-10-07: "no API call to any external
+ * anything"). This used to default to api-accounts.totalum.app — a third-party cloud — when
+ * VCAAS_BASE_URL was unset, which made every missing-env deployment a silent call to Totalum.
+ * There is no default now: unset means this module REFUSES at load with the reason below.
  */
-const VCAAS_BASE_URL =
-  process.env.VCAAS_BASE_URL || "https://api-accounts.totalum.app/api/v1/vcaas";
+const VCAAS_BASE_URL = process.env.VCAAS_BASE_URL || "";
+
+/** The base URL, or a loud refusal — never a hosted fallback. */
+function requireVcaasBase(): string {
+  if (!VCAAS_BASE_URL) {
+    throw new Error(
+      "VCAAS_BASE_URL is not set — the builder refuses to fall back to any hosted service " +
+        "(network lockdown, 2026-10-07: no external calls). Set VCAAS_BASE_URL, e.g. " +
+        "http://localhost:4000/api/v1/vcaas for the local engine."
+    );
+  }
+  return VCAAS_BASE_URL;
+}
 
 /**
  * ═══⭐⭐⭐ EVERY UPSTREAM URL MUST STAY INSIDE `/api/v1/vcaas/` ═══════════════
@@ -40,8 +52,8 @@ const VCAAS_BASE_URL =
  * points is the one test that cannot be talked around. Both request helpers go through
  * here, so no route can forget it.
  */
-const VCAAS_ORIGIN = new URL(VCAAS_BASE_URL).origin;
-const VCAAS_PATH_PREFIX = new URL(VCAAS_BASE_URL).pathname; // "/api/v1/vcaas"
+const VCAAS_ORIGIN = new URL(requireVcaasBase()).origin;
+const VCAAS_PATH_PREFIX = new URL(requireVcaasBase()).pathname; // "/api/v1/vcaas"
 
 export class VcaasPathError extends Error {
   constructor(path: string) {

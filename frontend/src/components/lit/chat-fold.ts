@@ -17,6 +17,7 @@
  */
 import { LitElement, html, css, nothing } from 'lit';
 import { designTokens } from '@/shared/design-tokens';
+import { figureStyles, figures } from '@/shared/figures';
 // THE DESIGN'S OWN CHEVRON, the exported 14x13 artwork — the same file the catalog check
 // and the Conversations dropdown import. One asset, imported, never re-drawn.
 // The dropdown chevron, INLINE: no path, no name, nothing can resolve it. It used to be the file
@@ -56,6 +57,7 @@ export class ChatFold extends LitElement {
 
   static styles = [
     designTokens,
+    figureStyles,
     css`
       :host {
         /* accordion-dropdown #40000934:22852 — a column, gap 5px. The tiles flex to hold
@@ -74,7 +76,11 @@ export class ChatFold extends LitElement {
         background: #F7F8F2;
         border-radius: 6px;
         box-shadow: -4px -4px 5px rgba(0, 0, 0, 0.15), 4px 4px 5px rgba(0, 0, 0, 0.15);
-        font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+        /* NUNITO — the owner's face ruling, 2026-10-07: "Arial or rounded fonts -> becomes
+           Nunito (found in chat interfaces for Grace)... Use our fonts only - no API
+           calls." The count chip's figure ("13 advisory") renders Inter via the figures
+           helper; the words keep the rounded face. */
+        font-family: 'Nunito', 'Inter', system-ui, sans-serif;
         overflow: hidden;
       }
       .header {
@@ -142,7 +148,7 @@ export class ChatFold extends LitElement {
           @click=${this._toggle}
         >
           ${this.label}
-          ${this.count ? html`<span class="chip count">${this.count}</span>` : nothing}
+          ${this.count ? html`<span class="chip count">${figures(this.count)}</span>` : nothing}
           <slot name="meta"></slot>
           <span class="chevron" aria-hidden="true"><img src=${arrowDropDown} width="14" height="13" alt="" /></span>
         </button>

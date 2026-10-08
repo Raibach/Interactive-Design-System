@@ -65,6 +65,12 @@ COPY config.py ./
 # Built frontend + generated manifest.json
 COPY --from=frontend-build /repo/frontend/dist ./frontend/dist
 
+# The self-hosted fonts, from SOURCE (2026-10-07): main.py mounts /fonts from
+# frontend/public/fonts/ — the figma-intake page and every /fonts request resolve there, and
+# the mount does not depend on the build output's freshness. One folder serves the Vite dev
+# server locally and this image in production.
+COPY frontend/public ./frontend/public
+
 # Frontend source (A2UI component catalog required by backend at runtime)
 COPY frontend/src ./frontend/src
 

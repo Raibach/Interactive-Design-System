@@ -33,9 +33,9 @@ describe("dev-static", () => {
       AUTOMATION_AGENT_SERVER_URL: "http://127.0.0.1:18000",
       AUTOMATION_AGENT_SERVER_API_KEY: "shared-session-key",
       AUTOMATION_LOCAL_API_KEY: "shared-session-key",
-      AUTOMATION_POSTHOG_API_KEY:
-        "phc_kBtz5nKmxVRRQ7HtPwr2QX9eMC5j65zE86QKocVNwb4U",
-      AUTOMATION_POSTHOG_HOST: "https://us.i.posthog.com",
+      // LOCKDOWN 2026-10-07: the baked key/host are blanked/dead in this tree.
+      AUTOMATION_POSTHOG_API_KEY: "",
+      AUTOMATION_POSTHOG_HOST: "http://127.0.0.1:9",
     });
   });
 

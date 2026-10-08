@@ -40,9 +40,11 @@ let demoMode = false;
 
 const LOCAL_DEVELOPMENT_TOOL = "http://localhost:8090/";
 const LOCAL_BUILDER_TOOL = "http://localhost:3223";
+const LOCAL_GOVERNANCE_TOOL = "http://localhost:8585/";
 
 let developmentTool = LOCAL_DEVELOPMENT_TOOL;
 let builderTool = LOCAL_BUILDER_TOOL;
+let governanceTool = LOCAL_GOVERNANCE_TOOL;
 
 /** True on the deployed demo. False everywhere else, including every failure path. */
 export const isDemoMode = (): boolean => demoMode;
@@ -59,6 +61,13 @@ export const developmentToolUrl = (): string => developmentTool;
  */
 export const builderToolUrl = (): string => builderTool;
 
+/**
+ * The Governance room's tool (OpenMetadata — the stakeholder monitoring interface).
+ * Empty string = not connected, same rule. The loopback law below applies to it
+ * exactly as to the other two: a deployed page may never reach a visitor's machine.
+ */
+export const governanceToolUrl = (): string => governanceTool;
+
 let started: Promise<void> | null = null;
 
 /** Ask the server which build this is — once. Never rejects; callers may await or ignore. */
@@ -73,6 +82,7 @@ export function appConfigReady(): Promise<void> {
       demoMode = body?.demo_mode === true;
       const development = typeof body?.development_tool_url === "string" ? body.development_tool_url.trim() : "";
       const builder = typeof body?.builder_tool_url === "string" ? body.builder_tool_url.trim() : "";
+      const governance = typeof body?.governance_tool_url === "string" ? body.governance_tool_url.trim() : "";
       // UNCONFIGURED MEANS LOCAL ONLY ON A LOOPBACK HOST, AND THIS IS THE SHIPPED PAGE'S LAW
       // (2026-10-06, late): a deployed page may never reach a visitor's loopback. The old
       // branch keyed this on the demo flag — when the demo went off, a deployed page with an
@@ -82,6 +92,7 @@ export function appConfigReady(): Promise<void> {
       const onLocalhost = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
       developmentTool = development || (onLocalhost ? LOCAL_DEVELOPMENT_TOOL : "");
       builderTool = builder || (onLocalhost ? LOCAL_BUILDER_TOOL : "");
+      governanceTool = governance || (onLocalhost ? LOCAL_GOVERNANCE_TOOL : "");
     } catch {
       // Leave the local defaults — see the header note.
     } finally {

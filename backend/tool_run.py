@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 import time
 import urllib.error
@@ -73,7 +74,24 @@ def _get(url: str, *, accept: str = "application/json") -> bytes:
     `urllib` rather than `requests`: this module is the only thing here that talks
     to the outside, and one fewer dependency to install on a machine that has to
     start from nothing is worth more than the nicer API.
+
+    THE LOCKDOWN GATE (owner, 2026-10-07: "no API call to any external anything"). This
+    helper is the ONLY door to the outside in the backend — news.google.com for
+    search-the-internet and en.wikipedia.org for read-a-wiki — and both tools are
+    model-invoked, so a call can leave without a person pressing anything. Unless the host
+    explicitly set ALLOW_EXTERNAL_TOOLS=1, the fetch is REFUSED with a reason the model
+    reads back and the person sees; nothing leaves the machine. Refusing rather than
+    hiding the tool is deliberate: the model gets a true answer about why it cannot, and
+    re-enabling is a visible act on the host, never a silent default.
     """
+    if os.getenv("ALLOW_EXTERNAL_TOOLS", "").strip() != "1":
+        host = urllib.parse.urlparse(url).netloc or url
+        raise ToolRunError(
+            "external tools are disabled by the network lockdown — no call to "
+            f"{host} was made (owner's rule, 2026-10-07: no API calls to any external "
+            "anything). Answer from what this workspace already holds, or set "
+            "ALLOW_EXTERNAL_TOOLS=1 on this host to enable external tools deliberately."
+        )
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": accept})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:

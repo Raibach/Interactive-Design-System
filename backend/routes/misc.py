@@ -167,17 +167,19 @@ async def api_config():
     demo_policy.py, and a client that lies about this value changes nothing but
     its own buttons. `false` on local runs, where the full system is the point.
 
-    `development_tool_url` / `builder_tool_url` are the rooms' tool addresses,
-    runtime config instead of hardcoded localhost: a local run leaves them unset
-    and the shell keeps `http://localhost:8090` / `:3223`; a deployed demo sets
-    them to hosted services, or leaves them empty and the rooms say so plainly.
-    (The Development room's workspace returned 2026-10-06, run from this repo
-    with its reporting channel stripped — development/CHANGELOG.md.)
+    `development_tool_url` / `builder_tool_url` / `governance_tool_url` are the
+    rooms' tool addresses, runtime config instead of hardcoded localhost: a local
+    run leaves them unset and the shell keeps `http://localhost:8090` / `:3223` /
+    `:8585`; a deployed demo sets them to hosted services, or leaves them empty
+    and the rooms say so plainly. (The Development room's workspace returned
+    2026-10-06, run from this repo with its reporting channel stripped —
+    development/CHANGELOG.md.)
     """
     return {
         "demo_mode": DEMO_MODE,
         "development_tool_url": os.getenv("DEVELOPMENT_TOOL_URL", "").rstrip("/"),
         "builder_tool_url": os.getenv("BUILDER_TOOL_URL", "").rstrip("/"),
+        "governance_tool_url": os.getenv("GOVERNANCE_TOOL_URL", "").rstrip("/"),
     }
 
 

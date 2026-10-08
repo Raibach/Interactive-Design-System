@@ -233,12 +233,13 @@ export class OutputFooterArea extends LitElement {
     .btn-label.credit { height: 35px; width: 156px; flex: 0 0 auto; }
 
     /* 40001123:6832 — Arial Rounded MT Bold Regular 12px, #3D515B, w-58. Each line takes the
-       font's own leading. */
+       font's own leading. NUNITO, per the owner's face ruling, 2026-10-07 ("Arial or rounded
+       fonts -> becomes Nunito... Use our fonts only - no API calls"). */
     .btn-text {
       display: flex;
       flex-direction: column;
       justify-content: center;
-      font-family: 'Arial Rounded MT Bold', system-ui, sans-serif;
+      font-family: 'Nunito', system-ui, sans-serif;
       font-weight: 400;
       font-size: 12px;
       color: #3d515b;
@@ -249,13 +250,14 @@ export class OutputFooterArea extends LitElement {
     .btn-text p { margin: 0; line-height: normal; }
 
     /* 40001123:6740 — Arial Rounded MT Bold Regular 9px, 12px leading, #3D515B, RIGHT/BOTTOM.
-       The © run keeps the fill explicitly; the rest inherit it. */
+       The © run keeps the fill explicitly; the rest inherit it. Nunito, per the owner's face
+       ruling — see .btn-text above. */
     .credit-text {
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
       width: 100%;
-      font-family: 'Arial Rounded MT Bold', system-ui, sans-serif;
+      font-family: 'Nunito', system-ui, sans-serif;
       font-weight: 400;
       font-size: 9px;
       color: #3d515b;

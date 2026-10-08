@@ -54,6 +54,9 @@ import designSectionBackground from "@/assets/design-section2-bkg.png";
 // duplicate of this tile left the tree with the retirement (2026-10-05 — one image for the lab
 // ground; `canvas-wireframe-lab-bkg.png` deleted, referenced by nothing).
 import developmentLabBackground from "@/assets/canvas-development-lab-bkg.jpg";
+import dataWave3Background from "@/assets/data-wave3.png";
+import GovernanceAssemblyRail from "@/components/GovernanceAssemblyRail";
+import GovernanceNavFrame from "@/components/GovernanceNavFrame";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/room-embed-art.jpg";
@@ -103,7 +106,7 @@ import { eventBus } from "@/shared/event-bus";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
-import { DEMO_DISABLED_SENTENCE, builderToolUrl, developmentToolUrl, isDemoMode } from "@/shared/appConfig";
+import { DEMO_DISABLED_SENTENCE, builderToolUrl, developmentToolUrl, governanceToolUrl, isDemoMode } from "@/shared/appConfig";
 import { IngestModal } from "@/components/IngestModal";
 // The ingest's own URL parser, imported rather than re-written: the form in the room and the form in
 // the modal must read a Figma link the same way, and this is the one place that does.
@@ -121,6 +124,7 @@ import { resolveTag, componentProps, assignProps } from "@/components/lit/a2ui-r
 // import of the elements themselves.
 import type { WorkspaceLayout } from "@/components/lit/workspace-layout";
 import type { ChatPanel } from "@/components/lit/chat-panel";
+import type { BuilderEmbed } from "@/components/lit/builder-embed";
 import { markArrival } from "@/shared/arrival";
 import { CORE_ROLE_LABELS, seatIdOf } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
@@ -566,6 +570,50 @@ export default function Index({
   const developmentGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
+   * THE GOVERNANCE ROOM OPENS THE SAME WAY (owner, 2026-10-07: *"pop it in there"* —
+   * OpenMetadata as the room's tool, its login KEPT as the tool's own administrative layer:
+   * *"I'm gonna require login. Because this is an administrative tool and I want another
+   * layer."*) Same three hands, third room: the minimum (three seconds, matching the other
+   * two rooms), the frame's own load, and the seat's binding — the cover spans the whole
+   * room and drops only when all three have landed, or at its ceiling; then the room eases
+   * in underneath it, one 700ms cross-fade. A frame that never arrives leaves the pane on
+   * its own ground — no fallbacks.
+   */
+  const GOVERNANCE_GATE_MIN_MS = 3_000;
+  const GOVERNANCE_GATE_MAX_MS = 25_000;
+  /*
+   * THE ROOM'S OWN RAIL LIST — the Development room's list and its reasons (the rail's
+   * empty-list rule draws every tab, Versions included; this room states the membership it
+   * wants instead).
+   */
+  const GOVERNANCE_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
+  const [governanceGateDown, setGovernanceGateDown] = useState(false);
+
+  /* THE ROOM'S RAIL DRIVES THE EMBEDDED APP (owner, 2026-10-07: *"so now it's time
+     to wire it up, I guess, to the app, and then remove the app's navigation"*). One
+     attribute write: <builder-embed> re-renders its iframe with the same
+     `embedded=console` + `house_door` parameters it always adds — and every
+     destination is a path inside the tool's own origin, reached the same way the
+     tool's own navigation reached it. A malformed address changes nothing. */
+  const navigateGovernanceTool = (path: string) => {
+    const base = governanceToolUrl();
+    if (!base) return;
+    try {
+      const url = new URL(path, base).toString();
+      governanceEmbedRef.current?.setAttribute('src', url);
+    } catch {
+      /* unreachable in practice — URL() only throws on an unparseable base, and the
+         base was just checked for emptiness; kept so a bad edit can never throw here */
+    }
+  };
+  const [governanceToolDown, setGovernanceToolDown] = useState(false);
+  const governanceMinElapsedRef = useRef(false);
+  const governanceFrameLoadedRef = useRef(false);
+  const governanceGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const governanceGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const governanceSeatSettledRef = useRef(false);
+
+  /*
    * THE PRODUCT ROOM OPENS THE SAME WAY (2026-10-05): the builder's own first paint is white,
    * and uncovered it flashed between the frame's mount and its content — the same white splash
    * the Development gate was built to hide. Same three hands, one room over (2026-10-06): the
@@ -616,6 +664,12 @@ export default function Index({
   const dropDevelopmentGateWhenAllLanded = useCallback(() => {
     if (developmentMinElapsedRef.current && developmentFrameLoadedRef.current && developmentSeatSettledRef.current) {
       setDevelopmentGateDown(true);
+    }
+  }, []);
+  /** THE GOVERNANCE ROOM'S OWN ALL-THREE-HANDS — the Development callback, one room over. */
+  const dropGovernanceGateWhenAllLanded = useCallback(() => {
+    if (governanceMinElapsedRef.current && governanceFrameLoadedRef.current && governanceSeatSettledRef.current) {
+      setGovernanceGateDown(true);
     }
   }, []);
   /*
@@ -807,6 +861,12 @@ export default function Index({
   // The Development room is a two-column tool room now too (owner, 2026-10-05) — and, like
   // Product, its ground has to sit at room level for the chat column's strip to show it.
   const isDevelopmentView = (headerTab || '') === 'development';
+  // THE GOVERNANCE ROOM WEARS THE WAVE AS ITS ROOM-LEVEL GROUND (late 2026-10-07): the
+  // wave is this section's exclusive image, and it must cover the WHOLE room — both
+  // columns, the chat side and the gripper strip. Without this branch the room fell to
+  // the composer default and the composer's image showed in the gripper strip beside the
+  // chat rail.
+  const isGovernanceView = (headerTab || '') === 'governance';
   // THE PRODUCT ROOM WEARS THE COMPOSER'S GROUND NOW (owner, 2026-10-05): the room gains the
   // console's chat column with its rail closed on entry, and the gripper strip beside the rail
   // is transparent — so the room's own ground is what shows in that strip, and the owner's
@@ -826,17 +886,19 @@ export default function Index({
     ? designSectionBackground
     : isDevelopmentView
       ? developmentLabBackground
-      : composerBackground;
+      : isGovernanceView
+        ? dataWave3Background
+        : composerBackground;
   // THE ROOM'S GROUND COLOUR — one fact with two readers (the two ground slots below).
   // Product stands on the composer purple; Development stands on its own dark grey, the
   // colour its tool's wrapper has always painted under the tile.
-  const workspaceGroundColor = isDevelopmentView ? '#2b2635' : '#582846';
+  const workspaceGroundColor = isDevelopmentView || isGovernanceView ? '#2b2635' : '#582846';
   // AND EVERY OTHER ROOM'S GROUND STRETCHES (100% × 100%, top-left, no repeat). The product
   // room's tiling era ended with its own image; DEVELOPMENT is the exception — a graph-paper
   // tile is drawn to REPEAT at natural size, and it inherits this room's own floor.
-  const groundSize = isDevelopmentView ? 'auto' : '100% 100%';
+  const groundSize = isDevelopmentView ? 'auto' : isGovernanceView ? 'cover' : '100% 100%';
   const groundRepeat = isDevelopmentView ? 'repeat' : 'no-repeat';
-  const groundPosition = 'top left';
+  const groundPosition = isGovernanceView ? 'center center' : 'top left';
   const surfaceComponents = isConsoleView ? consoleTree.components : workspaceTree.components;
   const surfaceDataModel = isConsoleView ? consoleTree.dataModel : workspaceTree.dataModel;
 
@@ -1249,6 +1311,10 @@ export default function Index({
      canvas tool's container (settled closed on entry the same way) and the room's seat. */
   const developmentLayoutRef = useRef<WorkspaceLayout | null>(null);
   const developmentSeatRef = useRef<ChatPanel | null>(null);
+  const governanceLayoutRef = useRef<WorkspaceLayout | null>(null);
+  const governanceSeatRef = useRef<ChatPanel | null>(null);
+  /** The embedded app's element — the rail writes its destinations onto this. */
+  const governanceEmbedRef = useRef<BuilderEmbed | null>(null);
   /*
    * THE COLUMN THE RUN ASSEMBLED, KEPT FOR THE STATE (owner, 2026-10-05). The model composes
    * the third column on every Run; the components it returns are what the drawing IS, and
@@ -5021,6 +5087,36 @@ export default function Index({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
+  /**
+   * THE GOVERNANCE ROOM'S OPENING — the Development effect above, mirrored for the third
+   * frame (owner, 2026-10-07: OpenMetadata placed as the room's tool, login kept as the
+   * tool's own administrative layer). The same three hands restart on every entry; the
+   * ceiling takes the cover down and the pane keeps its own ground — no fallbacks; the
+   * frame stays mounted underneath, so a late arrival still wins when it comes.
+   */
+  useEffect(() => {
+    if ((headerTab || '') !== 'governance') return;
+    setGovernanceGateDown(false);
+    setGovernanceToolDown(false);
+    governanceMinElapsedRef.current = false;
+    governanceFrameLoadedRef.current = false;
+    governanceSeatSettledRef.current = false;
+    if (governanceGateTimerRef.current) clearTimeout(governanceGateTimerRef.current);
+    governanceGateTimerRef.current = setTimeout(() => {
+      governanceMinElapsedRef.current = true;
+      dropGovernanceGateWhenAllLanded();
+    }, GOVERNANCE_GATE_MIN_MS);
+    if (governanceGateMaxTimerRef.current) clearTimeout(governanceGateMaxTimerRef.current);
+    governanceGateMaxTimerRef.current = setTimeout(() => {
+      if (!governanceFrameLoadedRef.current) setGovernanceToolDown(true);
+      setGovernanceGateDown(true);
+    }, GOVERNANCE_GATE_MAX_MS);
+    return () => {
+      if (governanceGateMaxTimerRef.current) clearTimeout(governanceGateMaxTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headerTab]);
+
   /** THE PRODUCT ROOM'S OWN THREE HANDS — the Development effect above, mirrored exactly. */
   useEffect(() => {
     if ((headerTab || '') !== 'product') return;
@@ -5502,6 +5598,18 @@ export default function Index({
     if (seat && !seat.allowedTabs) seat.allowedTabs = DEVELOPMENT_SEAT_TABS;
   }, [headerTab]);
 
+  /** THE GOVERNANCE ROOM'S CONTAINER LOADS CLOSED — the Development pair's mirror: the
+   *  property write (never the attribute — Lit's boolean converter reads any present
+   *  attribute, "false" included, as true), the first paint already closed, and the rail's
+   *  list filled from the room's own constant while the seat carries none. */
+  useLayoutEffect(() => {
+    if ((headerTab || '') !== 'governance') return;
+    const el = governanceLayoutRef.current;
+    if (el) el.isThirdOpen = false;
+    const seat = governanceSeatRef.current;
+    if (seat && !seat.allowedTabs) seat.allowedTabs = GOVERNANCE_SEAT_TABS;
+  }, [headerTab]);
+
   /**
    * THE DEVELOPMENT ROOM HAS ITS OWN CHAT NOW — ITS OWN PACKAGE, ITS OWN CONVERSATIONS
    * (owner, 2026-10-06: *"developers are going to have a package, they're gonna have chats
@@ -5576,6 +5684,65 @@ export default function Index({
     return () => { cancelled = true; };
   }, [headerTab]);
 
+  /**
+   * THE GOVERNANCE ROOM HAS ITS OWN CHAT — ITS OWN PACKAGE, ITS OWN CONVERSATIONS (the
+   * owner's per-room law, 2026-10-06: *"Every room has its own packages its own output.
+   * It's own conversation IDs."*). The bridge ensures the room's OWN package (a
+   * `prompt_sessions` row marked `governance_room`, hidden from the console's cards) with
+   * its own conversation, and the seat binds THAT — the Development seat's mechanism,
+   * third room. The rail is the room's own list; what answers a governance turn is the
+   * platform's own assistant, exactly as in the Composer — stated so, not dressed up.
+   */
+  useEffect(() => {
+    if ((headerTab || '') !== 'governance') return;
+    const seat = governanceSeatRef.current;
+    if (!seat) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/builder/governance/room`, {
+          method: 'POST',
+          headers: { 'X-User-ID': getStoredUserId() },
+        });
+        const body = (await res.json().catch(() => null)) as
+          | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
+          | null;
+        if (cancelled) return;
+        if (!body?.ok || !body.session_id || !body.conversation_id) {
+          /* SETTLED — the seat stands as it is, and the cover never outlives the honest state. */
+          governanceSeatSettledRef.current = true;
+          dropGovernanceGateWhenAllLanded();
+          return;
+        }
+        const unreported = assignProps(seat, {
+          sessionId: body.session_id,
+          conversationId: body.conversation_id,
+          packageTitle: String(body.label || 'Governance'),
+          allowedTabs: GOVERNANCE_SEAT_TABS,
+          instructions:
+            'The Governance room carries the governance team\'s own conversations. Answer briefly and about the work in front of the person.',
+          // The seat's third state — omitted is REFUSED, not defaulted. False: no workspace seats bound.
+          graceLiveContext: false,
+          // A tab click is not a turn (the product room's measurement).
+          tracePrompt: false,
+        });
+        if (unreported.length) {
+          console.warn(`[governance seat] unreported bindings: ${unreported.join(', ')}`);
+        }
+        governanceSeatSettledRef.current = true;
+        dropGovernanceGateWhenAllLanded();
+      } catch {
+        /* a failed room fetch leaves the seat as it stands — settled all the same: the
+           cover must not keep standing over a chat that will never arrive. */
+        if (!cancelled) {
+          governanceSeatSettledRef.current = true;
+          dropGovernanceGateWhenAllLanded();
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [headerTab]);
+
   useEffect(() => {
     // BOTH ROOMS' FRAMES ANNOUNCE THEMSELVES HERE (2026-10-05; Development's half is back,
     // 2026-10-06): the announcement is a bare window event and either embed raises it, so the
@@ -5587,6 +5754,15 @@ export default function Index({
         developmentFrameLoadedRef.current = true;
         setDevelopmentToolDown(false);
         dropDevelopmentGateWhenAllLanded();
+        return;
+      }
+      if (tab === 'governance') {
+        governanceFrameLoadedRef.current = true;
+        setGovernanceToolDown(false);
+        /* THE FRAME IS UP — assert the pane's width from a beat where the room is standing
+           (the product half's lesson, one room over). */
+        assertPaneWidth(governanceLayoutRef.current);
+        dropGovernanceGateWhenAllLanded();
         return;
       }
       if (tab === 'product') {
@@ -6757,6 +6933,11 @@ export default function Index({
           return;
         }
         const jobId = crypto.randomUUID();
+        // THE ROOM SAYS WORK STARTED — here, where the request actually starts, and not at the
+        // submit: the guards above can return without a request, and a wait that nothing would
+        // end must not begin (see workspace-layout's `_onIngestStarted`). The settle goes out in
+        // `finally` below for the same reason read backwards: every outcome ends the wait.
+        window.dispatchEvent(new CustomEvent('ingest-started'));
         const res = await apiFetch(`${API_BASE}/figma/ingest`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -6882,6 +7063,8 @@ export default function Index({
         });
       } finally {
         setDesignIngestBusy(false);
+        // Success, a refusal, a network failure — every outcome settles the room's wait.
+        window.dispatchEvent(new CustomEvent('ingest-settled'));
       }
     };
     window.addEventListener("ingest-submit", onIngestSubmit);
@@ -7696,11 +7879,15 @@ export default function Index({
     }
 
     if (tabId === 'governance') {
-      // GOVERNANCE GOES THROUGH ITS OWN PROCESS (2026-10-03) — the product branch's shape: the
-      // room's own assembly is asked, and nothing of the Composer's is called or touched.
+      // THE ROOM IS THE FRAME NOW (owner, 2026-10-07: *"pop it in there"*). The product
+      // branch's shape, one room over: the pane mounts <builder-embed> (OpenMetadata, the
+      // stakeholder monitoring interface — its login KEPT as the tool's own administrative
+      // layer: *"this is an administrative tool and I want another layer"*) and the room's
+      // own seat binds its own package (the seat effect below); no surface is asked for and
+      // no model call happens on arrival. `assembleGovernanceSurface` and its tree/state
+      // STAY IN THE FILE, unwired, rather than deleted: the ledger's surface may return,
+      // and a deleted door is not a decision this host gets to make alone.
       handleHeaderTabChange('governance');
-      console.log('🤖 [A2UI] Governance clicked → intent: render-governance (its own process)');
-      void assembleGovernanceSurface();
       return;
     }
 
@@ -10847,7 +11034,101 @@ export default function Index({
                             </>
                           )
                           : headerTab === 'governance'
-                            ? <a2ui-renderer key="governance-render" ref={governanceRendererRef} />
+                            ? (
+                              <>
+                                {/* THE GOVERNANCE ROOM IS THE FRAME NOW (owner, 2026-10-07:
+                                    *"pop it in there"* — OpenMetadata placed in the
+                                    stakeholder-monitoring role; its login KEPT as the tool's
+                                    own administrative layer: *"this is an administrative
+                                    tool and I want another layer"*). The Development room's
+                                    structure, third instance: left column = the tool
+                                    (loopback-only, plain programs — governance/preview; its
+                                    permanent home is the owner's later call), right column
+                                    = the platform's chat seat (its own package, its own
+                                    conversations — nothing borrowed from another room). No
+                                    surface is assembled for this room and no model call
+                                    happens on arrival; the assembled ledger surface stays
+                                    unwired in the file. */}
+                                {/* THE ROOM'S OWN RELATIVE GROUND — THE COVER'S FRAME (the
+                                    development room's pattern): the staged opening spans the
+                                    WHOLE room, both columns. Layout-neutral wrapper, clipped
+                                    like the sandbox's viewport. */}
+                                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
+                                <workspace-layout key="governance-room" ref={governanceLayoutRef} className="flex-1 min-h-0">
+                                {/* THE SLOT ADDS NOTHING — ONE WAVE FOR THE WHOLE ROOM (late
+                                    2026-10-07): the room-level ground (the "workspace" slot)
+                                    wears the wave (cover, centred), so this slot goes transparent —
+                                    the app's own transparent page grounds (house patch §2) and the
+                                    chat side both show the SAME single wave, edge to edge, with no
+                                    seam and no composer image showing beside the chat rail. */}
+                                  <div slot="left" style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: '100%', height: '100%', minHeight: 0 }}>
+                                {/* THE COPY TAKES THE LEFT EDGE (2026-10-07): the room's own navigation — the
+                                    transferred nav, governance/nav-copy — stands as its own column at the
+                                    left edge; its rows post their path to this page, which writes it onto
+                                    the embed (navigateGovernanceTool above). The app's own sidebar hides
+                                    behind the copy (house patch §21). The framed page is served at /govnav
+                                    (public/govnav -> governance/nav-copy — one source of truth, no copy to
+                                    drift). */}
+                                {governanceToolUrl() && (
+                                <GovernanceNavFrame onNavigate={navigateGovernanceTool} />
+                                )}
+                                {governanceToolUrl() && (
+                                <builder-embed
+                                  key="governance-workspace"
+                                  ref={governanceEmbedRef}
+                                  src={governanceToolUrl()}
+                                  style={{
+                                    display: 'block', flex: '1 1 0%', minWidth: 0, height: '100%',
+                                    opacity: governanceGateDown ? 1 : 0,
+                                    transition: 'opacity 700ms ease',
+                                  }}
+                                />
+                                )}
+                                {/* NO FALLBACK — the owner's law. No address, or a frame that
+                                    never arrived: the pane keeps its own ground and draws
+                                    NOTHING, exactly as the Product and Development rooms do. */}
+                                  </div>
+                                  {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the
+                                      console and composer mount, in the container's right
+                                      pane. CLOSED on entry (the layout effect sets
+                                      `isThirdOpen = false` as a PROPERTY); the seat binds
+                                      the room's OWN package (the seat effect above) and its
+                                      rail is the room's own list (GOVERNANCE_SEAT_TABS). */}
+                                  <chat-panel key="governance-seat" slot="right" ref={governanceSeatRef}></chat-panel>
+                                </workspace-layout>
+                                {/* THE RAIL RETIRES FOR THIS ROOM (late 2026-10-07): the app's own
+                                    navigation is restored and operating (house patch §20) — chevron
+                                    toggle, labels, hover tooltips, expandable sections — exactly
+                                    as the development room's tool navigation IS its navigation.
+                                    Deactivated, not deleted: one line to bring back. */}
+                                {/* {governanceToolUrl() && (
+                                  <GovernanceAssemblyRail onNavigate={navigateGovernanceTool} toolUp={!governanceToolDown} />
+                                )} */}
+                                {governanceToolUrl() && !governanceToolDown && (
+                                /* THE STAGED OPENING — the Development gate's pattern, third
+                                   room: three hands (minimum, frame, seat), one 700ms
+                                   cross-fade, the room eases in underneath; the ceiling drops
+                                   the cover honestly if a hand never lands. */
+                                <div
+                                  aria-hidden={governanceGateDown}
+                                  style={{
+                                    position: 'absolute', inset: 0, zIndex: 3,
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                                    backgroundImage: `url(${dataWave3Background})`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center',
+                                    opacity: governanceGateDown ? 0 : 1,
+                                    transition: 'opacity 700ms ease',
+                                    pointerEvents: governanceGateDown ? 'none' : 'auto',
+                                  }}
+                                >
+                                  <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                                  <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
+                                    {"Standing up the governance workspace\u2026"}
+                                  </p>
+                                </div>
+                                )}
+                                </div>
+                              </>
+                            )
                             : <a2ui-renderer key="composer-render" ref={composerRendererRef} />)
                   )}
                   {/*

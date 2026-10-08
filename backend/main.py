@@ -28,6 +28,7 @@ load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -35,7 +36,17 @@ from grace_gui import (
     load_logs_to_vectorstore,
 )
 
-app = FastAPI(title="Grace AI API", description="Backend API for Grace AI assistant")
+# ── THE CDN PAGES ARE OFF (owner's lockdown, 2026-10-07: "no API call to any external ─────────
+# anything") — FastAPI's default /docs and /redoc pull swagger-ui / redoc bundles from
+# cdn.jsdelivr.net the moment anyone opens them. The custom /docs below serves the same
+# Swagger UI with the bundle vendored into this repository; /redoc is off (it would need its
+# own 1 MB standalone vendored the same way — say the word and it comes back).
+app = FastAPI(
+    title="Grace AI API",
+    description="Backend API for Grace AI assistant",
+    docs_url=None,
+    redoc_url=None,
+)
 
 # Configure CORS
 app.add_middleware(
@@ -47,6 +58,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── THE DOCS PAGE, SERVED FROM THIS REPOSITORY (owner's lockdown, 2026-10-07) ─────────────────
+# The two files were fetched once into backend/static/swagger/ (the same swagger-ui-dist
+# version FastAPI pins, 5.9.0) — from here on /docs answers from this origin and no request
+# leaves the machine. redoc_url is None (see the note on the app above).
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")),
+    name="static",
+)
+
+
+@app.get("/docs", include_in_schema=False)
+async def house_docs():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " — API",
+        swagger_js_url="/static/swagger/swagger-ui-bundle.js",
+        swagger_css_url="/static/swagger/swagger-ui.css",
+    )
 
 
 @app.on_event("startup")
@@ -165,6 +197,27 @@ async def usage_ledger(request: Request, call_next):
     return response
 
 
+# ── THE FONTS, SERVED FROM SOURCE — NOT FROM dist (2026-10-07) ────────────────────────────────
+# The self-hosted sheet and its woff2 files live in frontend/public/fonts/, and backend origins
+# need them served: the figma-intake page (/api/governance/figma-intake) links
+# /fonts/fonts.css, and pages built before the 2026-10-07 rename still ask for
+# /fonts/inter.css. Before this mount, a /fonts/* request 404ed and the SPA fallback answered
+# it with index.html — a font request answered by an HTML page is a page without its fonts.
+#
+# THE SOURCE, NOT THE BUILD OUTPUT: frontend/dist/fonts/ exists only after a frontend build and
+# is stale the moment font files change. Local runs serve the site from source (Vite on 5001 —
+# "never a build"), and the production image copies frontend/public/ for exactly this mount
+# (see the Dockerfile). One folder, both worlds.
+_public_fonts = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "fonts")
+if os.path.isdir(_public_fonts):
+    app.mount("/fonts", StaticFiles(directory=_public_fonts), name="fonts")
+else:
+    print(
+        f"⚠️  fonts dir not found at {_public_fonts} — /fonts will not be served "
+        "and pages load system faces instead of the house fonts",
+        file=sys.stderr,
+    )
+
 # ── Serve production frontend (SPA) ────────────────────────────────────
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(frontend_dist):
@@ -211,7 +264,15 @@ if os.path.isdir(frontend_dist):
     async def spa_fallback(request: Request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if response.status_code == 404 and request.method == "GET" and not path.startswith("/api/"):
+        # AND /fonts/ IS NOT A PAGE. A font request the mount above could not answer must fail
+        # as a font — answering it with index.html (text/html) is the bug this guard exists to
+        # prevent; the browser refuses an HTML page where it asked for a stylesheet or a face.
+        if (
+            response.status_code == 404
+            and request.method == "GET"
+            and not path.startswith("/api/")
+            and not path.startswith("/fonts/")
+        ):
             index_path = os.path.join(frontend_dist, "index.html")
             if os.path.isfile(index_path):
                 return FileResponse(

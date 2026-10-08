@@ -31,6 +31,7 @@
  */
 import { LitElement, html, css } from 'lit';
 import modelMark from '@/assets/figma-readout-model-mark.svg';
+import { figureStyles, figures } from '@/shared/figures';
 
 export class OutputHeader extends LitElement {
   /** The status line. Empty draws the drawing's own sample. */
@@ -47,7 +48,7 @@ export class OutputHeader extends LitElement {
     calls: { type: String },
   };
 
-  static styles = css`
+  static styles = [figureStyles, css`
     /* 40001119:6308 "output-header" — 540 wide, HUG/HUG, column, gap 5, pad 16/20/0/20,
        #CBE6E3, primary CENTER (the blocks centre across the column). */
     :host {
@@ -93,9 +94,11 @@ export class OutputHeader extends LitElement {
     }
 
     /* 40001123:6750 — the line: Arial Rounded MT Bold 400 at 12, 20px leading, #3D515B, in its
-       box. The text box is 450×43 against the 450×40 frame above it — the drawing's geometry. */
+       box. The text box is 450×43 against the 450×40 frame above it — the drawing's geometry.
+       Drawn in Nunito, per the owner's face ruling, 2026-10-07 (the drawing's Arial Rounded ->
+       Nunito); the line's figures render Inter via the figures helper. */
     .line {
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-weight: 400;
       font-size: 12px;
       line-height: 20px;
@@ -149,7 +152,8 @@ export class OutputHeader extends LitElement {
       border-radius: 50%;
       box-sizing: border-box;
     }
-  `;
+  `,
+  ];
 
   /** The drawing's own line (#40001123:6750), when the seat hands none. */
   private static readonly SAMPLE =
@@ -170,7 +174,7 @@ export class OutputHeader extends LitElement {
       <div class="area" data-node-id="40001119:6308" data-layer-name="output-header">
         <div class="readout-area" data-node-id="40001119:6309" data-layer-name="chat-output-readout-area" role="status">
           <div class="textarea" data-node-id="40001123:6763" data-layer-name="textarea">
-            <p class="line" data-node-id="40001123:6750" data-layer-name="Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text">${this._line}</p>
+            <p class="line" data-node-id="40001123:6750" data-layer-name="Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text">${figures(this._line)}</p>
           </div>
           <div class="mark-box" data-node-id="40001124:7096" data-layer-name="model-readout-tokens-etc">
             <img

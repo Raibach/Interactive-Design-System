@@ -22,7 +22,9 @@ visible defect in this file, not a silent loss in a component.
 WHAT IT DOES NOT DO:
   * it never invents a value — a missing measurement produces no declaration, not a plausible one;
   * it never renames or reinterprets — layer names are kept, and the class name is derived from the
-    name by the same rule everywhere;
+    name by the same rule everywhere; the ONE declared translation is the font-face map (see
+    `_FONT_SUBSTITUTIONS` — the owner's font ruling, 2026-10-07), applied openly at the two
+    places a family is emitted, never anywhere else;
   * it is unaware of the model. Nothing in this module imports, calls or waits for one.
 """
 
@@ -358,6 +360,28 @@ def _on_click_events(spec: dict[str, Any]) -> list[str]:
     return found
 
 
+# ── THE FACE SUBSTITUTIONS (the owner's font ruling, 2026-10-07) ─────────────────────────────
+# "Arial or rounded fonts -> becomes Nunito (found in chat interfaces for Grace). Inter ->
+# everywhere else. Numbers -> Inter. Use our fonts only - no API calls." A measured design that
+# states one of the faces below is EMITTED with the local face that draws it — the same rule the
+# hand-carried chat components wear since the same day — because a component that asks for a
+# face this repository does not ship falls back to whatever the machine happens to have, which
+# is the drift the ruling exists to end. Everything not listed keeps the design's own family:
+# this is a declared translation, not an interpretation, and this map is the whole of it.
+_FONT_SUBSTITUTIONS = {
+    "Arial Rounded MT Bold": "Nunito",
+    "Arial": "Nunito",
+    # The conversations card's face in chat-header; the owner ruled both chat cards Nunito
+    # (2026-10-07, asked which local family replaces DM Sans).
+    "DM Sans": "Nunito",
+}
+
+
+def _local_face(family: str) -> str:
+    """The family as emitted: substituted per the owner's ruling, or the design's own."""
+    return _FONT_SUBSTITUTIONS.get(family, family)
+
+
 def _text_html(node: dict[str, Any]) -> str:
     """A measured text layer, as markup: the runs styled as measured, the words escaped.
 
@@ -392,7 +416,7 @@ def _text_html(node: dict[str, Any]) -> str:
         style = run.get("style") or {}
         declarations = []
         if style.get("fontFamily"):
-            declarations.append(f"font-family: {_css_string_in_attr(style['fontFamily'])}, sans-serif")
+            declarations.append(f"font-family: {_css_string_in_attr(_local_face(style['fontFamily']))}, sans-serif")
         if style.get("fontWeight"):
             declarations.append(f"font-weight: {style['fontWeight']}")
         if style.get("fontSize") is not None:
@@ -604,7 +628,7 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
 
     style = node.get("type_style") or {}
     if style.get("fontFamily"):
-        out.append(f"font-family: {_css_string(style['fontFamily'])}, sans-serif")
+        out.append(f"font-family: {_css_string(_local_face(style['fontFamily']))}, sans-serif")
     if style.get("fontWeight"):
         out.append(f"font-weight: {style['fontWeight']}")
     if style.get("fontSize") is not None:

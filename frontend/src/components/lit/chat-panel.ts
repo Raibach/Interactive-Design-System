@@ -1446,7 +1446,11 @@ export class ChatPanel extends LitElement {
        * thread and the view slot both carry overflow-y: auto — so this box is not a
        * scroll container and has no overflow to contain.
        */
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+      /* THE PANEL'S FACE — NUNITO, per the owner's ruling, 2026-10-07: "Arial or rounded
+         fonts -> becomes Nunito (found in chat interfaces for Grace)... Use our fonts
+         only - no API calls." The panel is chat; the figures its children draw render
+         Inter (.num). */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-size: 14px;
       color: #1c2f4e;
     }

@@ -261,9 +261,13 @@ def _create_app() -> FastAPI:
         ),
         version="1.17.0",  # x-release-please-version
         lifespan=lifespan,
-        docs_url=f"{base_path}/docs",
+        # THE CDN PAGES ARE OFF (owner's lockdown, 2026-10-07): the default /docs and
+        # /redoc pull their bundles from cdn.jsdelivr.net (and a docs font from Google) on
+        # open — external calls this repository no longer makes. openapi.json stays: it
+        # is served from this process and reaches nothing.
+        docs_url=None,
         openapi_url=f"{base_path}/openapi.json",
-        redoc_url=f"{base_path}/redoc",
+        redoc_url=None,
     )
 
 

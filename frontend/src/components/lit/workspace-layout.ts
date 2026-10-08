@@ -518,6 +518,15 @@ export class WorkspaceLayout extends LitElement {
     window.addEventListener('ingest-submit', this._onDesignRun);
     window.addEventListener('open-component', this._onDesignRun);
     /*
+     * AND THE WAIT IS SPOKEN BY THE SHELL, AROUND THE REQUEST ITSELF (owner, 2026-10-05: the
+     * missing "load middle column effect"). `ingest-submit` fires the dock before the shell has
+     * even looked at the link — an invalid one returns without a request — so the WAIT listens
+     * to the request's own two statements instead: `ingest-started` right before the fetch goes
+     * out, `ingest-settled` when its answer lands, refusal included. See `_onIngestStarted`.
+     */
+    window.addEventListener('ingest-started', this._onIngestStarted);
+    window.addEventListener('ingest-settled', this._onIngestSettled);
+    /*
      * AND `flow-select` IS NOT LISTENED FOR HERE ANY MORE.
      *
      * It was, to bring her column back when a person picked a node — at her width, taking the
@@ -551,6 +560,8 @@ export class WorkspaceLayout extends LitElement {
     window.removeEventListener('a2ui:run-held', this._onRunHeld);
     window.removeEventListener('ingest-submit', this._onDesignRun);
     window.removeEventListener('open-component', this._onDesignRun);
+    window.removeEventListener('ingest-started', this._onIngestStarted);
+    window.removeEventListener('ingest-settled', this._onIngestSettled);
     window.removeEventListener('flow-view-ready', this._onFlowViewReady);
     if (this._dockTimer !== null) window.clearTimeout(this._dockTimer);
     /*
@@ -912,6 +923,7 @@ export class WorkspaceLayout extends LitElement {
      * itself until the drawing lands). See `.pane.middle.working` in render().
      */
     this._runInFlight = true;
+    this._waitingLabel = 'Assembling the drawing…'; // the composer's own sentence, restored
     this.requestUpdate();
   };
 
@@ -924,6 +936,15 @@ export class WorkspaceLayout extends LitElement {
   private _runInFlight = false;
 
   /**
+   * THE SENTENCE THE WAIT DRAWS. The composer's Run is an assembly — "Assembling the drawing…",
+   * the pane's own line, unchanged. A design ingest renders the component from the design's own
+   * measurements and no model runs, so it says that instead (`_onIngestStarted`); the settle
+   * handler and the composer's own docks restore the default. One field, because one pane draws
+   * both waits.
+   */
+  private _waitingLabel = 'Assembling the drawing…';
+
+  /**
    * THE DRAWING IS ON SCREEN, so the room is done waiting: the wait state ends here and the list's
    * own dock (which this signal also carries) still lands. One handler, because both are statements
    * about the same moment.
@@ -931,6 +952,36 @@ export class WorkspaceLayout extends LitElement {
     private _onFlowViewReady = (): void => {
       this._runInFlight = false;
       this._dockNow();
+    };
+
+    /**
+     * THE WAIT, FOR AN INGEST (owner, 2026-10-05). A design submit docked her and then the middle
+     * stayed empty until the answer arrived — no load state, where a composer Run has one from
+     * the moment it starts (`dockPrompt`). This is that same state, raised by the shell around
+     * the actual request (`ingest-started` just before it goes out, `ingest-settled` when the
+     * answer lands — success or refusal), so a submit the shell turns away without a request
+     * (an invalid link, a tag) never starts a wait that nothing would end. The form stays open —
+     * a refusal's sentence lands THERE — and the middle holds the space the docked chat gave up
+     * (`middleGrow` reads the same flag).
+     */
+    private _onIngestStarted = (): void => {
+      if (this.getBoundingClientRect().width <= 0) return; // the room on screen, and only it
+      this._runInFlight = true;
+      this._waitingLabel = 'Rendering the design…';
+      this.requestUpdate();
+    };
+
+    /**
+     * THE INGEST SETTLED — AND NOTHING MORE IS COMING. On success the middle has its content by
+     * now (`_hasMiddle` turns true on the slot and ends `waiting` on its own); on a refusal this
+     * is the only thing that ends it, because a spinner left spinning over a refusal is a lie
+     * about what is coming.
+     */
+    private _onIngestSettled = (): void => {
+      if (!this._runInFlight) return;
+      this._runInFlight = false;
+      this._waitingLabel = 'Assembling the drawing…';
+      this.requestUpdate();
     };
 
     /**
@@ -1017,6 +1068,7 @@ export class WorkspaceLayout extends LitElement {
      * yet — and it ends when the room has content or the Run is called off.
      */
     this._runInFlight = true;
+    this._waitingLabel = 'Assembling the drawing…'; // the composer's own sentence, restored
     this._dockLeft();
     /*
      * HER COLUMN IS NOT TOUCHED BY THE DOCK, and that is the owner's 2026-09-24 reversal — see
@@ -1720,8 +1772,15 @@ export class WorkspaceLayout extends LitElement {
      * arrived in it yet — the column is already the canvas's place, and an empty stretch of it for
      * one beat reads as the picture coming, which is what it is. She keeps her own width and her
      * own edge, and the dock is the only thing that moves.
+     *
+     * AND AN INGEST'S WAIT HOLDS THE ROOM WITH THE FORM STILL OPEN (2026-10-05). The composer's
+     * wait has its left docked, so `_leftCollapsed` covered it; a design ingest keeps the form
+     * open — a refusal's sentence lands there — so an in-flight request is the second way the
+     * middle holds the space. `waiting` (below) is the same fact read for the render.
      */
-    const middleGrow = this._hasMiddle ? this._middle : (this._leftCollapsed ? 1 : 0);
+    const middleGrow = this._hasMiddle
+      ? this._middle
+      : ((this._leftCollapsed || this._runInFlight) ? 1 : 0);
     /*
      * AND WHILE THE ROOM IS EMPTY, THE ROOM SPEAKS — the one thing on screen that can.
      *
@@ -1912,14 +1971,14 @@ export class WorkspaceLayout extends LitElement {
       <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'} ${waiting ? 'working' : ''}" style="flex: ${share(middleGrow)} 1 0%;">
         <slot name="middle" @slotchange=${this._onMiddleSlotChange}></slot>
         <!-- THE ROOM SAYS IT IS WORKING WHILE IT WAITS FOR ITS COLUMN — see the waiting flag.
-             The wait is the MODEL composing the column (seconds), then the drawing (see the host's
-             sequence), so this is the window in which the panes have just slid back and there is
-             nothing here yet. Nothing is painted behind it: the person's own ground shows through,
-             which is the rule for this view. -->
+             The wait is an assembly composing the column (seconds), or a design ingest rendering
+             from its measurements (see the host's sequences) — either way this is the window in
+             which the panes have just slid back and there is nothing here yet. Nothing is painted
+             behind it: the person's own ground shows through, which is the rule for this view. -->
         ${waiting
           ? html`<div class="waiting" role="status">
               <div class="spinner" aria-hidden="true"></div>
-              <p>Assembling the drawing…</p>
+              <p>${this._waitingLabel}</p>
             </div>`
           : nothing}
       </div>

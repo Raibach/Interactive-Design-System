@@ -24,6 +24,7 @@ import { asPlainText, stripControlTags } from '@/shared/plainText';
 import { renderMarkdown } from '@/shared/richText';
 import { HER_ANSWERS, BUILD_WIREFRAME, EDIT_NODE } from '@/shared/actionLink';
 import { resultsAreTheReading } from '@/shared/chatScroll';
+import { figureStyles, figures } from '@/shared/figures';
 // The user's turn is the design's own row, not a styled div — v.4b draws it as
 // "user-response-bubble" #40001119:6352 and this element draws that element.
 import './user-response-bubble';
@@ -193,7 +194,7 @@ export class ChatMessages extends LitElement {
     return `Worked for ${secs}s`;
   }
 
-  static styles = css`
+  static styles = [figureStyles, css`
     :host { display: flex; flex-direction: column; min-height: 0; }
     /* IT DOES NOT SCROLL. The column does — see chat-panel's .content-scroll — so this
        thread is as tall as its turns and the one scrollbar belongs to the column. An
@@ -209,7 +210,12 @@ export class ChatMessages extends LitElement {
          not sitting right on the edge." (The same ask he made for the chat outputs on
          2026-09-19 earlier, and it is the same number.) */
       padding: 0 0 10px;
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+      /* NUNITO, NOT THE DRAWING'S ARIAL ROUNDED MT BOLD — the owner's face ruling,
+         2026-10-07: "Arial or rounded fonts -> becomes Nunito (found in chat interfaces for
+         Grace). Inter -> everywhere else. Numbers -> Inter. Use our fonts only - no API
+         calls." The thread is chat: it takes the rounded face, and its figures (the work
+         clock's "12s") render Inter through the figures helper. */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;
       color: var(--chat-text, #171717);
@@ -381,7 +387,8 @@ export class ChatMessages extends LitElement {
        help you today… if it's gotta be hardcoded"): her real words come from an assembly, and
        a brand-new conversation has had none. */
     .empty {
-      font-family: 'Arial Rounded MT Bold', 'Inter', system-ui, sans-serif;
+      /* Nunito, per the owner's face ruling — see .thread above. */
+      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 20px;
@@ -438,7 +445,8 @@ export class ChatMessages extends LitElement {
     /* No conversation selector here. The design puts it in the output area as
        <small-dropdown label="Conversations"> (chat-output-slot-area #40001085:1521),
        so this element is the thread and nothing else. */
-  `;
+  `,
+  ];
 
   private _roleOf(m: ChatMessage): string {
     const raw = String(m.role ?? (m as { type?: string }).type ?? 'assistant');
@@ -711,7 +719,7 @@ export class ChatMessages extends LitElement {
                     <path d="M6 18a4 4 0 0 1-2-7.464"/>
                     <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>
                   </svg>
-                  <span class="work-label ${this.sending ? 'shimmer' : ''}">${this._workLabel()}</span>
+                  <span class="work-label ${this.sending ? 'shimmer' : ''}">${figures(this._workLabel())}</span>
                   <svg class="work-chevron ${this._workOpen ? 'open' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="m6 9 6 6 6-6"/>
                   </svg>

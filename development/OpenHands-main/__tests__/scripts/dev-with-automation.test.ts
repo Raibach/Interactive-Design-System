@@ -250,10 +250,10 @@ describe("buildAgentServerAutomationEnv", () => {
 
 describe("buildAutomationTelemetryEnv", () => {
   it("provides the shared frontend PostHog key to automation by default", () => {
+    // LOCKDOWN 2026-10-07: the defaults are blank/dead in this tree (see config/defaults.json).
     expect(buildAutomationTelemetryEnv({})).toEqual({
-      AUTOMATION_POSTHOG_API_KEY:
-        "phc_kBtz5nKmxVRRQ7HtPwr2QX9eMC5j65zE86QKocVNwb4U",
-      AUTOMATION_POSTHOG_HOST: "https://us.i.posthog.com",
+      AUTOMATION_POSTHOG_API_KEY: "",
+      AUTOMATION_POSTHOG_HOST: "http://127.0.0.1:9",
     });
   });
 

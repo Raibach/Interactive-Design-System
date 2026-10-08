@@ -3,6 +3,32 @@
 Built by **John Holt, Raibach Interactive Design System** <sub>{impromptu}</sub>
 
 
+**[2026-10-07] — The lockdown: every host that called out is cut, every one that remains is declared**
+
+The font ruling became a repo-wide one. Owner: *"no API call to any external anything … This is a secure lockdown enterprise repo."* The fonts entry below is part of this; the rest of the sweep is recorded with verification receipts in `READ-ME/NETWORK-LOCKDOWN.md` — the one register of every host, every cut, and every deliberate exception.
+
+- **The site calls nothing external to render itself.** Fonts are self-hosted (entry below); the API's `/docs` stopped fetching its swagger bundle and stylesheet from a public CDN — swagger-ui is vendored into `backend/static/swagger/` and served by our own route (`/redoc` off — one word to vendor it too); the pages the fidelity renderer writes link the app's own font sheet.
+- **Grace's external tools are refused at the door.** `tool_run._get()` — the backend's single fetch door — refuses `news.google.com` and `en.wikipedia.org` with the host named in the refusal, unless the host operator deliberately sets `ALLOW_EXTERNAL_TOOLS=1`. No silent default can re-arm them.
+- **The Development room's tool was swept the same way** — its vendor font imports cut, its 186 remote icon URLs deadened, its telemetry blanked at the source and in every build (the baked PostHog key is gone from the tree; hosts point at a closed loopback port; consent denied). All of it held by one idempotent script, `development/openhands-patch.sh` (items 9–11), re-applied at every restart and inside every hosted build — so updating the tool cannot quietly re-arm a call. Its Python halves' `/docs` pages no longer load from a CDN either.
+- **The builder's silent third-party fallback is deleted** — with `VCAAS_BASE_URL` unset it now refuses loudly instead of reaching a hosted vendor.
+- **What remains, declared, is three things:** the model endpoint (`api.deepseek.com` — Grace, the builder engine, and the restart script's one-token status check; the building-time exception), Figma (`api.figma.com` — only when an ingest is run), and SMTP (the app's own emailer, env-gated and inert when unset). Nothing else calls out; a grep manifest of remaining record-only strings (guards, needles, changelogs, archives) is in the register.
+
+
+**[2026-10-07] — The fonts are ours: every face self-hosted, no external font call anywhere**
+
+The owner's ruling, in his words: *"Arial or rounded fonts -> becomes Nunito (found in chat interfaces for Grace). Inter -> everywhere else. Numbers -> Inter. Use our fonts only - no API calls."* The site's last external font paths are gone, and every face comes from the fonts this repository ships (`rids_resources/fonts_res/`).
+
+- **One sheet, one place.** `frontend/public/fonts/fonts.css` declares Inter (100–900) and Nunito (200–1000) as latin + latin-ext woff2 — Nunito cut from the local TTFs with pyftsubset, the same subset ranges Google serves. `inter.css` remains a one-line redirect so pages built before the rename keep resolving. Every entry point links the sheet by name — the app, the preview documents, the figma-intake page — and `backend/main.py` mounts `/fonts` so a backend origin serves it too (the Dockerfile copies `frontend/public` for it).
+- **The chat's rounded face is Nunito, drawn locally.** Nine components — chat-panel, chat-header, chat-messages, chat-fold, chat-plugin-tray, user-response-bubble, agent-card-element, output-header, output-footer-area — carried `Arial Rounded MT Bold` (and one `DM Sans` line, ruled Nunito the same day) and now draw Nunito; the drawings' own names stay in the records.
+- **Numbers render Inter even inside the rounded chat** — the figure and its unit as one token ("12s", "89.38%", "28.495s", "1,234") while the words around it keep the chat's voice (`frontend/src/shared/figures.ts`).
+- **The two render paths stop reaching Google.** The fidelity renderer carries the app's own sheet, resolved to local files — and REFUSES to render rather than draw substitute faces; the figma-intake page links `/fonts/fonts.css`. The deterministic design renderer translates measured faces through one declared map (Arial Rounded MT Bold / Arial / DM Sans → Nunito).
+- **The Development room's workspace obeyed the same ruling** — its vendor sheet's two dead Google imports are cut by `development/openhands-patch.sh` (item 9), with the link repointed to the stripped sheet (development/CHANGELOG.md, 2026-10-07).
+- **The one list** of every place a font is set across the site lives beside the font files: `rids_resources/fonts_res/FONTS.md`.
+- **Verified**: the running site loads Inter + Nunito from this origin alone (browser measurement — zero external hosts), `tsc -b` clean, the catalog audit run, the headless render draws Nunito from the local files or refuses loudly when they are missing.
+
+Archives and vendored material keep the links they were archived with — recorded in FONTS.md §9.
+
+
 **[2026-10-01] — Grace's words belong to the room, and a room that states none is refused**
 
 She is a different thing in each room, and until today the sentence that decided which one was compiled into the browser. 11,562 characters of the composer's script sat in `chat-panel.ts` and were sent as the context of every turn in every room — so in Design she introduced herself as the Agentic Flow Architect and reasoned about prompt pipelines over a component tree. The room owns her words now: the assemblies write them (`COMPOSER_GRACE_INSTRUCTIONS`, `CONSOLE_GRACE_INSTRUCTIONS`, and Design's own script composed from the database), the seat is bound to that path by the assembly that draws the surface, and the compiled copy is deleted.

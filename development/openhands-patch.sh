@@ -77,6 +77,29 @@
 #      async module — on a warm cache it can execute first. It lives INSTEAD in the head's
 #      TRAILING ZONE — the last nodes before </head>, together with the stylesheet link —
 #      and the zone is the #418 lesson below.
+#   9. THE GOOGLE FONTS GO (owner's cut, 2026-10-07 — *"Use our fonts only - no API calls"*):
+#      the vendor sheet opened with two @imports pulling Outfit and IBM Plex Mono from
+#      fonts.googleapis.com. Measured on this build: NOTHING references either family — every
+#      stack resolves through the system var fallbacks (--font-sans / --font-mono) — so
+#      deleting the imports changes no pixel; what it deletes is two calls that left the
+#      machine on every cold load. The stripped sheet is ALSO copied to a content-hashed
+#      house url and the <link> is repointed there: the vendor file is immutable-cached for
+#      a year on :8090 (measured), so an in-place edit alone never reaches a browser that has
+#      already loaded it — a new url carries the cut on the next ordinary reload (the same
+#      mechanism as the stylesheet above). Idempotent like everything here: a re-run after
+#      an update re-strips, re-hashes and re-points.
+#  10. THE ICON CDN GOES (owner's lockdown, 2026-10-07: *"no API call to any external
+#      anything"*). The integrations catalog shipped with the tool pulls ~40 remote logo
+#      marks from cdn.simpleicons.org — fetched BY THE BROWSER whenever those surfaces
+#      render. The host is rewritten to the same dead loopback the telemetry cut uses
+#      (http://127.0.0.1:9): no external request exists anywhere; where the tool keeps a
+#      bundled mark it draws it, and where it does not the image simply fails to draw.
+#      Cosmetic, deliberate, reported.
+#  11. THE TELEMETRY SOURCES DIE TOO (owner's lockdown, 2026-10-07): any long phc_ token is
+#      blanked and the PostHog hosts (z.openhands.dev, us.posthog.com, us.i.posthog.com) are
+#      pointed at the dead loopback across the whole @openhands scope — the same end state the
+#      2026-10-06 manual cut reached by hand, now re-applied on every run and after every
+#      install, belt-and-suspenders behind the consent flags the launcher already sets.
 #      WHY THE TRAILING ZONE (measured 2026-10-06): with the house nodes among the elements
 #      the app's own hydration walks, the console ran React's #418 on EVERY load — the full
 #      arrangement 6/6 reloads; the flag at the top of <head> (css link absent) 3/3; the
@@ -211,6 +234,128 @@ cp "$TMP" "$BUILD/assets/$NAME"
 rm -f "$TMP"
 echo "✅ stylesheet: assets/$NAME"
 if [ -n "$TILE_NAME" ]; then echo "✅ tile: assets/$TILE_NAME"; fi
+
+# ── 1b. THE GOOGLE FONTS GO (owner's cut, 2026-10-07 — "Use our fonts only - no API calls") ───
+# See item 9 in the header. One python pass does the strip, the house-hashed copy and the
+# <link> repoint, and it refuses loudly if the build's shape is not the one measured (exactly
+# one vendor root sheet, exactly one stylesheet link).
+python3 - "$BUILD" <<'PY'
+import glob, hashlib, os, re, sys
+
+build = sys.argv[1]
+assets = os.path.join(build, "assets")
+
+# The vendor's root sheet. Measured 2026-10-07: exactly one root-*.css, and it is the only
+# file in the whole built app that mentions fonts.googleapis.
+roots = sorted(glob.glob(os.path.join(assets, "root-*.css")))
+if len(roots) != 1:
+    raise SystemExit(f"?? fonts cut: expected exactly one vendor root-*.css under {assets}, found {len(roots)}")
+path = roots[0]
+src = open(path, encoding="utf-8").read()
+
+stripped = re.sub(r'@import\s*"https://fonts\.googleapis\.com[^"]*"\s*;?', "", src)
+if stripped == src:
+    print("ℹ️  fonts: no Google @import in the vendor sheet — already cut")
+else:
+    open(path, "w", encoding="utf-8").write(stripped)
+    print(f"✅ fonts: stripped Google @imports from {os.path.basename(path)}")
+
+# The house copy under its own content-hashed url — the same cache reasoning as the stylesheet
+# above: the vendor file is served immutable for a year, so the no-store html's <link> is what
+# carries a change to a browser that has already loaded the vendor name.
+sha = hashlib.sha256(stripped.encode("utf-8")).hexdigest()[:10]
+house = f"house-root-{sha}.css"
+for old in glob.glob(os.path.join(assets, "house-root-*.css")):
+    os.remove(old)
+open(os.path.join(assets, house), "w", encoding="utf-8").write(stripped)
+
+# Repoint the one stylesheet <link> in index.html. The vendor manifest keeps naming the
+# original file for route navigation — that file is stripped in place, so any fetch of it is
+# clean too; there is nothing to gain by editing a hashed vendor js for the cache that will
+# not read the edit anyway.
+html_path = os.path.join(build, "index.html")
+html = open(html_path, encoding="utf-8").read()
+html2, n = re.subn(
+    r'<link rel="stylesheet" href="/assets/(?:root-[^"]*|house-root-[^"]*)\.css"\s*/?>',
+    f'<link rel="stylesheet" href="/assets/{house}"/>',
+    html,
+)
+if n != 1:
+    raise SystemExit(f"?? fonts cut: expected exactly one root stylesheet link in index.html, replaced {n}")
+open(html_path, "w", encoding="utf-8").write(html2)
+print(f"✅ fonts: link → assets/{house}")
+PY
+
+# ── 1c. THE ICON CDN GOES (owner's lockdown, 2026-10-07) — see item 10 in the header ──────────
+python3 - "$BUILD" <<'PY'
+import os, sys
+
+build = sys.argv[1]
+# THE WHOLE @openhands SCOPE, not just this package: the tool ships as agent-canvas PLUS
+# sibling packages, and @openhands/extensions carries the integration catalog itself (the
+# first pass proved it — 31 catalog json files kept their live urls under a narrower walk).
+scope = os.path.dirname(os.path.dirname(os.path.abspath(build)))  # ".../@openhands"
+TARGET = "https://cdn.simpleicons.org"
+DEAD = "http://127.0.0.1:9"
+files = changed = 0
+for root in (scope,):
+    if not os.path.isdir(root):
+        continue
+    for dirpath, _dirs, names in os.walk(root):
+        for name in names:
+            if not name.endswith((".js", ".cjs", ".mjs", ".json", ".map")):
+                continue
+            p = os.path.join(dirpath, name)
+            try:
+                src = open(p, encoding="utf-8").read()
+            except (UnicodeDecodeError, OSError):
+                continue
+            if TARGET not in src:
+                continue
+            open(p, "w", encoding="utf-8").write(src.replace(TARGET, DEAD))
+            files += 1
+            changed += src.count(TARGET)
+if changed:
+    print(f"✅ icons: {changed} remote logo url(s) in {files} file(s) now point at the dead loopback")
+else:
+    print("ℹ️  icons: no live cdn.simpleicons.org urls found — already cut")
+PY
+
+# ── 1d. THE TELEMETRY SOURCES ARE DEAD (owner's lockdown, 2026-10-07) — see item 11 in the ────
+# header. Long phc_ tokens → ""; the PostHog hosts → the dead loopback; the whole @openhands
+# scope, every run.
+python3 - "$BUILD" <<'PY'
+import os, re, sys
+
+build = sys.argv[1]
+scope = os.path.dirname(os.path.dirname(os.path.abspath(build)))  # ".../@openhands"
+HOSTS = ("https://z.openhands.dev", "https://us.posthog.com", "https://us.i.posthog.com")
+DEAD = "http://127.0.0.1:9"
+KEY = re.compile(r"phc_[A-Za-z0-9]{20,}")
+files = keys = hosts = 0
+for dirpath, _dirs, names in os.walk(scope):
+    for name in names:
+        if not name.endswith((".js", ".cjs", ".mjs", ".json", ".map")):
+            continue
+        p = os.path.join(dirpath, name)
+        try:
+            src = open(p, encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        out = src
+        for h in HOSTS:
+            hosts += out.count(h)
+            out = out.replace(h, DEAD)
+        out, n = KEY.subn('""', out)
+        keys += n
+        if out != src:
+            open(p, "w", encoding="utf-8").write(out)
+            files += 1
+if files:
+    print(f"✅ telemetry: {keys} key(s) blanked, {hosts} posthog url(s) deadened in {files} file(s)")
+else:
+    print("ℹ️  telemetry: nothing to cut — already clean")
+PY
 
 # ── the HTML: the link and the ground script, in their canonical form ───────────────────────
 python3 - "$BUILD" "$NAME" "$HOSTED" <<'PY'
@@ -463,10 +608,27 @@ firstrun = '''<script id="house-patch-firstrun">
      backend is already present when a page loads (the hosted entrypoint injects its session
      key; the Mac's run is the same mechanism). With NO backend at all, the workspace has
      nothing to show and no wizard would offer to add one — revisit this preset if the tool
-     ever runs `--public`. */
+     ever runs `--public`.
+     ── AND THE FIRST-RUN CHECKLIST + THE OPEN MENU DO NOT COME BACK (owner, 2026-10-07,
+     meeting a cleared browser: *"we gotta take that memory feature out"*). The updated tool
+     reads its checklist dismissal from `openhands-sidebar-onboarding-checklist-dismissed`
+     — the literal string "true" — and its menu state from its own `openhands-sidebar`
+     store, whose migration key `openhands-sidebar-collapsed` it reads once and consumes
+     when that store is absent (both measured in the build's own modules, 2026-10-07). The
+     old seeds named keys this version never reads, which is exactly why a cleared browser
+     met the checklist and an open menu again. These writes put the CURRENT keys down
+     before the first render on every load; a menu choice the person makes later still wins
+     (the vendor's own rule). */
   try {
     if (localStorage.getItem("openhands-onboarded") === null) {
       localStorage.setItem("openhands-onboarded", "1");
+    }
+    if (localStorage.getItem("openhands-sidebar-onboarding-checklist-dismissed") !== "true") {
+      localStorage.setItem("openhands-sidebar-onboarding-checklist-dismissed", "true");
+    }
+    if (localStorage.getItem("openhands-sidebar") === null &&
+        localStorage.getItem("openhands-sidebar-collapsed") === null) {
+      localStorage.setItem("openhands-sidebar-collapsed", "true");
     }
   } catch (e) {}
 </script>'''
