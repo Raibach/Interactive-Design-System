@@ -41,7 +41,10 @@ server {
     proxy_set_header Accept-Encoding "";
     # The seeded admin session, minted once via the stock NextAuth sign-in
     # flow (10-year expiry thanks to AUTH_SESSION_MAX_AGE on langfuse-web).
-    proxy_set_header Cookie "__Secure-next-auth.session-token=${RAIBACH_SESSION_COOKIE}";
+    # Inject the session under BOTH cookie-name variants in one header:
+    # NextAuth expects the __Secure- name on https and the plain name on http.
+    # Same token either way — keeps one tree serving both worlds.
+    proxy_set_header Cookie "next-auth.session-token=${RAIBACH_SESSION_COOKIE}; __Secure-next-auth.session-token=${RAIBACH_SESSION_COOKIE}";
 
     proxy_hide_header X-Frame-Options;
     proxy_hide_header Content-Security-Policy;

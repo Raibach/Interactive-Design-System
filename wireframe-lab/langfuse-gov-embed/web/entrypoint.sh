@@ -29,10 +29,9 @@ if [ -n "$guard_missing" ]; then
     exit 1
 fi
 case "$NEXTAUTH_URL" in
-    https://*) ;;
-    http://localhost*|http://127.0.0.1*) ;;
+    http://*|https://*) ;;
     *)
-        echo "FATAL: NEXTAUTH_URL ($NEXTAUTH_URL) is neither the live https host nor localhost - refusing to start (no-fallback doctrine)." >&2
+        echo "FATAL: NEXTAUTH_URL ($NEXTAUTH_URL) is not an absolute http(s) URL - refusing to start (no-fallback doctrine)." >&2
         exit 1 ;;
 esac
 case "$DATABASE_URL" in
