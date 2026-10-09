@@ -269,6 +269,7 @@ const LogoutIcon = () => (
     { id: 'gov-annotation', label: 'Human Annotation', path: langfusePath('/annotation-queues'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><rect x="5" y="3" width="14" height="18" rx="2" {...govStroke} /><path d="M9 3a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4" {...govStroke} /></svg> },
     { id: 'gov-datasets', label: 'Datasets', path: langfusePath('/datasets'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" {...govStroke} /></svg> },
     { id: 'gov-experiments', label: 'Experiments', path: langfusePath('/experiments'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M9 3h6M10 3v5l-5 8a2 2 0 002 3h10a2 2 0 002-3l-5-8V3M7 14h10" {...govStroke} /></svg> },
+    { id: 'gov-settings', label: 'Settings', path: langfusePath('/settings'), group: null, icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><circle cx="12" cy="12" r="3" {...govStroke} /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" {...govStroke} /></svg> },
   ];
   const isGovernance = currentTab === 'governance';
 
@@ -293,6 +294,7 @@ const LogoutIcon = () => (
       'annotation-queues': 'gov-annotation',
       datasets: 'gov-datasets', dataset: 'gov-datasets',
       experiments: 'gov-experiments', experiment: 'gov-experiments',
+      settings: 'gov-settings',
     };
     return sectionForSeg[seg] ?? null;
   })();
@@ -341,13 +343,24 @@ const LogoutIcon = () => (
       className="relative h-full flex-shrink-0"
       style={{ zIndex: 50, width: 0 }}
     >
+      {/* THE COLLAPSED RAIL'S FILL — a full-height bar behind the R and the
+          floating icons, the header color at 75% (alpha 0.75), so the app
+          behind never competes with the icons. Only while collapsed. */}
+      {!isNavOpen && (
+        <div
+          data-lit-id="nav-rail-fill"
+          className="absolute left-0 top-0 w-14 h-full"
+          style={{ backgroundColor: "rgba(17, 14, 31, 0.75)" }}
+        />
+      )}
+
       {/* THE R — closed state only: the square that opens the nav. Nothing else is on screen. */}
       {!isNavOpen && (
         <button
           data-lit-id="nav-toggle"
           onClick={() => setIsNavOpen(true)}
           className="absolute top-0 left-0 w-14 h-14 flex items-center justify-center"
-          style={{ backgroundColor: "#110E1F", zIndex: 60 }}
+          style={{ zIndex: 60 }}
           title="Open navigation"
           aria-label="Open navigation"
         >

@@ -11089,6 +11089,7 @@ export default function Index({
                                     src={governanceToolUrl()}
                                     style={{
                                       display: 'block', flex: '1 1 0%', minWidth: 0, height: '100%',
+                                      marginLeft: '56px',
                                       opacity: governanceGateDown ? 1 : 0,
                                       transition: 'opacity 700ms ease',
                                     }}
