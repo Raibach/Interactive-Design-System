@@ -40,7 +40,12 @@ let demoMode = false;
 
 const LOCAL_DEVELOPMENT_TOOL = "http://localhost:8090/";
 const LOCAL_BUILDER_TOOL = "http://localhost:3223";
-const LOCAL_GOVERNANCE_TOOL = "http://localhost:3100/"; // Langfuse (self-hosted in governance/langfuse-main), served through the frame proxy that strips its frame-ancestors header — the room's tool, 2026-10-08
+// 2026-10-08: Langfuse (self-hosted in governance/langfuse-main) through the frame proxy.
+// 2026-10-09 (owner): the address carries the PROJECT PATH — the app's bare root shows the
+// project chooser whenever the browser has no remembered project, so the room always opens
+// the project Home ("the homepage") instead. Same path the hosted room uses.
+const LOCAL_GOVERNANCE_TOOL =
+  "http://localhost:3100/project/51211b35-c875-4715-8040-33fccb624279";
 
 let developmentTool = LOCAL_DEVELOPMENT_TOOL;
 let builderTool = LOCAL_BUILDER_TOOL;
