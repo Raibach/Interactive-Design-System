@@ -15,9 +15,11 @@
  * component never navigates itself; it is a view of the nav plus the two handshakes.
  *
  * The column width follows the rail's own state so the embed fills the rest of the
- * room; background matches the rail's tone so no white ever flashes under the frame.
- * NOTHING HERE IS A FALLBACK: if the frame fails to load, the column stands in the
- * rail's own colour with no nav — the failure is visible, not disguised.
+ * room; background is TRANSPARENT since 2026-10-08 evening (the fill-removal pass —
+ * the room's wave is the floor under the rail as well; nothing foreign ever shows
+ * under the frame while it loads).
+ * NOTHING HERE IS A FALLBACK: if the frame fails to load, the column simply stands
+ * as the room's own ground with no nav — the failure is visible, not disguised.
  */
 import { useEffect, useState } from 'react';
 
@@ -30,7 +32,6 @@ interface GovernanceNavFrameProps {
 
 export default function GovernanceNavFrame({ onNavigate, onSeat }: GovernanceNavFrameProps) {
   const [collapsed, setCollapsed] = useState(false);
-
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const d = e.data as { type?: string; href?: string; collapsed?: boolean; seat?: string } | null;
@@ -57,7 +58,7 @@ export default function GovernanceNavFrame({ onNavigate, onSeat }: GovernanceNav
         height: '100%',
         minHeight: 0,
         overflow: 'hidden',
-        background: '#110E1F',
+        background: 'transparent',
         transition: 'width 200ms ease',
       }}
     >

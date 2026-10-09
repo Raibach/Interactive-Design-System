@@ -1,4 +1,19 @@
 
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# NO ERROR SUPPRESSION. NO FALLBACKS. ZERO TRUST.
+#
+# An absence stated plainly is a REPORT. Making the surface look better than the state is ERROR
+# SUPPRESSION — and any error suppression in this system will be revealed (owner's law; it has
+# been, twice: the clamp).
+#
+# The case record, with every receipt — the clamp: found, removed on the owner's order,
+# re-entered four minutes later, found again eight days later:
+#   → AGENTS-instructions/THE_SUPPRESSION_RECORD.md
+#
+# Before adding anything that "makes it work", "leaves nothing missing", or "handles it quietly":
+# read that file first.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+
 Communication rules:
 - Use plain, literal language. No metaphors or figures of speech (for example "bends", "nothing breaks if X vanishes"). Say what you mean directly.
 - Write short sentences. Use standard engineering terms only, such as "dependency", "outbound request", "removed" or "still installed".

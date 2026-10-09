@@ -589,71 +589,25 @@ export default function Index({
   const GOVERNANCE_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
   const [governanceGateDown, setGovernanceGateDown] = useState(false);
 
-  /* THE ROOM'S RAIL DRIVES THE EMBEDDED APP (owner, 2026-10-07: *"so now it's time
-     to wire it up, I guess, to the app, and then remove the app's navigation"*). One
-     attribute write: <builder-embed> re-renders its iframe with the same
-     `embedded=console` + `house_door` parameters it always adds — and every
-     destination is a path inside the tool's own origin, reached the same way the
-     tool's own navigation reached it. A malformed address changes nothing. */
-  /* WHICH SEAT THE FRAME IS PROVISIONED AS (2026-10-08): travels as the `house_seat`
-     query parameter the frame's own login script reads (the house patch's item 6).
-     Default admin; the nav's seat switcher writes the others. Carried on every
-     navigation, so a reload can never silently drop the room back to admin. */
-  const governanceIdentityRef = useRef<'admin' | 'product' | 'designer'>('admin');
-  /* THE ENTRY ADDRESS CARRIES THE SEAT TOO (2026-10-08 night, after the sign-in screen
-     stood in the room): the frame's FIRST load must already name its seat — before
-     this, the mount src had no house_seat, and the frame's login script had nothing to
-     treat as the active identity on the very first boot. Every later address is written
-     by navigateGovernanceTool / switchGovernanceSeat, which always carry it. */
-  const governanceEntryUrl = (): string => {
-    /* THE LANDING IS THE VENDOR APPLICATION — RESTORED (2026-10-08 night). The room was
-       briefly pointed at our own page (/govnav/dashboard.html) without the owner's word;
-       he saw the application disappear under him and ordered the rollback ("roll
-       everything back… I'm not seeing the interface anymore") — correctly. The house
-       dashboard page stays PARKED at /govnav/dashboard.html; making it the landing
-       happens only on the owner's explicit word (and stays a one-line change: point
-       this base at it). */
-    const base = governanceToolUrl();
-    if (!base) return base;
-    try {
-      const url = new URL(base);
-      url.searchParams.set('house_seat', governanceIdentityRef.current);
-      return url.toString();
-    } catch {
-      return base;
-    }
-  };
+  /* THE ROOM'S RAIL USED TO DRIVE THE EMBEDDED APP (owner, 2026-10-07: *"so now it's time
+     to wire it up, I guess, to the app, and then remove the app's navigation"*). THE
+     APPLICATION LEFT THE ROOM (owner, 2026-10-08: removed — "everything … the
+     application and anything related to the application itself"). The rail stands as
+     the room's own navigation; this go-channel is kept wired per the architecture rule,
+     but the write below now reaches nothing — the embed it wrote to no longer mounts
+     (see the room's render). A malformed address changes nothing, as before. */
   const navigateGovernanceTool = (path: string) => {
     const base = governanceToolUrl();
     if (!base) return;
     try {
-      const url = new URL(path, base);
-      url.searchParams.set('house_seat', governanceIdentityRef.current);
-      governanceEmbedRef.current?.setAttribute('src', url.toString());
+      const url = new URL(path, base).toString();
+      governanceEmbedRef.current?.setAttribute('src', url);
     } catch {
       /* unreachable in practice — URL() only throws on an unparseable base, and the
          base was just checked for emptiness; kept so a bad edit can never throw here */
     }
   };
-  /* THE SEAT SWITCH (2026-10-08): the nav's switcher asks; the shell re-provisions the
-     frame as that seat — the same one-attribute write, the current page kept; the frame's
-     own login script does the rest. */
-  const switchGovernanceSeat = (seat: string) => {
-    if (seat !== 'admin' && seat !== 'product' && seat !== 'designer') return;
-    governanceIdentityRef.current = seat;
-    const current = governanceEmbedRef.current?.getAttribute('src') || governanceToolUrl() || '';
-    if (!current) return;
-    try {
-      const url = new URL(current);
-      url.searchParams.set('house_seat', seat);
-      governanceEmbedRef.current?.setAttribute('src', url.toString());
-    } catch {
-      /* same guard as above */
-    }
-  };
-  const [governanceToolDown, setGovernanceToolDown] = useState(false);
   const governanceMinElapsedRef = useRef(false);
-  const governanceFrameLoadedRef = useRef(false);
   const governanceGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const governanceGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const governanceSeatSettledRef = useRef(false);
@@ -711,11 +665,19 @@ export default function Index({
       setDevelopmentGateDown(true);
     }
   }, []);
-  /** THE GOVERNANCE ROOM'S OWN ALL-THREE-HANDS — the Development callback, one room over. */
+  /**
+   * THE GOVERNANCE ROOM'S OWN HANDS — TWO since 2026-10-08 (the frame-load hand went with
+   * the application, owner's order): the minimum and the seat. `assertPaneWidth` rides here
+   * now — the frame-load beat that used to carry it is gone, and this is the room's own
+   * standing moment (same `requestUpdate` door, same reason: the declared column width can
+   * land in a render that could not yet measure the room).
+   */
   const dropGovernanceGateWhenAllLanded = useCallback(() => {
-    if (governanceMinElapsedRef.current && governanceFrameLoadedRef.current && governanceSeatSettledRef.current) {
+    if (governanceMinElapsedRef.current && governanceSeatSettledRef.current) {
+      assertPaneWidth(governanceLayoutRef.current);
       setGovernanceGateDown(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /*
    * THE PANE'S WIDTH, ASSERTED WHERE IT CAN BE MEASURED. The room declares her column's load
@@ -1358,7 +1320,9 @@ export default function Index({
   const developmentSeatRef = useRef<ChatPanel | null>(null);
   const governanceLayoutRef = useRef<WorkspaceLayout | null>(null);
   const governanceSeatRef = useRef<ChatPanel | null>(null);
-  /** The embedded app's element — the rail writes its destinations onto this. */
+  /** The embedded app's element — the rail wrote its destinations onto this. NOTHING
+      mounts into it since 2026-10-08 (the application left the room, owner's order);
+      kept for the rail's dormant go-channel, per the architecture rule. */
   const governanceEmbedRef = useRef<BuilderEmbed | null>(null);
   /*
    * THE COLUMN THE RUN ASSEMBLED, KEPT FOR THE STATE (owner, 2026-10-05). The model composes
@@ -5134,17 +5098,15 @@ export default function Index({
 
   /**
    * THE GOVERNANCE ROOM'S OPENING — the Development effect above, mirrored for the third
-   * frame (owner, 2026-10-07: OpenMetadata placed as the room's tool, login kept as the
-   * tool's own administrative layer). The same three hands restart on every entry; the
-   * ceiling takes the cover down and the pane keeps its own ground — no fallbacks; the
-   * frame stays mounted underneath, so a late arrival still wins when it comes.
+   * room. TWO hands since 2026-10-08 (the application left the room, owner's order — the
+   * frame-load hand went with it): the minimum and the seat's binding restart on every
+   * entry; the ceiling still takes the cover down and the room keeps its own ground —
+   * no fallbacks, never a trapped blank.
    */
   useEffect(() => {
     if ((headerTab || '') !== 'governance') return;
     setGovernanceGateDown(false);
-    setGovernanceToolDown(false);
     governanceMinElapsedRef.current = false;
-    governanceFrameLoadedRef.current = false;
     governanceSeatSettledRef.current = false;
     if (governanceGateTimerRef.current) clearTimeout(governanceGateTimerRef.current);
     governanceGateTimerRef.current = setTimeout(() => {
@@ -5153,7 +5115,6 @@ export default function Index({
     }, GOVERNANCE_GATE_MIN_MS);
     if (governanceGateMaxTimerRef.current) clearTimeout(governanceGateMaxTimerRef.current);
     governanceGateMaxTimerRef.current = setTimeout(() => {
-      if (!governanceFrameLoadedRef.current) setGovernanceToolDown(true);
       setGovernanceGateDown(true);
     }, GOVERNANCE_GATE_MAX_MS);
     return () => {
@@ -5790,8 +5751,10 @@ export default function Index({
 
   useEffect(() => {
     // BOTH ROOMS' FRAMES ANNOUNCE THEMSELVES HERE (2026-10-05; Development's half is back,
-    // 2026-10-06): the announcement is a bare window event and either embed raises it, so the
-    // guard reads the CURRENT tab — never a stale closure — and routes it to that room's clocks.
+    // 2026-10-06; the GOVERNANCE branch left with the application, 2026-10-08 — its room has
+    // no frame any more, and the width-assert beat it carried moved to the room's own hands):
+    // the announcement is a bare window event and either embed raises it, so the guard reads
+    // the CURRENT tab — never a stale closure — and routes it to that room's clocks.
     // Re-registered per tab.
     const onFrameLoaded = () => {
       const tab = headerTab || '';
@@ -5799,15 +5762,6 @@ export default function Index({
         developmentFrameLoadedRef.current = true;
         setDevelopmentToolDown(false);
         dropDevelopmentGateWhenAllLanded();
-        return;
-      }
-      if (tab === 'governance') {
-        governanceFrameLoadedRef.current = true;
-        setGovernanceToolDown(false);
-        /* THE FRAME IS UP — assert the pane's width from a beat where the room is standing
-           (the product half's lesson, one room over). */
-        assertPaneWidth(governanceLayoutRef.current);
-        dropGovernanceGateWhenAllLanded();
         return;
       }
       if (tab === 'product') {
@@ -7924,14 +7878,14 @@ export default function Index({
     }
 
     if (tabId === 'governance') {
-      // THE ROOM IS THE FRAME NOW (owner, 2026-10-07: *"pop it in there"*). The product
-      // branch's shape, one room over: the pane mounts <builder-embed> (OpenMetadata, the
-      // stakeholder monitoring interface — its login KEPT as the tool's own administrative
-      // layer: *"this is an administrative tool and I want another layer"*) and the room's
-      // own seat binds its own package (the seat effect below); no surface is asked for and
-      // no model call happens on arrival. `assembleGovernanceSurface` and its tree/state
-      // STAY IN THE FILE, unwired, rather than deleted: the ledger's surface may return,
-      // and a deleted door is not a decision this host gets to make alone.
+      // THE ROOM IS THE SHELL NOW — the application left it (owner, 2026-10-08: the
+      // Evidently application was removed, everything of it; the container, the
+      // backgrounds, the chat, the slide and the left navigation stay). The product
+      // branch's shape, one room over: the room's own nav and seat stand, the seat binds
+      // its own package (the seat effect below); no surface is asked for and no model call
+      // happens on arrival. `assembleGovernanceSurface` and its tree/state STAY IN THE
+      // FILE, unwired, rather than deleted: the ledger's surface may return, and a deleted
+      // door is not a decision this host gets to make alone.
       handleHeaderTabChange('governance');
       return;
     }
@@ -11081,16 +11035,17 @@ export default function Index({
                           : headerTab === 'governance'
                             ? (
                               <>
-                                {/* THE GOVERNANCE ROOM IS THE FRAME NOW (owner, 2026-10-07:
-                                    *"pop it in there"* — OpenMetadata placed in the
-                                    stakeholder-monitoring role; its login KEPT as the tool's
-                                    own administrative layer: *"this is an administrative
-                                    tool and I want another layer"*). The Development room's
-                                    structure, third instance: left column = the tool
-                                    (loopback-only, plain programs — governance/preview; its
-                                    permanent home is the owner's later call), right column
-                                    = the platform's chat seat (its own package, its own
-                                    conversations — nothing borrowed from another room). No
+                                {/* THE ROOM IS THE SHELL — THE APPLICATION LEFT (owner,
+                                    2026-10-08: *"remove the evidently AI application from the
+                                    governance section — everything … keep the container, the
+                                    backgrounds, the chat, the sliding effect … keep the left
+                                    navigation … don't rip out the architecture … take out the
+                                    application and anything related to the application
+                                    itself."*). The Development room's structure holds, third
+                                    instance: the room's own left navigation and the
+                                    platform's chat seat (its own package, its own
+                                    conversations). Where the embedded application stood, the
+                                    room draws NOTHING — its own ground, no fallbacks. No
                                     surface is assembled for this room and no model call
                                     happens on arrival; the assembled ledger surface stays
                                     unwired in the file. */}
@@ -11101,37 +11056,35 @@ export default function Index({
                                 <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
                                 <workspace-layout key="governance-room" ref={governanceLayoutRef} className="flex-1 min-h-0">
                                 {/* THE SLOT ADDS NOTHING — ONE WAVE FOR THE WHOLE ROOM (late
-                                    2026-10-07): the room-level ground (the "workspace" slot)
-                                    wears the wave (cover, centred), so this slot goes transparent —
-                                    the app's own transparent page grounds (house patch §2) and the
-                                    chat side both show the SAME single wave, edge to edge, with no
-                                    seam and no composer image showing beside the chat rail. */}
+                                    2026-10-07; the application's own transparent page grounds
+                                    left with it, 2026-10-08): the room-level ground (the
+                                    "workspace" slot) wears the wave (cover, centred), so this
+                                    slot goes transparent — the left nav's floor and the chat
+                                    side show the SAME single wave, edge to edge, with no seam. */}
                                   <div slot="left" style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: '100%', height: '100%', minHeight: 0 }}>
-                                {/* THE COPY TAKES THE LEFT EDGE (2026-10-07): the room's own navigation — the
-                                    transferred nav, governance/nav-copy — stands as its own column at the
-                                    left edge; its rows post their path to this page, which writes it onto
-                                    the embed (navigateGovernanceTool above). The app's own sidebar hides
-                                    behind the copy (house patch §21). The framed page is served at /govnav
-                                    (public/govnav -> governance/nav-copy — one source of truth, no copy to
+                                {/* THE COPY TAKES THE LEFT EDGE (2026-10-07) — KEPT (owner's
+                                    order, 2026-10-08: *"keep the left navigation"*; nothing
+                                    in it was touched): the room's own navigation — the
+                                    transferred nav, governance/nav-copy — stands as its own
+                                    column at the left edge; its rows post their path to this
+                                    page, and navigateGovernanceTool writes that onto an embed
+                                    that no longer exists (the application left the room; the
+                                    go-channel is kept wired per the architecture rule). The
+                                    framed page is served at /govnav (public/govnav ->
+                                    governance/nav-copy — one source of truth, no copy to
                                     drift). */}
                                 {governanceToolUrl() && (
-                                <GovernanceNavFrame onNavigate={navigateGovernanceTool} onSeat={switchGovernanceSeat} />
+                                <GovernanceNavFrame onNavigate={navigateGovernanceTool} />
                                 )}
-                                {governanceToolUrl() && (
-                                <builder-embed
-                                  key="governance-workspace"
-                                  ref={governanceEmbedRef}
-                                  src={governanceEntryUrl()}
-                                  style={{
-                                    display: 'block', flex: '1 1 0%', minWidth: 0, height: '100%',
-                                    opacity: governanceGateDown ? 1 : 0,
-                                    transition: 'opacity 700ms ease',
-                                  }}
-                                />
-                                )}
-                                {/* NO FALLBACK — the owner's law. No address, or a frame that
-                                    never arrived: the pane keeps its own ground and draws
-                                    NOTHING, exactly as the Product and Development rooms do. */}
+                                {/* THE APPLICATION IS OUT (owner's order, 2026-10-08): the
+                                    Evidently UI embed that stood here — <builder-embed
+                                    key="governance-workspace" src={governanceToolUrl()}> —
+                                    was removed, everything of it. The pane keeps its own
+                                    ground; nothing is drawn in its place. */}
+                                {/* NO FALLBACK — the owner's law, and now the room's
+                                    permanent state: the pane keeps its own ground and draws
+                                    NOTHING, exactly as the Product and Development rooms do
+                                    when their frames never arrive. */}
                                   </div>
                                   {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the
                                       console and composer mount, in the container's right
@@ -11141,19 +11094,19 @@ export default function Index({
                                       rail is the room's own list (GOVERNANCE_SEAT_TABS). */}
                                   <chat-panel key="governance-seat" slot="right" ref={governanceSeatRef}></chat-panel>
                                 </workspace-layout>
-                                {/* THE RAIL RETIRES FOR THIS ROOM (late 2026-10-07): the app's own
-                                    navigation is restored and operating (house patch §20) — chevron
-                                    toggle, labels, hover tooltips, expandable sections — exactly
-                                    as the development room's tool navigation IS its navigation.
-                                    Deactivated, not deleted: one line to bring back. */}
+                                {/* THE RAIL RETIRES FOR THIS ROOM (late 2026-10-07): the room's
+                                    own navigation (the copy above) IS the navigation here.
+                                    Deactivated, not deleted (2026-10-08: the tool-down state
+                                    it read left with the application — `toolUp` is a plain
+                                    boolean now). */}
                                 {/* {governanceToolUrl() && (
-                                  <GovernanceAssemblyRail onNavigate={navigateGovernanceTool} toolUp={!governanceToolDown} />
+                                  <GovernanceAssemblyRail onNavigate={navigateGovernanceTool} toolUp={true} />
                                 )} */}
-                                {governanceToolUrl() && !governanceToolDown && (
-                                /* THE STAGED OPENING — the Development gate's pattern, third
-                                   room: three hands (minimum, frame, seat), one 700ms
-                                   cross-fade, the room eases in underneath; the ceiling drops
-                                   the cover honestly if a hand never lands. */
+                                {/* THE STAGED OPENING — the Development gate's pattern, third
+                                   room: TWO hands since 2026-10-08 (minimum + seat; the frame
+                                   hand left with the application), one 700ms cross-fade, the
+                                   room eases in underneath; the ceiling drops the cover
+                                   honestly if a hand never lands. */}
                                 <div
                                   aria-hidden={governanceGateDown}
                                   style={{
@@ -11170,7 +11123,6 @@ export default function Index({
                                     {"Standing up the governance workspace\u2026"}
                                   </p>
                                 </div>
-                                )}
                                 </div>
                               </>
                             )

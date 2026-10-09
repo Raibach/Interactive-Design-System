@@ -40,7 +40,7 @@ let demoMode = false;
 
 const LOCAL_DEVELOPMENT_TOOL = "http://localhost:8090/";
 const LOCAL_BUILDER_TOOL = "http://localhost:3223";
-const LOCAL_GOVERNANCE_TOOL = "http://localhost:8585/";
+const LOCAL_GOVERNANCE_TOOL = "http://localhost:8686/"; // the room's tool slot — NO application stands in it since 2026-10-08 (the Evidently application was taken out of the room, the owner's order); kept latent (the left navigation's guard and its dormant go-channel read it)
 
 let developmentTool = LOCAL_DEVELOPMENT_TOOL;
 let builderTool = LOCAL_BUILDER_TOOL;
@@ -62,9 +62,13 @@ export const developmentToolUrl = (): string => developmentTool;
 export const builderToolUrl = (): string => builderTool;
 
 /**
- * The Governance room's tool (OpenMetadata — the stakeholder monitoring interface).
- * Empty string = not connected, same rule. The loopback law below applies to it
- * exactly as to the other two: a deployed page may never reach a visitor's machine.
+ * The Governance room's tool address — LATENT SINCE 2026-10-08: the Evidently
+ * application was taken out of the room (owner's order — removed, everything of
+ * it), so nothing is embedded at this address any more. The slot and its plumbing
+ * are kept (the architecture rule): the room's left navigation mounts on it, and
+ * its go-channel writes to an embed that no longer exists. Empty string = not
+ * connected, same rule. The loopback law below applies to it exactly as to the
+ * other two: a deployed page may never reach a visitor's machine.
  */
 export const governanceToolUrl = (): string => governanceTool;
 

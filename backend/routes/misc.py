@@ -170,8 +170,8 @@ async def api_config():
     `development_tool_url` / `builder_tool_url` / `governance_tool_url` are the
     rooms' tool addresses, runtime config instead of hardcoded localhost: a local
     run leaves them unset and the shell keeps `http://localhost:8090` / `:3223` /
-    `:8585`; a deployed demo sets them to hosted services, or leaves them empty
-    and the rooms say so plainly. (The Development room's workspace returned
+    `:8686` (Evidently UI); a deployed demo sets them to hosted services, or
+    leaves them empty and the rooms say so plainly. (The Development room's workspace returned
     2026-10-06, run from this repo with its reporting channel stripped —
     development/CHANGELOG.md.)
     """
