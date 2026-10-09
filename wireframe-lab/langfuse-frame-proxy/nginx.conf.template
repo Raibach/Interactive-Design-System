@@ -1,0 +1,58 @@
+# Raibach frame-proxy (hosted) — the hosted twin of the local frame proxy.
+#
+# The stock Langfuse image hardcodes `frame-ancestors 'none'` + `X-Frame-Options:
+# SAMEORIGIN`, refusing any iframe embed. This proxy drops both headers and
+# re-issues a minimal CSP that allows framing ONLY from the studio origin
+# (STUDIO_ORIGIN). It also injects the pre-minted admin session cookie
+# (RAIBACH_SESSION_COOKIE) so the room never shows a login, plus the
+# house-ground styling and the location reporter the shell nav listens for.
+#
+# The nginx image entrypoint substitutes ${RAIBACH_SESSION_COOKIE} and
+# ${STUDIO_ORIGIN} into this template at boot. Missing values fail the config
+# loudly. The rest of Langfuse's CSP directives are intentionally not
+# re-issued: the proxy is the trust boundary.
+#
+# Revert = remove the Northflank service; this folder stays as the record.
+
+server {
+  listen 8080;
+  server_name _;
+
+  # Hashed static assets — pass through untouched (their immutable cache
+  # headers stand; the house script must never run on them).
+  location /_next/static/ {
+    proxy_pass http://langfuse-web:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+  }
+
+  location / {
+    proxy_pass http://langfuse-web:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_buffering off;
+    proxy_set_header Accept-Encoding "";
+    # The seeded admin session, minted once via the stock NextAuth sign-in
+    # flow (10-year expiry thanks to AUTH_SESSION_MAX_AGE on langfuse-web).
+    proxy_set_header Cookie "__Secure-next-auth.session-token=${RAIBACH_SESSION_COOKIE}";
+
+    proxy_hide_header X-Frame-Options;
+    proxy_hide_header Content-Security-Policy;
+    add_header Content-Security-Policy "frame-ancestors 'self' ${STUDIO_ORIGIN};" always;
+
+    # The document must never be cached: the house script is injected into it,
+    # and a stale cached copy would ship without it.
+    add_header Cache-Control "no-store" always;
+
+    # THE HOUSE GROUND (parity with the local proxy, 2026-10-09) + the location
+    # reporter (the app's path -> the shell nav's active mark).
+    # Revert = delete the <style id="raibach-house-ground"> block.
+    sub_filter_once on;
+    sub_filter '</head>' '<style id="raibach-house-ground">html,body{background:transparent !important}.bg-background,.bg-surface,.dark\:bg-background{background-color:transparent !important}.bg-card,.bg-muted,.bg-secondary,.bg-popover,.dark\:bg-card,.dark\:bg-muted,.dark\:bg-secondary,.dark\:bg-popover,.aria-expanded\:bg-muted[aria-expanded="true"],.cm-editor,.cm-gutters,.cm-scroller{background-color:rgba(17,14,31,0.75) !important}.bg-muted\/50{background-color:rgba(17,14,31,0.38) !important}.bg-muted\/25{background-color:rgba(17,14,31,0.19) !important}.hover\:bg-border:hover,.aria-expanded\:bg-border[aria-expanded="true"],.hover\:bg-input:hover{background-color:hsl(var(--accent)) !important}::-webkit-scrollbar{width:12px;height:12px;background:transparent !important}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent !important}::-webkit-scrollbar-button{display:none !important}::-webkit-scrollbar-thumb{background-color:hsl(var(--accent)) !important;border-radius:999px;border:3px solid transparent;background-clip:padding-box}.dark{--background:250.6 37.8% 8.8% / 0;--header:250.6 37.8% 8.8% / 0;--card:250.6 37.8% 8.8% / 0.75;--muted:250.6 37.8% 8.8% / 0.75;--secondary:250.6 37.8% 8.8% / 0.75;--tertiary:250.6 37.8% 8.8% / 0.75;--popover:250.6 37.8% 8.8% / 0.75;--modal:250.6 37.8% 8.8% / 0.75;--surface-sunken:250.6 37.8% 8.8% / 0.75;--surface-code:250.6 37.8% 8.8% / 0.75;--surface-code-header:250.6 37.8% 8.8% / 0.75;--accent:243.5 30.9% 10.8%}</style><script>(function(){var last=null;function r(){try{var p=location.pathname+location.search;if(p===last){return;}last=p;parent.postMessage({type:"langfuse-location",path:p},"*");}catch(e){}}r();setInterval(r,500);})();</script></head>';
+  }
+}
