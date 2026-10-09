@@ -20,16 +20,25 @@ server {
   listen 8080;
   server_name _;
 
+  # RE-RESOLVE THE UPSTREAM (2026-10-09 lesson): nginx resolves a proxy_pass
+  # hostname ONCE at boot. When langfuse-web is recreated it receives a new
+  # address on the compose network, and a proxy that never re-resolves answers
+  # every room request with 502 "connection refused" to the dead address —
+  # measured tonight. Docker's embedded DNS is 127.0.0.11; the variable form of
+  # proxy_pass (below, $lf_upstream) consults this resolver per `valid`.
+  resolver 127.0.0.11 valid=10s ipv6=off;
+  set $lf_upstream "http://${LANGFUSE_WEB_UPSTREAM}";
+
   # Hashed static assets — pass through untouched (their immutable cache
   # headers stand; the house script must never run on them).
   location /_next/static/ {
-    proxy_pass http://${LANGFUSE_WEB_UPSTREAM};
+    proxy_pass $lf_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
   }
 
   location / {
-    proxy_pass http://${LANGFUSE_WEB_UPSTREAM};
+    proxy_pass $lf_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

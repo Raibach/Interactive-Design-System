@@ -129,6 +129,10 @@ never drops). To carry data from the local machine (`railway`):
   (the storage process runs non-root; the volume root is mode 777 for exactly that
   reason — 10-09 lesson: a 755 folder answers `AccessDenied` on PUT). Restart does
   NOT re-read `.env`; after changing values, recreate: `docker compose up -d <service>`.
+- The frame-proxy re-resolves `langfuse-web` automatically (Docker-DNS resolver in the
+  template, added 2026-10-09): recreating the web service no longer blacks the room out
+  with a stale upstream address — before the fix, every web update answered 502
+  `connection refused` until the proxy was recreated too (measured and repaired live).
 - Logs are the truth surface: raw container stdout/stderr via
   `docker compose logs <service>` on raibach-cloud-1. Never summarize an error away.
 
