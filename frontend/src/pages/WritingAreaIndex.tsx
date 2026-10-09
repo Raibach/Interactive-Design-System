@@ -56,7 +56,6 @@ import designSectionBackground from "@/assets/design-section2-bkg.png";
 import developmentLabBackground from "@/assets/canvas-development-lab-bkg.jpg";
 import dataWave3Background from "@/assets/data-wave3.png";
 import GovernanceAssemblyRail from "@/components/GovernanceAssemblyRail";
-import GovernanceNavFrame from "@/components/GovernanceNavFrame";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/room-embed-art.jpg";
@@ -11062,29 +11061,23 @@ export default function Index({
                                     slot goes transparent — the left nav's floor and the chat
                                     side show the SAME single wave, edge to edge, with no seam. */}
                                   <div slot="left" style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: '100%', height: '100%', minHeight: 0 }}>
-                                {/* THE COPY TAKES THE LEFT EDGE (2026-10-07) — KEPT (owner's
-                                    order, 2026-10-08: *"keep the left navigation"*; nothing
-                                    in it was touched): the room's own navigation — the
-                                    transferred nav, governance/nav-copy — stands as its own
-                                    column at the left edge; its rows post their path to this
-                                    page, and navigateGovernanceTool writes that onto an embed
-                                    that no longer exists (the application left the room; the
-                                    go-channel is kept wired per the architecture rule). The
-                                    framed page is served at /govnav (public/govnav ->
-                                    governance/nav-copy — one source of truth, no copy to
-                                    drift). */}
+                                {/* THE ROOM'S TOOL (2026-10-08): Langfuse, self-hosted in
+                                    governance/langfuse-main, embedded full-page through the
+                                    frame proxy. The GovernanceAssemblyRail — mounted OVER this
+                                    pane — carries Langfuse's own sections and writes their
+                                    routes onto this embed (navigateGovernanceTool). */}
                                 {governanceToolUrl() && (
-                                <GovernanceNavFrame onNavigate={navigateGovernanceTool} />
+                                  <builder-embed
+                                    key="governance-workspace"
+                                    ref={governanceEmbedRef}
+                                    src={governanceToolUrl()}
+                                    style={{
+                                      display: 'block', flex: '1 1 0%', minWidth: 0, height: '100%',
+                                      opacity: governanceGateDown ? 1 : 0,
+                                      transition: 'opacity 700ms ease',
+                                    }}
+                                  />
                                 )}
-                                {/* THE APPLICATION IS OUT (owner's order, 2026-10-08): the
-                                    Evidently UI embed that stood here — <builder-embed
-                                    key="governance-workspace" src={governanceToolUrl()}> —
-                                    was removed, everything of it. The pane keeps its own
-                                    ground; nothing is drawn in its place. */}
-                                {/* NO FALLBACK — the owner's law, and now the room's
-                                    permanent state: the pane keeps its own ground and draws
-                                    NOTHING, exactly as the Product and Development rooms do
-                                    when their frames never arrive. */}
                                   </div>
                                   {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the
                                       console and composer mount, in the container's right
@@ -11094,14 +11087,12 @@ export default function Index({
                                       rail is the room's own list (GOVERNANCE_SEAT_TABS). */}
                                   <chat-panel key="governance-seat" slot="right" ref={governanceSeatRef}></chat-panel>
                                 </workspace-layout>
-                                {/* THE RAIL RETIRES FOR THIS ROOM (late 2026-10-07): the room's
-                                    own navigation (the copy above) IS the navigation here.
-                                    Deactivated, not deleted (2026-10-08: the tool-down state
-                                    it read left with the application — `toolUp` is a plain
-                                    boolean now). */}
-                                {/* {governanceToolUrl() && (
+                                {/* THE ROOM'S RAIL (2026-10-08): carries Langfuse's sections
+                                    and writes their routes onto the embed. Mounted over the
+                                    embed at the room's left edge, as it always stood. */}
+                                {governanceToolUrl() && (
                                   <GovernanceAssemblyRail onNavigate={navigateGovernanceTool} toolUp={true} />
-                                )} */}
+                                )}
                                 {/* THE STAGED OPENING — the Development gate's pattern, third
                                    room: TWO hands since 2026-10-08 (minimum + seat; the frame
                                    hand left with the application), one 700ms cross-fade, the

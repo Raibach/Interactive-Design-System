@@ -206,19 +206,33 @@ const WorkspaceStatusIcon = ({ up }: { up: boolean }) => (
   </svg>
 );
 
+// Langfuse's own sections, read from web/src/components/layouts/routes.tsx. Its routes are
+// project-scoped (/project/<projectId>/...). The id is empty until a project exists (the first
+// sign-up creates one); until then project-scoped items land on the app root, which langfuse
+// redirects to the organization — the honest behavior for a fresh install.
+const LANGFUSE_PROJECT_ID = '51211b35-c875-4715-8040-33fccb624279';
+const langfusePath = (suffix: string) =>
+  LANGFUSE_PROJECT_ID ? `/project/${LANGFUSE_PROJECT_ID}${suffix}` : '/';
+
+const stroke = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.5,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
 const ENTRIES = [
-  // Paths measured against the running 2.0.4 router (2026-10-07, frame walk): seven land on
-  // their pages directly. Observability has NO standalone route — `/observability` falls to
-  // the tool's /404 screen (the owner hit exactly that); its real landing is the alerts page,
-  // which is also what the tool's own menu opens first.
-  { id: 'om-home', icon: <OmHomeIcon />, label: 'Home', path: '/my-data' },
-  { id: 'om-explore', icon: <OmExploreIcon />, label: 'Explore', path: '/explore' },
-  { id: 'om-lineage', icon: <OmLineageIcon />, label: 'Lineage', path: '/lineage' },
-  { id: 'om-observability', icon: <OmObservabilityIcon />, label: 'Observability', path: '/observability/alerts' },
-  { id: 'om-insights', icon: <OmInsightsIcon />, label: 'Insights', path: '/data-insights' },
-  { id: 'om-marketplace', icon: <OmMarketplaceIcon />, label: 'Data Marketplace', path: '/data-marketplace' },
-  { id: 'om-govern', icon: <OmGovernIcon />, label: 'Govern', path: '/glossary' },
-  { id: 'om-context-center', icon: <OmContextCenterIcon />, label: 'Context Center', path: '/context-center' },
+  { id: 'lf-home', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5M5 9.5V21h14V9.5" {...stroke} /></svg>, label: 'Home', path: langfusePath('') },
+  { id: 'lf-dashboards', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" {...stroke} /></svg>, label: 'Dashboards', path: langfusePath('/dashboards') },
+  { id: 'lf-traces', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M6 3v18M6 8h6M6 15h6M12 5v6M12 12v6" {...stroke} /></svg>, label: 'Traces', path: langfusePath('/traces') },
+  { id: 'lf-sessions', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" {...stroke} /></svg>, label: 'Sessions', path: langfusePath('/sessions') },
+  { id: 'lf-prompts', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H8l-4 4V6zM8 8h8M8 11h5" {...stroke} /></svg>, label: 'Prompts', path: langfusePath('/prompts') },
+  { id: 'lf-playground', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" {...stroke} /></svg>, label: 'Playground', path: langfusePath('/playground') },
+  { id: 'lf-scores', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" {...stroke} /></svg>, label: 'Scores', path: langfusePath('/scores') },
+  { id: 'lf-evaluators', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6zM9 12l2 2 4-4" {...stroke} /></svg>, label: 'Evaluators', path: langfusePath('/evals') },
+  { id: 'lf-datasets', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" {...stroke} /></svg>, label: 'Datasets', path: langfusePath('/datasets') },
+  { id: 'lf-experiments', icon: <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M9 3h6M10 3v5l-5 8a2 2 0 002 3h10a2 2 0 002-3l-5-8V3M7 14h10" {...stroke} /></svg>, label: 'Experiments', path: langfusePath('/experiments') },
 ];
 
 interface GovernanceAssemblyRailProps {
