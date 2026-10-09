@@ -7,10 +7,12 @@
 # (RAIBACH_SESSION_COOKIE) so the room never shows a login, plus the
 # house-ground styling and the location reporter the shell nav listens for.
 #
-# The nginx image entrypoint substitutes ${RAIBACH_SESSION_COOKIE} and
-# ${STUDIO_ORIGIN} into this template at boot. Missing values fail the config
-# loudly. The rest of Langfuse's CSP directives are intentionally not
-# re-issued: the proxy is the trust boundary.
+# The nginx image entrypoint substitutes ${RAIBACH_SESSION_COOKIE},
+# ${STUDIO_ORIGIN} and ${LANGFUSE_WEB_UPSTREAM} into this template at boot
+# (upstream = the service's address setting — THE CONFIG RULE: values live on
+# the service, never in this file). Missing values fail the config loudly.
+# The rest of Langfuse's CSP directives are intentionally not re-issued:
+# the proxy is the trust boundary.
 #
 # Revert = remove the Northflank service; this folder stays as the record.
 
@@ -21,13 +23,13 @@ server {
   # Hashed static assets — pass through untouched (their immutable cache
   # headers stand; the house script must never run on them).
   location /_next/static/ {
-    proxy_pass http://langfuse-web:3000;
+    proxy_pass http://${LANGFUSE_WEB_UPSTREAM};
     proxy_http_version 1.1;
     proxy_set_header Host $host;
   }
 
   location / {
-    proxy_pass http://langfuse-web:3000;
+    proxy_pass http://${LANGFUSE_WEB_UPSTREAM};
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
