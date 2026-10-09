@@ -15,6 +15,31 @@ if [ "$LANGFUSE_REQUIRE_FIPS" = "true" ]; then
     fi
 fi
 
+# --- FAIL-FAST GUARD - no-fallback doctrine (owner-mandated 2026-10-09) ---
+# Required configuration must be present and plausible BEFORE anything connects.
+# There is no fallback path: a broken configuration crashes this container
+# immediately with a FATAL log line instead of serving a degraded state.
+guard_missing=""
+for v in REDIS_HOST CLICKHOUSE_URL SALT ENCRYPTION_KEY; do
+    eval "val=\${$v}"
+    if [ -z "$val" ]; then guard_missing="$guard_missing $v"; fi
+done
+if [ -n "$guard_missing" ]; then
+    echo "FATAL: required environment configuration is missing:$guard_missing - refusing to start (no-fallback doctrine)." >&2
+    exit 1
+fi
+case "$DATABASE_URL" in
+    postgres*) ;;
+    "")
+        if [ -z "$DATABASE_HOST" ] || [ -z "$DATABASE_USERNAME" ] || [ -z "$DATABASE_PASSWORD" ] || [ -z "$DATABASE_NAME" ]; then
+            echo "FATAL: no database configuration (DATABASE_URL or the DATABASE_* component set) - refusing to start (no-fallback doctrine)." >&2
+            exit 1
+        fi ;;
+    *)
+        echo "FATAL: DATABASE_URL does not look like a PostgreSQL DSN - refusing to start (no-fallback doctrine)." >&2
+        exit 1 ;;
+esac
+
 # Run cleanup script before running migrations
 # Check if DATABASE_URL is not set
 if [ -z "$DATABASE_URL" ]; then

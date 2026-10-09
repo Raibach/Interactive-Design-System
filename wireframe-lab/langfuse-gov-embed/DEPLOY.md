@@ -1,3 +1,6 @@
+> **Superseded as the runbook:** the strict operational runbook lives at the
+> repository root — `DEPLOY.md`. This file remains the blank-slate build recipe.
+
 # DEPLOY — the governance room's application, from a blank slate
 
 Everything the hosted room runs is **built from this repository**. No file is ever
@@ -8,7 +11,7 @@ placed on a server by hand; every value lives on the Northflank services
 
 | piece | source (this repo) | build command (from repo root) | Northflank service |
 |---|---|---|---|
-| **web** — the room's app | `wireframe-lab/langfuse-gov-embed/` | `docker build -f wireframe-lab/langfuse-gov-embed/web/Dockerfile --build-arg NEXT_IGNORE_BUILD_ERRORS=1 wireframe-lab/langfuse-gov-embed` | `langfuse-web-gov` (port 3000) |
+| **web** — the room's app | `wireframe-lab/langfuse-gov-embed/` | `docker build -f wireframe-lab/langfuse-gov-embed/web/Dockerfile wireframe-lab/langfuse-gov-embed` | `langfuse-web-gov` (port 3000) |
 | **worker** — ingestion enrichment | same tree | `docker build -f wireframe-lab/langfuse-gov-embed/worker/Dockerfile wireframe-lab/langfuse-gov-embed` | `langfuse-worker-gov` (port 3030, internal) |
 | **frame proxy** — frame headers, session, house ground | `wireframe-lab/langfuse-frame-proxy/` | `docker build wireframe-lab/langfuse-frame-proxy` | `langfuse-frame-proxy` (port 8080) |
 | **studio** — the shell around the room | repo root (its own Dockerfile) | production build from `main` | `semantic-design-systems` |
