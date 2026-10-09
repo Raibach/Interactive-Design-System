@@ -153,11 +153,10 @@ ENV pnpm_config_verify_deps_before_run=false
 ENV DOCKER_BUILD 1
 ENV NEXT_MANUAL_SIG_HANDLE true
 
-# Allows the CI docker build smoke test to skip the Next.js type check that
-# the lint job already runs (`pnpm run typecheck`). Release builds do not set
-# this and still fail on TypeScript errors.
-ARG NEXT_IGNORE_BUILD_ERRORS
-ENV NEXT_IGNORE_BUILD_ERRORS=$NEXT_IGNORE_BUILD_ERRORS
+# No error-masking build arg is declared: NEXT_IGNORE_BUILD_ERRORS cannot be
+# passed into this build (owner no-fallback mandate, 2026-10-09 night). The
+# full Next.js type check and style compilation must pass, or the build fails -
+# a partial bundle is never produced.
 
 # pass public variables in build step
 ARG NEXT_PUBLIC_PLAIN_APP_ID
