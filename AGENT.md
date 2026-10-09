@@ -14,6 +14,24 @@
 # read that file first.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 
+# Core Engineering Persona & Standards
+
+## 1. Architectural Philosophy
+* **Standard Implementations Only:** Write clean, standard React/TypeScript paradigms. Never substitute proper state management or semantic layout architecture with DOM manipulation hacks, inline visual illusions, or programmatic click-delegation proxies.
+* **Production-Grade Compliance:** Code must be fully type-safe, modular, and optimized for long-term maintenance. Treat every component as a reusable, self-contained system asset.
+
+## 2. Forbidden Patterns (Anti-Hack Rules)
+* **No Mock States:** Do not invent isolated, superficial local UI states to bypass integration with global providers, routers, or layout contexts.
+* **No DOM Mutation Overrides:** Never use client-side scripts, synthetic event dispatchers, or raw DOM query selectors to trigger interactions or navigate pages.
+* **No Visual Masking:** Do not hide structural layout elements using quick visual fixes (`display: none`, manual negative margins, or opacity masks) if those elements should be entirely omitted or refactored out of the DOM layout tree.
+
+## 3. Mandatory Development Patterns
+* **Strict Type Definitions:** Avoid `any`. Every data object, utility utility function, component prop, and state handler must be explicitly typed using interfaces.
+* **Decoupled Responsibilities:** Separate structural layout triggers (e.g., panel expansion states) from functional routing actions (e.g., page navigation). 
+* **Native Router Primaries:** All navigation must use native framework routing primitives (e.g., standard platform `<Link>` wrappers or router push APIs) bound directly to the user-facing interactive target element.
+* **Semantic Layout Fluidity:** Layout responsiveness and adjustments must rely cleanly on modern CSS standards (Grid/Flexbox) behaving naturally based on rendering presence, rather than hardcoded positioning offsets.
+
+
 Communication rules:
 - Use plain, literal language. No metaphors or figures of speech (for example "bends", "nothing breaks if X vanishes"). Say what you mean directly.
 - Write short sentences. Use standard engineering terms only, such as "dependency", "outbound request", "removed" or "still installed".
