@@ -36,6 +36,16 @@ export class BuilderEmbed extends LitElement {
    */
   private _embeddedSrc(): string {
     const base = this.src ?? 'http://localhost:3223/';
+    /* THE PARAMS ARE THE BUILDER'S, NOT EVERY FRAME'S (owner-approved F1a, 2026-10-09):
+       `embedded=console` and `house_door` are read by the builder tool (its back arrow)
+       and by Development's openhands-patch.sh (the onboarding door) — and by NOTHING in
+       the Governance room's Langfuse build (grep-verified: no readers). Worse, that
+       query string tripped a vendor route guard — PagedSettingsContainer judged
+       "settings?embedded=..." as "not /settings" and 404'd every settings-subnav click
+       (root-caused + fixed in the vendor source the same day). So the governance mount
+       opts out with `no-embedded-params`; every other mount keeps the params
+       byte-for-byte. This opt-out removes dead weight; it is not the bug fix. */
+    if (this.hasAttribute('no-embedded-params')) return base;
     try {
       const url = new URL(base);
       url.searchParams.set('embedded', 'console');
@@ -192,6 +202,10 @@ declare module 'react' {
       'builder-embed': React.DetailedHTMLProps<
         React.HTMLAttributes<BuilderEmbed> & {
           src?: string;
+          /** Opt-out (F1a, owner-approved 2026-10-09): the governance mount sets this
+           *  so the dead `embedded`/`house_door` params stay off Langfuse's URL. The
+           *  builder mounts (product, development) omit it and keep the params. */
+          'no-embedded-params'?: boolean | string;
         },
         BuilderEmbed
       >;

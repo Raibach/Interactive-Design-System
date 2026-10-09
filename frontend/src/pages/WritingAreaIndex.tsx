@@ -39,6 +39,7 @@ import { getAuthState } from "@/services/authService";
 import { promptService, type PromptSession, type PromptSection } from "@/services/promptService";
 import { UI_ID } from "@/utils/uiIdentifiers";
 import LeftVerticalMenu from "@/components/LeftVerticalMenu";
+import GovernanceNav from "@/components/navigation/GovernanceNav";
 import LeftColumnHeader from "@/components/LeftColumnHeader";
 import { useNotificationGate } from "@/hooks/useNotificationGate";
 import ConsolePage from "@/pages/ConsolePage";
@@ -54,7 +55,13 @@ import designSectionBackground from "@/assets/design-section2-bkg.png";
 // duplicate of this tile left the tree with the retirement (2026-10-05 — one image for the lab
 // ground; `canvas-wireframe-lab-bkg.png` deleted, referenced by nothing).
 import developmentLabBackground from "@/assets/canvas-development-lab-bkg.jpg";
-import dataWave3Background from "@/assets/data-wave3.png";
+// THE GOVERNANCE GROUND, THIRD PASS (owner, 2026-10-09): the owner knocked the wave back in
+// Photoshop — a transparent export, master `images/data-wave4.png`. That master is in the
+// ORIGINAL (unmirrored) orientation, and the room's flip from earlier today still stands, so
+// the asset imported here is a horizontal mirror of wave4 (`sips -f horizontal`, the same
+// one-copy step as wave3's). Masters stay untouched; `data-wave3-flipped.png` is now
+// referenced by nothing.
+import dataWave4Background from "@/assets/data-wave4-flipped.png";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/room-embed-art.jpg";
@@ -907,7 +914,7 @@ export default function Index({
     : isDevelopmentView
       ? developmentLabBackground
       : isGovernanceView
-        ? dataWave3Background
+        ? dataWave4Background
         : composerBackground;
   // THE ROOM'S GROUND COLOUR — one fact with two readers (the two ground slots below).
   // Product stands on the composer purple; Development stands on its own dark grey, the
@@ -10536,13 +10543,22 @@ export default function Index({
         </div>
       )}
 
-      {/* Left Vertical Menu — full-height icon strip */}
-      <LeftVerticalMenu
-        onNewChat={() => window.dispatchEvent(new CustomEvent("new-chat"))}
-        currentTab={headerTab}
-        onNavigateGovernance={navigateGovernanceTool}
-        activeGovernancePath={governancePath}
-      />
+      {/* Left column nav — THE SAME PAGE-LEVEL PATTERN EVERY SECTION USES: the
+          shell rail on every tab, and the Governance room's own isolated nav on
+          Governance. Both are width-0 overlays in this flex row at the page's
+          top-left, which is what keeps their header control (the logo) in the
+          header band — never under it. */}
+      {isGovernanceView ? (
+        <GovernanceNav
+          onNavigate={navigateGovernanceTool}
+          activePath={governancePath}
+        />
+      ) : (
+        <LeftVerticalMenu
+          onNewChat={() => window.dispatchEvent(new CustomEvent("new-chat"))}
+          currentTab={headerTab}
+        />
+      )}
 
       {/* Main content area — flex column that takes remaining height after header.
           Uses flex-1 + min-h-0 so the operator shell row below the header can grow
@@ -11076,20 +11092,38 @@ export default function Index({
                                     "workspace" slot) wears the wave (cover, centred), so this
                                     slot goes transparent — the left nav's floor and the chat
                                     side show the SAME single wave, edge to edge, with no seam. */}
-                                  <div slot="left" style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: '100%', height: '100%', minHeight: 0 }}>
+                                  <div slot="left" style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: '100%', height: '100%', minHeight: 0, paddingLeft: '75px' }}>
                                 {/* THE ROOM'S TOOL (2026-10-08): Langfuse, self-hosted in
                                     governance/langfuse-main, embedded full-page through the
-                                    frame proxy. Langfuse's own sidebar is the room's left
-                                    navigation — collapsible by its own chevron, the same
-                                    pattern the Development seat's workspace wears. */}
+                                    frame proxy. The room's nav is GovernanceNav, rendered at
+                                    the page level in the shell rail's own pattern (see the
+                                    nav render above). THE 75px LEFT SHIFT (owner, 2026-10-09)
+                                    lives on the slot's paddingLeft — the embed itself keeps
+                                    margin-left: 0, so the app is never pushed by a margin.
+                                    colorScheme: 'dark' IS LOAD-BEARING (diagnosed 2026-10-09):
+                                    Langfuse's document declares `color-scheme: dark`, and when
+                                    the embedding element's used color-scheme differs, the
+                                    browser paints the iframe canvas with an OPAQUE backdrop —
+                                    the frame's transparent backgrounds can never show the
+                                    room's wave. Matching the schemes is what makes the canvas
+                                    transparent. Do not remove this line.
+                                    AND THE DEAD PARAMS DO NOT TRAVEL HERE (F1a, owner-approved
+                                    2026-10-09): Langfuse reads neither `embedded=console` nor
+                                    `house_door` (grep-verified), and their query string tripped
+                                    the vendor settings-nav route guard — fixed in the vendor
+                                    source the same day — but this frame takes a clean address:
+                                    the attribute below tells <builder-embed> to skip both params
+                                    for THIS mount only. The builder mounts (product,
+                                    development) keep them byte-for-byte. */}
                                 {governanceToolUrl() && (
                                   <builder-embed
                                     key="governance-workspace"
                                     ref={governanceEmbedRef}
+                                    no-embedded-params
                                     src={governanceToolUrl()}
                                     style={{
                                       display: 'block', flex: '1 1 0%', minWidth: 0, height: '100%',
-                                      marginLeft: '56px',
+                                      colorScheme: 'dark',
                                       opacity: governanceGateDown ? 1 : 0,
                                       transition: 'opacity 700ms ease',
                                     }}
@@ -11114,7 +11148,7 @@ export default function Index({
                                   style={{
                                     position: 'absolute', inset: 0, zIndex: 3,
                                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                                    backgroundImage: `url(${dataWave3Background})`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center',
+                                    backgroundImage: `url(${dataWave4Background})`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center',
                                     opacity: governanceGateDown ? 0 : 1,
                                     transition: 'opacity 700ms ease',
                                     pointerEvents: governanceGateDown ? 'none' : 'auto',
