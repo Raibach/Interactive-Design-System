@@ -55,7 +55,6 @@ import designSectionBackground from "@/assets/design-section2-bkg.png";
 // ground; `canvas-wireframe-lab-bkg.png` deleted, referenced by nothing).
 import developmentLabBackground from "@/assets/canvas-development-lab-bkg.jpg";
 import dataWave3Background from "@/assets/data-wave3.png";
-import GovernanceAssemblyRail from "@/components/GovernanceAssemblyRail";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/room-embed-art.jpg";
@@ -588,24 +587,10 @@ export default function Index({
   const GOVERNANCE_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
   const [governanceGateDown, setGovernanceGateDown] = useState(false);
 
-  /* THE ROOM'S RAIL USED TO DRIVE THE EMBEDDED APP (owner, 2026-10-07: *"so now it's time
-     to wire it up, I guess, to the app, and then remove the app's navigation"*). THE
-     APPLICATION LEFT THE ROOM (owner, 2026-10-08: removed — "everything … the
-     application and anything related to the application itself"). The rail stands as
-     the room's own navigation; this go-channel is kept wired per the architecture rule,
-     but the write below now reaches nothing — the embed it wrote to no longer mounts
-     (see the room's render). A malformed address changes nothing, as before. */
-  const navigateGovernanceTool = (path: string) => {
-    const base = governanceToolUrl();
-    if (!base) return;
-    try {
-      const url = new URL(path, base).toString();
-      governanceEmbedRef.current?.setAttribute('src', url);
-    } catch {
-      /* unreachable in practice — URL() only throws on an unparseable base, and the
-         base was just checked for emptiness; kept so a bad edit can never throw here */
-    }
-  };
+  /* THE ROOM'S LEFT NAVIGATION IS LANGFUSE'S OWN SIDEBAR (owner, 2026-10-08): the
+     embedded app's sidebar — collapsible by its own chevron — is the nav, the same
+     pattern the Development seat's workspace wears. No shell rail; the embed is the
+     room's tool and the tool's own menu is the room's menu. */
   const governanceMinElapsedRef = useRef(false);
   const governanceGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const governanceGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -11063,9 +11048,9 @@ export default function Index({
                                   <div slot="left" style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: '100%', height: '100%', minHeight: 0 }}>
                                 {/* THE ROOM'S TOOL (2026-10-08): Langfuse, self-hosted in
                                     governance/langfuse-main, embedded full-page through the
-                                    frame proxy. The GovernanceAssemblyRail — mounted OVER this
-                                    pane — carries Langfuse's own sections and writes their
-                                    routes onto this embed (navigateGovernanceTool). */}
+                                    frame proxy. Langfuse's own sidebar is the room's left
+                                    navigation — collapsible by its own chevron, the same
+                                    pattern the Development seat's workspace wears. */}
                                 {governanceToolUrl() && (
                                   <builder-embed
                                     key="governance-workspace"
@@ -11087,12 +11072,6 @@ export default function Index({
                                       rail is the room's own list (GOVERNANCE_SEAT_TABS). */}
                                   <chat-panel key="governance-seat" slot="right" ref={governanceSeatRef}></chat-panel>
                                 </workspace-layout>
-                                {/* THE ROOM'S RAIL (2026-10-08): carries Langfuse's sections
-                                    and writes their routes onto the embed. Mounted over the
-                                    embed at the room's left edge, as it always stood. */}
-                                {governanceToolUrl() && (
-                                  <GovernanceAssemblyRail onNavigate={navigateGovernanceTool} toolUp={true} />
-                                )}
                                 {/* THE STAGED OPENING — the Development gate's pattern, third
                                    room: TWO hands since 2026-10-08 (minimum + seat; the frame
                                    hand left with the application), one 700ms cross-fade, the
