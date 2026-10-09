@@ -587,10 +587,39 @@ export default function Index({
   const GOVERNANCE_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
   const [governanceGateDown, setGovernanceGateDown] = useState(false);
 
-  /* THE ROOM'S LEFT NAVIGATION IS LANGFUSE'S OWN SIDEBAR (owner, 2026-10-08): the
-     embedded app's sidebar — collapsible by its own chevron — is the nav, the same
-     pattern the Development seat's workspace wears. No shell rail; the embed is the
-     room's tool and the tool's own menu is the room's menu. */
+  /* THE ROOM'S LEFT NAV IS THE SHELL'S (owner, 2026-10-09): the Governance items live
+     in the shell's left navigation and drive this embed. Each click writes the target
+     Langfuse route onto the frame and marks that section active. */
+  const [governancePath, setGovernancePath] = useState('');
+  const navigateGovernanceTool = (path: string) => {
+    const base = governanceToolUrl();
+    if (!base) return;
+    try {
+      const url = new URL(path, base).toString();
+      governanceEmbedRef.current?.setAttribute('src', url);
+      setGovernancePath(path);
+    } catch {
+      /* URL() only throws on an unparseable base — unreachable after the emptiness check */
+    }
+  };
+
+  /* THE APP REPORTS ITS LOCATION BACK (2026-10-09): the frame proxy injects a tiny
+     reporter into Langfuse that postMessages its pathname on change, so the shell nav
+     can mark the active section even when the person navigates inside the app. */
+  useEffect(() => {
+    const onLangfuseLocation = (event: MessageEvent) => {
+      const data = event.data as { type?: string; path?: string } | null;
+      if (!data || data.type !== 'langfuse-location' || typeof data.path !== 'string') return;
+      try {
+        if (event.origin !== new URL(governanceToolUrl()).origin) return;
+      } catch {
+        return;
+      }
+      setGovernancePath(data.path);
+    };
+    window.addEventListener('message', onLangfuseLocation);
+    return () => window.removeEventListener('message', onLangfuseLocation);
+  }, []);
   const governanceMinElapsedRef = useRef(false);
   const governanceGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const governanceGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -10511,6 +10540,8 @@ export default function Index({
       <LeftVerticalMenu
         onNewChat={() => window.dispatchEvent(new CustomEvent("new-chat"))}
         currentTab={headerTab}
+        onNavigateGovernance={navigateGovernanceTool}
+        activeGovernancePath={governancePath}
       />
 
       {/* Main content area — flex column that takes remaining height after header.

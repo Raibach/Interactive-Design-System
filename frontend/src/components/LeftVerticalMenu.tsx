@@ -1,7 +1,7 @@
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
 import { isDemoMode } from "@/shared/appConfig";
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import raibachLogo from "../assets/raibach-logo.jpg";
 import { IngestModal } from "./IngestModal";
 
@@ -17,6 +17,10 @@ interface LeftVerticalMenuProps {
   onUploadDocument?: () => void;
   /** The header tab the surrounding shell is on — "console" vs "composer". */
   currentTab?: string;
+  /** Writes a Langfuse route onto the Governance embed — the shell nav's deep-link. */
+  onNavigateGovernance?: (path: string) => void;
+  /** The embedded app's current path, so the active section can be marked. */
+  activeGovernancePath?: string;
   // Received and destructured since the real login landed (routes/auth.py + PinGate),
   // but not declared here, so the tree did not typecheck and `npm run build` failed
   // with TS2339 on the destructuring below. Declared, not wired: LogoutIcon exists at
@@ -95,6 +99,8 @@ const FolderIcon = () => (
 export default function LeftVerticalMenu({
   onNewChat,
   onUploadDocument,
+  onNavigateGovernance,
+  activeGovernancePath,
   onSignOut,
   userName = "User",
   userAvatar,
@@ -238,36 +244,96 @@ const LogoutIcon = () => (
   </svg>
 );
 
-  const menuItems: MenuItem[] = [
-    {
-      id: "new-chat",
-      icon: <ChatIcon />,
-      label: "New Chat",
-      onClick: onNewChat,
-    },
-    {
-      id: "prompts",
-      icon: <ListIcon />,
-      label: "Saved Prompts",
-    },
-    {
-      id: "components",
-      icon: <ComponentIcon />,
-      label: "Plugins",
-    },
-    /*
-     * "INGEST DESIGN" AND "UPLOAD DOCUMENT" ARE GONE (owner, 2026-10-01: *"You should remove it
-     * completely"*, then *"remove upload document"*). Ingest's home is the Design room's own rail
-     * — the Figma URL field, Notes and Submit, drawn by `figma-ingest-form` — and this item was a
-     * second entry point to the same modal. Nothing is left greyed here: a menu that keeps a
-     * deactivated control is a menu that has to explain itself.
-     */
-  ].filter((item) => {
-    // Saved Prompts and Plugins are console-only: on the composer they cover the
-    // header, so they come off the floating strip and the flyout there.
-    if (currentTab === 'console') return true;
-    return item.id !== 'prompts' && item.id !== 'components';
-  });
+  // The Governance tab's items — Langfuse's own sections, moved into the shell's nav
+  // (owner, 2026-10-09). Each writes its route onto the embed via onNavigateGovernance.
+  const LANGFUSE_PROJECT_ID = '51211b35-c875-4715-8040-33fccb624279';
+  const langfusePath = (suffix: string) => `/project/${LANGFUSE_PROJECT_ID}${suffix}`;
+  const govStroke = {
+    fill: 'none' as const,
+    stroke: 'currentColor',
+    strokeWidth: 1.5,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+  const GOVERNANCE_ITEMS: Array<{ id: string; icon: React.ReactNode; label: string; path: string; group: string | null }> = [
+    { id: 'gov-home', label: 'Home', path: langfusePath(''), group: null, icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M3 10.5L12 3l9 7.5M5 9.5V21h14V9.5" {...govStroke} /></svg> },
+    { id: 'gov-dashboards', label: 'Dashboards', path: langfusePath('/dashboards'), group: null, icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" {...govStroke} /></svg> },
+    { id: 'gov-traces', label: 'Tracing', path: langfusePath('/traces'), group: 'Observability', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M6 3v18M6 8h6M6 15h6M12 5v6M12 12v6" {...govStroke} /></svg> },
+    { id: 'gov-sessions', label: 'Sessions', path: langfusePath('/sessions'), group: 'Observability', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" {...govStroke} /></svg> },
+    { id: 'gov-users', label: 'Users', path: langfusePath('/users'), group: 'Observability', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" {...govStroke} /><circle cx="9" cy="7" r="4" {...govStroke} /><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" {...govStroke} /></svg> },
+    { id: 'gov-alerts', label: 'Alerts', path: langfusePath('/alerts'), group: 'Observability', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" {...govStroke} /></svg> },
+    { id: 'gov-prompts', label: 'Prompts', path: langfusePath('/prompts'), group: 'Prompt Management', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H8l-4 4V6zM8 8h8M8 11h5" {...govStroke} /></svg> },
+    { id: 'gov-playground', label: 'Playground', path: langfusePath('/playground'), group: 'Prompt Management', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M8 5.5v13l11-6.5z" {...govStroke} /></svg> },
+    { id: 'gov-scores', label: 'Scores', path: langfusePath('/scores'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" {...govStroke} /></svg> },
+    { id: 'gov-evaluators', label: 'Evaluators', path: langfusePath('/evals'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6zM9 12l2 2 4-4" {...govStroke} /></svg> },
+    { id: 'gov-annotation', label: 'Human Annotation', path: langfusePath('/annotation-queues'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><rect x="5" y="3" width="14" height="18" rx="2" {...govStroke} /><path d="M9 3a2 2 0 012-2h2a2 2 0 012 2M9 12l2 2 4-4" {...govStroke} /></svg> },
+    { id: 'gov-datasets', label: 'Datasets', path: langfusePath('/datasets'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" {...govStroke} /></svg> },
+    { id: 'gov-experiments', label: 'Experiments', path: langfusePath('/experiments'), group: 'Evaluation', icon: <svg viewBox="0 0 24 24" className="w-5 h-5"><path d="M9 3h6M10 3v5l-5 8a2 2 0 002 3h10a2 2 0 002-3l-5-8V3M7 14h10" {...govStroke} /></svg> },
+  ];
+  const isGovernance = currentTab === 'governance';
+
+  // The section the embedded app is standing in — so the shell nav can mark it the
+  // way the app's own sidebar does (detail routes keep their parent section lit).
+  const activeGovId = (() => {
+    if (!isGovernance || !activeGovernancePath) return null;
+    const projectMatch = activeGovernancePath.match(/^\/project\/[^/]+(\/([^/?]+))?/);
+    if (!projectMatch) return null; // not a project page — no section is active
+    const seg = projectMatch[2];
+    if (!seg) return 'gov-home';
+    const sectionForSeg: Record<string, string> = {
+      dashboards: 'gov-dashboards',
+      traces: 'gov-traces', trace: 'gov-traces', observations: 'gov-traces',
+      sessions: 'gov-sessions', session: 'gov-sessions',
+      users: 'gov-users',
+      alerts: 'gov-alerts',
+      prompts: 'gov-prompts', prompt: 'gov-prompts',
+      playground: 'gov-playground',
+      scores: 'gov-scores', score: 'gov-scores',
+      evals: 'gov-evaluators', evaluators: 'gov-evaluators', evaluation: 'gov-evaluators',
+      'annotation-queues': 'gov-annotation',
+      datasets: 'gov-datasets', dataset: 'gov-datasets',
+      experiments: 'gov-experiments', experiment: 'gov-experiments',
+    };
+    return sectionForSeg[seg] ?? null;
+  })();
+
+  const menuItems: MenuItem[] = isGovernance
+    ? GOVERNANCE_ITEMS.map((g) => ({
+        id: g.id,
+        icon: g.icon,
+        label: g.label,
+        onClick: () => onNavigateGovernance?.(g.path),
+      }))
+    : [
+        {
+          id: "new-chat",
+          icon: <ChatIcon />,
+          label: "New Chat",
+          onClick: onNewChat,
+        },
+        {
+          id: "prompts",
+          icon: <ListIcon />,
+          label: "Saved Prompts",
+        },
+        {
+          id: "components",
+          icon: <ComponentIcon />,
+          label: "Plugins",
+        },
+        /*
+         * "INGEST DESIGN" AND "UPLOAD DOCUMENT" ARE GONE (owner, 2026-10-01: *"You should remove it
+         * completely"*, then *"remove upload document"*). Ingest's home is the Design room's own rail
+         * — the Figma URL field, Notes and Submit, drawn by `figma-ingest-form` — and this item was a
+         * second entry point to the same modal. Nothing is left greyed here: a menu that keeps a
+         * deactivated control is a menu that has to explain itself.
+         */
+      ].filter((item) => {
+        // Saved Prompts and Plugins are console-only: on the composer they cover the
+        // header, so they come off the floating strip and the flyout there.
+        if (currentTab === 'console') return true;
+        return item.id !== 'prompts' && item.id !== 'components';
+      });
 
   return (
     <div
@@ -306,7 +372,7 @@ const LogoutIcon = () => (
                 e.stopPropagation();
                 setIsNavOpen(true);
               }}
-              className="w-9 h-9 flex items-center justify-center text-white transition-colors"
+              className={`w-9 h-9 flex items-center justify-center transition-colors ${isGovernance && item.id === activeGovId ? 'text-[#CBE6E3]' : 'text-white'}`}
               title={item.label}
               aria-label={item.label}
             >
@@ -357,19 +423,45 @@ const LogoutIcon = () => (
         )}
 
         {isNavOpen && !expandedItem && (
-          <div className="flex flex-col h-full p-3 gap-1" style={{ minWidth: "310px" }}>
-            {menuItems
-              .filter((item) => item.id !== "new-chat")
-              .map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleItemClick(item.id, item.onClick)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left"
-              >
-                <span className="w-5 h-5 flex items-center justify-center">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+          <div className="flex flex-col h-full p-3 gap-1 overflow-y-auto" style={{ minWidth: "310px" }}>
+            {isGovernance ? (
+              <>
+                {GOVERNANCE_ITEMS.map((g, i) => {
+                  const prev = i > 0 ? GOVERNANCE_ITEMS[i - 1] : null;
+                  const showHeader = g.group && g.group !== prev?.group;
+                  return (
+                    <Fragment key={g.id}>
+                      {showHeader && (
+                        <div className="pt-3 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">{g.group}</div>
+                      )}
+                      <button
+                        onClick={() => {
+                          onNavigateGovernance?.(g.path);
+                          setIsNavOpen(false);
+                        }}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${g.id === activeGovId ? 'bg-white/15 text-white' : 'text-gray-200 hover:bg-white/10 hover:text-white'}`}
+                      >
+                        <span className="w-5 h-5 flex items-center justify-center">{g.icon}</span>
+                        <span>{g.label}</span>
+                      </button>
+                    </Fragment>
+                  );
+                })}
+              </>
+            ) : (
+              menuItems
+                .filter((item) => item.id !== "new-chat")
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleItemClick(item.id, item.onClick)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-200 hover:bg-white/10 hover:text-white transition-colors text-left"
+                  >
+                    <span className="w-5 h-5 flex items-center justify-center">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))
+            )}
           </div>
         )}
         {isExpanded && expandedItem && (
