@@ -529,6 +529,11 @@ async def api_teacher_query(request: TeacherQueryRequest):
             self_reflection=request.self_reflection,
             editorial=request.editorial,
             mode=mode,
+            # THE SESSION RIDES THE TRACE (wire 2, owner-approved 2026-10-09): the
+            # package's session id groups the run's trace (and the judge's call) in the
+            # room, and it is the key the evaluation's verdict-score finds its trace by.
+            # Tracing only — nothing else reads it.
+            trace_session=request.session_id,
             # model intentionally omitted — use the enabled provider's default
             # (deepseek-v4-pro). Passing "glm-4.7" (a Z.ai model) here made
             # DeepSeek reject every prompt_output run with HTTP 400.

@@ -11,6 +11,7 @@ from deps import (
     get_user_id_from_header,
 )
 from grace_gui import (
+    LAST_RUN_TRACE,
     query_llm,
 )
 
@@ -734,18 +735,20 @@ async def record_evaluation(
             row = state.prompt_sessions_api.record_evaluation(
                 session_id, request.verdict, request.sentence, request.trigger
             )
+            _post_run_score(session_id, request.verdict, request.sentence)
             return {"evaluation": row, "error": None}
 
         if not (request.output or "").strip():
             raise HTTPException(status_code=400, detail="No verdict and no output to judge.")
 
         try:
-            judged = _judge_run_output(request.ask or "", request.output or "")
+            judged = _judge_run_output(request.ask or "", request.output or "", trace_session=session_id)
         except Exception as e:
             judged = {"verdict": "error", "sentence": f"The judge could not be asked: {e!s}"}
         row = state.prompt_sessions_api.record_evaluation(
             session_id, judged["verdict"], judged.get("sentence"), request.trigger
         )
+        _post_run_score(session_id, judged["verdict"], judged.get("sentence"))
         return {"evaluation": row, "error": None}
     except HTTPException:
         raise
@@ -758,7 +761,33 @@ async def record_evaluation(
         raise HTTPException(status_code=500, detail=f"Error recording evaluation: {e!s}")
 
 
-def _judge_run_output(ask: str, output: str) -> dict[str, Any]:
+def _post_run_score(session_id: str, verdict: str, sentence: str | None) -> None:
+    """Mirror one recorded verdict into the Governance room (wire 2, 2026-10-09).
+
+    Every evaluation this endpoint records also posts a Langfuse score — name `judge`,
+    value = the verdict word itself (categorical: cleared / failed / error — no invented
+    numbers), comment = the judge's sentence. It attaches to the RUN'S OWN trace via the
+    in-process ledger `LAST_RUN_TRACE` (grace_gui), which the run's query_llm call wrote;
+    a session with no run on record falls back to a session-level score — WHICH TARGET
+    WAS USED IS PRINTED, never implied. A score-post failure is PRINTED and does not
+    fail the evaluation: the run_evaluations row is the record; this is its mirror.
+    """
+    try:
+        from langfuse import get_client
+
+        trace_id = LAST_RUN_TRACE.get(session_id)
+        kwargs = {"name": "judge", "value": verdict, "data_type": "CATEGORICAL", "comment": sentence or None}
+        if trace_id:
+            get_client().create_score(trace_id=trace_id, **kwargs)
+            print(f"[langfuse] verdict '{verdict}' posted to the run's trace {trace_id[:8]}… (session {session_id[:8]}…)")
+        else:
+            get_client().create_score(session_id=session_id, **kwargs)
+            print(f"[langfuse] verdict '{verdict}' posted to session {session_id[:8]}… (no run trace on record for it)")
+    except Exception as exc:
+        print(f"[langfuse] score post failed for session {session_id[:8]}…: {exc}")
+
+
+def _judge_run_output(ask: str, output: str, trace_session: str | None = None) -> dict[str, Any]:
     """
     Ask Qwen to judge a run's answer against what it was asked to do. The verdict is two
     words the app already speaks — cleared, failed — and one sentence of plain English. No
@@ -786,6 +815,7 @@ def _judge_run_output(ask: str, output: str) -> dict[str, Any]:
         reasoning=False,
         mode="writer",
         prompt_id="evaluation-judge",
+        trace_session=trace_session,
     ).strip()
     lines = [line.strip() for line in answer.splitlines() if line.strip()]
     verdict_word = (lines[0] if lines else answer).lower()

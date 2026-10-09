@@ -18,6 +18,7 @@ that quietly changed author would make that unknowable. Every mode hard-fails if
 model cannot answer. No fake surfaces: there is no cache and no substitute of any kind.
 """
 
+import contextlib
 import itertools
 import json
 import os
@@ -25,9 +26,27 @@ import time
 from typing import Any
 
 from dotenv import load_dotenv
+# THE LANGFUSE TAP'S DROP-IN CLIENT (wire 1, owner-approved 2026-10-09): same API as
+# `openai.OpenAI`, but every chat.completions.create() it makes is also logged into the
+# Governance room's OWN Langfuse — LANGFUSE_BASE_URL = this machine (localhost:3100),
+# never Langfuse Cloud; the server's telemetry is off (verified in its container env).
+# Tracing is a TAP, not a dependency: the SDK ships spans from a background thread, so a
+# dark room never slows or breaks a call — the room just shows no new traces, and the
+# SDK names the failure in this backend's log.
+from langfuse import get_client, propagate_attributes
+# THE RAW CLIENT, NOT THE DROP-IN (optional upgrade, owner-approved 2026-10-09): the
+# drop-in logger created its own generation and priced it from Langfuse's static model
+# definition — off-peak rates only. The studio now owns the generation so the call can
+# carry THE STUDIO'S OWN EXACT COST (the right peak/off-peak window plus the measured
+# cache split), which Langfuse uses verbatim. A drop-in call under our own generation
+# would log a SECOND generation and double-count the cost — one client, one generation.
 from openai import OpenAI
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+
+# Every trace this file makes carries the studio's ONE active identity — the console
+# header's `u:00000000…0001` — so the room's Users view has something true to say.
+_STUDIO_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Provider config — ONE model, for every mode.
@@ -262,6 +281,13 @@ the room's own source.
 # one. Read it immediately after the call; the next call overwrites it.
 LAST_USAGE: dict[str, Any] = {}
 
+# THE RUN-TO-TRACE LEDGER (wire 2, owner-approved 2026-10-09): session id → the trace id of
+# that session's MOST RECENT prompt_output run. The evaluate endpoint reads it so the
+# judge's verdict posts its score to the run's OWN trace — no lookup, no lag. In-process,
+# last-write-wins; only prompt_output runs write here (a judge/tag writer call must never
+# overwrite a run's entry).
+LAST_RUN_TRACE: dict[str, str] = {}
+
 # Every query_llm() call gets a monotonically increasing id so the client can
 # tell one measured cost from the next. Without it, a surface that gets applied
 # twice dispatches its usage twice and the running tally double-counts.
@@ -349,6 +375,52 @@ def _estimate_cost(
     return round(input_part + output_part, 6), f"DeepSeek {window} rates, {split}"
 
 
+def _estimate_cost_details(
+    model: str | None,
+    prompt_tokens: int | None,
+    prompt_hit_tokens: int | None,
+    prompt_miss_tokens: int | None,
+    completion_tokens: int | None,
+) -> tuple[dict[str, float] | None, str | None]:
+    """The SAME estimate as `_estimate_cost`, split into Langfuse's cost keys.
+
+    The room needs per-part costs ({input, input_cached_tokens, output, total}) because
+    Langfuse stores cached input apart from input (it SUBTRACTS the cached count from
+    input at ingestion, so the two are priced separately and never double-bill). The two
+    functions read the same `_DEEPSEEK_PRICING` table and the same clock, so their totals
+    cannot disagree — `_estimate_cost` stays untouched as the ledger's single number (the
+    original governance contract), and this twin exists only to give the room the parts.
+    """
+    rates = _DEEPSEEK_PRICING.get(str(model or ""))
+    if not rates:
+        return None, None
+    mode = os.getenv("DEEPSEEK_PRICING", "auto").strip().lower()
+    peak = mode == "peak" or (mode != "off" and _is_peak_now())
+    tier = rates["peak"] if peak else rates["off_peak"]
+    window = "peak" if peak else "off-peak"
+    completion = int(completion_tokens) if completion_tokens is not None else 0
+    if prompt_hit_tokens is not None and prompt_miss_tokens is not None:
+        miss_part = (int(prompt_miss_tokens) / 1_000_000) * tier["input_miss"]
+        cached_part = (int(prompt_hit_tokens) / 1_000_000) * tier["input_hit"]
+        split = "measured cache split"
+    else:
+        miss_part = (
+            (int(prompt_tokens) if prompt_tokens is not None else 0) / 1_000_000
+        ) * tier["input_miss"]
+        cached_part = 0.0
+        split = "all input at the cache-miss price (no split reported)"
+    output_part = (completion / 1_000_000) * tier["output"]
+    return (
+        {
+            "input": miss_part,
+            "input_cached_tokens": cached_part,
+            "output": output_part,
+            "total": miss_part + cached_part + output_part,
+        },
+        f"DeepSeek {window} rates, {split}",
+    )
+
+
 def record_pending_usage(user_id: str | None, package_context: dict[str, Any] | None = None) -> None:
     """Persist the most recent call's usage, once. Never raises; a failure is printed loudly.
 
@@ -431,6 +503,11 @@ def query_llm(
     editorial: dict[str, Any] | None = None,
     mode: str = "writer",
     prompt_id: str = "unknown",
+    # THE TRACE'S OWN GROUPING KEY (wire 2, owner-approved 2026-10-09): the prompt
+    # package's session id, when the caller has one. It rides the trace as session_id,
+    # and it is the key the verdict that follows a run finds the run's trace by
+    # (LAST_RUN_TRACE below). Tracing only — nothing else in this path reads it.
+    trace_session: str | None = None,
     model: str | None = None,
 ) -> str:
     """Query the LLM. Tries all providers in priority order.
@@ -654,8 +731,118 @@ def query_llm(
         # this call may take); this says how long it DID take, and the two being
         # different is the whole question when someone asks why she is slow.
         call_started = time.time()
-        response = client.chat.completions.create(**payload, model=model_name)
+        # ── THE LANGFUSE TAP (wire 1, owner-approved 2026-10-09) ─────────────────────
+        # One context around the one create(): the drop-in client logs the generation
+        # (messages in, answer out, token usage, latency), and these attributes name its
+        # trace and bind it to who asked — name `query_llm.<mode>` (the Composer's RUN
+        # arrives as `prompt_output`), the studio's active identity, and the prompt
+        # package as the session when the caller carried one. NOTHING here may change
+        # what the studio does: the manager sets context attributes for the SDK, and the
+        # SDK never blocks a call on the network.
+        # THE TRACE ID IS MADE HERE, NOT READ BACK (wire 2, 2026-10-09): reading
+        # get_current_trace_id() after the call returned None — the drop-in's
+        # GENERATION span has already ended by then, so no ambient context is left
+        # (measured on langfuse 4.17.0, and the SDK says so on the console: "No active
+        # span in current context"). So the id is MADE first and the call is PINNED
+        # onto it by an outer span; the ledger gets an id we own, with no read-back
+        # race. Scaffolding failure here is printed and the call still runs — tracing
+        # must never break a run.
+        try:
+            _trace_id_now = get_client().create_trace_id()
+            _pin_span = get_client().start_as_current_observation(
+                name=f"query_llm.{mode}",
+                as_type="span",
+                trace_context={"trace_id": _trace_id_now},
+            )
+        except Exception as _trace_exc:
+            _trace_id_now = None
+            _pin_span = contextlib.nullcontext()
+            print(f"[langfuse] trace pinning failed: {_trace_exc}")
+        # OUR OWN GENERATION, SO THE COST IS OURS (optional upgrade, owner-approved
+        # 2026-10-09): the call runs inside a generation WE open, and the update after the
+        # response carries the EXACT cost the studio already computes for its own ledger
+        # (the right peak/off-peak window + the measured cache split) — Langfuse uses a
+        # provided cost verbatim, so the room and /api/governance/usage report the same
+        # number to the digit. Both updates go through the observation OBJECTS, never
+        # "current": the generation is current inside its own context, and the pinned
+        # root's io must not be written while the generation holds that position. Any
+        # scaffolding failure is PRINTED and the call still runs — tracing must never
+        # break a run.
+        try:
+            _gen_cm = get_client().start_as_current_observation(
+                name="completion",
+                as_type="generation",
+                model=model_name,
+            )
+        except Exception as _gen_open_exc:
+            _gen_cm = contextlib.nullcontext()
+            print(f"[langfuse] generation open failed: {_gen_open_exc}")
+        with propagate_attributes(
+            trace_name=f"query_llm.{mode}",
+            user_id=_STUDIO_USER_ID,
+            session_id=(trace_session or (prompt_id if prompt_id and prompt_id != "unknown" else None)),
+            metadata={
+                "mode": mode,
+                "prompt_id": prompt_id,
+                "model": model_name,
+                "temperature": request_temp,
+            },
+            tags=[mode],
+        ), _pin_span as _pin_obj, _gen_cm as _gen_obj:
+            response = client.chat.completions.create(**payload, model=model_name)
+            # THE TRACE PREVIEW SHOWS WHAT IT CARRIED (wire 2 follow-up, 2026-10-09): the
+            # pinned root span is OURS, so the first pinned traces read "didn't receive an
+            # input or output" while the generation child held both. set_current_trace_io
+            # was tried first and wrote NOTHING to the rows the preview reads (the root
+            # span's io stayed 0/0 in events_full — measured); an io update on the pinned
+            # root is what fills the preview (proved with a probe trace). The usage and
+            # cost ride the generation itself, from the SAME usage block the ledger reads;
+            # a failure is printed — never silent — and never breaks the call.
+            try:
+                _usage_now = getattr(response, "usage", None)
+                _answer = (
+                    response.choices[0].message.content
+                    if getattr(response, "choices", None)
+                    else None
+                )
+                if _pin_obj is not None:
+                    _pin_obj.update(input=payload.get("messages"), output=_answer)
+                if _gen_obj is not None:
+                    _gen_fields: dict[str, Any] = {
+                        "input": payload.get("messages"),
+                        "output": _answer,
+                    }
+                    if _usage_now is not None:
+                        _prompt_t = getattr(_usage_now, "prompt_tokens", None)
+                        _completion_t = getattr(_usage_now, "completion_tokens", None)
+                        _hit_t = getattr(_usage_now, "prompt_cache_hit_tokens", None)
+                        _miss_t = getattr(_usage_now, "prompt_cache_miss_tokens", None)
+                        _cached_t = int(_hit_t) if _hit_t is not None else 0
+                        # Langfuse's own convention: input EXCLUDES the cached count (its
+                        # ingestion subtracts it), so the two quote apart.
+                        _usage_details: dict[str, int] = {"input_cached_tokens": _cached_t}
+                        if _prompt_t is not None:
+                            _usage_details["input"] = max(int(_prompt_t) - _cached_t, 0)
+                        if _completion_t is not None:
+                            _usage_details["output"] = int(_completion_t)
+                        if _prompt_t is not None and _completion_t is not None:
+                            _usage_details["total"] = int(_prompt_t) + int(_completion_t)
+                        _gen_fields["usage_details"] = _usage_details
+                        _cost_details, _cost_basis = _estimate_cost_details(
+                            model_name, _prompt_t, _hit_t, _miss_t, _completion_t
+                        )
+                        if _cost_details is not None:
+                            _gen_fields["cost_details"] = _cost_details
+                            _gen_fields["metadata"] = {"cost_basis": _cost_basis}
+                    _gen_obj.update(**_gen_fields)
+            except Exception as _gen_upd_exc:
+                print(f"[langfuse] generation update failed: {_gen_upd_exc}")
         call_elapsed = time.time() - call_started
+
+        # THE LEDGER WRITE (wire 2): only a RUN records its trace for the verdict that
+        # follows it; the judge's own writer call must not overwrite a run's entry.
+        if mode == "prompt_output" and trace_session and _trace_id_now:
+            LAST_RUN_TRACE[trace_session] = _trace_id_now
         message = response.choices[0].message
         # Capture what this actually cost. Providers report it; guessing it
         # would put an invented number above a real action.
