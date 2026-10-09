@@ -25,6 +25,18 @@ RUN npm ci
 # The app, whole.
 COPY . .
 
+# THE BUILD-ARGUMENT WIRE (2026-10-09): VCAAS_BASE_URL is set as a build argument on
+# the Northflank service (the hosted engine's address, http://builder-engine:4000/...)
+# because `next build` evaluates the /api routes — and src/lib/vcaas-server.ts
+# REFUSES at load when the value is missing (network lockdown, 2026-10-07). Northflank
+# passes build arguments as Docker build args, which a Dockerfile only receives when
+# declared — and npm only sees them as environment variables — so this pair is the
+# WIRE, not a value: the value stays on the service. See "THE CONFIG RULE" in
+# wireframe-lab/HOST-THE-TOOLS.md. At run time the service's runtime env overrides the
+# baked default; a build without the argument fails loudly at the guard, as designed.
+ARG VCAAS_BASE_URL
+ENV VCAAS_BASE_URL=${VCAAS_BASE_URL}
+
 RUN npm run build
 
 ENV NODE_ENV=production

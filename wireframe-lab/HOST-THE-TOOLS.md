@@ -129,3 +129,38 @@ demo; the permission prompt never appears; local runs still behave exactly as to
 > before building anything public-facing with an API key.** Then verify end to end on the
 > deployed demo (the checklist above) and record the work in `development/CHANGELOG.md` and
 > `wireframe-lab/DEVELOPMENT-ROOM.md` in the repo's style.
+
+---
+
+## THE CONFIG RULE — local vs hosted, and what to check before every push (2026-10-09)
+
+**THE RULE: values live on the services, never in committed files.** A committed file may
+READ an environment variable and carry a value-free default; it may not carry a value that
+is only right on one machine. When the Mac and Northflank differ, the difference is a
+service setting (env var, build argument), not a commit.
+
+**Where every value actually lives (the inventory, verified 2026-10-09):**
+
+| Variable | Where the value lives | Committed? | Mac value | Hosted value |
+|---|---|---|---|---|
+| `VCAAS_BASE_URL` | Northflank: `builder` **runtime env AND build argument** | no | `http://localhost:4000/api/v1/vcaas` (`.env.local` — gitignored) | `http://builder-engine:4000/api/v1/vcaas` |
+| `DEVELOPMENT_TOOL_URL` / `BUILDER_TOOL_URL` / `GOVERNANCE_TOOL_URL` | Northflank: studio runtime env (currently unset — deployed rooms stay dark by the loopback law) | no | unset → localhost defaults | set when/if a tool is ever hosted |
+| `DEEPSEEK_API_KEY`, `NF_SDSMANAGER_*` | service env / addon inheritance | no | `backend/.env` (gitignored) | service settings |
+| `LANGFUSE_*` | backend `.env` — local-only by the owner's decision 2026-10-09 | no | local room | never (no hosted Langfuse) |
+
+**THE VCAAS CASE — the pattern, from the night it broke (2026-10-07 → fixed 2026-10-09):**
+the builder's lockdown guard (`src/lib/vcaas-server.ts`) refuses at load when
+`VCAAS_BASE_URL` is unset, and Next evaluates that module during `npm run build` — so the
+Northflank **build** needed the value, which only existed as a **runtime** env. The fix was
+one build argument on the service (set via `northflank update service build-arguments`) —
+**zero repo changes, nothing to switch over at commit time.** When a hosted build fails on
+a missing value, put the value on the service; do not bake it into a committed file.
+
+**BEFORE EVERY PUSH (checklist):**
+1. `git diff --cached` — no new `localhost` / machine-specific values anywhere in
+   committed files (docs and comments are fine — code paths are not).
+2. New env variables the hosted services will need → set them on the service (runtime
+   AND, if the build reads them, as a build argument) and add the row to the table above.
+3. If a committed file ever *must* carry an environment-specific value — today, none do —
+   it goes in the table above WITH the switch-over note, before the commit.
+
