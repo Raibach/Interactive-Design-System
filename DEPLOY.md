@@ -121,6 +121,14 @@ never drops). To carry data from the local machine (`railway`):
   `sslmode` in `DATABASE_URL` always wins; absent it, localhost → `disable`,
   private/`railway.internal` → `prefer`, anything else → `require`. The server's
   `studio.env` pins `?sslmode=prefer` (private compose network, no TLS on the wire).
+- The room's storage needs BOTH the address AND a writable bucket to ingest:
+  `LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT` + `LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT` must point
+  at the internal storage (`http://minio:9000`) — without them, uploads fall back to
+  REAL Amazon S3 and every ingest 500s (raw `InvalidAccessKeyId` in the room's log).
+  And a bucket folder created by hand under the storage volume must be world-writable
+  (the storage process runs non-root; the volume root is mode 777 for exactly that
+  reason — 10-09 lesson: a 755 folder answers `AccessDenied` on PUT). Restart does
+  NOT re-read `.env`; after changing values, recreate: `docker compose up -d <service>`.
 - Logs are the truth surface: raw container stdout/stderr via
   `docker compose logs <service>` on raibach-cloud-1. Never summarize an error away.
 
