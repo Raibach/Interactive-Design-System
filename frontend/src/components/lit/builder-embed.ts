@@ -47,7 +47,11 @@ export class BuilderEmbed extends LitElement {
        byte-for-byte. This opt-out removes dead weight; it is not the bug fix. */
     if (this.hasAttribute('no-embedded-params')) return base;
     try {
-      const url = new URL(base);
+      /* RELATIVE ADDRESSES RESOLVE AGAINST THIS PAGE (2026-10-10): under the door the
+         room hands this element same-origin paths ("/builder", "/dev") — new URL(relative)
+         alone would throw and silently drop the params below. Resolving against the page's
+         own url keeps both the absolute (direct-port) and the relative (door) forms whole. */
+      const url = new URL(base, window.location.href);
       url.searchParams.set('embedded', 'console');
       /* THE DOOR TRAVELS TO THE FRAME (2026-10-04). The Development room's tool decides what a
          first-time visitor sees — its onboarding wizard (the one with the model setup), or
@@ -116,6 +120,36 @@ export class BuilderEmbed extends LitElement {
       return;
     }
     frame.contentWindow.postMessage(message, origin);
+  }
+
+  /**
+   * NAVIGATE THE FRAME DIRECTLY (2026-10-09).
+   *
+   * A plain `src` write is a no-op when the target equals the current `src`
+   * value — but the embedded app routes itself with the history API, which
+   * moves the document WITHOUT rewriting the iframe's `src` attribute. The
+   * shell's nav must be able to pull the frame back to a section even then
+   * (measured in the room: after the app landed on its org chooser, clicking
+   * Home set the SAME url again and the frame did not move).
+   *
+   * So this tells the window itself to navigate. Navigating a cross-origin
+   * frame is allowed — reading its state is what the browser blocks.
+   * `replace` swaps the current history entry instead of piling entries into
+   * the frame. If a browser ever refused, the fallback rewrites `src` (which
+   * re-uses the normal render path — but that fallback alone cannot force a
+   * reload when `src` is unchanged, so it is only partial).
+   */
+  navigateTo(url: string): void {
+    const frame = this.renderRoot?.querySelector('iframe') as HTMLIFrameElement | null;
+    if (!frame?.contentWindow) {
+      this.src = url;
+      return;
+    }
+    try {
+      frame.contentWindow.location.replace(url);
+    } catch {
+      this.src = url;
+    }
   }
 
   connectedCallback() {

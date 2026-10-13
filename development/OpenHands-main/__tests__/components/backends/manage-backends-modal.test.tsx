@@ -25,7 +25,6 @@ import {
   getCloudOrganizationMe,
   getCurrentCloudApiKey,
 } from "#/api/cloud/organization-service.api";
-import * as telemetry from "#/services/telemetry";
 
 const deviceFlowMocks = vi.hoisted(() => ({
   startDeviceFlow: vi.fn(),
@@ -64,8 +63,6 @@ vi.mock("#/api/device-flow-client", async (importOriginal) => {
   };
 });
 
-let captureMock: ReturnType<typeof vi.spyOn>;
-
 vi.mock("#/hooks/query/use-settings", () => ({
   useSettings: () => ({
     data: { user_consents_to_analytics: true, email: "user@example.com" },
@@ -98,8 +95,6 @@ function TestSeed({
 }
 
 beforeEach(() => {
-  captureMock = vi.spyOn(telemetry, "trackEvent").mockResolvedValue(undefined);
-  vi.spyOn(telemetry, "isTelemetryEnabled").mockReturnValue(true);
   window.localStorage.clear();
   getServerInfoMock.mockReset();
   getServerInfoMock.mockResolvedValue({ version: "1.48.0" });
@@ -496,31 +491,7 @@ describe("ManageBackendsModal", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("captures backend_added with source manage_backends_modal when adding from here", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(<ManageBackendsModal onClose={vi.fn()} />);
-
-    await user.click(await screen.findByTestId("manage-backends-add"));
-    await screen.findByTestId("add-backend-modal");
-    await user.click(screen.getByTestId("add-backend-option-agent-server"));
-
-    await user.type(screen.getByTestId("add-backend-name"), "Local Extra");
-    await user.type(
-      screen.getByTestId("add-backend-host"),
-      "http://localhost:8000",
-    );
-    await user.type(screen.getByTestId("add-backend-api-key"), "sk-local");
-    await user.click(screen.getByTestId("add-backend-submit"));
-
-    await waitFor(() =>
-      expect(captureMock).toHaveBeenCalledWith(
-        "backend_added",
-        expect.objectContaining({ source: "manage_backends_modal" }),
-      ),
-    );
-  });
-
-  it("does not capture backend_added when editing an existing backend", async () => {
+  it("closes the edit modal after saving an existing backend", async () => {
     const user = userEvent.setup();
     renderWithProviders(
       <TestSeed
@@ -550,10 +521,6 @@ describe("ManageBackendsModal", () => {
       expect(
         screen.queryByTestId("edit-backend-modal"),
       ).not.toBeInTheDocument(),
-    );
-    expect(captureMock).not.toHaveBeenCalledWith(
-      "backend_added",
-      expect.anything(),
     );
   });
   it("uses Cloud reconnect recovery controls when locked to Cloud", async () => {

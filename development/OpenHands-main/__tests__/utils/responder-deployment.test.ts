@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AUTOMATION_CATALOG } from "@openhands/extensions/automations";
 import {
-  OPENHANDS_CLOUD_INTEGRATIONS_URL,
   isResponderAutomation,
   resolveResponderDeploymentOption,
 } from "#/utils/responder-deployment";
@@ -54,13 +53,6 @@ describe("resolveResponderDeploymentOption", () => {
     expect(resolveResponderDeploymentOption("local").action).toEqual({
       kind: "launch-local",
     });
-    expect(resolveResponderDeploymentOption("openhands-cloud").action).toEqual({
-      kind: "open-url",
-      url: OPENHANDS_CLOUD_INTEGRATIONS_URL,
-    });
-    expect(OPENHANDS_CLOUD_INTEGRATIONS_URL).toBe(
-      "https://app.all-hands.dev/settings/integrations",
-    );
     expect(() => resolveResponderDeploymentOption("user-cloud")).toThrow();
   });
 });

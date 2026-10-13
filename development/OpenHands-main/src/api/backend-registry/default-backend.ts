@@ -1,9 +1,9 @@
 import {
-  getAgentServerBaseUrl,
   getAgentServerSessionApiKey,
   getCookieAuthCloudHost,
   getLockedCloudHost,
 } from "../agent-server-config";
+import { getAgentCanvasBaseUrl } from "#/utils/base-path";
 import type { Backend } from "./types";
 
 /**
@@ -55,7 +55,7 @@ export function makeDefaultLocalBackend(): Backend | null {
   // see the docblock above.
   if (getLockedCloudHost()) return null;
 
-  const host = getAgentServerBaseUrl();
+  const host = getAgentCanvasBaseUrl();
   const apiKey = getAgentServerSessionApiKey();
 
   if (!host || !apiKey) return null;

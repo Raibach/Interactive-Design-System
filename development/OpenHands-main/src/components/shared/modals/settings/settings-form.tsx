@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import React from "react";
-import { useTracking } from "#/hooks/use-tracking";
 import { useNavigation } from "#/context/navigation-context";
 import { I18nKey } from "#/i18n/declaration";
 import { DangerModal } from "../confirmation-modals/danger-modal";
@@ -10,7 +9,6 @@ import { ModelSelector } from "./model-selector";
 import { Settings } from "#/types/settings";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { SettingsInput } from "#/components/features/settings/settings-input";
-import { HelpLink } from "#/ui/help-link";
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
 import { getAgentSettingValue } from "#/utils/sdk-settings-schema";
 import { SETTINGS_FORM } from "#/utils/constants";
@@ -21,7 +19,6 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ settings, onClose }: SettingsFormProps) {
-  const { trackSettingsSaved } = useTracking();
   const { mutate: saveUserSettings } = useSaveSettings();
   const { currentPath } = useNavigation();
   const { t } = useTranslation("openhands");
@@ -37,17 +34,6 @@ export function SettingsForm({ settings, onClose }: SettingsFormProps) {
     await saveUserSettings(newSettings, {
       onSuccess: () => {
         onClose();
-
-        const agentLlm =
-          ((newSettings.agent_settings_diff as Record<string, unknown>)
-            ?.llm as Record<string, unknown>) ?? {};
-        trackSettingsSaved({
-          llmModel: agentLlm.model,
-          llmApiKeySet: agentLlm.api_key ? "SET" : "UNSET",
-          searchApiKeySet: newSettings.search_api_key ? "SET" : "UNSET",
-          remoteRuntimeResourceFactor:
-            newSettings.remote_runtime_resource_factor,
-        });
       },
     });
   };
@@ -97,15 +83,6 @@ export function SettingsForm({ settings, onClose }: SettingsFormProps) {
             // eslint-disable-next-line i18next/no-literal-string -- masked-key sentinel, not translatable
             placeholder={isLLMKeySet ? "<hidden>" : ""}
             labelClassName={SETTINGS_FORM.LABEL_CLASSNAME}
-          />
-
-          <HelpLink
-            testId="llm-api-key-help-anchor"
-            text={t(I18nKey.SETTINGS$DONT_KNOW_API_KEY)}
-            linkText={t(I18nKey.SETTINGS$CLICK_FOR_INSTRUCTIONS)}
-            href="https://docs.openhands.dev/usage/local-setup#getting-an-api-key"
-            size="settings"
-            linkColor="white"
           />
         </div>
 

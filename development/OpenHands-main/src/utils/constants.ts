@@ -19,10 +19,6 @@ export const JSON_VIEW_THEME = {
   base0F: "#ff5370", // deprecated, red
 };
 
-export const PRODUCT_URL = {
-  PRODUCTION: "https://app.all-hands.dev",
-};
-
 export const SETTINGS_FORM = {
   LABEL_CLASSNAME: "text-[11px] font-medium leading-4 tracking-[0.11px]",
 };

@@ -37,7 +37,6 @@ import { AddAutomationModal } from "#/components/features/automations/add-automa
 import { ImportAutomationModal } from "#/components/features/automations/import-automation-modal";
 import { RecommendedAutomationsLauncher } from "#/components/features/automations/recommended-automations-launcher";
 import { BrandButton } from "#/components/features/settings/brand-button";
-import { useTracking } from "#/hooks/use-tracking";
 import {
   useAutomationCreatorFilterUserId,
   useAutomationPermissions,
@@ -174,8 +173,6 @@ export default function AutomationsList() {
   const runSummaries = useAutomationRunSummaries(runSummaryAutomations, {
     enabled: isBackendHealthy && dashboard !== null,
   });
-  const { trackPrebuiltAutomationEnabled, trackAutomationExported } =
-    useTracking();
   const toggleMutation = useToggleAutomation();
   const deleteMutation = useDeleteAutomation();
   const dispatchMutation = useDispatchAutomation();
@@ -224,13 +221,6 @@ export default function AutomationsList() {
   const handleToggle = (id: string, currentEnabled: boolean) => {
     const willEnable = !currentEnabled;
     toggleMutation.mutate({ id, enabled: willEnable });
-    if (willEnable) {
-      const automation = data?.automations.find((a) => a.id === id);
-      trackPrebuiltAutomationEnabled({
-        automationId: id,
-        automationName: automation?.name ?? id,
-      });
-    }
   };
 
   const handleRunNow = (id: string) => {
@@ -266,7 +256,6 @@ export default function AutomationsList() {
       new Blob([contents], { type: "application/json" }),
       getAutomationExportFilename(automation),
     );
-    trackAutomationExported({ backendKind: active.backend.kind });
   };
 
   const handleImportFile = async (file: File) => {

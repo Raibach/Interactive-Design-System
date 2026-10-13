@@ -493,10 +493,7 @@ export function PromptTable() {
   };
 
   return (
-    <DataTableControlsProvider
-      tableName={promptFilterConfig.tableName}
-      defaultSidebarCollapsed={promptFilterConfig.defaultSidebarCollapsed}
-    >
+    <DataTableControlsProvider tableName={promptFilterConfig.tableName}>
       <div className="flex h-full w-full flex-col">
         {/* Toolbar spanning full width */}
         {currentFolderPath && (

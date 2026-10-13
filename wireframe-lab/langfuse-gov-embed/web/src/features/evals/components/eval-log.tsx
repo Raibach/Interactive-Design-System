@@ -257,10 +257,7 @@ export default function EvalLogTable({
   };
 
   return (
-    <DataTableControlsProvider
-      tableName={evalLogFilterConfig.tableName}
-      defaultSidebarCollapsed={evalLogFilterConfig.defaultSidebarCollapsed}
-    >
+    <DataTableControlsProvider tableName={evalLogFilterConfig.tableName}>
       <div className="flex h-full w-full flex-col">
         <SearchableTableFilterLayout
           search={

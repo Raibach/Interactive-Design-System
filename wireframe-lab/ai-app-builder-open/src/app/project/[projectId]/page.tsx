@@ -39,6 +39,7 @@ import { PublishedModal } from "@/components/workspace/PublishedModal";
 import { useProjectOperation } from "@/components/workspace/use-project-operation";
 import { OPERATION_COPY, OPERATION_PROFILES, shouldAdoptServerRebuild } from "@/lib/project-operation";
 import { getPublishedHost, getPreviewUrlField } from "@/lib/project-status";
+import { BASE_PATH } from "@/lib/base-path";
 import { useVisualEditor } from "@/components/workspace/visual-editor/use-visual-editor";
 import { VisualEditorPanel } from "@/components/workspace/visual-editor/VisualEditorPanel";
 import { VisualChangesBar } from "@/components/workspace/visual-editor/VisualChangesBar";
@@ -156,7 +157,7 @@ function decodeAttachments(files: AgentInputFile[] | undefined): AgentInputFile[
 async function waitForPreview(projectId: string): Promise<void> {
   for (let attempt = 0; attempt < 40; attempt++) {
     try {
-      const response = await fetch(`/api/preview/${encodeURIComponent(projectId)}/`, { cache: "no-store" });
+      const response = await fetch(`${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}/`, { cache: "no-store" });
       if (response.ok && !looksLikePlaceholder(await response.text())) return;
     } catch {
       // Not up yet.
@@ -927,7 +928,7 @@ export default function WorkspacePage() {
      */
     const appIsServing = async (): Promise<boolean> => {
       try {
-        const response = await fetch(`/api/preview/${encodeURIComponent(projectId)}/`, { cache: "no-store" });
+        const response = await fetch(`${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}/`, { cache: "no-store" });
         if (!response.ok) return false;
         return !looksLikePlaceholder(await response.text());
       } catch {
@@ -1110,7 +1111,7 @@ export default function WorkspacePage() {
       for (let attempt = 0; attempt < PREVIEW_PROBE_ATTEMPTS; attempt++) {
         if (cancelled) return false;
         try {
-          const response = await fetch(`/api/preview/${encodeURIComponent(projectId)}/`, { method: "HEAD", cache: "no-store" });
+          const response = await fetch(`${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}/`, { method: "HEAD", cache: "no-store" });
           if (response.ok) return true;
         } catch {
           // Network hiccup — indistinguishable from "not up yet", so retry.
@@ -1382,7 +1383,7 @@ export default function WorkspacePage() {
   async function handlePublishToConsole() {
     setPublishing(true);
     try {
-      const res = await fetch(`/api/vcaas/projects/${encodeURIComponent(projectId)}/publish`, { method: "POST" });
+      const res = await fetch(`${BASE_PATH}/api/vcaas/projects/${encodeURIComponent(projectId)}/publish`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body?.errors) {
         toast.error(body?.errors?.errorMessage || "Could not publish this idea");
@@ -1670,7 +1671,7 @@ export default function WorkspacePage() {
                   className="flex-1 min-w-0"
                 />
                 <button className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0" onClick={() => { fetchProject(); setPreviewKey((k) => k + 1); }}><RefreshCw className="w-3.5 h-3.5" /></button>
-                {previewUrl && <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"><ExternalLink className="w-3.5 h-3.5" /></a>}
+                {previewUrl && <a href={`${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}/`} target="_blank" rel="noopener noreferrer" className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"><ExternalLink className="w-3.5 h-3.5" /></a>}
               </div>
             </div>
             {/*
@@ -1731,7 +1732,7 @@ export default function WorkspacePage() {
               </div>
             )}
             <div className={`flex-1 overflow-hidden ${activeTab === "preview" ? "rounded-none" : "m-2 sm:m-3 rounded-xl shadow-sm"}`} style={{ background: cardBg }}>
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ Same-origin ONLY while the editor is open — and for the length of an apply, which outlives the panel: dropping the proxy mid-apply would reload the frame and throw away the preview-only edits the user is watching. */ proxiedSrc={visualEditorOpen || visualLocked ? `/api/preview/${encodeURIComponent(projectId)}` : null} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} mobilePreview={mobilePreview} iframePath={iframePath} frameRef={previewFrameRef} /* ⭐ SAME-ORIGIN ALWAYS since the door (2026-10-10): the preview is served from the studio's single public address, where the engine's own URL would mean each visitor's own machine — the editor's old reason (a scriptable frame) simply always holds now, and the proxy's round trip is the deliberate cost of one address. */ proxiedSrc={`${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}`} />}
               {activeTab === "code" && <CodePanel projectId={projectId} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} onRebuildStarted={() => operation.begin("rebuild")} onRebuildFinished={() => operation.end("rebuild")} />}
               {activeTab === "database" && <DatabasePanel projectId={projectId} />}
             </div>
@@ -1851,7 +1852,7 @@ export default function WorkspacePage() {
             </div>
           ) : (
             <div className="h-full overflow-hidden">
-              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} mobilePreview={false} iframePath={iframePath} />}
+              {activeTab === "preview" && <PreviewPanel key={previewKey} previewUrl={shownPreviewUrl} cached={previewCached} onRefresh={() => { fetchProject(); setPreviewKey((k) => k + 1); }} loading={isBuilding} mobilePreview={false} iframePath={iframePath} proxiedSrc={`${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}`} />}
               {activeTab === "code" && <CodePanel projectId={projectId} darkMode={darkMode} onAskAiEdit={handleAskAiEdit} wake={serverWake} onRebuildStarted={() => operation.begin("rebuild")} onRebuildFinished={() => operation.end("rebuild")} />}
               {activeTab === "database" && <DatabasePanel projectId={projectId} />}
             </div>

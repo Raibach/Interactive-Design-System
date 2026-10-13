@@ -71,10 +71,7 @@ function buildConfig(): WebClientConfig {
   return {
     feature_flags: { hide_llm_settings: false, hide_users_page: true },
     providers_configured: [],
-    maintenance_start_time: null,
     recaptcha_site_key: null,
-    faulty_models: [],
-    error_message: null,
     updated_at: "2026-01-01T00:00:00.000Z",
   };
 }

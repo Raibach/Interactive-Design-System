@@ -6,9 +6,6 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useLocation,
-  useNavigate,
-  useNavigation as useRouterNavigation,
 } from "react-router";
 import "./tailwind.css";
 import "./index.css";
@@ -20,12 +17,7 @@ import {
   isAgentServerUnavailableError,
   isAgentServerAuthError,
 } from "#/api/agent-server-compatibility";
-import {
-  getLockedCloudAuthMode,
-  getLockedCloudHost,
-  isAuthRequiredAndMissing,
-  isSameCloudHost,
-} from "#/api/agent-server-config";
+import { isAuthRequiredAndMissing } from "#/api/agent-server-config";
 import {
   authenticateWithMainAppCookie,
   redirectToMainAppLogin,
@@ -43,10 +35,7 @@ import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { useConfig } from "#/hooks/query/use-config";
 import { QUERY_KEYS } from "#/hooks/query/query-keys";
 import { AgentServerUIRoot } from "#/components/providers";
-import { TelemetryConsentBanner } from "#/components/features/analytics/telemetry-consent-banner";
 import { buildAgentCanvasPath } from "#/utils/base-path";
-import { useOnboardingCompletion } from "#/components/features/onboarding/use-onboarding-completion";
-import { NavigationProvider } from "#/context/navigation-context";
 import {
   applyColorTheme,
   COLOR_THEME_BOOTSTRAP_SCRIPT,
@@ -74,21 +63,11 @@ const ApiKeyEntryScreen = React.lazy(
   () => import("#/components/features/backends/api-key-entry-screen"),
 );
 
-// Rendered only for first-run public/frontend-only bootstraps; keep the
-// onboarding flow out of the root bundle until this rare gate is active.
-const OnboardingModal = React.lazy(() =>
-  import("#/components/features/onboarding/onboarding-modal").then((m) => ({
-    default: m.OnboardingModal,
-  })),
-);
-
-// Rendered for first-run in locked-to-Cloud mode; shows Cloud login directly
-// without the onboarding progress bars.
-const BackendFormModal = React.lazy(() =>
-  import("#/components/features/backends/backend-form-modal").then((m) => ({
-    default: m.BackendFormModal,
-  })),
-);
+// THE FIRST-RUN ONBOARDING IS DELETED, NOT HIDDEN (owner, 2026-10-11: "the
+// onboarding I guess can be removed deleted"). The OnboardingModal lazy and
+// the locked-to-Cloud first-run screen that rendered BackendFormModal are both
+// gone from this tree, together with the `openhands-onboarded` flag they keyed
+// off. A first run now boots straight into the tool.
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -118,7 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 function AgentServerBootstrapLoading() {
   return (
-    <main className="min-h-screen bg-base px-6 py-10 text-contrast">
+    <main className="min-h-screen px-6 py-10 text-contrast">
       <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center">
         <div className="rounded-3xl border border-contrast/10 bg-base/80 px-8 py-10 shadow-2xl">
           <LoadingSpinner size="large" />
@@ -153,7 +132,7 @@ function MissingAgentServerScreen() {
   return (
     <main
       data-testid="agent-server-onboarding-screen"
-      className="min-h-screen bg-base"
+      className="min-h-screen"
     >
       <React.Suspense fallback={null}>
         <ManageBackendsModal onClose={handleClose} recoveryMode />
@@ -161,62 +140,6 @@ function MissingAgentServerScreen() {
     </main>
   );
 }
-function FirstRunOnboardingScreen({ onClose }: { onClose: () => void }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const routerNavigation = useRouterNavigation();
-  const conversationId =
-    location.pathname.match(/^\/conversations\/([^/]+)/)?.[1] ?? null;
-  const navigationValue = React.useMemo(
-    () => ({
-      currentPath: location.pathname,
-      conversationId,
-      isNavigating: Boolean(routerNavigation.location),
-      navigate: (to: string, options?: { replace?: boolean }) =>
-        navigate(to, options),
-    }),
-    [conversationId, location.pathname, navigate, routerNavigation.location],
-  );
-
-  const lockedCloudHost = getLockedCloudHost();
-  const isLockedToCloud = lockedCloudHost !== null;
-
-  // In locked-to-Cloud mode, show the Add Backend modal directly with Cloud
-  // login, instead of the full onboarding flow with progress bars. This
-  // matches the UX expectation for canvas.openhands.dev where Cloud is the
-  // only backend option.
-  if (isLockedToCloud) {
-    return (
-      <main
-        data-testid="first-run-onboarding-screen"
-        className="min-h-screen bg-base"
-      >
-        <React.Suspense fallback={<AgentServerBootstrapLoading />}>
-          <BackendFormModal
-            mode="add"
-            onClose={onClose}
-            source="manage_backends_modal"
-            hideCloseButton
-          />
-        </React.Suspense>
-      </main>
-    );
-  }
-
-  return (
-    <main
-      data-testid="first-run-onboarding-screen"
-      className="min-h-screen bg-base"
-    >
-      <NavigationProvider value={navigationValue}>
-        <React.Suspense fallback={<AgentServerBootstrapLoading />}>
-          <OnboardingModal onClose={onClose} />
-        </React.Suspense>
-      </NavigationProvider>
-    </main>
-  );
-}
-
 export const links: LinksFunction = () => [
   {
     rel: "icon",
@@ -226,7 +149,7 @@ export const links: LinksFunction = () => [
 ];
 
 export const meta: MetaFunction = () => [
-  { title: "OpenHands" },
+  { title: "Raibach — Agent Canvas" },
   { name: "description", content: "Let's Start Building!" },
 ];
 
@@ -252,62 +175,22 @@ export default function App() {
   const authMissing =
     bakedKeyMissing && !hasRegisteredKey && !isActiveCloudBackend;
   const queryClient = useQueryClient();
-  // In locked-to-Cloud mode the only valid backend is a Cloud backend whose
-  // host matches the configured locked Cloud host. A missing backend, a stale
-  // Local backend (e.g. one persisted from a previous non-locked session), or
-  // a Cloud backend pointing at a *different* host must all trigger first-run
-  // onboarding instead of the Manage Backends recovery modal — the onboarding
-  // flow owns the Cloud login that replaces the stale backend.
-  const lockedCloudHost = getLockedCloudHost();
-  const lockedCloudAuthMode = getLockedCloudAuthMode();
-  const isLockedToCloud = lockedCloudHost !== null;
-  // True only when the active backend IS the configured locked Cloud host
-  // (normalized comparison so trailing slash / case / protocol differences
-  // don't cause false negatives). This is the single signal the locked-mode
-  // gates key off of: a reachable stale Local backend or a Cloud backend on
-  // another host must never be treated as the locked backend.
-  const isActiveLockedCloudBackend =
-    isLockedToCloud &&
-    active.backend.kind === "cloud" &&
-    isSameCloudHost(active.backend.host, lockedCloudHost);
-  const { isCompleted: onboardingCompleted, markCompleted } =
-    useOnboardingCompletion();
-
-  // In locked-to-Cloud mode the `openhands-onboarded` localStorage flag is
-  // not trustworthy: it may have been set during a previous non-locked
-  // session on the same origin, and origin-scoped localStorage cannot tell
-  // the two deployments apart. So when the active backend is not the locked
-  // Cloud host we ignore the completion flag and force first-run onboarding
-  // (which owns the Cloud login). A stale completion flag must never strand
-  // the user on the Manage Backends recovery modal ("Add Backend") in locked
-  // mode.
-  //
-  // Once the active backend IS the locked Cloud host, a Cloud login that
-  // just succeeded (markCompleted fired via the onboarding modal's onClose)
-  // must hide first-run onboarding immediately. Treating
-  // `onboardingCompleted` as authoritative once the locked Cloud backend is
-  // active suppresses reopen flicker. (The flag is only honored when the
-  // active backend really is the locked Cloud host, so the stale-flag bypass
-  // concerns above don't apply here.)
+  // THE FIRST-RUN GATE IS DELETED (owner, 2026-10-11). The `openhands-onboarded`
+  // flag, the locked-to-Cloud first-run branch and the wizard they selected are
+  // all gone from this tree. A first run boots straight into the tool; the
+  // auth-required screen and the Manage Backends recovery modal below are what
+  // a boot with no usable backend still shows.
   const shouldCheckMainAppAuth = shouldUseMainAppCookieAuth();
-  const showFirstRunOnboarding = isLockedToCloud
-    ? !shouldCheckMainAppAuth &&
-      (!isActiveLockedCloudBackend ||
-        (lockedCloudAuthMode !== "cookie" && !onboardingCompleted))
-    : !onboardingCompleted;
   const mainAppAuth = useQuery({
     queryKey: QUERY_KEYS.MAIN_APP_COOKIE_AUTH,
     queryFn: authenticateWithMainAppCookie,
-    enabled: shouldCheckMainAppAuth && !showFirstRunOnboarding,
+    enabled: shouldCheckMainAppAuth,
     retry: false,
     staleTime: 1000 * 60 * 5,
     meta: { disableToast: true },
   });
   const waitingForMainAppAuth =
-    shouldCheckMainAppAuth &&
-    !showFirstRunOnboarding &&
-    mainAppAuth.isPending &&
-    !mainAppAuth.isError;
+    shouldCheckMainAppAuth && mainAppAuth.isPending && !mainAppAuth.isError;
   const redirectingToMainAppLogin =
     shouldCheckMainAppAuth && mainAppAuth.data === false;
   const mainAppAuthAllowsBackendQueries =
@@ -318,14 +201,10 @@ export default function App() {
   }, [redirectingToMainAppLogin]);
 
   // Skip the /server_info probe entirely when we already know auth is
-  // required and missing — it would just 401 and waste time. Also keep the
-  // root bootstrap quiet while the first-run onboarding modal owns backend
-  // collection; the onboarding steps issue their own backend-specific queries.
+  // required and missing — it would just 401 and waste time. (The first-run
+  // onboarding that used to suppress this probe as well is deleted.)
   const config = useConfig({
-    enabled:
-      !authMissing &&
-      !showFirstRunOnboarding &&
-      mainAppAuthAllowsBackendQueries,
+    enabled: !authMissing && mainAppAuthAllowsBackendQueries,
   });
   const activeCloudHealth = useBackendsHealth(
     active.backend.kind === "cloud" && mainAppAuthAllowsBackendQueries
@@ -359,15 +238,6 @@ export default function App() {
     activeCloudHealth?.disabled === true &&
     isCloudBackendApiKeyOrNetworkHealthError(activeCloudHealth.lastError);
 
-  if (showFirstRunOnboarding) {
-    return (
-      <>
-        <FirstRunOnboardingScreen onClose={markCompleted} />
-        <TelemetryConsentBanner />
-      </>
-    );
-  }
-
   if (
     waitingForMainAppAuth ||
     redirectingToMainAppLogin ||
@@ -376,7 +246,7 @@ export default function App() {
     return <AgentServerBootstrapLoading />;
   }
 
-  // No key at all after onboarding was skipped/completed → auth screen.
+  // No key at all → auth screen.
   // Stale key → /server_info 401 → auth screen (public mode only).
   if (authMissing || isAgentServerAuthError(config.error)) {
     return (
@@ -398,10 +268,5 @@ export default function App() {
     return <MissingAgentServerScreen />;
   }
 
-  return (
-    <>
-      <Outlet />
-      <TelemetryConsentBanner />
-    </>
-  );
+  return <Outlet />;
 }

@@ -91,11 +91,14 @@ export const BatchExportTableButton: React.FC<BatchExportTableButtonProps> = (
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* RAIBACH IDS (2026-10-12): bg-card = the house container fill — the
+            outline variant's bg-background is transparent in the embed, so
+            the wave ground showed through the export button. */}
         <Button
           variant="outline"
           size="icon"
           title="Export"
-          className="hidden md:inline-flex"
+          className="hidden bg-card md:inline-flex"
         >
           {isExporting ? (
             <Spinner size="sm" />

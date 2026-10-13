@@ -142,7 +142,6 @@ export type Settings = {
    * conversations behave exactly as before unless the user opts in.
    */
   run_router_at_conversation_start: boolean;
-  user_consents_to_analytics: boolean | null;
   search_api_key?: string;
   is_new_user?: boolean;
   mcp_config?: MCPConfig;

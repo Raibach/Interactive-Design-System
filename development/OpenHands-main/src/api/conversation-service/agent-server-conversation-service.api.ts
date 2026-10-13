@@ -50,7 +50,6 @@ import {
   NoBackendAvailableError,
 } from "../agent-server-client-options";
 import SettingsService from "../settings-service/settings-service.api";
-import { getTelemetryDistinctId } from "../../services/telemetry";
 import {
   ConversationMetadata,
   getStoredConversationMetadata,
@@ -555,12 +554,10 @@ class AgentServerConversationService {
       titleLlmProfile,
     });
 
-    const telemetryDistinctId = await getTelemetryDistinctId();
     const data = await new ConversationClient(
       getAgentServerClientOptions({ timeout: CREATE_CONVERSATION_TIMEOUT_MS }),
     ).createConversation<DirectConversationInfo>({
       ...payload,
-      ...(telemetryDistinctId ? { user_id: telemetryDistinctId } : {}),
     });
     const localBackend = getEffectiveLocalBackend();
     if (!localBackend) throw new NoBackendAvailableError();

@@ -61,9 +61,28 @@ function surfaceHasDrawn(): boolean {
     for (let i = 0; i < all.length; i += 1) {
       if (found) return;
       const el = all[i];
-      if (el.shadowRoot) walk(el.shadowRoot);
       const tag = el.tagName ? el.tagName.toLowerCase() : '';
-      if (tag === 'agent-card-element' || tag === 'prompt-section-editor' || tag === 'compiled-output-viewer') {
+      // The console surface is drawn by <a2ui-renderer> inside its own shadow root
+      // (workspace-layout / a2ui-* / chat-panel). A non-empty shadow root is the
+      // renderer's own "committed" signal — the tag probes below are the pre-A2UI
+      // names, kept as a fallback for the composer and design rooms.
+      if (tag === 'a2ui-renderer' && el.shadowRoot && el.shadowRoot.querySelectorAll('*').length > 0) {
+        found = true;
+        return;
+      }
+      // A room whose surface is an iframe (Development / Governance / Product).
+      if (tag === 'builder-embed') {
+        found = true;
+        return;
+      }
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (
+        tag === 'agent-card-element' ||
+        tag === 'prompt-section-editor' ||
+        tag === 'compiled-output-viewer' ||
+        tag === 'workspace-layout' ||
+        tag === 'chat-panel'
+      ) {
         found = true;
         return;
       }
@@ -112,6 +131,11 @@ export default function GateSplash({ holdUntilDrawn = false }: { holdUntilDrawn?
         reveal();
       }
     }, 150);
+    // A room's iframe announcing itself (builder-embed-loaded) is that room's own
+    // "drawn" signal — the gate must not wait for a console surface that does not
+    // exist on the Development / Governance / Product tabs.
+    const onFrameLoaded = () => reveal();
+    window.addEventListener('builder-embed-loaded', onFrameLoaded);
     const cap = setTimeout(() => {
       console.warn('[gate] hold safety cap reached — revealing whatever is there');
       reveal();
@@ -120,6 +144,7 @@ export default function GateSplash({ holdUntilDrawn = false }: { holdUntilDrawn?
       if (interval) clearInterval(interval);
       clearTimeout(cap);
       if (fadeTimer) clearTimeout(fadeTimer);
+      window.removeEventListener('builder-embed-loaded', onFrameLoaded);
     };
   }, [holdUntilDrawn]);
 

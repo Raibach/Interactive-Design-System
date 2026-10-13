@@ -3,7 +3,6 @@ import AgentServerConversationService from "#/api/conversation-service/agent-ser
 import { PluginSpec } from "#/api/conversation-service/agent-server-conversation-service.types";
 import { SuggestedTask } from "#/utils/types";
 import { Provider } from "#/types/settings";
-import { useTracking } from "#/hooks/use-tracking";
 import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
 import { useAgentProfiles } from "#/hooks/query/use-agent-profiles";
 import { useSettings } from "#/hooks/query/use-settings";
@@ -63,7 +62,6 @@ interface CreateConversationResponse {
 
 export const useCreateConversation = () => {
   const queryClient = useQueryClient();
-  const { trackConversationCreated } = useTracking();
   // Cache-warm on the home page (the profile picker reads the same query).
   // Stamped onto the conversation at creation so the switcher can show the
   // exact profile even when several profiles share a model (#1082).
@@ -387,19 +385,6 @@ export const useCreateConversation = () => {
       };
     },
     onSuccess: async (data, variables) => {
-      trackConversationCreated({
-        conversationId: data.conversation_id,
-        taskId: data.task_id,
-        hasRepository: !!variables.repository,
-        gitProvider: variables.repository?.gitProvider,
-        hasWorkspace: !!variables.workingDir,
-        workspaceMode: variables.workspaceMode,
-        hasInitialQuery: !!variables.query,
-        agentType: variables.agentType,
-        hasParentConversation: !!variables.parentConversationId,
-        entryPoint: variables.entryPoint,
-      });
-
       // Invalidate (rather than remove) so the existing paginated list stays
       // rendered while a background refetch picks up the new conversation.
       // `removeQueries` would wipe the cache and force the panel back to its

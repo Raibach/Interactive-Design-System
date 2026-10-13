@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { vcaasApi } from "@/lib/vcaas";
+import { BASE_PATH } from "@/lib/base-path";
 import {
   CloneProjectDialog,
   ExportProjectDialog,
@@ -215,7 +216,7 @@ export default function DashboardPage() {
   // When false we show the setup banners instead of nagging with API errors.
   const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null);
   useEffect(() => {
-    api.get<{ configured: boolean }>("/api/config").then((r) => {
+    api.get<{ configured: boolean }>(`${BASE_PATH}/api/config`).then((r) => {
       setKeyConfigured(r.ok && r.data ? r.data.configured : false);
     });
   }, []);

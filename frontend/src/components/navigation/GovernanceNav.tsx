@@ -46,9 +46,6 @@ const stroke = {
 const HomeIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M3 10.5L12 3l9 7.5M5 9.5V21h14V9.5" /></svg>
 );
-const DashboardsIcon = ({ className }: IconProps) => (
-  <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" /></svg>
-);
 const TracingIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M6 3v18M6 8h6M6 15h6M12 5v6M12 12v6" /></svg>
 );
@@ -118,7 +115,8 @@ const ChevronIcon = ({ rotated }: { rotated: boolean }) => (
 // sidebar uses (read from web/src/components/layouts/routes.tsx).
 const NAV_ITEMS: NavItem[] = [
   { label: "Home", href: langfuseHref(""), icon: HomeIcon, group: null },
-  { label: "Dashboards", href: langfuseHref("/dashboards"), icon: DashboardsIcon, group: null },
+  // No Dashboards entry — the list opens from the room's Home cog (settings
+  // modal); a nav shortcut here would be a second door.
   { label: "Tracing", href: langfuseHref("/traces"), icon: TracingIcon, group: "Observability" },
   { label: "Sessions", href: langfuseHref("/sessions"), icon: SessionsIcon, group: "Observability" },
   { label: "Users", href: langfuseHref("/users"), icon: UsersIcon, group: "Observability" },
@@ -159,7 +157,6 @@ export default function GovernanceNav({ onNavigate, activePath }: GovernanceNavP
     const seg = projectMatch[2];
     if (!seg) return langfuseHref("");
     const suffixForSeg: Record<string, string> = {
-      dashboards: "/dashboards",
       traces: "/traces", trace: "/traces", observations: "/traces",
       sessions: "/sessions", session: "/sessions",
       users: "/users",

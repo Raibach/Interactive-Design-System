@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MockInstance } from "vitest";
 import { __resetActiveStoreForTests } from "#/api/backend-registry/active-store";
 import { ActiveBackendProvider } from "#/contexts/active-backend-context";
 import {
@@ -11,7 +10,6 @@ import {
   type NavigationContextValue,
 } from "#/context/navigation-context";
 import { AddBackendModal } from "#/components/features/backends/add-backend-modal";
-import * as telemetry from "#/services/telemetry";
 
 const getServerInfoMock = vi.hoisted(() => vi.fn());
 const getSettingsMock = vi.hoisted(() => vi.fn().mockResolvedValue({}));
@@ -46,8 +44,6 @@ vi.mock("@openhands/typescript-client/clients", () => ({
   }),
 }));
 
-let captureMock: MockInstance<typeof telemetry.trackEvent>;
-
 vi.mock("#/hooks/query/use-settings", () => ({
   useSettings: () => ({
     data: { user_consents_to_analytics: true, email: "user@example.com" },
@@ -80,7 +76,6 @@ async function selectAgentServer(user = userEvent.setup()) {
 }
 
 beforeEach(() => {
-  captureMock = vi.spyOn(telemetry, "trackEvent").mockResolvedValue(undefined);
   window.localStorage.clear();
   getServerInfoMock.mockReset();
   getServerInfoMock.mockResolvedValue({ version: "1.48.0" });
@@ -100,13 +95,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  captureMock.mockRestore();
   window.localStorage.clear();
   __resetActiveStoreForTests();
 });
 
 describe("AddBackendModal – connection chooser", () => {
-  it("renders OpenHands Cloud first with its brand mark", () => {
+  it("renders the Cloud option first", () => {
     renderWithProviders(<AddBackendModal onClose={vi.fn()} />);
 
     const tabs = screen.getAllByRole("tab");
@@ -118,9 +112,8 @@ describe("AddBackendModal – connection chooser", () => {
       "add-backend-option-agent-server",
     );
     expect(tabs[1]).toHaveAttribute("aria-selected", "false");
-    expect(
-      within(tabs[0]).getByTestId("add-backend-option-cloud-logo"),
-    ).toBeInTheDocument();
+    // The vendor wordmark that used to render here is deleted; the tab carries
+    // no vendor mark and this test no longer asserts one.
     expect(tabs[0]).toHaveTextContent("BACKEND$CLOUD_OPTION_DESCRIPTION");
     expect(tabs[1]).toHaveTextContent(
       "BACKEND$AGENT_SERVER_OPTION_DESCRIPTION",
@@ -131,16 +124,6 @@ describe("AddBackendModal – connection chooser", () => {
     expect(screen.getByTestId("add-backend-description")).toHaveTextContent(
       "BACKEND$CHOOSER_DESCRIPTION",
     );
-    expect(
-      screen.getByTestId("add-backend-deployment-options-link"),
-    ).toHaveAttribute(
-      "href",
-      "https://docs.openhands.dev/overview/introduction",
-    );
-    // Short inline link so the description reads as one flowing sentence.
-    expect(
-      screen.getByTestId("add-backend-deployment-options-link"),
-    ).toHaveTextContent("CTA$LEARN_MORE");
   });
 
   it("hides the Advanced host disclosure while authorization is pending", async () => {
@@ -153,6 +136,14 @@ describe("AddBackendModal – connection chooser", () => {
     renderWithProviders(<AddBackendModal onClose={vi.fn()} />);
 
     expect(screen.getByTestId("add-backend-advanced-toggle")).toBeVisible();
+
+    // There is no vendor cloud host default anymore: the flow needs a host the
+    // user typed (or a locked host) before authorization can start.
+    await user.click(screen.getByTestId("add-backend-advanced-toggle"));
+    await user.type(
+      screen.getByTestId("add-backend-cloud-host"),
+      "https://cloud.example.com",
+    );
 
     await user.click(screen.getByTestId("add-backend-login-button"));
 
@@ -191,10 +182,6 @@ describe("AddBackendModal – connection chooser", () => {
     expect(
       screen.getByTestId("add-backend-local-guidance"),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("add-backend-local-docs-link")).toHaveAttribute(
-      "href",
-      expect.stringContaining("docs/DEVELOPMENT.md"),
-    );
     expect(screen.getByTestId("add-backend-name")).toBeInTheDocument();
     expect(screen.getByTestId("add-backend-host")).toBeInTheDocument();
     expect(screen.getByTestId("add-backend-api-key")).toBeInTheDocument();
@@ -310,11 +297,6 @@ describe("AddBackendModal – connection chooser", () => {
     expect(
       screen.getByTestId("add-backend-remote-guidance"),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("add-backend-remote-docs-link")).toHaveAttribute(
-      "href",
-      expect.stringContaining("docs/SELF_HOSTING.md"),
-    );
-
     await user.type(screen.getByTestId("add-backend-name"), "Remote GPU");
     await user.type(
       screen.getByTestId("add-backend-host"),
@@ -530,39 +512,5 @@ describe("AddBackendModal – redirect after adding a backend", () => {
 
     // Assert
     expect(navigate).not.toHaveBeenCalled();
-  });
-});
-
-describe("AddBackendModal – analytics", () => {
-  it("captures backend_added once with manual connection metadata", async () => {
-    // Arrange
-    renderWithProviders(<AddBackendModal onClose={vi.fn()} />);
-    const user = await selectAgentServer();
-
-    // Act — connect a local backend through the manual form
-    await user.type(screen.getByTestId("add-backend-name"), "Local Extra");
-    await user.type(
-      screen.getByTestId("add-backend-host"),
-      "http://localhost:8000",
-    );
-    await user.type(screen.getByTestId("add-backend-api-key"), "sk-local");
-    await user.click(screen.getByTestId("add-backend-submit"));
-
-    // Assert — emitted exactly once with coarse, non-sensitive properties
-    await waitFor(() =>
-      expect(captureMock).toHaveBeenCalledWith(
-        "backend_added",
-        expect.objectContaining({
-          backend_kind: "local",
-          connection_method: "manual",
-          has_api_key: true,
-          source: "add_backend_modal",
-        }),
-      ),
-    );
-    const backendAddedCalls = captureMock.mock.calls.filter(
-      ([event]) => event === "backend_added",
-    );
-    expect(backendAddedCalls).toHaveLength(1);
   });
 });

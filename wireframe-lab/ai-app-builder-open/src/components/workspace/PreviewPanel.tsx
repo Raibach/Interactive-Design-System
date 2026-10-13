@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { RefObject } from "react";
 import { Monitor, Loader2, Archive } from "lucide-react";
+import { BASE_PATH } from "@/lib/base-path";
 
 interface PreviewPanelProps {
   previewUrl: string | null;
@@ -20,9 +21,11 @@ interface PreviewPanelProps {
    * `sandbox` flags changes it. `/api/preview/{projectId}` re-serves the project
    * through this app, so the document becomes same-origin and scriptable.
    *
-   * ⚠️ IT IS USED ONLY WHILE THE EDITOR IS OPEN. Normal viewing keeps the direct
-   * URL: the proxy costs a round trip per asset and rewrites the HTML, and neither
-   * is worth paying for a preview nobody is editing.
+   * ⚠️ ALWAYS SET since the door (2026-10-10): the preview is served from the studio's
+   * single public address, where the engine's own URL (`localhost:4000`) would mean each
+   * visitor's OWN machine. Same-origin for everyone — the editor's needs and the
+   * visitors' coincide — and the proxy's round trip per asset is the deliberate cost of
+   * one address.
    */
   proxiedSrc?: string | null;
   /** The editor needs the element to `postMessage` to its injected agent. */
@@ -38,7 +41,7 @@ export function PreviewPanel({ previewUrl, onRefresh, loading, mobilePreview = f
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* iframe - no URL bar here, it's in the header now */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden relative" style={{ background: "#2b2635 url(/canvas-development-lab-bkg.jpg) repeat" }}>
+        <div className="flex-1 flex items-center justify-center overflow-hidden relative" style={{ background: `#2b2635 url(${BASE_PATH}/canvas-development-lab-bkg.jpg) repeat` }}>
         {/* Cached snapshot indicator: shown when the dev server is not active and
             we're displaying the cachedDevelopmentUrl static snapshot */}
         {previewUrl && cached && (

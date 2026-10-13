@@ -5,7 +5,6 @@ import { SuggestedTaskGroup } from "#/utils/types";
 import { ConversationStatus } from "#/types/conversation-status";
 import { GitRepository } from "#/types/git";
 import { sanitizeQuery } from "#/utils/sanitize-query";
-import { PRODUCT_URL } from "#/utils/constants";
 import { AgentState } from "#/types/agent-state";
 import { I18nKey } from "#/i18n/declaration";
 import { getTaskStatusI18nKey } from "#/utils/status";
@@ -93,13 +92,6 @@ export const isMobileDevice = (): boolean => {
   // Fallback: touch present but no matchMedia — assume mobile
   return true;
 };
-
-/**
- * Checks if the current domain is the production domain
- * @returns True if the current domain matches the production URL
- */
-export const isProductionDomain = (): boolean =>
-  window.location.origin === PRODUCT_URL.PRODUCTION;
 
 interface EventActionHistory {
   args?: {

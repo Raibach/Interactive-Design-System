@@ -622,9 +622,19 @@ export function DataTable<TData extends object, TValue>({
                                 header.getResizeHandler(),
                               )}
                               className={cn(
-                                "bg-secondary absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none opacity-0 select-none group-hover:opacity-100",
+                                // RAIBACH IDS (2026-10-13, owner's separator pass):
+                                // the 1px separator line now draws ALWAYS — at rest
+                                // every column boundary carries its line (the owner's
+                                // "fixed separators", the precise grab line), which
+                                // the old opacity-0 gate was silently hiding; on hover
+                                // the line thickens to a LIGHT 2px (the owner: "a
+                                // hover effect on a light line of 2 pixels to show
+                                // the user the grippers are there"); while a resize
+                                // is in progress the strip turns accent and the line
+                                // hides unless the pointer still hovers the header.
+                                "before:bg-border before:absolute before:top-0 before:right-0 before:h-full before:w-px before:opacity-60 before:content-[''] group-hover:before:w-0.5 group-hover:before:bg-foreground/50 group-hover:before:opacity-100 absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none select-none",
                                 header.column.getIsResizing() &&
-                                  "bg-primary-accent opacity-100",
+                                  "bg-primary-accent before:opacity-0",
                               )}
                             />
                           </div>

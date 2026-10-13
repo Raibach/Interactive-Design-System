@@ -46,7 +46,6 @@ const socketCapture = vi.hoisted(() => ({
   reconnectPlanning: vi.fn(),
   queueMessage: vi.fn(),
   readConversationFile: vi.fn(),
-  trackError: vi.fn(),
   launchChild: vi.fn(),
 }));
 
@@ -100,7 +99,6 @@ vi.mock("#/services/child-conversation-launch", () => ({
 }));
 
 vi.mock("#/utils/error-handler", () => ({
-  trackError: (...args: unknown[]) => socketCapture.trackError(...args),
 }));
 
 vi.mock("#/api/agent-server-client-options", () => ({
@@ -337,8 +335,7 @@ describe("Conversation websocket behavior", () => {
     socketCapture.reconnectPlanning.mockReset();
     socketCapture.queueMessage.mockReset().mockResolvedValue(undefined);
     socketCapture.readConversationFile.mockReset();
-    socketCapture.trackError.mockReset();
-    socketCapture.launchChild.mockReset().mockResolvedValue(undefined);
+      socketCapture.launchChild.mockReset().mockResolvedValue(undefined);
     nextSeq = 0;
     historyCapture.result = {
       data: { events: [] },
@@ -1057,7 +1054,6 @@ describe("Conversation websocket behavior", () => {
     dispatchMain(makeMessageEvent("10", "assistant", ["connected"]));
     expect(useErrorMessageStore.getState().errorMessage).toBeNull();
     expect(consumeMatchingPendingMessage).not.toHaveBeenCalled();
-    expect(socketCapture.trackError).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
 
     dispatchMain({
@@ -1071,16 +1067,6 @@ describe("Conversation websocket behavior", () => {
       errorType: "conversation",
       errorCode: "BadRequest",
     });
-    expect(socketCapture.trackError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: "conversation",
-        metadata: expect.objectContaining({
-          eventId: "11",
-          errorCode: "BadRequest",
-        }),
-      }),
-    );
-    expect(socketCapture.trackError).toHaveBeenCalledTimes(1);
 
     dispatchMain(makeMessageEvent("12", "assistant", ["still connected"]));
     expect(useErrorMessageStore.getState().errorMessage).toBe(
@@ -1093,17 +1079,6 @@ describe("Conversation websocket behavior", () => {
       tool_call_id: "call-13",
       error: "Model failed",
     });
-    expect(socketCapture.trackError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: "agent",
-        metadata: expect.objectContaining({
-          eventId: "13",
-          toolName: "llm",
-          toolCallId: "call-13",
-        }),
-      }),
-    );
-    expect(socketCapture.trackError).toHaveBeenCalledTimes(2);
 
     useOptimisticUserMessageStore.setState({
       pendingMessages: [
@@ -1879,14 +1854,7 @@ describe("Conversation websocket behavior", () => {
     expect(useErrorMessageStore.getState().errorClassification).toEqual(
       classification,
     );
-    expect(socketCapture.trackError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        classification,
-        source: "planning_conversation",
-      }),
-    );
     dispatchPlanning(error);
-    expect(socketCapture.trackError).toHaveBeenCalledTimes(1);
   });
 
   it("forwards the child-launch action with the parent and tool-call IDs", () => {
@@ -1982,7 +1950,6 @@ describe("Conversation websocket behavior", () => {
     dispatchPlanning(makeMessageEvent("37-normal", "assistant", ["ready"]));
     expect(useErrorMessageStore.getState().errorMessage).toBeNull();
     expect(consumeMatchingPendingMessage).not.toHaveBeenCalled();
-    expect(socketCapture.trackError).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
 
     dispatchPlanning({
@@ -1996,15 +1963,6 @@ describe("Conversation websocket behavior", () => {
       errorType: "conversation",
       errorCode: "PlannerUnavailable",
     });
-    expect(socketCapture.trackError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: "planning_conversation",
-        metadata: expect.objectContaining({
-          eventId: "38",
-          errorCode: "PlannerUnavailable",
-        }),
-      }),
-    );
 
     dispatchPlanning({
       ...baseEvent("39", "agent"),
@@ -2012,17 +1970,6 @@ describe("Conversation websocket behavior", () => {
       tool_call_id: "call-39",
       error: "Planner model failed",
     });
-    expect(socketCapture.trackError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: "planning_agent",
-        metadata: expect.objectContaining({
-          eventId: "39",
-          toolName: "planner_llm",
-          toolCallId: "call-39",
-        }),
-      }),
-    );
-    expect(socketCapture.trackError).toHaveBeenCalledTimes(2);
 
     useOptimisticUserMessageStore.setState({
       pendingMessages: [

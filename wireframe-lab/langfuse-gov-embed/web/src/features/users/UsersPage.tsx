@@ -45,6 +45,9 @@ export default function UsersPage() {
   return (
     <Page
       headerProps={{
+        // RAIBACH IDS (2026-10-12): 20px above the section — equal top spacing
+        // throughout the app (matches Home). REVERT: drop the className.
+        className: "pt-5",
         title: "Users",
         help: {
           description: (
@@ -69,10 +72,15 @@ export default function UsersPage() {
       scrollable={showOnboarding}
     >
       {/* Show onboarding screen if user has no users */}
+      {/* RAIBACH IDS (2026-10-12, owner's header pass): the time range renders
+          inline in the toolbar row and the search box sits beside the section
+          title (searchInTitleRow) — the header hoist is deleted, the strip
+          above the title closes up. REVERT: restore `showControlsInPageHeader`
+          and delete searchInTitleRow. */}
       {showOnboarding ? (
         <UsersOnboarding />
       ) : (
-        <UsersTable isV4={isV4} showControlsInPageHeader />
+        <UsersTable isV4={isV4} searchInTitleRow />
       )}
     </Page>
   );

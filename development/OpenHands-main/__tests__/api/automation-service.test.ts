@@ -18,7 +18,6 @@ const {
   mockCallCloudProxy,
   mockGetActive,
   mockGetEffectiveLocal,
-  mockGetTelemetryDistinctId,
   capturedInterceptors,
 } = vi.hoisted(() => {
   const interceptors: Array<
@@ -34,7 +33,6 @@ const {
     mockCallCloudProxy: vi.fn(),
     mockGetActive: vi.fn(),
     mockGetEffectiveLocal: vi.fn(),
-    mockGetTelemetryDistinctId: vi.fn(),
     capturedInterceptors: interceptors,
   };
 });
@@ -73,9 +71,6 @@ vi.mock("#/api/backend-registry/active-store", () => ({
   getEffectiveLocalBackend: mockGetEffectiveLocal,
 }));
 
-vi.mock("#/services/telemetry", () => ({
-  getTelemetryDistinctId: mockGetTelemetryDistinctId,
-}));
 
 // Import after mocking
 import AutomationService from "#/api/automation-service/automation-service.api";
@@ -88,10 +83,9 @@ const localBackend: Backend = {
   kind: "local",
 };
 
-const expectedAutomationTelemetryHeaders = {
+const expectedAutomationClientHeaders = {
   "X-OpenHands-Client": "agent_canvas",
   "X-OpenHands-Client-Version": expect.any(String),
-  "X-OpenHands-Telemetry-Distinct-Id": "ph-test-distinct-id",
 };
 
 const cloudBackend: Backend = {
@@ -155,8 +149,6 @@ describe("AutomationService", () => {
     mockGetActive.mockReturnValue({ backend: localBackend, orgId: null });
     mockGetEffectiveLocal.mockReset();
     mockGetEffectiveLocal.mockReturnValue(localBackend);
-    mockGetTelemetryDistinctId.mockReset();
-    mockGetTelemetryDistinctId.mockResolvedValue("ph-test-distinct-id");
   });
 
   describe("listAutomations", () => {
@@ -393,7 +385,7 @@ describe("AutomationService", () => {
         backend: cloudBackend,
         method: "GET",
         path: "/api/automation/v1?limit=10&offset=5",
-        headers: expectedAutomationTelemetryHeaders,
+        headers: expectedAutomationClientHeaders,
       });
       expect(mockGet).not.toHaveBeenCalled();
       expect(result).toEqual(response);
@@ -420,7 +412,7 @@ describe("AutomationService", () => {
         backend: cloudBackend,
         method: "GET",
         path: "/api/automation/v1/abc",
-        headers: expectedAutomationTelemetryHeaders,
+        headers: expectedAutomationClientHeaders,
       });
       expect(result).toEqual(mockAutomation);
     });
@@ -434,7 +426,7 @@ describe("AutomationService", () => {
         backend: cloudBackend,
         method: "POST",
         path: "/api/automation/v1/abc/dispatch",
-        headers: expectedAutomationTelemetryHeaders,
+        headers: expectedAutomationClientHeaders,
       });
       expect(mockPost).not.toHaveBeenCalled();
       expect(result).toEqual(mockRun);
@@ -453,7 +445,7 @@ describe("AutomationService", () => {
         method: "PATCH",
         path: "/api/automation/v1/abc",
         body: { enabled: false },
-        headers: expectedAutomationTelemetryHeaders,
+        headers: expectedAutomationClientHeaders,
       });
       expect(mockPatch).not.toHaveBeenCalled();
       expect(result).toEqual(updated);
@@ -468,7 +460,7 @@ describe("AutomationService", () => {
         backend: cloudBackend,
         method: "DELETE",
         path: "/api/automation/v1/abc",
-        headers: expectedAutomationTelemetryHeaders,
+        headers: expectedAutomationClientHeaders,
       });
       expect(mockDelete).not.toHaveBeenCalled();
     });
@@ -491,7 +483,7 @@ describe("AutomationService", () => {
         backend: cloudBackend,
         method: "POST",
         path: "/api/automation/v1/abc/dispatch",
-        headers: expectedAutomationTelemetryHeaders,
+        headers: expectedAutomationClientHeaders,
       });
       expect(mockPost).not.toHaveBeenCalled();
       expect(result).toEqual(run);
@@ -525,7 +517,7 @@ describe("AutomationService", () => {
   // registry rather than the build-time VITE_SESSION_API_KEY env var so that
   // the published npm package picks up the runtime-injected key (issue #829).
   describe("localAutomationAxios interceptor", () => {
-    it("sets telemetry headers and X-Session-API-Key from the effective local backend apiKey", async () => {
+    it("sets the client headers and X-Session-API-Key from the effective local backend apiKey", async () => {
       const interceptor = capturedInterceptors[0];
       expect(interceptor).toBeDefined();
 
@@ -541,10 +533,6 @@ describe("AutomationService", () => {
       expect(config.headers.set).toHaveBeenCalledWith(
         "X-OpenHands-Client",
         "agent_canvas",
-      );
-      expect(config.headers.set).toHaveBeenCalledWith(
-        "X-OpenHands-Telemetry-Distinct-Id",
-        "ph-test-distinct-id",
       );
       expect(config.headers.set).toHaveBeenCalledWith(
         "X-Session-API-Key",

@@ -32,9 +32,6 @@ type PendingAction =
   | { type: "enable"; extension: InstalledCanvasExtensionInfo }
   | { type: "uninstall"; extension: InstalledCanvasExtensionInfo };
 
-const CANVAS_EXTENSIONS_DOCS_URL =
-  "https://docs.openhands.dev/openhands/usage/agent-canvas/canvas-extensions";
-
 export default function CanvasExtensionsScreen() {
   const { t } = useTranslation("openhands");
   const { backend } = useActiveBackend();
@@ -88,7 +85,7 @@ export default function CanvasExtensionsScreen() {
     >
       <ExtensionsNavigation />
       <main className={cn(settingsLikeMainScrollClassName, "h-full")}>
-        <div className="mx-auto flex w-full min-w-0 max-w-200 flex-col gap-6">
+        <div className="mx-auto flex w-full min-w-0 max-w-200 flex-col gap-6 rounded-[10px] bg-[rgba(34,32,45,0.5)] p-2.5">
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">
               <h2 className="text-xl font-semibold leading-6 text-foreground">
@@ -97,15 +94,6 @@ export default function CanvasExtensionsScreen() {
               <p className="max-w-2xl text-sm text-tertiary-light">
                 {t(I18nKey.SETTINGS$APPS_PAGE_DESCRIPTION)}
               </p>
-              <a
-                href={CANVAS_EXTENSIONS_DOCS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-              >
-                {t(I18nKey.SETTINGS$APPS_BUILD_LINK)}
-                <ExternalLink className="size-3.5" aria-hidden />
-              </a>
             </div>
             <BrandButton
               type="button"

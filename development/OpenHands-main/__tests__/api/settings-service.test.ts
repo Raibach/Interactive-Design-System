@@ -200,24 +200,6 @@ describe("SettingsService", () => {
     ]);
   });
 
-  it("treats omitted app-preferences analytics consent as unset", async () => {
-    server.use(
-      http.get("*/api/settings", () =>
-        HttpResponse.json({
-          agent_settings: {},
-          conversation_settings: {},
-          llm_api_key_is_set: false,
-          misc_settings: { app_preferences: {} },
-        }),
-      ),
-    );
-    SettingsService.invalidateCache();
-
-    const settings = await SettingsService.getSettings();
-
-    expect(settings.user_consents_to_analytics).toBeNull();
-  });
-
   it("surfaces server-side misc_settings.app_preferences in getSettings on a local backend", async () => {
     // The local agent-server returns app_preferences nested under
     // `misc_settings` on GET /api/settings. The mock handler echoes whatever
@@ -228,7 +210,6 @@ describe("SettingsService", () => {
       git_user_name: "Alice",
       git_user_email: "alice@example.com",
       enable_sound_notifications: true,
-      user_consents_to_analytics: true,
       title_llm_profile: "Titles",
       disabled_skills: ["SSH Microagent"],
     };
@@ -242,7 +223,6 @@ describe("SettingsService", () => {
       git_user_name: settings.git_user_name,
       git_user_email: settings.git_user_email,
       enable_sound_notifications: settings.enable_sound_notifications,
-      user_consents_to_analytics: settings.user_consents_to_analytics,
       title_llm_profile: settings.title_llm_profile,
       disabled_skills: settings.disabled_skills,
     }).toEqual(appPrefs);

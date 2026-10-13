@@ -7,7 +7,6 @@ import {
   gitControlBarActionLabelClassName,
 } from "#/utils/git-control-bar-classes";
 import { I18nKey } from "#/i18n/declaration";
-import { useTracking } from "#/hooks/use-tracking";
 
 interface GitControlBarPullButtonProps {
   onSuggestionsClick: (value: string) => void;
@@ -23,13 +22,11 @@ export function GitControlBarPullButton({
   isConversationReady = true,
 }: GitControlBarPullButtonProps) {
   const { t } = useTranslation("openhands");
-  const { trackPullButtonClick } = useTracking();
 
   const isButtonEnabled =
     providerTokensReady && hasRepository && isConversationReady;
 
   const handlePullClick = () => {
-    trackPullButtonClick();
     onSuggestionsClick(getGitPullPrompt());
   };
 

@@ -2,6 +2,7 @@ import { logger } from '@/lib/logger';
 // Sentry is disabled (owner, 2026-10-02): every captureException below is a no-op; the local
 // logger lines beside them are unchanged. See lib/sentry.ts.
 import * as Sentry from '@/lib/sentry';
+import { generateUuid } from '@/utils/uuid';
 // Conversation data types
 export interface Message {
   id: string;
@@ -812,7 +813,7 @@ export const conversationStorage = {
       }
 
       const message: Message = {
-        id: crypto.randomUUID(),
+        id: generateUuid(),
         type,
         content: content.trim(),
         timestamp: Date.now(),
@@ -896,7 +897,7 @@ export const conversationStorage = {
   },
 
   generateUUID: (): string => {
-    return crypto.randomUUID();
+    return generateUuid();
   },
 
   // ── Deprecated: auto-fix and cleanup functions are no-ops (no localStorage) ──

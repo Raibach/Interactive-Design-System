@@ -435,10 +435,7 @@ export default function EvaluatorTable({ projectId }: { projectId: string }) {
   );
 
   return (
-    <DataTableControlsProvider
-      tableName={evaluatorFilterConfig.tableName}
-      defaultSidebarCollapsed={evaluatorFilterConfig.defaultSidebarCollapsed}
-    >
+    <DataTableControlsProvider tableName={evaluatorFilterConfig.tableName}>
       <div className="flex h-full w-full flex-col">
         <SearchableTableFilterLayout
           search={

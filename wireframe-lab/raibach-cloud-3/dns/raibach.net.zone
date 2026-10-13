@@ -1,0 +1,45 @@
+; raibach.net — BIND zone file, ready to import into Hetzner Console → DNS.
+; Generated 2026-10-11 from the LIVE zone, verified record-by-record against
+; SiteGround's authoritative name servers (ns1/ns2.siteground.net). Everything
+; below answers identically on both sides at generation time.
+;
+; RULES FOR THE HETZNER SIDE:
+;   - DO NOT copy the old NS rows (ns1/ns2.siteground.net). Hetzner creates the
+;     SOA and its three name servers (hydrogen/oxygen/helium) automatically and
+;     they cannot be deleted. If the old NS rows exist in the console, delete them.
+;   - Names WITHOUT a trailing dot get the zone appended (www → www.raibach.net).
+;     Names WITH a trailing dot are taken as full (used in MX/CNAME targets).
+;
+$ORIGIN raibach.net.
+$TTL 3600
+
+; ── web ─────────────────────────────────────────────────────────────────────
+@			IN	A	188.245.25.26	; the box — Caddy serves raibach.net from here
+www			IN	A	188.245.25.26	; Caddy redirects www → bare name
+studio			IN	A	188.245.25.26	; dormant (nothing serves this name on the box yet)
+staging2		IN	A	188.245.25.26	; dormant (as above)
+design.system	IN	A	188.245.25.26	; the IDS stack name (next build)
+
+; ── legacy rows still pointing at the old host (SiteGround) ────────────────
+; Copied as-is so the switch changes nothing. Each one gets retired or
+; repointed deliberately later — not as a side effect of the move.
+portfolio		IN	A	35.212.127.26
+mail			IN	A	35.212.127.26
+autodiscover	IN	A	35.212.127.26
+autoconfig		IN	A	35.212.127.26
+ftp			IN	A	35.212.127.26
+
+; ── mail (Proton, Switzerland) ──────────────────────────────────────────────
+@			IN	MX	10 mail.protonmail.ch.
+@			IN	MX	20 mailsec.protonmail.ch.
+@			IN	TXT	"v=spf1 include:_spf.protonmail.ch ~all"
+protonmail._domainkey	IN	CNAME	protonmail.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch.
+protonmail2._domainkey	IN	CNAME	protonmail2.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch.
+protonmail3._domainkey	IN	CNAME	protonmail3.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch.
+_dmarc			IN	TXT	"v=DMARC1; p=quarantine"
+
+; ── verification rows (keep — each proves this domain is ours to someone) ──
+@			IN	TXT	"protonmail-verification=f22a07da22d5d53905f3f593f06f6f36ca73905d"
+@			IN	TXT	"google-site-verification=Dvo39gwO0nAI7zyoPxEccKbPk7vOM0yh7CjULwhFp8A"
+@			IN	TXT	"zone-ownership-verification-408880232baa40294e126f2f7249f0b21011d6c0ae509158d6275cb8e0f278fe"
+verify-2p5wb10thxqci2frwb0s28pj	IN	TXT	"92aa4a75882bf1094ef5cca8c201ce0956382db5ff75b8d68052b052615d8c3c"

@@ -95,6 +95,7 @@ import {
   TABLE_AGGREGATION_OPTIONS,
 } from "@/src/utils/date-range-utils";
 import { TableHeaderControls } from "@/src/components/table/table-header-controls";
+import { PageHeaderTitleSlotPortal } from "@/src/components/layouts/page-header-controls-slot";
 import { TimeRangePicker } from "@/src/components/date-picker";
 import { DataTableRefreshButton } from "@/src/components/table/data-table-refresh-button";
 import { MobileFiltersSheet } from "@/src/features/events/components/MobileFiltersSheet";
@@ -268,6 +269,12 @@ export type EventsTableProps = {
    * of a `Page`.
    */
   showControlsInPageHeader?: boolean;
+  /**
+   * RAIBACH IDS (2026-10-12, owner's header pass): render the search composer
+   * beside the page title (the header title-row slot) instead of stacking its
+   * own row in the sticky band — the box flexes and truncates.
+   */
+  searchInTitleRow?: boolean;
   /** Explicit signal from the Fast Preview/v4 page routes. */
   enableAppRootDefault?: boolean;
   /**
@@ -314,6 +321,7 @@ export default function ObservationsEventsTable({
   limitRows,
   sessionId,
   showControlsInPageHeader = false,
+  searchInTitleRow = false,
   enableAppRootDefault = false,
   isolateTableState = false,
 }: EventsTableProps) {
@@ -1845,7 +1853,10 @@ export default function ObservationsEventsTable({
 
   return (
     <DataTableControlsProvider tableName={eventsFilterConfig.tableName}>
-      <div className="flex h-full w-full flex-col">
+      {/* RAIBACH IDS (2026-10-12, owner's balance pass): 30px right margin —
+          with the 12px house scrollbar this matches the 41px left side
+          (filter rail + seam); the table ends ~30px left of the gripper. */}
+      <div className="flex h-full w-full flex-col pr-[30px]">
         {showControlsInPageHeader && !hideControls && !isMobile && (
           <TableHeaderControls
             timeRange={timeRange}
@@ -2004,36 +2015,41 @@ export default function ObservationsEventsTable({
                 showControlsInPageHeader is set (the standalone traces/
                 observations pages), time-range + refresh are hoisted to the
                 page header via TableHeaderControls; otherwise they remain in
-                the toolbar row below. */}
+                the toolbar row below. RAIBACH IDS (2026-10-12): with
+                searchInTitleRow the composer itself hoists beside the page
+                title (the box flexes; overflow truncates) and this band holds
+                only the toolbar. */}
             {searchBarMode && (
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <EventsSearchBarRow
-                    size={showControlsInPageHeader ? "large" : "default"}
-                    key={`${viewControllers.filterEditorResetKey}-${queryFilter.draftResetKey}`}
-                    registry={searchRegistry}
-                    projectId={projectId}
-                    tableName={eventsFilterConfig.tableName}
-                    isV4={true}
-                    store={searchBarStore}
-                    commit={searchBarCommit}
-                    observed={observedOptions}
-                    erroredColumns={erroredColumns}
-                    fieldReason={
-                      chartActive ? chartSearchFieldReason : undefined
-                    }
-                    freeTextReason={
-                      chartFreeTextIgnored
-                        ? CHART_SEARCH_QUERY_REASON
-                        : undefined
-                    }
-                    onApplyFilters={searchBarApplyFilters}
-                    onRequestColumns={requestColumns}
-                    aiDataContext={aiDataContext}
-                    aiScoreNames={aiScoreNames}
-                  />
+              <PageHeaderTitleSlotPortal enabled={searchInTitleRow}>
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <EventsSearchBarRow
+                      size={showControlsInPageHeader ? "large" : "default"}
+                      key={`${viewControllers.filterEditorResetKey}-${queryFilter.draftResetKey}`}
+                      registry={searchRegistry}
+                      projectId={projectId}
+                      tableName={eventsFilterConfig.tableName}
+                      isV4={true}
+                      store={searchBarStore}
+                      commit={searchBarCommit}
+                      observed={observedOptions}
+                      erroredColumns={erroredColumns}
+                      fieldReason={
+                        chartActive ? chartSearchFieldReason : undefined
+                      }
+                      freeTextReason={
+                        chartFreeTextIgnored
+                          ? CHART_SEARCH_QUERY_REASON
+                          : undefined
+                      }
+                      onApplyFilters={searchBarApplyFilters}
+                      onRequestColumns={requestColumns}
+                      aiDataContext={aiDataContext}
+                      aiScoreNames={aiScoreNames}
+                    />
+                  </div>
                 </div>
-              </div>
+              </PageHeaderTitleSlotPortal>
             )}
             {/* Toolbar spanning full width */}
             <DataTableToolbar

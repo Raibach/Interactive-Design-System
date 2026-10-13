@@ -6,7 +6,6 @@ import { useSettings } from "#/hooks/query/use-settings";
 import { SettingsInput } from "#/components/features/settings/settings-input";
 import { SettingsDropdownInput } from "#/components/features/settings/settings-dropdown-input";
 import { OpenAISubscriptionAuthCard } from "#/components/features/settings/llm-settings/openai-subscription-auth-card";
-import { HelpLink } from "#/ui/help-link";
 import { KeyStatusIcon } from "#/components/features/settings/key-status-icon";
 import {
   SdkSectionHeaderProps,
@@ -102,23 +101,6 @@ const isProviderDefaultBaseUrl = (model: string, baseUrl: string) => {
 
 interface OpenHandsApiKeyHelpProps {
   testId: string;
-}
-
-function OpenHandsApiKeyHelp({ testId }: OpenHandsApiKeyHelpProps) {
-  const { t } = useTranslation("openhands");
-
-  return (
-    <HelpLink
-      testId={testId}
-      text={t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_TEXT)}
-      linkText={t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_LINK)}
-      href="https://app.all-hands.dev/settings/api-keys"
-      suffix={` ${t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_SUFFIX)}`}
-      suffixLinkText={t(I18nKey.SETTINGS$SEE_HERE_FOR_MORE_DETAILS)}
-      suffixLinkHref="https://docs.openhands.dev/usage/local-setup#getting-an-api-key"
-      trailing="."
-    />
-  );
 }
 
 export function LlmSettingsScreen({
@@ -316,11 +298,7 @@ export function LlmSettingsScreen({
         />
       );
 
-      const renderApiKeyInput = (
-        testId: string,
-        helpTestId: string,
-        openHandsHelpTestId: string,
-      ) => (
+      const renderApiKeyInput = (testId: string) => (
         <>
           <SettingsInput
             testId={testId}
@@ -336,20 +314,6 @@ export function LlmSettingsScreen({
               apiKeyIsSet ? <KeyStatusIcon isSet={apiKeyIsSet} /> : undefined
             }
           />
-
-          {/* The OpenHands provider's key lives in the OpenHands Cloud "API
-              Keys" tab, so point users there instead of the generic docs page
-              that covers both LLM and regular API keys. */}
-          {showOpenHandsApiKeyHelp ? (
-            <OpenHandsApiKeyHelp testId={openHandsHelpTestId} />
-          ) : (
-            <HelpLink
-              testId={helpTestId}
-              text={t(I18nKey.SETTINGS$DONT_KNOW_API_KEY)}
-              linkText={t(I18nKey.SETTINGS$CLICK_FOR_INSTRUCTIONS)}
-              href="https://docs.openhands.dev/usage/local-setup#getting-an-api-key"
-            />
-          )}
         </>
       );
 
@@ -474,10 +438,6 @@ export function LlmSettingsScreen({
                     : renderApiKeyInput(
                         // eslint-disable-next-line i18next/no-literal-string -- DOM id, not user-facing
                         "llm-api-key-input",
-                        // eslint-disable-next-line i18next/no-literal-string -- DOM id, not user-facing
-                        "llm-api-key-help-anchor",
-                        // eslint-disable-next-line i18next/no-literal-string -- DOM id, not user-facing
-                        "openhands-api-key-help",
                       )}
                 </>
               )}
@@ -533,10 +493,6 @@ export function LlmSettingsScreen({
                     : renderApiKeyInput(
                         // eslint-disable-next-line i18next/no-literal-string -- DOM id, not user-facing
                         "llm-api-key-input",
-                        // eslint-disable-next-line i18next/no-literal-string -- DOM id, not user-facing
-                        "llm-api-key-help-anchor-advanced",
-                        // eslint-disable-next-line i18next/no-literal-string -- DOM id, not user-facing
-                        "openhands-api-key-help-2",
                       )}
                 </>
               )}

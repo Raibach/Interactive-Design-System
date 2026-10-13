@@ -37,10 +37,7 @@ describe("mock agent-server discovery", () => {
         hide_users_page: false,
       },
       providers_configured: [],
-      maintenance_start_time: null,
       recaptcha_site_key: null,
-      faulty_models: [],
-      error_message: null,
       updated_at: expect.any(String),
     });
 
@@ -266,7 +263,6 @@ describe("mock agent-server discovery", () => {
         hide_users_page: false,
       },
       providers_configured: [],
-      faulty_models: [],
       updated_at: expect.any(String),
     });
   });

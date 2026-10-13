@@ -1,7 +1,6 @@
 import { useRouter } from "next/router";
 import { api } from "@/src/utils/api";
 import { TimeRangePicker } from "@/src/components/date-picker";
-import { PageHeaderControlsPortal } from "@/src/components/layouts/page-header-controls-slot";
 import { useDashboardFilterOptions } from "@/src/hooks/useDashboardFilterOptions";
 import {
   PopoverFilterBuilder,
@@ -16,7 +15,7 @@ import {
   type FilterState,
 } from "@langfuse/shared";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StringParam, useQueryParam } from "use-query-params";
 import {
   DASHBOARD_AGGREGATION_OPTIONS,
@@ -41,13 +40,21 @@ import {
   useDashboardQueryScheduler,
 } from "@/src/features/dashboard/hooks/useDashboardQueryScheduler";
 import Link from "next/link";
-import { LockIcon, PencilIcon } from "lucide-react";
+import { LockIcon, PencilIcon, SettingsIcon } from "lucide-react";
 import { showErrorToast } from "@/src/features/notifications";
 import { useHasProjectAccess } from "@/src/features/rbac";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics";
 import { Button } from "@/src/components/ui/button";
 import { DashboardGrid } from "@/src/features/widgets/components/DashboardGrid";
 import { HomeDashboardSelect } from "@/src/features/dashboard/components/HomeDashboardSelect";
+import { ConnectedDashboardTable } from "@/src/features/dashboard/components/DashboardTable/ConnectedDashboardTable";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/src/components/ui/dialog";
 import { useQueryProjectOrOrganization } from "@/src/features/projects";
 import { setupTracingRoute } from "@/src/features/setup";
 
@@ -230,6 +237,10 @@ function HomeDashboard({ readPath }: { readPath: ResolvedReadPath }) {
     scope: "apiKeys:CUD",
   });
 
+  // RAIBACH IDS (2026-10-12, owner's settings-modal pass): open state for the
+  // dashboards list modal — the cog in the title row toggles it.
+  const [showDashboardList, setShowDashboardList] = useState(false);
+
   // Silent on success: the "Set default" button disappearing is the feedback.
   const setHomeDashboard = api.dashboard.setHomeDashboard.useMutation({
     onSuccess: () => {
@@ -343,6 +354,12 @@ function HomeDashboard({ readPath }: { readPath: ResolvedReadPath }) {
         withPadding
         scrollable
         headerProps={{
+          // RAIBACH IDS (2026-10-12, owner's homepage pass): the time control
+          // moves up into this row (right of Filters) from the hoisted strip —
+          // which is deleted, closing the space above; ~20px pad ≈ the ~25px
+          // from top the owner marked. REVERT: restore the portal hoist, drop
+          // the className and the TimeRangePicker in actionButtonsLeft.
+          className: "pt-5",
           title: "Home",
           actionButtonsLeft: (
             <>
@@ -364,6 +381,26 @@ function HomeDashboard({ readPath }: { readPath: ResolvedReadPath }) {
                 // v3/legacy surface (not the v4 events table).
                 tableName="home-dashboard"
                 isV4={false}
+              />
+              {/* RAIBACH IDS (2026-10-12, owner's homepage pass): the time
+                  range sits right of Filters — moved down out of the hoisted
+                  header strip, which is deleted. */}
+              <TimeRangePicker
+                timeRange={timeRange}
+                onTimeRangeChange={setTimeRange}
+                timeRangePresets={dashboardTimeRangePresets}
+                className="my-0 max-w-full overflow-x-auto"
+                triggerClassName="px-2"
+                disabled={
+                  lookbackLimit
+                    ? {
+                        before: new Date(
+                          new Date().getTime() -
+                            lookbackLimit * 24 * 60 * 60 * 1000,
+                        ),
+                      }
+                    : undefined
+                }
               />
             </>
           ),
@@ -418,6 +455,19 @@ function HomeDashboard({ readPath }: { readPath: ResolvedReadPath }) {
                     Configure Tracing
                   </Button>
                 ))}
+              {/* RAIBACH IDS (2026-10-12, owner's settings-modal pass): the cog
+                  opens the dashboards list as a page-settings modal — the first
+                  of the tab-level settings overlays.
+                  REVERT: delete this cog + the Dialog block below. */}
+              <Button
+                variant="outline"
+                size="icon"
+                title="Dashboard settings"
+                onClick={() => setShowDashboardList(true)}
+              >
+                <SettingsIcon className="icon-base text-icon-foreground" />
+                <span className="sr-only">Dashboard settings</span>
+              </Button>
             </>
           ),
           actionButtonsMenu: ({ closeMenu }) => (
@@ -516,25 +566,9 @@ function HomeDashboard({ readPath }: { readPath: ResolvedReadPath }) {
           ),
         }}
       >
-        <PageHeaderControlsPortal>
-          <TimeRangePicker
-            timeRange={timeRange}
-            onTimeRangeChange={setTimeRange}
-            timeRangePresets={dashboardTimeRangePresets}
-            className="my-0 max-w-full overflow-x-auto"
-            triggerClassName="px-2"
-            disabled={
-              lookbackLimit
-                ? {
-                    before: new Date(
-                      new Date().getTime() -
-                        lookbackLimit * 24 * 60 * 60 * 1000,
-                    ),
-                  }
-                : undefined
-            }
-          />
-        </PageHeaderControlsPortal>
+        {/* RAIBACH IDS (2026-10-12): the hoisted strip is deleted — the time
+            control lives in the title row, right of Filters. REVERT: restore
+            the PageHeaderControlsPortal block here. */}
         {!isDashboardDataReady || isResolvingDashboard ? (
           <NoDataOrLoading isLoading />
         ) : (
@@ -553,6 +587,25 @@ function HomeDashboard({ readPath }: { readPath: ResolvedReadPath }) {
             readOnly
           />
         )}
+
+        {/* RAIBACH IDS (2026-10-12, owner's settings-modal pass): the dashboards
+            list as a settings modal — deep drop shadow because our colors are
+            dark, X-out in the header. First page-settings overlay; the other
+            tabs repurpose this shape. REVERT: delete this block (and the cog
+            in actionButtonsRight). */}
+        <Dialog open={showDashboardList} onOpenChange={setShowDashboardList}>
+          <DialogContent
+            size="lg"
+            className="max-w-5xl shadow-[0_30px_100px_-12px_rgba(0,0,0,0.95),0_12px_40px_-8px_rgba(0,0,0,0.8)]"
+          >
+            <DialogHeader>
+              <DialogTitle>Dashboards</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <ConnectedDashboardTable />
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
       </Page>
     </DashboardQuerySchedulerProvider>
   );

@@ -108,6 +108,9 @@ export type SessionTableProps = {
    * of a `Page`.
    */
   showControlsInPageHeader?: boolean;
+  /** RAIBACH IDS (2026-10-12, owner's header pass): render the search box in
+   * the page title row (it flexes and truncates) instead of its own row. */
+  searchInTitleRow?: boolean;
 };
 
 export default function SessionsTable({
@@ -116,6 +119,7 @@ export default function SessionsTable({
   omittedFilter = [],
   isV4 = false,
   showControlsInPageHeader = false,
+  searchInTitleRow = false,
 }: SessionTableProps) {
   const capture = usePostHogClientCapture();
   const sessionsFilterConfig = useMemo(
@@ -839,7 +843,10 @@ export default function SessionsTable({
 
   return (
     <DataTableControlsProvider tableName={sessionsFilterConfig.tableName}>
-      <div className="flex h-full w-full flex-col">
+      {/* RAIBACH IDS (2026-10-12, owner's balance pass): 30px right margin —
+          with the 12px house scrollbar this matches the 41px left side
+          (filter rail + seam); the table ends ~30px left of the gripper. */}
+      <div className="flex h-full w-full flex-col pr-[30px]">
         {showControlsInPageHeader && (
           <TableHeaderControls
             timeRange={timeRange}
@@ -847,6 +854,7 @@ export default function SessionsTable({
           />
         )}
         <StickySearchableTableFilterLayout
+          searchInTitleRow={searchInTitleRow}
           search={
             <TableSearchBar
               size={showControlsInPageHeader ? "large" : "default"}

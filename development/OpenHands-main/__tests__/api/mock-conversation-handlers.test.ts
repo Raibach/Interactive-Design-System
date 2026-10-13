@@ -556,7 +556,6 @@ describe("mock conversation handlers", () => {
       llm_base_url: string;
       llm_model: string;
       search_api_key_set: boolean;
-      user_consents_to_analytics: boolean;
       provider_tokens_set: Record<string, string>;
     }>("/api/v1/settings");
     const key = await cloudProxy<{
@@ -589,7 +588,6 @@ describe("mock conversation handlers", () => {
       llm_base_url: "",
       llm_model: "openhands/claude-haiku-4-5-20251001",
       search_api_key_set: false,
-      user_consents_to_analytics: false,
       provider_tokens_set: { github: "" },
     });
     expect(key.body).toEqual({

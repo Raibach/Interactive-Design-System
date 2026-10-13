@@ -56,7 +56,7 @@ export function ModalBackdrop({
     >
       <div
         onClick={handleClick}
-        className="fixed inset-0 bg-black opacity-60"
+        className="fixed inset-0"
       />
       <div className="relative">{children}</div>
     </div>,

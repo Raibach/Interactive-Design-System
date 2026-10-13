@@ -30,6 +30,10 @@ export function rewriteHtml(html: string, base: string): string {
     return html
         .replace(/(\s(?:src|href|action|poster)\s*=\s*")\/(?!\/)/g, `$1${base}/`)
         .replace(/(\s(?:src|href|action|poster)\s*=\s*')\/(?!\/)/g, `$1${base}/`)
+        .replace(/(\s(?:src|href|action|poster)\s*=\s*")([^"]*)"/g,
+            (_full, prefix: string, value: string) => `${prefix}${rewriteRelativeRef(value, base)}"`)
+        .replace(/(\s(?:src|href|action|poster)\s*=\s*')([^']*)'/g,
+            (_full, prefix: string, value: string) => `${prefix}${rewriteRelativeRef(value, base)}'`)
         .replace(/(\ssrcset\s*=\s*")([^"]*)"/g, (_full, prefix: string, value: string) => {
             const next = value
                 .split(",")
@@ -38,6 +42,24 @@ export function rewriteHtml(html: string, base: string): string {
             return `${prefix}${next}"`;
         })
         .replace(/"\/_next\//g, `"${base}/_next/`);
+}
+
+/**
+ * THE RELATIVE HALF (2026-10-10, measured live): `./styles.css`, `app.js`, `index.html`
+ * are values that resolve against the DOCUMENT's URL — and at the door the document's
+ * canonical URL has NO trailing slash (Next.js canonicalizes `/route/` → `/route`),
+ * so `./styles.css` climbs a level and 404s. They are pointed at the proxy base the
+ * same way root-absolute ones are. `#fragment`, `?query`, every scheme'd value
+ * (`data:`, `mailto:`, `http:`, `//host`) and anything already base-prefixed (starts
+ * with `/`) are left untouched — the root-absolute rules above ran first, so their
+ * output is skipped here.
+ */
+function rewriteRelativeRef(value: string, base: string): string {
+    const v = value.trim();
+    if (!v || v.startsWith("/") || v.startsWith("#") || v.startsWith("?") || /^[a-z][a-z0-9+.-]*:/i.test(v)) {
+        return value;
+    }
+    return `${base}/${v.startsWith("./") ? v.slice(2) : v}`;
 }
 
 /**
@@ -65,10 +87,17 @@ export function rewriteHtml(html: string, base: string): string {
  * alone.
  */
 export function rewriteCss(css: string, base: string): string {
-    return css.replace(
-        /url\(\s*(['"]?)\/(?!\/)/g,
-        (_full, quote: string) => `url(${quote}${base}/`
-    );
+    return css
+        .replace(
+            /url\(\s*(['"]?)\/(?!\/)/g,
+            (_full, quote: string) => `url(${quote}${base}/`
+        )
+        /* THE RELATIVE HALF (same fix, same day): `url(./font.woff2)` — see
+           rewriteRelativeRef's note; quoted and bare forms both handled. */
+        .replace(
+            /url\(\s*(['"]?)(?!\/|data:|https?:|#|\?)([^'")]+)\1\s*\)/g,
+            (_full, quote: string, value: string) => `url(${quote}${rewriteRelativeRef(value, base)}${quote})`
+        );
 }
 
 export function injectAgent(html: string, base: string): string {

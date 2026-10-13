@@ -807,9 +807,6 @@ describe("recommended automations", () => {
     expect(
       screen.getByTestId("responder-deployment-modal-close"),
     ).toBeDisabled();
-    expect(
-      screen.getByTestId("responder-deployment-open-openhands-cloud"),
-    ).toBeDisabled();
     expect(mockCreateSecret).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
@@ -1109,29 +1106,6 @@ describe("recommended automations", () => {
         "/automations/new/github-repo-monitor",
       ),
     );
-  });
-
-  it("opens the OpenHands Cloud integrations page without launching when the cloud option is chosen", () => {
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-
-    renderLauncher();
-
-    fireEvent.click(
-      screen.getByTestId("recommended-automation-card-github-repo-monitor"),
-    );
-    fireEvent.click(
-      screen.getByTestId("responder-deployment-open-openhands-cloud"),
-    );
-
-    expect(openSpy).toHaveBeenCalledWith(
-      "https://app.all-hands.dev/settings/integrations",
-      "_blank",
-      "noopener,noreferrer",
-    );
-    expect(mockCreateConversationMutate).not.toHaveBeenCalled();
-    expect(mockCreateSecret).not.toHaveBeenCalled();
-
-    openSpy.mockRestore();
   });
 
   it("does not show the deployment choice modal for non-responder automations", () => {

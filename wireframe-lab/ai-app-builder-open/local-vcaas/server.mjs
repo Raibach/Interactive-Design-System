@@ -910,6 +910,24 @@ function servePreview(res, projectId, subPath) {
   let content = files[path];
   if (content === undefined) content = files[`${path}/index.html`]; // directory → its index
   if (content === undefined) content = files[`${path}.html`]; // /about → about.html
+  // THE ENGINE'S OWN ASSETS RIDE THE PREVIEW PATH (2026-10-10): the empty-state splash
+  // (emptyProjectPage, above) draws itself with `/assets/…` refs — the R logo, the two lab
+  // grounds. Those files belong to the ENGINE, not the project; the asset desk below serves
+  // them only at the server root, so through the studio's door (where the splash arrives
+  // under the builder's /api/preview prefix) the refs 404'd and the owner met a broken R
+  // (owner, 2026-10-10: *"my R logo… it's still broken"*). Same flat-name whitelist as the
+  // desk, mirrored here; project files still win — they are checked first — and anything
+  // else stays a loud 404.
+  const deskMatch = path.match(/^assets\/([A-Za-z0-9._-]+)$/);
+  if (deskMatch) {
+    const deskPath = join(ASSETS_DIR, deskMatch[1]);
+    if (existsSync(deskPath)) {
+      const deskExt = deskMatch[1].slice(deskMatch[1].lastIndexOf("."));
+      res.writeHead(200, { "content-type": MIME[deskExt] || "application/octet-stream", "cache-control": "no-store" });
+      res.end(readFileSync(deskPath));
+      return;
+    }
+  }
   if (content === undefined && Object.keys(files).length === 0 && (path === "index.html" || path === "index")) {
     // THE EMPTY PROJECT — the splash, never the 404 (see `emptyProjectPage`).
     res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });

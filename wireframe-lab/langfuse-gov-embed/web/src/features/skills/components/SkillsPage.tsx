@@ -206,7 +206,7 @@ function SkillsList({
   ];
 
   return (
-    <DataTableControlsProvider tableName="skills" defaultSidebarCollapsed>
+    <DataTableControlsProvider tableName="skills">
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="md:hidden">

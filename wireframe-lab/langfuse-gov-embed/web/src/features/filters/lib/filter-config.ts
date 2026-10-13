@@ -80,7 +80,6 @@ export interface FilterConfig {
   tableName: string;
   columnDefinitions: ColumnDefinition[];
   defaultExpanded?: string[];
-  defaultSidebarCollapsed?: boolean;
   facets: Facet[];
   /** Runs after display-name normalization and before filter validation. */
   migrateFilterState?: FilterStateMigration;

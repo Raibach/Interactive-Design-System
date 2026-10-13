@@ -1174,10 +1174,7 @@ export default function ScoresTable({
   );
 
   return (
-    <DataTableControlsProvider
-      tableName={scoresFilterConfig.tableName}
-      defaultSidebarCollapsed={scoresFilterConfig.defaultSidebarCollapsed}
-    >
+    <DataTableControlsProvider tableName={scoresFilterConfig.tableName}>
       <div className="flex h-full w-full flex-col">
         {showControlsInPageHeader && (
           <TableHeaderControls

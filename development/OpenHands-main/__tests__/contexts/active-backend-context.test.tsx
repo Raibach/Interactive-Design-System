@@ -3,16 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { setTelemetryCloudContextMock, setTelemetryIdentityMock } = vi.hoisted(
-  () => ({
-    setTelemetryCloudContextMock: vi.fn(),
-    setTelemetryIdentityMock: vi.fn(),
-  }),
-);
-vi.mock("#/services/telemetry", () => ({
-  setTelemetryCloudContext: setTelemetryCloudContextMock,
-  setTelemetryIdentity: setTelemetryIdentityMock,
-}));
 import {
   __resetActiveStoreForTests,
   NO_BACKEND_ID,
@@ -170,8 +160,6 @@ describe("ActiveBackendProvider", () => {
     });
 
     expect(result.current.active.backend.id).toBe(SEEDED_DEFAULT_BACKEND_ID);
-    expect(setTelemetryCloudContextMock).toHaveBeenCalledWith(null);
-    expect(setTelemetryIdentityMock).not.toHaveBeenCalled();
   });
 
   it("clears Cloud context without resetting identity when switching Cloud orgs", () => {
@@ -194,8 +182,6 @@ describe("ActiveBackendProvider", () => {
     });
 
     expect(result.current.active.orgId).toBe("org-2");
-    expect(setTelemetryCloudContextMock).toHaveBeenCalledWith(null);
-    expect(setTelemetryIdentityMock).not.toHaveBeenCalled();
   });
 
   it("clears Cloud context and defers identity when switching Cloud backends", () => {
@@ -226,8 +212,6 @@ describe("ActiveBackendProvider", () => {
     });
 
     expect(result.current.active.backend.id).toBe(firstCloudId);
-    expect(setTelemetryCloudContextMock).toHaveBeenCalledWith(null);
-    expect(setTelemetryIdentityMock).toHaveBeenCalledWith(null);
   });
 
   // @spec BM-003 — Fallback on active backend removal
@@ -344,8 +328,6 @@ describe("ActiveBackendProvider", () => {
     });
 
     expect(result.current.active.backend.connectionRevision).toBe(1);
-    expect(setTelemetryCloudContextMock).toHaveBeenCalledWith(null);
-    expect(setTelemetryIdentityMock).toHaveBeenCalledWith(null);
   });
 
   it("clears identity when the active Cloud backend is removed", () => {
@@ -366,8 +348,6 @@ describe("ActiveBackendProvider", () => {
       result.current.removeBackend(id);
     });
 
-    expect(setTelemetryCloudContextMock).toHaveBeenCalledWith(null);
-    expect(setTelemetryIdentityMock).toHaveBeenCalledWith(null);
   });
 
   it("removeBackend drops the backend's persisted health entry", () => {

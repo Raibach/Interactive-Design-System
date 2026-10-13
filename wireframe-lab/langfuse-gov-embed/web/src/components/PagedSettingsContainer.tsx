@@ -63,7 +63,9 @@ export const PagedSettingsContainer = ({
   return (
     <main
       className={cn(
-        "flex flex-1 flex-col gap-4 py-4 md:gap-8",
+        // RAIBACH IDS (2026-10-12, owner's settings pass): 20px above the
+        // section — equal top spacing throughout the app.
+        "flex flex-1 flex-col gap-4 pt-5 pb-4 md:gap-8",
         fullHeight && "min-h-0 overflow-hidden",
       )}
     >
@@ -107,7 +109,10 @@ export const PagedSettingsContainer = ({
         </nav>
         <nav
           className={cn(
-            "text-muted-foreground hidden text-sm md:sticky md:top-5 md:grid md:gap-y-1",
+            // RAIBACH IDS (2026-10-12, owner's settings pass): the left column
+            // wears the dashboard container — same fill as the dashboards
+            // (rgba(17,14,31,0.75), 6px radius). REVERT: drop the md:* boxes.
+            "text-muted-foreground hidden text-sm md:sticky md:top-5 md:grid md:gap-y-1 md:rounded-md md:bg-[rgba(17,14,31,0.75)] md:p-2",
             fullHeight && "md:top-0",
           )}
           x-chunk="dashboard-04-chunk-0"
@@ -145,7 +150,9 @@ export const PagedSettingsContainer = ({
         </nav>
         <div
           className={cn(
-            "w-full overflow-hidden p-1",
+            // RAIBACH IDS (2026-10-12, owner's settings pass): everything in
+            // the right column lives in one dashboard container.
+            "w-full overflow-hidden rounded-md bg-[rgba(17,14,31,0.75)] p-4",
             fullHeight && "h-full min-h-0",
           )}
         >

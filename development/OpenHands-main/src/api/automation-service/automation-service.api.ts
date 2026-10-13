@@ -1,11 +1,4 @@
 import axios from "axios";
-import {
-  clearPendingLocalTelemetryRevocation,
-  getTelemetryConsent,
-  getTelemetryDistinctId,
-  getTelemetryDistinctIdForConsentSync,
-  type TelemetryConsent,
-} from "#/services/telemetry";
 import type {
   Automation,
   AutomationCreatedByFilter,
@@ -44,10 +37,7 @@ import {
 } from "../backend-registry/active-store";
 import { NoBackendAvailableError } from "../agent-server-client-options";
 import { callCloudProxy } from "../cloud/proxy";
-import {
-  AGENT_CANVAS_CLIENT_HEADERS,
-  OPENHANDS_TELEMETRY_DISTINCT_ID_HEADER,
-} from "../client-source";
+import { AGENT_CANVAS_CLIENT_HEADERS } from "../client-source";
 
 const AUTOMATION_BASE_PATH = "/api/automation";
 
@@ -72,12 +62,8 @@ const localAutomationAxios = axios.create();
 async function buildAutomationRequestHeaders(
   extraHeaders: Record<string, string> = {},
 ): Promise<Record<string, string>> {
-  const telemetryDistinctId = await getTelemetryDistinctId();
   return {
     ...AGENT_CANVAS_CLIENT_HEADERS,
-    ...(telemetryDistinctId
-      ? { [OPENHANDS_TELEMETRY_DISTINCT_ID_HEADER]: telemetryDistinctId }
-      : {}),
     ...extraHeaders,
   };
 }
@@ -236,26 +222,6 @@ async function buildPinnedCloudHeaders(active: ResolvedActiveBackend) {
 }
 
 class AutomationService {
-  static async syncTelemetryConsent(
-    consent: TelemetryConsent = getTelemetryConsent(),
-  ): Promise<void> {
-    const active = getActiveBackend();
-    if (active.backend.kind !== "local") return;
-
-    const frontendDistinctId = await getTelemetryDistinctIdForConsentSync();
-    await localAutomationAxios.post(
-      `${AUTOMATION_BASE_PATH}/v1/telemetry/consent`,
-      {
-        consent_granted: consent === "granted",
-        frontend_distinct_id: frontendDistinctId,
-      },
-      { timeout: 5000 },
-    );
-    if (consent !== "granted" && frontendDistinctId) {
-      clearPendingLocalTelemetryRevocation(frontendDistinctId);
-    }
-  }
-
   static async getSdkVersion(): Promise<string | null> {
     const active = getActiveBackend();
     const path = `${AUTOMATION_BASE_PATH}/sdk-version`;

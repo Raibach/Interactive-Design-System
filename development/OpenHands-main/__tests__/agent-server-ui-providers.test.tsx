@@ -24,17 +24,6 @@ import {
 } from "#/index";
 import i18n from "#/i18n";
 
-const telemetryProviderMock = vi.hoisted(() => vi.fn());
-vi.mock("#/components/providers/telemetry-provider", () => ({
-  TelemetryProvider: (props: {
-    children: React.ReactNode;
-    config?: unknown;
-  }) => {
-    telemetryProviderMock(props);
-    return props.children;
-  },
-}));
-
 const BaseProbe = ({ translation }: { translation?: string }) => {
   const currentQueryClient = useQueryClient();
 
@@ -168,47 +157,6 @@ describe("AgentServerUIProviders", () => {
 
     expect(getQueryClient()).toBe(getDefaultQueryClient());
     expect(getI18n()).toBe(getDefaultI18n());
-  });
-
-  it("passes disabled and runtime analytics configuration to TelemetryProvider", () => {
-    telemetryProviderMock.mockClear();
-
-    const noAnalyticsView = render(
-      <AgentServerUIProviders>
-        <div data-testid="child">child</div>
-      </AgentServerUIProviders>,
-    );
-
-    expect(screen.getByTestId("child")).toHaveTextContent("child");
-    expect(telemetryProviderMock).toHaveBeenCalledWith(
-      expect.objectContaining({ config: false }),
-    );
-
-    noAnalyticsView.unmount();
-    telemetryProviderMock.mockClear();
-
-    const analytics = {
-      provider: "posthog" as const,
-      apiKey: "phc_embedded",
-      apiHost: "https://events.example.com",
-      uiHost: "https://posthog.example.com",
-    };
-
-    render(
-      <AgentServerUIProviders analytics={analytics}>
-        <div data-testid="child-with-analytics">child</div>
-      </AgentServerUIProviders>,
-    );
-
-    expect(telemetryProviderMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: {
-          apiKey: analytics.apiKey,
-          apiHost: analytics.apiHost,
-          uiHost: analytics.uiHost,
-        },
-      }),
-    );
   });
 
   it("wraps children in a scoped, customizable style root by default", () => {

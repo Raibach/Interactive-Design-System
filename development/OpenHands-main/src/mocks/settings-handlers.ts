@@ -56,10 +56,7 @@ export const createMockWebClientConfig = (
     ...overrides.feature_flags,
   },
   providers_configured: [],
-  maintenance_start_time: null,
   recaptcha_site_key: null,
-  faulty_models: [],
-  error_message: null,
   updated_at: new Date().toISOString(),
   ...overrides,
 });
@@ -968,10 +965,7 @@ export const SETTINGS_HANDLERS = [
         hide_users_page: false,
       },
       providers_configured: [],
-      maintenance_start_time: null,
       recaptcha_site_key: null,
-      faulty_models: [],
-      error_message: null,
       updated_at: new Date().toISOString(),
     };
 
@@ -1009,7 +1003,6 @@ export const SETTINGS_HANDLERS = [
 
     const DEFAULT_APP_PREFERENCES = {
       language: null,
-      user_consents_to_analytics: null,
       enable_sound_notifications: null,
       git_user_name: null,
       git_user_email: null,

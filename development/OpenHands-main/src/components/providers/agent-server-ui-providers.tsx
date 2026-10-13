@@ -16,25 +16,10 @@ import {
 import { ActiveBackendProvider } from "#/contexts/active-backend-context";
 import { CloudOrganizationBoundary } from "#/components/features/backends/cloud-organization-boundary";
 import { useHydrateFreeModels } from "#/hooks/query/use-free-models";
-import type { TelemetryConfig } from "#/services/telemetry";
-import { TelemetryProvider } from "./telemetry-provider";
 import {
   AgentServerUIRoot,
   type AgentServerUIRootProps,
 } from "./agent-server-ui-root";
-
-export interface AgentServerUIPostHogAnalyticsConfig extends TelemetryConfig {
-  provider: "posthog";
-}
-
-export type AgentServerUIAnalyticsConfig =
-  | AgentServerUIPostHogAnalyticsConfig
-  | false
-  | null;
-
-export const DEFAULT_AGENT_SERVER_ANALYTICS: AgentServerUIAnalyticsConfig = {
-  provider: "posthog",
-};
 
 export interface AgentServerUIProvidersProps extends Pick<
   AgentServerUIRootProps,
@@ -42,7 +27,6 @@ export interface AgentServerUIProvidersProps extends Pick<
 > {
   children: React.ReactNode;
   queryClient?: QueryClient;
-  analytics?: AgentServerUIAnalyticsConfig;
   i18n?: I18nInstance;
   withStyleRoot?: boolean;
   /** Opt in only after authentication; otherwise mount CloudOrganizationBoundary after the host auth gate. */
@@ -62,7 +46,6 @@ function FreeModelsHydrator() {
 export function AgentServerUIProviders({
   children,
   queryClient,
-  analytics,
   i18n,
   className,
   contentClassName,
@@ -102,23 +85,15 @@ export function AgentServerUIProviders({
     [],
   );
 
-  const posthogConfig =
-    analytics && analytics.provider === "posthog"
-      ? {
-          apiKey: analytics.apiKey,
-          apiHost: analytics.apiHost,
-          uiHost: analytics.uiHost,
-        }
-      : false;
   const content = (
-    <TelemetryProvider config={posthogConfig}>
+    <>
       <FreeModelsHydrator />
       {resolveCloudOrganization ? (
         <CloudOrganizationBoundary>{children}</CloudOrganizationBoundary>
       ) : (
         children
       )}
-    </TelemetryProvider>
+    </>
   );
 
   const wrappedContent = withStyleRoot ? (

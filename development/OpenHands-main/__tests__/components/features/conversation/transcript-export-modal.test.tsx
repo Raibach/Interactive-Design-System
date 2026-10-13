@@ -17,7 +17,6 @@ const {
   getEventCountMock,
   loadCompleteTranscriptEventsMock,
   searchEventsMock,
-  trackConversationExportedMock,
   useTranslationMock,
 } = vi.hoisted(() => ({
   displayErrorToastMock: vi.fn(),
@@ -31,7 +30,6 @@ const {
   getEventCountMock: vi.fn(),
   loadCompleteTranscriptEventsMock: vi.fn(),
   searchEventsMock: vi.fn(),
-  trackConversationExportedMock: vi.fn(),
   useTranslationMock: vi.fn(),
 }));
 
@@ -51,13 +49,6 @@ vi.mock("#/utils/utils", async (importOriginal) => ({
 vi.mock("#/utils/transcript-export", () => ({
   eventsToHtml: (...args: unknown[]) => eventsToHtmlMock(...args),
   eventsToMarkdown: (...args: unknown[]) => eventsToMarkdownMock(...args),
-}));
-
-vi.mock("#/hooks/use-tracking", () => ({
-  useTracking: () => ({
-    trackConversationExported: (...args: unknown[]) =>
-      trackConversationExportedMock(...args),
-  }),
 }));
 
 vi.mock("#/stores/use-event-store", () => ({
@@ -147,7 +138,6 @@ function renderExportModal({
     getEventCountMock,
     loadCompleteTranscriptEventsMock,
     searchEventsMock,
-    trackConversationExportedMock,
     useTranslationMock,
   ].forEach((mock) => mock.mockReset());
 
@@ -220,7 +210,6 @@ describe("transcript export modal", () => {
     expect(filename).toBe("conversation-conversation-1.md");
     expect(blob.type).toBe("text/markdown;charset=utf-8");
     await expect(readBlob(blob)).resolves.toBe("# Markdown transcript");
-    expect(trackConversationExportedMock).toHaveBeenCalledWith("markdown");
     expect(scenario.onClose).toHaveBeenCalledOnce();
   });
 
@@ -293,7 +282,6 @@ describe("transcript export modal", () => {
     expect(filename).toBe("conversation-conversation-1.html");
     expect(blob.type).toBe("text/html;charset=utf-8");
     await expect(readBlob(blob)).resolves.toBe("<html>HTML transcript</html>");
-    expect(trackConversationExportedMock).toHaveBeenCalledWith("html");
     expect(scenario.onClose).toHaveBeenCalledOnce();
   });
 
@@ -334,7 +322,6 @@ describe("transcript export modal", () => {
     await waitFor(() => expect(downloadBlobMock).toHaveBeenCalledOnce());
     expect(getEventCountMock).toHaveBeenCalledTimes(2);
     expect(loadCompleteTranscriptEventsMock).toHaveBeenCalledTimes(2);
-    expect(trackConversationExportedMock).toHaveBeenCalledWith("markdown");
     expect(scenario.onClose).toHaveBeenCalledOnce();
   });
 
@@ -418,7 +405,6 @@ describe("transcript export modal", () => {
     await act(async () => count.resolve(1));
 
     await waitFor(() => expect(downloadBlobMock).toHaveBeenCalledOnce());
-    expect(trackConversationExportedMock).toHaveBeenCalledOnce();
     expect(scenario.onClose).toHaveBeenCalledOnce();
   });
 

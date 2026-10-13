@@ -198,6 +198,21 @@ resources/
 lit_design-catalogs/
 n8n-data/
 
+# ── THE WORDPRESS SITES (2026-10-10) ─────────────────────────────────────────
+# The owner's WordPress sites move onto this machine — files + database, run
+# locally. Local-only, the same rule as governance/ above: the owner's own
+# sites, in no clone. Site files carry live credentials (wp-config.php) and
+# visitor data — nothing here is ever pushed.
+/wordpress/
+
+# ── THE REPO'S OWN ENGINE COPY (2026-10-10) ─────────────────────────────────
+# runtime/node/ is a full copy of Node.js (82 MB) kept on disk so every local
+# service starts from the repository's own engine instead of the machine's
+# shared install. A toolchain is not source — kept out of the history, same
+# rule as the vendored trees above. Delete runtime/ to fall back to the
+# machine's install.
+runtime/
+
 # A dump of THIS repository's database, taken before it is changed. Same rule as the
 # .prod-backup-*.json below: insurance, kept on disk, and it holds other people's rows —
 # emails, prompt text, password hashes. Never in the history. Written by pg_dump into

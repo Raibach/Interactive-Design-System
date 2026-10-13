@@ -5,11 +5,7 @@ import {
   DeviceFlowError,
   type DeviceAuthorizationResponse,
 } from "#/api/device-flow-client";
-import {
-  trackCloudDeviceAuthorizationStarted,
-  trackCloudDeviceAuthorizationSucceeded,
-  type CloudConnectionSource,
-} from "#/services/cloud-funnel-analytics";
+import type { CloudConnectionSource } from "#/services/cloud-funnel-analytics";
 
 export type DeviceFlowStatus =
   | "idle"
@@ -63,7 +59,7 @@ const initialState: DeviceFlowState = {
  * const { status, verificationUrl, apiKey, error, start, cancel, reset } = useDeviceFlow();
  *
  * // Start auth
- * start("https://app.all-hands.dev");
+ * start(host);
  *
  * // Open browser when awaiting
  * if (status === "awaiting_authorization" && verificationUrl) {
@@ -116,8 +112,6 @@ export function useDeviceFlow(): UseDeviceFlowReturn {
 
       if (abortController.signal.aborted) return;
 
-      trackCloudDeviceAuthorizationStarted(host, analyticsSource);
-
       setState({
         ...initialState,
         status: "awaiting_authorization",
@@ -136,8 +130,6 @@ export function useDeviceFlow(): UseDeviceFlowReturn {
         );
 
         if (abortController.signal.aborted) return;
-
-        trackCloudDeviceAuthorizationSucceeded(host, analyticsSource);
 
         setState({
           ...initialState,

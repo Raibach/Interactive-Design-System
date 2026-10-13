@@ -7,7 +7,6 @@ import { cn } from "#/utils/utils";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { useLaunchSkillInChat } from "#/hooks/use-launch-skill-in-chat";
 import { useActiveBackend } from "#/contexts/active-backend-context";
-import { useTracking } from "#/hooks/use-tracking";
 import { getAutomationsDocsUrl } from "#/manifests/automation-interface";
 
 function InlineExampleWrap({ children }: { children?: ReactNode }) {
@@ -53,10 +52,8 @@ export function CreateInstructionsContent({
   const { t } = useTranslation("openhands");
   const launchInChat = useLaunchSkillInChat();
   const active = useActiveBackend();
-  const { trackAutomationCreatedButton } = useTracking();
 
   const handleCreateAutomation = () => {
-    trackAutomationCreatedButton({ backendKind: active.backend.kind });
     launchInChat(t(I18nKey.AUTOMATIONS$CREATE_AUTOMATION_PROMPT), onLaunch);
   };
 

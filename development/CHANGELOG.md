@@ -1,5 +1,120 @@
 # The Development zone — record
 
+## 2026-10-10 — THE HYDRATION BREAK FOUND AND DELETED; THE LAST LOGOS CUT; THE CONTENT BUMP
+
+**The #418 on every load was OURS — the fonts pass's `<link>` repoint.** The stripped vendor
+sheet was also served under `house-root-<sha>.css` and the `<link>` repointed at it (item 9,
+2026-10-07). Measured today by controlled removal in a live tab (the served html's link
+swapped per load, cache disabled, `pageerror` counted): house-root link present → React #418
+on EVERY load; link back on the vendor's own filename → zero errors. The app's hydration
+re-renders the stylesheet its manifest names; the DOM carried a different href; and the
+regenerated tree is exactly the "pop → black → house ground" the owner kept catching — the
+flash was the #418 regeneration itself, not a cascade fight (all four combinations — ground
+script on/off × sheet as-is/wrapped — recorded clean once the link was back).
+
+**Fixed in `openhands-patch.sh`:** item 12 (1b now strips in place, deletes any leftover
+`house-root-*.css`, and normalizes the `<link>` to the vendor name); item 13 — THE CONTENT
+BUMP — renames every file under `build/assets` (except `house-*`, which already carry their
+bytes' hash in their names) to `<name>-hb-<token>` and rewrites every textual reference
+(index.html included; two-phase sentinel pass so no replacement can cascade). Token = short
+hash of the script's own bytes; state in `build/.house-bump`; an unchanged re-run no-ops.
+Item 1c extended: the last three live logo urls (Ordinal favicon + two jsdelivr icons) cut —
+**18 urls in 16 files**, the whole `@openhands` scope made inert (`data:,`). Everything else
+external in the catalog is a docs link or an integration endpoint that fires only when used
+(the Ordinal `/api/mcp` endpoint deliberately stays — dormant, reported).
+
+**Run receipts (live system):** 270 assets renamed (token `df361e9f1c`), 250 reference files
+rewritten; old `vendor~module-DyG7x7JT.js` → **404**, new → 200; served html carries zero
+`house-root`; fresh cache-disabled load: **zero page errors, zero failed requests, zero
+old-name requests; the recorder shows the ground clean from the first sample — no black
+frame.** A second unchanged run: bump no-ops, urls untouched (this is what RESTART-LOCAL.sh
+does on every start).
+
+**Two honest notes.** (1) The cascade-layer wrap first proposed for the flash was NOT added —
+the measurements above show the sheet as-is records clean once the link is fixed; adding it
+would have been motion, not a repair. (2) Any tab left open through the rename will miss
+lazily-imported old names until it is reloaded once — that reload is the honest repair, and
+it is the last one this class of problem needs, because the old addresses are gone.
+
+**Consequence to say plainly:** every browser loads once more (owner's tabs reload); after
+that no cache can serve pre-patch bytes again — burned caches have no address left.
+
+**Owner's ruling on the tab-title leftover (same day): NOT CHASED.** Loaded the sanctioned way —
+inside the room's React shell — the frame's title never reaches the browser tab: the tab carries
+the shell's own title ("Raibach — Interactive Design"). "OpenHands" shows only when the tool is
+opened standalone, which is a testing path, not a door. Recorded so no future session chases it.
+
+**The same day, later — items 14a/14b: every build asset ships compressed.** Cold loads were
+pulling 5.25 MB uncompressed over the tunnel — that was the first-load delay the owner measured.
+Now: `scripts/static-server.mjs` gets `gzip: true, brotli: true` (sirv serves `<file>.gz` /
+`<file>.br` by `Accept-Encoding`), and item 14b writes those siblings with node's zlib (gzip
+level 9, brotli quality 5) for every text asset (js/mjs/cjs/css/json/svg/html/txt) —
+mtime-guarded, orphan-cleaned, idempotent, 271 gzip + 271 brotli files this run. Receipts: the
+largest chunk `vendor~module-…js` 188,782 B → **58,695 B brotli** at the door and through the
+tunnel (`content-encoding: br`); a cold load of the canvas conversation measured **229
+resources, 2.10 MB transferred** (decoded 5.58 MB). Raw files are still served to clients that
+don't negotiate compression; nothing lossy, nothing re-encoded. Because the script's own bytes
+changed, the content bump re-tokenized the build to **`-hb-0485b194c2`** — no cache anywhere can
+pair old CSS with new JS; one reload per tab remains the honest repair, then this class is done.
+
+**The empty-stage splash's logo — fixed engine-side.** The splash ("My new product idea") and the
+room tile live in the engine's asset desk at the server ROOT (`/assets/<file>`); served through
+the builder's preview path (`/builder/api/preview/<id>/assets/<file>`) the engine's `servePreview`
+only looked at project files → 404 every time (the owner's broken R; the console showed the 404s
+for the logo and the two lab grounds). Fix in `local-vcaas/server.mjs` `servePreview`: an
+`assets/<file>` request serves from the engine's own asset dir when the file exists there;
+project files keep precedence; anything unresolved answers the loud 404 unchanged. Verified: door
+logo 200, door tile 200, and the card renders with the R drawn (browser receipt through the
+door). **And one incident found on the way:** the whole door returned 500 because the builder's
+dev server was DOWN (no process on :3223 — the vite proxy had nothing to talk to). Restarted with
+`wireframe-lab/ai-app-builder-open/run-dev-local.sh` (the repo's own node; one launcher now owns
+both the Next server and the engine — the separate manual engine instance was stopped first so
+exactly one engine runs). Door chain green afterward: builder root 308→200, preview root 200,
+logo 200, tile 200, engine `{ok:true, key:true}`.
+
+**The DeepSeek account is gone; every stored key now points at the new one.** The owner's old
+emails are unreachable → the old account cannot be recovered; the old key (balance exhausted) is
+dead everywhere. The new key (held in `backend/.env`; not printed in this record) is now in:
+repo-root `.env`, `backend/.env`, `wireframe-lab/ai-app-builder-open/local-vcaas/.env`, and the
+canvas agent's stored settings via its own API (`PATCH /api/settings`, encrypted at rest,
+read-back `llm_api_key_is_set: True`) — proven with a real one-token completion (HTTP 200)
+before any of this was written down. Northflank: no fleet (`northflank list services` → 404 for
+the token's scope) — nothing to update. **The backup server (Hetzner `raibach-cloud-2`) is
+UNREACHABLE as of this entry** (HTTPS 000, ports 22/443 dead, ssh times out; it answered earlier
+the same day), so its two env files (`/opt/raibach/.env`, `/opt/raibach/studio.env`) still carry
+the dead key; the update is one ssh line away and lands the moment the box answers. Nothing
+pretends otherwise. **Later the same day the owner began closing the Hetzner account itself —
+services removed, the stored card removed through the bank-transfer path, deletion gated by
+Hetzner until the next invoice (Oct 12) is paid. The box's darkness was his decommissioning,
+not a failure; the key update there is void, recorded so no future session attempts it.
+Runtime and public address from here on = this machine plus the tunnel, as agreed.**
+
+**Same day, the hardening window — three items landed, one blocked by macOS, one real bug caught.**
+At the owner's word the queued runtime items were executed. **Container rebinds:** the three
+LAN-exposed ports (langfuse-web 3000, frame-proxy 3100, minio 9090) are now `127.0.0.1`-only;
+receipts — the LAN address refuses (`000`), loopback answers, the governance room gives final 200
+through `/governance`. **Colima narrowed:** `colima.yaml` `mounts: []` → the repo-only mount list
+(backup `colima.yaml.bak-2026-10-10`); after the restart the VM sees exactly ONE `/Users` mount —
+the repository; stack back 8/8 healthy. **Boot chain installed:** `development/ops/start-all-local.sh`
+(idempotent; skips running services; logs under `~/Library/Logs/raibach/`) + `~/Library/LaunchAgents/com.raibach.stack.plist` —
+**blocked on its first run: `Operation not permitted` (exit 126)** — macOS forbids login agents from
+running scripts inside `~/Documents` without an explicit grant (the tunnel/awake agents are unaffected;
+their binaries live outside Documents). Unblocking is the owner's one-time System Settings decision
+(Full Disk Access to `/bin/bash`, broad; or to a dedicated launcher binary, narrow — built on his
+pick); until then the boot script runs by hand after a reboot — one command that brings the whole
+chain up. **Failure tests, each app stopped and restored on purpose:** builder down → door 500 on
+`/builder/` and the preview; canvas down → `/dev/` 500; frame-proxy down → `/governance` 500 — all
+honest refusals, all restored green. The tests caught a real bug in the boot script: its restricted
+PATH missed `uv` (`~/.local/bin`), so the canvas step died at start — fixed in the script and
+re-verified from its own run. **One open puzzle on the way out:** `k0v` (and `glp`) are absent from
+the engine's project store; the five remaining empties and built 078 all serve, and the splash +
+desk logo verified intact across them; the store folder's last change was ≈09:55 — before this
+window; nothing in the hardening touches that store; it matches the previously flagged idea-vanishing
+pattern (1yb/41p/tpq/8a5) — whether the owner discarded those ideas is his answer to give; nothing
+was recreated. **Agreed next phase: security exploration** — the seed list is already measured:
+native listeners still on the LAN (studio 5001, backend 8000, builder 3223, engine 4000, canvas
+8090/3001), Apple's ControlCenter on 5000/7000, and the pending TCC decision.
+
 ## 2026-10-07 — the tool's Google Fonts go; nothing is fetched to draw it
 
 The owner's font ruling — *"Arial or rounded fonts -> becomes Nunito … Inter -> everywhere else. Numbers -> Inter. Use our fonts only - no API calls."* — lands in this room as a pure subtraction: the vendor sheet opened with two `@import` lines pulling **Outfit** and **IBM Plex Mono** from `fonts.googleapis.com`, and nothing in the build references either family (every stack resolves through the system vars `--font-sans` / `--font-mono`), so the imports were two calls out of the machine per cold load that drew nothing.
@@ -693,3 +808,22 @@ THE MECHANISM, measured in the tool's own modules (2026-10-07): the 10-06 tool u
 THE FIX (`development/openhands-patch.sh` only — the `house-patch-firstrun` block in the head's trailing zone, before any app script can read): it now also writes the CURRENT keys — checklist dismissed (`"true"`, forced when not already true) and menu collapsed through the vendor's own migration key (written only when no stored choice exists; a person's later toggle still wins). Re-applied to the build; the served page carries all three writes.
 VERIFIED THROUGH THE REAL PATH (the owner's same-night law: testing the tool load-ed raw, outside the React shell, *"is cheating … a shortcut … a way of suppressing errors"* — these tests are in-frame): inside the shell's Development room, twice — in the working browser, and in a brand-new browser taken through the sign-in gate into the room. Both frames: the embedded URL (`?embedded=console&house_door=dev`), checklist absent, `openhands-sidebar` = `{"state":{"collapsed":true},"version":0}`, dismissal `"true"`.
 LEFT ALONE, SAID PLAINLY: the vendor's "New Version Available" notice still ships from the bundle (flagged to the owner, not cut).
+
+**2026-10-10 (night) — THE TWO BOXES, DEAD FOR EVERY VISITOR — AND WHERE THIS WORKSPACE'S REAL SETTINGS LIVE (the map, recorded because they buried it deep).**
+The owner, with the public demo in front of strangers: *"Every single person other than me has seen this"* (the preference box) · *"why is it saying I don't have an LLM"* · *"Just delete it … delete it and they'll never come back again"* · *"no selecting no is not an option because it will not be selected the next time somebody in a different IP opens it up."* Both notices were per-visitor ask-loops; both are now dead **server-side, once, for every visitor**:
+- **THE CONSENT BOX's gate** (`telemetry-consent-banner.tsx`): `settings?.user_consents_to_analytics === null` → ask. The value lives NESTED at **`misc_settings.app_preferences.user_consents_to_analytics`** in `~/.openhands/settings.json` — NOT `telemetry.consent` (a router comment mislabels it; the frontend map `settings-service.api.ts` is authoritative). Written `false` → the box can never render again, for anyone.
+- **THE LLM BANNER's gate** (`use-llm-configured.ts`): locally `hasUsableLlm = hasActiveProfileApiKey` — **the ACTIVE LLM PROFILE's `api_key_set`**, never the plain agent-settings key. The profile list was EMPTY (`{"profiles":[],"active_profile":null}`) — the reason every earlier "set up the LLM" attempt never stuck. Profile `default` created (`deepseek-v4-flash` + the key from `backend/.env`, `include_secrets:true`) and activated; read-back `api_key_set:true`, `active_profile:"default"`.
+- **EXACT CALLS** (both to the local agent-server — `127.0.0.1:8090/dev/api/…`, auth = the page's injected `X-Session-API-Key`, which **rotates each workspace boot**; stale tabs get 401 walls until reload — A/B receipt: current key 200 · previous key 401): settings writes are **DIFF-shaped** (`{"misc_settings_diff":{"app_preferences":{"user_consents_to_analytics":false}}}`; flat fields → 400 "At least one of … must be provided"); profiles via `POST /api/profiles/default` then `POST /api/profiles/default/activate`. Stores on disk: `~/.openhands/` (settings.json + encrypted profile store) — they survive restarts.
+- **VERIFIED as a stranger through `https://raibach-ids.ngrok.dev/dev`** (fresh load): `hasConsentBox:false` · `hasLlmBanner:false` · `externalHosts:[]`.
+- **THE LAW, OWNER-STATED (same night): NO self-healing, NO auto-repair, ever.** *"there's no fucking such thing as self healing start up disable that"* — the proposed re-apply-at-startup step was WITHDRAWN before anything was built; nothing exists to disable. If the state is ever wiped, the boxes must come back **LOUD** and the fix is re-applied on purpose.
+- **WHY THEY KEPT COMING BACK** (asked directly by the owner): a deletion that isn't in the re-application path is replaced wholesale when the package refreshes; an "answer" kept in per-visitor state resets whenever state is recreated. The durable form is the single server-side value — which is what was written.
+- Separate layer, already standing: telemetry hard-off via `AGENT_CANVAS_DISABLE_TELEMETRY=1` (both launchers; `window.__AGENT_CANVAS_DO_NOT_TRACK__=true` injected; SDK never initializes).
+
+**2026-10-11 (night) — THE ROOM'S TOOL LEAVES THE MAC: THE CANVAS DEPLOYS TO THE BOX, AND THE LLM BLOCK'S TWO REAL LAYERS COME OUT (both predate the box).**
+The Development room's canvas now runs on raibach-cloud-3 as its own container (`ids-canvas-1` — the four services in one image: agent-server, automation, static frontend, ingress — behind the door's `/dev* → canvas:8090`; the honest 503 placeholder is retired). The image builds from THIS folder's sources: `development/canvas/` (Dockerfile, entrypoint.sh, log.sh, `requirements-agent.txt` + `requirements-automation.txt` — the sets frozen from the live local venvs, pyobjc pinned darwin-only). Deploy record: `wireframe-lab/raibach-cloud-3/` (canvas service in the ids compose; `canvas-deploy.sh` — idempotent, brace-counted Caddy edit, in-network + through-the-door verification).
+What the containerization measured, kept because each cost a rebuild: `python:3.12-slim` has no node (the frontend/ingress are `.mjs` — the node binary travels from the node stage); the scripts import `sirv` + `httpxy` (both ship; the whole node_modules tree); the agent binary is `agent-server`, not `openhands-agent-server`; the automation venv needs the vendored `openhands-workspace` editable; **`OH_WEB_URL` (path `/dev`) is what makes the agent-server answer under `/dev/*` at all** (api.py `_get_root_path`); `AUTOMATION_DB_URL=sqlite+aiosqlite://` or automation seeks a postgres that doesn't exist; the session key still injects into the served HTML off-loopback via the scripts' own container opt-in (`--allow-lan-session-key`) — no visitor is ever asked for a key.
+THE DOOR INCIDENT, said plainly: the first `/dev` door swap used a regex that ran past the old block's indented closing brace and swallowed the Caddy catch-all — for ~11 minutes `/` and every `/api/*` answered empty 200s while the section routes stayed green. Found and fixed the same evening; the deploy script now replaces the block by brace-counting and refuses to write unless the studio catch-all and every other route survive. The lesson is written inline where the edit lives: status codes are not verification — check bodies and sizes.
+THE LLM BLOCK — TWO LAYERS, NEITHER OF THEM "THE BOX":
+1. The send stayed disabled because the box's canvas volume lacked the profile files — `use-llm-configured.ts` found an empty profile list. Fixed by carrying the Mac's own `profiles/default.json` + `agent-profiles/default.json`.
+2. The run then hit `litellm.BadRequestError: LLM Provider NOT provided … model=deepseek-v4-flash`. LiteLLM cannot resolve the bare name; the provider prefix is required — **`deepseek/deepseek-v4-flash`** — proven in-container both ways (bare fails; prefixed answers, served as `deepseek-flash`). The bare name was set on 2026-10-10 when the profile was created — and the Mac's only-ever conversation (Oct 10, 17:47, "make a button") failed with the identical error: this configuration had never sent a message successfully on ANY machine until tonight.
+Fixed on both machines (the model string in `profiles/default.json` + `settings.json`; box state under `/opt/raibach/ids/data/canvas/`, Mac under `~/.openhands/`). VERIFIED end-to-end in the room: new conversation → "Thinking: The user wants me to reply with exactly 'hello from the box'." → agent reply "hello from the box", no error, context meter live. Nothing vendor was reinstalled anywhere — every fix tonight was two state files and one string.

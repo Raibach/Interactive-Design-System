@@ -9,7 +9,6 @@ import {
   useTaskPolling,
   useTaskPollingController,
 } from "#/hooks/query/use-task-polling";
-import { trackCloudConversationReady } from "#/services/cloud-funnel-analytics";
 import { useOptimisticUserMessageStore } from "#/stores/optimistic-user-message-store";
 import {
   consumePendingTaskDraft,
@@ -27,10 +26,6 @@ vi.mock(
     },
   }),
 );
-vi.mock("#/services/cloud-funnel-analytics", () => ({
-  trackCloudConversationReady: vi.fn(),
-}));
-
 const readyTask: AppConversationStartTask = {
   id: "123",
   created_by_user_id: "user-1",
@@ -227,11 +222,5 @@ describe("useTaskPolling", () => {
 
     await waitFor(() => expect(result.current.taskStatus).toBe("READY"));
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
-
-    expect(trackCloudConversationReady).toHaveBeenCalledOnce();
-    expect(trackCloudConversationReady).toHaveBeenCalledWith(
-      "123",
-      "conversation-1",
-    );
   });
 });

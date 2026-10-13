@@ -8,9 +8,6 @@ export {
   AgentServerUIProviders,
   AgentServerUIRoot,
   CloudOrganizationBoundary,
-  DEFAULT_AGENT_SERVER_ANALYTICS,
-  type AgentServerUIAnalyticsConfig,
-  type AgentServerUIPostHogAnalyticsConfig,
   type AgentServerUIProvidersProps,
   type AgentServerUIRootProps,
 } from "../components/providers";
@@ -55,19 +52,3 @@ export {
   type InstallCanvasExtensionRequest,
   type InstalledCanvasExtensionInfo,
 } from "../types/canvas-extension";
-
-// Telemetry exports
-export { useTelemetry, type UseTelemetryReturn } from "../hooks/use-telemetry";
-export {
-  configureTelemetry,
-  getTelemetryConsent,
-  setTelemetryConsent,
-  isTelemetryEnabled,
-  trackInstall,
-  trackSessionStart,
-  trackEvent,
-  clearTelemetryData,
-  type TelemetryConfig,
-  type TelemetryConfiguration,
-  type TelemetryConsent,
-} from "../services/telemetry";

@@ -63,7 +63,7 @@ export function ManifestSubpageLayout({
     <div className="flex h-full gap-4 md:gap-6 md:pl-8 lg:gap-10 lg:pl-10">
       <aside
         data-testid={`${navTestIdBase}-desktop`}
-        className="hidden md:flex md:w-65 md:shrink-0 md:flex-col md:gap-2 md:sticky md:top-8 md:self-start"
+        className="hidden md:flex md:w-65 md:shrink-0 md:flex-col md:gap-2 md:sticky md:top-8 md:self-start rounded-[10px] bg-[rgba(34,32,45,0.5)] p-2.5"
       >
         <span className="px-2 text-sm font-normal text-contrast">
           {heading}
@@ -75,7 +75,7 @@ export function ManifestSubpageLayout({
         </div>
       </aside>
       <main className={cn(settingsLikeMainScrollClassName, "h-full")}>
-        <div className="mx-auto flex w-full min-w-0 max-w-200 flex-col gap-6">
+        <div className="mx-auto flex w-full min-w-0 max-w-200 flex-col gap-6 rounded-[10px] bg-[rgba(34,32,45,0.5)] p-2.5">
           <nav
             data-testid={`${navTestIdBase}-mobile`}
             className="md:hidden flex gap-1 overflow-x-auto border-b border-border pb-2"

@@ -404,13 +404,11 @@ describe("buildAgentServerTelemetryEnv", () => {
     canvasToolsDir: "/tmp/tools",
   };
 
-  it("configures PostHog telemetry by default without seeding consent", () => {
-    // LOCKDOWN 2026-10-07: the defaults are blank/dead in this tree (see config/defaults.json).
-    expect(buildAgentServerTelemetryEnv({})).toEqual({
-      OH_TELEMETRY_EXPORTER: "posthog",
-      OH_TELEMETRY_POSTHOG_API_KEY: "",
-      OH_TELEMETRY_POSTHOG_HOST: "http://127.0.0.1:9",
-    });
+  it("emits no telemetry environment while the shared PostHog key is blank", () => {
+    // LOCKDOWN 2026-10-07: the defaults are blank in this tree (see
+    // config/defaults.json), and the builder omits the exporter entirely
+    // rather than pointing a dead exporter at a discard host.
+    expect(buildAgentServerTelemetryEnv({})).toEqual({});
   });
 
   it("prefers explicit agent-server telemetry settings", () => {
@@ -450,13 +448,13 @@ describe("buildAgentServerTelemetryEnv", () => {
     });
   });
 
-  it("includes telemetry defaults in the full agent-server environment", () => {
+  it("leaves telemetry unset in the full agent-server environment", () => {
     const env = buildAgentServerEnv(agentServerConfig, { env: {} });
 
     expect(env).toMatchObject({
-      OH_TELEMETRY_EXPORTER: "posthog",
       OH_SESSION_API_KEYS_0: "session",
     });
+    expect(env).not.toHaveProperty("OH_TELEMETRY_EXPORTER");
   });
 
   it("forwards configured Docker conversation runtime settings", () => {

@@ -43,6 +43,12 @@ Action rules:
 - Before any action that changes my files, services or remote infrastructure, list exactly what you will do and wait for my approval.
 - If a result contradicts something you said earlier, point out the contradiction instead of smoothing it over.
 
+Context rules:
+- We do not look at standalone files. Every file, program and view is read in the context of the entire application.
+- No pulling things out and looking at them on their own. A page, a tool or a bundle is only ever examined where it actually runs — inside the React shell, in the room it belongs to.
+- The Development tool is the app inside the React shell. It is opened in the room and verified in the room. It is never opened standalone, and never on its own port outside the frame.
+- A file discovered outside the application is not evidence about the application. Put it back in context before drawing any conclusion from it.
+
 ## Existing Registry
 {{REGISTRY_KEYS}}
 

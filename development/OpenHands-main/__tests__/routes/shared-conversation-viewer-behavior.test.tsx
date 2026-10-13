@@ -353,10 +353,6 @@ describe("shared conversation viewer", () => {
       ),
     ).toBeInTheDocument();
 
-    const homeLink = screen.getByRole("link", {
-      name: I18nKey.BRANDING$OPENHANDS_LOGO,
-    });
-    expect(homeLink).toHaveAttribute("href", "/conversations");
 
     const messages = screen.getByTestId("shared-messages");
     expect(messages).toHaveAttribute(

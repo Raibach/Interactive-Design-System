@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { I18nKey } from "#/i18n/declaration";
 import { useAutomationRuns } from "#/hooks/query/use-automation-detail";
 import { useActiveBackend } from "#/contexts/active-backend-context";
-import { useTracking } from "#/hooks/use-tracking";
 import ActivityIcon from "#/icons/activity.svg?react";
 import { cn } from "#/utils/utils";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
@@ -33,7 +32,6 @@ export function ActivityLogSection({
 }: ActivityLogSectionProps) {
   const { t } = useTranslation("openhands");
   const active = useActiveBackend();
-  const { trackAutomationActivityLogExported } = useTracking();
   const [limit, setLimit] = useState(PAGE_SIZE);
   const highlightedRef = useRef<HTMLDivElement | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -54,10 +52,6 @@ export function ActivityLogSection({
         automation,
         format,
         conversationBaseUrl: getAgentCanvasBaseUrl(),
-      });
-      trackAutomationActivityLogExported({
-        backendKind: active.backend.kind,
-        format,
       });
     } catch (error) {
       displayErrorToast(

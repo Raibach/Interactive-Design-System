@@ -21,10 +21,6 @@ import {
 } from "#/api/backend-registry/types";
 import { QUERY_KEYS } from "#/hooks/query/query-keys";
 import { queryClient } from "#/query-client-config";
-import {
-  setTelemetryCloudContext,
-  setTelemetryIdentity,
-} from "#/services/telemetry";
 
 type BackendInput = Omit<Backend, "id" | "connectionRevision">;
 
@@ -48,24 +44,6 @@ function generateId(): string {
     return crypto.randomUUID();
   }
   return `backend-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function applyTelemetrySelectionBoundary(
-  previous: ResolvedActiveBackend,
-  next: ResolvedActiveBackend,
-): void {
-  const previousWasCloud = previous.backend.kind === "cloud";
-  const nextIsCloud = next.backend.kind === "cloud";
-  if (!previousWasCloud && !nextIsCloud) return;
-
-  setTelemetryCloudContext(null);
-
-  if (
-    nextIsCloud &&
-    (!previousWasCloud || previous.backend.id !== next.backend.id)
-  ) {
-    void setTelemetryIdentity(null);
-  }
 }
 
 export function ActiveBackendProvider({
@@ -103,8 +81,6 @@ export function ActiveBackendProvider({
         backend: selectedBackend ?? registeredBackends[0] ?? NO_BACKEND,
         orgId: selectedBackend ? nextOrgId : null,
       };
-      applyTelemetrySelectionBoundary(currentSnapshot.active, nextActive);
-
       const next: BackendSelection = { backendId, orgId: nextOrgId };
       setActiveSelection(next);
       retryBootstrapProbe();
@@ -123,13 +99,8 @@ export function ActiveBackendProvider({
   // @spec BM-001 — Auto-switch to newly connected backend
   const addBackend = React.useCallback(
     (backend: BackendInput): Backend => {
-      const previousActive = getSnapshot().active;
       const next: Backend = { ...backend, id: generateId() };
       const list = [...getRegisteredBackends(), next];
-      applyTelemetrySelectionBoundary(previousActive, {
-        backend: next,
-        orgId: null,
-      });
       setRegisteredBackends(list);
       setActiveSelection({ backendId: next.id });
       retryBootstrapProbe();
@@ -170,10 +141,6 @@ export function ActiveBackendProvider({
       if (hostChanged || apiKeyChanged) {
         resetBackendHealth(id);
         if (activeBeforeUpdate === id) {
-          if (prev?.kind === "cloud") {
-            setTelemetryCloudContext(null);
-            void setTelemetryIdentity(null);
-          }
           retryBootstrapProbe();
         }
       }
@@ -183,16 +150,8 @@ export function ActiveBackendProvider({
 
   const removeBackend = React.useCallback(
     (id: string) => {
-      const removed = getRegisteredBackends().find((b) => b.id === id);
-      const wasActiveCloud =
-        removed?.kind === "cloud" &&
-        getSnapshot().active.backend.id === removed.id;
       const list = getRegisteredBackends().filter((b) => b.id !== id);
       setRegisteredBackends(list);
-      if (wasActiveCloud) {
-        setTelemetryCloudContext(null);
-        void setTelemetryIdentity(null);
-      }
       dropBackendHealth(id);
       retryBootstrapProbe();
       // If the active selection pointed at this backend, the active

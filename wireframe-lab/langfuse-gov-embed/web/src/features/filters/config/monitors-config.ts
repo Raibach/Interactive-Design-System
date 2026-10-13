@@ -19,7 +19,6 @@ export const monitorFilterConfig: FilterConfig = {
   tableName: "monitors",
   columnDefinitions: monitorsTableCols,
   defaultExpanded: ["severity", "tags"],
-  defaultSidebarCollapsed: false,
   facets: baseFacets,
 };
 

@@ -1,13 +1,12 @@
 /**
- * Top chrome row shared by the sidebar logo strip and the page-header first
- * row. Height and the bottom border live on this same box so the sidebar's
- * `border-r` forms a single-pixel T-junction with the divider, instead of a
- * stair-step from mismatched row heights.
- *
- * Padding is call-site specific: the page-header row must stay full-width
- * (the divider has to reach the sidebar) while its *content* can be
- * container-capped on settings pages.
+ * Top chrome row of the page header. RAIBACH IDS (2026-10-12, owner: "close up
+ * that space above"): the sidebar is deleted, so this row no longer aligns to
+ * anything — the dead min-height and its junction border are deleted with it.
+ * The row now takes its natural height: zero when it carries nothing (an
+ * empty band must not stand over the page) and the controls' own height when
+ * a page hoists them in. Padding stays call-site specific (full-width row,
+ * optional container on the content).
  */
-export const APP_SHELL_CHROME_ROW_CLASS = "flex min-h-11 items-center border-b";
+export const APP_SHELL_CHROME_ROW_CLASS = "flex items-center";
 
 export const APP_SHELL_CHROME_ROW_TEST_ID = "app-shell-chrome-row";

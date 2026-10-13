@@ -29,7 +29,6 @@ import { getAgentServerClientOptions } from "../agent-server-client-options";
  */
 export const APP_PREFERENCE_FIELDS = [
   "language",
-  "user_consents_to_analytics",
   "enable_sound_notifications",
   "git_user_name",
   "git_user_email",

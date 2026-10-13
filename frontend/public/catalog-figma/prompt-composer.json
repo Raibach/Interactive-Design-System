@@ -279,7 +279,7 @@
   "40001207:3497": {
    "tag": "f-40001207-3497",
    "nodeId": "40001207:3497",
-   "approvedAt": "2026-10-01T02:08:46.411592Z",
+   "approvedAt": "2026-10-10T00:53:01.780571Z",
    "layers": 13,
    "tree": {
     "id": "40001207:3497",
@@ -1788,30 +1788,7 @@
      }
     }
    },
-   "assets": [
-    {
-     "kind": "mcp-url",
-     "mime": "image/svg+xml",
-     "file": "/assets/figma-3cbad9fb701ebbfe023d5c5976d35daee1a29f73.svg",
-     "bytes": 2219,
-     "source": "http://localhost:3845/assets/3cbad9fb701ebbfe023d5c5976d35daee1a29f73.svg",
-     "refreshed": true
-    },
-    {
-     "kind": "mcp-url",
-     "mime": "image/svg+xml",
-     "file": "/assets/figma-412c515f9c9bcedbefcab631f94d04e38aa3d122.svg",
-     "bytes": 503,
-     "source": "http://localhost:3845/assets/412c515f9c9bcedbefcab631f94d04e38aa3d122.svg"
-    },
-    {
-     "kind": "mcp-url",
-     "mime": "image/png",
-     "file": null,
-     "source": "http://localhost:3845/assets/10c13ac1a228a365cb98a0064b1d5afbc84887b2.png",
-     "note": "the bytes could not be obtained, so only the pointer was captured"
-    }
-   ]
+   "assets": []
   },
   "40001207:3559": {
    "tag": "f-40001207-3559",
@@ -2952,7 +2929,7 @@
    ]
   }
  },
- "generatedAt": "2026-10-01T02:08:46.411614Z",
+ "generatedAt": "2026-10-10T00:53:01.780632Z",
  "removed": {
   "40001206:3422": {
    "tag": "f-40001206-3422",

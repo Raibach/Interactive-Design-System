@@ -82,11 +82,6 @@ export const SETUP_QUERY_KEYS = {
   capabilities: () => ["setup-capabilities"] as const,
 } as const;
 
-export const APP_UPDATE_QUERY_KEYS = {
-  /** Latest published @openhands/agent-canvas version (npm `latest` dist-tag). */
-  latestVersion: ["agent-canvas-latest-version"] as const,
-} as const;
-
 export const CONVERSATION_QUERY_KEYS = {
   subConversations: ["v1", "sub-conversations"] as const,
 } as const;

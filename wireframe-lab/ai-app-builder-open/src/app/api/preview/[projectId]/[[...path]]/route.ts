@@ -12,6 +12,7 @@ import { getPreviewUrl } from "@/lib/project-status";
 import type { VcaasProject } from "@/lib/vcaas-types";
 import { AGENT_PATH, AGENT_SOURCE, PREVIEW_RUNTIME_SHIM } from "@/lib/visual-edit-agent";
 import { injectAgent, rewriteCss, rewriteHtml } from "@/lib/preview-proxy";
+import { BASE_PATH } from "@/lib/base-path";
 
 export const dynamic = "force-dynamic";
 
@@ -107,19 +108,19 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
  * has just acquired a preview is not told "no preview" for another 15 seconds.
  */
 const ORIGIN_TTL_MS = 15_000;
-const originCache = new Map<string, { origin: string; at: number }>();
+const originCache = new Map<string, { origin: string; previewPath: string; at: number }>();
 
-function cachedOrigin(key: string): string | null {
+function cachedOrigin(key: string): { origin: string; previewPath: string } | null {
     const hit = originCache.get(key);
     if (!hit) return null;
     if (Date.now() - hit.at > ORIGIN_TTL_MS) {
         originCache.delete(key);
         return null;
     }
-    return hit.origin;
+    return { origin: hit.origin, previewPath: hit.previewPath };
 }
 
-function rememberOrigin(key: string, origin: string): void {
+function rememberOrigin(key: string, origin: string, previewPath: string): void {
     /**
      * A bound so a long-lived server cannot accumulate an entry per project seen.
      * Well above any real fan-out; the oldest insertion goes first.
@@ -128,16 +129,16 @@ function rememberOrigin(key: string, origin: string): void {
         const oldest = originCache.keys().next().value;
         if (oldest !== undefined) originCache.delete(oldest);
     }
-    originCache.set(key, { origin, at: Date.now() });
+    originCache.set(key, { origin, previewPath, at: Date.now() });
 }
 
 async function resolvePreviewOrigin(
     projectId: string,
     ctx: Parameters<typeof vcaasRequest>[2]
-): Promise<{ origin: string } | { error: NextResponse }> {
+): Promise<{ origin: string; previewPath: string } | { error: NextResponse }> {
     const cacheKey = `${ctx?.accountUserId ?? ""}:${projectId}`;
     const hit = cachedOrigin(cacheKey);
-    if (hit) return { origin: hit };
+    if (hit) return hit;
 
     const response = await vcaasRequest(`/projects/${encodeURIComponent(projectId)}`, {}, ctx);
     const payload = (await response.json().catch(() => null)) as { data?: VcaasProject } | null;
@@ -160,9 +161,20 @@ async function resolvePreviewOrigin(
         const url = new URL(previewUrl);
         // http/https only — a `javascript:` or `file:` value upstream must not be followed.
         if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("bad protocol");
+        /* ⚠️ THE PREVIEW'S PATH IS PART OF THE ADDRESS (2026-10-10, measured live). The
+           hosted account-backend hands out per-project ORIGINS (the preview is the
+           origin's root), and this route was written against exactly that: it kept
+           ONLY `url.origin` and re-fetched `<origin>/`. The local engine — and every
+           path-form deployment — serves the SAME origin for every project, its
+           preview under `/preview/<id>/` — so origin-only fetched the engine's ROOT
+           (its info text) for every project, and the canvas could never show an app
+           through the door: the owner's exact "the only thing not loading in the
+           builder is the canvas". Keep the pathname too — a trailing slash guaranteed,
+           because relative asset links inside the served document resolve against it. */
+        const previewPath = url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`;
         // Only a SUCCESSFUL resolution is remembered — see the note on the cache.
-        rememberOrigin(cacheKey, url.origin);
-        return { origin: url.origin };
+        rememberOrigin(cacheKey, url.origin, previewPath);
+        return { origin: url.origin, previewPath };
     } catch {
         return { error: NextResponse.json({ ok: false, error: "Bad preview URL" }, { status: 502 }) };
     }
@@ -214,7 +226,7 @@ async function handle(
          * before anything else executes. Concatenation makes that ordering
          * structural instead of dependent on how the browser schedules two requests.
          */
-        const base = `/api/preview/${encodeURIComponent(projectId)}`;
+        const base = `${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}`;
         const body = `${PREVIEW_RUNTIME_SHIM(base)}\n${AGENT_SOURCE}`;
         return new NextResponse(body, {
             status: 200,
@@ -228,8 +240,14 @@ async function handle(
     const resolved = await resolvePreviewOrigin(projectId, auth.ctx);
     if ("error" in resolved) return resolved.error;
 
+    /* NO SLASH REDIRECT IS POSSIBLE HERE — MEASURED 2026-10-10: Next.js canonicalizes
+       `/route/` → `/route` itself (trailingSlash defaults to false), so a route-level
+       "missing slash" redirect fought Next's own and looped. The engine's equivalent
+       redirect exists because IT owns its server. The door's answer is in the HTML
+       rewriter instead: relative asset refs are made proxy-absolute (preview-proxy.ts),
+       so the document is correct at whatever form the browser's URL takes. */
     const suffix = (path ?? []).map(encodeURIComponent).join("/");
-    const target = new URL(`${resolved.origin}/${suffix}`);
+    const target = new URL(suffix, `${resolved.origin}${resolved.previewPath}`);
     target.search = request.nextUrl.search;
 
     // Forward the request, minus the headers that would confuse the upstream or
@@ -262,7 +280,7 @@ async function handle(
         if (!STRIPPED_RESPONSE_HEADERS.has(key.toLowerCase())) responseHeaders.set(key, value);
     });
 
-    const base = `/api/preview/${encodeURIComponent(projectId)}`;
+    const base = `${BASE_PATH}/api/preview/${encodeURIComponent(projectId)}`;
 
     // ── Redirects stay inside the proxy, and inside the origin ──────────────
     const location = upstream.headers.get("location");

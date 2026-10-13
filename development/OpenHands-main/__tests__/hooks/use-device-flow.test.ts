@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useDeviceFlow } from "../../src/hooks/use-device-flow";
 import * as deviceFlowClient from "../../src/api/device-flow-client";
-import * as cloudFunnelAnalytics from "../../src/services/cloud-funnel-analytics";
 
 vi.mock("../../src/api/device-flow-client", () => ({
   startDeviceFlow: vi.fn(),
@@ -15,11 +14,6 @@ vi.mock("../../src/api/device-flow-client", () => ({
       this.code = code;
     }
   },
-}));
-
-vi.mock("../../src/services/cloud-funnel-analytics", () => ({
-  trackCloudDeviceAuthorizationStarted: vi.fn(),
-  trackCloudDeviceAuthorizationSucceeded: vi.fn(),
 }));
 
 describe("useDeviceFlow", () => {
@@ -93,9 +87,6 @@ describe("useDeviceFlow", () => {
       "https://app.all-hands.dev/device?user_code=USER-1234",
     );
     expect(result.current.userCode).toBe("USER-1234");
-    expect(
-      cloudFunnelAnalytics.trackCloudDeviceAuthorizationStarted,
-    ).toHaveBeenCalledWith("https://app.all-hands.dev", "onboarding");
 
     // Resolve pollForToken
     await act(async () => {
@@ -106,9 +97,6 @@ describe("useDeviceFlow", () => {
     // Now should be success
     expect(result.current.status).toBe("success");
     expect(result.current.apiKey).toBe("api-key-123");
-    expect(
-      cloudFunnelAnalytics.trackCloudDeviceAuthorizationSucceeded,
-    ).toHaveBeenCalledWith("https://app.all-hands.dev", "onboarding");
   });
 
   it("handles startDeviceFlow error", async () => {
@@ -127,9 +115,6 @@ describe("useDeviceFlow", () => {
     });
 
     expect(result.current.error).toBe("Failed to start");
-    expect(
-      cloudFunnelAnalytics.trackCloudDeviceAuthorizationStarted,
-    ).not.toHaveBeenCalled();
   });
 
   it("handles pollForToken error", async () => {
@@ -162,9 +147,6 @@ describe("useDeviceFlow", () => {
 
     expect(result.current.error).toBe("Access denied");
     expect(result.current.errorCode).toBe("access_denied");
-    expect(
-      cloudFunnelAnalytics.trackCloudDeviceAuthorizationSucceeded,
-    ).not.toHaveBeenCalled();
   });
 
   it("cancels flow and resets to idle", async () => {

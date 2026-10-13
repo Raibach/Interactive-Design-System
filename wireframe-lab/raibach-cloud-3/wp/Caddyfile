@@ -1,0 +1,55 @@
+# raibach.net — served from raibach-cloud-3. Certificates: automatic (Let's Encrypt).
+
+raibach.net {
+	reverse_proxy rai-wp:80
+}
+
+www.raibach.net {
+	redir https://raibach.net{uri} permanent
+}
+
+# ── holtportfolio.com — records flipped 2026-10-11 ──
+# Mirrors what the old host did (checked before the flip): john is the
+# canonical site; apex and www names 301 to it.
+
+john.holtportfolio.com {
+	reverse_proxy holt-wp:80
+}
+
+# apex kept as its own block: its record is still finishing propagation, and
+# bundling it with the others would hold their certificate hostage until it
+# lands. It retries on its own clock.
+
+holtportfolio.com {
+	redir https://john.holtportfolio.com{uri} permanent
+}
+
+www.holtportfolio.com, www.john.holtportfolio.com {
+	redir https://john.holtportfolio.com{uri} permanent
+}
+
+# ── design.system.raibach.net — the design system (2026-10-11) ──
+# The one door: the studio app at the root; the rooms' sections route to their
+# services on the shared docker network (governance → frame-proxy → langfuse;
+# builder → the builder UI; /preview → the builder engine, whose PUBLIC_BASE_URL
+# is this same door so its preview URLs are path-form).
+design.system.raibach.net {
+	handle /governance* {
+		reverse_proxy frame-proxy:8080
+	}
+	handle /builder* {
+		reverse_proxy builder:3223
+	}
+	handle /preview* {
+		reverse_proxy builder-engine:4000
+	}
+	# The Development room's canvas — the agent-canvas container on the shared
+	# network. The room loads /dev/ same-origin; the canvas derives its route
+	# prefix from OH_WEB_URL (path /dev), so every route answers under /dev/*.
+	handle /dev* {
+		reverse_proxy canvas:8090
+	}
+	handle {
+		reverse_proxy studio:5001
+	}
+}

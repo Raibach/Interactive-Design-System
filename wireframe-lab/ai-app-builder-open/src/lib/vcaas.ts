@@ -38,6 +38,7 @@
 // Type-only import: erased at compile time, so it creates NO runtime dependency on
 // the `"use client"` `@/lib/api` module.
 import { toBase64 } from "@/lib/base64";
+import { BASE_PATH } from "@/lib/base-path";
 import type { ApiResponse } from "@/lib/api";
 import type { VcaasErrorCode, VcaasErrorDetails } from "@/lib/vcaas-errors";
 import type {
@@ -177,8 +178,8 @@ const proxy = {
     proxyRequest<T>(url, { method: "DELETE", headers: JSON_HEADERS, body: JSON.stringify(body) }),
 };
 
-/** Root of the internal proxy. Everything below is relative to this. */
-const API = "/api/vcaas";
+/** Root of the internal proxy — under the door's section (src/lib/base-path.ts). */
+const API = `${BASE_PATH}/api/vcaas`;
 /** Per-project path prefix, e.g. `/api/vcaas/projects/my-app`. */
 const project = (projectId: string) => `${API}/projects/${encodeURIComponent(projectId)}`;
 

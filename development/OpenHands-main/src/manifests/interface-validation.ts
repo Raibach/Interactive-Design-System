@@ -28,8 +28,6 @@ import {
 /** Copy must never be able to inject markup into the host. */
 const MARKUP_PATTERN = /<[A-Za-z/!]/;
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-/** The one URL the manifest may state, pinned to the product documentation. */
-const DOCS_URL_PREFIX = "https://docs.openhands.dev/";
 const FILE_KIND_PATTERN = /^[a-z][a-z-]*$/;
 const FILENAME_SUFFIX_PATTERN = /^\.[a-z][a-z.]*json$/;
 const EVENT_SOURCE_PATTERN = /^[a-z0-9][a-z0-9.-]*$/;
@@ -726,12 +724,6 @@ export function validateInterfaceManifest(
   checkRoutes(check, candidate.routes, context.mountedRoutes);
   checkNavigation(check, candidate.navigation);
   checkPages(check, candidate.pages);
-  if (
-    typeof candidate.docsUrl !== "string" ||
-    !candidate.docsUrl.startsWith(DOCS_URL_PREFIX)
-  ) {
-    check.fail("docsUrl", `must start with ${DOCS_URL_PREFIX}`);
-  }
   checkAttributes(check, candidate.attributes);
   checkImportExport(check, candidate.importExport);
   checkEndpoints(check, candidate.endpoints);

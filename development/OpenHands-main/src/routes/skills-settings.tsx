@@ -133,7 +133,7 @@ function SkillsSettingsScreen() {
       <main className={cn(settingsLikeMainScrollClassName, "h-full")}>
         <div
           data-testid="skills-page"
-          className="mx-auto flex w-full min-w-0 max-w-275 flex-col gap-6"
+          className="mx-auto flex w-full min-w-0 max-w-275 flex-col gap-6 rounded-[10px] bg-[rgba(34,32,45,0.5)] p-2.5"
         >
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">

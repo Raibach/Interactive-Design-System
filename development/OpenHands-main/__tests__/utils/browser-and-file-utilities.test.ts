@@ -6,7 +6,6 @@ import {
   getStyleHeightPx,
   isMobileDevice,
   isMobileUserAgent,
-  isProductionDomain,
   removeUnwantedKeys,
   setStyleHeightPx,
 } from "#/utils/utils";
@@ -160,17 +159,6 @@ describe("mobile environment detection", () => {
     useWindowCapabilities({ hasTouchProperty: false });
 
     expect(isMobileDevice()).toBe(true);
-  });
-});
-
-describe("deployment domain detection", () => {
-  it.each([
-    ["https://app.all-hands.dev", true],
-    ["http://localhost:3000", false],
-  ])("reports whether %s is the production origin", (origin, expected) => {
-    vi.stubGlobal("window", { location: { origin } });
-
-    expect(isProductionDomain()).toBe(expected);
   });
 });
 

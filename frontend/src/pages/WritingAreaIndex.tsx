@@ -38,6 +38,7 @@ import { loadSystemRegistry } from "@/shared/a2uiRegistries";
 import { getAuthState } from "@/services/authService";
 import { promptService, type PromptSession, type PromptSection } from "@/services/promptService";
 import { UI_ID } from "@/utils/uiIdentifiers";
+import { generateUuid } from "@/utils/uuid";
 import LeftVerticalMenu from "@/components/LeftVerticalMenu";
 import GovernanceNav from "@/components/navigation/GovernanceNav";
 import LeftColumnHeader from "@/components/LeftColumnHeader";
@@ -49,19 +50,22 @@ import composerBackground from "@/assets/composer-image-bg.jpg";
 // mechanism as the Composer's, so it is bundled and hashed like every other asset.
 // The artwork is the owner's second pass at it (`images/design-section2-bkg.png`, 2026-09-30); the
 // first file is still in the assets directory and is referenced by nothing.
-import designSectionBackground from "@/assets/design-section2-bkg.png";
+// 2026-10-10: re-encoded to WebP (q90) — 348 KB PNG → 42 KB; the PNG stays in assets/_old.
+import designSectionBackground from "@/assets/design-section2-bkg.webp";
 // THE PRODUCT ROOM'S OWN GROUND RETIRED (2026-10-03 → 2026-10-05): the room wears the
 // composer's ground now (see the workspaceBackground block below), and the wireframe-named
 // duplicate of this tile left the tree with the retirement (2026-10-05 — one image for the lab
 // ground; `canvas-wireframe-lab-bkg.png` deleted, referenced by nothing).
-import developmentLabBackground from "@/assets/canvas-development-lab-bkg.jpg";
+// 2026-10-10: re-encoded to WebP (q90) — 411 KB JPG → 238 KB; the JPG stays in assets/_old.
+import developmentLabBackground from "@/assets/canvas-development-lab-bkg.webp";
 // THE GOVERNANCE GROUND, THIRD PASS (owner, 2026-10-09): the owner knocked the wave back in
 // Photoshop — a transparent export, master `images/data-wave4.png`. That master is in the
 // ORIGINAL (unmirrored) orientation, and the room's flip from earlier today still stands, so
 // the asset imported here is a horizontal mirror of wave4 (`sips -f horizontal`, the same
 // one-copy step as wave3's). Masters stay untouched; `data-wave3-flipped.png` is now
 // referenced by nothing.
-import dataWave4Background from "@/assets/data-wave4-flipped.png";
+// 2026-10-10: re-encoded to WebP (q90) — 2.8 MB PNG → 354 KB WebP; the PNG stays in assets/_old.
+import dataWave4Background from "@/assets/data-wave4-flipped.webp";
 // The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
 // texture is started by loadCanvasElements (below) when a Run asks for the canvas.
 import canvasArt from "@/assets/room-embed-art.jpg";
@@ -594,17 +598,60 @@ export default function Index({
   const GOVERNANCE_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
   const [governanceGateDown, setGovernanceGateDown] = useState(false);
 
+  /*
+   * THE GRIP'S SAFETY NET, GOVERNANCE'S COPY (2026-10-13): the chat strip's whole gesture
+   * rides document-level moves (the seat's own measured design — pointer capture was tried
+   * and rejected), and THIS room's surface is a builder-embed iframe — the strip's left
+   * neighbour — so the frame's document swallows every move the moment the hand crosses onto
+   * it and the drag freezes. The owner, 2026-10-13: *"I cannot grab the chat gripper and
+   * pullout the trey for chat, it's stuck"* — the console has no iframe beside it, which is
+   * why the same strip works there. THE PRODUCT ROOM'S FIX, one room over (see
+   * `productGripActive`): while this flag is true the room draws a transparent fixed
+   * overlay, so every move of the gesture stays in THIS document. ROOM-SIDE: the seat
+   * element is untouched.
+   */
+  const [governanceGripActive, setGovernanceGripActive] = useState(false);
+
   /* THE ROOM'S LEFT NAV IS THE SHELL'S (owner, 2026-10-09): the Governance items live
      in the shell's left navigation and drive this embed. Each click writes the target
      Langfuse route onto the frame and marks that section active. */
   const [governancePath, setGovernancePath] = useState('');
+  /* THE SECTION PREFIX (2026-10-10, the door): governanceToolUrl() may be a same-origin
+     PATH ("/governance/project/…"). It is derived per navigation so a nav href
+     ("/project/<id>/traces") lands as <origin><section><href>, and the reporter's
+     pathnames — which carry the section — normalize back to the nav's own shape. */
+  const governanceSectionPrefix = () => {
+    try {
+      const abs = new URL(governanceToolUrl(), window.location.href);
+      const marker = abs.pathname.indexOf("/project/");
+      return marker > 0 ? abs.pathname.slice(0, marker) : "";
+    } catch {
+      return "";
+    }
+  };
   const navigateGovernanceTool = (path: string) => {
     const base = governanceToolUrl();
     if (!base) return;
     try {
-      const url = new URL(path, base).toString();
-      governanceEmbedRef.current?.setAttribute('src', url);
+      const abs = new URL(base, window.location.href);
+      const url = abs.origin + governanceSectionPrefix() + path;
+      const embed = governanceEmbedRef.current;
+      if (!embed) return;
       setGovernancePath(path);
+      /* THE FRAME CAN DRIFT AWAY FROM ITS `src` (2026-10-09, owner-reported):
+         the embedded app routes itself with the history API, which moves the
+         document without rewriting the iframe's `src` attribute. A plain
+         attribute write is then a no-op when the target equals the current
+         `src` — the Home button would set the SAME url and the frame would not
+         move (measured in the room: after the app landed on its org chooser,
+         clicking Home left the frame there). So when `src` already names the
+         target, navigate the window directly; browsers allow navigating a
+         cross-origin frame (reading it is what is blocked). */
+      if (embed.getAttribute('src') !== url) {
+        embed.setAttribute('src', url);
+      } else {
+        embed.navigateTo(url);
+      }
     } catch {
       /* URL() only throws on an unparseable base — unreachable after the emptiness check */
     }
@@ -618,11 +665,18 @@ export default function Index({
       const data = event.data as { type?: string; path?: string } | null;
       if (!data || data.type !== 'langfuse-location' || typeof data.path !== 'string') return;
       try {
-        if (event.origin !== new URL(governanceToolUrl()).origin) return;
+        if (event.origin !== new URL(governanceToolUrl(), window.location.href).origin) return;
       } catch {
         return;
       }
-      setGovernancePath(data.path);
+      /* THE SECTION COMES OFF BEFORE MATCHING (2026-10-10): under the door the app
+         reports "/governance/project/…"; the nav's hrefs and its active-match regex
+         are section-free. */
+      const section = governanceSectionPrefix();
+      const normalized = section && data.path.startsWith(section)
+        ? (data.path.slice(section.length) || "/")
+        : data.path;
+      setGovernancePath(normalized);
     };
     window.addEventListener('message', onLangfuseLocation);
     return () => window.removeEventListener('message', onLangfuseLocation);
@@ -3661,7 +3715,7 @@ export default function Index({
 
       // Build sections array - include ALL sections, even empty ones
       const sections: PromptSection[] = allSections.map((s, index) => ({
-        id: crypto.randomUUID?.() || s.name,
+        id: generateUuid(),
         type: s.name as PromptSection['type'],
         content: s.content,
       }));
@@ -4853,6 +4907,10 @@ export default function Index({
       const builderProjectId = (openedCard as any)?.builder_project?.project_id ?? null;
       console.log(`🤖 [A2UI] Product card → the builder${builderProjectId ? ` on "${builderProjectId}"` : ' (dashboard)'}`);
       setProductRoomProjectId(builderProjectId ? String(builderProjectId) : null);
+      // THE SAME PRE-ARM THE TAB PATH DOES (2026-10-11, see `handleTabChangeWithGate`): the
+      // room's gate must be standing on its first painted frame — never a fade-in over the
+      // raw application (the flag persists from the last visit).
+      setProductGateDown(false);
       handleHeaderTabChange('product');
       return;
     }
@@ -5723,6 +5781,18 @@ export default function Index({
     if ((headerTab || '') !== 'governance') return;
     const seat = governanceSeatRef.current;
     if (!seat) return;
+    /*
+     * AND THE GRIP'S SAFETY NET RIDES HERE (see `governanceGripActive`): the layout's own
+     * `resize-start`/`resize-end` — dispatched on itself when the chat strip's gesture
+     * begins and ends — raise and lower the room's transparent drag overlay, so the hand's
+     * moves keep reaching this document while it is over the frame beside the strip. The
+     * Product room's wiring, one room over.
+     */
+    const layout = governanceLayoutRef.current;
+    const onGripStart = () => setGovernanceGripActive(true);
+    const onGripEnd = () => setGovernanceGripActive(false);
+    layout?.addEventListener('resize-start', onGripStart);
+    layout?.addEventListener('resize-end', onGripEnd);
     let cancelled = false;
     void (async () => {
       try {
@@ -5766,7 +5836,12 @@ export default function Index({
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      layout?.removeEventListener('resize-start', onGripStart);
+      layout?.removeEventListener('resize-end', onGripEnd);
+      setGovernanceGripActive(false);
+    };
   }, [headerTab]);
 
   useEffect(() => {
@@ -6951,7 +7026,7 @@ export default function Index({
           setDesignIngest({ busy: false, message: needsANode });
           return;
         }
-        const jobId = crypto.randomUUID();
+        const jobId = generateUuid();
         // THE ROOM SAYS WORK STARTED — here, where the request actually starts, and not at the
         // submit: the guards above can return without a request, and a wait that nothing would
         // end must not begin (see workspace-layout's `_onIngestStarted`). The settle goes out in
@@ -7573,38 +7648,31 @@ export default function Index({
          * call that can only 404.
          */
           /*
-           * AND THEN THE PAGE RELOADS, BECAUSE NOTHING ELSE CAN SHOW WHAT WAS APPROVED.
+           * THE APPROVE STAYS IN THE ROOM — NO RELOAD, NO TRIP TO THE CONSOLE (owner, 2026-10-09).
            *
-           * The file is on disk — measured, the catalogue's `f-40001207-3497.ts` carries the mtime
-           * of its approve to the second — and the temporary draft is DELETED by the same call
-           * (`_drop_preview`), so there is nothing left in the preview folder and nothing left to
-           * lose by reloading.
+           * The list on the left is made of TEXT ROWS (`figma-layers-view`), not live renderings of
+           * the components, and it re-reads its files when the host bumps `refresh` — which the call
+           * above this comment already did. So approving refreshes the list in place: the row appears
+           * (or its facts update) right here, in the Design room, and the confirmation below is what
+           * the person sees. A full page reload was the old mechanism, and it is what threw the
+           * person out of the room: a reload has no memory of which room it left, and a fresh load
+           * with no session in the URL boots to the Console. The owner: approving "should approve it
+           * and give a confirmation and I should see the component pop-up in that list on the
+           * left-hand side" — it was never meant to leave the room.
            *
-           * BUT THE REST OF THE PAGE CANNOT SEE THE NEW FILE. A custom element is defined once per
-           * document — `customElements.define` is a no-op the second time — so every place the
-           * catalogue is drawn BY NAME keeps painting the version this page loaded: every row in the
-           * left list, and every click that opens one in this column. Measured 2026-09-30: the owner
-           * approved a replacement four times and each time concluded the pipeline had not replaced
-           * it, because the list — drawn by `<f-40001207-3497>` itself — still showed the old
-           * component. That is not a stale file and not a cache: the file is new and the page cannot
-           * see it.
-           *
-           * SO THE APPROVE RELOADS, which is the only mechanism there is, and the sentence is
-           * painted first — a reload with no reason is the same unexplained behaviour this room has
-           * spent the night removing. The delay is what makes the sentence readable; it is a UI
-           * affordance and not a measurement, and nothing depends on its exact length.
+           * THE DRAFT ADDRESS IS CLEARED, so the frame does not reach for the temporary file the
+           * commit just deleted (`_drop_preview`): the confirmation replaces the drawing, and the
+           * component's new home is the list on the left.
            */
-          setDesignIngest({ busy: false, message: "", refresh: Date.now() });
           setDesignPreview({
             ...preview,
             jobId: undefined,
+            draft: null,
             alreadyInCatalogue: true,
             note:
               `Approved into the catalogue${written ? ` — ${written} file${written === 1 ? "" : "s"} written` : ""}. ` +
-              `Reloading so the list draws what was approved — a page holds the component version it loaded, ` +
-              `so without this the row you click would still be the old one.`,
+              `The list on the left now reads the new file, and the room stays put.`,
           });
-          window.setTimeout(() => window.location.reload(), 900);
       } catch (err) {
         setDesignIngest({ busy: false, message: err instanceof Error ? err.message : "Approve failed" });
       }
@@ -7745,6 +7813,113 @@ export default function Index({
   }, [designTree, setDesignIngest, setDesignPreview]);
 
   const handleTabChangeWithGate = useCallback(async (tabId: string | null) => {
+    /*
+     * ══ THE OUTGOING ROOM COMES DOWN IN THE CLICK'S OWN FRAME (owner, 2026-10-11) ══
+     *
+     * *"you have to move between product and then click development and then click product
+     * again and you'll see the ghost … it appears before assembly … it happens within the 1st
+     * ms."* Measured on that exact switch: after the click, the OLD room stayed painted while
+     * the switch was still being decided — the exit guard's fetch below runs BEFORE any tab
+     * moves, and this shell's own re-render of the tab change lands a frame or two after the
+     * click — so the eye caught the previous room once more before the new room's gate. A
+     * React state change cannot fix this: that update would itself pay the same render delay
+     * before anything changed on screen. So the mounted room roots are hidden IMPERATIVELY,
+     * synchronously, in the click's own task — the first frame after the click already shows
+     * the pane's own ground, never the old room's face. The swap that follows unmounts the
+     * hidden node; `roomRootsShown()` restores it only on the paths where nothing moves.
+     * THE OUTGOING NODE MUST NOT BE REUSABLE — each room root carries its own `key`
+     * (`development-root`, `product-root`, `governance-root`); measured 2026-10-11 without
+     * them: React recycled the hidden node as the incoming room's root and that room stayed
+     * invisible (probe: 109/109 frames hidden-but-mounted). With the keys the incoming room
+     * is a fresh, visible node; probe after the fix: 0 frames showing the outgoing room,
+     * either direction. The 700ms staged openings are untouched — this takes away the
+     * ghost, not the assembly.
+     */
+    const roomRootsShown = () =>
+      document.querySelectorAll<HTMLElement>('[data-room-root]').forEach((el) => { el.style.visibility = ''; });
+    const roomRootsHidden = () =>
+      document.querySelectorAll<HTMLElement>('[data-room-root]').forEach((el) => { el.style.visibility = 'hidden'; });
+    /*
+     * ══ AND THE HAND-OFF IS ONE GROUND, NOT THREE (owner, 2026-10-11, the switch still
+     * jerking after the ghost was taken out: *"It's supposed to be a beautiful assembly
+     * spinner then it fades into the application … there's not supposed to be jumping and
+     * snapping and ghosts."*) ══
+     *
+     * What the eye got on that switch, measured: click → the outgoing room hid → the pane's
+     * own ground (the Composer's paper) showed through for the exit guard's round-trip — 40ms
+     * on the way out of Product — → the incoming room's gate, whose ground is the LAB TILE —
+     * a different color. Paper flashing between two dark rooms IS the snap. So the switch now
+     * lands on ONE ground: `#room-handoff-cover` (the lab tile, no spinner) is shown
+     * imperatively in the click's own frame, over everything; the incoming room's own gate
+     * then mounts on the SAME tile behind it — the cover is removed the moment that room's
+     * root is in the document and visible, and the seam cannot show (identical tile, identical
+     * position; the spinner and its sentence simply appear with the gate). The cover is also
+     * removed when the guard answers "keep working" (nothing moved — beside the room coming
+     * back), and it retires itself after 1.5s no matter what, so a stuck cover is impossible.
+     *
+     * ══ AND THE TARGET ROOM'S GATE IS ARMED BEFORE ITS OWN COMMIT ══
+     *
+     * The gate flags persist while the room is away (a room left after its opening holds
+     * `gateDown = true`), and the entry effect resets them AFTER paint — so on the way back in,
+     * the room's first painted frame held the gate at opacity 0 and the raw iframe at opacity 1,
+     * and then the gate FADED IN over the bare application (its 700ms transition fires on that
+     * 0→1). That fade-in-over-the-raw-app is the jerk — the gate must be UP from the room's
+     * first frame, and only ONE fade may exist: the fade OUT into the application. Clearing
+     * the flag here — synchronously, before the tab change it rides with — mounts the room
+     * with the gate already standing and the frame already hidden under it. The entry effect's
+     * own reset then finds the flag already cleared (a no-op).
+     */
+    /*
+     * The cover wears the TARGET ROOM'S OWN GATE FACE — the tile, the amber ring, the sentence
+     * — for the beat the owner caught on Development after the first cover landed (2026-10-11):
+     * *"it looks like a background is flashing, and then it loads the assembler."* Leaving
+     * Product runs the exit guard's state read BEFORE the tab can move (~40ms), so a
+     * spinnerless cover stood as a flat tile for five frames and the ring then popped in: a
+     * flash, then an assembler. With the ring and sentence in the cover, the assembler is
+     * present from the click's own frame; the room's real gate mounts behind it with an
+     * identical face, and the hand-off is one surface to the eye. (The ring's phase can differ
+     * by the guard's few frames at the hand-off — a one-time arc tick the eye reads as
+     * continuous rotation; the alternative was the pop that was rejected.)
+     */
+    const handoffCoverShown = (room: string) => {
+      const cover = document.getElementById('room-handoff-cover');
+      if (!cover) return;
+      const line = cover.querySelector('p');
+      if (line) {
+        line.textContent = room === 'product'
+          ? 'Standing up the builder\u2026'
+          : room === 'development'
+            ? 'Standing up the development workspace\u2026'
+            : 'Standing up the governance workspace\u2026';
+      }
+      cover.style.display = 'flex';
+    };
+    const handoffCoverHidden = () => {
+      const cover = document.getElementById('room-handoff-cover');
+      if (cover) cover.style.display = 'none';
+    };
+    const isRoomSwitch = !!tabId && tabId !== (headerTab || '');
+    if (isRoomSwitch) {
+      roomRootsHidden();
+      if (tabId === 'product') setProductGateDown(false);
+      else if (tabId === 'development') setDevelopmentGateDown(false);
+      else if (tabId === 'governance') setGovernanceGateDown(false);
+      if (tabId === 'product' || tabId === 'development' || tabId === 'governance') {
+        handoffCoverShown(tabId);
+        const roomTarget = tabId;
+        const coverShownAt = performance.now();
+        const settleCover = () => {
+          const root = document.querySelector<HTMLElement>(`[data-room-root="${roomTarget}"]`);
+          if ((root && getComputedStyle(root).visibility !== 'hidden') || performance.now() - coverShownAt > 1500) {
+            handoffCoverHidden();
+            return;
+          }
+          requestAnimationFrame(settleCover);
+        };
+        requestAnimationFrame(settleCover);
+      }
+    }
+
     /**
      * ⭐ THE ROOM'S EXIT GUARD COMES FIRST (owner, 2026-10-04: *"you should probably ask the
      * user if they try to exit the product team area without saving their project if they
@@ -7752,10 +7927,23 @@ export default function Index({
      * console"* — and "don't save" means DISCARD). Leaving the Product room with an open,
      * unpublished idea asks the question before ANY tab moves; a blank idea is discarded in
      * silence; a published one leaves freely. See `guardProductExit`.
+     *
+     * AND IT IS THE EXIT DOOR ONLY (2026-10-11): it no longer runs when the target IS the
+     * product room — entering it abandons nothing (`openProductRoom` reopens the held
+     * project — the confirmed package model) — and running it there bought a network
+     * round-trip before the tab moved for an answer that path never uses. Real switches out
+     * of a published project still pay the guard's own state read — safe by design; the
+     * hide above already keeps that wait from showing the last room's face.
      */
-    if (productRoomProjectId) {
+    if (productRoomProjectId && tabId !== 'product') {
       const mayLeave = await guardProductExit();
-      if (!mayLeave) return;
+      if (!mayLeave) {
+        // NOTHING MOVED — "keep working" — the room gets its face back, and the cover comes
+        // off with it (same frame; the room is never seen behind a leftover cover).
+        roomRootsShown();
+        handoffCoverHidden();
+        return;
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -10701,7 +10889,7 @@ export default function Index({
                 {/* slot="workspace" — AI-driven Lit tree (A2UI v0.9.1).
                     Slots are the loading contract. AI fills them with prompt blocks.
                     When assembly FAILS, show the error — no hiding. */}
-                <div slot="workspace" style={{ display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: workspaceGroundColor, backgroundImage: `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
+                <div slot="workspace" style={{ position: 'relative', display: 'flex', flex: '1 1 0%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', backgroundColor: workspaceGroundColor, backgroundImage: `url(${workspaceBackground})`, backgroundSize: groundSize, backgroundRepeat: groundRepeat, backgroundPosition: groundPosition }}>
                   {aiAssemblyFailed ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', overflow: 'auto' }}>
                       {/* The DECLARED A2UI error surface. This slot previously held an ad-hoc
@@ -10776,7 +10964,7 @@ export default function Index({
                          COMPOSER'S loaded chat (the seat effect beside the development clocks
                          below); no surface is assembled for this room and no new conversation
                          is created.
-                         THE WORKSPACE IS THE REPO-RUN COPY (development/dev-tool, :8090 —
+                         THE WORKSPACE IS THE REPO-RUN COPY (development/OpenHands-main, :8090 —
                          started by RESTART-LOCAL.sh), telemetry cut so nothing reaches any
                          other server (development/CHANGELOG.md, 2026-10-06). The staged
                          opening (DEVELOPMENT_GATE_MIN_MS, above) covers the load so nothing
@@ -10796,7 +10984,7 @@ export default function Index({
                               wrapper is layout-neutral: a flex column handing the layout the same
                               box the sandbox's viewport gave it, and clipping it as that viewport
                               did. */}
-                          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
+                          <div key="development-root" data-room-root="development" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
                           <workspace-layout key="development-room" ref={developmentLayoutRef} className="flex-1 min-h-0">
                             {/* THE ROOM'S WORKSPACE + THE STAGED OPENING (2026-10-06): the
                                 left column loads the repo-run workspace — the modified copy
@@ -10913,7 +11101,7 @@ export default function Index({
                                   The wrapper is layout-neutral: a flex column handing the layout
                                   the same box the sandbox's viewport gave it, and clipping it as
                                   that viewport did. */}
-                              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
+                              <div key="product-root" data-room-root="product" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
                               <workspace-layout key="product-room" ref={productLayoutRef} className="flex-1 min-h-0">
                                 <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
                               {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
@@ -11080,11 +11268,23 @@ export default function Index({
                                     surface is assembled for this room and no model call
                                     happens on arrival; the assembled ledger surface stays
                                     unwired in the file. */}
+                                {/* THE GRIP'S SAFETY NET — up only while the chat strip has a live
+                                    gesture (the layout's own resize-start/resize-end). Transparent
+                                    and fixed over the whole window, so the hand's moves keep
+                                    reaching THIS document even while the pointer is over the
+                                    Langfuse frame beside the strip (see `governanceGripActive`).
+                                    The Product room's own overlay, one room over. */}
+                                {governanceGripActive && (
+                                  <div
+                                    aria-hidden="true"
+                                    style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }}
+                                  />
+                                )}
                                 {/* THE ROOM'S OWN RELATIVE GROUND — THE COVER'S FRAME (the
                                     development room's pattern): the staged opening spans the
                                     WHOLE room, both columns. Layout-neutral wrapper, clipped
                                     like the sandbox's viewport. */}
-                                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
+                                <div key="governance-root" data-room-root="governance" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
                                 <workspace-layout key="governance-room" ref={governanceLayoutRef} className="flex-1 min-h-0">
                                 {/* THE SLOT ADDS NOTHING — ONE WAVE FOR THE WHOLE ROOM (late
                                     2026-10-07; the application's own transparent page grounds
@@ -11225,6 +11425,28 @@ export default function Index({
                     The ingest tool itself is untouched and still opens from the left menu, which
                     is what a host mount is for.
                   */}
+                  {/* ── THE ROOM SWITCH'S ONE GROUND (2026-10-11) — see `handoffCoverShown` in
+                      `handleTabChangeWithGate`: it wears the TARGET ROOM'S OWN GATE FACE — the
+                      lab tile, the amber ring, the sentence — shown imperatively in the
+                      click's own frame and removed once the incoming room's own gate stands
+                      behind it (identical face — the seam cannot show). `display:none` by
+                      default, and NOTHING here is ever driven by React state, on purpose: the
+                      cover must exist in the click's own task, before any render runs. */}
+                  <div
+                    id="room-handoff-cover"
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute', inset: 0, zIndex: 60, display: 'none', pointerEvents: 'none',
+                      flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                      backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
+                    }}
+                  >
+                    {/* The gates' own ring and sentence, verbatim — the hand-off is only seam-
+                        less if the face is the same. The sentence is set imperatively per
+                        target (the three gates' texts above); it stays empty while hidden. */}
+                    <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                    <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }} />
+                  </div>
                 </div>
             </ai-surface-sandbox>
           </SentryErrorBoundary>

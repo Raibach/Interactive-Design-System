@@ -68,9 +68,13 @@ type RowData = {
 export function UsersTable({
   isV4,
   showControlsInPageHeader = false,
+  searchInTitleRow = false,
 }: {
   isV4: boolean;
   showControlsInPageHeader?: boolean;
+  /** RAIBACH IDS (2026-10-12, owner's header pass): render the search box in
+   * the page title row (it flexes and truncates) instead of its own row. */
+  searchInTitleRow?: boolean;
 }) {
   const router = useRouter();
   const projectId = router.query.projectId as string;
@@ -517,7 +521,10 @@ export function UsersTable({
 
   return (
     <DataTableControlsProvider tableName={usersFilterConfig.tableName}>
-      <div className="flex h-full w-full flex-col">
+      {/* RAIBACH IDS (2026-10-12, owner's balance pass): 30px right margin —
+          with the 12px house scrollbar this matches the 41px left side
+          (filter rail + seam); the table ends ~30px left of the gripper. */}
+      <div className="flex h-full w-full flex-col pr-[30px]">
         {showControlsInPageHeader && (
           <TableHeaderControls
             timeRange={timeRange}
@@ -525,6 +532,7 @@ export function UsersTable({
           />
         )}
         <StickySearchableTableFilterLayout
+          searchInTitleRow={searchInTitleRow}
           search={
             <TableSearchBar
               size={showControlsInPageHeader ? "large" : "default"}

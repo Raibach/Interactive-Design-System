@@ -16,7 +16,6 @@ export const skillsFilterConfig: FilterConfig = {
   tableName: "skills",
   columnDefinitions: columns,
   defaultExpanded: ["tags"],
-  defaultSidebarCollapsed: true,
   facets: [
     {
       type: "categorical",

@@ -8,8 +8,6 @@ export const promptFilterConfig: FilterConfig = {
 
   defaultExpanded: ["type"],
 
-  defaultSidebarCollapsed: true,
-
   facets: [
     {
       type: "categorical" as const,

@@ -33,10 +33,11 @@ describe("dev-static", () => {
       AUTOMATION_AGENT_SERVER_URL: "http://127.0.0.1:18000",
       AUTOMATION_AGENT_SERVER_API_KEY: "shared-session-key",
       AUTOMATION_LOCAL_API_KEY: "shared-session-key",
-      // LOCKDOWN 2026-10-07: the baked key/host are blanked/dead in this tree.
-      AUTOMATION_POSTHOG_API_KEY: "",
-      AUTOMATION_POSTHOG_HOST: "http://127.0.0.1:9",
     });
+    // No AUTOMATION_POSTHOG_* keys: the shared key default is blank in this
+    // tree (config/defaults.json), so the builder emits no telemetry at all.
+    expect(env).not.toHaveProperty("AUTOMATION_POSTHOG_API_KEY");
+    expect(env).not.toHaveProperty("AUTOMATION_POSTHOG_HOST");
   });
 
   it("keeps reusable frontend builds free of session credentials", () => {

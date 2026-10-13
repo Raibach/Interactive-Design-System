@@ -2,6 +2,7 @@ import type { AgentServerUICssVariableName } from "#/styles/agent-server-ui-styl
 
 export type ColorThemeKey =
   | "openhands-deepsea"
+  | "openhands-house"
   | "openhands-neutral"
   | "openhands-neo"
   | "light-plus"

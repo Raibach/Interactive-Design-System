@@ -332,7 +332,6 @@ describe("mock settings schemas and state", () => {
       misc_settings: {
         app_preferences: {
           language: null,
-          user_consents_to_analytics: null,
           enable_sound_notifications: null,
           git_user_name: null,
           git_user_email: null,

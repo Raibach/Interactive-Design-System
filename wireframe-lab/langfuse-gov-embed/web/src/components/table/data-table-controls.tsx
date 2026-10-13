@@ -114,25 +114,22 @@ export const ControlsContext = createContext<ControlsContextType | null>(null);
 export function DataTableControlsProvider({
   children,
   tableName,
-  defaultSidebarCollapsed,
 }: {
   children: React.ReactNode;
   tableName?: string;
-  defaultSidebarCollapsed?: boolean;
 }) {
   const isDesktop = useMediaQuery({ query: "(min-width: 768px)" });
-  const storageKey = tableName
-    ? `data-table-controls-${tableName}`
-    : "data-table-controls";
-  // The desktop preference persists across tabs and sessions (localStorage,
-  // aligned with the peek-panel persistence direction — LFE-10601). Mobile
-  // uses per-mount local state instead, so the filter panel never covers the
-  // table by default and a narrow tab neither inherits nor overwrites the
-  // desktop preference.
-  const [desktopOpen, setDesktopOpen] = useLocalStorage(
-    storageKey,
-    !defaultSidebarCollapsed,
-  );
+  // RAIBACH IDS (2026-10-12): the filter panel is a TRANSIENT tool, never a
+  // remembered preference — a panel that reopens after the session that used
+  // it is an error, and localStorage caused exactly that. Every mount starts
+  // COLLAPSED on both breakpoints; leaving the page closes it (unmount); while
+  // open, an outside pointerdown closes it (FilterPanels' dismiss listener).
+  // The split WIDTH still persists per session (ResizableSplitLayout); the
+  // OPEN state does not.
+  // REVERT: restore `useLocalStorage(storageKey, !defaultSidebarCollapsed)`
+  // and bring back the `defaultSidebarCollapsed` prop with its config call
+  // sites (dropped together — grep filter-config.ts).
+  const [desktopOpen, setDesktopOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const open = isDesktop ? desktopOpen : mobileOpen;
   const setOpen = isDesktop ? setDesktopOpen : setMobileOpen;

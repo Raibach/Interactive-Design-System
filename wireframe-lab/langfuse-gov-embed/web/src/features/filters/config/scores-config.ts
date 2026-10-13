@@ -30,8 +30,6 @@ const scoreFilterConfig: FilterConfig = {
 
   defaultExpanded: ["environment", "name"],
 
-  defaultSidebarCollapsed: true,
-
   facets: [
     {
       type: "categorical" as const,

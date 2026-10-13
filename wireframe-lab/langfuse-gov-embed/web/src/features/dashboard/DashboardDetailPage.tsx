@@ -45,7 +45,6 @@ import {
 } from "@/src/features/widgets";
 import { DashboardGrid } from "@/src/features/widgets/components/DashboardGrid";
 import { CloneFirstDialogController } from "@/src/features/dashboard/components/CloneFirstDialogController";
-import { PageHeaderControlsPortal } from "@/src/components/layouts/page-header-controls-slot";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,9 +117,6 @@ export default function DashboardDetailPage() {
         scrollable
         headerProps={{
           title: "Dashboard",
-          breadcrumb: [
-            { name: "Dashboards", href: `/project/${projectId}/dashboards` },
-          ],
         }}
       >
         <NoDataOrLoading isLoading />
@@ -1184,17 +1180,19 @@ function DashboardDetailView({ readPath }: { readPath: ResolvedReadPath }) {
                   withPadding
                   scrollable
                   headerProps={{
+                    // RAIBACH IDS (2026-10-12, owner's homepage pass): the
+                    // breadcrumb strip above is deleted (the stub renders
+                    // nothing) and its prop is deleted with it — the band
+                    // closes up; the time control now sits in this row, right
+                    // of Filters. Hmm 20px top pad ≈ the ~25px from top the
+                    // owner marked. REVERT: restore the breadcrumb prop + the
+                    // PageHeaderControlsPortal hoist.
+                    className: "pt-5",
                     title:
                       (dashboard.data?.name || "Dashboard") +
                       (dashboard.data?.owner === "LANGFUSE"
                         ? " (Langfuse Maintained)"
                         : ""),
-                    breadcrumb: [
-                      {
-                        name: "Dashboards",
-                        href: `/project/${projectId}/dashboards`,
-                      },
-                    ],
                     help: {
                       description:
                         dashboard.data?.description ||
@@ -1218,6 +1216,26 @@ function DashboardDetailView({ readPath }: { readPath: ResolvedReadPath }) {
                           // surface (not the v4 events table).
                           tableName="dashboard"
                           isV4={false}
+                        />
+                        {/* RAIBACH IDS (2026-10-12, owner's homepage pass):
+                            the time range sits right of Filters — moved down
+                            out of the hoisted header strip, which is deleted. */}
+                        <TimeRangePicker
+                          timeRange={timeRange}
+                          onTimeRangeChange={setTimeRange}
+                          timeRangePresets={dashboardTimeRangePresets}
+                          className="my-0 max-w-full overflow-x-auto"
+                          triggerClassName="px-2"
+                          disabled={
+                            lookbackLimit
+                              ? {
+                                  before: new Date(
+                                    new Date().getTime() -
+                                      lookbackLimit * 24 * 60 * 60 * 1000,
+                                  ),
+                                }
+                              : undefined
+                          }
                         />
                       </>
                     ),
@@ -1325,25 +1343,9 @@ function DashboardDetailView({ readPath }: { readPath: ResolvedReadPath }) {
                     ),
                   }}
                 >
-                  <PageHeaderControlsPortal>
-                    <TimeRangePicker
-                      timeRange={timeRange}
-                      onTimeRangeChange={setTimeRange}
-                      timeRangePresets={dashboardTimeRangePresets}
-                      className="my-0 max-w-full overflow-x-auto"
-                      triggerClassName="px-2"
-                      disabled={
-                        lookbackLimit
-                          ? {
-                              before: new Date(
-                                new Date().getTime() -
-                                  lookbackLimit * 24 * 60 * 60 * 1000,
-                              ),
-                            }
-                          : undefined
-                      }
-                    />
-                  </PageHeaderControlsPortal>
+                  {/* RAIBACH IDS (2026-10-12): the hoisted header strip is
+                      deleted — the time control lives in the title row.
+                      REVERT: restore the PageHeaderControlsPortal block here. */}
                   {isDraggingFile && (
                     <Layer name="modal">
                       <div className="bg-background/80 pointer-events-none fixed inset-0 flex items-center justify-center backdrop-blur-xs">

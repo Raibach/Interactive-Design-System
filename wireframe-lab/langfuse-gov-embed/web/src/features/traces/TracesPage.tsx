@@ -57,6 +57,9 @@ export default function TracesPage() {
   return (
     <Page
       headerProps={{
+        // RAIBACH IDS (2026-10-12): 20px above the section — equal top spacing
+        // throughout the app (matches Home). REVERT: drop the className.
+        className: "pt-5",
         title: "Tracing",
         titleBadges: <V4MigrationDelayBadge page="traces" />,
         help: {
@@ -87,6 +90,14 @@ export default function TracesPage() {
               },
       }}
     >
+      {/* RAIBACH IDS (2026-10-12, owner's traces pass): the time range and the
+          refresh control render inline in the toolbar, right of the Table/Chart
+          toggle — the header hoist is deleted from both table modes, so the
+          top strip closes up (the homepage pattern). The search box (which
+          shows the applied "isRootObservation: true" token — a search filter,
+          not an error) now sits beside the section title via searchInTitleRow.
+          REVERT: restore `showControlsInPageHeader` and delete the
+          searchInTitleRow prop. */}
       {!isResolved ? (
         <>
           {/* Wait for the beta flag before mounting either table. Otherwise the
@@ -97,11 +108,11 @@ export default function TracesPage() {
       ) : isV4 ? (
         <ObservationsEventsTable
           projectId={projectId}
-          showControlsInPageHeader
+          searchInTitleRow
           enableAppRootDefault
         />
       ) : (
-        <TracesTable projectId={projectId} showControlsInPageHeader />
+        <TracesTable projectId={projectId} />
       )}
     </Page>
   );

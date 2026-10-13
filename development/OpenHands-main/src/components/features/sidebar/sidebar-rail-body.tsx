@@ -8,7 +8,6 @@ import {
   Settings,
   PanelsTopLeft,
 } from "lucide-react";
-import { OpenHandsLogoButton } from "#/components/shared/buttons/openhands-logo-button";
 import { NavigationLink } from "#/components/shared/navigation-link";
 import { getLockedCloudHost } from "#/api/agent-server-config";
 import {
@@ -28,15 +27,12 @@ import { StyledTooltip } from "#/components/shared/buttons/styled-tooltip";
 import { BackendSelector } from "#/components/features/backends/backend-selector";
 import { BackendStatusDot } from "#/components/features/backends/backend-status-dot";
 import { CommandMenuTrigger } from "#/components/features/command-menu/command-menu-trigger";
-import { AgentCanvasVersionTile } from "#/components/features/settings/agent-canvas-version-tile";
 import { SidebarConversationList } from "./sidebar-conversation-list";
-import { SidebarOnboardingChecklist } from "./sidebar-onboarding-checklist";
 import AutomationsIcon from "#/icons/automations.svg?react";
 import {
   SIDEBAR_COLLAPSE_TOGGLE_OVERLAY_CLASS,
   SIDEBAR_COLLAPSED_LOGO_WRAPPER_CLASS,
   SIDEBAR_ICON_BUTTON_CLASS,
-  SIDEBAR_ICON_SLOT_CLASS,
   sidebarHeaderRowClassName,
   sidebarNavLabelClassName,
   sidebarNavListClassName,
@@ -46,8 +42,6 @@ import { useCanvasExtensionsRuntime } from "#/components/features/canvas-extensi
 import type { Backend } from "#/api/backend-registry/types";
 
 const ICON_SIZE = 18;
-const SIDEBAR_LOGO_WIDTH = 34;
-const SIDEBAR_LOGO_HEIGHT = Math.round((SIDEBAR_LOGO_WIDTH * 30) / 46);
 
 export interface SidebarRailBodyProps {
   collapsed: boolean;
@@ -135,21 +129,6 @@ export function SidebarRailBody({
               : "flex min-w-0 shrink-0 items-center",
           )}
         >
-          <div
-            className={cn(
-              collapsed &&
-                showCollapseToggle &&
-                "flex h-full w-full items-center justify-start pl-2.5 transition-opacity duration-150",
-              collapsed && showCollapsedExpandButton && "opacity-0",
-            )}
-          >
-            <OpenHandsLogoButton
-              logoWidth={SIDEBAR_LOGO_WIDTH}
-              logoHeight={SIDEBAR_LOGO_HEIGHT}
-              logoClassName="max-w-none"
-              className={cn(SIDEBAR_ICON_SLOT_CLASS, "overflow-visible")}
-            />
-          </div>
           {collapsed && showCollapseToggle ? (
             <button
               type="button"
@@ -390,16 +369,12 @@ export function SidebarRailBody({
 
       {!collapsed ? (
         <>
-          <div className="mb-2 shrink-0 pr-2.5">
-            <SidebarOnboardingChecklist collapsed={collapsed} />
-          </div>
           <div
             className={cn(
               "flex flex-col items-stretch max-w-none box-border shrink-0 gap-2",
               "-ml-2.5 w-[calc(100%+0.625rem)] border-t border-border pt-2 px-2.5",
             )}
           >
-            <AgentCanvasVersionTile hideWhenUpToDate />
             <BackendSelector sidebarCollapsed={collapsed} openUpward />
           </div>
         </>

@@ -37,7 +37,6 @@ import { ErrorState } from "#/components/features/automations/error-state";
 import { BackendNotConfigured } from "#/components/features/automations/backend-not-configured";
 import { DeleteConfirmationModal } from "#/components/features/automations/delete-confirmation-modal";
 import { EditAutomationModal } from "#/components/features/automations/detail/edit-automation-modal";
-import { useTracking } from "#/hooks/use-tracking";
 import {
   useAutomationPermissions,
   useIsAutomationOwner,
@@ -115,8 +114,6 @@ export default function AutomationDetail() {
     enabled: isBackendHealthy && !backendChanged,
   });
 
-  const { trackPrebuiltAutomationEnabled, trackAutomationExported } =
-    useTracking();
   const toggleMutation = useToggleAutomation();
   const deleteMutation = useDeleteAutomation();
   const dispatchMutation = useDispatchAutomation();
@@ -185,12 +182,6 @@ export default function AutomationDetail() {
   const handleToggle = () => {
     const willEnable = !automation.enabled;
     toggleMutation.mutate({ id: automation.id, enabled: willEnable });
-    if (willEnable) {
-      trackPrebuiltAutomationEnabled({
-        automationId: automation.id,
-        automationName: automation.name,
-      });
-    }
   };
 
   const handleDelete = () => {
@@ -220,7 +211,6 @@ export default function AutomationDetail() {
       new Blob([contents], { type: "application/json" }),
       getAutomationExportFilename(automation),
     );
-    trackAutomationExported({ backendKind: active.backend.kind });
   };
 
   // Write actions on a specific automation: manage OR creator (escape hatch).

@@ -7,10 +7,7 @@
 import { HydratedRouter } from "react-router/dom";
 import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
-import {
-  AgentServerUIProviders,
-  DEFAULT_AGENT_SERVER_ANALYTICS,
-} from "./components/providers";
+import { AgentServerUIProviders } from "./components/providers";
 import { waitForI18n } from "./i18n";
 import { shouldStartMockWorker } from "./mocks/should-start-mock-worker";
 
@@ -37,10 +34,7 @@ prepareApp().then(() =>
     hydrateRoot(
       document,
       <StrictMode>
-        <AgentServerUIProviders
-          analytics={DEFAULT_AGENT_SERVER_ANALYTICS}
-          withStyleRoot={false}
-        >
+        <AgentServerUIProviders withStyleRoot={false}>
           <HydratedRouter />
         </AgentServerUIProviders>
       </StrictMode>,

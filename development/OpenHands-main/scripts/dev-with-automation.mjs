@@ -811,7 +811,12 @@ function getLocalServiceRoutes(config) {
 }
 
 function buildRouteArgs(routes) {
-  return routes.flatMap(([prefix, url]) => ["--route", `${prefix}=${url}`]);
+  // RAIBACH IDS — THE DOOR (2026-10-10): when VITE_BASE_PATH mounts the UI under
+  // a path, every backend route lives under the same path (the client addresses
+  // them as `<base>/api/...`). Prefix each route; unset VITE_BASE_PATH = the old
+  // shape, byte for byte.
+  const doorBase = (process.env.VITE_BASE_PATH ?? "").replace(/\/+$/, "");
+  return routes.flatMap(([prefix, url]) => ["--route", `${doorBase}${prefix}=${url}`]);
 }
 
 /**
@@ -823,7 +828,9 @@ function buildRouteArgs(routes) {
  */
 function getNoReferrerPrefixArgs(config) {
   if (!config.launchAgentServer || !config.vscodeBasePath) return [];
-  return ["--no-referrer-prefix", config.vscodeBasePath];
+  // RAIBACH IDS — THE DOOR (2026-10-10): same section prefix as its route above.
+  const doorRef = (process.env.VITE_BASE_PATH ?? "").replace(/\/+$/, "");
+  return ["--no-referrer-prefix", `${doorRef}${config.vscodeBasePath}`];
 }
 
 /**
@@ -837,7 +844,9 @@ function getNoReferrerPrefixArgs(config) {
  */
 function getVSCodeAdvertiseArgs(config) {
   if (!config.launchAgentServer || !config.vscodeBasePath) return [];
-  return ["--vscode-base-path", config.vscodeBasePath];
+  // RAIBACH IDS — THE DOOR (2026-10-10): same section prefix as its route above.
+  const doorVscode = (process.env.VITE_BASE_PATH ?? "").replace(/\/+$/, "");
+  return ["--vscode-base-path", `${doorVscode}${config.vscodeBasePath}`];
 }
 
 /**

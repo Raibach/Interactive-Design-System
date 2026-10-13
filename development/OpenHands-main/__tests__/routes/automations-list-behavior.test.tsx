@@ -34,8 +34,6 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   dispatch: vi.fn(),
   importAutomation: vi.fn(),
-  trackEnabled: vi.fn(),
-  trackExported: vi.fn(),
   useTranslation: vi.fn(),
   translate: vi.fn((key: string) => key),
   successToast: vi.fn(),
@@ -108,13 +106,6 @@ vi.mock("#/hooks/query/use-automations", () => ({
 vi.mock("#/contexts/active-backend-context", () => ({
   useActiveBackend: () => ({
     backend: { id: "backend-1", kind: mocks.backendKind },
-  }),
-}));
-
-vi.mock("#/hooks/use-tracking", () => ({
-  useTracking: () => ({
-    trackPrebuiltAutomationEnabled: mocks.trackEnabled,
-    trackAutomationExported: mocks.trackExported,
   }),
 }));
 
@@ -668,7 +659,7 @@ describe("automations list interactions", () => {
     expect(screen.queryAllByTestId(/^automation-/)).toHaveLength(0);
   });
 
-  it("enables and disables automations while tracking only enablement", async () => {
+  it("enables and disables automations", async () => {
     const enabled = makeAutomation({ id: "enabled", enabled: true });
     const disabled = makeAutomation({
       id: "disabled",
@@ -692,11 +683,6 @@ describe("automations list interactions", () => {
     expect(mocks.toggle).toHaveBeenNthCalledWith(2, {
       id: "enabled",
       enabled: false,
-    });
-    expect(mocks.trackEnabled).toHaveBeenCalledOnce();
-    expect(mocks.trackEnabled).toHaveBeenCalledWith({
-      automationId: "disabled",
-      automationName: "Disabled automation",
     });
   });
 
@@ -727,10 +713,6 @@ describe("automations list interactions", () => {
     expect(mocks.toggle).toHaveBeenCalledWith({
       id: "missing-id",
       enabled: true,
-    });
-    expect(mocks.trackEnabled).toHaveBeenCalledWith({
-      automationId: "missing-id",
-      automationName: "missing-id",
     });
     expect(screen.queryByTestId("delete-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("edit-modal")).not.toBeInTheDocument();
@@ -910,7 +892,6 @@ describe("automations list interactions", () => {
     expect(await readBlobText(blob)).toBe(
       `${JSON.stringify(mocks.serializeAutomation.mock.results[0].value, null, 2)}\n`,
     );
-    expect(mocks.trackExported).toHaveBeenCalledWith({ backendKind: "local" });
   });
 
   it("shows create and import actions without management permission", () => {

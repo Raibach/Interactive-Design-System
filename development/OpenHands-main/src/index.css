@@ -25,7 +25,7 @@
   --bg-editor-active: var(--oh-bg-editor-active);
   --border-editor-sidebar: var(--oh-border-editor-sidebar);
   --bg-neutral-muted: var(--oh-bg-neutral-muted);
-  background-color: var(--oh-color-base) !important;
+  background-color: transparent !important;
 
   /* ── Cool Grey Scale (13 shades + 2 pure anchors: white / black) ──────── */
   --cool-grey-50:  #F7F9FC;
@@ -44,15 +44,36 @@
   /* ─────────────────────────────────────────────────────────────────────── */
 }
 
+html {
+  /* THE HOUSE GROUND — the Development room's graph-paper tile, painted as
+     the tool's own canvas. An iframe's transparent areas never reveal what the
+     parent painted behind it, so the tile must live here, not behind the page. */
+  background: url("./assets/canvas-development-lab-bkg.png") repeat;
+}
+
 body {
   margin: 0;
-  background-color: var(--oh-color-base);
+  background-color: transparent;
   font-family:
     -apple-system, "SF Pro", BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
     "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* THE APP ROOT CARRIES NO FILL — the room's paper is the ground.
+   AgentServerUIRoot renders a `[data-theme]` wrapper inside the scope element;
+   HeroUI's base layer paints that wrapper `hsl(var(--heroui-background))` —
+   the neutral grey #181818 — and that opaque fill covered the graph-paper tile
+   in every view (owner, 2026-10-11: "my customizations are all purple with
+   transparency… I want it properly in-line designed styling"). The fill is
+   deleted at its element, here, in the app's own stylesheet: no injected
+   override, no patch script, nothing to re-apply after a rebuild.
+   This rule is unlayered and the vendor's is in `@layer base`, so it wins from
+   any position in the document; it is deliberately NOT `!important`. */
+[data-agent-server-ui] > [data-theme] {
+  background-color: transparent;
 }
 
 code {

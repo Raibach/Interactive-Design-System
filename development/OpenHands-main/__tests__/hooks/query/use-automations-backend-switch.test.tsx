@@ -30,7 +30,6 @@ import type {
   AutomationsResponse,
   AutomationRunsResponse,
 } from "#/types/automation";
-import * as telemetry from "#/services/telemetry";
 
 vi.mock("#/api/automation-service/automation-service.api", () => ({
   default: {
@@ -48,8 +47,6 @@ vi.mock("#/api/automation-service/automation-service.api", () => ({
 // Mirrors the non-terminal poll interval returned by `useAutomationRuns`
 // (`refetchInterval` in src/hooks/query/use-automation-detail.ts).
 const RUNS_POLL_INTERVAL_MS = 3000;
-
-let captureMock: ReturnType<typeof vi.spyOn>;
 
 vi.mock("#/hooks/query/use-settings", () => ({
   useSettings: () => ({ data: { user_consents_to_analytics: true } }),
@@ -112,7 +109,6 @@ function makeWrapper() {
 }
 
 beforeEach(() => {
-  captureMock = vi.spyOn(telemetry, "trackEvent").mockResolvedValue(undefined);
   window.localStorage.clear();
   __resetActiveStoreForTests();
   vi.mocked(AutomationService.getAutomations).mockReset();
@@ -140,7 +136,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  captureMock.mockRestore();
   window.localStorage.clear();
   __resetActiveStoreForTests();
 });
@@ -350,94 +345,6 @@ describe("run mutations — sidebar conversation refresh", () => {
     // Assert
     expect(queryClient.getQueryState(conversationsKey)?.isInvalidated).toBe(
       true,
-    );
-  });
-});
-
-describe("automation mutation hooks — analytics tracking", () => {
-  it("captures automation_executed after a successful dispatch", async () => {
-    const { result } = renderHook(() => useDispatchAutomation(), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync("auto-1");
-    });
-
-    await waitFor(() => {
-      expect(captureMock).toHaveBeenCalledWith(
-        "automation_executed",
-        expect.objectContaining({ backend_kind: "local" }),
-      );
-    });
-  });
-
-  it("captures automation_deleted after a successful delete", async () => {
-    const { result } = renderHook(() => useDeleteAutomation(), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync("auto-1");
-    });
-
-    await waitFor(() => {
-      expect(captureMock).toHaveBeenCalledWith(
-        "automation_deleted",
-        expect.objectContaining({ backend_kind: "local" }),
-      );
-    });
-  });
-
-  it("captures automation_edited after a successful update", async () => {
-    const { result } = renderHook(() => useUpdateAutomation(), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        id: "auto-1",
-        body: { name: "Renamed" },
-      });
-    });
-
-    await waitFor(() => {
-      expect(captureMock).toHaveBeenCalledWith(
-        "automation_edited",
-        expect.objectContaining({ backend_kind: "local" }),
-      );
-    });
-  });
-
-  it("captures automation_disable_button when an automation is disabled", async () => {
-    const { result } = renderHook(() => useToggleAutomation(), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync({ id: "auto-1", enabled: false });
-    });
-
-    await waitFor(() => {
-      expect(captureMock).toHaveBeenCalledWith(
-        "automation_disable_button",
-        expect.objectContaining({ backend_kind: "local" }),
-      );
-    });
-  });
-
-  it("does not capture automation_disable_button when an automation is enabled", async () => {
-    const { result } = renderHook(() => useToggleAutomation(), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync({ id: "auto-1", enabled: true });
-    });
-
-    expect(captureMock).not.toHaveBeenCalledWith(
-      "automation_disable_button",
-      expect.anything(),
     );
   });
 });

@@ -1,7 +1,6 @@
 import React from "react";
 import { Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useTracking } from "#/hooks/use-tracking";
 import { cn } from "#/utils/utils";
 import { I18nKey } from "#/i18n/declaration";
 import { transformVSCodeUrl } from "#/utils/vscode-url-helper";
@@ -101,7 +100,6 @@ export function ConversationCard({
   alwaysShowPinIcon = false,
 }: ConversationCardProps) {
   const { t } = useTranslation("openhands");
-  const { trackDownloadVsCodeButtonClicked } = useTracking();
   const [titleMode, setTitleMode] = React.useState<"view" | "edit">("view");
   const { mutateAsync: downloadConversation } = useDownloadConversation();
 
@@ -163,7 +161,6 @@ export function ConversationCard({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    trackDownloadVsCodeButtonClicked();
 
     // Fetch the VS Code URL from the API
     if (conversationId) {

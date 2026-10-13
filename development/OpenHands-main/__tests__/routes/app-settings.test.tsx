@@ -66,11 +66,8 @@ describe("AppSettingsScreen", () => {
 
     renderAppSettingsScreen();
 
-    const analyticsSwitch = await screen.findByTestId(
-      "enable-analytics-switch",
-    );
-
-    expect(analyticsSwitch).toBeInTheDocument();
+    // Wait for the form to finish loading before asserting on its fields.
+    await screen.findByTestId("git-user-name-input");
     expect(screen.getByTestId("git-user-name-input")).toHaveValue("octocat");
     expect(screen.getByTestId("git-user-email-input")).toHaveValue(
       "octocat@example.com",
@@ -83,52 +80,6 @@ describe("AppSettingsScreen", () => {
         name: "SETTINGS$TITLE_GENERATION_MODEL",
       }),
     ).toHaveValue("SETTINGS$TITLE_GENERATION_AUTOMATIC");
-  });
-
-  it("renders the analytics toggle as checked and disabled for cloud backends", async () => {
-    activeBackendState.kind = "cloud";
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ user_consents_to_analytics: false }),
-    );
-
-    renderAppSettingsScreen();
-
-    const analyticsSwitch = await screen.findByTestId(
-      "enable-analytics-switch",
-    );
-    const submitButton = screen.getByTestId("submit-button");
-
-    expect(analyticsSwitch).toBeChecked();
-    expect(analyticsSwitch).toBeDisabled();
-
-    await userEvent.click(analyticsSwitch);
-    expect(submitButton).toBeDisabled();
-  });
-
-  it("does not submit analytics consent for cloud backends", async () => {
-    activeBackendState.kind = "cloud";
-    const saveSettingsSpy = vi
-      .spyOn(SettingsService, "saveSettings")
-      .mockResolvedValue(true);
-    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
-      buildSettings({ user_consents_to_analytics: false }),
-    );
-
-    renderAppSettingsScreen();
-
-    const user = userEvent.setup();
-    await user.click(
-      await screen.findByTestId("enable-sound-notifications-switch"),
-    );
-    await user.click(screen.getByTestId("submit-button"));
-
-    await waitFor(() => {
-      expect(saveSettingsSpy).toHaveBeenCalledWith(
-        expect.not.objectContaining({
-          user_consents_to_analytics: expect.anything(),
-        }),
-      );
-    });
   });
 
   it("saves updated git author details in OSS mode", async () => {

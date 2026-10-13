@@ -79,7 +79,7 @@ export function ExtensionsNavigation() {
   return (
     <aside
       data-testid="extensions-navbar-desktop"
-      className="hidden md:flex md:w-65 md:shrink-0 md:flex-col md:gap-2 md:sticky md:top-8 md:self-start"
+      className="hidden md:flex md:w-65 md:shrink-0 md:flex-col md:gap-2 md:sticky md:top-8 md:self-start rounded-[10px] bg-[rgba(34,32,45,0.5)] p-2.5"
     >
       <span className="px-2 text-sm font-normal text-contrast">
         {t(I18nKey.NAV$CUSTOMIZE)}

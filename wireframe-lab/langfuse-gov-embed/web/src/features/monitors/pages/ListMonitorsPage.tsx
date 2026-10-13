@@ -86,10 +86,7 @@ const MainPage = ({ projectId }: { projectId: string }) => {
   );
 
   return (
-    <DataTableControlsProvider
-      tableName={monitorFilterConfig.tableName}
-      defaultSidebarCollapsed={monitorFilterConfig.defaultSidebarCollapsed}
-    >
+    <DataTableControlsProvider tableName={monitorFilterConfig.tableName}>
       <Page
         headerProps={{
           ...headerProps,

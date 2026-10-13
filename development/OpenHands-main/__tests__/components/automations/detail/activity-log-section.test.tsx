@@ -10,18 +10,8 @@ import {
 } from "#/types/automation";
 import { downloadActivityLogExport } from "#/utils/automation-activity-log-export";
 
-const { trackAutomationActivityLogExported } = vi.hoisted(() => ({
-  trackAutomationActivityLogExported: vi.fn(),
-}));
-
 vi.mock("#/utils/automation-activity-log-export", () => ({
   downloadActivityLogExport: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("#/hooks/use-tracking", () => ({
-  useTracking: () => ({
-    trackAutomationActivityLogExported,
-  }),
 }));
 
 vi.mock("#/contexts/active-backend-context", () => ({
@@ -80,7 +70,7 @@ describe("ActivityLogSection export", () => {
     } as unknown as ReturnType<typeof useAutomationRuns>);
   });
 
-  it("exports JSON via the activity-log export helper and tracks it", async () => {
+  it("exports JSON via the activity-log export helper", async () => {
     const user = userEvent.setup();
     renderSection();
 
@@ -93,13 +83,9 @@ describe("ActivityLogSection export", () => {
         conversationBaseUrl: window.location.origin,
       });
     });
-    expect(trackAutomationActivityLogExported).toHaveBeenCalledWith({
-      backendKind: "local",
-      format: "json",
-    });
   });
 
-  it("exports CSV via the activity-log export helper and tracks it", async () => {
+  it("exports CSV via the activity-log export helper", async () => {
     const user = userEvent.setup();
     renderSection();
 
@@ -111,10 +97,6 @@ describe("ActivityLogSection export", () => {
         format: "csv",
         conversationBaseUrl: window.location.origin,
       });
-    });
-    expect(trackAutomationActivityLogExported).toHaveBeenCalledWith({
-      backendKind: "local",
-      format: "csv",
     });
   });
 

@@ -6,7 +6,6 @@ import {
 } from "@tanstack/react-query";
 import AutomationService from "#/api/automation-service/automation-service.api";
 import { useActiveBackend } from "#/contexts/active-backend-context";
-import { useTracking } from "#/hooks/use-tracking";
 import { uniqueById } from "#/utils/unique-by-id";
 import type {
   Automation,
@@ -86,67 +85,51 @@ export function useAutomations(options: UseAutomationsOptions = {}) {
 
 export function useToggleAutomation() {
   const queryClient = useQueryClient();
-  const active = useActiveBackend();
-  const { trackAutomationDisableButton } = useTracking();
   return useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       AutomationService.toggleAutomation(id, enabled),
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: AUTOMATION_DETAIL_QUERY_KEY });
-      if (!variables.enabled) {
-        trackAutomationDisableButton({ backendKind: active.backend.kind });
-      }
     },
   });
 }
 
 export function useImportAutomation() {
   const queryClient = useQueryClient();
-  const active = useActiveBackend();
-  const { trackAutomationImported } = useTracking();
   return useMutation({
     mutationFn: (spec: AutomationSpec) =>
       AutomationService.createAutomation({ ...spec, enabled: false }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY_KEY });
-      trackAutomationImported({ backendKind: active.backend.kind });
     },
   });
 }
 
 export function useUpdateAutomation() {
   const queryClient = useQueryClient();
-  const active = useActiveBackend();
-  const { trackAutomationEdited } = useTracking();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<Automation> }) =>
       AutomationService.updateAutomation(id, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: AUTOMATION_DETAIL_QUERY_KEY });
-      trackAutomationEdited({ backendKind: active.backend.kind });
     },
   });
 }
 
 export function useDeleteAutomation() {
   const queryClient = useQueryClient();
-  const active = useActiveBackend();
-  const { trackAutomationDeleted } = useTracking();
   return useMutation({
     mutationFn: (id: string) => AutomationService.deleteAutomation(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY_KEY });
-      trackAutomationDeleted({ backendKind: active.backend.kind });
     },
   });
 }
 
 export function useDispatchAutomation() {
   const queryClient = useQueryClient();
-  const active = useActiveBackend();
-  const { trackAutomationExecuted } = useTracking();
   return useMutation({
     mutationFn: (id: string) => AutomationService.dispatchAutomation(id),
     onSuccess: (_run, id) => {
@@ -159,7 +142,6 @@ export function useDispatchAutomation() {
       // conversation poll is paused on automation routes, so refresh the list
       // explicitly (same prefix all conversation mutations invalidate).
       queryClient.invalidateQueries({ queryKey: ["user", "conversations"] });
-      trackAutomationExecuted({ backendKind: active.backend.kind });
     },
   });
 }

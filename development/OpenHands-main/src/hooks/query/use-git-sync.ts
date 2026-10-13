@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import AutomationService from "#/api/automation-service/automation-service.api";
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import { getErrorStatus } from "#/hooks/query/use-settings";
-import { useTracking } from "#/hooks/use-tracking";
 import type { GitSyncConfigUpdateRequest } from "#/types/git-sync";
 
 export const GIT_SYNC_STATUS_QUERY_KEY = ["git-sync-status"] as const;
@@ -39,7 +38,6 @@ export function useGitSyncStatus(options: UseGitSyncStatusOptions = {}) {
 export function useUpdateGitSyncConfig() {
   const queryClient = useQueryClient();
   const active = useActiveBackend();
-  const { trackGitSyncConfigUpdated } = useTracking();
   return useMutation({
     mutationFn: (body: GitSyncConfigUpdateRequest) =>
       AutomationService.updateGitSyncConfig(body),
@@ -54,7 +52,6 @@ export function useUpdateGitSyncConfig() {
       // pre-save snapshot.
       await queryClient.cancelQueries({ queryKey });
       queryClient.setQueryData(queryKey, data);
-      trackGitSyncConfigUpdated({ backendKind: active.backend.kind });
     },
     // The form reports failures itself, so the global mutation toast would
     // stack a raw one on top.
@@ -81,13 +78,10 @@ export function useCheckGitSyncConfig() {
 
 export function useTriggerGitSync() {
   const queryClient = useQueryClient();
-  const active = useActiveBackend();
-  const { trackGitSyncTriggered } = useTracking();
   return useMutation({
     mutationFn: () => AutomationService.triggerGitSync(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: GIT_SYNC_STATUS_QUERY_KEY });
-      trackGitSyncTriggered({ backendKind: active.backend.kind });
     },
     // The page maps a failed trigger to its own message (503 means sync is
     // off, not that the request broke), so the global mutation toast would

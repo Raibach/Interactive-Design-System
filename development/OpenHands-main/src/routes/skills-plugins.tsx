@@ -127,7 +127,7 @@ export default function SkillsPluginsScreen() {
     >
       <ExtensionsNavigation />
       <main className={cn(settingsLikeMainScrollClassName, "h-full")}>
-        <div className="mx-auto flex w-full min-w-0 max-w-200 flex-col gap-6">
+        <div className="mx-auto flex w-full min-w-0 max-w-200 flex-col gap-6 rounded-[10px] bg-[rgba(34,32,45,0.5)] p-2.5">
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">
               <h2 className="text-xl font-semibold leading-6 text-foreground">

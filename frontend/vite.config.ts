@@ -89,6 +89,7 @@ export default defineConfig({
       'localhost',
       '.loca.lt',
       '.ngrok-free.dev',
+      '.ngrok.dev',
       '.ngrok.io',
       '.ngrok-free.app',
       '.trycloudflare.com',
@@ -97,6 +98,27 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+      },
+      // ── THE DOOR'S SECTIONS (2026-10-10) ────────────────────────────────────────────────
+      // One public address serves every room: these paths forward <studio>/builder, /dev
+      // and /governance to the tools' own ports, so embeds work for EVERY visitor (through
+      // the tunnel too) without any localhost address inside the page. The path is forwarded
+      // AS-IS — each tool is mounted under its own section server-side — and the rooms' env
+      // addresses in backend/.env name the same sections (keep the three in sync).
+      '/builder': {
+        target: 'http://localhost:3223',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/dev': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        ws: true,
+      },
+      '/governance': {
+        target: 'http://localhost:3100',
+        changeOrigin: true,
+        ws: true,
       },
     },
     // THE PREVIEW FOLDER IS NOT SOURCE. Previews are written and deleted under `.preview/`

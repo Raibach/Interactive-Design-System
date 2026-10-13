@@ -83,18 +83,6 @@ describe("VerificationSettingsScreen", () => {
     expect(apiKeyInput).toHaveAttribute("type", "password");
     expect(apiKeyInput).not.toBeRequired();
 
-    // The accompanying help link points users at OpenHands Cloud, mirroring
-    // the hint we already show under the LLM provider's API key field.
-    const helpLink = screen.getByTestId(
-      "help-link-verification.critic_api_key",
-    );
-    expect(helpLink).toBeInTheDocument();
-    expect(
-      helpLink.querySelector(
-        'a[href="https://app.all-hands.dev/settings/api-keys"]',
-      ),
-    ).not.toBeNull();
-
     // Major-prominence fields (confirmation_mode) are hidden in basic view
     expect(
       screen.queryByTestId("sdk-settings-confirmation_mode"),

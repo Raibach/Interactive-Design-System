@@ -61,6 +61,7 @@ const solarized: ITheme = {
 
 const palettes: Record<ColorThemeKey, ITheme> = {
   "openhands-deepsea": dark,
+  "openhands-house": dark,
   "openhands-neutral": dark,
   "openhands-neo": dark,
   "light-plus": light,

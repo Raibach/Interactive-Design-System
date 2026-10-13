@@ -88,7 +88,7 @@ describe("ConversationCardPreview", () => {
     );
   });
 
-  it("styles the model row with the OpenHands brand icon", () => {
+  it("shows the model name on the model row", () => {
     renderWithProviders(
       <ConversationCardPreview
         title={PREVIEW_TITLE}
@@ -100,9 +100,6 @@ describe("ConversationCardPreview", () => {
     expect(
       screen.getByTestId("conversation-card-preview-model"),
     ).toHaveTextContent("openhands/claude-opus-4-5-20251101");
-    expect(
-      screen.getByTestId("agent-brand-icon-openhands"),
-    ).toBeInTheDocument();
   });
 
   it("uses the ACP provider mark on the model row for ACP conversations", () => {

@@ -227,8 +227,12 @@ describe("formatRunPhaseAge — telling a moving run from a stalled one", () => 
     expect(formatRelativeTime("not-a-date", "fr", translate)).toMatch(
       /Invalid/,
     );
+    // The epoch is the backend's "datetime unset" sentinel. The shared
+    // formatter prints it as a real date — 1970-01-01 in UTC, but the day
+    // before on machines behind UTC — which is why formatRunPhaseAge guards
+    // it instead of showing it.
     expect(formatRelativeTime("1970-01-01T00:00:00Z", "fr", translate)).toMatch(
-      /1970/,
+      /1969|1970/,
     );
 
     expect(formatRunPhaseAge("not-a-date", "fr", translate)).toBeNull();

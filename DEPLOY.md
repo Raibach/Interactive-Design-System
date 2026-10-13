@@ -1,8 +1,8 @@
-# DEPLOY.md — the strict runbook (local + raibach-cloud-1)
+# DEPLOY.md — the strict runbook (local + raibach-cloud-2)
 
 Authoritative operating facts, written after the 2026-10-09 launch-friction /
 configuration-drift mandate and re-grounded the same night when all hosting moved
-off Northflank onto raibach-cloud-1 (the retired Northflank fleet is history, not
+off Northflank onto raibach-cloud-2 (the retired Northflank fleet is history, not
 a fallback). Everything below is a mechanical fact of the live system — not a
 suggestion.
 
@@ -26,7 +26,7 @@ Therefore EVERY entry point into the room carries the project path suffix:
 - Local room: `http://localhost:3100/project/51211b35-c875-4715-8040-33fccb624279`
   - hardcoded in `frontend/src/shared/appConfig.ts` → `LOCAL_GOVERNANCE_TOOL`
   - read ONCE at page boot → after changing it, reload the page (not just the tab)
-- Hosted room (raibach-cloud-1): `http://2.31.32.12/project/51211b35-c875-4715-8040-33fccb624279`
+- Hosted room (raibach-cloud-2): `http://2.28.109.69/project/51211b35-c875-4715-8040-33fccb624279`
   - the hosted studio receives this via its env `GOVERNANCE_TOOL_URL`
     (value lives on the server in `/opt/raibach/studio.env` — THE CONFIG RULE — never in this repo)
 - `/project/<id>` (no trailing slash) 308-redirects to `/project/<id>/`; that
@@ -35,7 +35,7 @@ Therefore EVERY entry point into the room carries the project path suffix:
 The project path IS the homepage (project Home dashboard). If you ever see the
 chooser page, you entered at a bare root: fix the ADDRESS, never the app.
 
-## 2. Routing and authentication mechanics (raibach-cloud-1)
+## 2. Routing and authentication mechanics (raibach-cloud-2)
 
 `browser → frame-proxy (nginx, :80) → langfuse-web (Next.js, :3000)`
 
@@ -51,20 +51,20 @@ chooser page, you entered at a bare root: fix the ADDRESS, never the app.
   name variants in one header (`next-auth.session-token` + `__Secure-…`) — one tree
   serves the bare http server and any future https world.
   Never create an account/admin on this deployment; nothing should ever ask you to.
-- `NEXTAUTH_URL` MUST name the live host: `http://2.31.32.12` (read at boot; the
+- `NEXTAUTH_URL` MUST name the live host: `http://2.28.109.69` (read at boot; the
   boot guard accepts any absolute http(s) URL and FATALs on anything else).
   If the host ever changes: patch it in `/opt/raibach/.env` (it feeds both
   `langfuse-web` and `langfuse-worker`), recreate those two containers, then test.
   A mismatch is a broken state — there is no fallback path.
 - Embedding: no `x-frame-options`; CSP `frame-ancestors` = studio origin only;
-  responses `no-store`. Studio origin: `http://2.31.32.12:5001` (the `STUDIO_ORIGIN`
+  responses `no-store`. Studio origin: `http://2.28.109.69:5001` (the `STUDIO_ORIGIN`
   value in `/opt/raibach/.env`; recreate `frame-proxy` after changing it).
   The proxy also injects the house-ground styling and the location reporter the
   studio's shell nav listens for.
 
-## 3. The server (raibach-cloud-1)
+## 3. The server (raibach-cloud-2)
 
-One bare Ubuntu box (cpx42, 2.31.32.12), Docker + compose, no platform layer.
+One bare Ubuntu box (cx33, 2.28.109.69), Docker + compose, no platform layer.
 Stack root: `/opt/raibach` — `docker-compose.yml` + `.env` (values, chmod 600) +
 one source folder per built image. Every service runs `restart: "no"`: a broken
 build or boot leaves its port BLACK on purpose; the raw error is in
@@ -79,7 +79,7 @@ Compose services (project name `raibach`):
 - `studio` — build `./studio` (the repo-root Dockerfile: built frontend + FastAPI
   backend in one image), the public studio door (`:5001`)
 
-## 4. The deploy procedure (raibach-cloud-1)
+## 4. The deploy procedure (raibach-cloud-2)
 
 Source of truth is this repository on the Mac. A deploy is three mechanical steps —
 no CI, no buildpacks, no guessing:
@@ -134,7 +134,7 @@ never drops). To carry data from the local machine (`railway`):
   with a stale upstream address — before the fix, every web update answered 502
   `connection refused` until the proxy was recreated too (measured and repaired live).
 - Logs are the truth surface: raw container stdout/stderr via
-  `docker compose logs <service>` on raibach-cloud-1. Never summarize an error away.
+  `docker compose logs <service>` on raibach-cloud-2. Never summarize an error away.
 
 ## 6. Environment keys (names only — values live on the server)
 
@@ -158,9 +158,9 @@ never drops). To carry data from the local machine (`railway`):
 ## 7. 60-second verification receipts
 
 ```sh
-curl -sL -o /dev/null -w '%{http_code}\n' "http://2.31.32.12:5001/"                                              # studio — expect 200
-curl -sL -o /dev/null -w '%{http_code}\n' "http://2.31.32.12/project/51211b35-c875-4715-8040-33fccb624279/"      # room — expect 200
-curl -s http://2.31.32.12:5001/api/config                                                                         # must name the room URL
+curl -sL -o /dev/null -w '%{http_code}\n' "http://2.28.109.69:5001/"                                              # studio — expect 200
+curl -sL -o /dev/null -w '%{http_code}\n' "http://2.28.109.69/project/51211b35-c875-4715-8040-33fccb624279/"      # room — expect 200
+curl -s http://2.28.109.69:5001/api/config                                                                         # must name the room URL
 curl -s  -o /dev/null -w '%{http_code}\n' \
   "http://localhost:3100/project/51211b35-c875-4715-8040-33fccb624279/"                                           # local room — expect 200 (or its trailing-slash 308)
 ```

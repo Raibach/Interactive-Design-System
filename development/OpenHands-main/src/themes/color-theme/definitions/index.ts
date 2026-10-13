@@ -1,5 +1,6 @@
 import type { ColorThemeDefinition, ColorThemeKey } from "../types";
 import { openhandsDeepsea } from "./openhands-deepsea";
+import { openhandsHouse } from "./openhands-house";
 import { openhandsNeutral } from "./openhands-neutral";
 import { openhandsNeo } from "./openhands-neo";
 import { lightPlus } from "./light-plus";
@@ -13,13 +14,14 @@ import { solarizedLight } from "./solarized-light";
  */
 export const COLOR_THEMES: Record<ColorThemeKey, ColorThemeDefinition> = {
   "openhands-deepsea": openhandsDeepsea,
+  "openhands-house": openhandsHouse,
   "openhands-neutral": openhandsNeutral,
   "openhands-neo": openhandsNeo,
   "light-plus": lightPlus,
   "solarized-light": solarizedLight,
 };
 
-export const DEFAULT_COLOR_THEME: ColorThemeKey = "openhands-neutral";
+export const DEFAULT_COLOR_THEME: ColorThemeKey = "openhands-house";
 
 export const AVAILABLE_COLOR_THEMES = Object.entries(COLOR_THEMES).map(
   ([key, def]) => ({ key: key as ColorThemeKey, label: def.label }),

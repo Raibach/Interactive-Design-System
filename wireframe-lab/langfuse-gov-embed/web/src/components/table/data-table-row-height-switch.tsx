@@ -75,7 +75,15 @@ export const DataTableRowHeightSwitch = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" title="Row height">
+        {/* RAIBACH IDS (2026-10-12): bg-card = the house container fill — the
+            outline variant's bg-background is transparent in the embed, so the
+            wave ground showed through the button. */}
+        <Button
+          variant="outline"
+          size="icon"
+          title="Row height"
+          className="bg-card"
+        >
           <Rows3 className="icon-base text-icon-foreground" />
         </Button>
       </DropdownMenuTrigger>

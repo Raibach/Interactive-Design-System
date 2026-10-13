@@ -1,6 +1,5 @@
 import React from "react";
 import { useNavigate } from "react-router";
-import { useTracking } from "#/hooks/use-tracking";
 import { useTranslation } from "react-i18next";
 import { isAcpAuthErrorCode } from "#/utils/acp-error-codes";
 import { convertImageToBase64 } from "#/utils/convert-image-to-base-64";
@@ -35,7 +34,6 @@ import { useOptimisticUserMessageStore } from "#/stores/optimistic-user-message-
 import { SERVER_CONNECTION_ERROR_MESSAGE } from "#/constants/server-connection-error";
 import { ErrorMessageBanner } from "./error-message-banner";
 import { SkillInstallRestartBanner } from "./skill-install-restart-banner";
-import { LlmNotConfiguredBanner } from "#/components/features/home/llm-not-configured-banner";
 import { useLlmConfigured } from "#/hooks/use-llm-configured";
 import { Messages } from "#/components/conversation-events/chat/messages";
 import { PendingUserMessages } from "./pending-user-messages";
@@ -66,7 +64,6 @@ function getEntryPoint(
 export function ChatInterface() {
   useAutoRefreshFilesOnEdit();
 
-  const { trackInitialQuerySubmitted, trackUserMessageSent } = useTracking();
   const { setMessageToSend, conversationMode, planContent } =
     useConversationStore();
   const {
@@ -334,21 +331,6 @@ export function ChatInterface() {
     // Create mutable copies of the arrays
     const images = [...originalImages];
     const files = [...originalFiles];
-    if (totalEvents === 0) {
-      trackInitialQuerySubmitted({
-        entryPoint: getEntryPoint(
-          selectedRepository !== null,
-          replayJson !== null,
-        ),
-        queryCharacterLength: content.length,
-        replayJsonSize: replayJson?.length,
-      });
-    } else {
-      trackUserMessageSent({
-        sessionMessageCount: totalEvents,
-        currentMessageLength: content.length,
-      });
-    }
 
     // Validate file sizes before any processing
     const allFiles = [...images, ...files];
@@ -513,10 +495,6 @@ export function ChatInterface() {
             !isProvisioningTask &&
             totalEvents === 0 &&
             !isArchivedConversation &&
-            // With no usable LLM the suggestions can't be acted on (the input is
-            // disabled). They're also a `pointer-events-auto` overlay that would
-            // sit over the LlmNotConfiguredBanner below and swallow clicks on its
-            // setup button — so hide them and let the banner be the lone CTA.
             !llmBlocked && (
               <ChatSuggestions
                 onSuggestionsClick={(message) => setMessageToSend(message)}
@@ -617,10 +595,6 @@ export function ChatInterface() {
                     : undefined
                 }
               />
-            )}
-
-            {llmBlocked && !isArchivedConversation && (
-              <LlmNotConfiguredBanner />
             )}
 
             {isArchivedConversation ? (

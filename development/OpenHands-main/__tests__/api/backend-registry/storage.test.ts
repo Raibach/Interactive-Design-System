@@ -69,7 +69,6 @@ describe("backend-registry storage", () => {
   });
 
   it("seeds the default Local backend when host and API key are available", () => {
-    vi.stubEnv("VITE_BACKEND_BASE_URL", "http://localhost:9000");
     vi.stubEnv("VITE_SESSION_API_KEY", "fresh-session-key");
 
     const result = readStoredBackends();
@@ -77,7 +76,9 @@ describe("backend-registry storage", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       id: "default-local",
-      host: "http://localhost:9000",
+      // The seed points at this app's own origin (plus base path), not at
+      // VITE_BACKEND_BASE_URL.
+      host: window.location.origin,
       apiKey: "fresh-session-key",
       kind: "local",
     });

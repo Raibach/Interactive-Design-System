@@ -65,10 +65,6 @@ const wsCapture = vi.hoisted(() => ({
   }>,
 }));
 
-const errorHandlerMocks = vi.hoisted(() => ({
-  trackError: vi.fn(),
-}));
-
 // Keep the units under test real (the provider, `useConversationHistory`, the
 // event store). Only the network is stubbed: the WebSocket transport and the
 // REST service the history query depends on.
@@ -96,9 +92,6 @@ vi.mock("#/hooks/use-websocket", () => ({
 }));
 vi.mock("#/hooks/query/use-user-conversation", () => ({
   useUserConversation: vi.fn(),
-}));
-vi.mock("#/utils/error-handler", () => ({
-  trackError: errorHandlerMocks.trackError,
 }));
 
 const sendEventMock = vi.hoisted(() => vi.fn());
@@ -673,7 +666,7 @@ describe("ConversationWebSocketProvider — conversation-scoped event store", ()
       expect(useErrorMessageStore.getState().errorMessage).toBeNull();
     });
 
-    it("forwards error classifications to the banner store and telemetry", async () => {
+    it("forwards error classifications to the banner store", async () => {
       await renderCaptured();
       const classification = {
         kind: "auth" as const,
@@ -692,94 +685,6 @@ describe("ConversationWebSocketProvider — conversation-scoped event store", ()
       expect(useErrorMessageStore.getState().errorClassification).toEqual(
         classification,
       );
-      expect(errorHandlerMocks.trackError).toHaveBeenCalledWith({
-        source: "conversation",
-        metadata: {
-          eventId: "conv-error-2",
-          errorCode: "SomeError",
-        },
-        classification,
-      });
-    });
-
-    it("forwards AgentErrorEvent classifications to telemetry (main agent)", async () => {
-      await renderCaptured();
-      const classification = {
-        kind: "auth" as const,
-        retryable: false,
-        user_action: "settings" as const,
-      };
-
-      deliver(makeAgentError("agent-err-1", classification));
-
-      expect(errorHandlerMocks.trackError).toHaveBeenCalledWith({
-        source: "agent",
-        metadata: {
-          eventId: "agent-err-1",
-          toolName: "generic",
-          toolCallId: "call-agent-err-1",
-        },
-        classification,
-      });
-    });
-
-    it("forwards AgentErrorEvent classifications to telemetry (planning agent)", async () => {
-      const planningConversation: AppConversation = {
-        id: "planning-err",
-        created_by_user_id: null,
-        selected_repository: null,
-        selected_branch: null,
-        git_provider: null,
-        title: "Planner",
-        trigger: null,
-        pr_number: [],
-        llm_model: null,
-        metrics: null,
-        created_at: "2026-07-28T00:00:00Z",
-        updated_at: "2026-07-28T00:00:00Z",
-        execution_status: null,
-        conversation_url:
-          "http://planner.example/api/conversations/planning-err",
-        session_api_key: null,
-        sandbox_id: null,
-        sub_conversation_ids: [],
-      };
-      const classification = {
-        kind: "auth" as const,
-        retryable: true,
-        user_action: "settings" as const,
-      };
-
-      render(
-        <QueryClientProvider client={queryClient}>
-          <ConversationWebSocketProvider
-            conversationId="conv-err"
-            conversationUrl="http://main.example/api/conversations/conv-err"
-            subConversationIds={[planningConversation.id]}
-            subConversations={[planningConversation]}
-          >
-            <div />
-          </ConversationWebSocketProvider>
-        </QueryClientProvider>,
-      );
-      // Wait for the planning sub-conversation WebSocket to be established.
-      await waitFor(() => expect(wsCapture.planningOnMessage).not.toBeNull());
-
-      act(() => {
-        wsCapture.planningOnMessage!({
-          data: durable(makeAgentError("agent-err-2", classification)),
-        });
-      });
-
-      expect(errorHandlerMocks.trackError).toHaveBeenCalledWith({
-        source: "planning_agent",
-        metadata: {
-          eventId: "agent-err-2",
-          toolName: "generic",
-          toolCallId: "call-agent-err-2",
-        },
-        classification,
-      });
     });
   });
 

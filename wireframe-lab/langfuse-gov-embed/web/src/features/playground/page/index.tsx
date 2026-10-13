@@ -101,6 +101,9 @@ export default function PlaygroundPage() {
       <Page
         withPadding={false}
         headerProps={{
+          // RAIBACH IDS (2026-10-12): 20px above the section — equal top
+          // spacing throughout the app (matches Home).
+          className: "pt-5",
           title: "Playground",
           help: {
             description:
@@ -137,6 +140,9 @@ export default function PlaygroundPage() {
         scrollable={false}
         withPadding={false}
         headerProps={{
+          // RAIBACH IDS (2026-10-12): 20px above the section — equal top
+          // spacing throughout the app (matches Home).
+          className: "pt-5",
           title: "Playground",
           help: {
             description:

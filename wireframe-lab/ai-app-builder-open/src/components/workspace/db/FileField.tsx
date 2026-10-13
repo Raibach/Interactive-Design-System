@@ -17,6 +17,7 @@ import { toast } from "@/lib/toast";
 import { splitForPreview } from "@/lib/db-files";
 import { filesOf, isImageFile, type StoredFile } from "@/lib/totalum-schema";
 import { cn } from "@/lib/utils";
+import { BASE_PATH } from "@/lib/base-path";
 import { fileGlyphFor, FileGalleryModal, MoreFilesBadge } from "./FilePreview";
 
 /**
@@ -124,7 +125,7 @@ export function FileField({
             body.append("file", file);
 
             const request = new XMLHttpRequest();
-            request.open("POST", `/api/vcaas/upload/${encodeURIComponent(projectId)}`);
+            request.open("POST", `${BASE_PATH}/api/vcaas/upload/${encodeURIComponent(projectId)}`);
 
             request.upload.onprogress = event => {
                 if (!event.lengthComputable || !mounted.current) return;
@@ -183,7 +184,7 @@ export function FileField({
 
         setFetchingUrl(true);
         try {
-            const response = await fetch(`/api/vcaas/upload/${encodeURIComponent(projectId)}`, {
+            const response = await fetch(`${BASE_PATH}/api/vcaas/upload/${encodeURIComponent(projectId)}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url }),

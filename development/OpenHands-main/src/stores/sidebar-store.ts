@@ -18,7 +18,7 @@ const LEGACY_STORAGE_KEY = "openhands-sidebar-collapsed";
 export const useSidebarStore = create<SidebarStore>()(
   persist(
     (set) => ({
-      collapsed: false,
+      collapsed: true,
       setCollapsed: (next) =>
         set((state) => ({
           collapsed: typeof next === "function" ? next(state.collapsed) : next,

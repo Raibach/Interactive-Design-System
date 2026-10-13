@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, type ReactNode } from "react";
 // container's light DOM.
 import { createPortal } from "react-dom";
 import { parseFigmaUrl } from "@/utils/figmaUrl";
+import { generateUuid } from "@/utils/uuid";
 import { loadDrawn, drawnBy, tagFor, type DrawnIndex } from "@/shared/component-drawn-by";
 import { contractFor, catalogEntryFacts } from "@/shared/component-contract";
 import { nodeIdentity, nodeLocation } from "@/shared/node-id";
@@ -975,7 +976,7 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
       return;
     }
 
-    const jobId = crypto.randomUUID();
+    const jobId = generateUuid();
     const item: DraftItem = { id: jobId, url, notes, status: "processing" };
     setItems((prev) => [...prev, item]);
     setSelectedId(jobId);

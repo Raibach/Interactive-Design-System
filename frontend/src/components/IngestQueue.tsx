@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
+import { generateUuid } from "@/utils/uuid";
+
 interface QueueItem {
   id: string;
   url: string;
@@ -78,7 +80,7 @@ export function IngestQueue({ open, onClose, apiFetch }: IngestQueueProps) {
   const addToQueue = async () => {
     if (!isValidUrl(url)) return;
     const item: QueueItem = {
-      id: crypto.randomUUID(),
+      id: generateUuid(),
       url,
       notes,
       status: "queued",

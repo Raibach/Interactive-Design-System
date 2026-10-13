@@ -322,6 +322,9 @@ export default function ProjectSettingsPage() {
     return (
       <ContainerPage
         headerProps={{
+          // RAIBACH IDS (2026-10-12): 20px above the section — equal top
+          // spacing throughout the app (matches Home).
+          className: "pt-5",
           title: "Project Settings",
         }}
       >
@@ -333,6 +336,9 @@ export default function ProjectSettingsPage() {
   return (
     <ContainerPage
       headerProps={{
+        // RAIBACH IDS (2026-10-12): 20px above the section — equal top
+        // spacing throughout the app (matches Home).
+        className: "pt-5",
         title: "Project Settings",
       }}
     >

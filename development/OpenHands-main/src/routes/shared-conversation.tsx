@@ -11,7 +11,6 @@ import { shouldRenderEvent } from "#/components/conversation-events/chat/event-c
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { handleEventForUI } from "#/utils/handle-event-for-ui";
 import { OpenHandsEvent } from "#/types/agent-server/core";
-import OpenHandsLogo from "#/assets/branding/openhands-logo.svg?react";
 import { useInfiniteScroll } from "#/hooks/use-infinite-scroll";
 
 /**
@@ -94,17 +93,9 @@ export default function SharedConversation() {
       {/* Header with logo, conversation title and branch info */}
       <div className="border-b border-border-subtle p-4 flex-shrink-0">
         <div className="max-w-4xl mx-auto flex items-start gap-4">
-          <Link
-            to="/conversations"
-            className="flex-shrink-0"
-            aria-label={t(I18nKey.BRANDING$OPENHANDS_LOGO)}
-          >
-            <OpenHandsLogo
-              width={46}
-              height={30}
-              className="text-contrast [&_path:not([fill=transparent])]:fill-current"
-            />
-          </Link>
+          {/* The vendor wordmark header block was DELETED, not hidden (owner,
+              2026-10-11: "I wanted it deleted, deleted not hidden"). The
+              asset is gone from this tree; nothing replaces it. */}
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-medium mb-2">
               {conversation?.title ||

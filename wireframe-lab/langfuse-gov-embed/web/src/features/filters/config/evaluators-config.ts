@@ -8,8 +8,6 @@ export const evaluatorFilterConfig: FilterConfig = {
 
   defaultExpanded: ["status"],
 
-  defaultSidebarCollapsed: true,
-
   facets: [
     {
       type: "categorical" as const,

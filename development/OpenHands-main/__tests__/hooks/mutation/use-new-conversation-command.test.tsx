@@ -1,9 +1,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import AgentServerConversationService from "#/api/conversation-service/agent-server-conversation-service.api";
 import { useNewConversationCommand } from "#/hooks/mutation/use-new-conversation-command";
-import * as telemetry from "#/services/telemetry";
 
 const mockNavigate = vi.fn();
 
@@ -92,20 +91,12 @@ function makeStartTask(overrides: Record<string, unknown> = {}) {
 
 describe("useNewConversationCommand", () => {
   let queryClient: QueryClient;
-  let captureMock: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    captureMock = vi
-      .spyOn(telemetry, "trackEvent")
-      .mockResolvedValue(undefined);
     queryClient = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
-  });
-
-  afterEach(() => {
-    captureMock.mockRestore();
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -242,36 +233,6 @@ describe("useNewConversationCommand", () => {
         expect.objectContaining({ id: "clear-conversation" }),
       );
       expect(mockToast.dismiss).toHaveBeenCalledWith("clear-conversation");
-    });
-  });
-
-  it("emits conversation_start_requested on success with the /new no-context payload", async () => {
-    const readyTask = makeStartTask();
-    vi.spyOn(
-      AgentServerConversationService,
-      "createConversation",
-    ).mockResolvedValue(readyTask as never);
-
-    const { result } = renderHook(() => useNewConversationCommand(), {
-      wrapper,
-    });
-
-    await result.current.mutateAsync();
-
-    await waitFor(() => {
-      expect(captureMock).toHaveBeenCalledWith(
-        "conversation_start_requested",
-        expect.objectContaining({
-          conversation_id: "new-conv-999",
-          task_id: "task-789",
-          is_start_task: false,
-          has_repository: false,
-          has_workspace: false,
-          has_initial_query: false,
-          has_parent_conversation: false,
-          entry_point: "new_command",
-        }),
-      );
     });
   });
 });

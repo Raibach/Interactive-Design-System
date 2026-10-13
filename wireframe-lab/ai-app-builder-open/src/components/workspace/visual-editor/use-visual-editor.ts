@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { VISUAL_EDIT_MESSAGE } from "@/lib/visual-edit-agent";
+import { BASE_PATH } from "@/lib/base-path";
 import type { ElementSignature, VisualChange, VisualChangeKind } from "@/lib/visual-edit";
 
 /**
@@ -357,7 +358,7 @@ export function useVisualEditor({
         setOutcome(null);
 
         try {
-            const response = await fetch(`/api/visual-edit/${encodeURIComponent(projectId)}/apply`, {
+            const response = await fetch(`${BASE_PATH}/api/visual-edit/${encodeURIComponent(projectId)}/apply`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ changes }),

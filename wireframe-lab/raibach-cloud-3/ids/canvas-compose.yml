@@ -1,0 +1,25 @@
+# canvas — the Development room's tool (agent-canvas + automation).
+# Merged into /opt/raibach/ids/docker-compose.yml on the box (see canvas-deploy.sh).
+# Reachable as canvas:8090 on the shared network — the Caddy door sends /dev* here.
+# The port is NOT published on the host: the only entry is the door.
+services:
+  canvas:
+    image: raibach-canvas:2026-10-11
+    restart: unless-stopped
+    environment:
+      # HOME holds ~/.openhands (settings.json + generated keys) on the volume.
+      HOME: /root
+      # Seals settings.json/secrets.json — the MAC's secret-key.txt value, so the
+      # shipped settings.json (with the DeepSeek credential sealed inside)
+      # decrypts on the box. Distinct from the session key below.
+      OH_SECRET_KEY: 2889d197e876a1ef7e6cb7bfd95e2adf1d97e709a9791c14ceb1a9ea8e7e71e8
+      # Session key seed: minted into the volume on first boot, then read back
+      # from data/canvas/agent-canvas/session-key.txt. Injected into the served
+      # HTML — visitors are never asked for a key.
+      CANVAS_SESSION_KEY: 70a0ff385f75f88a87e0362b10cf89ac41299b20abbd0b2f2bf9389b602627f8
+    volumes:
+      - ./data/canvas:/root/.openhands
+    networks:
+      shared:
+        aliases:
+          - canvas

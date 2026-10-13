@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTracking } from "#/hooks/use-tracking";
 import SettingsService from "#/api/settings-service/settings-service.api";
 import {
   MCPConfig,
@@ -63,30 +62,11 @@ export const useSaveSettings = (
   scope: SettingsScope = "personal",
   { retry }: { retry?: number } = {},
 ) => {
-  const { trackMcpConfigUpdated } = useTracking();
   const queryClient = useQueryClient();
-  const { data: currentSettings } = useSettings(scope);
 
   return useMutation({
     ...(retry === undefined ? {} : { retry }),
     mutationFn: async (settings: SettingsUpdate) => {
-      const nextMcpConfig = settings.mcp_config as MCPConfig | undefined;
-      const currentMcpConfig = currentSettings?.mcp_config as
-        | MCPConfig
-        | undefined;
-
-      if (nextMcpConfig && currentMcpConfig !== nextMcpConfig) {
-        const servers = Object.values(nextMcpConfig);
-        trackMcpConfigUpdated({
-          sseServersCount: servers.filter(
-            (server) => server.transport === "sse",
-          ).length,
-          stdioServersCount: servers.filter(
-            (server) => server.transport === "stdio",
-          ).length,
-        });
-      }
-
       await saveSettingsMutationFn(settings);
     },
     onSuccess: async () => {

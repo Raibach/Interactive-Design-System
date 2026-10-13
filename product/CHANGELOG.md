@@ -74,3 +74,16 @@ conversations are the projects (owner, 2026-10-06). **The handoff sheet — "IDs
 lands in this folder once those elements are built**, carrying the real IDs, bindings and
 declared events for the drawing side (owner, 2026-10-06: *"may need to be done after you've
 built it"*).
+
+**2026-10-11 — the builder and its engine live on the box.**
+The Product room's tool is deployed to raibach-cloud-3 as two services on the shared network:
+the builder UI (`basePath /builder`, behind the door's `/builder*`) and the builder engine
+(`wireframe-lab/ai-app-builder-open/local-vcaas/server.mjs`, dependency-free, `/preview*`),
+both recorded in `wireframe-lab/raibach-cloud-3/ids/docker-compose.yml`. The engine's
+`VCAAS_BASE_URL` is passed as a BUILD argument — the build's lockdown guard refuses to compile
+without it — and resolves to the door itself, so preview URLs are path-form:
+`/preview/<projectId>/`.
+Verified live: `/builder` 200; `/preview/product-idea-078/` 200 serving a real project
+("Aurelle — Handmade Leather Handbags"); engine health `{"ok":true,"key":true}`; the room's
+store (the owner's own projects) restored with the studio database — see
+`console/CHANGELOG.md`, same date.

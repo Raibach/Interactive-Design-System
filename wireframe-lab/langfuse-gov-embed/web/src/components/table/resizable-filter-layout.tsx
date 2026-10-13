@@ -6,6 +6,8 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  useEffect,
+  useRef,
 } from "react";
 import { X } from "lucide-react";
 import { ResizableSplitLayout } from "@/src/components/ui/resizable-split-layout";
@@ -16,6 +18,7 @@ import {
   SearchBarDraftCacheContext,
   useSearchBarDraftCache,
 } from "@/src/features/search-bar/hooks/useEventsSearchBar";
+import { PageHeaderTitleSlotPortal } from "@/src/components/layouts/page-header-controls-slot";
 import { useDataTableControls } from "./data-table-controls";
 
 // Mirrors the trace peek's collapsed-panel rail (TraceLayoutDesktop): instead
@@ -57,6 +60,7 @@ export function SearchableTableFilterLayout({
   search,
   toolbar,
   mobileControls,
+  searchInTitleRow = false,
   children,
 }: PropsWithChildren<{
   search: ReactNode;
@@ -64,6 +68,9 @@ export function SearchableTableFilterLayout({
   /** Compact context controls that belong in the mobile Filters sheet rather
    * than consuming a second toolbar row (for example saved views and time). */
   mobileControls?: ReactNode;
+  /** RAIBACH IDS (2026-10-12, owner's header pass): hoist the search box into
+   * the page title row (it flexes and truncates) instead of stacking a row. */
+  searchInTitleRow?: boolean;
 }>) {
   const { isMobile } = useDataTableControls();
   const searchDraftCache = useSearchBarDraftCache(
@@ -72,7 +79,11 @@ export function SearchableTableFilterLayout({
 
   return (
     <SearchBarDraftCacheContext.Provider value={searchDraftCache}>
-      {isMobile ? null : search}
+      {isMobile ? null : (
+        <PageHeaderTitleSlotPortal enabled={searchInTitleRow}>
+          {search}
+        </PageHeaderTitleSlotPortal>
+      )}
       {toolbar}
       <FilterPanels
         mobileSearch={isMobile ? search : null}
@@ -90,12 +101,16 @@ export function StickySearchableTableFilterLayout({
   toolbar,
   mobileControls,
   nonStickyContent,
+  searchInTitleRow = false,
   children,
 }: PropsWithChildren<{
   search: ReactNode;
   toolbar: ReactNode;
   mobileControls?: ReactNode;
   nonStickyContent?: ReactNode;
+  /** RAIBACH IDS (2026-10-12, owner's header pass): hoist the search box into
+   * the page title row (it flexes and truncates) instead of stacking a row. */
+  searchInTitleRow?: boolean;
 }>) {
   const { isMobile } = useDataTableControls();
   const searchDraftCache = useSearchBarDraftCache(
@@ -105,7 +120,11 @@ export function StickySearchableTableFilterLayout({
   return (
     <SearchBarDraftCacheContext.Provider value={searchDraftCache}>
       <div className="bg-surface sticky top-0 z-30 pb-1.5">
-        {isMobile ? null : search}
+        {isMobile ? null : (
+          <PageHeaderTitleSlotPortal enabled={searchInTitleRow}>
+            {search}
+          </PageHeaderTitleSlotPortal>
+        )}
         {toolbar}
       </div>
       {nonStickyContent}
@@ -135,6 +154,39 @@ function FilterPanels({
   // while `open` still held the persisted DESKTOP open-state — briefly showing
   // an open desktop sidebar as a mobile sheet.
   const isDesktop = !isMobile;
+
+  // RAIBACH IDS (2026-10-12): overlay dismissal — while the desktop panel is
+  // open, a pointerdown anywhere outside it closes it (the rule Radix gives
+  // popovers; the docked panel had no dismiss). The panel subtree is the
+  // boundary; the floating layers it opens and resize handles count as
+  // inside. The listener exists only while open — unmount covers navigation
+  // (the panel is never remembered; see DataTableControlsProvider).
+  // REVERT: delete this effect and the secondaryContent wrapper below.
+  const filterPanelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open || isMobile) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (filterPanelRef.current?.contains(target)) return;
+      // A click inside a floating layer the panel opened (facet selects,
+      // metadata comboboxes, the add-filter picker) is "inside": Radix
+      // portals these to <body>, so DOM containment alone is not enough.
+      if (target.closest("[data-radix-popper-content-wrapper], [data-side]"))
+        return;
+      // A drag-grab on a resize handle is not an away-click.
+      if (target.closest('[data-slot="resizable-handle"]')) return;
+      setOpen(false);
+      capture("filters:sidebar_toggled", {
+        tableName,
+        open: false,
+        trigger: "click_away",
+      });
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open, isMobile, setOpen, capture, tableName]);
 
   // Extract filter sidebar and table content from children
   const childrenArray = Children.toArray(children).filter(Boolean);
@@ -258,7 +310,13 @@ function FilterPanels({
           {tableContent}
         </div>
       }
-      secondaryContent={filterSidebar}
+      secondaryContent={
+        // The dismissal boundary (see filterPanelRef): pointerdowns inside
+        // this node keep the panel up; everything else on the page closes it.
+        <div ref={filterPanelRef} className="h-full">
+          {filterSidebar}
+        </div>
+      }
       open={open}
       onOpenChange={setOpen}
       defaultPrimarySize={tableDefault}

@@ -813,12 +813,21 @@ def _drop_preview_files(job_id: str = "") -> None:
 # IT IS DELIBERATELY NOT THE REAL LOADER UNDER ANOTHER PATH: copying the catalogue's loader in would
 # drag the catalogue's companions — and their props — into the preview, which is the same fault with
 # more steps. The draft file itself stays BYTE-IDENTICAL to the file that will be committed.
-PREVIEW_SEAM = """// THE PREVIEW'S SEAM — the application's binding, and not the catalogue's element.
-// The drawing above this file comes from the temporary draft, so the catalogue's element is never
-// loaded here. What IS called is the binding: the owner's rule, 2026-09-30 — *"it does not have to be
-// blind to the data binding. It can load the data binding as part of the preview"* — so the boxes in
-// a preview hold the component's real values, from the database, exactly as they will in the list.
-export { attachBehaviour, detachBehaviour, behaviourProperties } from '@/components/lit/behaviour/attach';
+PREVIEW_SEAM = """// THE PREVIEW'S SEAM — three exports that do nothing.
+//
+// The generated element's first line imports `./behaviour/attach`, which in the catalogue resolves
+// to the hand-written loader (frontend/src/components/lit/behaviour/attach.ts) and in a PREVIEW
+// resolves to THIS file. A preview is BLIND to the catalogue (owner, 2026-09-30: *"whenever it's in
+// the preview it should be blind to the lit catalogue… It shouldn't have any idea"*), so the preview
+// draws the design as measured, with nothing bound and no behaviour — which is what a preview is for.
+// The drawing is entirely in the draft beside this file; the seam contributes nothing.
+//
+// WHY INERT, NOT A RE-EXPORT: the catalogue's real loader reads its companions with
+// `import.meta.glob`, a Vite-only construct the production server has no way to serve. An inert seam
+// keeps the preview a single deterministic module any server can hand to the browser.
+export function behaviourProperties(_tag: string): Record<string, unknown> { return {}; }
+export function attachBehaviour(_el: unknown, _tag: string): void {}
+export function detachBehaviour(_el: unknown, _tag: string): void {}
 """
 
 
@@ -1341,21 +1350,45 @@ def _register_in_figma_map(tag: str, node_id: str, figma_name: str) -> str | Non
     return "mapped"
 
 
+def _esbuild_binary() -> str | None:
+    """The esbuild executable that compile-checks generated modules.
+
+    The native per-platform binary is tried first (`@esbuild/<platform>/bin/esbuild`),
+    because the production image has no `node` and the npm `.bin/esbuild` shim is a JS
+    wrapper that cannot run without one. The `.bin` shim is the last candidate — it is
+    what local development uses, where `node` exists.
+    """
+    base = os.path.join(FRONTEND_DIR, "node_modules")
+    for rel in (
+        os.path.join("@esbuild", "linux-x64", "bin", "esbuild"),
+        os.path.join("@esbuild", "linux-arm64", "bin", "esbuild"),
+        os.path.join("@esbuild", "darwin-arm64", "bin", "esbuild"),
+        os.path.join("@esbuild", "darwin-x64", "bin", "esbuild"),
+        os.path.join(".bin", "esbuild"),
+    ):
+        path = os.path.join(base, rel)
+        if os.path.exists(path):
+            return path
+    return None
+
+
 def _validate_generated_module(code: str) -> dict[str, Any]:
     """Compile a generated module with the frontend's own esbuild.
 
     The point is to catch a malformed draft while a designer is still looking at it,
-    rather than at the moment they commit it. A missing esbuild is not a verdict, so
-    that case reports ok with a note instead of blocking the flow.
+    rather than at the moment they commit it. A missing esbuild is a REAL verdict of
+    "not checked" — reported, never papered over: the approve step refuses a draft
+    whose compile verdict is not `ok`, so a missing compiler blocks approval exactly
+    as a failing compiler does.
     """
-    esbuild = os.path.join(FRONTEND_DIR, "node_modules", ".bin", "esbuild")
-    if not os.path.exists(esbuild):
+    esbuild = _esbuild_binary()
+    if esbuild is None:
         return {
             "ok": False,
             "error": (
-                f"the generated code was NOT checked: {esbuild} is missing, so nothing can say whether "
-                f"it compiles. What to do: run `npm install` in frontend/ — an unchecked component must "
-                f"not be approved as if it had passed."
+                f"the generated code was NOT checked: no esbuild binary was found under "
+                f"{os.path.join(FRONTEND_DIR, 'node_modules')}. Nothing can say whether it compiles, "
+                "and an unchecked component must not be approved as if it had passed."
             ),
         }
     try:
@@ -1371,6 +1404,88 @@ def _validate_generated_module(code: str) -> dict[str, Any]:
     if proc.returncode != 0:
         return {"ok": False, "error": (proc.stderr or proc.stdout or "esbuild failed").strip()[:600]}
     return {"ok": True}
+
+
+# A preview job id is a UUID written by the ingest; a preview file name is a tag or the seam.
+_SAFE_JOB_RE = re.compile(r"^[0-9a-fA-F-]{20,64}$")
+
+
+def _bundle_preview_module(abs_path: str) -> str:
+    """Bundle one preview file into a single self-contained ES module, `lit` external.
+
+    The preview pane's document carries an import map (`lit` → `/@id/lit`), so the bare `lit`
+    specifier the generated element uses must stay bare in the served module. Every OTHER import
+    — the element's own `./behaviour/attach` (the inert seam the ingest wrote beside the draft) —
+    is resolved and inlined here, so the browser makes exactly one request and the preview stays a
+    single deterministic module. The catalogue is never consulted: the only files read are the
+    draft and the seam it already imports.
+    """
+    esbuild = _esbuild_binary()
+    if esbuild is None:
+        return "throw new Error('the preview cannot be compiled: no esbuild binary is present');\n"
+    proc = subprocess.run(
+        [esbuild, abs_path, "--bundle", "--format=esm", "--target=es2020", "--external:lit"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if proc.returncode != 0:
+        msg = (proc.stderr or proc.stdout or "esbuild failed").strip()[:400]
+        return "throw new Error(" + json.dumps("the preview does not compile: " + msg) + ");\n"
+    return proc.stdout
+
+
+@router.get("/@id/lit")
+async def api_preview_lit() -> Response:
+    """Serve the `lit` module the preview pane's import map points at.
+
+    Vite serves `lit` at `/@id/lit` in development; production has no Vite, so the Dockerfile
+    pre-bundles the package into `frontend/dist/lit.bundle.js` and this route hands it back as
+    JavaScript. If the bundle is missing, the pane reports the failure rather than receiving an
+    HTML page where it asked for a module.
+    """
+    path = os.path.join(FRONTEND_DIR, "dist", "lit.bundle.js")
+    if not os.path.isfile(path):
+        return Response(
+            "throw new Error('the preview pane could not load lit: frontend/dist/lit.bundle.js is missing');\n",
+            media_type="text/javascript",
+        )
+    return Response(open(path, encoding="utf-8").read(), media_type="text/javascript")
+
+
+@router.get("/@figma-preview/{job_id}/{file:path}")
+async def api_preview_module(job_id: str, file: str) -> Response:
+    """Serve one preview module — the temporary .ts the ingest wrote — as JavaScript.
+
+    The production twin of `frontend/vite-plugin-figma-preview.ts`: read the file from
+    `PREVIEW_DIR/<job_id>/<file>` and bundle it (esbuild, `lit` external) so the preview pane's
+    dynamic `import()` succeeds. Names are validated before they touch a path, and a file that is
+    gone (discarded, approved, replaced) answers a module that SAYS SO in the pane — the same
+    sentence the dev plugin writes — never an HTML page the browser refuses as a module.
+    """
+    if not _SAFE_JOB_RE.match(job_id or ""):
+        return Response("throw new Error('that is not a preview job id');\n", media_type="text/javascript")
+    is_seam = file == "behaviour/attach.ts"
+    if not is_seam:
+        if not file.endswith(".ts"):
+            return Response("throw new Error('a preview module must end in .ts');\n", media_type="text/javascript")
+        tag = file[:-3]
+        if not _SAFE_TAG_RE.match(tag):
+            return Response("throw new Error('that is not a preview component name');\n", media_type="text/javascript")
+    preview_file = os.path.join(PREVIEW_DIR, job_id, file)
+    if not os.path.isfile(preview_file):
+        if is_seam:
+            return Response(
+                "throw new Error('This preview was written without its own seam copy, so the drafted element cannot open. Ingest it again.');\n",
+                media_type="text/javascript",
+            )
+        return Response(
+            "throw new Error(" + json.dumps(
+                f"Nothing is being previewed as {tag} any more. It was discarded, or approved, or replaced by the next ingest. Ingest it again to look at it."
+            ) + ");\n",
+            media_type="text/javascript",
+        )
+    return Response(_bundle_preview_module(preview_file), media_type="text/javascript")
 
 
 def _run_cem_analyze() -> None:
@@ -4359,16 +4474,13 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
                 "and the node can be re-ingested once the renderer can place it."
             ),
         )
-    check = await asyncio.to_thread(_validate_generated_module, rendered)
-    if not check.get("ok"):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Nothing was written: the rendered component for {target_tag} does not compile — "
-                f"{check.get('error', 'no reason recorded')}. The design was measured; the fault is "
-                "in the renderer."
-            ),
-        )
+    # ── THE COMPILE CHECK DOES NOT GATE THE PREVIEW (owner, 2026-10-09) ──────
+    # The rendered component is written to the preview and SHOWN, even when it does not compile.
+    # The owner's ruling: the design is evaluated in the preview state in the middle, and any error
+    # is reported THERE — the designer then fixes it, or the system fails at APPROVE. The compile
+    # verdict is still computed below (`validation`) and returned with the answer, and the approve
+    # step still refuses code that does not compile (`api_figma_commit`). Refusing here would write
+    # NOTHING, which hides the component the designer is meant to look at.
     drafts[target_tag] = rendered
 
     # The model is not called anywhere in this pipeline any more. `assembled` stays as a shape the

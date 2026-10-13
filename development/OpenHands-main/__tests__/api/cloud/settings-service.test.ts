@@ -330,7 +330,6 @@ describe("cloud settings", () => {
     await saveCloudSettings({
       app_preferences: {
         language: undefined,
-        user_consents_to_analytics: null,
         enable_sound_notifications: false,
         git_user_name: "",
         disabled_skills: [],
@@ -342,7 +341,6 @@ describe("cloud settings", () => {
     expect(request.url).toBe(SETTINGS_URL);
     expect(request.headers.get("authorization")).toBe("Bearer bearer-token");
     expect(capturedBodies[0]).toEqual({
-      user_consents_to_analytics: null,
       enable_sound_notifications: false,
       git_user_name: "",
       disabled_skills: [],

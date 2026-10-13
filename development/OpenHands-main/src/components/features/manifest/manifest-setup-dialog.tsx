@@ -11,7 +11,6 @@ import { I18nKey } from "#/i18n/declaration";
 import { cn } from "#/utils/utils";
 import { modalTitleLgClassName } from "#/utils/modal-classes";
 import { getApiErrorBody } from "#/utils/api-error-message";
-import { useTracking } from "#/hooks/use-tracking";
 import { useSetupCapabilities } from "#/hooks/query/use-manifest-capabilities";
 import { useSetupPrerequisites } from "#/hooks/query/use-manifest-prerequisites";
 import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
@@ -104,12 +103,6 @@ export function SetupDialog({ entry, onClose }: SetupDialogProps) {
   const prerequisites = useSetupPrerequisites(entry);
   const runPreflight = useSetupPreflight(entry);
   const runAction = useSetupAction();
-  const {
-    trackAutomationSetupOpened,
-    trackAutomationSetupValidated,
-    trackAutomationSetupCreated,
-    trackAutomationSetupFailed,
-  } = useTracking();
 
   const [step, setStep] = useState<SetupStep>("prerequisites");
   const allTriggerOptions = useMemo(() => triggerKinds(entry.setup), [entry]);
@@ -230,13 +223,6 @@ export function SetupDialog({ entry, onClose }: SetupDialogProps) {
     [entry, selectedTrigger, selectedAction],
   );
 
-  const emittedOpenRef = useRef(false);
-  useEffect(() => {
-    if (emittedOpenRef.current) return;
-    emittedOpenRef.current = true;
-    trackAutomationSetupOpened({ automationId: entry.id });
-  }, [entry.id, trackAutomationSetupOpened]);
-
   // An entry the published interface cannot create is refused here rather than
   // at the moment of creating: a bundle needs two endpoints a manifest from
   // before bundles does not declare, and no answer the user gives supplies
@@ -352,7 +338,6 @@ export function SetupDialog({ entry, onClose }: SetupDialogProps) {
     }
 
     setServiceErrors(NO_SERVICE_ERRORS);
-    trackAutomationSetupValidated({ automationId: entry.id });
     setStep("review");
   };
 
@@ -369,18 +354,10 @@ export function SetupDialog({ entry, onClose }: SetupDialogProps) {
         selectedTrigger,
         selectedAction,
       );
-      trackAutomationSetupCreated({
-        automationId: entry.id,
-        setupMode,
-      });
       const destination = getDestination(response);
       if (destination) navigate(destination, { replace: true });
       else onClose();
     } catch (error) {
-      trackAutomationSetupFailed({
-        automationId: entry.id,
-        setupMode,
-      });
       const mapped = mapServiceErrors(
         normalizeServiceErrors(getApiErrorBody(error), actionPayload),
         errorMap,

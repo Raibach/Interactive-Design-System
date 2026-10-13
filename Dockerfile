@@ -19,6 +19,16 @@ COPY . .
 WORKDIR /repo/frontend
 RUN npm run build
 
+# ── THE PREVIEW'S `lit`, PRE-BUNDLED (2026-10-09) ──────────────────────────────────
+# The preview pane's import map resolves `lit` to `/@id/lit` (Vite's dev URL); production has no
+# Vite, so the package is bundled here into ONE self-contained module the backend serves at that
+# same URL (backend/routes/figma.py, `api_preview_lit`). Written into dist/ so the existing
+# `COPY --from=frontend-build /repo/frontend/dist` below carries it with no extra step.
+RUN node_modules/@esbuild/linux-x64/bin/esbuild \
+      node_modules/lit/index.js \
+      --bundle --format=esm --target=es2020 \
+      --outfile=dist/lit.bundle.js
+
 # ── THE AUDIT REPORT, GENERATED WHERE THE CODE THAT PRODUCES IT IS (2026-10-01) ──────────────
 # The runtime image receives `frontend/dist` and `frontend/src` and nothing else, and the report
 # lives in `frontend/catalog-audit/` — which is gitignored, so it is not in a clone's build context
@@ -73,6 +83,13 @@ COPY frontend/public ./frontend/public
 
 # Frontend source (A2UI component catalog required by backend at runtime)
 COPY frontend/src ./frontend/src
+
+# esbuild — the native binary that validates generated components
+# (backend/routes/figma.py `_validate_generated_module`). The runtime image has no `node`
+# and no `node_modules`, so the platform binary is copied from the build stage, where
+# `npm ci` installed it. The backend looks for it under
+# `frontend/node_modules/@esbuild/<platform>/bin/esbuild`.
+COPY --from=frontend-build /repo/frontend/node_modules/@esbuild ./frontend/node_modules/@esbuild
 
 # The audit report the build stage produced (see the note there). The backend reads it from
 # `/app/frontend/catalog-audit/<pipeline>.json` — the exact path its 503 names when it is missing.

@@ -78,10 +78,6 @@ describe("validateInterfaceManifest", () => {
       },
     ],
     [
-      "a documentation link outside the product documentation",
-      { docsUrl: "https://evil.example/phishing" },
-    ],
-    [
       "an endpoint that is not a rooted service-relative path",
       {
         endpoints: {
@@ -370,8 +366,8 @@ describe("validateInterfaceManifest", () => {
   it("reports every problem at once so an author sees the whole picture", () => {
     // Arrange
     const candidate = createInterfaceManifestWith({
-      docsUrl: "https://evil.example/",
       featuredAutomationIds: ["unpublished-entry"],
+      dashboards: [],
     });
 
     // Act

@@ -1,9 +1,8 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Globe, Info, Monitor } from "lucide-react";
+import { ChevronDown, Cloud, Globe, Info, Monitor } from "lucide-react";
 import { ServerClient } from "@openhands/typescript-client/clients";
-import OpenHandsLogoWhite from "#/assets/branding/openhands-logo-white.svg?react";
 import { ModalBackdrop } from "#/components/shared/modals/modal-backdrop";
 import {
   MODAL_MAX_WIDTH_VIEWPORT,
@@ -16,7 +15,6 @@ import { SegmentedToggle } from "#/components/features/files-tab/segmented-toggl
 import { useActiveBackendContext } from "#/contexts/active-backend-context";
 import { useNavigation } from "#/context/navigation-context";
 import { useBackendsHealth } from "#/hooks/query/use-backends-health";
-import { useTracking } from "#/hooks/use-tracking";
 import type { CloudConnectionSource } from "#/services/cloud-funnel-analytics";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import { getLockedCloudHost } from "#/api/agent-server-config";
@@ -144,14 +142,7 @@ function isValidHostUrl(host: string): boolean {
   }
 }
 
-const DEFAULT_OPENHANDS_CLOUD_HOST = "https://app.all-hands.dev";
 const LOCAL_BACKEND_COMMAND = "agent-canvas --backend-only --port 8001";
-const LOCAL_AGENT_SERVER_DOCS_URL =
-  "https://github.com/OpenHands/OpenHands/blob/main/docs/DEVELOPMENT.md#alternative-development-workflows";
-const REMOTE_AGENT_SERVER_DOCS_URL =
-  "https://github.com/OpenHands/OpenHands/blob/main/docs/SELF_HOSTING.md";
-const DEPLOYMENT_OPTIONS_URL =
-  "https://docs.openhands.dev/overview/introduction";
 export type BackendConnectionMethod = "manual" | "cloud_login";
 
 export type BackendAddedSource = CloudConnectionSource;
@@ -622,7 +613,6 @@ export function BackendForm({
                 }
           }
           onBlur={() => setHostTouched(true)}
-          placeholder={DEFAULT_OPENHANDS_CLOUD_HOST}
           className="w-full"
           showRequiredTag
           error={hostError}
@@ -892,8 +882,6 @@ function ManualConnectionColumn({
           setHost(value);
           setConnectionError(null);
         }}
-        // eslint-disable-next-line i18next/no-literal-string -- example value, not translatable
-        placeholder="http://localhost:8000"
         className="w-full"
       />
 
@@ -982,8 +970,7 @@ function CloudLoginColumn({
   const [customHost, setCustomHost] = React.useState("");
   const advancedPanelId = `${testIdRoot}-advanced-panel`;
 
-  const effectiveHost =
-    lockedHost ?? (customHost.trim() || DEFAULT_OPENHANDS_CLOUD_HOST);
+  const effectiveHost = lockedHost ?? customHost.trim();
 
   const handleLoginSuccess = (apiKey: string) => {
     onConnected(
@@ -1001,13 +988,6 @@ function CloudLoginColumn({
     <div className="flex w-full min-w-0 flex-col items-center gap-3">
       {showBranding ? (
         <div className="flex flex-col items-center gap-1">
-          <OpenHandsLogoWhite
-            width={56}
-            height={56}
-            className="text-contrast [&_path:not([fill=transparent])]:fill-current"
-            aria-hidden
-          />
-
           <h4
             className={modalTitleLgMediumClassName}
             data-testid={`${testIdRoot}-cloud-title`}
@@ -1084,7 +1064,6 @@ function CloudLoginColumn({
                       label={t(I18nKey.BACKEND$HOST_LABEL)}
                       value={customHost}
                       onChange={setCustomHost}
-                      placeholder={DEFAULT_OPENHANDS_CLOUD_HOST}
                       className="w-full"
                     />
                     <p className="mt-1 text-xs text-muted">
@@ -1236,12 +1215,6 @@ function AgentServerGuidance({ location }: { location: AgentServerLocation }) {
   const description = isRemote
     ? t(I18nKey.BACKEND$REMOTE_SETUP_DESCRIPTION)
     : t(I18nKey.BACKEND$LOCAL_SETUP_DESCRIPTION);
-  const docsHref = isRemote
-    ? REMOTE_AGENT_SERVER_DOCS_URL
-    : LOCAL_AGENT_SERVER_DOCS_URL;
-  const docsLabel = isRemote
-    ? t(I18nKey.BACKEND$REMOTE_SETUP_DOCS)
-    : t(I18nKey.BACKEND$LOCAL_SETUP_DOCS);
   const testIdRoot = isRemote ? "add-backend-remote" : "add-backend-local";
   const toggleId = `${testIdRoot}-guidance-toggle`;
   const bodyId = `${testIdRoot}-guidance-body`;
@@ -1321,17 +1294,6 @@ function AgentServerGuidance({ location }: { location: AgentServerLocation }) {
               </code>
             )}
 
-            <a
-              href={docsHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={`${testIdRoot}-docs-link`}
-              tabIndex={isExpanded ? undefined : -1}
-              className="inline-flex w-fit items-center gap-1.5 text-primary hover:underline"
-            >
-              <span>{docsLabel}</span>
-              <ExternalLinkIcon className="size-4 shrink-0" aria-hidden />
-            </a>
           </div>
         </div>
       </div>
@@ -1371,14 +1333,7 @@ function AddBackendChooser({
           selectedValue={selectedOption}
           title={t(I18nKey.BACKEND$CLOUD_TITLE)}
           description={t(I18nKey.BACKEND$CLOUD_OPTION_DESCRIPTION)}
-          icon={
-            <OpenHandsLogoWhite
-              width={32}
-              height={32}
-              data-testid="add-backend-option-cloud-logo"
-              className="text-contrast [&_path:not([fill=transparent])]:fill-current"
-            />
-          }
+          icon={<Cloud className="size-6" />}
           onSelect={setSelectedOption}
           panelId={panelId}
           testId="add-backend-option-cloud"
@@ -1489,7 +1444,6 @@ function AddBackendConnectionOptions({
 }) {
   const { addBackend } = useActiveBackendContext();
   const redirectAfterAdd = useRedirectAfterAddBackend();
-  const { trackBackendAdded } = useTracking();
   const lockedCloudHost = getLockedCloudHost();
 
   const handleConnected = React.useCallback(
@@ -1499,17 +1453,10 @@ function AddBackendConnectionOptions({
       metadata?: BackendConnectionTestMetadata,
     ) => {
       addBackend(payload);
-      trackBackendAdded({
-        backendKind: payload.kind,
-        connectionMethod,
-        hasApiKey: Boolean(payload.apiKey),
-        source,
-        agentServerVersion: metadata?.agentServerVersion,
-      });
       redirectAfterAdd();
       onClose();
     },
-    [addBackend, redirectAfterAdd, onClose, trackBackendAdded, source],
+    [addBackend, redirectAfterAdd, onClose, source],
   );
 
   if (lockedCloudHost) {
@@ -1571,21 +1518,7 @@ export function BackendFormModal({
                 className="mt-2 text-sm leading-6 text-muted"
                 data-testid="add-backend-description"
               >
-                {t(I18nKey.BACKEND$CHOOSER_DESCRIPTION)}{" "}
-                <a
-                  href={DEPLOYMENT_OPTIONS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={t(I18nKey.BACKEND$DEPLOYMENT_OPTIONS)}
-                  data-testid="add-backend-deployment-options-link"
-                  className="text-primary hover:underline"
-                >
-                  {t(I18nKey.CTA$LEARN_MORE)}
-                  <ExternalLinkIcon
-                    className="ml-1 inline size-3.5 align-[-0.125em]"
-                    aria-hidden
-                  />
-                </a>
+                {t(I18nKey.BACKEND$CHOOSER_DESCRIPTION)}
               </p>
             </div>
           )}

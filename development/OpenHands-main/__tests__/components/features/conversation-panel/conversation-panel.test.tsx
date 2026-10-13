@@ -1734,9 +1734,12 @@ describe("ConversationPanel", () => {
       screen.getByRole("button", { name: /confirm/i }),
     ).toBeInTheDocument();
 
-    // Click the backdrop (the dark overlay behind the modal)
-    const backdrop = document.querySelector(".bg-black.opacity-60");
-    expect(backdrop).toBeInTheDocument();
+    // Click the backdrop: the dialog's first child is the full-surface
+    // click-catcher that closes the modal (see ModalBackdrop).
+    const backdrop = screen
+      .getByRole("dialog")
+      .querySelector(":scope > div") as HTMLElement | null;
+    expect(backdrop).not.toBeNull();
     await user.click(backdrop!);
 
     // Modal should be closed
@@ -1790,9 +1793,12 @@ describe("ConversationPanel", () => {
       screen.getByRole("button", { name: /confirm/i }),
     ).toBeInTheDocument();
 
-    // Click the backdrop
-    const backdrop = document.querySelector(".bg-black.opacity-60");
-    expect(backdrop).toBeInTheDocument();
+    // Click the backdrop: the dialog's first child is the full-surface
+    // click-catcher that closes the modal (see ModalBackdrop).
+    const backdrop = screen
+      .getByRole("dialog")
+      .querySelector(":scope > div") as HTMLElement | null;
+    expect(backdrop).not.toBeNull();
     await user.click(backdrop!);
 
     // Modal should be closed

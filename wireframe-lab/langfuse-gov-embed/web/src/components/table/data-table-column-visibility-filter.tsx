@@ -582,10 +582,14 @@ export function DataTableColumnVisibilityFilter<TData, TValue>({
     >
       {({ Trigger }) => (
         <Trigger asChild>
+          {/* RAIBACH IDS (2026-10-12): bg-card = the house container fill —
+              the outline variant's bg-background is transparent in the
+              embed, so the wave ground showed through the trigger. */}
           <Button
             variant="outline"
             size={triggerSize}
             title="Show/hide columns"
+            className="bg-card"
           >
             <span>Columns</span>
             <div className="bg-input ml-1 rounded-sm px-1 text-xs">{`${count}/${total}`}</div>

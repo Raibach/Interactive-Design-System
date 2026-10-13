@@ -15,7 +15,6 @@ import {
   eventsToMarkdown,
   type TranscriptExportFormat,
 } from "#/utils/transcript-export";
-import { useTracking } from "#/hooks/use-tracking";
 import { useEventStore } from "#/stores/use-event-store";
 import EventService from "#/api/event-service/event-service.api";
 import { loadCompleteTranscriptEvents } from "#/utils/transcript-export/load-complete-events";
@@ -41,7 +40,6 @@ export function TranscriptExportModal({
   onClose,
 }: TranscriptExportModalProps) {
   const { t } = useTranslation("openhands");
-  const { trackConversationExported } = useTracking();
   const [format, setFormat] =
     React.useState<TranscriptExportFormat>("markdown");
   const [includeToolDetails, setIncludeToolDetails] = React.useState(true);
@@ -118,7 +116,6 @@ export function TranscriptExportModal({
         new Blob([content], { type: mimeType }),
         `conversation-${conversationId}.${extension}`,
       );
-      trackConversationExported(format);
       onClose();
     } catch {
       if (!isCancelledRef.current) {

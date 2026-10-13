@@ -12,7 +12,6 @@ import { useNavigation } from "#/context/navigation-context";
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useSettings } from "#/hooks/query/use-settings";
 import { useMetaProfiles } from "#/hooks/query/use-meta-profiles";
-import { useTracking } from "#/hooks/use-tracking";
 
 export const useNewConversationCommand = () => {
   const queryClient = useQueryClient();
@@ -21,7 +20,6 @@ export const useNewConversationCommand = () => {
   const { data: conversation } = useActiveConversation();
   const { data: settings } = useSettings();
   const { data: metaProfiles } = useMetaProfiles();
-  const { trackConversationCreated } = useTracking();
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -75,16 +73,6 @@ export const useNewConversationCommand = () => {
       });
     },
     onSuccess: (data) => {
-      trackConversationCreated({
-        conversationId: data.newConversationId,
-        taskId: data.taskId,
-        hasRepository: false,
-        hasWorkspace: false,
-        hasInitialQuery: false,
-        hasParentConversation: false,
-        entryPoint: "new_command",
-      });
-
       toast.dismiss("clear-conversation");
       displaySuccessToast(t(I18nKey.CONVERSATION$CLEAR_SUCCESS));
       navigate(`/conversations/${data.newConversationId}`);

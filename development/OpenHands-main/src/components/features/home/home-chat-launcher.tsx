@@ -238,7 +238,7 @@ export function HomeChatLauncher() {
   return (
     <div
       data-testid="home-chat-launcher"
-      className="flex w-full flex-col items-center pt-[max(4rem,28vh)] pb-10"
+      className="flex w-full flex-col items-center pt-[max(4rem,calc(28vh-100px))] pb-10"
     >
       <div className="flex w-full max-w-200 flex-col gap-4 md:px-4">
         <div className="flex w-full justify-center">

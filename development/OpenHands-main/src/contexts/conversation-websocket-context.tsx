@@ -66,7 +66,6 @@ import type {
 import EventService from "#/api/event-service/event-service.api";
 import { getAgentServerClientOptions } from "#/api/agent-server-client-options";
 import { useConversationStore } from "#/stores/conversation-store";
-import { trackError } from "#/utils/error-handler";
 import { useReadConversationFile } from "#/hooks/mutation/use-read-conversation-file";
 import useMetricsStore, { type MetricsState } from "#/stores/metrics-store";
 import { useConversationHistory } from "#/hooks/query/use-conversation-history";
@@ -654,14 +653,6 @@ export function ConversationWebSocketProvider({
               | ServerErrorEvent;
             const classification =
               "classification" in errorEvent ? errorEvent.classification : null;
-            trackError({
-              source: "conversation",
-              metadata: {
-                eventId: errorEvent.id,
-                errorCode: errorEvent.code,
-              },
-              classification,
-            });
             setErrorMessage(
               errorEvent.detail,
               "conversation",
@@ -672,19 +663,7 @@ export function ConversationWebSocketProvider({
             handleNonErrorEvent();
           }
 
-          // LLM errors render inline in the chat (see ErrorEventMessage); track
-          // them for analytics but keep them out of the banner above the chat box.
-          if (isAgentErrorEvent(event)) {
-            trackError({
-              source: "agent",
-              metadata: {
-                eventId: event.id,
-                toolName: event.tool_name,
-                toolCallId: event.tool_call_id,
-              },
-              classification: event.classification,
-            });
-          }
+          // LLM errors render inline in the chat (see ErrorEventMessage).
 
           // Clear optimistic user message when a user message is confirmed.
           // History and live delivery share the same timestamp/identity checks.
@@ -922,14 +901,6 @@ export function ConversationWebSocketProvider({
               | ServerErrorEvent;
             const classification =
               "classification" in errorEvent ? errorEvent.classification : null;
-            trackError({
-              source: "planning_conversation",
-              metadata: {
-                eventId: errorEvent.id,
-                errorCode: errorEvent.code,
-              },
-              classification,
-            });
             setErrorMessage(
               errorEvent.detail,
               "conversation",
@@ -942,17 +913,6 @@ export function ConversationWebSocketProvider({
 
           // LLM errors render inline in the chat (see ErrorEventMessage); track
           // them for analytics but keep them out of the banner above the chat box.
-          if (isAgentErrorEvent(event)) {
-            trackError({
-              source: "planning_agent",
-              metadata: {
-                eventId: event.id,
-                toolName: event.tool_name,
-                toolCallId: event.tool_call_id,
-              },
-              classification: event.classification,
-            });
-          }
 
           // Clear optimistic user message when a user message is confirmed.
           // Always scope to the main `conversationId` (where the user types)

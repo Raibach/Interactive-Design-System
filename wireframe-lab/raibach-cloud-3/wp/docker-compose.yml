@@ -1,0 +1,120 @@
+# ── THE WORDPRESS SITES ON raibach-cloud-3 — server variant ──────────────────
+# Lives on the box at /opt/raibach/wp. This repo copy is THE source of truth.
+#
+# Layout on the box:
+#   /opt/raibach/wp/docker-compose.yml     (this file)
+#   /opt/raibach/wp/caddy/Caddyfile        (Caddy config)
+#     NOTE: the caddy service mounts its DIRECTORY (./caddy:/etc/caddy).
+#     A single-file mount keeps the old inode after rsync replaces the file ->
+#     reloads silently read stale config. Bitten 2026-10-11; never go back.
+#   /opt/raibach/wp/raibach.net/           (web root, bind-mounted)
+#   /opt/raibach/wp/holtportfolio.com/     (web root, bind-mounted)
+#   /opt/raibach/wp/rai-db-data/           (mysql data, server-side state)
+#   /opt/raibach/wp/holt-db-data/
+#
+# Differences from the local stack (wordpress/_stack/docker-compose.yml):
+#   - db services publish NO host ports (internal only — never reachable)
+#   - wp services publish on the box: 8082 (raibach.net) · 8081 (holtportfolio.com)
+#   - restart: "no" — house rule: a broken boot leaves the port BLACK, loudly
+#
+# Bring up (on the box):
+#   cd /opt/raibach/wp && docker compose up -d rai-db rai-wp
+# wp-cli (on demand):
+#   docker compose --profile cli run --rm rai-cli wp <command>
+name: wp-sites
+
+services:
+  rai-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: raibach-local-root
+      MYSQL_DATABASE: dbvzmg3i2l10d6
+      MYSQL_USER: railocal
+      MYSQL_PASSWORD: railocal
+    volumes:
+      - ./rai-db-data:/var/lib/mysql
+    restart: "no"
+
+  rai-wp:
+    image: wordpress:php8.2-apache
+    depends_on:
+      - rai-db
+    environment:
+      WORDPRESS_DB_HOST: rai-db
+      WORDPRESS_DB_USER: railocal
+      WORDPRESS_DB_PASSWORD: railocal
+      WORDPRESS_DB_NAME: dbvzmg3i2l10d6
+    ports:
+      - 8082:80
+    volumes:
+      - ./raibach.net:/var/www/html
+    restart: "no"
+
+  rai-cli:
+    image: wordpress:cli
+    depends_on:
+      - rai-db
+    environment:
+      WORDPRESS_DB_HOST: rai-db
+      WORDPRESS_DB_USER: railocal
+      WORDPRESS_DB_PASSWORD: railocal
+      WORDPRESS_DB_NAME: dbvzmg3i2l10d6
+    volumes:
+      - ./raibach.net:/var/www/html
+    profiles: ["cli"]
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - rai-wp
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: "no"
+
+  holt-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: raibach-local-root
+      MYSQL_DATABASE: dbauikx8dsba33
+      MYSQL_USER: holtlocal
+      MYSQL_PASSWORD: holtlocal
+    volumes:
+      - ./holt-db-data:/var/lib/mysql
+    restart: "no"
+
+  holt-wp:
+    image: wordpress:php8.2-apache
+    depends_on:
+      - holt-db
+    environment:
+      WORDPRESS_DB_HOST: holt-db
+      WORDPRESS_DB_USER: holtlocal
+      WORDPRESS_DB_PASSWORD: holtlocal
+      WORDPRESS_DB_NAME: dbauikx8dsba33
+    ports:
+      - 8081:80
+    volumes:
+      - ./holtportfolio.com:/var/www/html
+    restart: "no"
+
+  cli:
+    image: wordpress:cli
+    depends_on:
+      - holt-db
+    environment:
+      WORDPRESS_DB_HOST: holt-db
+      WORDPRESS_DB_USER: holtlocal
+      WORDPRESS_DB_PASSWORD: holtlocal
+      WORDPRESS_DB_NAME: dbauikx8dsba33
+    volumes:
+      - ./holtportfolio.com:/var/www/html
+    profiles: ["cli"]
+
+volumes:
+  caddy-data:
+  caddy-config:

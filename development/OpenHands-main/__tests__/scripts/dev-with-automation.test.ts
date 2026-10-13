@@ -249,12 +249,11 @@ describe("buildAgentServerAutomationEnv", () => {
 });
 
 describe("buildAutomationTelemetryEnv", () => {
-  it("provides the shared frontend PostHog key to automation by default", () => {
-    // LOCKDOWN 2026-10-07: the defaults are blank/dead in this tree (see config/defaults.json).
-    expect(buildAutomationTelemetryEnv({})).toEqual({
-      AUTOMATION_POSTHOG_API_KEY: "",
-      AUTOMATION_POSTHOG_HOST: "http://127.0.0.1:9",
-    });
+  it("emits no automation telemetry environment while the PostHog key is blank", () => {
+    // LOCKDOWN 2026-10-07: the defaults are blank in this tree (see
+    // config/defaults.json), so the builder returns nothing at all instead of
+    // a blank key and a discard host.
+    expect(buildAutomationTelemetryEnv({})).toEqual({});
   });
 
   it("prefers explicit automation telemetry settings", () => {

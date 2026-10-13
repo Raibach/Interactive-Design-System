@@ -1093,11 +1093,11 @@ describe("ConversationCard", () => {
       ).toBeInTheDocument();
     });
 
-    it("renders the OpenHands logo + model name for native conversations", () => {
-      // With the chip toggle on, OpenHands native conversations show the
-      // OpenHands logo + the raw ``agent.llm.model`` string. A stray
-      // ``acp_server`` value on an OpenHands card must not flip the icon to
-      // the Claude/Codex/Gemini brand mark.
+    it("renders the model name for native conversations", () => {
+      // With the chip toggle on, native conversations show the raw
+      // ``agent.llm.model`` string. A stray ``acp_server`` value on the card
+      // must not flip the row to the Claude/Codex/Gemini brand mark. (The
+      // vendor wordmark that used to render beside the model is deleted.)
       renderWithProviders(
         <ConversationCard
           title="Conversation 1"
@@ -1113,9 +1113,6 @@ describe("ConversationCard", () => {
       const chip = screen.getByTestId("conversation-card-agent-chip");
       expect(chip).toHaveTextContent("claude-sonnet-4");
       expect(chip).toHaveAttribute("title", "claude-sonnet-4");
-      expect(
-        within(chip).getByTestId("agent-brand-icon-openhands"),
-      ).toBeInTheDocument();
       expect(
         within(chip).queryByTestId("agent-brand-icon-claude-code"),
       ).not.toBeInTheDocument();

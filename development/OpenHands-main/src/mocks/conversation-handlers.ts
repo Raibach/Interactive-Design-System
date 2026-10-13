@@ -440,7 +440,6 @@ export const CONVERSATION_HANDLERS = [
         search_api_key_set: false,
         agent: "CodeActAgent",
         language: "en",
-        user_consents_to_analytics: false,
         provider_tokens_set: { github: "" },
       });
     }

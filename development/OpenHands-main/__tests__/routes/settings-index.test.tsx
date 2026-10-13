@@ -44,10 +44,7 @@ describe("settings index route", () => {
         hide_users_page: true,
       },
       providers_configured: [],
-      maintenance_start_time: null,
       recaptcha_site_key: null,
-      faulty_models: [],
-      error_message: null,
       updated_at: new Date().toISOString(),
     });
   });

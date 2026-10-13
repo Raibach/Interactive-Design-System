@@ -12,9 +12,6 @@ const useSettingsMock = vi.fn();
 const changeLanguageMock = vi.fn();
 const ensureActiveProfileMock = vi.fn();
 const migrateEnabledSkillsMock = vi.fn();
-const syncTelemetryConsentMock = vi.fn();
-const syncAutomationTelemetryConsentMock = vi.fn();
-const telemetryIdentityMock = vi.fn();
 
 vi.mock("#/hooks/query/use-config", () => ({
   useConfig: () => useConfigMock(),
@@ -26,18 +23,6 @@ vi.mock("#/hooks/query/use-settings", () => ({
 
 vi.mock("#/hooks/use-migrate-enabled-skills", () => ({
   useMigrateEnabledSkills: () => migrateEnabledSkillsMock(),
-}));
-
-vi.mock("#/hooks/use-sync-telemetry-consent", () => ({
-  useSyncTelemetryConsent: () => syncTelemetryConsentMock(),
-}));
-
-vi.mock("#/hooks/use-sync-automation-telemetry-consent", () => ({
-  useSyncAutomationTelemetryConsent: () => syncAutomationTelemetryConsentMock(),
-}));
-
-vi.mock("#/hooks/use-telemetry-identity", () => ({
-  useTelemetryIdentity: () => telemetryIdentityMock(),
 }));
 
 vi.mock("#/hooks/use-ensure-active-profile", () => ({
@@ -64,24 +49,12 @@ vi.mock("#/components/features/sidebar/sidebar-mobile-menu-bar", () => ({
   SidebarMobileMenuBar: () => <div data-testid="mobile-menu-bar" />,
 }));
 
-vi.mock("#/components/features/alerts/alert-banner", () => ({
-  AlertBanner: ({
-    errorMessage,
-  }: {
-    errorMessage: string | null | undefined;
-  }) => <div data-testid="alert-banner">{errorMessage}</div>,
-}));
-
 vi.mock("#/components/features/backends/environment-switch-overlay", () => ({
   default: () => <div data-testid="environment-switch-overlay" />,
 }));
 
 vi.mock("#/components/features/command-menu/command-menu", () => ({
   CommandMenu: () => <div data-testid="command-menu" />,
-}));
-
-vi.mock("#/components/features/onboarding", () => ({
-  OnboardingHost: () => <div data-testid="onboarding-host" />,
 }));
 
 vi.mock("react-i18next", async (importOriginal) => {
@@ -254,16 +227,12 @@ describe("root layout", () => {
 
     expect(changeLanguageMock).toHaveBeenCalledWith("en");
     expect(migrateEnabledSkillsMock).toHaveBeenCalledOnce();
-    expect(syncTelemetryConsentMock).toHaveBeenCalledOnce();
-    expect(syncAutomationTelemetryConsentMock).toHaveBeenCalledOnce();
-    expect(telemetryIdentityMock).toHaveBeenCalledOnce();
     expect(ensureActiveProfileMock).toHaveBeenCalledOnce();
     expect(document.title).toBe("OpenHands");
     expect(
       await screen.findByTestId("environment-switch-overlay"),
     ).toBeInTheDocument();
     expect(await screen.findByTestId("command-menu")).toBeInTheDocument();
-    expect(screen.queryByTestId("alert-banner")).not.toBeInTheDocument();
   });
 
   it("updates the active language when the setting changes", () => {
@@ -323,72 +292,12 @@ describe("root layout", () => {
     expect(screen.getByTestId("mobile-menu-bar")).toBeInTheDocument();
   });
 
-  it("renders the onboarding host only when preview mode is requested", () => {
-    const { unmount } = renderMainApp("/settings");
-
-    expect(screen.queryByTestId("onboarding-host")).not.toBeInTheDocument();
-    unmount();
-
-    renderMainApp("/settings?previewOnboardingStep=2");
-
-    expect(screen.getByTestId("onboarding-host")).toBeInTheDocument();
-  });
-
-  it("renders the lazy alert banner when the backend reports an error", async () => {
-    useConfigMock.mockReturnValue({
-      isLoading: false,
-      data: {
-        maintenance_start_time: null,
-        faulty_models: [],
-        error_message: "Backend degraded",
-        updated_at: new Date().toISOString(),
-      },
-    });
-
-    renderMainApp();
-
-    expect(await screen.findByTestId("alert-banner")).toHaveTextContent(
-      "Backend degraded",
-    );
-  });
-
-  it.each([
-    {
-      label: "scheduled maintenance",
-      data: {
-        maintenance_start_time: "2030-01-02T03:04:05.000Z",
-        faulty_models: [],
-        error_message: null,
-        updated_at: "2030-01-01T00:00:00.000Z",
-      },
-    },
-    {
-      label: "a faulty model",
-      data: {
-        maintenance_start_time: null,
-        faulty_models: ["broken-model"],
-        error_message: null,
-        updated_at: "2030-01-01T00:00:00.000Z",
-      },
-    },
-  ])("renders the alert banner for $label", async ({ data: configData }) => {
-    useConfigMock.mockReturnValue({
-      isLoading: false,
-      data: configData,
-    });
-
-    renderMainApp();
-
-    expect(await screen.findByTestId("alert-banner")).toBeInTheDocument();
-  });
-
-  it("renders without an alert when config data is unavailable", async () => {
+  it("renders when config data is unavailable", async () => {
     useConfigMock.mockReturnValue({ isLoading: false, data: null });
 
     renderMainApp();
 
     expect(await screen.findByTestId("command-menu")).toBeInTheDocument();
-    expect(screen.queryByTestId("alert-banner")).not.toBeInTheDocument();
   });
 });
 
