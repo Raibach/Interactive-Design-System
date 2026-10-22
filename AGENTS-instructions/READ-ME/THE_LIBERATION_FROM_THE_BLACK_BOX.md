@@ -1,4 +1,4 @@
-# The Liberation from the Black-Box Surveillance State
+# The Liberation from the Black-Box
 
 **Author:** John Holt, Raibach Interactive Design Studio
 **Status:** Systemwide doctrine — established 2026-10-17
