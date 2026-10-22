@@ -225,6 +225,18 @@ approval-reviews/**/*.zip
 product/PRODUCT-build.archives/
 **/_old/
 
+# ── INTERNAL NOTES AND DEPLOYMENT FILES (2026-10-22, owner's direction) ──────
+# The repository is read by people evaluating the work, not by developers building it.
+# Session handoffs, deployment runbooks, DNS lists, the login plan, the root build file and
+# the root config are working material: they stay on disk and stay out of the repository.
+NEXT-SESSION-PROMPT*.md
+/DEPLOY.md
+/Dockerfile
+/config.py
+/login-plan.md
+/dns-mail-records.txt
+/dns-records-siteground.txt
+
 # ── runtime/ — RETIRED (2026-10-15, owner's direction) ──────────────────────
 # runtime/node/ was a full copy of Node.js (82 MB) kept on disk so local
 # services started from the repository's own engine. The copy is retired:
