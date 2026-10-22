@@ -5,14 +5,11 @@
 **Raibach Interactive Design Studio** · John Holt  
 Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
-## Demo: Wireframe interactive prototype
-https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
-Demo pin: Request pin access
+> The old hosted prototype link (`site--semantic-design-systems--…code.run`) was removed
+> 2026-10-22: it answers nothing. The application runs from this repository — see Quick Start.
 
-> ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
-> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
->
-> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
+> ### 🧭 How this repo is run: [`AGENTS-instructions/THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md)
+> Live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
 
 ---
 
@@ -149,7 +146,7 @@ each interaction, a session that survives the journey, a store and a view — do
 
 What remains genuinely real — and already exists in your system, measured tonight:
 
-Grounding is already judged, per run, in plain English. The run_evaluations table holds 53 judged runs right now (32 failed / 21 cleared), each with the judge's written sentence — rows like "it explicitly did not read them and instead restated headline-level summaries." That is a grounding verdict, stored as a database row. It's written by the house's own evaluation-judge and surfaced as the Eval tab's feed in the seat.
+Grounding is already judged, per run, in plain English. The `run_evaluations` table stores one judgment per run — cleared or failed — each with the judge's written sentence; rows like "it explicitly did not read them and instead restated headline-level summaries" are grounding verdicts, stored as database rows. They are written by the house's own evaluation judge and surfaced as the Eval tab's feed in the seat.
 Cost ledger: usage_metrics — per-call, priced, cache-split aware.
 Provenance: memory_provenance + vector ids into the local store (the Milvus tie-in).
 Conformance: the deterministic stand-ins for structure-drift — catalogue gate, catalog:check, fidelity gate.
@@ -165,7 +162,7 @@ Cloud providers ship MCP servers that connect corporate production workflows to 
 **The internal alternative (model-agnostic RIDS).**
 This system is built on open standards (A2UI, MCP) with no dependency on one model provider. The shell is the gatekeeper, so data stays inside the enterprise's own pipelines and models can be replaced without giving up the component tree or the production logic.
 
-This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
+This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on request (`npm run catalog:check`; the build itself is `tsc -b && vite build`); populating payloads is ingestion.
 
 A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
 
@@ -210,8 +207,8 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 │  Envelope: createSurface → updateComponents → updateDataModel    │
 └──────────────────────────────────────────────────────────────────┘
          │                    │                     │
-    PostgreSQL       LLM providers        Zilliz Cloud
-    (42 tables)      (AI assembly)       (vector memory)
+    PostgreSQL       LLM providers        Milvus
+    (55 tables)      (AI assembly)       (local, lite)
 ```
 
 ---
@@ -222,7 +219,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 |-----------|---------------|
 | **Shell Always Visible** | The deterministic React shell renders unconditionally — nav, frame, error states, slot containers. The user never stares at a blank page. AI failure = shell shows the failure, not nothing. |
 | **AI Fills Slots** | Slots are the loading contract (left/middle/right). AI decides which prompt blocks, data, and chat populate them. It does not create or remove slots. |
-| **Zero-Trust Catalog** | Every component validated against `catalogs/<pipeline>/catalog.json`. Unknown → HTTP 503. No silent failures. |
+| **Zero-Trust Catalog** | Every component validated against `frontend/src/components/A2UI/catalogs/<surface>/catalog.json`. Unknown → HTTP 503. No silent failures. |
 | **Fail Loud** | Invalid AI responses → 503 with diagnostics. Database down → 503. Empty Figma spec → 503 with exact reason. Never silently degrade. |
 | **No Executable Code** | `eval()` eliminated. `innerHTML` blocked. Buttons dispatch declarative `a2ui:action` events only. |
 | **Package-First** | A composer creates the draft package row on mount. Chat is scoped from keystroke one. |
@@ -232,7 +229,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-67 trusted components — 17 A2UI Basic Catalog primitives + 50 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 67 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+66 trusted components in the Composer's catalogue, typed with `ChildList` / `DynamicString` per validator rules. The number is measured from `frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json` (counted 2026-10-22; every surface carries its own catalogue — `primitives` 7, `design-artifacts` 65, `ecommerce` 38); `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 66 trusted components`).
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
@@ -260,9 +257,9 @@ Design room:    design-left-panel · design-middle-container · component-previe
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · npm · Tailwind · TypeScript |
-| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM providers (Z.ai GLM primary, DeepSeek) |
+| **Backend** | FastAPI · PostgreSQL 15 · Milvus (local, `MILVUS_MODE=lite`) · LLM providers (DeepSeek — `deepseek-flash` default, `deepseek-v4-pro`, `deepseek-chat`) |
 | **Components** | Lit Web Components (Shadow DOM) · Figma API spec-driven |
-| **Deploy** | Docker · Northflank (us-central) · Cloudflare Tunnel |
+| **Deploy** | Docker (one image per app) · local stack · ngrok tunnel |
 
 ---
 
@@ -275,18 +272,28 @@ backend/
 ├── services.py          # Database service startup
 ├── figma_service.py     # Figma API → Lit spec extractor
 ├── grace_gui.py         # AI system prompts & assembly logic
-└── routes/              # 11 topic routers
+└── routes/              # 21 topic routers
     ├── ai.py                # Manifest, assemble-surface, save, audit
-    ├── conversations.py    # Conversation + message CRUD
-    ├── prompt_sessions.py  # Packages, versions, permissions
-    ├── projects.py         # Project CRUD
-    ├── memory.py           # Memory storage (dictation)
-    ├── figma.py            # Figma API proxy
-    ├── milvus.py           # Zilliz/Milvus vectors
-    ├── agent_rpc.py        # JSON-RPC 2.0 agent integration
-    ├── teacher.py          # Teacher query, model ensure
-    ├── misc.py             # Health, news, PDF, reasoning
-    └── files.py            # Documentation file I/O
+    ├── agent_rpc.py         # JSON-RPC 2.0 agent integration
+    ├── auth.py              # Sign-in and accounts
+    ├── billing.py           # Plans, free trial, the payment seam
+    ├── builder_bridge.py    # The builder room's bridge
+    ├── conversations.py     # Conversation + message CRUD
+    ├── design_console.py    # The design console's assembly
+    ├── element_analytics.py # Funnel, pacing and friction reads
+    ├── element_events.py    # The element capture door
+    ├── figma.py             # Figma API proxy
+    ├── figma_intake.py      # Paste a Figma link: intake
+    ├── files.py             # Documentation file I/O
+    ├── governance.py        # Governance reads, inspection trigger
+    ├── memory.py            # Memory storage (dictation)
+    ├── milvus.py            # Milvus vectors
+    ├── misc.py              # Health, news, PDF, reasoning
+    ├── projects.py          # Project CRUD
+    ├── prompt_sessions.py   # Packages, versions, permissions
+    ├── teacher.py           # Teacher query, model ensure
+    ├── tools_surface.py     # The tools surface tree
+    └── ux_chat.py           # The UX chat door
 
 frontend/
 ├── src/
@@ -297,7 +304,7 @@ frontend/
 │   ├── pages/               # WritingAreaIndex (main surface)
 │   ├── hooks/               # React hooks
 │   └── shared/              # Surface contract, tag registry
-└── scripts/                  # Manifest generator, Figma sync
+└── scripts/                  # catalog-check.mjs, catalog-tree.mjs, app-loads.mjs, shell-decompose.cjs
 ```
 
 ---
@@ -316,24 +323,31 @@ open http://localhost:5001
 ```
 
 - **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}`
-- **Dev PIN:** `Request pin access`
-- **Dev mode:** global no-cache middleware — no stale bytes
+- **The visitor gate:** the access code lives in `frontend/index.html` and nowhere else. It is deliberately not repeated in this document.
+- **Caching:** the shell (`index.html`) is served `no-store`; the content-hashed `/assets/*` files are immutable for a year (measured 2026-10-01: the old blanket no-store re-downloaded ~1 MB on every load).
 
 ---
 
 ## Deployment
 
-Docker on **Northflank** (`prompt-composer-console`, us-central). Production deploys via git push to `main` (CI/CD) or the local `DEPLOY-NORTHFLANK.sh` runbook. The image is a **multi-stage build**: the frontend compiles inside a Node stage (including manifest generation), so no build artifacts live in the repository.
+Docker images are built from each app's own Dockerfile; the studio's is a **multi-stage build** — the frontend compiles inside a Node stage, so no build artifacts live in the repository.
+
+The application runs on this machine as a local stack: `bash RESTART-LOCAL.sh` (backend, site, checks) or `bash development/ops/start-all-local.sh` (every door), with `development/ops/supervise-all.sh` keeping the ports up. Each room's program is its own container or process; outside access runs through the ngrok tunnel configured in `runtime/ngrok-endpoints.yml`.
+
+The earlier Northflank deployment (`prompt-composer-console`, us-central, `DEPLOY-NORTHFLANK.sh`) is retired — neither the script nor the service exists any more.
 
 ---
 
 ## Documentation
 
-- [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
-- [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
-- [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
+- [`AGENTS-instructions/THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — Live-verification design engineering: the working doctrine
+- [`AGENTS-instructions/READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](AGENTS-instructions/READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
 - [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
-- [`FIGMA/CONSOLE_CONTRACTS.md`](FIGMA/CONSOLE_CONTRACTS.md) — Console surface data contract
+- [`SECURITY-AND-COMPLIANCE.md`](SECURITY-AND-COMPLIANCE.md) — The compliance gate and its limits
+- [`USER-FLOW.md`](USER-FLOW.md) — The journey the gate governs
+
+> The conformance specification (`IMPLEMENTATION_CONFORMANCE.md`) and `FIGMA/CONSOLE_CONTRACTS.md`
+> were removed from the tree before 2026-10-22; this list names only documents that exist here.
 
 ---
 
