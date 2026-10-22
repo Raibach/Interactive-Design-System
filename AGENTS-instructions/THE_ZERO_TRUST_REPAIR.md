@@ -1,4 +1,4 @@
-# The Zero-Trust Repair — a running record of a system that was lying, and what it took to make it stop
+# The Zero-Trust Repair — a running record
 
 **Author:** John Holt, Raibach Interactive Design Studio
 **Status:** Working record — one entry per session, newest first. Written from measurements, never
