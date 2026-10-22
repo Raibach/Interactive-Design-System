@@ -5,8 +5,8 @@
 **Raibach Interactive Design Studio** · John Holt  
 Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
-> The old hosted prototype link (`site--semantic-design-systems--…code.run`) was removed
-> 2026-10-22: it answers nothing. The application runs from this repository — see Quick Start.
+> **Request pin access.** The old hosted prototype link was removed 2026-10-22 — it answered
+> nothing; the application runs from this repository (see Quick Start).
 
 > ### 🧭 How this repo is run: [`AGENTS-instructions/THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md)
 > Live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
@@ -323,7 +323,7 @@ open http://localhost:5001
 ```
 
 - **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}`
-- **The visitor gate:** the access code lives in `frontend/index.html` and nowhere else. It is deliberately not repeated in this document.
+- **Access:** Request pin access.
 - **Caching:** the shell (`index.html`) is served `no-store`; the content-hashed `/assets/*` files are immutable for a year (measured 2026-10-01: the old blanket no-store re-downloaded ~1 MB on every load).
 
 ---

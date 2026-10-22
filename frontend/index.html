@@ -22,22 +22,12 @@
     <link rel="stylesheet" href="/fonts/fonts.css">
     <title>Raibach — Interactive Design Systems</title>
     <!--
-      ── THE GATE IS REAL, AND IT IS HERE ───────────────────────────────────────────────────
-      Owner, 2026-10-02: "it looks like … a fake login that no one can enter and then suddenly a
-      real login appears" — and that is exactly what this was: a drawn form whose fields were
-      dead until the React bundle arrived seconds later. A gate nobody can type into is worse
-      than no gate. So the static card IS the login now:
+      NO ACCESS CODE LIVES IN THIS FILE (2026-10-22).
 
-        · the SAME pair PinGate.tsx checks (`dev@local` / Request pin access), the SAME three localStorage
-          keys it writes — this script and that component are two doors, one lock;
-        · it works before any bundle exists, with the logo inline (7.5 KB) and no other request;
-        · a signed-in visitor (the flag is already set) sees the preparing card instead of the
-          form, which is also the state after a successful submit while the page reloads;
-        · React's PinGate remains the fallback (see main.tsx: the static gate is not removed
-          while unauthenticated, so a working form is never replaced by a hidden one).
-
-      MEASURED EARLIER, KEPT AS HISTORY: before this card existed the page was white for ~3 s
-      (vendor JS 1.25 MB / 2.8 s, index JS 984 KB / 1.3 s) and the gate could not draw at all.
+      The static gate card and its React counterpart were removed on 2026-10-21: this is a local
+      studio serving its own rooms, and a door whose key is no longer minted is a blank screen,
+      not a door. Access is by request; neither this document nor the bundle carries a pin, and
+      no document in the repository repeats one.
     -->
     <style>
       html, body { margin: 0; background: #110E1F; }
