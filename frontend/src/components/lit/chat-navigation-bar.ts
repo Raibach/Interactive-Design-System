@@ -61,6 +61,11 @@ import approveButtonIcon from '@/assets/figma-approve-icon.svg';
 import evalButtonIcon from '@/assets/figma-evals-icon.svg';
 import toolsApiButtonIcon from '@/assets/figma-tools-api-icon.svg';
 import settingsButtonIcon from '@/assets/figma-settings-icon.svg';
+// THE UX TAB'S MARK — the owner's own icon (2026-10-18), copied from the repository's
+// images/ folder. The tab is the Design seat's extra item. Its view slot is EMPTY on purpose:
+// the counters view it first held was removed the same day (owner: vanity numbers with no
+// action tied to them). A view arrives here when a watch has something to act on.
+import uxAgentIcon from '@/assets/ai-agent-icon.svg';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types — exported for React consumers (InteractiveChatInterface.tsx)
@@ -87,7 +92,17 @@ import settingsButtonIcon from '@/assets/figma-settings-icon.svg';
 // icon "settings 1" #40001119:6637. It is drawn because the design draws it and it is
 // NOT wired: the node carries no annotation, so there is no event name to emit and
 // inventing one is the thing the annotation rule exists to stop. See the click handler.
-export type TabId = 'chat' | 'trace' | 'versions' | 'tools' | 'approvals' | 'eval' | 'states' | 'repair' | 'settings';
+export type TabId = 'chat'
+  | 'trace'
+  | 'sessions'
+  | 'versions'
+  | 'tools'
+  | 'approvals'
+  | 'eval'
+  | 'states'
+  | 'repair'
+  | 'ux'
+  | 'settings';
 
 /** Detail payload for the 'tab-change' CustomEvent. */
 export interface TabChangeEventDetail {
@@ -202,10 +217,30 @@ const TABS: TabDef[] = [
     // rail tab is a view switch, and the panel's view is a SLOT — the design calls
     // it chat-output-simple-slot-area, and anything can be injected into it.
     //
-    // The hand-traced `svgPath` that used to sit here as the drawing of record is
-    // NOT restored: the original string is not recoverable from git, whose version
-    // of this file predates the working tree. `iconSrc` is the design's own
-    // artwork and is what renders; the traced fallback was unused while it was set.
+    // RESTORED AGAIN 2026-10-18: it was taken out of the drawable list for a day on a
+    // misreading of the owner's order — he asked for the WORD "Langfuse" to be removed,
+    // not the application. The tab is back exactly as it was.
+    nodeId: '40001011:26266',
+    iconNodeId: '40001011:26260',
+    labelNodeId: '40001011:26259',
+    iconSrc: traceButtonIcon,
+  },
+  {
+    /* SESSIONS — THE SECOND BUTTON, WHERE THE TRACE BUTTON STANDS (owner, 2026-10-17:
+       *"well let's add sessions to where the trace was … make preview Sessions"*). The
+       ROOM decides which of the two it shows: the governance rail's allowedTabs list never
+       carries `trace`, so this button takes that position there, and the rooms that still
+       offer Trace keep both.
+
+       A SESSION IS A GROUPING LABEL, not a process: rows sharing a `session_id` are one
+       session. The view (<sessions-feed>) draws that grouping from the app's own store.
+
+       THE ARTWORK IS THE RAIL SLOT'S OWN — the same Figma "trace-button" asset (#40001011:
+       26266) the button beside it draws, because this button is the one that stands in
+       that slot. No new glyph is invented for it. */
+    id: 'sessions',
+    label: 'Sessions',
+    tooltip: 'Sessions recorded in the governance store',
     nodeId: '40001011:26266',
     iconNodeId: '40001011:26260',
     labelNodeId: '40001011:26259',
@@ -315,6 +350,19 @@ const TABS: TabDef[] = [
     svgPath: 'M4 4h16v3H4zM4 10h11v3H4zM4 16h14v3H4z',
   },
   {
+    // UX — THE DESIGN SEAT'S OBSERVABILITY TAB (owner, 2026-10-18: *"It should be inside of
+    // design on the chat vertical navigation I gave you an icon"*). Drawable everywhere (this
+    // list is what MAY be drawn), but only a room that names it in its allowed-tabs draws it —
+    // today that is Design alone. The view is its own element in its own file; the seat's view
+    // slot draws it, and the room appends it.
+    id: 'ux',
+    label: 'UX',
+    tooltip: 'UX observability — element counts and the flows they served',
+    /* THE OWNER'S OWN MARK, PAINTED IN THE RAIL'S TEAL. It is black artwork; the mask lets the
+       rail draw it in #1FACC2 like every designed icon beside it (see `maskSrc`). */
+    maskSrc: uxAgentIcon,
+  },
+  {
     // THE RAIL'S FOOT BUTTON, AND IT IS LAST IN THIS LIST ON PURPOSE. The drawing pins it
     // to the bottom of the rail (`justify-content: flex-end`, frame #40001119:6593), and
     // the element does that with `margin-top: auto` — an auto margin absorbs the free
@@ -350,6 +398,15 @@ export class ChatNavigationBar extends LitElement {
     healthCount: { type: Number, attribute: 'health-count' },
     healthState: { type: String, attribute: 'health-state' },
     unread: { type: Boolean, attribute: 'unread' },
+    tabLabels: { type: String, attribute: 'tab-labels' },
+    /**
+     * DEACTIVATED TABS — comma-separated ids that stay on the rail but cannot be pushed
+     * (owner, 2026-10-13: *"Preview should be deactivated until a trace is selected"*).
+     * Visible-but-dark on purpose: the relation between the tabs and the selection is
+     * exactly what the defaults teach, so the tab is not hidden — it is the wrong move
+     * made visible. See `.nb.nd` for the drawn state.
+     */
+    disabledTabs: { type: String, attribute: 'disabled-tabs' },
   };
 
   // ── Defaults ─────────────────────────────────────────────────────────────
@@ -386,12 +443,27 @@ export class ChatNavigationBar extends LitElement {
    * If unset, all tabs are shown (backwards-compatible dev default).
    */
   declare allowedTabs: string;
+  /**
+   * PER-ROOM LABEL OVERRIDES — how THIS room names a tab whose id does not change.
+   *
+   * Ids are the stable key; labels are presentation (the Approve precedent on the
+   * approvals tab). This is the mechanism for the day a room means something else by
+   * a shared id: a JSON map of `{ "<tabId>": { "label": "…", "tooltip": "…" } }`,
+   * each field optional, applied to the drawn button only — the id, the event, the
+   * view wiring and the node ids all stay exactly as they are. Governance renames
+   * `tools` to "Preview" because its hole shows the trace DETAIL there; the composer
+   * and console keep "Tools" untouched because their tab is still the tool registry.
+   */
+  declare tabLabels?: string;
+  /** The room's `disabled-tabs` list. See the property note. */
+  declare disabledTabs: string;
 
   constructor() {
     super();
     this.activeTab = 'chat';
     this.collapsed = false;
     this.allowedTabs = '';
+    this.disabledTabs = '';
     this.unread = false;
     this.healthCount = 0;
     this.healthState = 'loading';
@@ -524,6 +596,15 @@ export class ChatNavigationBar extends LitElement {
     .na {
       background: #CBE6E3;
       height: 77px;
+    }
+    /* A DEACTIVATED TAB — ON THE RAIL, DARK, UNPUSHABLE (owner, 2026-10-13: *"Preview
+       should be deactivated until a trace is selected"*). Not hidden: the tab says what
+       it needs to be itself, and the defaults are what teach the relation. pointer-events
+       keeps even the hover lift away, so it never pretends to be a move. */
+    .nb.nd {
+      opacity: 0.38;
+      cursor: default;
+      pointer-events: none;
     }
 
     /* ── Icon wrapper ─────────────────────────────────────────────────── */
@@ -670,6 +751,19 @@ export class ChatNavigationBar extends LitElement {
       height: var(--nb-icon-h, 38px);
       object-fit: contain;
       pointer-events: none;
+    }
+    /* PAINTED FROM A MASK — the rail's own teal, whatever the artwork's own fill was. */
+    .nci.ncm {
+      background-color: #1FACC2;
+      -webkit-mask-image: var(--ncm-src);
+      mask-image: var(--ncm-src);
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      mask-position: center;
+      -webkit-mask-size: contain;
+      mask-size: contain;
+      border: 0;
     }
     /* The label's colour, straight off the node: #1FACC2 — the same value the
        icon's vector carries, so the glyph and its word read as one mark.
@@ -843,7 +937,20 @@ export class ChatNavigationBar extends LitElement {
     window.dispatchEvent(new CustomEvent('navigate-console'));
   }
 
+  /** Is this tab on the room's `disabled-tabs` list? See the `disabledTabs` property. */
+  private _isTabDisabled(tabId: TabId): boolean {
+    if (!this.disabledTabs) return false;
+    return this.disabledTabs
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .includes(tabId);
+  }
+
   private _handleTabClick(tabId: TabId) {
+    // A DEACTIVATED TAB ANSWERS NOTHING — see the `disabledTabs` property. The button is
+    // also `disabled` in the DOM; this guard is for the paths that call with an id.
+    if (this._isTabDisabled(tabId)) return;
     // TODO(behavior): action undefined in Figma — node 40001119:6600 (the settings
     // button). The v.4b drawing draws the gear and annotates nothing, so there is no
     // event name to emit, and inventing one is the thing the annotation rule exists to
@@ -993,6 +1100,21 @@ export class ChatNavigationBar extends LitElement {
     return parts.join('; ');
   }
 
+  /**
+   * The room's label overrides, parsed. A malformed string is ignored whole rather
+   * than half-applied: a rail that renamed one tab and dropped another from a typo
+   * is harder to see than one that renamed nothing.
+   */
+  private _labelOverrides(): Record<string, { label?: string; tooltip?: string }> {
+    if (!this.tabLabels) return {};
+    try {
+      const raw = JSON.parse(this.tabLabels) as Record<string, { label?: string; tooltip?: string }>;
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+      return {};
+    }
+  }
+
   render() {
     const currentTab = this.activeTab;
 
@@ -1006,7 +1128,13 @@ export class ChatNavigationBar extends LitElement {
     const filtered = allowed.length
       ? TABS.filter((tab) => allowed.includes(tab.id))
       : TABS;
-    const visibleTabs = filtered.length ? filtered : TABS;
+    /* The room's own words for its buttons, when it stated any — applied to the
+       DRAWN label and tooltip only. See `tabLabels`. */
+    const overrides = this._labelOverrides();
+    const visibleTabs = (filtered.length ? filtered : TABS).map((tab) => {
+      const o = overrides[tab.id];
+      return o ? { ...tab, label: o.label ?? tab.label, tooltip: o.tooltip ?? tab.tooltip } : tab;
+    });
 
     return html`
       <div class="sb">
@@ -1025,7 +1153,8 @@ export class ChatNavigationBar extends LitElement {
             <button
               type="button"
               data-node-id=${tab.nodeId ?? nothing}
-              class="nb ${tab.iconSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''} ${tab.id === 'chat' && this.unread && this.collapsed ? 'nb-news' : ''}"
+              ?disabled=${this._isTabDisabled(tab.id)}
+              class="nb ${tab.iconSrc || tab.maskSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${this._isTabDisabled(tab.id) ? 'nd' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''} ${tab.id === 'chat' && this.unread && this.collapsed ? 'nb-news' : ''}"
               style=${this._tabStyle(tab)}
               @click=${() => this._handleTabClick(tab.id)}
               title="${tab.tooltip}"
@@ -1036,10 +1165,16 @@ export class ChatNavigationBar extends LitElement {
                 <div class="iw">
                   <div class="ic">
                     <!-- A tab with exported artwork renders the design's own icon;
-                         the rest keep the mask + glyph pair. -->
-                    ${tab.iconSrc
-                      ? html`<img class="nci" src=${tab.iconSrc} alt="" data-node-id=${tab.iconNodeId ?? nothing} />`
-                      : html`
+                         the rest keep the mask + glyph pair. A tab whose artwork is
+                         MONOCHROME names it as maskSrc and the rail paints it in
+                         its own teal instead of drawing the black asset.
+                         (No backticks in this comment: this is an html template and
+                         one would end it.) -->
+                    ${tab.maskSrc
+                      ? html`<span class="nci ncm" style=${`--ncm-src: url("${tab.maskSrc}")`} aria-hidden="true"></span>`
+                      : tab.iconSrc
+                        ? html`<img class="nci" src=${tab.iconSrc} alt="" data-node-id=${tab.iconNodeId ?? nothing} />`
+                        : html`
                         <!-- Monochrome mask layer -->
                         <svg class="nm" fill="none" viewBox="0 0 26 25">
                           <path d="M26 0H0V25H26V0Z" fill="white" fill-opacity="0.01" />
@@ -1102,6 +1237,7 @@ declare module 'react' {
            */
           collapsed?: '' | boolean;
           'allowed-tabs'?: string;
+          'tab-labels'?: string;
           'health-count'?: number | string;
           'health-state'?: 'ok' | 'loading' | 'unknown';
           ref?: React.Ref<ChatNavigationBar>;

@@ -46,9 +46,6 @@ const stroke = {
 const HomeIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M3 10.5L12 3l9 7.5M5 9.5V21h14V9.5" /></svg>
 );
-const TracingIcon = ({ className }: IconProps) => (
-  <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M6 3v18M6 8h6M6 15h6M12 5v6M12 12v6" /></svg>
-);
 const SessionsIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
 );
@@ -117,7 +114,17 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Home", href: langfuseHref(""), icon: HomeIcon, group: null },
   // No Dashboards entry — the list opens from the room's Home cog (settings
   // modal); a nav shortcut here would be a second door.
-  { label: "Tracing", href: langfuseHref("/traces"), icon: TracingIcon, group: "Observability" },
+  // TRACING IS NOT HERE — removed 2026-10-14 on the owner's word: *"we could
+  // remove trace now from the left hand navigation because Grace is handling
+  // it."* The Trace button in her rail is the room's door to Tracing: it
+  // deep-links the app AND carries the standing selection, so the table
+  // re-marks what the seat features — a clean /traces jump from here could
+  // never do that, and that path is exactly the one that left the featured
+  // trace unmarked on the table (owner-reported the same day). The other
+  // sections leave this nav the same way as the rail covers them; Home — and
+  // the configuration-level items — stay (owner: *"you can click on the Home
+  // icon on the left-hand side which will remain. It's just going to be more
+  // high-level configuration than it is navigation."*).
   { label: "Sessions", href: langfuseHref("/sessions"), icon: SessionsIcon, group: "Observability" },
   { label: "Users", href: langfuseHref("/users"), icon: UsersIcon, group: "Observability" },
   { label: "Alerts", href: langfuseHref("/alerts"), icon: AlertsIcon, group: "Observability" },
@@ -182,10 +189,18 @@ export default function GovernanceNav({ onNavigate, activePath }: GovernanceNavP
     >
       {/* THE COLLAPSED RAIL'S FILL — 0.75, starting BELOW the header zone
           (top: 56px) so the header's own 0.75 is never stacked on a second 0.75
-          layer. Mounts only once the panel has fully closed. */}
+          layer. Mounts only once the panel has fully closed.
+          PINNED BOTH EDGES — NOT h-full (fixed 2026-10-13 night, owner-reported: "it slides
+          up and there's a white bar at the bottom"). `top-14 h-full` made this fill
+          exactly 56px TALLER than the viewport (top 56 + 100vh), so the shell's
+          overflow-hidden row had 56px of hidden scrollable content underneath it — and any
+          focus/scroll reaching the room below the fold scrolled it to the bottom, sliding
+          the whole shell (header included) up out of the window with a blank band left at
+          the foot. top-14 + bottom-0 sizes it to the exact span it was always meant to
+          cover and leaves nothing scrollable behind. */}
       {isCollapsed && railVisible && (
         <div
-          className="absolute left-0 top-14 w-14 h-full"
+          className="absolute left-0 top-14 bottom-0 w-14"
           style={{ backgroundColor: "rgba(17, 14, 31, 0.75)" }}
         />
       )}

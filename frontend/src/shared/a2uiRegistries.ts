@@ -4,7 +4,7 @@
  * WHY THIS EXISTS. A bundle is built long before a design system is ingested, so the mapping from a
  * component NAME to a custom-element TAG cannot be a `.ts` file written at runtime: the browser can
  * never import it. It is DATA — one `registry.json` per partition, served by the server and fetched
- * here (wireframe-lab/ADD-A-DESIGN-SYSTEM.md §6).
+ * here (product/ADD-A-DESIGN-SYSTEM.md §6).
  *
  * HOW IT IS CONSULTED — AND THE ORDER CHANGED ON 2026-10-03, BY THE OWNER'S WALL. `resolveTag(name,
  * system)` reads the CHOSEN system's own table FIRST: a design system's catalogue is the authority

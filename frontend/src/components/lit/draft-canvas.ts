@@ -391,7 +391,7 @@ export class DraftCanvas extends LitElement {
      *   · the catalogue does not know the name at all; or
      *   · the name resolves (a system's registry maps it) to an element this bundle does NOT
      *     contain — an ingested system whose component is proposed but not implemented yet, which is
-     *     a real state and not an ingest error (§5 of wireframe-lab/ADD-A-DESIGN-SYSTEM.md).
+     *     a real state and not an ingest error (§5 of product/ADD-A-DESIGN-SYSTEM.md).
      */
     // EACH NODE, AND EACH OF ITS CHILDREN, RESOLVED THE SAME WAY — a container's contents are
     // resolved by this same reader (see DraftComponent.children): the refusals are drawn on the

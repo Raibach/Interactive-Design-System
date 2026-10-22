@@ -78,7 +78,7 @@ CONSOLE_TABS = "chat,eval,tools,approvals,settings"
 # the tab would leave the check row in the tree and unreachable on screen, which is the hole this
 # constant closes. `trace` stays because Design's seat is given a trace view; `approvals` does
 # not, because approvals are the console's job.
-DESIGN_TABS = "chat,trace,tools,executions,eval,repair,settings"
+DESIGN_TABS = "chat,trace,tools,executions,eval,repair,ux,settings"
 
 # THE PRODUCT ROOM'S RAIL. The product role's own declared tabs (`role_caps.py`, the 'product'
 # role: chat, trace, tools) — the stage needs no more, and the seat draws a button only for a
@@ -1818,16 +1818,18 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
             _warn(f"the draft-safe palette of '{palette_catalog}' could not be read, so the stage's tray offers nothing: {e}")
             palette = []
 
-        # THE VOCABULARY THIS ROOM'S MODEL IS HANDED, AND WHOSE IT IS (2026-10-03 — THE WALL).
-        # A session that chose a design system is handed THAT SYSTEM'S OWN catalogue — its own
-        # file (the owner's correction, measured on his own drive: the app handed him
-        # prompt-composer's catalogue for a session drawing from another system, and the rule
-        # is "the applications catalog cannot be leveraged for this"). With no system chosen,
-        # the app's own catalogue IS the session's catalogue — today's default, a real answer.
-        if chosen_system:
-            vocabulary_block = _session_catalog_vocabulary(chosen_system)
-        else:
-            vocabulary_block = _catalog_component_vocabulary()
+        # NO COMPONENT VOCABULARY IS BUILT FOR THIS ROOM — DELETED 2026-10-21.
+        #
+        # What stood here: `_session_catalog_vocabulary(chosen_system)` or
+        # `_catalog_component_vocabulary()` — the whole catalogue generated from the schema,
+        # all thirty-five components. That list is where the CONSOLE's `ConsoleCardGrid`
+        # entered the Product room: the vocabulary is generated from the catalog, the catalog
+        # holds the card grid, so every product assembly was handed the console's card
+        # component as a tool it might use. This room's left slot is the stage and has never
+        # held a card, and its tree is fixed below — a list of components the model may choose
+        # is a list of components this room is not building. Owner, 2026-10-21: "We're not
+        # gonna smooth it over. We're gonna break it. We're gonna stop it from doing that.
+        # We're gonna take out that aspect of it for product."
 
         # (TWO DEAD LINES WERE HERE — `palette_names` and `chosen_line`, computed on every assembly
         # from 2026-10-03 and read by nothing: what the block carries is the script alone, below.
@@ -1839,112 +1841,58 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
 
         ms_a = (time.perf_counter() - t_a_start) * 1000
 
-        # ── THE CONTRACT — the room's whole description, composed by the model ──────
-        llm_prompt = f"""You are Grace, the A2UI surface assembler for the product room.
-{render_tools_block()}
+        # ── THE ROOM'S TREE, WRITTEN HERE — THE MODEL IS NOT ASKED (deleted 2026-10-21) ──
+        #
+        # WHAT THIS REPLACED: an f-string contract prompt (tools block + the room's whole
+        # description + the full component vocabulary), a `query_llm(...,
+        # prompt_id="surface-assembly-product")` call, fence-stripping, `_extract_json_payload`,
+        # and a parse-failure path that could 503 the room.
+        #
+        # WHY IT IS GONE, IN THE OWNER'S WORDS (2026-10-21): "We're not gonna smooth it over.
+        # We're gonna break it. We're gonna stop it from doing that. We're gonna take out that
+        # aspect of it for product."
+        #
+        # The prompt ended with "Output ONLY this exact JSON" and then spelled out all three
+        # components with every property already in them — the model was retyping a tree that
+        # was already decided, paying seconds on every room load and risking an invented
+        # component on every load. Nothing in the product room ever read its `ai_message`
+        # (checked across `src/rooms/product` and the product files: no consumer). The console's
+        # assembly machine — its vocabulary, its card grid, its parse path — is not part of this
+        # room, so it is not called here at all.
+        components = [
+            {
+                "id": "root",
+                "component": "workspace-layout",
+                "isThirdOpen": False,
+                "chatLoadWidth": 700,
+                "children": {"left": "product-stage", "right": "product-chat"},
+            },
+            {
+                "id": "product-stage",
+                "component": "artifact-canvas",
+                "artifact": {"path": "/session/artifact"},
+            },
+            {
+                "id": "product-chat",
+                "component": "chat-panel",
+                "tracePrompt": False,
+                "allowedTabs": PRODUCT_TABS,
+                "conversationId": {"path": "/session/conversation_id"},
+                "conversations": {"path": "/session/conversations"},
+                "sessionId": {"path": "/session/session_id"},
+            },
+        ]
 
-The user opened the Product room — their wireframe workspace, one prompt package at a time.
-The package is "{session.get('title') or '(untitled)'}".
+        # Her rail, and her words — both THIS room's, written by the assembly rather than
+        # trusted to a model's memory (see `_seat_grace`). Idempotent; neither adds a component.
+        _seat_tabs(components, PRODUCT_TABS)
+        _seat_grace(components, "/session", False)
+        ai_message = "The room is ready."
 
-Assemble the FULL product room surface using A2UI v0.9.1.
-
-{vocabulary_block}
-
-REQUIREMENTS:
-1. id "root", component "workspace-layout" — the composer's own container. Its panes are
-   NAMED slots, so "children" is an OBJECT keyed by slot name; the array form fills nothing.
-   It carries "chatLoadWidth": 700 — THE ROOM'S DECLARED WIDTH FOR HER COLUMN ON LOAD (owner,
-   2026-10-03: *"We don't do equal split on this because we need more canvas space than we do
-   chat space"* — and 700 is his number: *"that's not a fixed width, that's just a width on
-   load; the user can of course resize it"*). Emit it exactly as written. It is not a clamp:
-   a drag is still the operator's.
-2. "product-stage": "artifact-canvas" in slot "left", bound to the page on the stage:
-   "artifact" carries {{"path": "/session/artifact"}} (null until the first build — the
-   element's own empty state). THE PAGE IS BUILT BY GRACE, FREELY, FROM THE PERSON'S OWN
-   SENTENCE: the artifact is a real HTML document written by her
-   (POST /api/ai/build-artifact), held in-session until Save / Submit lands (a later slice);
-   the stage is simply the window onto it. NO palette and NO movable/grid/clearable flags ride
-   this stage — the Composer's own stage keeps its gestures and its tray; this room's stage is
-   the page. THIS IS THE STAGE. It fetches nothing.
-3. "product-chat": "chat-panel" in slot "right" — the person's seat, bound to this
-   package's own conversation: conversationId {{"path": "/session/conversation_id"}},
-   conversations {{"path": "/session/conversations"}}, sessionId {{"path": "/session/session_id"}}.
-   There is no middle slot.
-4. "isThirdOpen": false — the chat column loads CLOSED. This is the container's own state
-   and it owns the column's width: at false the right pane sits at its designed collapsed
-   floor with the rail showing, and the rail's Chat button OPENS it on the first click. Do
-   NOT send "collapsed" or "rightWidth" on the panel or the container.
-5. "product-chat" carries "allowedTabs": "chat,trace,tools" and "tracePrompt": false. Emit
-   them exactly as written. It carries NO child in its "view" slot — the room has no context
-   strip (the owner removed the catalogue chooser, 2026-10-03: *"they don't need to select
-   anything"*): her panel is her thread, and nothing sits above it.
-6. Short friendly ai_message
-
-Emit nothing else — no greeting, no header, no Text above them.
-
-Output ONLY this exact JSON (no markdown, no extra text):
-{{
-  "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "chatLoadWidth": 700, "children": {{"left": "product-stage", "right": "product-chat"}}}},
-    {{"id": "product-stage", "component": "artifact-canvas", "artifact": {{"path": "/session/artifact"}}}},
-    {{"id": "product-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,trace,tools", "conversationId": {{"path": "/session/conversation_id"}}, "conversations": {{"path": "/session/conversations"}}, "sessionId": {{"path": "/session/session_id"}}}}
-  ],
-  "ai_message": "Your message"
-}}
-"""
-
+        # NO MODEL CALL ON THIS PATH. Zeroed rather than removed so the perf trace below keeps
+        # its shape and stays comparable with the other rooms' traces.
         ms_b = 0.0
         ms_c = 0.0
-        t_b_start = time.perf_counter()
-        llm_response = query_llm(
-            question=llm_prompt,
-            mode="surface_assembly",
-            temperature=0.0,
-            prompt_id="surface-assembly-product"
-            # model intentionally omitted — use the enabled provider's default
-        )
-        ms_b = (time.perf_counter() - t_b_start) * 1000
-
-        if not llm_response or not llm_response.strip():
-            raise HTTPException(
-                status_code=503,
-                detail="A2UI FAILURE: AI did not respond. The AI must be active to render this surface."
-            )
-        if llm_response.strip().startswith("Error:"):
-            raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
-
-        t_c_start = time.perf_counter()
-        response_text = llm_response.strip()
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0].strip()
-
-        try:
-            parsed = _extract_json_payload(response_text)
-            components = parsed["components"]
-            # Her rail, and her words — both THIS room's, written by the assembly rather
-            # than trusted to the model's memory (see `_seat_grace`).
-            _seat_tabs(components, PRODUCT_TABS)
-            _seat_grace(components, "/session", False)
-            ai_message = parsed.get("ai_message", "The room is ready.")
-            if not isinstance(components, list) or len(components) == 0:
-                raise ValueError("components must be non-empty array")
-            ms_c = (time.perf_counter() - t_c_start) * 1000
-        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
-            print(
-                f"[A2UI Product] AI RESPONSE PARSE FAILED:\n"
-                f"  error_type: {type(e).__name__}\n"
-                f"  error_message: {e}\n"
-                f"  llm_response_length: {len(response_text)}\n"
-                f"  llm_response_first_500: {response_text[:500]}\n"
-                f"  timestamp: {time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n"
-                f"  FIX: The LLM returned something that isn't valid A2UI JSON. Check the prompt or the model."
-            )
-            raise HTTPException(
-                status_code=503,
-                detail=f"A2UI FAILURE: AI returned invalid JSON for render-product — {type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
-            )
 
         elapsed_ms = int((time.time() - start_time) * 1000)
         print(f"\n{'='*60}")
@@ -2014,8 +1962,11 @@ Output ONLY this exact JSON (no markdown, no extra text):
                             "artifact": None,
                         },
                         "assembly_time_ms": elapsed_ms,
-                        "llm_used": True,
-                        "usage": dict(LAST_USAGE),  # measured, straight from the provider
+                        # FALSE, AND THAT IS THE POINT: this room's tree is written in Python
+                        # (see above), so no provider was called and there is no usage to
+                        # report. Stated rather than left as a stale True.
+                        "llm_used": False,
+                        "usage": {},
                         "ai_message": ai_message,
                         "warnings": _drain_warnings(),
                     }
@@ -2990,7 +2941,12 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 title="Design",
                 description="The Design experience's own session — a division, not a prompt package.",
             )
-            design_conversation = state.prompt_sessions_api.get_or_create_design_conversation(user_id=uid)
+            # THE FIGMA SECTION'S OWN CONVERSATION ROOM (`conversations.tab = 'tools'`). The
+            # console's Chat room is a different row — the console is the console, and the design
+            # system's thread is the Figma section's, so the two never share messages.
+            design_conversation = state.prompt_sessions_api.get_or_create_design_conversation(
+                user_id=uid, tab="tools"
+            )
 
             # ── THE CONVERSATIONS THAT HANG OFF THE DESIGN CONTAINER, READ ON ASSEMBLY ────
             #

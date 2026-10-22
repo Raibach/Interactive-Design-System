@@ -109,7 +109,7 @@ class ConversationAPI:
             query = """
                 SELECT id, user_id, title, message_count, is_archived,
                        created_at, updated_at, metadata, project_id,
-                       surface_state_json, surface_updated_at
+                       surface_state_json, surface_updated_at, tab
                 FROM conversations
                 WHERE (user_id = %s OR session_id IN (
                     SELECT session_id FROM session_permissions WHERE user_id = %s))
@@ -640,7 +640,7 @@ class ConversationAPI:
 
     # ── THE WIREFRAME DRAFT: ONE FACT PER CONVERSATION ──────────────────────────────────────────
     #
-    # S2 of the drafting plan (wireframe-lab/PLAN.md). The key is the CONVERSATION — decided
+    # S2 of the drafting plan (product/PLAN.md). The key is the CONVERSATION — decided
     # 2026-10-02: `prompt_artifacts` already carries `conversation_id` (indexed) and no package
     # column, and the seat's own law is that the package owns its conversations, so a draft belongs
     # to the thread it was made in. There is no fallback to another conversation, ever.

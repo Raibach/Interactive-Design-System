@@ -1,0 +1,37 @@
+Mail + DNS records to recreate at SiteGround — read from live DNS on 2026-10-19
+
+================================================================
+raibach.net  (currently MISSING A and MX — mail and site are down)
+================================================================
+
+Type   Name                     Value
+A      @                        46.225.45.132
+A      www                      46.225.45.132
+MX     @            priority 10  mail.protonmail.ch
+MX     @            priority 20  mailsec.protonmail.ch
+TXT    @                        v=spf1 include:_spf.protonmail.ch ~all
+TXT    _dmarc                   v=DMARC1; p=quarantine
+
+TXT    protonmail._domainkey    v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz2sCVvX1w6JTAyKxTmfimYXk0LSKFImRTmMBBo3b8hKGpg21BhppKGdxetHAdzL9YZ8AdMiPrshgCPIRblfHlm0Y42o05mfnMkgUYNIxSQhA4A/zXf0T305Dxtuz8ZvDoHaXlFhhxFroSfkODoL+usGfuPrB4ctoymHzuMhbb9fuAYfuxN+VKAgChmFJXHeNb7O7G8bErhV8WtrVJa+PPrZeXzZ2PSgiI8R6bPYRQtDj3+X7XK2E1atM/JWnKmybJfQJdynqJ2J9Ia+oP6nlS2UHpUSkbf+OSojH2gk5h7GhqegMOsMKmiDpX/45cITZ4d9BTo4GY6pA++sGqbPvewIDAQAB;
+
+CNAME  protonmail2._domainkey   protonmail2.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch
+CNAME  protonmail3._domainkey   protonmail3.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch
+
+(If SiteGround will not accept a CNAME at protonmail2/3._domainkey, create them as
+TXT records with the same hostnames as the value.)
+
+================================================================
+holtportfolio.com  (complete and correct — nothing to change)
+================================================================
+
+A      @                        46.225.45.132
+A      www                      46.225.45.132
+MX     @            priority 10  mail.protonmail.ch
+MX     @            priority 20  mailsec.protonmail.ch
+TXT    @                        v=spf1 include:_spf.protonmail.ch ~all
+TXT    _dmarc                   v=DMARC1; p=quarantine
+
+TXT    protonmail._domainkey    v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwBRNW+ODX8ijWq9FVvmfRL7LL4dQhNCvFdWNZ7xe/RwE6q7yLSBa3H+XLc/56Rc4ktUpsTyJcirChrFUZjkS3X4M162xhMhK1QWrbTqCpTUtf24HAZmzDPIvhis7MO4MNIg+TG+OWd5X/bphJOl9S/zARAMLZnAy4pQSe4Hhkp77/tYBf4v2aHRtDWhOH8wpGdFduuw2qLhuBq+HFOHIWVpVislNj/zg4792MjlLMJdWC4fUAvZtoJsvwJ00LzoJN9KrQ6wgieh7od1ht5Sg7yqnJJdaZ9F3GlVa/aYRSzv8nGASF/KbiHCSIzS1u+IZnSxS+LnxUFYV7ROiidybNQIDAQAB;
+
+CNAME  protonmail2._domainkey   protonmail2.domainkey.dauvbe7zslpx3ezj5w6ua4tyrnsohfb5wismii4jinod4pmg2qydq.domains.proton.ch
+CNAME  protonmail3._domainkey   protonmail3.domainkey.dauvbe7zslpx3ezj5w6ua4tyrnsohfb5wismii4jinod4pmg2qydq.domains.proton.ch

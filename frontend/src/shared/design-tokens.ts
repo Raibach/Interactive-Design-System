@@ -70,14 +70,20 @@ export const designTokens = css`
      * than as damage. The steps stay named, so a thing that is "meta" is still meta — it is
      * simply no longer smaller than the floor.
      *
-     * The scale therefore reads 20 / 14 / 13 / 13 / 13. If a level needs to separate
-     * further, it separates INK or WEIGHT or CASE — not size.
+     * THE FLOOR IS 14 FOR TEXT, 13 FOR NUMBERS (owner, 2026-10-13: *"all of the text in
+     * here did not get a 14 pixel minimum size. And all of the numbers should never go
+     * below 13 pixels. … my reference is pixels."*). The 2026-09-18 law said nothing sits
+     * below 13; this one separates the two classes: WORDS hold 14 (the caption step rose
+     * from 13), FIGURES — ids, latencies, costs, token counts, timestamps — may sit at 13,
+     * which is where the tabular figures read densest without shrinking. The scale reads
+     * 20 / 14 / 14 / 13 / 14. If a level needs to separate further, it separates INK or
+     * WEIGHT or CASE — not size.
      */
     --ds-fs-lg: 20px;   /* the primitives' .greeting */
     --ds-fs-md: 14px;   /* body — the chat thread and the primitives' .body */
-    --ds-fs-sm: 13px;   /* the primitives' .caption — the FLOOR */
-    --ds-fs-meta: 13px; /* timestamps, statuses, detail lines (was 11) */
-    --ds-fs-label: 13px;/* uppercase section labels and badges (was 10) */
+    --ds-fs-sm: 14px;   /* the primitives' .caption — text floor (was 13; owner 2026-10-13) */
+    --ds-fs-meta: 13px; /* the NUMBERS tier: timestamps, ids, figures (never below 13) */
+    --ds-fs-label: 14px;/* uppercase section labels and badges — these are WORDS (was 13) */
 
     /* ── ink and surface ──────────────────────────────────────────────────────
        CONTRAST FLOOR: every ink token below is at least 4.5:1 on --ds-surface, so

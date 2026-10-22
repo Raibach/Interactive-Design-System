@@ -887,6 +887,18 @@
     "behavior": "generated",
     "generator": "figma ingest \u2014 approve step"
   }
+},
+{
+  "figmaName": "prompt-textarea-container-system",
+  "figmaNodeId": "40001177:2476",
+  "litComponent": "f-40001177-2476",
+  "file": "frontend/src/components/lit/f-40001177-2476.ts",
+  "status": "built",
+  "provenance": {
+    "litComponent": "generated",
+    "behavior": "generated",
+    "generator": "figma ingest \u2014 approve step"
+  }
 }
 ]
 }

@@ -1,13 +1,11 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import GateSplash from "@/components/GateSplash";
-import { SignUpWizard } from "@/components/SignUpWizard";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
-import { appConfigReady, isDemoMode } from "@/shared/appConfig";
+import { isDemoMode } from "@/shared/appConfig";
 import "./global.css";
 
 /*
@@ -28,104 +26,40 @@ const CommandCenter = lazy(() => import("@/pages/CommandCenter"));
 // route because it is a reader of the catalogue, not a surface the AI assembles: no catalog
 // entry names it, and nothing on `/` links to it except this route's own path.
 const CatalogInspector = lazy(() => import("@/pages/CatalogInspector"));
+// THE TRACE EXPERIENCE — its own page, its own file.
+const TraceExperience = lazy(() => import("@/pages/TraceExperience"));
 
 const queryClient = new QueryClient();
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    // Session-scoped (2026-10-04): a fresh visit meets the gate — see src/shared/session.ts.
-    return sessionStorage.getItem("grace_is_authenticated") === "true";
-  });
-  // WHICH BUILD THIS IS, BEFORE THE TREE DRAWS. The read was STARTED by the entry
-  // (main.tsx, not awaited — see there); this only waits for its answer, which for an
-  // already-signed-in session is the only thing between the first frame and the app.
-  const [demoSettled, setDemoSettled] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    void appConfigReady().then(() => {
-      if (alive) setDemoSettled(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  /* THE PIN GATE IS GONE (owner, 2026-10-21: *"if the code was properly clean … I didn't have a
+     whole bunch of junk in it like authorization gates and stuff for these applications then it
+     wouldn't be slow"*).
 
-  /*
-   * THE GATE IS THE HTML CARD (index.html) — the ONLY door. It checks the pin and writes
-   * the flag itself, before any bundle exists; this component does not re-implement it
-   * and renders NOTHING while the flag is absent (the card covers the screen). No
-   * fallback login, no degraded path: one lock, one door.
-   */
+     What stood here: an `isAuthenticated` state read from `sessionStorage.grace_is_authenticated`,
+     a `useGateSession()` listener for the static card's `grace-signed-in` event, and
+     `if (!isAuthenticated) return null;`. That last line is why a browser with no flag saw a
+     WHITE PAGE FOREVER — the card that was supposed to write the flag had been removed from
+     index.html, so nothing could ever write it and the app returned null for the rest of the
+     session. A door whose key is no longer minted is not a door, it is a blank screen.
+
+     There is no login for this application: it is a local studio serving its own rooms. The
+     shell renders, always. */
+
   /*
    * THE PIN-ENTRY TIME IS LOADING TIME (the owner's design, 2026-10-02). Nothing used
    * the seconds a person spends typing the pin — the app only began downloading after
    * Sign in, so the wait landed where it read as hesitation. This starts the console's
-   * own chunk the moment the gate appears (and for an already-signed-in session, the
-   * moment the app mounts — in parallel with the config read). By the time Enter is
-   * pressed, the download is done; what remains is the console's own Standby while the
-   * surface assembles, which is where a wait belongs. Same specifier as the lazy()
-   * above, so it warms exactly that chunk; a failed prefetch is nothing — the real
-   * import retries on the way in.
+   * own chunk the moment the gate appears. Same specifier as the lazy() above, so it
+   * warms exactly that chunk; a failed prefetch is nothing — the real import retries on
+   * the way in.
    */
   useEffect(() => {
     void import("@/pages/WritingAreaIndex").catch(() => {});
   }, []);
 
-  /*
-   * ── THE REGISTRATION DOOR (2026-10-04) ─────────────────────────────────────────────────────
-   * `?signup` renders the sign-up wizard, and this is the real door — not a test one. The gate
-   * in index.html carries the link that reaches it ("Register for beta testing", quieter than
-   * the pin button on purpose): the pin is for the people who already have one, and this is for
-   * the people who do not yet exist here. BESIDE the pin, not a way past it.
-   *
-   * THE TWO HALVES MOVE TOGETHER: index.html hides its card for this query (the `signup` class)
-   * and this early return renders the wizard before the auth check. Deleting either leaves a
-   * visitor staring at the gate with a door they cannot open.
-   *
-   * IT SITS BELOW THE HOOKS ON PURPOSE. Both returns below this point are EARLY returns, and a
-   * hook after one of them would be a hook called on some renders and not others — which is the
-   * one thing React does not forgive, and which this file was already doing before the door was
-   * added (the prefetch above used to sit under the `!isAuthenticated` return). Moving the
-   * returns down is the whole of that fix.
-   */
-  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("signup")) {
-    return (
-      <SignUpWizard
-        open
-        onClose={() => { window.location.search = ""; }}
-        /* THE REGISTERED GUEST COMES IN (2026-10-04). A person who just signed up and started a
-           trial has no pin and never will — the gate is the door for people who already have
-           one. So the success button opens the same session the pin opens (the flag
-           index.html writes) and then leaves the door address behind; the reload lands in the
-           console. Cancel keeps the old behavior: straight back to the gate. Measured before
-           this existed: the success button reused onClose, and a fresh registrant met a pin
-           card they could not answer. */
-        onEnterWorkspace={() => {
-          try {
-            sessionStorage.setItem("grace_is_authenticated", "true");
-            /* THIS DOOR IS 'registered' (2026-10-04) — the marker the Development room's frame
-               carries (builder-embed.ts) so the tool's onboarding wizard appears for a
-               signed-up person while dev@local keeps its current behavior. The pin login
-               writes 'dev' over it; the two markers cannot both be true. Session-scoped with
-               the sign-in itself (src/shared/session.ts). */
-            sessionStorage.setItem("grace_door", "registered");
-          } catch {
-            console.error("[signup] could not open the session — the gate will still show.");
-          }
-          /* AND THE LANDING IS THE CONSOLE (owner, 2026-10-04) — not the Development room: the
-             room carries the registered door marker, so the onboarding wizard greets them
-             there WHEN THEY GO THERE, and nothing drags them into it on arrival. */
-          window.location.search = "";
-        }}
-      />
-    );
-  }
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  // Show main app if authenticated
+  // Show main app
   try {
     return (
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -161,10 +95,20 @@ function App() {
                     cross-fade away. No timer decides; the console's own state does. The
                     cap inside is a last-resort abort so a dead server cannot freeze the
                     tab. */}
-                <GateSplash holdUntilDrawn />
-                {demoSettled ? (
-                  <Suspense fallback={null}>
-                    <Routes>
+                {/* THE SPLASH IS GONE (owner, 2026-10-21: *"We don't need the gate splash at all"*).
+                    index.html hides its own card the moment the session is signed in, so there is
+                    nothing left for this component to lift — and its amber ring could no longer
+                    collide with a room's gate ring. The visitor gate in the same card is untouched:
+                    a signed-out visitor still sees the form and never this shell. */}
+                {/* THE TREE NO LONGER WAITS FOR THE CONFIG READ (owner, 2026-10-21: *"oh yes let's
+                    take this out"*). It used to render only after `appConfigReady()` settled, which
+                    measured 1.7 s between the gate lifting and the console's own standby showing —
+                    time the person spent looking at an empty frame. The console slot draws its own
+                    standby the moment the shell paints; the rooms read the tool URLs when they mount,
+                    and the dev-only routes below appear once the config answers (the state change
+                    below is what re-renders this tree). */}
+                <Suspense fallback={null}>
+                  <Routes>
                       {/* A2UI: Single root route - AI assembles all surfaces dynamically */}
                       <Route
                         path="/"
@@ -189,11 +133,18 @@ function App() {
                           element={<CatalogInspector />}
                         />
                       )}
+                      {/* The Trace experience on its own route — the surface a host frames.
+                          Read by its own fetch; the pick lives in its own address. */}
+                      {!isDemoMode() && (
+                        <Route
+                          path="/trace-experience"
+                          element={<TraceExperience />}
+                        />
+                      )}
                       {/* All other paths redirect to root - AI controls navigation */}
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
-                  </Suspense>
-                ) : null}
+                </Suspense>
               </SentryErrorBoundary>
             </div>
           </TooltipProvider>

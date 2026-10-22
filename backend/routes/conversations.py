@@ -209,7 +209,7 @@ async def update_conversation(
 async def get_conversation_draft(
     conversation_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
 ):
-    """The drafting canvas's payload for this conversation (S2, wireframe-lab/PLAN.md).
+    """The drafting canvas's payload for this conversation (S2, product/PLAN.md).
 
     ABSENT IS A REAL ANSWER: `{"draft": null}` means nothing has been drafted in this thread yet,
     and the canvas draws its empty state. A read that FAILS is a 500 with the reason — never an

@@ -24,3 +24,17 @@ reads the real report again (`frontend/src/shared/catalogHealth.ts`; the hard "d
 both halves go through it: the shell's fetch and the backend readers (Grace's check rows,
 `_repair_rows`; `routes/misc.py` `_read_catalog_audit`), so a flipped switch cannot leave the two
 halves telling different stories. Owner's word on the plan's question: "align".
+
+## 2026-10-15 — the zone's first map, and the design-update plan
+
+The composer had no notes of its own — only this log, the code, and the A2UI documents — so the
+map begins here: `THE-COMPOSER-IS-A-PURE-A2UI-SURFACE.md` draws what the room is (the
+server-assembled surface, the prompt column's element chain, the bindings, and the window-event
+surface the model drives the prompt with), each claim pointing into the code that owns it.
+
+The companion plan for the owner's design-update project — restyle from Figma, ingest, approve,
+live Lit catalog, refresh, the composer shows it — is filed in the Design zone:
+`design/DESIGN-UPDATE-FLOW-PLAN-2026-10-15.md`, with the two doors the approve's write-set
+allows and the protection list this surface must keep.
+
+Both documents wait on the owner's word before any build work; nothing else in the zone changed.

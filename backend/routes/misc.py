@@ -180,6 +180,7 @@ async def api_config():
         "development_tool_url": os.getenv("DEVELOPMENT_TOOL_URL", "").rstrip("/"),
         "builder_tool_url": os.getenv("BUILDER_TOOL_URL", "").rstrip("/"),
         "governance_tool_url": os.getenv("GOVERNANCE_TOOL_URL", "").rstrip("/"),
+        "posthog_tool_url": os.getenv("POSTHOG_TOOL_URL", "").rstrip("/"),
     }
 
 
@@ -354,7 +355,7 @@ async def api_catalog_registry(system: str):
     """A partition's TAG MAP — the data half of the component resolver.
 
     The app FETCHES this, it is never bundled: a `registry.ts` written while the server runs could
-    never be imported by a bundle built long before (wireframe-lab/ADD-A-DESIGN-SYSTEM.md §6). The
+    never be imported by a bundle built long before (product/ADD-A-DESIGN-SYSTEM.md §6). The
     drafting canvas consults it, last, for names the app's own tables do not know.
 
     An unknown SYSTEM is a 404 NAMING it — a typo must not read as "this system has no components",

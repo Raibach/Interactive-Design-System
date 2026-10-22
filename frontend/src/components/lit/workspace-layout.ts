@@ -34,6 +34,23 @@ export class WorkspaceLayout extends LitElement {
     isThirdOpen: { type: Boolean, attribute: 'is-third-open', noAccessor: true },
     leftCollapsed: { type: Boolean, attribute: 'left-collapsed', reflect: true, noAccessor: true },
     chatLoadWidth: { type: Number, attribute: 'chat-load-width' },
+    /**
+     * THE ROOM'S WORD: HER COLUMN IS AN OVERLAY, NOT A PANE (2026-10-13). Declared by a
+     * room whose left pane is an embedded application (governance's Langfuse frame) — the
+     * owner: *"it can't collapse the table. It has to overlay it. It's an overlay just like
+     * the original one was."* As a flex PANE beside the frame she took width out of it, so
+     * opening her squeezed the application (its table) on every move of hers. With this set
+     * — and a `builder-embed` actually standing in the left slot, read from the slot like
+     * every other fact here — her box becomes a LAYER over the application: absolute, z-3,
+     * and the application keeps every pixel behind her (the same mechanism, and the same
+     * reasoning, as her layer over a drawing — see `_rightOverDrawing`). As a layer with no
+     * chosen width she takes HALF the room — what the equal pane split gave her before, so
+     * the day she became a layer changed no number on screen — the drag still sizes her
+     * (follow the pointer, snap closed at the rail), and her drag ceiling frees the
+     * application's own floor (60) rather than the prompt's (420): that 420 is about reading
+     * a prompt, and this layer covers a thing she is not allowed to squeeze.
+     */
+    chatOverlaysContent: { type: Boolean, attribute: 'chat-overlays-content' },
   };
 
   /**
@@ -52,6 +69,9 @@ export class WorkspaceLayout extends LitElement {
    * nothing here re-asserts: the declaration only says where she stands before anyone moves her.
    */
   declare chatLoadWidth: number;
+
+  /** The room's `chat-overlays-content` declaration. See the property note. */
+  declare chatOverlaysContent: boolean;
 
   /**
    * THE LEFT COLUMN, SAME LAW AS THE RIGHT: the payload may set it, the operator
@@ -317,6 +337,25 @@ export class WorkspaceLayout extends LitElement {
   private _groundElement: HTMLElement | null = null;
 
   private _dragging: 'left' | 'right' | null = null;
+
+  /**
+   * WHERE THE HAND TOOK HOLD — the pointer's distance from her column's own edge.
+   *
+   * THE STRIP IS INSIDE THE COLUMN IT SIZES. `_rightPxFromPointer` reads the pointer's
+   * ABSOLUTE position as "the width she should be", which is right for a divider drawn ON
+   * the boundary and wrong for a 30px strip drawn immediately INSIDE it: pressing the strip
+   * at its far side set her width 30px narrower than she was, and the strip jumped out from
+   * under the cursor before the hand moved at all. The owner, 2026-10-17: *"it's snatching
+   * itself away when the user clicks … it's not supposed to jerk itself away from the
+   * user."*
+   *
+   * So the press records the offset and changes nothing; every move applies it, which makes
+   * the edge follow the pointer exactly and the first move a continuation rather than a jump.
+   */
+  private _gripOffset = 0;
+
+  /** Did the hand actually travel? A click is not a drag — see `_onMouseUp`. */
+  private _gripMoved = false;
 
   /** Observes THIS element's width — see the element-size note in connectedCallback. */
   private _sizeObserver: ResizeObserver | null = null;
@@ -1016,6 +1055,21 @@ export class WorkspaceLayout extends LitElement {
     return this._hasRight && !!middleEl && middleEl.tagName.toLowerCase() === 'room-embed';
   }
 
+  /**
+   * IS HER COLUMN A LAYER OVER AN EMBEDDED APPLICATION? The room's own declaration
+   * (`chatOverlaysContent`, see the property note) plus the slot's own fact — a
+   * `builder-embed` actually standing in the left pane, read from the slot, never sent.
+   * Both must be true: the word without the application (a dead frame, a room switching)
+   * leaves her a pane, and the application without the word (the product and development
+   * rooms embed builders too) keeps exactly the law those rooms have always had.
+   */
+  private get _rightOverApp(): boolean {
+    if (!this.chatOverlaysContent) return false;
+    const leftSlot = this.shadowRoot?.querySelector('slot[name="left"]') as HTMLSlotElement | null;
+    const leftEl = (leftSlot?.assignedElements({ flatten: true }) ?? [])[0] as HTMLElement | undefined;
+    return !!leftEl && !!leftEl.querySelector('builder-embed');
+  }
+
   /*
    * THE FLIP IS GONE, AND THIS IS WHY.
    *
@@ -1147,14 +1201,67 @@ export class WorkspaceLayout extends LitElement {
    * SHE OPENS AT HER OWN WIDTH — the design's 650, and what an expand returns to. Every way of
    * opening her that is NOT a drag goes through here: the rail's Chat button, any rail tab, a
    * picked note. A drag sets her width from the pointer instead, which is why it does not.
+   *
+   * A ROOM THAT DECLARES ITS LOAD WIDTH OPENS THERE — the 2026-10-03 doctrine sentence
+   * ("A room that declares `chatLoadWidth` opens her there") completed, 2026-10-13: the
+   * declared number covers EVERY opener this method serves, not only the load render.
+   * Governance's cold Trace-tab landing — the owner, same night: *"whenever someone… clicks
+   * the trace button in chat nav directly without selecting something in the table first…
+   * this is what someone landing on that section for the first time [gets]"* — must stand
+   * her at the room's 650, and the product room's reopen stands at its declared 600.
+   * A HAND'S WIDTH STILL OUTRANKS BOTH (`_rightIsOperatorSet`): a room whose column the
+   * operator has sized reopens at the standard OPEN_CHAT_PX exactly as it always did.
    */
   private _openThird(): void {
-    this._rightPx = WorkspaceLayout.OPEN_CHAT_PX;
+    this._rightPx =
+      !this._rightIsOperatorSet && this.chatLoadWidth > 0
+        ? Math.round(this.chatLoadWidth)
+        : WorkspaceLayout.OPEN_CHAT_PX;
+    this._setThirdOpen(true);
+    this._syncRightPanel();
+  }
+
+  /**
+   * THE ROOM ASKS HER OUT — THE SAME ACT AS THE RAIL'S OWN TAB TAP.
+   *
+   * The owner, 2026-10-13: *"It's not working when I click a row it doesn't pop out … The
+   * chat should pop out 650."* — and he was right about the cause: once a hand closes her
+   * by the gripper or the rail, the pane is OPERATOR-OWNED, and the shell's plain
+   * `isThirdOpen = true` write is refused (that protection exists for payload/data ticks —
+   * it must never swallow the person's own row click). The rail's tap goes through the
+   * INTERNAL path (`_onTabChange` → here), which may reopen her; this method is that same
+   * door made public so the room's selection handler can knock on it.
+   *
+   * HER WIDTH IS KEPT, NOT RESET — unlike `_openThird`, which returns to the standing
+   * number. A declared `chatLoadWidth` (650 in governance) is where she stands unless a
+   * hand has moved her; a hand's width survives close/reopen exactly as it always has.
+   */
+  openChat(): void {
+    this._openOwnedByOperator = true;
+    if (this.isThirdOpen) return;
     this._setThirdOpen(true);
     this._syncRightPanel();
   }
 
   private _onGripDown = (side: 'left' | 'right', e: MouseEvent): void => {
+    /*
+     * HER PANE IS THE MEASUREMENT, AND IT ALWAYS EXISTS — `.pane.right` is this element's own
+     * markup, drawn unconditionally in `render()`. If it is not there the layout is broken, so
+     * the grip refuses rather than guessing a boundary: a guessed edge is exactly the arithmetic
+     * that moved her on the press. Refused HERE, before `dragging` is set, so nothing is left to
+     * unwind — and said out loud, because a silent refusal is indistinguishable from a dead grip.
+     */
+    let edge = 0;
+    if (side === 'right') {
+      const pane = this.renderRoot.querySelector('.pane.right') as HTMLElement | null;
+      if (!pane) {
+        console.error(
+          '[workspace-layout] .pane.right is missing from the layout — the column grip was not started.',
+        );
+        return;
+      }
+      edge = pane.getBoundingClientRect().left;
+    }
     this.setAttribute('dragging', '');
     this._dragging = side;
     /*
@@ -1175,11 +1282,29 @@ export class WorkspaceLayout extends LitElement {
       this._setLeftCollapsed(false);
     } else {
       this._openOwnedByOperator = true;
-      if (!this.isThirdOpen) {
+      /*
+       * A GRIP TAKEN ON THE STRIP DOES NOT MOVE HER — the press used to size her.
+       *
+       * `_rightPxFromPointer(e.clientX)` on mousedown is correct only for a divider that sits
+       * exactly on the boundary. This strip is 30px wide and lives INSIDE her column, so the
+       * pointer is 0..30px right of the edge it moves: pressing at the strip's far side made
+       * her 30px narrower on the press, and the strip left the cursor without the hand having
+       * moved (owner, 2026-10-17). The press now records the offset from the edge measured
+       * above and leaves the width alone; `_onMouseMove` applies it, so the edge tracks the hand
+       * with no jump at any width.
+       */
+      const wasOpen = this.isThirdOpen;
+      if (!wasOpen) {
         this._setThirdOpen(true);
         this._syncRightPanel();
+        /* A column with no width to drag: the grab gives her one at the pointer, which is the
+           one case where the press really does size her. */
+        this._rightPx = this._rightPxFromPointer(e.clientX);
+        this._gripOffset = 0;
+      } else {
+        this._gripOffset = edge - e.clientX;
       }
-      this._rightPx = this._rightPxFromPointer(e.clientX);
+      this._gripMoved = false;
       this._rightIsOperatorSet = true;
     }
     this.dispatchEvent(new CustomEvent('resize-start', { detail: { side } }));
@@ -1222,7 +1347,10 @@ export class WorkspaceLayout extends LitElement {
       // Her column takes the width the hand is pointing at. The panes beside her give it up
       // by flex's own arithmetic, so nothing here has to hand width to anyone — which is what
       // makes it impossible for her gripper to swell the prompt.
-      this._rightPx = this._rightPxFromPointer(e.clientX);
+      // THE OFFSET IS THE GRAB'S OWN, so the edge stays under the finger that took it (see
+      // `_gripOffset`): the first move continues the gesture instead of rectifying a jump.
+      this._gripMoved = true;
+      this._rightPx = this._rightPxFromPointer(e.clientX + this._gripOffset);
       this._rightIsOperatorSet = true;
       // ...except at the very end: when she has taken everything the prompt needs, the prompt
       // is on its floor, and that is the same collapsed state the dock and the rail speak. Only
@@ -1268,7 +1396,15 @@ export class WorkspaceLayout extends LitElement {
        * floor and it closes" never fired.
        */
       if (this._dragging === 'right') {
-        const collapsed = this._rightPx <= WorkspaceLayout.MIN_RIGHT_PX + WorkspaceLayout.SNAP_PX;
+        /*
+         * A CLICK IS NOT A DRAG. The floor test closed her on ANY release at the floor —
+         * including a press with no movement, so tapping the strip made the column vanish
+         * (owner, 2026-10-17: *"it's snatching itself away when the user clicks"*). The hand
+         * has to have travelled for the release to mean anything; the drag-to-the-floor and
+         * let-go gesture he described still works exactly as it did.
+         */
+        const collapsed = this._gripMoved
+          && this._rightPx <= WorkspaceLayout.MIN_RIGHT_PX + WorkspaceLayout.SNAP_PX;
         if (collapsed !== !this.isThirdOpen) {
           this._setThirdOpen(!collapsed);
           this._syncRightPanel();
@@ -1276,6 +1412,7 @@ export class WorkspaceLayout extends LitElement {
         // A column that was shut goes back to her width the next time it opens; a column that
         // is open keeps exactly what the hand made it — the drag is the operator's.
         if (collapsed) this._rightPx = WorkspaceLayout.OPEN_CHAT_PX;
+        this._gripMoved = false;
       }
       // `right` is her column's WIDTH in px; `left` and `middle` are shares, because those two
       // panes divide what she leaves.
@@ -1748,7 +1885,16 @@ export class WorkspaceLayout extends LitElement {
    */
   private _columnWidth(): number {
     const room = Math.max(1, this.clientWidth) - WorkspaceLayout.GRIP_CHAT_PX;
-    const ceiling = Math.max(WorkspaceLayout.MIN_RIGHT_PX, room - WorkspaceLayout.MIN_PROMPT_PX);
+    /*
+     * THE RESERVE IS THE THING BESIDE HER, READ AS WHAT IT IS. The 420 (MIN_PROMPT_PX)
+     * is about a prompt a person READS; when she is a layer over an embedded application
+     * (`_rightOverApp`) there is no prompt on that side — there is a surface she is
+     * allowed to cover — so the reserve drops to the application's own floor (60), which
+     * is what lets the drag carry her the whole way across (the owner: *"the user has full
+     * control over … pulling that chat out if they want to cover the whole page"*).
+     */
+    const reserve = this._rightOverApp ? WorkspaceLayout.MIN_LEFT_PX : WorkspaceLayout.MIN_PROMPT_PX;
+    const ceiling = Math.max(WorkspaceLayout.MIN_RIGHT_PX, room - reserve);
     return Math.min(Math.max(this._rightPx, WorkspaceLayout.MIN_RIGHT_PX), ceiling);
   }
 
@@ -1795,7 +1941,15 @@ export class WorkspaceLayout extends LitElement {
      * mid-sentence: the sentence is the same, from the pane that was there and then from the column
      * that arrived.
      */
-    const waiting = this._runInFlight && !this._hasMiddle;
+    /*
+     * THE CONTAINER'S OWN WAITING SPINNER IS GONE (owner, 2026-10-21: *"There is no waiting state
+     * there should not be a waiting state … it's just using the wrong container"*). The dock used
+     * to draw a white ring and "Assembling the drawing…" in the middle pane while a Run composed
+     * its column — the composer's own behaviour, carried into Product where the room stands up its
+     * amber gate, so two spinners spoke at once and the white one slid with the chat column.
+     * `_runInFlight` STAYS: it still drives the left column's collapse. Only its spinner is gone.
+     * REVERT: restore `waiting` and the `<div class="waiting">` block in the middle pane.
+     */
     /*
      * HER COLUMN'S WIDTH IS A NUMBER, and it is a WIDTH — not a share of the flex line. See
      * _rightPx, and see the .pane.right rule: she is a LAYER over the drawing, so this width
@@ -1812,7 +1966,7 @@ export class WorkspaceLayout extends LitElement {
      * console too — so her layer landed across the console's own column: the owner, 2026-09-18,
      * "Restore the console. The console is responsive. You've just broke it just now."
      */
-    const rightOver = this._rightOverDrawing;
+    const rightOver = this._rightOverDrawing || this._rightOverApp;
     /*
      * SHE NO LONGER ABSORBS THE DOCK'S LEFTOVER, AND THIS VARIABLE IS WHY IT IS GONE.
      *
@@ -1881,7 +2035,9 @@ export class WorkspaceLayout extends LitElement {
      * mechanisms compute the same number. Same cure the prompt's fold got — order, not a trick.
      */
     const rightStyle = rightOver
-      ? (equal ? `width: ${WorkspaceLayout.OVER_DRAWING_SHARE}%;` : `width: ${this._hasRight ? rightWidth : 0}px;`)
+      ? (equal
+          ? `width: ${this._rightOverApp ? 50 : WorkspaceLayout.OVER_DRAWING_SHARE}%;`
+          : `width: ${this._hasRight ? rightWidth : 0}px;`)
       : (equal
           ? `flex: 1 1 0%; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`
           : `flex: 0 1 ${rightWidth}px; min-width: ${this._hasRight ? WorkspaceLayout.MIN_RIGHT_PX : 0}px;`);
@@ -1910,8 +2066,19 @@ export class WorkspaceLayout extends LitElement {
      *
      * Normalising changes no proportion — 0.68 : 1.32 is the same split as
      * 0.34 : 0.66 — it only guarantees the open panes sum to the whole.
+     *
+     * AND A PANE ON ITS FLOOR IS COUNTED AT ZERO — the collapse fact decides the pane's
+     * flex AND its place in this denominator through ONE expression, so the two cannot
+     * drift. Counting the collapsed prompt anyway made the middle's share fractional
+     * (0.5) whenever her column was a LAYER (absolute, off the flex line): the line
+     * stopped at the middle pane's edge and the rest of the room showed as a dead strip
+     * between the drawing and her rail — a grow sum below 1 leaves the remainder
+     * distributed to NOBODY, and with her column absolute no pane is left to absorb it.
+     * Measured on a reopened composer run: layout 1740, middle flex 0.5, 60 + 837 on the
+     * line, her layer covering 580 of the remaining 838 — the visible strip was the rest.
      */
-    const growTotal = this._left + middleGrow;
+    const leftGrow = this._leftCollapsed ? 0 : this._left;
+    const growTotal = leftGrow + middleGrow;
     const share = (g: number) => (growTotal > 0 ? g / growTotal : 0);
     /*
      * A COLLAPSED PROMPT IS ITS RAIL, WHATEVER SET THE FLAG.
@@ -1932,7 +2099,7 @@ export class WorkspaceLayout extends LitElement {
      */
     const leftFlex = this._leftCollapsed
       ? `0 0 ${minLeft}px`
-      : `${share(this._left)} 1 0%`;
+      : `${share(leftGrow)} 1 0%`;
     /*
      * HER BOX IS SIZED HERE, IN THE INLINE STYLE, and it is sized differently depending on what
      * she is standing on — which is not a detail to be tidied away:
@@ -1968,19 +2135,8 @@ export class WorkspaceLayout extends LitElement {
       ${this._hasMiddle
         ? html`<div class="gripper" @mousedown=${(e: MouseEvent) => this._onGripDown('left', e)}></div>`
         : nothing}
-      <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'} ${waiting ? 'working' : ''}" style="flex: ${share(middleGrow)} 1 0%;">
+      <div class="pane middle ${this._hasMiddle ? '' : 'collapsed'}" style="flex: ${share(middleGrow)} 1 0%;">
         <slot name="middle" @slotchange=${this._onMiddleSlotChange}></slot>
-        <!-- THE ROOM SAYS IT IS WORKING WHILE IT WAITS FOR ITS COLUMN — see the waiting flag.
-             The wait is an assembly composing the column (seconds), or a design ingest rendering
-             from its measurements (see the host's sequences) — either way this is the window in
-             which the panes have just slid back and there is nothing here yet. Nothing is painted
-             behind it: the person's own ground shows through, which is the rule for this view. -->
-        ${waiting
-          ? html`<div class="waiting" role="status">
-              <div class="spinner" aria-hidden="true"></div>
-              <p>${this._waitingLabel}</p>
-            </div>`
-          : nothing}
       </div>
       <!-- THE RIGHT COLUMN IS THE DESIGN'S CONTAINER, and this spacer is its FIRST
            CHILD — a sibling of the panel, not a neighbour of the column.
@@ -2045,6 +2201,8 @@ declare module 'react' {
       'workspace-layout': React.DetailedHTMLProps<
         React.HTMLAttributes<WorkspaceLayout> & {
           'is-third-open'?: '' | boolean;
+          /** The room's overlay declaration — see the property note. */
+          'chat-overlays-content'?: '' | boolean;
         },
         WorkspaceLayout
       >;

@@ -1,10 +1,11 @@
-# DEPLOY.md — the strict runbook (local + raibach-cloud-2)
+# DEPLOY.md — the strict runbook (local + raibach-cloud-3)
 
 Authoritative operating facts, written after the 2026-10-09 launch-friction /
 configuration-drift mandate and re-grounded the same night when all hosting moved
-off Northflank onto raibach-cloud-2 (the retired Northflank fleet is history, not
-a fallback). Everything below is a mechanical fact of the live system — not a
-suggestion.
+off Northflank onto raibach-cloud-2, then re-grounded again on 2026-10-18 onto
+**raibach-cloud-3** (188.245.25.26 — the machine that is live today; the retired
+Northflank fleet and raibach-cloud-2 are history, not a fallback). Everything
+below is a mechanical fact of the live system — not a suggestion.
 
 ## Doctrine (applies to every section)
 
@@ -26,69 +27,75 @@ Therefore EVERY entry point into the room carries the project path suffix:
 - Local room: `http://localhost:3100/project/51211b35-c875-4715-8040-33fccb624279`
   - hardcoded in `frontend/src/shared/appConfig.ts` → `LOCAL_GOVERNANCE_TOOL`
   - read ONCE at page boot → after changing it, reload the page (not just the tab)
-- Hosted room (raibach-cloud-2): `http://2.28.109.69/project/51211b35-c875-4715-8040-33fccb624279`
+- Hosted room (raibach-cloud-3): `https://design.system.raibach.net/project/51211b35-c875-4715-8040-33fccb624279`
   - the hosted studio receives this via its env `GOVERNANCE_TOOL_URL`
-    (value lives on the server in `/opt/raibach/studio.env` — THE CONFIG RULE — never in this repo)
+    (value lives on the server in `/opt/raibach/ids/studio.env` — THE CONFIG RULE — never in this repo)
 - `/project/<id>` (no trailing slash) 308-redirects to `/project/<id>/`; that
   normalization is expected — real browsers follow it silently, probes must use `-L`.
 
 The project path IS the homepage (project Home dashboard). If you ever see the
 chooser page, you entered at a bare root: fix the ADDRESS, never the app.
 
-## 2. Routing and authentication mechanics (raibach-cloud-2)
+## 2. Routing and authentication mechanics (raibach-cloud-3)
 
 `browser → frame-proxy (nginx, :80) → langfuse-web (Next.js, :3000)`
 
-- The proxy is the only door. Template: `wireframe-lab/langfuse-frame-proxy/nginx.conf.template`.
+- The proxy is the only door. Template: `product/langfuse-frame-proxy/nginx.conf.template`.
   Its upstream comes from the env `LANGFUSE_WEB_UPSTREAM` (= `langfuse-web:3000` on the
   compose network); no service name is hardcoded in the config — addresses move by
   value, not by name.
 - Authentication: the standard login wall is DISABLED BY DESIGN — our patched source
   has no sign-in UI and there is no user-account flow. The proxy injects the
   pre-minted, long-lived session (`AUTH_SESSION_MAX_AGE=5256000`) via the
-  `RAIBACH_SESSION_COOKIE` value in `/opt/raibach/.env` (mint procedure:
-  `wireframe-lab/langfuse-gov-embed/DEPLOY.md`). The cookie is injected under BOTH
+  `RAIBACH_SESSION_COOKIE` value in `/opt/raibach/ids/.env` (mint procedure:
+  `product/raibach-cloud-3/ids/README.md`). The cookie is injected under BOTH
   name variants in one header (`next-auth.session-token` + `__Secure-…`) — one tree
   serves the bare http server and any future https world.
   Never create an account/admin on this deployment; nothing should ever ask you to.
-- `NEXTAUTH_URL` MUST name the live host: `http://2.28.109.69` (read at boot; the
-  boot guard accepts any absolute http(s) URL and FATALs on anything else).
-  If the host ever changes: patch it in `/opt/raibach/.env` (it feeds both
+- `NEXTAUTH_URL` MUST name the live host: `https://design.system.raibach.net` (read at boot;
+  the boot guard accepts any absolute http(s) URL and FATALs on anything else).
+  If the host ever changes: patch it in `/opt/raibach/ids/.env` (it feeds both
   `langfuse-web` and `langfuse-worker`), recreate those two containers, then test.
   A mismatch is a broken state — there is no fallback path.
 - Embedding: no `x-frame-options`; CSP `frame-ancestors` = studio origin only;
-  responses `no-store`. Studio origin: `http://2.28.109.69:5001` (the `STUDIO_ORIGIN`
-  value in `/opt/raibach/.env`; recreate `frame-proxy` after changing it).
+  responses `no-store`. Studio origin: `https://design.system.raibach.net` (the `STUDIO_ORIGIN`
+  value in `/opt/raibach/ids/.env`; recreate `frame-proxy` after changing it).
   The proxy also injects the house-ground styling and the location reporter the
   studio's shell nav listens for.
 
-## 3. The server (raibach-cloud-2)
+## 3. The server (raibach-cloud-3)
 
-One bare Ubuntu box (cx33, 2.28.109.69), Docker + compose, no platform layer.
-Stack root: `/opt/raibach` — `docker-compose.yml` + `.env` (values, chmod 600) +
-one source folder per built image. Every service runs `restart: "no"`: a broken
-build or boot leaves its port BLACK on purpose; the raw error is in
-`docker compose logs <service>`.
+One bare Ubuntu box (cpx32, 188.245.25.26, hostname `raibach-cloud-3`), Docker +
+compose, no platform layer. Stack root: **`/opt/raibach/ids`** — `docker-compose.yml`
++ `.env` (values, chmod 600) + `studio.env` + one source folder per built image.
+Every service runs `restart: "no"`: a broken build or boot leaves its port BLACK on
+purpose; the raw error is in `docker compose logs <service>`.
 
-Compose services (project name `raibach`):
+**The public door is Caddy, not the stack.** A separate compose project
+(`wp-sites`, container `wp-sites-caddy-1`) owns host ports 80/443 and reverse-proxies
+by hostname. **The `ids` services publish NO host ports** — reaching them by
+`IP:port` is expected to fail; go through `https://design.system.raibach.net`.
+
+Compose services (project name `ids`):
 - `postgres`, `clickhouse`, `redis`, `minio` — the room's state stores (named volumes)
-- `langfuse-web` — build `./langfuse` (web/Dockerfile), `127.0.0.1:3000` only
-- `langfuse-worker` — build `./langfuse` (worker/Dockerfile), internal only
-- `frame-proxy` — build `./frame-proxy`, the public room door (`:80 → 8080`)
+- `langfuse-web` — build `./langfuse`, internal only
+- `langfuse-worker` — build `./langfuse`, internal only
+- `frame-proxy` — build `./frame-proxy`, the room door behind Caddy
 - `studio-postgres` — the studio's own database (healthchecked; internal only)
 - `studio` — build `./studio` (the repo-root Dockerfile: built frontend + FastAPI
-  backend in one image), the public studio door (`:5001`)
+  backend in one image), served at the site root
+- `builder`, `builder-engine`, `canvas` — the design-side services
 
-## 4. The deploy procedure (raibach-cloud-2)
+## 4. The deploy procedure (raibach-cloud-3)
 
-Source of truth is this repository on the Mac. A deploy is three mechanical steps —
-no CI, no buildpacks, no guessing:
+Source of truth is this repository on the local machine. A deploy is three
+mechanical steps — no CI, no buildpacks, no guessing:
 
 1. SEND the source: rsync the tree the Dockerfile reads into its folder under
-   `/opt/raibach` (for the studio: `.git` (the catalog checker asks git), the repo
+   `/opt/raibach/ids` (for the studio: `.git` (the catalog checker asks git), the repo
    `Dockerfile`, `.dockerignore`, `README.md`, `config.py`, `backend/` (no `.venv`,
    no `.env`), `frontend/` (no `node_modules`, no `dist`), `READ-ME/`,
-   `catalog-audit/`, `wireframe-lab/catalogs`).
+   `catalog-audit/`, `product/catalogs`, **and `filter-config/`** — see below).
 2. BUILD on the server: `cd /opt/raibach && docker compose build <service>`.
    A failed build deploys NOTHING; the previous image stays in use. Never swap in
    a vendor image as a stopgap, never re-add error-masking.
@@ -97,9 +104,29 @@ no CI, no buildpacks, no guessing:
 
 The studio's database: `init_db.py` runs on every studio boot (safe migrations,
 never drops). To carry data from the local machine (`railway`):
-`pg_dump -d railway --no-owner --no-acl` on the Mac, piped into
-`docker exec -i raibach-studio-postgres-1 psql -U studio -d studio`
+`pg_dump -d railway --no-owner --no-acl` locally, piped into
+`docker exec -i ids-studio-postgres-1 psql -U studio -d studio`
 (ON_ERROR_STOP=1 — a failed restore is loud).
+
+### 4a. Two inputs the studio build needs that are easy to forget (measured 2026-10-18)
+
+- **`filter-config/sessions-config.ts` must be in the build context.** The governance
+  sessions lane generates its query catalogue from the Langfuse fork's own
+  `web/src/features/filters/config/sessions-config.ts`, and the fork is NOT in the
+  studio image. The repo keeps one copy — a symlink at `filter-config/sessions-config.ts`
+  pointing into the fork — and the Dockerfile does `COPY filter-config ./filter-config`.
+  The backend resolves it through `governance_lanes.sessions_config_path()`:
+  `LANGFUSE_FILTER_CONFIG` → `LANGFUSE_FILTER_DIR` → fork path → `filter-config/`.
+  Missing file = the catalogue endpoint answers `FileNotFoundError` with every path it
+  tried (that was the first deploy failure; the error named the path, which is why the
+  repair was mechanical).
+- **`studio.env` must carry the ClickHouse coordinates.** The lane reads ClickHouse for
+  facet values and session rows. Default is `http://127.0.0.1:8123`, which inside the
+  container is nothing — the endpoint answers `URLError: Connection refused`. The four
+  lines that must be in `/opt/raibach/ids/studio.env`:
+  `CLICKHOUSE_URL=http://clickhouse:8123`, `CLICKHOUSE_DB=default`,
+  `CLICKHOUSE_USER=clickhouse`, `CLICKHOUSE_PASSWORD=<same value as the compose .env>`.
+  Adding them requires `docker compose up -d studio` (a restart does not re-read env).
 
 ## 5. Fail-fast / no-fallback enforcement (live)
 
@@ -134,33 +161,36 @@ never drops). To carry data from the local machine (`railway`):
   with a stale upstream address — before the fix, every web update answered 502
   `connection refused` until the proxy was recreated too (measured and repaired live).
 - Logs are the truth surface: raw container stdout/stderr via
-  `docker compose logs <service>` on raibach-cloud-2. Never summarize an error away.
+  `docker compose logs <service>` on raibach-cloud-3. Never summarize an error away.
 
 ## 6. Environment keys (names only — values live on the server)
 
-- `/opt/raibach/.env` feeds `langfuse-web`, `langfuse-worker` and the stores:
+- `/opt/raibach/ids/.env` feeds `langfuse-web`, `langfuse-worker` and the stores:
   `NEXTAUTH_URL` + `NEXTAUTH_SECRET` + `AUTH_SESSION_MAX_AGE`, `SALT`,
   `ENCRYPTION_KEY`, `DATABASE_URL` + `POSTGRES_*`, `REDIS_*`, `CLICKHOUSE_*`
   (URL/USER/PASSWORD/MIGRATION_URL/CLUSTER_ENABLED), `LANGFUSE_S3_*`
   (media + event upload), `LANGFUSE_INIT_*` (org/project/user bootstrap),
   `TELEMETRY_ENABLED=false`, `RAIBACH_SESSION_COOKIE`, `STUDIO_ORIGIN`,
   `LANGFUSE_WEB_UPSTREAM`, `STUDIO_DB_PASSWORD` (the studio DB's generated password).
-- `/opt/raibach/studio.env` feeds the `studio` service (chmod 600):
+- `/opt/raibach/ids/studio.env` feeds the `studio` service (chmod 600):
   `DATABASE_URL` (internal studio DB, `sslmode=prefer`), `ENVIRONMENT`,
   `MODEL_PROVIDER`/`DEEPSEEK_*`, `FIGMA_*`, `SMTP_*`/`FROM_EMAIL`,
   `ADMIN_USER_IDS`/`DEFAULT_USER_ID`, `GOVERNANCE_TOOL_URL` (the room project path —
   served to the browser via `/api/config`), `LANGFUSE_BASE_URL` (internal
   `http://langfuse-web:3000`) + `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`
-  (the server's own project keys, copied from `LANGFUSE_INIT_PROJECT_*`), `PORT=5001`.
+  (the server's own project keys, copied from `LANGFUSE_INIT_PROJECT_*`),
+  `CLICKHOUSE_URL`/`CLICKHOUSE_DB`/`CLICKHOUSE_USER`/`CLICKHOUSE_PASSWORD`
+  (the governance query lanes read ClickHouse directly — see §4a), `PORT=5001`.
 - Local: room stack in `governance/langfuse-main` (compose; app images built from
   this repo source), studio vite `:5001`, backend uvicorn `:8000`, `RESTART-LOCAL.sh`.
 
 ## 7. 60-second verification receipts
 
 ```sh
-curl -sL -o /dev/null -w '%{http_code}\n' "http://2.28.109.69:5001/"                                              # studio — expect 200
-curl -sL -o /dev/null -w '%{http_code}\n' "http://2.28.109.69/project/51211b35-c875-4715-8040-33fccb624279/"      # room — expect 200
-curl -s http://2.28.109.69:5001/api/config                                                                         # must name the room URL
+curl -sL -o /dev/null -w '%{http_code}\n' "https://design.system.raibach.net/"                                    # studio — expect 200
+curl -sL -o /dev/null -w '%{http_code}\n' "https://design.system.raibach.net/project/51211b35-c875-4715-8040-33fccb624279/"  # room — expect 200
+curl -s https://design.system.raibach.net/api/config                                                              # must name the room URL
+curl -s https://design.system.raibach.net/api/governance/sessions/catalogue | head -c 120                         # must say "status":"ok"
 curl -s  -o /dev/null -w '%{http_code}\n' \
   "http://localhost:3100/project/51211b35-c875-4715-8040-33fccb624279/"                                           # local room — expect 200 (or its trailing-slash 308)
 ```

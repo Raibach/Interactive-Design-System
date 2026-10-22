@@ -224,6 +224,39 @@ export class ChatPanel extends LitElement {
         Approvals on the console. Empty shows them all (dev default). */
     allowedTabs: { type: String, attribute: 'allowed-tabs' },
     /**
+     * The room's own words for the rail's buttons, passed through untouched to
+     * `<chat-navigation-bar>`'s `tab-labels` (a JSON map id→{label,tooltip}; see the
+     * rail for the shape). Ids are the stable key, labels are presentation — a room
+     * that means something else by a shared id says so here instead of renaming a
+     * button every other room is using. The seat itself never parses it.
+     */
+    tabLabels: { type: String, attribute: 'tab-labels' },
+    /** The room's rail list of deactivated tabs — relayed to <chat-navigation-bar>. See there. */
+    disabledTabs: { type: String, attribute: 'disabled-tabs' },
+    /**
+     * THE GOVERNANCE ROOM'S SELECTED TRACE — her own eyes on the program beside her.
+     *
+     * Governance is a room the person works THROUGH (the trace list, the tree, the
+     * preview), and her turns are about what is on that screen. The room states the
+     * facts: the shell reads the selected trace (lib/governance-trace-source.ts) and
+     * writes the SUMMARY here and the selected NODE as `governanceObservation`. Both
+     * draw a line in her context only when `graceLiveContext` is true — the same switch
+     * every other room's facts ride — and ONLY when written: a room with no selection
+     * says nothing about a trace. DEDICATED PROPS, never dressed into
+     * `leftColumnContent`/`compiledOutput` (those render and mean the composer's
+     * areas; see the seat-binding comments in the shell).
+     */
+    governanceTrace: { type: Object },
+    /** The node the person has selected within that trace — same channel. See above. */
+    governanceObservation: { type: Object },
+    /**
+     * THE TRACE'S PROMPT PACKAGE — resolved by the shell (on a Composer run the trace's
+     * Langfuse session IS the package's session id) and written only when a package
+     * exists; the action bar then offers Open in Composer (see chat-action-bar).
+     * Empty = no package for this trace — no button, no dead control.
+     */
+    composerPackageId: { type: String, attribute: 'composer-package-id' },
+    /**
      * Whether the rail's Trace tab SENDS its prompt when clicked.
      *
      * The prompt asks for tokens, cost, latency and evaluation — properties of a
@@ -541,6 +574,16 @@ export class ChatPanel extends LitElement {
   declare collapsed: boolean;
   /** Comma-separated rail buttons this surface may show. */
   declare allowedTabs: string;
+  /** The room's label overrides for the rail, JSON, passed through. See the property. */
+  declare tabLabels: string;
+  /** Comma-separated rail tab ids the room has deactivated (relayed to the rail). */
+  declare disabledTabs: string;
+  /** The trace facts the governance room writes — see the property above. */
+  declare governanceTrace: Record<string, unknown> | undefined;
+  /** The selected node within that trace — see above. */
+  declare governanceObservation: Record<string, unknown> | undefined;
+  /** The trace's resolved prompt package — see the property above. */
+  declare composerPackageId: string;
   /** Whether the rail's Trace tab sends its prompt. See the property above. */
   declare tracePrompt: boolean;
   /**
@@ -1353,19 +1396,10 @@ export class ChatPanel extends LitElement {
   private _footerHeight = 142;
 
   /**
-   * WHAT THE TRAY'S MARKS REPORT AS PLACED — the windows the output area above is
-   * actually showing. The drawing's own state dims "chat history" for exactly one
-   * reason (the owner, 2026-09-20): "the reason it's deactivated in the bottom footer is
-   * because the conversations are being displayed at the top." This panel draws the
-   * Conversations bar at the top of the output unconditionally, so that is the truth it
-   * hands the tray. When the stack exists and the user composes it, this reads the stack
-   * instead — until then it says what is really on screen rather than guessing.
-   */
-  /**
    * WHICH OUTPUT WINDOWS ARE SHOWING. The conversations window leads, so conversations
-   * starts in the list. The footer mark toggles a window in and out; the control inside a
-   * window removes that window. Both arrive as events carrying the window name, so this
-   * element holds the list and the drawing follows.
+   * starts in the list. The window's own control removes that window (the footer mark that
+   * used to toggle one in retired with the tray's stubs, 2026-10-14). Events carry the
+   * window name, so this element holds the list and the drawing follows.
    */
   private _outputWindows: string[] = ['conversations'];
 
@@ -1379,11 +1413,6 @@ export class ChatPanel extends LitElement {
       ? [...this._outputWindows, id]
       : this._outputWindows.filter((w) => w !== id);
     this.requestUpdate();
-  }
-
-  /** A window's tray label, so the footer mark reads as placed while that window is up. */
-  private get _trayPlaced(): string {
-    return this._outputWindows.map((w) => (w === 'conversations' ? 'chat history' : w)).join(',');
   }
 
   private _onResizeStart(e: Event) {
@@ -1483,6 +1512,14 @@ export class ChatPanel extends LitElement {
      * node's fill is switched off (or removed) in Figma and the container's fill is
      * what shows through; the glyph's two colours are the component set's two
      * states, and the colour IS the hover — neither state paints a background.
+     *
+     * AND THE GLYPH SITS AT THE STRIP'S RAIL SIDE, NOT ITS CENTRE (owner, 2026-10-13:
+     * *"Scroll bar is still underneath the gripper … brought in closer"*). MEASURED at
+     * the governance seam: the app's own 12px scrollbar rides the app's right edge at
+     * 90..102px from the browser's edge, and the CENTRED glyph (84..94) sat on its
+     * lane. Justified to the panel side the glyph lives at 74..84 — six clear pixels
+     * from the scrollbar's lane — while the strip's own width and every number the
+     * layout's drag arithmetic keeps stay untouched.
      */
     .gripper-chat {
       flex: 0 0 30px;
@@ -1490,7 +1527,7 @@ export class ChatPanel extends LitElement {
       background: transparent;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-end;
       cursor: col-resize;
       color: #b4b4b4;
       user-select: none;
@@ -1862,6 +1899,17 @@ export class ChatPanel extends LitElement {
     .view-slot.tab-eval ::slotted(eval-feed) { display: block; }
     .view-slot.tab-approvals ::slotted(chat-repair-actions) { display: block; }
     .view-slot.tab-repair ::slotted(chat-repair-actions) { display: block; }
+    /* A ROOM'S OWN VIEW, PER TAB — the same one-slot-one-view discipline as the tag
+       rules above, made generic so the seat needs no room's names: the view declares its
+       tab on itself (the view-tab attribute, e.g. view-tab="trace" — the attribute
+       _viewSlotted reads) and only the active tab's claimant draws. Everything claiming a
+       tab is hidden first; the two showing rules are the two tabs that have a claimant
+       today — a room whose view declares another tab adds that pair the day the view
+       exists. A view naming NO tab is not governed here: it is chat furniture, and
+       _anyForeignViewAssigned is that door. */
+    .view-slot ::slotted([view-tab]) { display: none; }
+    .view-slot.tab-trace ::slotted([view-tab="trace"]) { display: block; }
+    .view-slot.tab-tools ::slotted([view-tab="tools"]) { display: block; }
     /* THE EVALS VIEW PAINTS NO GROUND — the owner asked for it transparent (2026-09-24), so
        the drawing's ground reads through the column. Scoped to the eval tab: the chat and the
        other views keep the design's own sheet. */
@@ -1870,6 +1918,9 @@ export class ChatPanel extends LitElement {
     /* The trace fold holds the same slot; only the feed it names may draw there. */
     .fold-wrap ::slotted(eval-feed) { display: none; }
     .fold-wrap ::slotted(chat-repair-actions) { display: none; }
+    /* …and only the view that NAMED the trace tab may draw there: it is the trace tab's
+       hole, so a claimant of any other tab is hidden — the pair's other half. */
+    .fold-wrap ::slotted([view-tab]:not([view-tab="trace"])) { display: none; }
     /* THE CHAT TAB CARRIES THE FINDINGS TOO — AND ONLY THE FINDINGS.
        The console must not open on a blank chat (owner, 2026-09-18: "I'm building a demo and
        I don't want blank chat to open up, so add it to the chat as well… just make sure it's
@@ -2108,11 +2159,37 @@ export class ChatPanel extends LitElement {
       .includes('approvals');
   }
 
+  /**
+   * IS A VIEW CLAIMING THIS TAB — an assigned view declaring `view-tab="<tab>"` on
+   * itself (a room's own furniture; see `_viewSlotted`). When one is, the tab draws
+   * the view FLAT, not in the fold: the trace fold exists for the console/composer's
+   * trace-feed — a disclosure around telemetry — and a room whose own view fills the
+   * hole draws it as the hole's content, the way the app it came from draws it (the
+   * owner, 2026-10-13: "there's no drop-down … if it's a flat list there's no
+   * drop-down"). The fold path stays untouched for every seat without a claimant.
+   */
+  private _tabClaimant(tab: string): boolean {
+    const claims = (el: Element): boolean =>
+      el.tagName.toLowerCase() !== 'slot' && el.getAttribute('view-tab') === tab;
+    const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
+    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE && claims(n as Element))) return true;
+    return Array.from(this.children).some(
+      (el) => el.getAttribute('slot') === 'view' && claims(el),
+    );
+  }
+
   private _viewSlotted(): boolean {
     const wanted = this._wantedViewTag();
-    if (!wanted) return false;
     const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
-    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName.toLowerCase() === wanted)) return true;
+    /* TWO WAYS A VIEW BELONGS TO THIS TAB — its TAG is one this tab wants (the seat's
+       own views: trace-feed, eval-feed, chat-repair-actions), or the ROOM declared the
+       tab on the element itself (`view-tab="<rail tab id>"` — the door that lets a
+       room's own furniture fill this hole without the seat learning room names).
+       Either way its waiting line must not draw: the view is coming, or here. */
+    const cameFor = (el: Element): boolean =>
+      (!!wanted && el.tagName.toLowerCase() === wanted)
+      || (!!this.activeTab && el.getAttribute('view-tab') === this.activeTab);
+    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE && cameFor(n as Element))) return true;
     // The light DOM covers what slotting does not report: jsdom's slotting is thin,
     // and the surface's child may be appended after this element's first render.
     // A SLOT ELEMENT IS NOT A VIEW. When a host sits between this panel and the
@@ -2121,7 +2198,7 @@ export class ChatPanel extends LitElement {
     // being it. Counting them claimed a view was slotted when the host had none, and
     // the waiting line was suppressed for a view that was never coming.
     return Array.from(this.children).some(
-      (el) => el.getAttribute('slot') === 'view' && el.tagName.toLowerCase() === wanted,
+      (el) => el.getAttribute('slot') === 'view' && el.tagName.toLowerCase() !== 'slot' && cameFor(el),
     );
   }
 
@@ -2143,15 +2220,24 @@ export class ChatPanel extends LitElement {
    */
   private _anyForeignViewAssigned(): boolean {
     const known = new Set(['trace-feed', 'eval-feed', 'chat-repair-actions']);
-    const tags = new Set<string>();
+    /* A TAB VIEW IS NOT FURNITURE. A room's rail-tab view declares `view-tab` on itself
+       and draws in the hole under its own tab (the `view-tab` rules in the styles); this
+       door feeds the chat-top strip ABOVE the thread and must not see those — admitting
+       one drew an empty chat-top band on every Chat tab, because that strip's own styles
+       allow only the repair rows. Foreign here means: a tag this seat does not own AND
+       no tab claimed — the Product strip was that, and the next such strip joins by
+       nothing but this check. */
+    const isFurniture = (el: Element): boolean =>
+      el.tagName.toLowerCase() !== 'slot'
+      && !known.has(el.tagName.toLowerCase())
+      && !el.hasAttribute('view-tab');
     const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
     for (const n of assigned) {
-      if (n.nodeType === Node.ELEMENT_NODE) tags.add((n as Element).tagName.toLowerCase());
+      if (n.nodeType === Node.ELEMENT_NODE && isFurniture(n as Element)) return true;
     }
-    for (const el of Array.from(this.children)) {
-      if (el.getAttribute('slot') === 'view' && el.tagName.toLowerCase() !== 'slot') tags.add(el.tagName.toLowerCase());
-    }
-    return [...tags].some((t) => !known.has(t));
+    return Array.from(this.children).some(
+      (el) => el.getAttribute('slot') === 'view' && isFurniture(el),
+    );
   }
 
   /**
@@ -2219,6 +2305,24 @@ export class ChatPanel extends LitElement {
    * in the same order and punctuation chat-header uses. The usage figures are NOT joined
    * here: output-header owns the Tokens/Calls readouts it is handed.
    */
+  /**
+   * WHETHER THE ROOM HAS SLOTTED ITS OWN READOUT STRIP (the trace seat's facts — owner,
+   * 2026-10-13 late: they live in the seat's readout bar, "It goes here"). The relay
+   * slot below sits inside <output-header>; this flag rides the same render and turns
+   * the bar's built-in line off when the strip is present. False in every other room.
+   */
+  private _statusContentSlotted = false;
+
+  private _onStatusSlotChange = (e: Event): void => {
+    const slot = e.target as HTMLSlotElement;
+    const has = (slot.assignedNodes?.() ?? []).some(
+      (n) => n.nodeType === Node.ELEMENT_NODE || (n.nodeType === Node.TEXT_NODE && !!n.textContent?.trim()),
+    );
+    if (has === this._statusContentSlotted) return;
+    this._statusContentSlotted = has;
+    this.requestUpdate();
+  };
+
   private get _statusLine(): string {
     if (this.statusText) return this.statusText;
     const parts: string[] = [];
@@ -2530,7 +2634,7 @@ export class ChatPanel extends LitElement {
    */
   private _onComposerOpened = (e: Event): void => {
     const d = ((e as CustomEvent).detail || {}) as { kind?: string; sessionId?: string | null };
-    const kind: ArrivalKind = d.kind === 'resume' ? 'resume' : d.kind === 'console' ? 'console' : 'blank';
+    const kind: ArrivalKind = d.kind === 'resume' ? 'resume' : d.kind === 'console' ? 'console' : d.kind === 'governance' ? 'governance' : 'blank';
     /*
      * THE ADDRESS IS THE WHOLE POINT. This announcement is broadcast on `window` and every mounted
      * panel hears it, so a seat that is NOT named must not answer it. Measured 2026-09-23: the
@@ -2817,6 +2921,31 @@ export class ChatPanel extends LitElement {
         + 'them find, filter or sort what is in it, and ask what they are looking for. Do NOT '
         + 'describe, quote or comment on any particular package — naming one is reading over their '
         + 'shoulder. Offer no buttons.',
+        { silent: true },
+      );
+      return;
+    }
+    /*
+     * AND THE GOVERNANCE ROOM GETS ITS OWN HELLO (owner, 2026-10-14: *"she should say something
+     * on land when people load the page even if it's tucked away to the right … that seat in
+     * governance doesn't seem to have any awareness of where she is"*). Same rule as the
+     * console's — the THREAD's emptiness is the fact — and the same once-per-thread life: her
+     * reply is written into the conversation and every load after reads her own words back.
+     * She is told what THIS room is (its rail, its trace facts, the work that belongs to it)
+     * and chooses her own words.
+     */
+    if (kind === 'governance') {
+      if (!empty) return;
+      void this._send(
+        'A person has just opened the governance room — the room that watches what the system '
+        + 'did: its traces, what the models cost and how long they took, and the seats that read '
+        + 'them. This column is the room\'s own chat, always beside the surface. Their rail is '
+        + 'Chat, Trace, Preview, Approve, Evals, States and Repairs; when they select a trace, '
+        + 'what is on screen is given to you as the TRACE ON SCREEN facts. YOUR WORK HERE IS '
+        + 'READING WITH THEM — what the room shows, where something lives, what a trace says — '
+        + 'and NOT writing into the app. Introduce yourself in a sentence or two, say what this '
+        + 'room watches and that you can help them read, question or check the work in it, and '
+        + 'ask what they would like to look at. Offer no buttons.',
         { silent: true },
       );
       return;
@@ -3147,6 +3276,43 @@ export class ChatPanel extends LitElement {
       });
     }
 
+    /*
+     * THE TRACE BESIDE HER — the governance room's own facts (see the `governanceTrace`
+     * property). Stated ONLY when the room wrote them, which it does only once the person
+     * has selected one; the numbers are the same ones the header and the tree draw, so her
+     * words and the screen agree. The node's raw I/O is deliberately NOT here: it can be
+     * orders of magnitude larger than the conversation, and the person can open the
+     * Preview tab to read it — she is told what is on screen and where to look, not made
+     * to recite it.
+     */
+    const traceFacts = this.governanceTrace;
+    if (traceFacts && typeof traceFacts === 'object') {
+      const t = traceFacts as Record<string, unknown>;
+      parts.push('');
+      parts.push('=== TRACE ON SCREEN (what the person has selected in this room) ===');
+      parts.push(`trace id: ${String(t.id ?? '(unknown)')}`);
+      if (t.name) parts.push(`name: ${String(t.name)}`);
+      if (t.startTime) parts.push(`started: ${String(t.startTime)}`);
+      if (typeof t.latency === 'number') parts.push(`latency: ${t.latency.toFixed(2)} seconds`);
+      if (typeof t.totalCost === 'number') parts.push(`cost: $${t.totalCost}`);
+      if (typeof t.totalTokens === 'number') parts.push(`tokens: ${t.totalTokens}`);
+      if (t.sessionId) parts.push(`session: ${String(t.sessionId)}`);
+      if (t.userId) parts.push(`user: ${String(t.userId)}`);
+      if (typeof t.observationCount === 'number') parts.push(`observations: ${t.observationCount}`);
+      const node = this.governanceObservation;
+      if (node && typeof node === 'object') {
+        const n = node as Record<string, unknown>;
+        parts.push(`selected node: ${String(n.name ?? '(unnamed)')} (${String(n.type ?? 'SPAN')})`);
+        if (typeof n.latency === 'number') parts.push(`  its latency: ${n.latency.toFixed(2)} seconds`);
+        if (typeof n.totalCost === 'number') parts.push(`  its cost: $${n.totalCost}`);
+        if (typeof n.totalTokens === 'number') parts.push(`  its tokens: ${n.totalTokens}`);
+        if (n.model) parts.push(`  model: ${String(n.model)}`);
+        if (n.level && n.level !== 'DEFAULT') parts.push(`  level: ${String(n.level)}`);
+        if (n.statusMessage) parts.push(`  status: ${String(n.statusMessage)}`);
+      }
+      parts.push('Its full input/output is readable in this room\'s Preview tab.');
+    }
+
     return parts.join('\n');
   }
 
@@ -3178,42 +3344,6 @@ export class ChatPanel extends LitElement {
     }
   }
 
-  /**
-   * HER INSTRUCTIONS, FROM THE ROOM, OR A REFUSAL THAT NAMES WHY THERE ARE NONE.
-   *
-   * WHAT WAS HERE (removed 2026-10-01): 11,562 characters of the composer's script, compiled
-   * into the bundle and sent as the context of EVERY turn in EVERY room. In Design she
-   * introduced herself as the Agentic Flow Architect and reasoned about prompt pipelines while
-   * the room's left column held a component tree — the owner: *"she's not talking, she's not
-   * thinking, because some dumb ass AI has put a hardcoded mess in there to trick me"* — and its
-   * replacement was a fallback: a room that bound no words got those same words anyway.
-   *
-   * THERE ARE NO FALLBACKS. The rule is the owner's, 2026-10-01, and it decides this function:
-   * a seat that has no words for its room must not borrow another room's, and it must not decide
-   * quietly which one it is. It refuses, and the refusal is legible.
-   *
-   * WHO SHE IS IS THE ROOM'S FACT, so the room states it — never this element, and never a model.
-   * `_seat_grace` (backend/routes/ai.py) writes two props on every seat of every surface it
-   * assembles:
-   *
-   *   instructions      the path to THIS room's script, in the surface's data model:
-   *                     `CONSOLE_GRACE_INSTRUCTIONS` in the console, `COMPOSER_GRACE_INSTRUCTIONS`
-   *                     in a package (composer, session canvas, run), and the design room's own
-   *                     database-backed script in Design. Measured 2026-10-01 on the live
-   *                     `render-design` surface: that binding used to arrive only because the
-   *                     model's answer happened to reproduce the contract's line, which is a hope
-   *                     about a language model, not an assembly.
-   *   graceLiveContext  whether this seat's live workspace follows those words. A composer's
-   *                     script is an identity, so the package, its seats and the tool register
-   *                     ride after it; the design room's script already carries its live facts
-   *                     (read from the database on every assembly), so nothing follows it.
-   *
-   * THE THIRD STATE IS THE POINT OF THE UNION: `undefined` is not `false`. A surface that did not
-   * state the flag has not been examined, and an undefined flag resolved either way would be a
-   * guess — the same class of defect as a missing script, so it gets the same refusal. Both
-   * flags are written by the assemblies named above; a new room that forgets one is told here,
-   * in its own thread, the first time somebody speaks in it.
-   */
   private _gracePrompt(): { ok: true; text: string } | { ok: false; why: string } {
     const room = String(this.instructions ?? '').trim();
     if (!room) {
@@ -3536,6 +3666,24 @@ export class ChatPanel extends LitElement {
     text = (text ?? '').trim();
     if (!text || this._sending) return;
     /*
+     * A QUESTION IS ASKED IN THE CHAT TAB — AND NOWHERE ELSE.
+     *
+     * Governance's rail law: the conversations live in Chat, the other tabs carry views
+     * of the thing being worked (the owner, 2026-10-13: *"if anyone wants to chat, it has
+     * to shift back to the chat tab … the user is going to have to manually go back to
+     * the trace that they were working on"*). So a person who types — or presses send —
+     * while looking at Trace, Tools or any other view lands in the thread, because that
+     * is where their turn is going to be drawn. THE TRIGGER IS THE SEND ONLY: focusing
+     * the input, clicking a rail tab, or simply looking at a view never flips anything,
+     * and the return to a view is the person's own click, never automatic. Approvals is
+     * exempt: the console's recorded rule draws the thread there on purpose (the tab a
+     * person asks the governance system its report from). Silent turns never flip —
+     * nothing the person did raised them.
+     */
+    if (!opts.silent && this.activeTab !== 'chat' && this.activeTab !== 'approvals') {
+      this.activeTab = 'chat';
+    }
+    /*
      * THE HARD STOP — SHE IS NOT MADE TO SPEAK INTO A PACKAGE THAT HAS ALREADY RUN.
      *
      * This is the one place it is enforced, and it is enforced HERE because every rule that was
@@ -3755,11 +3903,17 @@ export class ChatPanel extends LitElement {
        * the conversation the turn actually landed in, and the turn is PERSISTED — a room that
        * builds on this event (the Product room's host) reads "the thread's last person message"
        * and is guaranteed to find THIS one. Silent turns — the app's own instructions to her —
-       * never announce; nobody typed them. The event is generic: no other room listens.
+       * never announce; nobody typed them. The event is generic: rooms take from it what they
+       * need — Product remounts its stage; Governance reads the text (added 2026-10-13) for
+       * the ask-listener that pivots the room to a trace when the person asks for one.
        */
       if (!opts.silent) {
         window.dispatchEvent(new CustomEvent('a2ui:person-turn', {
-          detail: { conversationId: this.conversationId, sessionId: this.sessionId },
+          /* AND THE TURN'S OWN WORDS (2026-10-13 late) — additive: the governance room
+             reads them to answer an ask (“I want to look at trace” pivots the room;
+             see WritingAreaIndex's ask-listener). Every existing listener takes these
+             events unchanged. */
+          detail: { conversationId: this.conversationId, sessionId: this.sessionId, text },
         }));
       }
       // The measured cost of this call, attributed to the conversation it
@@ -4220,13 +4374,9 @@ export class ChatPanel extends LitElement {
    * (GET /api/prompt-sessions/{id}) — not inferred from a tab list or from which props a
    * payload happened to include. A package seat does nothing here: starting a conversation
    * inside a package's own set is a different action, and this design has not specified it.
-   */
-  private _onConversationNew(): void {
-    this._startNewConversation();
-  }
-
-  /**
-   * ONE AT A TIME. The foot's add mark is a click and cannot double-fire, but the same work is
+   *
+   * ONE AT A TIME. The foot's add mark (which called this until it retired with the tray's
+   * stub set, 2026-10-14) was a click and could not double-fire, but the same work is
    * started by a package being opened with no conversation at all (see `_startNewConversation`'s
    * caller in _greetIfArriving) — and two starts racing would make a package two threads for one
    * open. The body below is unchanged; this is the latch in front of it.
@@ -4740,6 +4890,20 @@ export class ChatPanel extends LitElement {
     // The VIEW switches either way; only a seat that has a run is asked the
     // question. See `tracePrompt`.
     if (tab === 'trace' && this.tracePrompt) void this._send(TRACE_PROMPT);
+    /*
+     * AND THE ROOM MAY WANT TO KNOW — the tab is announced OUT the same way the rail
+     * announces it IN. A room with nothing selected can answer the Trace click itself
+     * (the governance room moves the app to its Traces section, opens this column and
+     * loads the newest trace — the owner's rule, 2026-10-13). An element never reaches
+     * into its host; it says what happened and the host decides.
+     */
+    this.dispatchEvent(
+      new CustomEvent('tab-change', {
+        detail: { tab },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   /**
@@ -4971,6 +5135,8 @@ export class ChatPanel extends LitElement {
             <chat-navigation-bar
               active-tab=${this.collapsed ? '' : this.activeTab}
               allowed-tabs=${this.allowedTabs}
+              tab-labels=${this.tabLabels}
+              disabled-tabs=${this.disabledTabs}
               ?collapsed=${this.collapsed}
               ?unread=${this._unread}
               @tab-change=${this._onTabChange}
@@ -5030,10 +5196,26 @@ export class ChatPanel extends LitElement {
                 <output-header
                   line=${this._statusLine}
                   ?attributed=${attributed}
+                  ?readout-filled=${this._statusContentSlotted}
                   tokens=${String((usage.totalTokens as number) ?? 0)}
                   calls=${String((usage.calls as number) ?? 0)}
-                ></output-header>
-                ${this._outputWindows.includes('conversations')
+                >
+                  <!-- THE ROOM'S READOUT STRIP RELAYS THROUGH HERE (owner, 2026-10-13 late
+                       — the trace facts go in THIS bar). A room appends its strip to this
+                       seat with slot="status-content"; the relay forwards it into the
+                       bar's own door (readout-content). Empty elsewhere: nothing is
+                       forwarded and the bar is exactly what it always was. -->
+                  <slot name="status-content" slot="readout-content" @slotchange=${this._onStatusSlotChange}></slot>
+                </output-header>
+                <!-- THE CONVERSATION FURNITURE STEPS OUT WHERE A ROOM'S OWN VIEW SHOWS
+                     (owner, 2026-10-13 late: "you can remove the conversation panel …
+                     in the trace view. We don't need it there." — and the trace view
+                     STAYS: the correction was "in the trace view", not removing it).
+                     When the active tab's claimant is a host view (the trace room's
+                     tree on Trace, its detail on Preview), this bar is not drawn — a
+                     tab showing its own view shows THE VIEW, nothing appended. Every
+                     other tab and every other room: unchanged. -->
+                ${this._outputWindows.includes('conversations') && !this._tabClaimant(this.activeTab)
                   ? html`<chat-header
                   status-text=${(() => {
                     const n = this._conversationRows?.length ?? (this.conversations ?? []).length;
@@ -5077,11 +5259,6 @@ export class ChatPanel extends LitElement {
                       </div>
                     `
                   : nothing}
-                <!-- THE 1px RULE THAT WAS HERE IS GONE WITH ITS NODE. v.4b draws no
-                     rule between the output blocks — they are #CBE6E3 grounds separated
-                     by their own 2px — so the old "chat-output-spacer-slot-area"
-                     (#40001085:2404, a 1px #B5CCCE line) is not drawn. Nothing else
-                     used it and no control lived in it. -->
                 ${unannotated
                   ? html`<error-banner
                       code="UNANNOTATED-IN-USE"
@@ -5179,7 +5356,7 @@ export class ChatPanel extends LitElement {
                             .spentTurn=${this._spentTurn}
                             .doneActions=${this._stepsDone()}
                           ></chat-messages>`}`
-                    : this.activeTab === 'trace'
+                    : this.activeTab === 'trace' && !this._tabClaimant('trace')
                       ? html`<div class="fold-wrap">
                           <chat-fold
                             label="Trace"
@@ -5230,6 +5407,7 @@ export class ChatPanel extends LitElement {
                 <chat-action-bar
                   model-label=${this.modelLabel ?? 'Models'}
                   trailing=${this._seatIsConsole === false ? 'console' : 'agent'}
+                  composer-package=${this.composerPackageId ?? ''}
                   ?busy=${this._sending}
                   ?has-text=${this._draft.trim().length > 0}
                   @input-resize-start=${this._onResizeStart}
@@ -5258,7 +5436,8 @@ export class ChatPanel extends LitElement {
                 <!-- v.4b's foot, OR THE PRODUCT ROOM'S OWN TOOLS (owner, 2026-10-06:
                      "all of these stubs go. And you're gonna put the products wiring
                      down."). The flag is the product room's binding alone — every other
-                     seat keeps the tray, exactly as it was. See <chat-product-tools>. -->
+                     seat keeps the tray (its five marks retired 2026-10-14; label and
+                     credit alone — see its header). See <chat-product-tools>. -->
                 ${this.productTools
                   ? html`<chat-product-tools
                       .figmaConnected=${this.productFigmaConnected}
@@ -5269,10 +5448,7 @@ export class ChatPanel extends LitElement {
                       @product-tool=${(e: CustomEvent<{ tool: string }>) =>
                         this._forwardProductTool(e.detail.tool)}
                     ></chat-product-tools>`
-                  : html`<chat-plugin-tray
-                      .placed=${this._trayPlaced}
-                      @conversation-new=${this._onConversationNew}
-                    ></chat-plugin-tray>`}
+                  : html`<chat-plugin-tray></chat-plugin-tray>`}
               </div>
             </div>
           `}

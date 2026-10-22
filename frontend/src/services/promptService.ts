@@ -1,6 +1,3 @@
-// Authentication is disabled for development
-// import { getAuthState } from "./authService";
-
 import { systemDiagnostics } from "@/services/systemDiagnostics";
 import { API_BASE } from "@/shared/apiHelper";
 import type { FlowGraph } from "@/shared/agentFlow";

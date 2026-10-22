@@ -29,6 +29,15 @@
 
 import { LitElement, html, css } from 'lit';
 
+/**
+ * THE TABS THAT DRAW THEIR OWN OPENING. Each of these rooms paints its own gate (its ground,
+ * its ring, its sentence) over the pane it owns — so the sandbox's `spinner` slot must never
+ * be projected over them, or a click lands on two rings and two grounds at once (measured
+ * 2026-10-21, see `_activeSlot`). Design is deliberately absent: its tool seat raises the
+ * assembling flag on purpose so the spinner slot covers the room while the tool works.
+ */
+const SELF_GATED_ROOMS = new Set(['product', 'development', 'governance']);
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -138,9 +147,26 @@ export class AISurfaceSandbox extends LitElement {
    * The slot the shell is asking for, right now — the same three-way contract render()
    * uses: spinner while assembling, console for the console header tab, workspace
    * otherwise.
+   *
+   * ── THE SPINNER SLOT IS THE SANDBOX'S OWN FACE, NEVER A ROOM'S (owner, 2026-10-21) ──
+   * *"I see three spinners … one of them slides around one slides next to it. It's purple
+   * and then the main assembly spinner loads."* MEASURED on a Product click during a running
+   * assembly: two rings on screen at once — this slot's (26px, raised by the slot's own 200px
+   * bottom padding, over the #582846 ground) AND the Product room's gate ring (centred in the
+   * pane) — because `isAIAssembling` belongs to the SHELL's surfaces (console, composer,
+   * sections) and it OUTLIVES a tab move: an assembly asked for on the console is still
+   * running when the click lands on Product, so this slot was projected OVER a room that
+   * never assembles and draws its own gate.
+   *
+   * Product, Development and Governance each stand their own gate over their own ground
+   * (see `pages/WritingAreaIndex.tsx`); the hand-off cover carries their face in between.
+   * One room, one opening, one ring. The flag still speaks for the console and the composer
+   * — going back to either while their assembly is genuinely running shows this slot again.
+   * Design is NOT in this set: its tool seat raises the flag ON PURPOSE so this slot covers
+   * the room while the tool assembles.
    */
   private get _activeSlot(): string {
-    return this.isAIAssembling
+    return this.isAIAssembling && !SELF_GATED_ROOMS.has(this.headerTab)
       ? 'spinner'
       : this.headerTab === 'console'
         ? 'console'

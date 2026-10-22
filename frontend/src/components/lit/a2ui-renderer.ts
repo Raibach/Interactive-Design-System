@@ -356,7 +356,7 @@ export function componentProps(
 
 // ── the renderer ────────────────────────────────────────────────────────────
 
-class A2UIRenderer extends LitElement {
+export class A2UIRenderer extends LitElement {
   static properties = {
     components: { type: Array },
     rootId: { type: String, attribute: 'root-id' },
@@ -438,12 +438,14 @@ class A2UIRenderer extends LitElement {
   `;
 
   /** A child's event goes up the tree, tagged with who raised it. */
-  private _forward = (event: Event, sourceId: string) => {
+  private _forward = (event: Event, sourceId: string, component: string) => {
     this.dispatchEvent(
       new CustomEvent('a2ui-event', {
         bubbles: true,
         composed: true,
-        detail: { sourceId, type: event.type, payload: (event as CustomEvent).detail },
+        // `component` is the CATALOGUE TAG (comp.component) beside the instance id (comp.id):
+        // the capture door records against element keys, so the tag must travel with the event.
+        detail: { sourceId, component, type: event.type, payload: (event as CustomEvent).detail },
       }),
     );
   };
@@ -551,9 +553,9 @@ class A2UIRenderer extends LitElement {
       data-a2ui-id=${comp.id}
       slot=${slot ?? nothing}
       ${ref(assign)}
-      @a2ui-action=${(e: Event) => this._forward(e, comp.id)}
-      @message-sent=${(e: Event) => this._forward(e, comp.id)}
-      @command-received=${(e: Event) => this._forward(e, comp.id)}
+      @a2ui-action=${(e: Event) => this._forward(e, comp.id, comp.component)}
+      @message-sent=${(e: Event) => this._forward(e, comp.id, comp.component)}
+      @command-received=${(e: Event) => this._forward(e, comp.id, comp.component)}
     >${children}</${unsafeStatic(tag)}>`;
   }
 

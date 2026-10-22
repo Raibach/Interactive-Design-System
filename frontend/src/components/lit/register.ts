@@ -40,10 +40,6 @@ import "@/components/lit/design-left-panel";
 // input the owner asked for could not be named by any surface until this existed. Same registration
 // rule as every import here — a tag nothing defines draws an empty box and says nothing.
 import "@/components/lit/figma-ingest-form";
-// (THE ADD-DESIGN-SYSTEM FORM WAS HERE — imported 2026-10-02, removed 2026-10-04: no catalogue is
-// installed from the front end. The rail is the Figma form over the tree, as it was before it.)
-// THE MIDDLE COLUMN'S PREVIEW — what a RUN loaded. Same registration rule: without this import
-// the surface names a tag nothing defines and the column draws an empty pane with no error.
 import "@/components/lit/component-preview";
 // AND THE DRAWING ITSELF WHEN THE RUN WAS AN INGEST. The frame above says what a run loaded; this
 // element DRAWS a draft — from the temporary file the ingest wrote (`.preview/<jobId>/`), inside
@@ -52,22 +48,6 @@ import "@/components/lit/component-preview";
 // it through the catalogue, so re-ingesting a node the catalogue already holds drew the approved
 // component while the fresh draft sat untouched. Given the FILE, it can only draw the draft.
 import "@/components/lit/draft-preview";
-// (THE PRODUCT ROOM'S CONTEXT STRIP WAS HERE — `design-system-picker`, registered 2026-10-03 and
-// removed the same day on the owner's word: *"I don't want the user to be able to select a
-// catalogue… I'm removing that feature."* The room's system is a server-side constant now;
-// nothing selects, so nothing is registered. The element file is deleted with this import.)
-// (AGNOSTICUI AND KOR WERE HERE — two copied-in design systems registered 2026-10-03 and removed
-// 2026-10-04, along with their trees. Their registry imports went with them: an import naming a
-// module that does not exist is a build failure, and these two were exactly that once the folders
-// were deleted. Each ingested system's registry lived in its own tree by the wall in
-// PLANS.AGENT/multiple-catalogs.md §10. No ingested system is registered here now: all three were
-// removed the same day.)
-// (CARBON WAS HERE — the vendor package's own Lit components, registered 2026-10-03 and removed
-// 2026-10-04 with its tree, the same as agnosticui and kor above: an import naming a module that
-// no longer exists is a build failure, which is what this was once the folder went.)
-// THE GOVERNANCE ROOM'S FEED (2026-10-03) — the per-call cost ledger, drawn. Same registration
-// rule as every import here: the room's tree names it, so a tag nothing defines would draw an
-// empty box and say nothing.
 import "@/components/lit/governance-usage-view";
 // THE PRODUCT ROOM'S STAGE, IN ITS OWN ERA (2026-10-03, late): <artifact-canvas> is the window
 // onto the PAGE Grace builds from the person's sentence (POST /api/ai/build-artifact) — a
@@ -102,6 +82,28 @@ import "@/components/lit/chat-panel";
 // the one that guarantees the tag exists whether or not the thread ever draws one.
 import "@/components/lit/user-response-bubble";
 import "@/components/lit/trace-feed";
+// THE EVALS TAB'S OWN SEAT — its own file, its own content, its own read. Registered here so
+// the room can mount it when the Evals tab is selected; nothing global reaches into any seat,
+// and the index it draws is imported by that file itself.
+import "@/components/lit/evals-chat-panel";
+// THE DESIGN ROOM'S OWN SEAT — a whole duplicate of <chat-panel>, retagged <design-chat-panel>,
+// living in the design folder with the rest of the seat's pieces (owner, 2026-10-18: isolate the
+// seat; only the Lit components and the styling are shared). An element that is never imported is
+// never defined, so this line is what makes the tag real.
+import "@/design/design-chat-panel";
+// AND DESIGN'S OWN RENDERER AND CHAT — the room's element for drawing a surface
+// (<design-renderer>) and the room's chat that a tab binds to its engine and prompting system
+// (<design-chat>). Both are Design's files, not the composer's; registered here for the same
+// reason as every element above.
+import "@/design/design-renderer";
+import "@/design/design-chat";
+// THE TOOLS TAB'S OWN PIECES ARE NOT REGISTERED HERE ANY MORE (2026-10-21). `tools-tab` imports
+// `figma-layers-view` and `figma-ingest-form`, and this file rides the boot chunk — so 55 kB of
+// Figma tree (measured 1.08 s through the tunnel) was downloaded before the console could paint,
+// for a panel nobody had opened. The Design room owns them now (`design/DesignRoom.tsx`), and
+// that room is lazy: it arrives when the Design button is pressed, which is the only moment the
+// tools rail can exist.
+import "@/tools/GraceToolsChat";
 // The judged runs of one package, for the rail's Evals view. Same registration rule as the two
 // above: an element that is never imported is never defined, and the surface would emit the name
 // into an empty slot, silently.
@@ -117,6 +119,18 @@ import "@/components/lit/eval-feed";
 // and an element that is never imported is never defined — the surface would emit the
 // name and the slot would stay empty, silently.
 import "@/components/lit/chat-repair-actions";
+// THE GOVERNANCE SEAT'S TRACE VIEWS — the tree (its Trace tab), the detail (its Preview
+// tab) and the facts header (its content-header slot). The governance room is hand-mounted
+// by the shell, which appends these three and writes their data from
+// lib/governance-trace-source.ts; the same rule as every import here applies — a tag
+// nothing defines draws an empty box and says nothing.
+import "@/components/lit/trace-context-header";
+import "@/components/lit/trace-tree";
+import "@/components/lit/trace-detail";
+// THE UX TAB'S VIEW — the running observability application, framed. It is small (one iframe,
+// no data of its own) and it is registered here for the same reason as the three above: the
+// Design room appends the tag, and a tag nothing defines draws an empty column in silence.
+import "@/components/lit/ux-app-frame";
 /*
  * <agent-flow> AND <room-embed> ARE NOT IMPORTED HERE, ON PURPOSE — and this is the one
  * place above that breaks the rule the comments state. They were imported here, and it cost
@@ -163,7 +177,7 @@ import "@/components/lit/output-footer-area";
 // definition; the file it points at explains the measurement and why a glob rather than an
 // entry above.
 import "@/components/lit/ingested";
-import composerBackground from "@/assets/composer-image-bg.jpg";
+import composerBackground from "@/assets/composer-image-bg.webp";
 
 /*
  * ── THE COMPOSER'S GROUND, FETCHED BEFORE THE APP DRAWS ───────────────────────

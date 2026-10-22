@@ -46,10 +46,14 @@ const LOCAL_BUILDER_TOOL = "http://localhost:3223";
 // the project Home ("the homepage") instead. Same path the hosted room uses.
 const LOCAL_GOVERNANCE_TOOL =
   "http://localhost:3100/project/51211b35-c875-4715-8040-33fccb624279";
+// 2026-10-21 (owner): the UX application (PostHog) is framed under the studio's own origin at
+// /posthog — the same door as /builder, /dev, /governance — never at its own http://localhost:8200.
+const LOCAL_POSTHOG_TOOL = "/posthog";
 
 let developmentTool = LOCAL_DEVELOPMENT_TOOL;
 let builderTool = LOCAL_BUILDER_TOOL;
 let governanceTool = LOCAL_GOVERNANCE_TOOL;
+let posthogTool = LOCAL_POSTHOG_TOOL;
 
 /** True on the deployed demo. False everywhere else, including every failure path. */
 export const isDemoMode = (): boolean => demoMode;
@@ -74,21 +78,42 @@ export const builderToolUrl = (): string => builderTool;
  */
 export const governanceToolUrl = (): string => governanceTool;
 
+/**
+ * The Design room's UX application — PostHog — framed under the studio's own origin
+ * (`/posthog`), the same door as the other rooms. Empty string = not connected.
+ */
+export const posthogToolUrl = (): string => posthogTool;
+
 let started: Promise<void> | null = null;
 
 /** Ask the server which build this is — once. Never rejects; callers may await or ignore. */
 export function appConfigReady(): Promise<void> {
   started ??= (async () => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
+    // THE OWNER'S LAW (2026-10-21): "it should fail after 10 seconds." The old 3-second abort
+    // killed the read while the backend was busy assembling a surface (its model call blocks
+    // the event loop), and the failure was swallowed below. Ten seconds, and the failure speaks.
+    const timer = setTimeout(
+      () => controller.abort(new DOMException('GET /api/config timed out after 10000ms', 'TimeoutError')),
+      10000,
+    );
     try {
       const response = await fetch("/api/config", { cache: "no-store", signal: controller.signal });
-      if (!response.ok) return;
+      /* A NON-200 IS A FAILURE AND IS NOW TREATED AS ONE (owner's law, 2026-10-21: *"if there's
+         anything in there suppressing errors that needs to be removed, we need to fail hard"*).
+         This used to `return` on `!response.ok` — the read had failed, the person was given the
+         local defaults, and nothing was said: a silent success in everything but name. It now
+         goes to the same catch, which states the reason and dispatches `app-config-failed`. */
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(`GET /api/config answered ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+      }
       const body = await response.json();
       demoMode = body?.demo_mode === true;
       const development = typeof body?.development_tool_url === "string" ? body.development_tool_url.trim() : "";
       const builder = typeof body?.builder_tool_url === "string" ? body.builder_tool_url.trim() : "";
       const governance = typeof body?.governance_tool_url === "string" ? body.governance_tool_url.trim() : "";
+      const posthog = typeof body?.posthog_tool_url === "string" ? body.posthog_tool_url.trim() : "";
       // UNCONFIGURED MEANS LOCAL ONLY ON A LOOPBACK HOST, AND THIS IS THE SHIPPED PAGE'S LAW
       // (2026-10-06, late): a deployed page may never reach a visitor's loopback. The old
       // branch keyed this on the demo flag — when the demo went off, a deployed page with an
@@ -99,8 +124,13 @@ export function appConfigReady(): Promise<void> {
       developmentTool = development || (onLocalhost ? LOCAL_DEVELOPMENT_TOOL : "");
       builderTool = builder || (onLocalhost ? LOCAL_BUILDER_TOOL : "");
       governanceTool = governance || (onLocalhost ? LOCAL_GOVERNANCE_TOOL : "");
-    } catch {
-      // Leave the local defaults — see the header note.
+      posthogTool = posthog || (onLocalhost ? LOCAL_POSTHOG_TOOL : "");
+    } catch (error) {
+      // NO SILENT FALLBACK (owner's law, 2026-10-21): the read failed, so it says so with the
+      // real reason and announces it. The local defaults still apply, declared as what they
+      // are — a fallback after a stated failure, never a silent success.
+      console.error('[appConfig] GET /api/config failed — using local defaults:', error);
+      window.dispatchEvent(new CustomEvent('app-config-failed', { detail: String(error) }));
     } finally {
       clearTimeout(timer);
     }

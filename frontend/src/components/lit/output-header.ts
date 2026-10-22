@@ -40,12 +40,21 @@ export class OutputHeader extends LitElement {
   declare attributed: boolean;
   declare tokens: string;
   declare calls: string;
+  /**
+   * THE HOST HAS FILLED THE READOUT (owner, 2026-10-13 late — the trace seat's facts
+   * live in THIS bar: *"That header information doesn't go there. It goes here"*).
+   * When true the built-in line (and its drawing sample) steps aside and the slotted
+   * content draws in the line's place; the mark stays. False = every other room, which
+   * draws the line exactly as before.
+   */
+  declare readoutFilled: boolean;
 
   static properties = {
     line: { type: String },
     attributed: { type: Boolean },
     tokens: { type: String },
     calls: { type: String },
+    readoutFilled: { type: Boolean, attribute: 'readout-filled' },
   };
 
   static styles = [figureStyles, css`
@@ -91,6 +100,27 @@ export class OutputHeader extends LitElement {
       flex: 1 1 auto;
       min-width: 0;
       height: 40px;
+    }
+
+    /* THE HOST'S STRIP TAKES THE LINE'S PLACE (see readoutFilled). The slot itself
+       renders always — a slot that does not exist cannot receive — and the line hides
+       only when the seat says the strip is slotted. */
+    .readout-area.filled .textarea {
+      display: none;
+    }
+    /* AND THE BOX GROWS TO HOLD IT (owner, 2026-10-13 late: *"Maybe you should expand
+       that box and let all that information sit there visibly — we'll discuss truncation
+       later."*). The drawing's fixed 55px is the ONE-LINE bar's number; a host strip
+       that wraps to more rows pushes the box taller instead of spilling out of it.
+       The collapse/expand mechanics (the meatball grip under this bar) are future work,
+       on the owner's word. */
+    .readout-area.filled {
+      height: auto;
+      min-height: 55px;
+    }
+    .readout-area ::slotted(*) {
+      flex: 1 1 auto;
+      min-width: 0;
     }
 
     /* 40001123:6750 — the line: Arial Rounded MT Bold 400 at 12, 20px leading, #3D515B, in its
@@ -172,10 +202,14 @@ export class OutputHeader extends LitElement {
   render() {
     return html`
       <div class="area" data-node-id="40001119:6308" data-layer-name="output-header">
-        <div class="readout-area" data-node-id="40001119:6309" data-layer-name="chat-output-readout-area" role="status">
+        <div class="readout-area ${this.readoutFilled ? 'filled' : ''}" data-node-id="40001119:6309" data-layer-name="chat-output-readout-area" role="status">
           <div class="textarea" data-node-id="40001123:6763" data-layer-name="textarea">
             <p class="line" data-node-id="40001123:6750" data-layer-name="Analyzing: Session 222 | support Customer Session Duration: 28.495s Closed QA: 89.38% Sample text">${figures(this._line)}</p>
           </div>
+          <!-- THE HOST'S DOOR INTO THE READOUT (owner, 2026-10-13 late — the trace facts
+               strip goes HERE, this bar; see readoutFilled). Empty in every room that
+               does not fill it — the slot then draws nothing and the line above stands. -->
+          <slot name="readout-content"></slot>
           <div class="mark-box" data-node-id="40001124:7096" data-layer-name="model-readout-tokens-etc">
             <img
               class="mark-icon"

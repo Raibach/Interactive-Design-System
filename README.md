@@ -38,6 +38,115 @@ It exists because for open-ended generative systems you can't enumerate the poss
 
 Why that layer is largely not needed here — and what remains. My own ARCHITECTURE-IS-THE-GOVERNANCE.md already draws this line: the model composes only from the human-curated catalogue, and a name outside it gets a loud 503 — so "drift" stops being a statistical thing to watch and becomes a binary violation to reject. For structure, classical drift monitoring is obsolete as a method. The document itself names the pots it does not cover — and one of them is exactly what you're circling: it says the evals / model-risk pots "are different purchases."
 
+> **This section's argument, written out as doctrine:**
+> [`AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md`](AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md)
+> — self-reporting, not self-healing; the failure vault; the morning brief; the
+> seven-or-thirty-day window; the purge. When the code and the doctrine disagree, the
+> code is wrong.
+
+---
+
+## October 17, 2026: Zero-Reasoning, Zero-Telemetry, Self-Reporting
+
+### 1. Paradigm Shift: Zero-Reasoning / Zero-Trust Architecture
+
+We have moved away from the “AI governance” and passive observability model (Langfuse /
+OpenTelemetry spans) as a default. In its place: the model is a utility inside a contract.
+
+In our protocol the AI does not think, does not design, does not write code on the fly, and
+does not make runtime architectural decisions. It operates as a stateless, non-interpretive
+semantic force mapping data arrays directly to a rigid, deterministic Component Registry and
+Static Catalog. Because reasoning is explicitly turned off at the provider level, the model
+cannot drift, it cannot lose grounding, and it cannot return anything outside our concrete
+boundaries.
+
+### 2. The Economics We Chose
+
+Cloud providers price reasoning tokens and deep-reasoning models at a premium. We do not
+request them: the payload carries `reasoning_effort: "none"` on every mode, unconditionally.
+What we pay for is the transformation — and it is small. A measured call, 600 tokens, costs
+**$0.00004**.
+
+The same applies to observation: we removed the trace trees, span waterfalls, dashboards and
+filter tables that exist to watch an open-ended model. A deterministic pipeline needs a
+morning receipt, not a live heart monitor.
+
+If an infrastructure fracture occurs, the system behaves as a pure circuit breaker: it halts
+instantly, protects the interface, hands the user the real reason and the door to try again,
+and writes a single confession — one row, five facts — for the next-day morning briefing.
+
+We do not run an unconstrained chat application. We run a tight, high-performance machine
+unburdened by legacy computing philosophies or artificial complexity.
+
+**The full argument:** [`AGENTS-instructions/READ-ME/THE_LIBERATION_FROM_THE_BLACK_BOX.md`](AGENTS-instructions/READ-ME/THE_LIBERATION_FROM_THE_BLACK_BOX.md)
+· **The failure doctrine:** [`THE_SELF_REPORTING_SYSTEM.md`](AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md)
+· **The security and compliance gate:** [`SECURITY-AND-COMPLIANCE.md`](SECURITY-AND-COMPLIANCE.md)
+· **The user flow:** [`USER-FLOW.md`](USER-FLOW.md)
+
+### 3. New Initiative: A Compliance Gate, and a Thin Governance Layer
+
+We are separating two things that were sharing a word.
+
+**Compliance** answers *"is this assembly allowed to exist?"* — a question with an answer
+before anything ships. **Governance** answers *"how is the running system behaving?"* — a
+question with no answer until there is traffic.
+
+The initiative builds the first as a chain and keeps the second thin. Business logic is
+enforced where it is decided: at the assembly window, where the product person's prompt meets
+the static Lit catalogue and the model returns a candidate assembly. Nothing reaches a front end
+without three contributed verdicts — **design** reviews it for compliance and disability
+standards, runs it in front of real users and sends the analysis back; **product** reads that
+analysis and decides it is what they meant; then **one developer** hardens the package against
+the registry and launches. Production reads the frozen record; it re-derives nothing. Where the
+instruction needs a component the catalogue does not hold, design draws it in Figma, ingests it
+through the design seat, and the package continues with the new component tied to the business
+logic. The approvals live in the Approvals tab that is already in the chat navigation.
+
+Research is not a fourth department — design *is* research, and every phase carries research
+layers. Discovery, feedback and surveys are research for product; A/B tests and user reaction
+are research for design; a **spike** is a developer's research; compliance, security and
+oversight are research for the CTO and the CEO in the business.
+
+**The loop is the AI.** The machine runs the coordination end to end — communications,
+notifications, gate management, catalogue compliance, deterministic assembly — and never idles
+waiting on a person. People are contributors at the edge: they supply the spark once, contribute
+a verdict at a checkpoint, and step back. Curation is the machine's job too, because curation is
+itself a loop and people curate inconsistently. One boundary does not move: the AI may check,
+refuse, route, record and escalate its own assembly, but it may not approve it. A machine that
+signs its own work is a mirror, not a control.
+
+Governance remains — to keep an eye on failed assemblies, provider walls and evaluation
+verdicts — but on a monthly cadence driven by those alerts, not by per-request tracing.
+
+The doctrine, the failure modes it addresses, and the limits it accepts are in
+[`SECURITY-AND-COMPLIANCE.md`](SECURITY-AND-COMPLIANCE.md). The chain is not built yet.
+
+### 4. The User Flow, and What It Makes Measurable
+
+The journey end to end — the product person's idea, the instruction, the assembly, the three
+approvals, the customer's moment — is written out in [`USER-FLOW.md`](USER-FLOW.md). The gate
+document states the rules; that document states the journey through them.
+
+While the people make the judgements, the machine does the coordination: communications between
+stages, notifications, gate management, the approval record, assembly, catalogue management, and
+composition for the front end. It decides nothing, approves nothing, and invents no component.
+
+Because the front end is drawn from a **fixed catalogue of known components** rather than
+generated markup, every interaction can be attributed to a named component inside a named
+assembly from a named package. That is what makes deep product analytics honest here:
+time-to-intent, click-through latency per component, task completion velocity, friction and
+drop-off — plus, internally, how long a package waits at each approval stage.
+
+The inversion follows: an AI product usually spends its telemetry looking inward, tracing the
+model. Here the internal steps are fixed by the catalogue and the gate, so looking inward buys
+almost nothing. The measurement looks **outward**, at the person using the surface.
+
+Honest status: the design-side activity records (`design_element_activity`) and the governance
+event counts exist. The customer-side pieces — a served-at timestamp, a component identity on
+each interaction, a session that survives the journey, a store and a view — do not exist yet.
+
+---
+
 What remains genuinely real — and already exists in your system, measured tonight:
 
 Grounding is already judged, per run, in plain English. The run_evaluations table holds 53 judged runs right now (32 failed / 21 cleared), each with the judge's written sentence — rows like "it explicitly did not read them and instead restated headline-level summaries." That is a grounding verdict, stored as a database row. It's written by the house's own evaluation-judge and surfaced as the Eval tab's feed in the seat.
@@ -123,7 +232,7 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ## Component Catalog
 
-60 trusted components — 17 A2UI Basic Catalog primitives + 43 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 60 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
+67 trusted components — 17 A2UI Basic Catalog primitives + 50 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 67 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
 ```
 A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup

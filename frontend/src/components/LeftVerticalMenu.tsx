@@ -1,9 +1,15 @@
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
 import { isDemoMode } from "@/shared/appConfig";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import raibachLogo from "../assets/raibach-logo.jpg";
-import { IngestModal } from "./IngestModal";
+/* THE INGEST MODAL IS FETCHED WHEN IT IS OPENED (2026-10-21). It was a static import, and it
+   imports `figma-layers-view` — 55 kB that arrived before the console could paint, for a modal
+   nobody had opened (measured: 1.08 s through the tunnel). `lazy()` keeps the chain out of the
+   boot payload: the nav rail draws, the modal's chunk comes when the ingest button is pressed. */
+const IngestModal = lazy(() =>
+  import("./IngestModal").then((m) => ({ default: m.IngestModal })),
+);
 
 interface MenuItem {
   id: string;
@@ -652,13 +658,15 @@ const LogoutIcon = () => (
 
       {/* Ingest Modal — never mounted on the demo (see onOpenIngest above). */}
       {!isDemoMode() && (
-        <IngestModal
-          open={ingestModalOpen}
-          onClose={() => setIngestModalOpen(false)}
-          apiFetch={apiFetch}
-          sessionId={activeSessionId}
-          sessionTitle={activeSessionTitle}
-        />
+        <Suspense fallback={null}>
+          <IngestModal
+            open={ingestModalOpen}
+            onClose={() => setIngestModalOpen(false)}
+            apiFetch={apiFetch}
+            sessionId={activeSessionId}
+            sessionTitle={activeSessionTitle}
+          />
+        </Suspense>
       )}
     </div>
   );

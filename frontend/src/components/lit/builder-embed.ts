@@ -3,7 +3,7 @@
  *
  * The whole app builder runs INSIDE this room — its own prompt box, the run's progression,
  * the live preview and the code panel — served by this machine's own engine
- * (`wireframe-lab/ai-app-builder-open/local-vcaas/server.mjs`, DeepSeek behind it, no
+ * (`product/ai-app-builder-open/local-vcaas/server.mjs`, DeepSeek behind it, no
  * Totalum account).
  *
  * A PLAIN IFRAME, UNLIKE <artifact-canvas> — and the difference is the trust level, not a
@@ -24,9 +24,12 @@ export class BuilderEmbed extends LitElement {
     /** The builder's address — e.g. http://localhost:3223/ (observed as an attribute: the room
      *  mounts this element from JSX, and React writes an attribute, not a property). */
     src: { type: String },
+    /** Opt-in readiness watch — see `_watchReady`. The Development mount passes `h1`. */
+    readySelector: { type: String, attribute: 'ready-selector' },
   };
 
   declare src: string | null;
+  declare readySelector: string | null;
 
   /**
    * EVERY PAGE IS LOADED WITH `?embedded=console` — the header the builder's back arrow
@@ -53,23 +56,6 @@ export class BuilderEmbed extends LitElement {
          own url keeps both the absolute (direct-port) and the relative (door) forms whole. */
       const url = new URL(base, window.location.href);
       url.searchParams.set('embedded', 'console');
-      /* THE DOOR TRAVELS TO THE FRAME (2026-10-04). The Development room's tool decides what a
-         first-time visitor sees — its onboarding wizard (the one with the model setup), or
-         straight to the workspace — from a marker in its own address, because the frame cannot
-         ask who came in. The shell knows which door was used: a person who signed up carries
-         `grace_door = 'registered'` (App.tsx's onEnterWorkspace) and gets the wizard; the pin
-         (dev@local) writes `grace_door = 'dev'` (index.html) and keeps the tool's current
-         state — no wizard. The canvas's ground script (openhands-patch.sh) reads this. Same
-         one-place contract as `embedded` above. A browser with no marker at all (older
-         sessions) sends nothing and behaves exactly as it did before this existed. */
-      let door: string | null = null;
-      try {
-        // Session-scoped with the sign-in itself (2026-10-04; src/shared/session.ts).
-        door = sessionStorage.getItem('grace_door');
-      } catch {
-        /* no storage — send nothing, the pre-existing behavior */
-      }
-      if (door === 'registered' || door === 'dev') url.searchParams.set('house_door', door);
       return url.toString();
     } catch {
       return base;
@@ -165,10 +151,67 @@ export class BuilderEmbed extends LitElement {
    */
   private _onFrameLoaded = (): void => {
     window.dispatchEvent(new CustomEvent('builder-embed-loaded'));
+    this._watchReady();
+  };
+
+  /**
+   * THE APP HAS PAINTED (2026-10-16, opt-in via `ready-selector`).
+   *
+   * `builder-embed-loaded` fires at the iframe's load event — the DOCUMENT finished, not
+   * the app: measured on the Development canvas, its home heading first exists ~350ms
+   * AFTER load, and the room-switch cover needs exactly that moment to hold until ("soft
+   * fade in when the app signals ready" — the owner's direction; the embedded app's own
+   * boot faces may not show). The frame is same-origin by construction, so the element —
+   * the thing that owns the frame — can watch its document for the selector the mount
+   * names (`ready-selector="h1"` on the Development embed) and announce
+   * `builder-embed-ready` on `window` once it appears. Polls at 50ms, capped at TEN
+   * SECONDS, then gives up silently: the cover's own ten-second bound is the truth when
+   * readiness never comes. A selector the CSS parser rejects stops the watch immediately
+   * with a console shout — a config error must not masquerade as slowness.
+   */
+  private _readyTimer: number | null = null;
+  private _stopReadyPoll = (): void => {
+    if (this._readyTimer !== null) {
+      window.clearTimeout(this._readyTimer);
+      this._readyTimer = null;
+    }
+  };
+  private _watchReady = (): void => {
+    this._stopReadyPoll();
+    const selector = this.readySelector;
+    if (!selector) return;
+    const started = performance.now();
+    const tick = (): void => {
+      this._readyTimer = null;
+      const frame = this.renderRoot?.querySelector('iframe') as HTMLIFrameElement | null;
+      let doc: Document | null = null;
+      try {
+        doc = frame?.contentDocument ?? null;
+      } catch {
+        doc = null; // cross-origin read refused (never in this house; the bound covers it)
+      }
+      if (doc) {
+        let hit = false;
+        try {
+          hit = !!doc.querySelector(selector);
+        } catch {
+          console.warn(`[builder-embed] ready-selector "${selector}" is not a valid selector — readiness will never fire`);
+          return;
+        }
+        if (hit) {
+          window.dispatchEvent(new CustomEvent('builder-embed-ready'));
+          return;
+        }
+      }
+      if (performance.now() - started > 10_000) return;
+      this._readyTimer = window.setTimeout(tick, 50);
+    };
+    this._readyTimer = window.setTimeout(tick, 50);
   };
 
   disconnectedCallback() {
     window.removeEventListener('message', this._onMessage);
+    this._stopReadyPoll();
     super.disconnectedCallback();
   }
 
@@ -240,6 +283,11 @@ declare module 'react' {
            *  so the dead `embedded`/`house_door` params stay off Langfuse's URL. The
            *  builder mounts (product, development) omit it and keep the params. */
           'no-embedded-params'?: boolean | string;
+          /** Opt-in readiness watch (2026-10-16): when set, the element polls its
+           *  same-origin frame for this selector after load and announces
+           *  `builder-embed-ready` once it appears. The Development room passes
+           *  "h1". See `_watchReady`. */
+          'ready-selector'?: string;
         },
         BuilderEmbed
       >;

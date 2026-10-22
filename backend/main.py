@@ -83,7 +83,15 @@ async def house_docs():
 
 @app.on_event("startup")
 async def startup_event():
-    load_logs_to_vectorstore()
+    # THE VECTOR STORE LOAD IS NOT A PRECONDITION FOR SERVING (owner, 2026-10-21:
+    # "address both issues, the backend loop"). It loads the embedding model + Milvus —
+    # measured 30-60s — and it ran BEFORE the server answered, so every --reload paid a
+    # full outage and a trivial GET /api/config hung for the whole boot. It runs in a
+    # worker thread in the background now; the memory features stand down (as they
+    # already do when the embedder is skipped for memory) until it finishes. Nothing is
+    # suppressed: the loader prints its own progress and failures exactly as before.
+    import asyncio as _asyncio
+    app.state.vectorstore_task = _asyncio.create_task(_asyncio.to_thread(load_logs_to_vectorstore))
 
     import os as _os
     database_url = _os.getenv("DATABASE_URL")
@@ -115,9 +123,23 @@ async def shutdown_event():
         task.cancel()
         try:
             import asyncio as _asyncio
-            await _asyncio.wait_for(_asyncio.shield(task), timeout=5)
+            # Await the cancelled task WITHOUT re-raising its CancelledError:
+            # that class is a BaseException (Python 3.8+), so the generic clause
+            # below can never catch it — and wait_for(shield(task)) re-raises it
+            # right here, which made every shutdown (and every --reload cycle)
+            # log "Application shutdown failed" while this line waited (measured
+            # 2026-10-15). wait() reports completion without raising the child's
+            # cancellation; the timeout still bounds a stuck task.
+            await _asyncio.wait({task}, timeout=5)
         except Exception:  # noqa: BLE001 — shutdown must not hang on the inspector
             pass
+
+    # The vector-store thread cannot be cancelled; give it a bounded window to finish
+    # rather than holding the shutdown (the process exits either way).
+    vectorstore_task = getattr(app.state, "vectorstore_task", None)
+    if vectorstore_task and not vectorstore_task.done():
+        import asyncio as _asyncio
+        await _asyncio.wait({vectorstore_task}, timeout=5)
 
 
 # ── Route modules (extracted during modularization) ─────────────────
@@ -128,6 +150,8 @@ from routes import (
     billing,
     builder_bridge,
     conversations,
+    element_analytics,
+    element_events,
     figma,
     figma_intake,
     files,
@@ -137,12 +161,15 @@ from routes import (
     misc,
     projects,
     prompt_sessions,
+    design_console,
     teacher,
+    tools_surface,
+    ux_chat,
 )
 
 for _m in (misc, conversations, projects, teacher, memory,
            prompt_sessions, ai, figma, milvus, agent_rpc, files, auth, billing, governance,
-           figma_intake, builder_bridge):
+           figma_intake, builder_bridge, element_events, element_analytics, design_console, tools_surface, ux_chat):
     app.include_router(_m.router)
 
 
@@ -172,6 +199,7 @@ app.middleware("http")(demo_policy_dispatch)
 # fatal). A request that made no model call is a no-op — the call_id has not changed.
 from deps import get_user_id_from_header
 from grace_gui import record_pending_usage
+from starlette.concurrency import run_in_threadpool
 
 
 @app.middleware("http")
@@ -191,7 +219,15 @@ async def usage_ledger(request: Request, call_next):
         }
     response = await call_next(request)
     try:
-        record_pending_usage(get_user_id_from_header(request.headers.get("X-User-ID")), package_context)
+        # OFF THE EVENT LOOP (owner, 2026-10-21: "address both issues, the backend loop").
+        # `record_pending_usage` is a synchronous psycopg2 write; called directly it held the
+        # event loop for the duration of that write after EVERY request, so a busy database
+        # stalled unrelated requests. It runs in the worker thread pool now.
+        await run_in_threadpool(
+            record_pending_usage,
+            get_user_id_from_header(request.headers.get("X-User-ID")),
+            package_context,
+        )
     except Exception as ledger_error:
         print(f"[usage] the ledger middleware failed: {ledger_error}")
     return response

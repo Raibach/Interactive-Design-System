@@ -615,6 +615,35 @@ TABLE_DEFINITIONS = {
             created_at timestamp without time zone DEFAULT now()
         )
     """,
+    # THE FAILURE VAULT (owner, 2026-10-17): one row per wall the system hit — a provider
+    # that dropped the connection, a model that answered outside the registry contract.
+    # No bodies, no latency, no trace ids: a confession, not a log. The morning brief reads
+    # this table and the purge empties it, so the vault never grows without a reason.
+    'failure_snapshots': """
+        CREATE TABLE IF NOT EXISTS failure_snapshots (
+            id uuid NOT NULL DEFAULT uuid_generate_v4(),
+            occurred_at timestamp with time zone NOT NULL DEFAULT now(),
+            component_id character varying(120) NOT NULL,
+            error_type character varying(60) NOT NULL,
+            raw_code character varying(60),
+            detail text,
+            user_id uuid,
+            outcome character varying(30),
+            outcome_at timestamp with time zone
+        )
+    """,
+    'governance_searches': """
+        CREATE TABLE IF NOT EXISTS governance_searches (
+            id uuid NOT NULL DEFAULT uuid_generate_v4(),
+            session_id uuid NOT NULL REFERENCES prompt_sessions(id) ON DELETE CASCADE,
+            name character varying(160) NOT NULL,
+            query text DEFAULT ''::text,
+            sort character varying(24) DEFAULT 'newest'::character varying,
+            filters jsonb DEFAULT '[]'::jsonb,
+            created_at timestamp with time zone NOT NULL DEFAULT now(),
+            last_used_at timestamp with time zone
+        )
+    """,
     'user_grace_settings': """
         CREATE TABLE IF NOT EXISTS user_grace_settings (
             user_id uuid NOT NULL,
@@ -749,8 +778,20 @@ TABLE_DEFINITIONS = {
             element_id UUID NOT NULL REFERENCES prompt_sessions(id) ON DELETE CASCADE,
             user_id UUID REFERENCES users(id) ON DELETE SET NULL,
             package_id UUID,
+            -- THE VISITOR, IN ITS OWN COLUMN (vocabulary v2, 2026-10-18). The capture door used
+            -- to write the browser's session id into `actor`, which says what KIND of actor made
+            -- the row (ingest, user, catalogue-sync) and is short by design. Order within one
+            -- session is what a funnel is read from, so the surrogate identity gets its own
+            -- column and its own index; `actor` keeps its kind. Nullable: ingest rows predate
+            -- the door and have no browser session.
+            session_id VARCHAR(128),
             actor VARCHAR(32) DEFAULT 'user',
             action VARCHAR(64) NOT NULL,
+            -- THE SAME TIE THE COUNTERS HAVE (2026-10-18): the composer package's session id when
+            -- the event belongs to one, '' otherwise. The door received `flow` from the first day
+            -- of v2 and DROPPED IT on this insert, so a funnel could not be scoped to the business
+            -- process it served — found when the funnel read failed on a missing column.
+            flow VARCHAR(200) NOT NULL DEFAULT '',
             detail JSONB DEFAULT '{}',
             at TIMESTAMPTZ DEFAULT NOW()
         )
@@ -795,6 +836,12 @@ TABLE_DEFINITIONS = {
 
     # THE MILLIONS CASE, SEPARATE ON PURPOSE — see the note above. Partition by month and index
     # (element_id, at) when it earns it; do not build that shape before it is needed.
+    #
+    # bucket_date and dims_hash are the COUNTER's bucket key, added for the capture door
+    # (routes/element_events.py): one row per element+metric+day+identical-dimensions, so a
+    # person clicking forty times is one row with a bigger number. bucket_date is the EVENT's
+    # day (client timestamp), dims_hash is md5 over the dimensions with keys sorted in Python.
+    # Both are nullable on purpose: rows from any pre-door writer are not counters.
     'design_element_metrics': """
         CREATE TABLE IF NOT EXISTS design_element_metrics (
             id BIGSERIAL PRIMARY KEY,
@@ -802,7 +849,27 @@ TABLE_DEFINITIONS = {
             metric VARCHAR(64) NOT NULL,
             value NUMERIC,
             dimensions JSONB DEFAULT '{}',
-            at TIMESTAMPTZ DEFAULT NOW()
+            at TIMESTAMPTZ DEFAULT NOW(),
+            bucket_date DATE,
+            dims_hash TEXT,
+            flow VARCHAR(200) NOT NULL DEFAULT ''
+        )
+    """,
+
+    # SURFACE FACTS, THE SECOND KIND OF RECORD (2026-10-18). An element metric hangs off an
+    # element; a screen-level fact has no element to hang from, and forcing one into
+    # design_element_metrics would need a nullable element_id — the shape the door's law
+    # refuses. So surface facts get their own table: one row per open of a surface (a screen,
+    # an assembled surface, the chat seat), read row by row, session-bearing by design. The
+    # `event` vocabulary is closed the same way (SURFACE_METRICS in element_metrics_vocabulary).
+    'design_surface_events': """
+        CREATE TABLE IF NOT EXISTS design_surface_events (
+            id BIGSERIAL PRIMARY KEY,
+            session_id VARCHAR(128) NOT NULL,
+            surface VARCHAR(200) NOT NULL,
+            event VARCHAR(64) NOT NULL,
+            detail JSONB DEFAULT '{}',
+            at TIMESTAMPTZ NOT NULL
         )
     """,
 }
@@ -924,6 +991,20 @@ COLUMN_MIGRATIONS = [
     # table holds rows in other environments. The code sets it on every insert.
     ("ai_suggestions", "user_id", "UUID"),
     ("projects", "metadata", "JSONB DEFAULT '{}'"),
+    # design_element_metrics — the capture door's counter bucket (see the DDL comment). Safe
+    # additive: both nullable, no default, no rewrite of existing rows.
+    ("design_element_metrics", "bucket_date", "DATE"),
+    ("design_element_metrics", "dims_hash", "TEXT"),
+    # THE TIE TO THE BUSINESS PROCESS — the composer package's session id when the emitting
+    # surface belongs to one; '' otherwise. NOT NULL with a default so the bucket's uniqueness
+    # holds for every row (Postgres treats NULLs as distinct in a unique index).
+    ("design_element_metrics", "flow", "VARCHAR(200) NOT NULL DEFAULT ''"),
+    # design_element_activity — the visitor on the trail (see the DDL comment there). Nullable:
+    # ingest rows predate the door and carry no browser session.
+    ("design_element_activity", "session_id", "VARCHAR(128)"),
+    # design_element_activity — the business-process tie, the same value the counter bucket has.
+    # NOT NULL with a default so the column can be added to a table that already holds rows.
+    ("design_element_activity", "flow", "VARCHAR(200) NOT NULL DEFAULT ''"),
 ]
 
 # SQL to run after column migrations — fixes NOT NULL constraints that should be nullable
@@ -988,6 +1069,10 @@ INDEX_DEFINITIONS = [
     "CREATE INDEX IF NOT EXISTS idx_prompt_versions_session ON prompt_versions(session_id, version_number)",
     "CREATE INDEX IF NOT EXISTS idx_ai_suggestions_session ON ai_suggestions(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_tags_user ON tags(user_id)",
+    # The vault is read newest-first by the morning brief, and purged wholesale; one index
+    # on the time column is the whole cost of that.
+    "CREATE INDEX IF NOT EXISTS idx_failure_snapshots_occurred ON failure_snapshots(occurred_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_governance_searches_session ON governance_searches(session_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_prompt_context_session ON prompt_context(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_prompt_context_type ON prompt_context(context_type)",
     # ONE console session per user, enforced by the database rather than by code.
@@ -1028,6 +1113,14 @@ INDEX_DEFINITIONS = [
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_design_per_user "
     "ON prompt_sessions(user_id) WHERE (metadata->>'session_type') = 'design'",
 
+    # ONE PACKAGE PER DESIGN TAB. The container ('design') is one row per user; each tab under it
+    # is its own package — the level that owns that tab's conversation and data. The tab name is
+    # the key WITHIN the parent, so the same partial-unique rule holds two concurrent landings to
+    # one row instead of splitting the tab in two.
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_design_tab_per_user "
+    "ON prompt_sessions(user_id, (metadata->>'design_tab')) "
+    "WHERE (metadata->>'session_type') = 'design_tab'",
+
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_sessions_design_catalogue_per_system "
     "ON prompt_sessions(user_id, (metadata->>'design_system')) "
     "WHERE (metadata->>'session_type') = 'design_catalogue'",
@@ -1051,6 +1144,13 @@ INDEX_DEFINITIONS = [
     "ON design_element_activity(element_id, at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_design_element_activity_user "
     "ON design_element_activity(user_id, at DESC)",
+    # The funnel's own read: one visitor's steps in the order they happened. (session_id, at)
+    # is the only shape that question has; an index on either alone would be half of it.
+    "CREATE INDEX IF NOT EXISTS idx_design_element_activity_session "
+    "ON design_element_activity(session_id, at)",
+    # The funnel scoped to a business process: the flow first, then the visitor and the moment.
+    "CREATE INDEX IF NOT EXISTS idx_design_element_activity_flow "
+    "ON design_element_activity(flow, session_id, at)",
     "CREATE INDEX IF NOT EXISTS idx_design_element_annotations_element "
     "ON design_element_annotations(element_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_design_element_annotations_unresolved "
@@ -1059,6 +1159,27 @@ INDEX_DEFINITIONS = [
     "ON design_element_versions(element_id, version_number)",
     "CREATE INDEX IF NOT EXISTS idx_design_element_metrics_element "
     "ON design_element_metrics(element_id, at DESC)",
+
+    # THE COUNTER'S UNIQUENESS, and the reason it is PARTIAL: rows written before the capture
+    # door carry no bucket_date and are not counters of the same kind. The door's ON CONFLICT
+    # must repeat `WHERE bucket_date IS NOT NULL` or Postgres refuses the statement with
+    # "there is no unique or exclusion constraint matching the ON CONFLICT specification".
+    #
+    # FLOW IS IN THE BUCKET (2026-10-18): the same element in two composer processes is two
+    # buckets, because the element's performance belongs to the business process it served.
+    # The previous index (without flow) is DROPPED first and would otherwise block a second
+    # flow's row; the drop is a no-op after the first boot.
+    "DROP INDEX IF EXISTS ux_design_element_metrics_counter",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_design_element_metrics_bucket "
+    "ON design_element_metrics(element_id, metric, bucket_date, dims_hash, flow) "
+    "WHERE bucket_date IS NOT NULL",
+
+    # The surface record is read two ways: a session's path through the app (retention), and
+    # one surface's opens over time (trends). One index per question.
+    "CREATE INDEX IF NOT EXISTS idx_design_surface_events_session "
+    "ON design_surface_events(session_id, at)",
+    "CREATE INDEX IF NOT EXISTS idx_design_surface_events_surface "
+    "ON design_surface_events(surface, at DESC)",
 ]
 
 
@@ -1577,6 +1698,8 @@ def init_database():
             # table that was written and never created looks exactly like a table that works.
             'design_element_activity', 'design_element_annotations',
             'design_element_versions', 'design_element_metrics',
+            # The surface record — no foreign key, because a surface is not an element.
+            'design_surface_events',
             # THE TOOLS THE SYSTEM CAN USE, and the reason it was missing: the DDL was written
             # and this list was not, so `CREATE TABLE IF NOT EXISTS tools` never ran on any
             # database this file created. A fresh install came up with no register at all — no

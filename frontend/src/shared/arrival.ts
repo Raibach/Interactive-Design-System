@@ -20,11 +20,15 @@
  *   resume  an existing package was opened — she greets from where the work was
  *           left. Worth doing whether or not the thread has turns, because the
  *           turns are exactly what she is greeting about.
+ *   governance
+ *           the governance room opened — she introduces herself to the room
+ *           itself. Addressed to that room's own session; only a thread with
+ *           nothing in it is greeted (the console's rule).
  *
  * This is page-level, not persisted: a reload has no open package until one opens.
  */
 
-export type ArrivalKind = 'blank' | 'resume' | 'console';
+export type ArrivalKind = 'blank' | 'resume' | 'console' | 'governance';
 
 /**
  * AN ARRIVAL IS ADDRESSED TO ONE SEAT — and this is the field that was missing.

@@ -2927,9 +2927,461 @@
      "note": "the bytes could not be obtained, so only the pointer was captured"
     }
    ]
+  },
+  "40001177:2476": {
+   "tag": "f-40001177-2476",
+   "nodeId": "40001177:2476",
+   "approvedAt": "2026-10-19T02:29:39.186375Z",
+   "layers": 3,
+   "tree": {
+    "id": "40001177:2476",
+    "name": "prompt-textarea-container-system",
+    "type": "FRAME",
+    "size": [
+     562.0,
+     45.0
+    ],
+    "position": [
+     -20920.0,
+     -5537.0
+    ],
+    "layout": {
+     "layoutMode": "VERTICAL",
+     "itemSpacing": 10.0,
+     "paddingLeft": 13.0,
+     "paddingRight": 13.0,
+     "paddingTop": 10.0,
+     "paddingBottom": 10.0,
+     "layoutWrap": "NO_WRAP"
+    },
+    "fill": "#ffffff",
+    "radius": 6.0,
+    "effects": [
+     {
+      "type": "INNER_SHADOW",
+      "x": 0.0,
+      "y": 2.0,
+      "radius": 4.0,
+      "color": "rgba(0, 0, 0, 0.15)"
+     },
+     {
+      "type": "INNER_SHADOW",
+      "x": 1.0,
+      "y": 0.0,
+      "radius": 4.0,
+      "color": "rgba(0, 0, 0, 0.25)"
+     }
+    ],
+    "strokeAlign": "INSIDE",
+    "constraints": {
+     "vertical": "TOP",
+     "horizontal": "LEFT"
+    },
+    "sizing": {
+     "layoutSizingHorizontal": "FIXED",
+     "layoutSizingVertical": "HUG",
+     "layoutGrow": 0.0,
+     "layoutAlign": "INHERIT"
+    },
+    "children": [
+     {
+      "id": "40001177:2477",
+      "name": "text-input-area",
+      "type": "FRAME",
+      "size": [
+       530.0,
+       25.0
+      ],
+      "position": [
+       -20907.0,
+       -5527.0
+      ],
+      "layout": {
+       "layoutMode": "HORIZONTAL",
+       "itemSpacing": 10.0,
+       "counterAxisAlignItems": "CENTER",
+       "layoutWrap": "NO_WRAP"
+      },
+      "strokeAlign": "INSIDE",
+      "constraints": {
+       "vertical": "TOP",
+       "horizontal": "LEFT"
+      },
+      "sizing": {
+       "layoutSizingHorizontal": "FIXED",
+       "layoutSizingVertical": "HUG",
+       "layoutGrow": 0.0,
+       "layoutAlign": "INHERIT"
+      },
+      "children": [
+       {
+        "id": "40001177:2478",
+        "name": "empty",
+        "type": "TEXT",
+        "size": [
+         530.0,
+         25.0
+        ],
+        "position": [
+         -20907.0,
+         -5527.0
+        ],
+        "fill": "#767676",
+        "strokeAlign": "OUTSIDE",
+        "constraints": {
+         "vertical": "TOP",
+         "horizontal": "LEFT"
+        },
+        "sizing": {
+         "layoutSizingHorizontal": "FILL",
+         "layoutSizingVertical": "HUG",
+         "layoutGrow": 1.0,
+         "layoutAlign": "INHERIT"
+        },
+        "text": "Enter prompt text.",
+        "type_style": {
+         "fontFamily": "Inter",
+         "fontWeight": 500,
+         "fontSize": 16.0,
+         "lineHeightPx": 25.0,
+         "lineHeightUnit": "PIXELS",
+         "letterSpacing": 0.0,
+         "textAlignHorizontal": "LEFT",
+         "textAlignVertical": "TOP"
+        },
+        "stated": {
+         "scrollBehavior": "SCROLLS",
+         "blendMode": "PASS_THROUGH",
+         "absoluteRenderBounds": {
+          "x": -20905.720703125,
+          "y": -5520.63623046875,
+          "width": 136.306640625,
+          "height": 14.9091796875
+         },
+         "size": {
+          "x": 530.0,
+          "y": 25.0
+         },
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "interactions": [],
+         "complexStrokeProperties": {
+          "strokeType": "BASIC"
+         }
+        }
+       }
+      ],
+      "stated": {
+       "scrollBehavior": "SCROLLS",
+       "blendMode": "PASS_THROUGH",
+       "background": [],
+       "backgroundColor": {
+        "r": 0.0,
+        "g": 0.0,
+        "b": 0.0,
+        "a": 0.0
+       },
+       "primaryAxisSizingMode": "FIXED",
+       "strokesIncludedInLayout": true,
+       "absoluteRenderBounds": {
+        "x": -20907.0,
+        "y": -5527.0,
+        "width": 530.0,
+        "height": 25.0
+       },
+       "size": {
+        "x": 530.0,
+        "y": 25.0
+       },
+       "interactions": [],
+       "complexStrokeProperties": {
+        "strokeType": "BASIC"
+       }
+      }
+     }
+    ],
+    "stated": {
+     "scrollBehavior": "SCROLLS",
+     "blendMode": "PASS_THROUGH",
+     "background": [
+      {
+       "blendMode": "NORMAL",
+       "type": "SOLID",
+       "color": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0,
+        "a": 1.0
+       }
+      }
+     ],
+     "cornerSmoothing": 0.0,
+     "backgroundColor": {
+      "r": 1.0,
+      "g": 1.0,
+      "b": 1.0,
+      "a": 1.0
+     },
+     "counterAxisSizingMode": "FIXED",
+     "strokesIncludedInLayout": true,
+     "absoluteRenderBounds": {
+      "x": -20920.0,
+      "y": -5537.0,
+      "width": 562.0,
+      "height": 45.0
+     },
+     "size": {
+      "x": 562.0,
+      "y": 45.0
+     },
+     "interactions": [],
+     "complexStrokeProperties": {
+      "strokeType": "BASIC"
+     }
+    }
+   },
+   "assets": [
+    {
+     "kind": "mcp-url",
+     "mime": "image/png",
+     "file": null,
+     "source": "http://localhost:3845/assets/10c13ac1a228a365cb98a0064b1d5afbc84887b2.png",
+     "note": "the bytes could not be obtained, so only the pointer was captured"
+    }
+   ]
+  },
+  "40001177-2476": {
+   "tag": "f-40001177-2476",
+   "nodeId": "40001177-2476",
+   "approvedAt": "2026-10-19T02:32:02.132878Z",
+   "layers": 3,
+   "tree": {
+    "id": "40001177:2476",
+    "name": "prompt-textarea-container-system",
+    "type": "FRAME",
+    "size": [
+     562.0,
+     45.0
+    ],
+    "position": [
+     -20920.0,
+     -5537.0
+    ],
+    "layout": {
+     "layoutMode": "VERTICAL",
+     "itemSpacing": 10.0,
+     "paddingLeft": 13.0,
+     "paddingRight": 13.0,
+     "paddingTop": 10.0,
+     "paddingBottom": 10.0,
+     "layoutWrap": "NO_WRAP"
+    },
+    "fill": "#ffffff",
+    "radius": 6.0,
+    "effects": [
+     {
+      "type": "INNER_SHADOW",
+      "x": 0.0,
+      "y": 2.0,
+      "radius": 4.0,
+      "color": "rgba(0, 0, 0, 0.15)"
+     },
+     {
+      "type": "INNER_SHADOW",
+      "x": 1.0,
+      "y": 0.0,
+      "radius": 4.0,
+      "color": "rgba(0, 0, 0, 0.25)"
+     }
+    ],
+    "strokeAlign": "INSIDE",
+    "constraints": {
+     "vertical": "TOP",
+     "horizontal": "LEFT"
+    },
+    "sizing": {
+     "layoutSizingHorizontal": "FIXED",
+     "layoutSizingVertical": "HUG",
+     "layoutGrow": 0.0,
+     "layoutAlign": "INHERIT"
+    },
+    "children": [
+     {
+      "id": "40001177:2477",
+      "name": "text-input-area",
+      "type": "FRAME",
+      "size": [
+       530.0,
+       25.0
+      ],
+      "position": [
+       -20907.0,
+       -5527.0
+      ],
+      "layout": {
+       "layoutMode": "HORIZONTAL",
+       "itemSpacing": 10.0,
+       "counterAxisAlignItems": "CENTER",
+       "layoutWrap": "NO_WRAP"
+      },
+      "strokeAlign": "INSIDE",
+      "constraints": {
+       "vertical": "TOP",
+       "horizontal": "LEFT"
+      },
+      "sizing": {
+       "layoutSizingHorizontal": "FIXED",
+       "layoutSizingVertical": "HUG",
+       "layoutGrow": 0.0,
+       "layoutAlign": "INHERIT"
+      },
+      "children": [
+       {
+        "id": "40001177:2478",
+        "name": "empty",
+        "type": "TEXT",
+        "size": [
+         530.0,
+         25.0
+        ],
+        "position": [
+         -20907.0,
+         -5527.0
+        ],
+        "fill": "#767676",
+        "strokeAlign": "OUTSIDE",
+        "constraints": {
+         "vertical": "TOP",
+         "horizontal": "LEFT"
+        },
+        "sizing": {
+         "layoutSizingHorizontal": "FILL",
+         "layoutSizingVertical": "HUG",
+         "layoutGrow": 1.0,
+         "layoutAlign": "INHERIT"
+        },
+        "text": "Enter prompt text.",
+        "type_style": {
+         "fontFamily": "Inter",
+         "fontWeight": 500,
+         "fontSize": 16.0,
+         "lineHeightPx": 25.0,
+         "lineHeightUnit": "PIXELS",
+         "letterSpacing": 0.0,
+         "textAlignHorizontal": "LEFT",
+         "textAlignVertical": "TOP"
+        },
+        "stated": {
+         "scrollBehavior": "SCROLLS",
+         "blendMode": "PASS_THROUGH",
+         "absoluteRenderBounds": {
+          "x": -20905.720703125,
+          "y": -5520.63623046875,
+          "width": 136.306640625,
+          "height": 14.9091796875
+         },
+         "size": {
+          "x": 530.0,
+          "y": 25.0
+         },
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "interactions": [],
+         "complexStrokeProperties": {
+          "strokeType": "BASIC"
+         }
+        }
+       }
+      ],
+      "stated": {
+       "scrollBehavior": "SCROLLS",
+       "blendMode": "PASS_THROUGH",
+       "background": [],
+       "backgroundColor": {
+        "r": 0.0,
+        "g": 0.0,
+        "b": 0.0,
+        "a": 0.0
+       },
+       "primaryAxisSizingMode": "FIXED",
+       "strokesIncludedInLayout": true,
+       "absoluteRenderBounds": {
+        "x": -20907.0,
+        "y": -5527.0,
+        "width": 530.0,
+        "height": 25.0
+       },
+       "size": {
+        "x": 530.0,
+        "y": 25.0
+       },
+       "interactions": [],
+       "complexStrokeProperties": {
+        "strokeType": "BASIC"
+       }
+      }
+     }
+    ],
+    "stated": {
+     "scrollBehavior": "SCROLLS",
+     "blendMode": "PASS_THROUGH",
+     "background": [
+      {
+       "blendMode": "NORMAL",
+       "type": "SOLID",
+       "color": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0,
+        "a": 1.0
+       }
+      }
+     ],
+     "cornerSmoothing": 0.0,
+     "backgroundColor": {
+      "r": 1.0,
+      "g": 1.0,
+      "b": 1.0,
+      "a": 1.0
+     },
+     "counterAxisSizingMode": "FIXED",
+     "strokesIncludedInLayout": true,
+     "absoluteRenderBounds": {
+      "x": -20920.0,
+      "y": -5537.0,
+      "width": 562.0,
+      "height": 45.0
+     },
+     "size": {
+      "x": 562.0,
+      "y": 45.0
+     },
+     "interactions": [],
+     "complexStrokeProperties": {
+      "strokeType": "BASIC"
+     }
+    }
+   },
+   "assets": [
+    {
+     "kind": "mcp-url",
+     "mime": "image/png",
+     "file": null,
+     "source": "http://localhost:3845/assets/10c13ac1a228a365cb98a0064b1d5afbc84887b2.png",
+     "note": "the bytes could not be obtained, so only the pointer was captured"
+    }
+   ]
   }
  },
- "generatedAt": "2026-10-10T00:53:01.780632Z",
+ "generatedAt": "2026-10-19T02:32:02.132895Z",
  "removed": {
   "40001206:3422": {
    "tag": "f-40001206-3422",

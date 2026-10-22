@@ -282,28 +282,3 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
     throw err;
   }
 };
-
-// ── Console interception — capture ALL errors and warnings, filter nothing ─
-// ⚠️  DISABLED: This creates infinite recursion because logger calls console.error,
-// which then calls logger.error again. Keep original console as-is.
-
-// const _origConsole = {
-//   error: console.error.bind(console),
-//   warn: console.warn.bind(console),
-// };
-
-// console.error = function (...args: any[]) {
-//   _origConsole.error(...args);
-//   const msg = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
-//   if (msg.trim()) {
-//     logger.error(`[console] ${msg.slice(0, 500)}`);
-//   }
-// };
-
-// console.warn = function (...args: any[]) {
-//   _origConsole.warn(...args);
-//   const msg = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
-//   if (msg.trim()) {
-//     logger.warn(`[console] ${msg.slice(0, 500)}`);
-//   }
-// };

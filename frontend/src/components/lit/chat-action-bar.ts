@@ -36,6 +36,17 @@ export class ChatActionBar extends LitElement {
   static properties = {
     /** Label on the Models button. */
     modelLabel: { type: String, attribute: 'model-label' },
+    /**
+     * PER-TAB WORDS FOR THE SAME CONTROLS (owner, 2026-10-17: *"take the exact same chat send
+     * button and its existing console button and you add a third button"*). The Evals tab's
+     * send IS its query submit and its trailing pill IS the list toggle: same pills, same
+     * styles, different words. EMPTY KEEPS THE SEAT'S OWN WORDS, so every other seat is
+     * byte-identical in behaviour.
+     */
+    sendLabel: { type: String, attribute: 'send-label' },
+    trailingLabel: { type: String, attribute: 'trailing-label' },
+    /** A THIRD PILL, SAME TREATMENT (the Evals tab's "+ New evaluator"). Empty = absent. */
+    extraLabel: { type: String, attribute: 'extra-label' },
     /** A call is in flight — the one control shows stop instead of send. */
     busy: { type: Boolean },
     /** The input holds no text — send is disabled (`Disabled:` on state=send). */
@@ -50,12 +61,27 @@ export class ChatActionBar extends LitElement {
      * own word, Agent, so a seat that has not been asked keeps what the design says.
      */
     trailing: { type: String },
+    /**
+     * OPEN IN COMPOSER — the governance seat's way back to the package under inspection
+     * (owner, 2026-10-13: it opens "that package that you're inspecting inside of the
+     * composer … lets the user edit it and rerun it based on the governance
+     * information"). SET ONLY by a seat whose room resolved a package for the trace on
+     * screen (on a Composer run the trace's Langfuse session IS the package's session
+     * id); the button then REPLACES the trailing Agent/Console pill — the drawing's own
+     * slot — and dispatches `open-composer` for the shell to route. A seat that sets
+     * nothing keeps the pill and this element draws exactly as it always has.
+     */
+    composerPackage: { type: String, attribute: 'composer-package' },
   };
 
   declare modelLabel: string;
+  declare sendLabel: string;
+  declare trailingLabel: string;
+  declare extraLabel: string;
   declare busy: boolean;
   declare hasText: boolean;
   declare trailing: string;
+  declare composerPackage: string;
 
   /**
    * THE TWO TRAILING BUTTONS ARE OFF THE BAR — Models and "+", together, on the owner's
@@ -76,6 +102,7 @@ export class ChatActionBar extends LitElement {
     this.busy = false;
     this.hasText = false;
     this.trailing = 'agent';
+    this.composerPackage = '';
   }
 
   static styles = css`
@@ -260,7 +287,7 @@ export class ChatActionBar extends LitElement {
    * as a button of its own with its own annotation (2026-09-19). When that note lands, this
    * name follows it.
    */
-  private _emit(type: 'send-input-to-model' | 'stop-model-thinking' | 'loads-cards-form-console-in-prompt-area' | 'open-console') {
+  private _emit(type: 'send-input-to-model' | 'stop-model-thinking' | 'loads-cards-form-console-in-prompt-area' | 'open-console' | 'open-composer' | 'extra-action') {
     this.dispatchEvent(new CustomEvent(type, { bubbles: true, composed: true }));
   }
 
@@ -376,7 +403,7 @@ export class ChatActionBar extends LitElement {
               ${this.busy
                 ? html`<span class="glyph-stop" aria-hidden="true"></span>`
                 : html`<img src=${sendIcon} width="24" height="25" alt="" data-node-id="40001119:6380" />`}
-              <span>${this.busy ? 'Stop' : 'Send'}</span>
+              <span>${this.sendLabel || (this.busy ? 'Stop' : 'Send')}</span>
             </button>
           </div>
           <!-- THE GRIP IS A ROW OF ITS OWN, BETWEEN THE TWO CONTROLS — the design as the
@@ -415,16 +442,39 @@ export class ChatActionBar extends LitElement {
                NOTE FOR THE AUDIT: this element is NOT in the allowlist, so the check that
                catches a dispatched-but-unheard event (event-unheard) never looks at it. A
                dead control here is invisible to the gate. -->
-          <button
-            class="pill agent"
-            type="button"
-            data-node-id="40001120:6641"
-            title=${this.trailing === 'console' ? 'Console' : 'Agent'}
-            aria-label=${this.trailing === 'console' ? 'Console' : 'Agent'}
-            @click=${() => this._emit(this.trailing === 'console' ? 'open-console' : 'loads-cards-form-console-in-prompt-area')}
-          >
-            ${this.trailing === 'console' ? 'Console' : 'Agent'}
-          </button>
+          ${this.composerPackage
+            ? html`<button
+                class="pill composer"
+                type="button"
+                title="View prompt for this trace — opens it in the Composer"
+                aria-label="View prompt for this trace"
+                style="background:#ffffff;color:#1FACC2;border:1px solid #CBE6E3"
+                @click=${() => this._emit('open-composer')}
+              >
+                View prompt for this trace
+              </button>`
+            : html`<button
+                class="pill agent"
+                type="button"
+                data-node-id="40001120:6641"
+                title=${this.trailingLabel || (this.trailing === 'console' ? 'Console' : 'Agent')}
+                aria-label=${this.trailingLabel || (this.trailing === 'console' ? 'Console' : 'Agent')}
+                @click=${() => this._emit(this.trailing === 'console' ? 'open-console' : 'loads-cards-form-console-in-prompt-area')}
+              >
+                ${this.trailingLabel || (this.trailing === 'console' ? 'Console' : 'Agent')}
+              </button>`}
+          <!-- THE THIRD PILL — the same treatment as the trailing one, present only when a tab
+               names it (the Evals tab's "+ New evaluator"). Its click is announced as
+               extra-action; the host decides what it does. -->
+          ${this.extraLabel
+            ? html`<button
+                class="pill agent"
+                type="button"
+                title=${this.extraLabel}
+                aria-label=${this.extraLabel}
+                @click=${() => this._emit('extra-action')}
+              >${this.extraLabel}</button>`
+            : nothing}
         </div>
         <!-- MODELS AND "+" ARE UNHOOKED, NOT DELETED. The owner, 2026-09-19: "you can
              remove the models on the horizontal drag for the chat panel… we don't need

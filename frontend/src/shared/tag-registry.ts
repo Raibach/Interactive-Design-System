@@ -839,6 +839,27 @@ export const TAG_REGISTRY = {
        * surface never stated it.
        */
       graceLiveContext: { type: 'boolean', optional: true },
+      /**
+       * THE GOVERNANCE ROOM'S SELECTED TRACE — written by the SHELL from its own read
+       * (lib/governance-trace-source.ts), never by a model, and only for that room's
+       * seat. When graceLiveContext is true the seat appends it to her turn context as
+       * the TRACE ON SCREEN block, so her answers are about what is on the screen.
+       * Absent = no selection — the context then says nothing about a trace.
+       */
+      governanceTrace: { type: 'object', optional: true },
+      /** The NODE selected within that trace — same channel; absent when none. */
+      governanceObservation: { type: 'object', optional: true },
+      /**
+       * THE TRACE'S PROMPT PACKAGE — resolved by the SHELL (on a Composer run the trace's
+       * Langfuse session IS the package's session id) and written only when the package
+       * answers; the action bar then offers "View prompt for this trace" (renamed 2026-10-13
+       * late — preview is the trace's prompt, and the button opens that package in the
+       * Composer so the person can edit and rerun it). Empty = no package for this trace —
+       * no button.
+       */
+      composerPackageId: { type: 'string', optional: true },
+      /** The rail's deactivated tabs, relayed to <chat-navigation-bar> (see there). */
+      disabledTabs: { type: 'string', optional: true },
     },
     events: ['message-sent', 'command-received'],
     constraints: [],
@@ -910,6 +931,70 @@ export const TAG_REGISTRY = {
     constraints: [
       'a view, not a source: every row arrives already composed, as a data-model binding',
       'belongs in chat-panel\'s "view" slot beside the trace view — the panel draws the slot, the surface fills it',
+    ],
+  },
+
+  // THE GOVERNANCE SEAT'S TRACE VIEWS — the room's own furniture in the seat's "view"
+  // and "content-header" slots. Each rail-tab view declares its tab on itself
+  // (`view-tab`), which is how chat-panel draws one claimed view per tab without
+  // knowing any room's names. The values all arrive from the shell, which reads
+  // lib/governance-trace-source.ts.
+  'trace-context-header': {
+    tag: 'trace-context-header',
+    surface: 'both',
+    column: 'right',
+    description:
+      'The trace facts strip IN the chat seat\'s readout bar (<output-header> — the block that draws "Analyzing: Session 222 | …"), reached through the seat\'s status-content relay (owner, 2026-10-13 late: "That header information doesn\'t go there. It goes here"). State 1 draws the selected trace\'s row facts (id, name, latency, cost, tokens, session, user); with an observation present it draws that node\'s detail header instead (name, start, latency, cost, tokens). The fly-out\'s two surviving controls ride its trailing edge: Download JSON (emits trace-download; the SHELL writes the file from the bundle it holds) and a ⋮ holding the app\'s own copy items (Copy trace ID, Copy trace name) — no up/down flipper and no expander. NO gripper of its own: the bar beneath already draws the design\'s own five-dot meatball grip, and THAT is the strip\'s future expander (truncation/resize discussed later, owner\'s word). A VIEW: it fetches nothing — the shell reads lib/governance-trace-source.ts and writes trace/observation. Unset trace draws NOTHING: no trace chosen is a fact, not a placeholder to fill. With no trace and metrics set (the room\'s landing read), a LANDING state draws the newest-window model usage — traces, observations, cost, tokens, model.',
+    props: {
+      trace: { type: 'object', optional: true },
+      observation: { type: 'object', optional: true },
+      metrics: { type: 'object', optional: true },
+    },
+    events: ['trace-download'],
+    constraints: [
+      'a view, not a source: both props are written by the shell',
+      'slotted with slot="status-content" — the seat relays it into the readout bar (output-header), which grows to hold it and steps its own built-in line aside',
+      'the download emits; the SHELL writes the file — this element owns the ask, never the data',
+      'the ⋮ holds only actions that are real: Share (public link) and Delete stay out until the owner says otherwise',
+    ],
+  },
+  'trace-tree': {
+    tag: 'trace-tree',
+    surface: 'both',
+    column: 'right',
+    description:
+      'The selected trace\'s observation tree, for the seat\'s Trace tab — the Langfuse fork\'s navigation panel transcribed WHOLE: the toolbar (Search, the Expand all/Collapse all toggle, the View Options preferences — Show Comments / Show Scores / Show Duration / Show Cost / Collapse System Prompts / Min Level — and the Tree | Timeline | Graph switch) over the Tree outline, the Timeline lanes, or the layered Graph. A VIEW: it fetches nothing — the shell writes trace/observations/selectedId (and scores/commentCounts for chips and badges). A row click emits trace-node-selected and the SHELL answers by writing selectedId back. Unset trace = no trace chosen; observations [] = the trace has none — different claims. Not transcribed yet: the dense timeline\'s map-mode and the graph\'s ELK layout. The collapseSystemPrompt preference also emits trace-prefs for the shell to hand to <trace-detail>.',
+    props: {
+      trace: { type: 'object', optional: true },
+      observations: { type: 'array', optional: true },
+      selectedId: { type: 'string', optional: true },
+      scores: { type: 'array', optional: true },
+      commentCounts: { type: 'object', optional: true },
+    },
+    events: ['trace-node-selected', 'trace-prefs'],
+    constraints: [
+      'a view, not a source: every value arrives from the shell',
+      'carries view-tab="trace" where a host slots it — the seat\'s per-tab door for a room\'s own view',
+    ],
+  },
+  'trace-detail': {
+    tag: 'trace-detail',
+    surface: 'both',
+    column: 'right',
+    description:
+      'The selected observation\'s detail, for the seat\'s Preview tab — the fork\'s detail pane transcribed: the full inner strip (Preview | Attributes | Scores | Log View | Formatted | Raw) over the node\'s IO (role blocks when the input parses to chat messages, tabs otherwise), the node\'s fields, the trace\'s score rows, and the trace\'s observations in time order. A VIEW: it fetches nothing — the shell writes trace/observation/io/scores/observations. io undefined = being read; {input:null,output:null} = nothing captured, a different claim. Collapse System Prompts (written by the shell from the tree header\'s preference) folds system blocks. No inner scroll boxes — the chat column\'s one scroller carries everything. A trace-level selection lands its ROOT node (the shell defaults parentObservationId-null; 2026-10-13) so this pane — the trace\'s prompt, the light preview — is alive the moment a trace stands. The prompt-package door (M4, answered) lives on the seat\'s action bar: the button reads "View prompt for this trace" and opens the package in the Composer; this pane carries none of it.',
+    props: {
+      trace: { type: 'object', optional: true },
+      observation: { type: 'object', optional: true },
+      io: { type: 'object', optional: true },
+      scores: { type: 'array', optional: true },
+      observations: { type: 'array', optional: true },
+      collapseSystemPrompt: { type: 'boolean', optional: true },
+    },
+    events: [],
+    constraints: [
+      'a view, not a source: every value arrives from the shell',
+      'carries view-tab="tools" where a host slots it — the seat\'s per-tab door for a room\'s own view',
     ],
   },
 
@@ -1328,7 +1413,7 @@ export const TAG_REGISTRY = {
       'a node\'s props are set as PROPERTIES on the mounted element (an object prop cannot ride an attribute)',
       'ITS OWN EVENT NAMES (draft-select, draft-node-moved): both canvases can be in the same room and the host listens on window — one name for two facts would make the run canvas answer a draft gesture',
       'placements: the element owns the live drag, the payload owns the model — one writer for a place, and a rebuild never moves what a hand has placed',
-      'the store is BUILT (2026-10-02): prompt_artifacts keyed by conversation, one row replaced, written on gesture end — the host is the single writer; the blueprint is wireframe-lab/PRODUCT-ROOM.md',
+      'the store is BUILT (2026-10-02): prompt_artifacts keyed by conversation, one row replaced, written on gesture end — the host is the single writer; the blueprint is product/PRODUCT-ROOM.md',
       'the tray: when a `palette` is bound, the stage draws its + Add picker whose list IS that palette — an add announces `draft-node-added` and the host folds and writes it, exactly as a drag announces `draft-node-moved`; with no palette bound (the Composer seat), no tray is drawn',
       'clearable (default false) is the stage\'s own hand: the Product room binds TRUE, and while the draft holds at least one node the rail draws a small Clear — a press announces `draft-cleared` carrying nothing, and the host writes the EMPTY layout through the same one store the spoken "clear the stage" lands in (one fact, both hands, one writer); with nothing to clear the button is not drawn — a control that cannot work is not drawn (owner, 2026-10-03: the stage had no way to be emptied)',
     ],
@@ -1351,22 +1436,6 @@ export const TAG_REGISTRY = {
       'one name for one fact: `artifact-cleared` is this element\'s own event, distinct from <draft-canvas>\'s draft-* gestures — both canvases can be in the same document and the host listens on window',
     ],
   },
-  // ── 'design-system-picker' WAS HERE, DECLARED AND REMOVED 2026-10-03 ──────────────────────  // The product room's context strip lived here for one day. The owner, seeing the room work:
-  // *"So I don't want the user to be able to select a catalogue. Let's just pick one that's most
-  // compatible and use it. I'm removing that feature — they don't need to select anything."*
-  // So the room's system is a server-side constant (`_PRODUCT_ROOM_DESIGN_SYSTEM` in
-  // routes/ai.py), the element file is deleted, and the entry left with the element — a
-  // declaration for an element nothing draws is the dead control this repository deletes.
-  // ── THE INGESTED SYSTEMS' ENTRIES MOVED OUT, 2026-10-03 ───────────────────────────────────
-  // 'ag-select' (AgnosticUI, declared here 2026-10-03) and 'kor-button' / 'kor-icon' (Kor) were
-  // declared here while the wall was incomplete. By the owner's own rule this file is the
-  // PROMPT-COMPOSER catalogue's own — "The app's three files are the app catalogue's files. A
-  // second catalogue must never write into them" (PLANS.AGENT/multiple-catalogs.md §10) — and
-  // each system's declarations now live in its own registry module:
-  //   components/lit/agnosticui/registry.ts   (ag-select)
-  //   components/lit/kor/registry.ts          (kor-button, kor-icon)
-  // with each system's name→tag table in its own partition's registry.json, which is what
-  // `resolveTag` consults for a system's names. Nothing of a system resolves through this table.
   'governance-usage-view': {
     tag: 'governance-usage-view',
     surface: 'composer',
@@ -1657,8 +1726,6 @@ export const TAG_REGISTRY = {
    * `busy` AND `message` ARE THE HOST'S. Only the caller that made the call knows when it finished,
    * and only it knows why Submit is blocked — so the element decides neither.
    */
-  // (THE ADD-DESIGN-SYSTEM TAG WAS HERE — declared 2026-10-02, removed 2026-10-04 together with
-  // the form itself: no catalogue is installed from the front end, so no surface may name it.)
   'figma-ingest-form': {
     tag: 'figma-ingest-form',
     surface: 'design',
@@ -1764,10 +1831,12 @@ export const TAG_REGISTRY = {
     props: {
       isThirdOpen: { type: 'boolean', optional: true },
       chatLoadWidth: { type: 'number', optional: true },
+      chatOverlaysContent: { type: 'boolean', optional: true },
     },
       events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
       constraints: [
         'must contain prompt-section-editor (left), compiled-output-viewer (middle), chat-panel (right)',
+        '`chat-overlays-content` IS THE ROOM\'S OWN WORD, and the layout checks the left slot really holds a builder-embed before it obeys: set, her column is a LAYER over the embedded application (absolute, z-3 — the application keeps every pixel behind her, the drag still sizes and closes her, the drag ceiling frees the application floor of 60 instead of the prompt\'s 420). Unset: every other room keeps the pane law exactly as it was',
         'IT DOCKS HER FOR THE DESIGN ROOM\'S RUNS AND FOR NOTHING ELSE (2026-10-01). `ingest-submit` (the form) and `open-component` (a catalogue row) close the right column to its rail, because in that room the output is a drawing that wants the width (owner: *"dock the chat when someone clicks submit or tries to view one of our components… dock Grace to give the user full view"*). A COMPOSER Run does NOT dock her, and that is deliberate: the owner reversed exactly that on 2026-09-24, because the prompt contents, the tool results and the run\'s answer all land in her column, so docking at the click hid the output the Run produces. Verified in a page: `open-component` and `ingest-submit` take her 637 → 104; `flow-view-ready` leaves her open at 610. Only the layout on screen obeys — a hidden composer must not have her shut behind the operator\'s back — and nothing re-closes her on render, so an operator who reopens her keeps her open',
       ],
   },

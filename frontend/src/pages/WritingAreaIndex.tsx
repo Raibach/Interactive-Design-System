@@ -3,8 +3,8 @@
 // waits for forty elements it cannot draw yet (2026-10-02; the rule it protects — a tag
 // nothing defines draws nothing — is documented in components/lit/register.ts).
 import "@/components/lit/register";
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate, useSearchParams, useBlocker } from "react-router-dom";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, lazy, Suspense } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 // THE ONE WAY THROUGH THE BOUNDARY. The design room's container is drawn by the design
 // renderer INSIDE ITS SHADOW ROOT, and the ingest's three regions are React elements the
 // renderer cannot instantiate — it builds elements from the catalogue by tag name, and the
@@ -18,21 +18,11 @@ import { useParams, useNavigate, useSearchParams, useBlocker } from "react-route
 // beneath the room and pushed the whole design up by 129px. The ingest is the TEMPLATE for what
 // this room must do; its functionality is translated into the catalogue's own elements, bound to
 // the data model, drawn by the renderer. Nothing else may be mounted in there.
-// pdfService import removed — PDF processing is retired
-// import { quarantineService } from "@/services/quarantineService"; // Excluded from production
 import {
   conversationStorage,
   type Project,
   type Conversation,
 } from "@/services/conversationStorage";
-// TODO: Legacy reference cleanup — module no longer exists at this path
-// import TeacherEditorChat from "@/components/TeacherChat/TeacherEditorChat";
-// PromptWorkspace import removed — replaced by model-driven Lit tree (prompt-section-editor + compiled-output-viewer + workspace-layout) inside slot="workspace"
-// import QuarantinePanel from "@/components/QuarantinePanel"; // Excluded from production
-// MyStoryEditor + SaveProjectModal imports removed — components are retired
-// TODO: Legacy reference cleanup — module no longer exists at this path
-// import MemoriesTab from "@/components/MemoriesTab";
-// Progress import removed — was only used by retired PDF processing
 import { useToast } from "@/hooks/use-toast";
 import { loadSystemRegistry } from "@/shared/a2uiRegistries";
 import { getAuthState } from "@/services/authService";
@@ -43,9 +33,29 @@ import LeftVerticalMenu from "@/components/LeftVerticalMenu";
 import GovernanceNav from "@/components/navigation/GovernanceNav";
 import LeftColumnHeader from "@/components/LeftColumnHeader";
 import { useNotificationGate } from "@/hooks/useNotificationGate";
+import { GOVERNANCE_GATE_MAX_MS } from "@/gate/gateTimings";
 import ConsolePage from "@/pages/ConsolePage";
+// THE DESIGN TAB LOADS A FILE, AND THAT FILE IMPORTS ITS CONTENT (owner, 2026-10-18: *"There is a
+// button at the top. It's called Design. Load a file that imports its content."*). The shell holds
+// no design code: it renders <DesignRoom />, and `design/DesignRoom` imports the room's parts —
+// today the console experience, and per tab each tab's own experience file.
+/* THE ROOM LOADS WHEN ITS TAB IS OPENED (2026-10-21). It used to be a static import here, so
+   every byte of the Design room — its seat shells, the tools rail, the Figma layers tree — rode
+   the boot chunk and had to arrive before the console could paint. Measured through the tunnel:
+   the room chunk was 403 kB gzipped and took 1.7 s, and `figma-layers-view` alone was 55 kB /
+   1.8 s of that. `lazy()` moves it behind the moment the Design button is pressed. */
+const DesignRoom = lazy(() => import("@/design/DesignRoom"));
 import consoleVideo from "@/assets/No-Copyright-waves.mp4";
-import composerBackground from "@/assets/composer-image-bg.jpg";
+// 2026-10-19: JPG re-encoded to WebP (516 KB → 231 KB) for faster loading.
+import composerBackground from "@/assets/composer-image-bg.webp";
+// THE PRODUCT ROOM'S ASSEMBLY GROUND — the SAME IMAGE as the composer's, carried as its own
+// RE-LABELED copy (owner, 2026-10-14: *"just borrow it … same effect same fade in same
+// everything but be sure to re-label it so it doesn't interfere with composer in any way"*).
+// The room's one background is the composer's image; the assembly cover must load the SAME one —
+// as a name of its own, so neither side can ever redefine the other's picture.
+// 2026-10-19: JPG re-encoded to WebP (516 KB → 231 KB) for faster loading.
+// MOVED (2026-10-21): the import went with the pane — `rooms/product/ProductRoom.tsx` wears it
+// now, and this page no longer names the room's picture at all.
 // THE DESIGN SECTION'S OWN CANVAS — the artwork behind the room's columns. Same import
 // mechanism as the Composer's, so it is bundled and hashed like every other asset.
 // The artwork is the owner's second pass at it (`images/design-section2-bkg.png`, 2026-09-30); the
@@ -56,7 +66,7 @@ import designSectionBackground from "@/assets/design-section2-bkg.webp";
 // composer's ground now (see the workspaceBackground block below), and the wireframe-named
 // duplicate of this tile left the tree with the retirement (2026-10-05 — one image for the lab
 // ground; `canvas-wireframe-lab-bkg.png` deleted, referenced by nothing).
-// 2026-10-10: re-encoded to WebP (q90) — 411 KB JPG → 238 KB; the JPG stays in assets/_old.
+// 2026-10-10: re-encoded to WebP (q90) — 411 KB JPG → 238 KB; 2026-10-19: recompressed q75 → 77 KB.
 import developmentLabBackground from "@/assets/canvas-development-lab-bkg.webp";
 // THE GOVERNANCE GROUND, THIRD PASS (owner, 2026-10-09): the owner knocked the wave back in
 // Photoshop — a transparent export, master `images/data-wave4.png`. That master is in the
@@ -64,11 +74,10 @@ import developmentLabBackground from "@/assets/canvas-development-lab-bkg.webp";
 // the asset imported here is a horizontal mirror of wave4 (`sips -f horizontal`, the same
 // one-copy step as wave3's). Masters stay untouched; `data-wave3-flipped.png` is now
 // referenced by nothing.
-// 2026-10-10: re-encoded to WebP (q90) — 2.8 MB PNG → 354 KB WebP; the PNG stays in assets/_old.
+// 2026-10-10: re-encoded to WebP (q90) — 2.8 MB PNG → 354 KB; 2026-10-19: recompressed q75 → 177 KB.
 import dataWave4Background from "@/assets/data-wave4-flipped.webp";
-// The drawing's ground. A URL, not a fetch: importing the asset costs a string, and the 591KB
-// texture is started by loadCanvasElements (below) when a Run asks for the canvas.
-import canvasArt from "@/assets/room-embed-art.jpg";
+/* `canvasArt` WAS IMPORTED HERE AND NEVER RENDERED (removed 2026-10-21): a 301 KB WebP whose
+   only job was to be a string nobody read. The ground the Run uses is `warmLabGrounds` below. */
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 
 /**
@@ -89,59 +98,95 @@ import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
  * A TAG WITH NO ROW YIELDS NOTHING — a component being created for the first time has no data yet,
  * and an empty list is that fact. Nothing is substituted for it.
  */
-function previewValues(rows: any[], tag: string): Array<{ field: string; value: string }> {
-  const row = rows.find((r) => r?.id === tag || r?.name === tag || r?.key === tag);
-  if (!row) return [];
-  const values: Array<{ field: string; value: string }> = [];
-  if (row.name) values.push({ field: "name", value: String(row.name) });
-  if (row.description) values.push({ field: "description", value: String(row.description) });
-  // The address the row is known by, when it says something the name does not (the tree's own rule
-  // for its second line): the catalogue key, which is `f-<node id>` for a generated component.
-  if (row.key && row.key !== row.name) values.push({ field: "code", value: String(row.key) });
-  return values;
-}
+// `previewValues` LIVES IN `canvas/pageHelpers.ts` NOW (2026-10-21) — the first block pulled out
+// of this file by the extraction plan (development/ops/WRITING-AREA-EXTRACTION-PLAN.md).
 // InteractiveChatInterface is RETIRED — archived, not deleted, at
 // retired-files/console-seat-20260917/InteractiveChatInterface.tsx. The console's
 // chat is the same Lit <chat-panel> the composer loads, assembled in the console's
 // surface and bound to the console's own conversation.
 // MobileLayout stood here — a stub returning null, imported and never rendered. It was
 // moved to retired-files/dead-code-20260918/ with the rest of the unreachable React set
-// (2026-09-18). The real responsive handling is MinWidthWarning + useIsMobile below.
-import { useIsMobile } from "@/hooks/use-mobile";
-import { MinWidthWarning } from "@/components/MinWidthWarning";
-import { useLayoutState } from "@/hooks/useLayoutState";
-import { useAiOrchestrator, extractCommands } from "@/shared/ai-orchestrator";
+// (2026-09-18). Responsive handling is `useIsMobile` alone: NO width warning, by the
+// owner's word (2026-10-18) — a narrow window clips the card rather than telling the
+// person to buy a bigger screen. The overlay lives at
+// retired-files/responsive-warning-20261018/MinWidthWarning.tsx.
+import { deepFind, loadCanvasElements, loadDraftElements, warmLabGrounds } from "@/canvas/pageHelpers";
+import { useOpenCardFromConsole } from "@/rooms/useOpenCardFromConsole";
+import type { UseOpenCardFromConsoleDeps } from "@/rooms/useOpenCardFromConsole";
+import { ProductRoom } from "@/rooms/product/ProductRoom";
+import { useProductGate } from "@/rooms/product/useProductGate";
+import { useProductFootWiring } from "@/rooms/product/useProductFootWiring";
+import { useProductEntry } from "@/rooms/product/useProductEntry";
+import { useWriteProductDraftPayload } from "@/rooms/product/useWriteProductDraftPayload";
+import { useWriteProductArtifactPayload } from "@/rooms/product/useWriteProductArtifactPayload";
+import { useCheckBuilderEngine } from "@/rooms/product/useCheckBuilderEngine";
+import { useOpenProductRoom } from "@/rooms/product/useOpenProductRoom";
+import { useDiscardProductProject } from "@/rooms/product/useDiscardProductProject";
+import { useGuardProductExit } from "@/rooms/product/useGuardProductExit";
+import { useProductAttachment } from "@/rooms/product/useProductAttachment";
+import { useAssembleProductSurface } from "@/rooms/product/useAssembleProductSurface";
+import { useProductBuildWireframe } from "@/rooms/product/useProductBuildWireframe";
+import { useProductNodeEdit } from "@/rooms/product/useProductNodeEdit";
+import { useProductSeat } from "@/rooms/product/useProductSeat";
+import { useProductConversationPoll } from "@/rooms/product/useProductConversationPoll";
+import { useProductDraft } from "@/rooms/product/useProductDraft";
+import type { DraftPayloadShape } from "@/rooms/product/types";
+import { useDesignSurface } from "@/rooms/design/useDesignSurface";
+import { useDesignPreview } from "@/design/useDesignPreview";
+import { useRestorePackageWorkspace } from "@/canvas/useRestorePackageWorkspace";
+import { useTabGate } from "@/rooms/useTabGate";
+import { useAssembleSurface } from "@/console/useAssembleSurface";
+// THE DEVELOPMENT AND GOVERNANCE ROOMS ARE FOLDERS TOO (2026-10-21) — the Product room's
+// architecture applied to both: the page renders <DevelopmentRoom /> and <GovernanceRoom />
+// and calls their hooks; the markup and the behaviour live in `rooms/<room>/`.
+import { DevelopmentRoom } from "@/rooms/development/DevelopmentRoom";
+import { useDevelopmentRoom } from "@/rooms/development/useDevelopmentRoom";
+import { GovernanceRoom } from "@/rooms/governance/GovernanceRoom";
+import { useGovernanceRoom } from "@/rooms/governance/useGovernanceRoom";
+import { useGovernanceChrome } from "@/rooms/governance/useGovernanceChrome";
+import { useRunPipeline } from "@/canvas/useRunPipeline";
+import { useShellEventListeners } from "@/canvas/useShellEventListeners";
+import { useAiOrchestrator } from "@/shared/ai-orchestrator";
 import { eventBus } from "@/shared/event-bus";
+// THE CAPTURE EMITTER — the browser's half of the element capture door. The door records
+// against catalogue element keys; the renderer forwards each interaction with the tag beside
+// the instance id, and this page hands the fact on. No vendor, no token: same-origin POST.
+import { uxCapture } from "@/shared/uxCapture";
 import SessionLoader from "@/components/SessionLoader";
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
-import { DEMO_DISABLED_SENTENCE, builderToolUrl, developmentToolUrl, governanceToolUrl, isDemoMode } from "@/shared/appConfig";
-import { IngestModal } from "@/components/IngestModal";
-// The ingest's own URL parser, imported rather than re-written: the form in the room and the form in
-// the modal must read a Figma link the same way, and this is the one place that does.
-import { parseFigmaUrl } from "@/utils/figmaUrl";
+import { isDemoMode } from "@/shared/appConfig";
+// THE GOVERNANCE TRACE READS — see the module's header for why the reads live there:
+// same-origin tRPC against the embedded app's own session, the only read path this
+// deployment answers in v4 events_only mode. The views never fetch; this shell does.
+import { fetchGovTrace, fetchGovObservationIO, fetchGovTraceScores, fetchGovObservationCommentCounts, observationWindow, type GovTraceBundle, type GovTraceScore } from "@/lib/governance-trace-source";
+/* THE INGEST MODAL IS NOT IMPORTED HERE ANY MORE (2026-10-21). Nothing in this file rendered it
+   — only two comments mention it — and it dragged `figma-layers-view` (55 kB, measured 1.8 s
+   through the tunnel) plus the whole modal into the boot chunk. The Design room imports what it
+   draws; this page does not. */
+/* THE INGEST'S URL PARSER IS NOT IMPORTED HERE (2026-10-21): `parseFigmaUrl` was imported and
+   never called — the Design room and the modal both parse their own links. */
 // The renderer's own resolver, imported rather than re-implemented: the shell asks the same
 // authority the renderer will use, so "what can be drawn" has one answer.
-// AND ITS PROP PIPELINE, for the Product room's seat (2026-10-05): `componentProps` resolves a
-// component's settings against a surface's data model, `assignProps` writes them onto the
-// element — the same two steps the renderer's own `_assign` runs. The room's chat column is
-// host-mounted (written in its JSX, not drawn by any surface), so those steps have to be
-// callable from here; both functions' behaviour is unchanged.
-import { resolveTag, componentProps, assignProps } from "@/components/lit/a2ui-renderer";
+// AND ITS PROP PIPELINE, for the room seats: `assignProps` writes a component's settings onto
+// the element — the same step the renderer's own `_assign` runs. `resolveTag` and
+// `componentProps` were imported beside it and had no caller left after the dead row-click
+// handler went (removed 2026-10-21).
+import { assignProps } from "@/components/lit/a2ui-renderer";
 // TYPE-ONLY, and both elements are already REGISTERED by `@/components/lit/register` (the
 // first import above) — these two lines are only the refs' types, never a second runtime
 // import of the elements themselves.
 import type { WorkspaceLayout } from "@/components/lit/workspace-layout";
+import { useProductRoomState } from "@/rooms/product/useProductRoomState";
+import type { EvalsChatPanel } from "@/components/lit/evals-chat-panel";
 import type { ChatPanel } from "@/components/lit/chat-panel";
 import type { BuilderEmbed } from "@/components/lit/builder-embed";
 import { markArrival } from "@/shared/arrival";
-import { CORE_ROLE_LABELS, seatIdOf } from "@/shared/promptSections";
 import { getStoredUserId } from "@/services/authService";
-import { aiOrchestrator } from "@/utils/aiOrchestrator";
 // The frontend half of the fail-loud boundary. Every failure the shell can observe gets
 // named, pointed at, and shown — see shared/error-registry.ts for why this is a hardcoded
 // ledger rather than a heuristic.
-import { classifyFailure, parseValidationEnvelope, type FailureReport } from "@/shared/error-registry";
+import { classifyFailure, type FailureReport } from "@/shared/error-registry";
 // The A2UI envelope boundary — the version and surface labels on every operation,
 // read instead of assumed. See shared/a2ui-envelope.ts: a version this shell does
 // not implement, or a response describing more than one surface, is refused here
@@ -153,25 +198,22 @@ import { readA2UIEnvelope, envelopeRefusalError, applyComponentUpdate } from "@/
 // See lib/trace-source.ts for why the element does not fetch its own.
 import { subscribeTrace, traceSnapshot, type TraceSnapshot } from "@/lib/trace-source";
 import { buildRepairSections } from "@/shared/repairSections";
-// The trigger rule lives once, in shared/triggers.ts, so a trigger chosen on the canvas and one
-// chosen in the row's menu are the same edit — see the `trigger` branch of onFlowAction.
-import { withTrigger } from "@/shared/triggers";
+// The trigger rule lives once, in shared/triggers.ts. `withTrigger` was imported here and never
+// called (removed 2026-10-21); the canvas and the row's menu import it themselves.
 import { repairAsk, repairBrief } from "@/shared/repairMaterial";
 // The flow — the same process the prompt is, drawn. The builder is pure (it makes
 // the graph from facts this file already holds); everything below the import is the
 // writing, the swapping and the listening.
 import {
   buildRepairFlow,
-  rowForAddedNode,
   type FlowNote,
   type FlowPosition,
   type FlowSeatInput,
   type RepairRunFacts,
 } from "@/shared/agentFlow";
 // THE BLOCKERS, COMPUTED — the whole pre-Run list, so she explains it instead of deriving it.
-// See the module's head: the list is arithmetic, and a list a model remembers arrives a piece
-// at a time.
-import { reviewFlow, holdsRun, runHoldingRepairs } from "@/shared/flowReview";
+// `holdsRun` and `runHoldingRepairs` live in the module that owns them; this shell never called
+// them (removed 2026-10-21, with `reviewFlow`, which had no caller here either).
 // THE PACKAGE'S FACTS, READ BY THE READER THE SEAT READS THEM WITH — the name and the
 // description, surface first. Two readers of one fact is what held every Run on a package whose
 // description was on screen; see the module's head.
@@ -229,7 +271,7 @@ interface WritingAreaIndexProps {
  * A failure clears it: the next Run tries again, and the run that failed leaves the output
  * column where it was (the caller says why — see the Run's own catch).
  */
-let canvasElements: Promise<void> | null = null;
+// `loadCanvasElements` LIVES IN `canvas/pageHelpers.ts` NOW (2026-10-21).
 
 /**
  * NO WIDTH IS ASKED FOR HERE ANY MORE, AND THAT IS THE DECISION. The room used to name two pixel
@@ -243,41 +285,20 @@ let canvasElements: Promise<void> | null = null;
  * afterwards, exactly as it does on a fresh package. See `splitEqually` in `workspace-layout.ts`.
  */
 
-function loadCanvasElements(): Promise<void> {
-  if (canvasElements) return canvasElements;
-  const ground = new Image();
-  ground.src = canvasArt;
-  if (ground.decode) ground.decode().catch(() => {});
-  canvasElements = Promise.all([
-    import('@/components/lit/agent-flow'),
-    import('@/components/lit/room-embed'),
-  ])
-    .then(() => undefined)
-    .catch((err: unknown) => {
-      canvasElements = null;
-      throw err;
-    });
-  return canvasElements;
-}
+/* `loadCanvasElements` LIVES IN `@/canvas/pageHelpers` NOW (2026-10-21). It and its module-scope
+   promise moved out of this page: the canvas fetch is a landing concern, not room navigation. */
 
 /**
- * THE LAB GROUND, WARMED AT LANDING (owner, 2026-10-05: *"an awful paint progressive JPEG
+ * THE ROOM GROUNDS, WARMED AT LANDING (owner, 2026-10-05: *"an awful paint progressive JPEG
  * effect … load those backgrounds early somewhere else in the application, maybe after the
- * user lands"*). The Development room paints this tile the moment it opens — and since the
- * park (2026-10-06) it is the room's whole ground — so fetched cold it visibly paints itself
- * in while the room is already on screen. ONE image (the wireframe-named duplicate was
- * retired 2026-10-05: *"we need to have just one of those images"*), so this is one fetch,
- * decoded. Deliberately not awaited, and failure-is-nothing: the room still fetches the tile
- * itself if this never ran; all this buys is that the usual path spends no time on it.
+ * user lands"*). The Development room paints its lab tile the moment it opens, and since
+ * 2026-10-16 the room-switch cover can wear any room's own face (see `handoffCoverShown`):
+ * the lab tile (Development), the assembly image (Product), the wave (Governance), the design
+ * sheet (Design). Fetched cold they visibly paint themselves in mid-switch, so all four decode
+ * here, deliberately not awaited and failure-is-nothing: every room still fetches its own
+ * ground; this buys only that the usual path spends no time on it.
  */
-let labGroundWarmed = false;
-function warmLabGrounds(): void {
-  if (labGroundWarmed) return;
-  labGroundWarmed = true;
-  const img = new Image();
-  img.src = developmentLabBackground;
-  if (img.decode) img.decode().catch(() => {});
-}
+/* `warmLabGrounds` LIVES IN `@/canvas/pageHelpers` NOW (2026-10-21). */
 
 /**
  * THE DRAFTING VIEW'S ELEMENT, loaded the same lazy way and for the same reason: the tree-write
@@ -285,17 +306,7 @@ function warmLabGrounds(): void {
  * is an unknown element — a blank column with no error anywhere. So the module is awaited before
  * the write, not after it.
  */
-let draftElements: Promise<void> | null = null;
-function loadDraftElements(): Promise<void> {
-  if (draftElements) return draftElements;
-  draftElements = import('@/components/lit/draft-canvas')
-    .then(() => undefined)
-    .catch((err: unknown) => {
-      draftElements = null;
-      throw err;
-    });
-  return draftElements;
-}
+/* `loadDraftElements` LIVES IN `@/canvas/pageHelpers` NOW (2026-10-21). */
 
 /**
  * FIND AN ELEMENT WHEREVER IT IS DRAWN — the shell draws the surface INSIDE the renderer's
@@ -307,20 +318,7 @@ function loadDraftElements(): Promise<void> {
  * It is a DOM read, not a new contract: the elements it finds are the same ones the envelope
  * wrote, and the properties it sets on them are the ones they already publish.
  */
-function deepFind<T extends Element>(selector: string): T | null {
-  const walk = (root: ParentNode): Element | null => {
-    const hit = root.querySelector(selector);
-    if (hit) return hit;
-    for (const el of root.querySelectorAll('*')) {
-      const shadow = (el as HTMLElement).shadowRoot;
-      if (!shadow) continue;
-      const found = walk(shadow);
-      if (found) return found;
-    }
-    return null;
-  };
-  return walk(document) as T | null;
-}
+/* `deepFind` LIVES IN `@/canvas/pageHelpers` NOW (2026-10-21). */
 
 /**
  * The Figma file the tool calls address.
@@ -331,7 +329,7 @@ function deepFind<T extends Element>(selector: string): T | null {
  * it asks the server to run the tool — the server defaults to it too, and a call
  * that names no file is a call nobody can audit.
  */
-const FIGMA_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
+/* `FIGMA_FILE_KEY` and `RUN_DOCK_MS` LIVE IN `@/canvas/pageHelpers` NOW (2026-10-21). */
 
 /**
  * HOW LONG THE PROMPT TAKES TO FOLD — the pane's own `--dur-pane`, restated here because the
@@ -344,7 +342,7 @@ const FIGMA_FILE_KEY = '20UPR2KQMsbAxlo5NJb1se';
  * canvas while the panes were still sliding — the delay is what makes the fold read as one event
  * and the picture as the next (see the beat below).
  */
-const RUN_DOCK_MS = 760;
+
 
 
 export default function Index({
@@ -355,15 +353,15 @@ export default function Index({
   const { toast } = useToast();
   const { id: routeSessionId } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isMobile = useIsMobile();
-  const { flipped, toggleFlip } = useLayoutState();
+  /* `useIsMobile()` and `useLayoutState()` WERE CALLED HERE AND THEIR RESULTS THROWN AWAY
+     (removed 2026-10-21): `isMobile` and `flipped`/`toggleFlip` were never read or called in
+     this file, so both hooks ran their own effects — a media-query listener and a layout
+     subscription — for nobody. The mobile handling lives in the components that use it. */
   const [activeTab, setActiveTab] = useState("composer");
   const {
     tabLoading: _tabLoading,
-    approvalMode,
     headerTab,
     setHeaderTab,
-    clearApprovalMode,
     handleHeaderTabChange,
     handleNotificationAction: _handleNotificationAction,
     finishTabChange: _finishTabChange,
@@ -371,6 +369,41 @@ export default function Index({
     isNotificationSuppressed: _isNotificationSuppressed,
   // A2UI: Removed onNavigate - AI controls surfaces, not URL routing
   } = useNotificationGate({ initialTab: routeSessionId ? "composer" : "console" });
+  /*
+   * THE TAB AS IT STANDS THIS INSTANT, for work that lands seconds after the click that asked
+   * for it (owner, 2026-10-21: *"stop the snap back"*). MEASURED on a cold session: the boot
+   * console assembly was still in flight when the click landed on Product; the tab moved, and
+   * the landing — arriving later — wrote `console` back over it. A render-synced ref is the
+   * only honest read: `headerTab` in a closure is the value from when the request was made.
+   */
+  const headerTabRef = useRef(headerTab);
+  headerTabRef.current = headerTab;
+  /*
+   * THE PRODUCT ROOM'S OWN STATE (moved 2026-10-21). The page names none of it now: the tree,
+   * the open package, the project, the seat's settled hand, the stage key, the grip, the three
+   * canvases and the artifact all live in `@/rooms/product/useProductRoomState` with the
+   * comments that explain them. Destructured under the same names, so every reader below is
+   * unchanged.
+   */
+  const {
+    productTree, setProductTree,
+    /* THE SETTER STAYS, THE VALUE GOES (2026-10-21): nothing in this file reads
+       `currentProductSession` any more — the room's assembly writes it and its own hook reads
+       it through `currentProductSessionRef` — but the assembly still needs the setter, so it
+       is passed below. Removing the pair would have been removing a live write. */
+    setCurrentProductSession,
+    productRoomProjectId, setProductRoomProjectId,
+    productSeatSettledRef,
+    productStageKey, setProductStageKey,
+    productGripActive, setProductGripActive,
+    currentProductSessionRef,
+    productDraftPayloadRef,
+    productSelectedNodeRef,
+    productRendererRef,
+    productLayoutRef,
+    productSeatRef,
+    productArtifactRef,
+  } = useProductRoomState();
   const [consoleRefreshKey, setConsoleRefreshKey] = useState(0);
   const pendingExitTabRef = useRef<string | null>(null);
 
@@ -484,84 +517,27 @@ export default function Index({
   const [workspaceTree, setWorkspaceTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
     { components: [], dataModel: {} },
   );
-  /*
-   * DESIGN'S OWN TREE AND ITS OWN SESSION — the client half of the boundary.
-   *
-   * The owner, 2026-09-30: *"I told you it's a separate experience and you just didn't admit that
-   * it runs through the composer's machinery. So if the composer has its own machinery, then you
-   * need to create a rendering process for design."*
-   *
-   * So Design does not assemble through `assembleSurfaceThenRepairs` — that function is the
-   * Composer's and it does four Composer things (the unsaved-changes gate, the repair pass, the
-   * tab forcing, and the adoption of the package the response names). None of those is gated off
-   * for Design; they are simply not in its path, because a click on Design calls
-   * `assembleDesignSurface` below and writes these two values and nothing else.
-   *
-   * `currentDesignSession` is Design's "what am I on". It is bound to the Design CONTAINER the
-   * server resolves — never a prompt package — and `currentPromptSession` stays the Composer's
-   * alone: no path from Design writes it, which is what makes the blindness structural.
-   */
   const [designTree, setDesignTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
     { components: [], dataModel: {} },
   );
-  const [currentDesignSession, setCurrentDesignSession] = useState<Record<string, any> | null>(null);
 
-  /*
-   * THE PRODUCT ROOM'S OWN STATE (2026-10-03) — the same shape and the same law as Design's:
-   * this room's assembly writes THESE two, and no path from Products writes the Composer's
-   * `currentPromptSession`. A PRODUCT SESSION IS A PACKAGE (title, owners, conversations,
-   * saving — exactly the Composer's data shape); `currentProductSession` is "which package is
-   * open"; the draft the stage draws arrives INSIDE the tree's data model at
-   * `/session/draft` — the server reads it before the tree names the element, so a failed
-   * read can never draw as an empty stage.
-   */
-  const [productTree, setProductTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
-    { components: [], dataModel: {} },
-  );
-  const [currentProductSession, setCurrentProductSession] = useState<Record<string, any> | null>(null);
-  /*
-   * WHICH PROJECT THE ROOM IS OPENED ON (2026-10-04) — the bridge's second half. A console
-   * card for a builder project carries `builder_project.project_id` (routes/builder_bridge.py
-   * writes it); a click on that card writes the id HERE and the room's embed loads
-   * `/project/<id>`. null = the tool's dashboard. A direct Product-tab click also lands on
-   * null — the dashboard is the room's home.
-   */
-  const [productRoomProjectId, setProductRoomProjectId] = useState<string | null>(null);
+  /* THE TOOLS SEAT OWNS ITS OWN ASSEMBLY AND ITS OWN DOOR (`design/ToolsSeat.tsx`, owner,
+     2026-10-18: the Figma section "was loading by default when you selected design and I'm just
+     trying to move it and its chat which goes with it to the tools tab"). Nothing of that seat is
+     asserted here — not its tree, not its seats, not its listeners. */
+
   /** The builder's engine, up or down — the bridge's /api/builder/health door, read when the room opens. */
   const [builderEngineDown, setBuilderEngineDown] = useState(false);
   /*
-   * THE DEVELOPMENT ROOM'S STAGED ASSEMBLY (owner, 2026-10-04: *"I want to create an assembly
-   * effect similar to our other pages with a background … you could use it as a 10 second delay
-   * … and then I wanted to ease in like composer and design"*). The ten became five the same
-   * night it was asked; three from 2026-10-06 (*"a small 3 second assembly process"*).
-   *
-   * AND THE ROOM LOADS AGAIN (2026-10-06, later): the left column carries the workspace once
-   * more — the repo-run copy, telemetry cut — so the gate waits on the SAME THREE hands as the
-   * Product room: the minimum (three seconds), the frame's own load announcement, and the
-   * seat's binding — and it covers the WHOLE room now, both columns, so nothing arrives beside
-   * a workspace that has already revealed (see the seat-settled note below).
+   * THE DEVELOPMENT ROOM OPENS STRAIGHT INTO THE WORKSPACE — NO ASSEMBLY. There is no gate,
+   * no cover, no minimum clock, no ceiling: the workspace's own loading face is the room's
+   * state, from its first frame. A load may never be held hidden behind a spinner or a cover
+   * — a ready (or failed) workspace sitting behind a claim is suppression; fail fast, show
+   * the truth. A stopped workspace draws nothing — no fallback, ever.
    */
-  const DEVELOPMENT_GATE_MIN_MS = 3_000;
-  /*
-   * AND THE DOOR THAT NEVER OPENS DRAWS NOTHING (2026-10-04; the panel retired 2026-10-06,
-   * late: *"there's not supposed to be any fallbacks in this application … there is no
-   * fallback ever"*). Not loaded by the ceiling: the cover comes down and the pane keeps its
-   * own ground — no panel, no sentence. The frame stays mounted underneath, so a late
-   * arrival still wins when it comes.
-   */
-  const DEVELOPMENT_GATE_MAX_MS = 25_000;
-  /*
-   * THE ROOM'S OWN RAIL LIST (owner, 2026-10-05): *"Remove versions from the chat rail menu
-   * on the right column … development section."* The rail's rule for an EMPTY list is "show
-   * everything" — and this seat starts empty, so Versions was drawn by default, by nobody's
-   * decision. This is every drawable tab of the rail (chat-navigation-bar's own vocabulary;
-   * the nav bar decides the order, this list only decides membership) with Versions left
-   * out: the rail the room had, one button shorter. It lands twice — as the seat's first
-   * fill (the closed-on-entry layout effect) and as the rule over the Composer's bound list
-   * (the seat effect; an empty bound list is the rail's "everything", which through this
-   * room's rule is THIS list, never the full rail with Versions back on).
-   */
-  const DEVELOPMENT_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
+  /* THE DEVELOPMENT ROOM'S RAIL LIST MOVED WITH THE ROOM (2026-10-21): it is
+     `DEVELOPMENT_SEAT_TABS` in `@/rooms/development/useDevelopmentRoom`, where the seat that
+     consumes it is bound. The page's copy had no reader left. */
 
   /*
    * THE PRODUCT ROOM'S OWN RAIL LIST (owner, 2026-10-06 — the wireframe's list, nothing more):
@@ -571,12 +547,6 @@ export default function Index({
    * Versions, States and Repairs are not offered in this room.
    */
   const PRODUCT_SEAT_TABS = 'chat,trace,tools,approvals,eval,settings';
-  const [developmentGateDown, setDevelopmentGateDown] = useState(false);
-  const [developmentToolDown, setDevelopmentToolDown] = useState(false);
-  const developmentMinElapsedRef = useRef(false);
-  const developmentFrameLoadedRef = useRef(false);
-  const developmentGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const developmentGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
    * THE GOVERNANCE ROOM OPENS THE SAME WAY (owner, 2026-10-07: *"pop it in there"* —
@@ -588,14 +558,41 @@ export default function Index({
    * in underneath it, one 700ms cross-fade. A frame that never arrives leaves the pane on
    * its own ground — no fallbacks.
    */
-  const GOVERNANCE_GATE_MIN_MS = 3_000;
-  const GOVERNANCE_GATE_MAX_MS = 25_000;
+  /* The gate clocks live in @/gate/gateTimings — extracted 2026-10-19. */
   /*
    * THE ROOM'S OWN RAIL LIST — the Development room's list and its reasons (the rail's
    * empty-list rule draws every tab, Versions included; this room states the membership it
    * wants instead).
+   * THE TRACE TAB IS OUT OF THIS ROOM (owner, 2026-10-17: *"Evals are important, evaluators are
+   * important, rules are important — those I get, those I understand"*, after calling the
+   * trace table *"a log … bloat"*). Traces keep being written — they are the evidence an
+   * evaluator's verdict lands on — but a browser of 700+ successful calls with seventy
+   * filters is engineering tooling, not a surface a person in this room uses. What is
+   * actionable stays: the verdict in the evaluator's status, and the failed-call count on
+   * the readout (grace_gui writes level ERROR with the provider's real reason).
+   * Restoring the tab is one word here: add `trace` back to the list.
+   *
+   * THE ROOMS THAT DO OFFER IT STILL DO (the owner's word, 2026-10-18: the removal he asked
+   * for was of the WORD, not the application — Development and Product keep Trace).
+   *
+   * AND SESSIONS TAKES THAT SEAT (owner, 2026-10-17: *"well let's add sessions to where the
+   * trace was … make preview Sessions"*). The rail filters by TABS order, so the Sessions
+   * button lands in the second position — the slot the Trace button occupies in the rooms
+   * that still offer it.
+   *
+   * STATES AND REPAIRS ARE OUT OF THIS ROOM (owner, 2026-10-18, with a picture of the two rail
+   * buttons: *"remove these from the governance chat panel"*). The tabs themselves stay defined in
+   * `chat-navigation-bar.ts` because Development still draws the console's rail — this is the
+   * GOVERNANCE room's list, and the room it belongs to is the only thing that changed.
    */
-  const GOVERNANCE_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
+  const GOVERNANCE_SEAT_TABS = 'chat,sessions,tools,approvals,eval,settings';
+  /**
+   * THE ROOM'S LANDING BEAT — the staged opening's clock (see the room's render).
+   *
+   * It times the cover over the embedded application: the minimum, the seat's binding, and
+   * the ceiling that drops the cover honestly if a hand never lands. Restored 2026-10-18 with
+   * the application itself.
+   */
   const [governanceGateDown, setGovernanceGateDown] = useState(false);
 
   /*
@@ -611,148 +608,100 @@ export default function Index({
    * element is untouched.
    */
   const [governanceGripActive, setGovernanceGripActive] = useState(false);
+  /* WHAT THE ROOM REPORTED AS SELECTED — the trace (and node) the person is working
+     through. The frame's own reporter carries a row click and a node click (the
+     langfuse-location path's traceId/observation/timestamp params — verified live
+     2026-10-13), our tree's clicks write the node back into it, and ONE read effect
+     below turns it into the seat's views. Nothing else consumes it. */
+  const [governanceTraceSig, setGovernanceTraceSig] = useState<{
+    projectId: string;
+    traceId: string;
+    obsId: string | null;
+    timestampIso: string | null;
+    /** The app's own `peek` value — the observation IT calls the trace's root; the table
+        hears the row mark from this id, so the room keeps it (2026-10-13 late). */
+    peekId: string | null;
+  } | null>(null);
+  /* THE SEAT'S VIEWS MOUNT A BEAT AFTER A SELECTION CAN ARRIVE (owner, 2026-10-17: the tree
+     sat empty while the read was healthy — "Trace is disconnected"). The bundle effect used
+     to RETURN when the views were not registered yet and never ran again; this tick makes it
+     retry once the mount settles, so a selection that lands first is APPLIED, not dropped. */
+  const [governanceTraceElsTick, setGovernanceTraceElsTick] = useState(0);
 
-  /* THE ROOM'S LEFT NAV IS THE SHELL'S (owner, 2026-10-09): the Governance items live
-     in the shell's left navigation and drive this embed. Each click writes the target
-     Langfuse route onto the frame and marks that section active. */
-  const [governancePath, setGovernancePath] = useState('');
-  /* THE SECTION PREFIX (2026-10-10, the door): governanceToolUrl() may be a same-origin
-     PATH ("/governance/project/…"). It is derived per navigation so a nav href
-     ("/project/<id>/traces") lands as <origin><section><href>, and the reporter's
-     pathnames — which carry the section — normalize back to the nav's own shape. */
-  const governanceSectionPrefix = () => {
-    try {
-      const abs = new URL(governanceToolUrl(), window.location.href);
-      const marker = abs.pathname.indexOf("/project/");
-      return marker > 0 ? abs.pathname.slice(0, marker) : "";
-    } catch {
-      return "";
-    }
-  };
-  const navigateGovernanceTool = (path: string) => {
-    const base = governanceToolUrl();
-    if (!base) return;
-    try {
-      const abs = new URL(base, window.location.href);
-      const url = abs.origin + governanceSectionPrefix() + path;
-      const embed = governanceEmbedRef.current;
-      if (!embed) return;
-      setGovernancePath(path);
-      /* THE FRAME CAN DRIFT AWAY FROM ITS `src` (2026-10-09, owner-reported):
-         the embedded app routes itself with the history API, which moves the
-         document without rewriting the iframe's `src` attribute. A plain
-         attribute write is then a no-op when the target equals the current
-         `src` — the Home button would set the SAME url and the frame would not
-         move (measured in the room: after the app landed on its org chooser,
-         clicking Home left the frame there). So when `src` already names the
-         target, navigate the window directly; browsers allow navigating a
-         cross-origin frame (reading it is what is blocked). */
-      if (embed.getAttribute('src') !== url) {
-        embed.setAttribute('src', url);
-      } else {
-        embed.navigateTo(url);
-      }
-    } catch {
-      /* URL() only throws on an unparseable base — unreachable after the emptiness check */
-    }
-  };
-
-  /* THE APP REPORTS ITS LOCATION BACK (2026-10-09): the frame proxy injects a tiny
-     reporter into Langfuse that postMessages its pathname on change, so the shell nav
-     can mark the active section even when the person navigates inside the app. */
-  useEffect(() => {
-    const onLangfuseLocation = (event: MessageEvent) => {
-      const data = event.data as { type?: string; path?: string } | null;
-      if (!data || data.type !== 'langfuse-location' || typeof data.path !== 'string') return;
-      try {
-        if (event.origin !== new URL(governanceToolUrl(), window.location.href).origin) return;
-      } catch {
-        return;
-      }
-      /* THE SECTION COMES OFF BEFORE MATCHING (2026-10-10): under the door the app
-         reports "/governance/project/…"; the nav's hrefs and its active-match regex
-         are section-free. */
-      const section = governanceSectionPrefix();
-      const normalized = section && data.path.startsWith(section)
-        ? (data.path.slice(section.length) || "/")
-        : data.path;
-      setGovernancePath(normalized);
-    };
-    window.addEventListener('message', onLangfuseLocation);
-    return () => window.removeEventListener('message', onLangfuseLocation);
-  }, []);
-  const governanceMinElapsedRef = useRef(false);
-  const governanceGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* MOVED (2026-10-21): the room's nav (`governancePath`, `governanceSectionPrefix`,
+     `navigateGovernanceTool`) and the app's location reporter live in
+     `@/rooms/governance/useGovernanceChrome`. Called below, after the refs exist — the
+     reporter reads the embed, the layout and the seat. */
   const governanceGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const governanceSeatSettledRef = useRef(false);
 
   /*
-   * THE PRODUCT ROOM OPENS THE SAME WAY (2026-10-05): the builder's own first paint is white,
-   * and uncovered it flashed between the frame's mount and its content — the same white splash
-   * the Development gate was built to hide. Same three hands, one room over (2026-10-06): the
-   * gate spans the whole room and drops only when the frame's load event, the minimum, and the
-   * seat have all landed. The ceiling takes the cover down and the pane draws NOTHING — no
-   * fallbacks (the owner's law); the frame is unmounted with the ceiling (see the pane's own
-   * rule below), and the next entry asks again.
-   * THE MINIMUM MATCHES THE DEVELOPMENT ROOM'S THREE SECONDS (2026-10-06 — one staged opening,
-   * both rooms).
+   * THE PRODUCT ROOM'S STAGED OPENING (2026-10-05): the builder's own first paint is white,
+   * and uncovered it flashes between the frame's mount and its content — this cover hides
+   * that splash. Its hands (2026-10-06; the time minimum removed 2026-10-21 by the owner's
+   * order): the gate spans the whole room and drops only when the frame's load event and the
+   * seat have both landed. The ceiling takes the cover down and the pane draws NOTHING — no
+   * fallbacks; the frame is unmounted with the ceiling (see the pane's own rule below), and
+   * the next entry asks again.
+   *
+   * THE OPENING IS PRODUCT'S AND GOVERNANCE'S ONLY. Development has none — it opens straight
+   * into its workspace; never reintroduce a cover there (a load held hidden behind a claim
+   * is suppression).
+   * The faces and clocks themselves belong to the room: they live in
+   * `@/rooms/product/useProductGate` and are destructured below, under these same names.
    */
-  const PRODUCT_GATE_MIN_MS = 3_000;
-  const PRODUCT_GATE_MAX_MS = 25_000;
-  const [productGateDown, setProductGateDown] = useState(false);
-  const [productToolDown, setProductToolDown] = useState(false);
-  const productMinElapsedRef = useRef(false);
-  const productFrameLoadedRef = useRef(false);
-  const productGateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const productGateMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
-   * THE OPENING'S THIRD HAND — THE SEAT (owner, 2026-10-06: *"I had a fade in for product and
-   * development … It was like an assembly process … Right now product and development are
-   * popping in — actually product loads in, the chat doesn't even show up for a delayed few
-   * seconds and then it pops in … put back the assembly illusion … it creates a nice fade into
-   * the application and there's no popping and snapping of components."*). The seat is the last
-   * thing the room draws and it binds on its own clock (the two seat effects below); with the
-   * cover over the left column only, the chat arrived BESIDE a workspace that had already
-   * revealed — the pop. Settled means BOUND OR FAILED: a failed binding leaves the seat on its
-   * honest blank face, and a cover must not go on standing over a chat that will never arrive.
-   */
-  const productSeatSettledRef = useRef(false);
-  const developmentSeatSettledRef = useRef(false);
-  /*
    * AND THE COVER IS THE WHOLE ROOM'S (owner, same night — the illusion "creates a nice fade
-   * into the application"). It holds until ALL THREE hands have landed — the minimum, the
-   * frame's load, the seat — and then the room eases in under it as one object. Measured
+   * into the application"). It holds until BOTH of the room's hands have landed — the frame's
+   * load and the seat (the time minimum was removed 2026-10-21: a floor is still a hold) — and
+   * then the room eases in under it as one object. Measured
    * before it (2026-10-06, driving the room cold): the chat column sat frozen at its 104px
    * rail floor — the layout's declared 600 landed in a render that could not yet measure the
    * element — until an unrelated re-render unfroze it seconds later; that unfreeze, visible
-   * beside the left-only cover, was the pop. Both crossings live here so no writer can drop
-   * the cover on two hands and forget the third.
+   * beside the left-only cover, was the pop. Both crossings live in the room's own gate hook
+   * (`@/rooms/product/useProductGate`) so no writer can drop the cover on two hands and forget
+   * the third.
    */
-  const dropProductGateWhenAllLanded = useCallback(() => {
-    if (productMinElapsedRef.current && productFrameLoadedRef.current && productSeatSettledRef.current) {
-      setProductGateDown(true);
-    }
-  }, []);
-  const dropDevelopmentGateWhenAllLanded = useCallback(() => {
-    if (developmentMinElapsedRef.current && developmentFrameLoadedRef.current && developmentSeatSettledRef.current) {
-      setDevelopmentGateDown(true);
-    }
-  }, []);
+  /* MOVED (2026-10-21): the gate's faces, clocks, effect and lift rule live in
+     `@/rooms/product/useProductGate`. Destructured under the same names, so every call site
+     below — the tab gate, the frame's load handler, the JSX — is unchanged. */
+  const {
+    productGateDown,
+    productToolDown,
+    productFrameLoadedRef,
+    dropProductGateWhenAllLanded,
+    setProductGateDown,
+    setProductToolDown,
+  } = useProductGate({ headerTab, productSeatSettledRef });
   /**
-   * THE GOVERNANCE ROOM'S OWN HANDS — TWO since 2026-10-08 (the frame-load hand went with
-   * the application, owner's order): the minimum and the seat. `assertPaneWidth` rides here
-   * now — the frame-load beat that used to carry it is gone, and this is the room's own
-   * standing moment (same `requestUpdate` door, same reason: the declared column width can
+   * THE GOVERNANCE ROOM'S OWN HAND — THE SEAT, and since 2026-10-21 nothing else: the minimum
+   * is gone by the owner's order (*"remove those time minimums"*), and the frame-load hand
+   * went with the application on 2026-10-08. `assertPaneWidth` rides here — this is the room's
+   * own standing moment (same `requestUpdate` door, same reason: the declared column width can
    * land in a render that could not yet measure the room).
    */
   const dropGovernanceGateWhenAllLanded = useCallback(() => {
-    if (governanceMinElapsedRef.current && governanceSeatSettledRef.current) {
+    if (governanceSeatSettledRef.current) {
       assertPaneWidth(governanceLayoutRef.current);
       setGovernanceGateDown(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /**
+   * HER POP-OUT OPENS AT 650 (owner, 2026-10-13 late: *"I think a pop out of 650 pixels
+   * wide is a good default. They won't expand it more. They can easily do that."* — the
+   * design's own 650). A PROPERTY through the ref, the product room's exact mechanism:
+   * the layout lands a declared width once (see `chatLoadWidth`), a drag still wins
+   * afterward, and the room still LOADS with her closed — the declaration only says how
+   * wide she stands when she is asked out.
+   */
+  useLayoutEffect(() => {
+    if ((headerTab || '') !== 'governance') return;
+    const el = governanceLayoutRef.current;
+    if (!el) return;
+    el.chatLoadWidth = 650;
+  }, [headerTab]);
   /*
    * THE PANE'S WIDTH, ASSERTED WHERE IT CAN BE MEASURED. The room declares her column's load
    * width (`chatLoadWidth`, below) and the layout lands it once — but that landing render can
@@ -771,28 +720,7 @@ export default function Index({
     }
   }, []);
 
-  /*
-   * THE STAGE'S REFRESH KEY (2026-10-06 — the chat absorption). `a2ui:person-turn` fires only
-   * after the server answered, which for this room means the ENGINE'S BUILD LANDED; bumping
-   * this key remounts the embed so the stage re-reads the project. See the handler below.
-   */
-  const [productStageKey, setProductStageKey] = useState(0);
 
-  /*
-   * THE GRIP'S SAFETY NET (owner, 2026-10-06: *"On product, I cannot resize the browser with the
-   * gripper… it's not resizable. It needs to be movable… apply that gripper and slide effects
-   * that we have on console and the other seats to the chat gripper inside of product."*).
-   *
-   * THE ROOM'S GEOMETRY IS WHY: the chat strip's whole gesture rides DOCUMENT-level moves (the
-   * seat's own measured design — pointer capture was tried and rejected: "it hangs onto your
-   * cursor"), and the strip's LEFT NEIGHBOUR in this room is the builder IFRAME — the moment the
-   * hand crosses from the strip into the frame, the frame's document swallows every move and the
-   * drag freezes (console has no iframe beside it, which is why the same strip works there).
-   * While this flag is true the room draws a transparent fixed overlay — the builder app's own
-   * resize draws the same (`fixed inset-0 z-50`) — so every move of the gesture stays in THIS
-   * document. PRODUCT-ONLY, ROOM-SIDE: the seat element is untouched.
-   */
-  const [productGripActive, setProductGripActive] = useState(false);
 
   /*
    * THE GOVERNANCE ROOM'S STATE (2026-10-03) — the room where the system accounts for what it
@@ -802,81 +730,12 @@ export default function Index({
   const [governanceTree, setGovernanceTree] = useState<{ components: any[]; dataModel: Record<string, any> }>(
     { components: [], dataModel: {} },
   );
-  const [currentGovernanceSession, setCurrentGovernanceSession] = useState<Record<string, any> | null>(null);
-  /* Read by the long-lived drag listener below — a listener registered once keeps the render
-     it was registered on, so it reads THROUGH the ref (the file's own rule for Save). */
-  const currentProductSessionRef = useRef<Record<string, any> | null>(null);
-  /* The drag listener's payload copy for THIS room — kept by the product renderer effect from
-     the assembly's own read (the server read it BEFORE the tree named the element). */
-  const productDraftPayloadRef = useRef<{
-    label?: string;
-    nodes: Array<Record<string, unknown>>;
-    positions?: Record<string, { x: number; y: number }>;
-  } | null>(null);
-  /* WHICH TILE IS SELECTED IN THIS ROOM — the stage's own fact (`draft-select`), held here so a
-     scoped edit can name it (the stolen `edit-node` op; see the edit handler's note). Only the
-     VISIBLE stage takes clicks, so no guard is needed to keep the Composer's canvas out. */
-  const productSelectedNodeRef = useRef<string | null>(null);
-
-  /*
-   * THE ROOM'S CONTAINER, ONCE IT EXISTS — THE TARGET OF THE INJECTION.
-   *
-   * The design surface is a CONTAINER: `workspace-layout`, with `left`, `middle` and `right`
-   * among its slots, drawn by the design renderer into the design renderer's shadow root.
-   * Nothing outside that shadow root can put anything into it — and the ingest's three regions
-   * are React, so the renderer cannot build them either (it instantiates catalogue tags by
-   * name, and the ingest is not in the catalogue: it is what WRITES it).
-   *
-   * So the injection is a portal into this element. Each region arrives carrying its own
-   * `slot` attribute (`IngestModal`, `variant="section"`) and lands in the column it was named
-   * for — left rail, output column, Grace — with the container supplying the frame and the
-   * theme, exactly as the owner described: *"you don't replace, you inject… what you've got is
-   * unstyled, it has no theme — it's just the application the way you built it. And we're just
-   * gonna port that into the slots."*
-   *
-   * `null` until the renderer has drawn. That is the ORDER, and it is load-bearing: *"the
-   * assembly happens. The render of this container happens and then the injection happens."*
-   */
-  const [designRoomEl, setDesignRoomEl] = useState<HTMLElement | null>(null);
-
-  /*
-   * THE MIDDLE COLUMN'S CONTAINER — THE SEAT THE PREVIEW IS LOADED INTO.
-   *
-   * The room's `<workspace-layout>` has PANES, and a pane is not a container: content left loose
-   * in a pane sits in the container's light DOM, which lit-html owns and React does not, so lit's
-   * re-renders displace it and every change in the slot's assignment makes the container
-   * re-baseline its split. The owner felt exactly that (2026-09-30): *"I can't close the
-   * container. I can't grab a hold of the grippers. It's jerking away from me."*
-   *
-   * The design's middle column is therefore its own element with a hole in it
-   * (`design-middle-container`, emitted by `render-design`), and the ingest's Preview is rendered
-   * INTO that hole: the element's light DOM stays empty, and lit never writes a child there.
-   *
-   * THE RIGHT COLUMN IS LEFT EXACTLY AS IT IS, and that is the owner's instruction rather than an
-   * omission (2026-09-30): *"I have not decided what I want her navigation to be so none of that
-   * navigation wiring needs to be taken apart. It just needs to be ignored."* Whatever the
-   * Composer put in that slot stays in it until something we are bringing across from the ingest
-   * conflicts with it — so what that region is seated in is not decided here, and this shell does
-   * not touch it.
-   */
-  const [designMiddleSeat, setDesignMiddleSeat] = useState<HTMLElement | null>(null);
+  /* THE SETTER STAYS, THE VALUE GOES (2026-10-21): `setCurrentGovernanceSession` is called by the
+     room's assembly below, but nothing in this file reads the value back — the governance hook
+     holds its own copy. */
+  const [, setCurrentGovernanceSession] = useState<Record<string, any> | null>(null);
 
 
-  /*
-   * THE LEFT COLUMN'S CONTAINER — THE SEAT THE RAIL IS LOADED INTO.
-   *
-   * The same seat as the middle one, one column over, and this is what the owner was looking at
-   * when he said it (2026-09-30): *"it is loading underneath the container the design renderer has
-   * to render it inside of the container."* Design's left column drew the Composer's prompt
-   * editor and the ingest's rail sat BELOW it, loose in the pane.
-   *
-   * The panel is part of the frame and stays, but it has to arrive EMPTY and own a hole: the
-   * design's left column is its own element (`design-left-panel`, emitted by `render-design`) —
-   * the Composer's own `<prompt-container>` frame with a mount inside its shadow tree — and the
-   * rail is rendered INTO that mount. The mount (rather than a slot) is what lets the tool keep
-   * its own styling: see that element, and `@/shared/app-stylesheet`.
-   */
-  const [designLeftSeat, setDesignLeftSeat] = useState<HTMLElement | null>(null);
 
   /*
    * IS THE THIRD COLUMN DRAWN YET? — no, until there is something to put in it.
@@ -907,17 +766,12 @@ export default function Index({
    * something we're adding from the ingestion application."* So the Composer's chat seat stays where
    * it is and this shell does not touch it.
    */
-  const [designPreviewOpen, setDesignPreviewOpen] = useState(false);
-
-  /** The tool's report — see `onPreviewChange` on the ingest. Stable, so the tool's effect is not
-   *  re-run by a new function identity on every render of this shell. */
-  const onDesignPreviewChange = useCallback((hasPreview: boolean) => {
-    // THE FALSE HALF IS IGNORED, deliberately: deselecting a component while the column is open is
-    // not a request to take the column away, and the owner's rule is about OPENING it —
-    // *"if the Preview window is already open then there's no reason to reopen it right, because
-    // it's open."* One writer, and it only ever opens.
-    if (hasPreview) setDesignPreviewOpen(true);
-  }, []);
+  /* THE FLAG STAYS, THE CALLBACK GOES (2026-10-21). `designPreviewOpen` is READ — `useDesignSurface`
+     below receives it — so it is live state. What was dead was `onDesignPreviewChange`, the only
+     writer: it was never passed to anything (the ingest that would have reported to it is not
+     mounted by this page), so the flag could never become true. It is declared here, read by the
+     room's hook, and written by nothing — stated plainly rather than dressed up. */
+  const [designPreviewOpen] = useState(false);
 
   /**
    * THE LIVE TREE, READABLE FROM A LISTENER REGISTERED IN AN EARLIER RENDER.
@@ -980,7 +834,6 @@ export default function Index({
   const groundSize = isDevelopmentView ? 'auto' : isGovernanceView ? 'cover' : '100% 100%';
   const groundRepeat = isDevelopmentView ? 'repeat' : 'no-repeat';
   const groundPosition = isGovernanceView ? 'center center' : 'top left';
-  const surfaceComponents = isConsoleView ? consoleTree.components : workspaceTree.components;
   const surfaceDataModel = isConsoleView ? consoleTree.dataModel : workspaceTree.dataModel;
 
   /*
@@ -1014,7 +867,6 @@ export default function Index({
    * renderers. Development is the one compartment still waiting for its room.
    */
   const SECTION_TABS = ['development'];
-  const isSectionShell = SECTION_TABS.includes(headerTab || '');
 
   /*
    * DEAD TABS — Development is the LAST stub, and it is dead on purpose.
@@ -1377,27 +1229,56 @@ export default function Index({
   const composerRendererRef = useRef<any>(null);
   /* DESIGN'S OWN RENDERER — a separate instance, never the Composer's with a swapped tree. */
   const designRendererRef = useRef<any>(null);
-  /* AND THE PRODUCT ROOM'S — the same rule, one room further (2026-10-03). */
-  const productRendererRef = useRef<any>(null);
+
   /* AND GOVERNANCE'S (2026-10-03) — the last room. */
   const governanceRendererRef = useRef<any>(null);
-  /* THE PRODUCT ROOM'S TWO COLUMNS (2026-10-05): the container's handle — so the room can
-     settle it closed on entry (its `isThirdOpen` is set as a PROPERTY, never as a JSX
-     attribute: Lit's boolean converter reads any present attribute, "false" included, as
-     true) — and the seat's, so the Composer's loaded chat can be handed to it. Plain refs:
-     neither value is state and nothing re-renders on their account. */
-  const productLayoutRef = useRef<WorkspaceLayout | null>(null);
-  const productSeatRef = useRef<ChatPanel | null>(null);
+
   /* AND THE DEVELOPMENT ROOM'S (owner, 2026-10-05) — the same pair for the same job: the
      canvas tool's container (settled closed on entry the same way) and the room's seat. */
   const developmentLayoutRef = useRef<WorkspaceLayout | null>(null);
   const developmentSeatRef = useRef<ChatPanel | null>(null);
   const governanceLayoutRef = useRef<WorkspaceLayout | null>(null);
   const governanceSeatRef = useRef<ChatPanel | null>(null);
+  /* THE EVALS TAB'S OWN SEAT (owner's architecture, 2026-10-17: *"one tab = one file … the tab
+     IS the file"*). It stands in the room's right pane beside the shared seat and is shown only
+     while the Evals tab is selected; the shared seat is hidden, never unmounted — so its
+     conversation and scroll survive the round trip, and the Evals file can never reach another
+     tab's surface. */
+  const governanceEvalsSeatRef = useRef<EvalsChatPanel | null>(null);
+  const [governanceEvalsSeat, setGovernanceEvalsSeat] = useState(false);
   /** The embedded app's element — the rail wrote its destinations onto this. NOTHING
       mounts into it since 2026-10-08 (the application left the room, owner's order);
       kept for the rail's dormant go-channel, per the architecture rule. */
   const governanceEmbedRef = useRef<BuilderEmbed | null>(null);
+  /** The room's three trace views, appended into this seat's own slots (the mount block
+      in the governance seat effect). Rebuilt per room entry; views never fetch — the
+      shell writes every value from lib/governance-trace-source.ts. */
+  const governanceTraceElsRef = useRef<{
+    header: HTMLElement;
+    tree: HTMLElement;
+    detail: HTMLElement;
+  } | null>(null);
+  /** The seat's trace state BETWEEN room entries: the last bundle read, the node asked
+      for, and the node + elements that were actually written — the read effect's skip
+      conditions (`els` + `appliedObsId`) live here, not in render state, because none
+      of this should re-render the shell on its account. */
+  const governanceTraceSelRef = useRef<{
+    bundle: GovTraceBundle | null;
+    traceId: string | null;
+    obsId: string | null;
+    appliedObsId: string | null;
+    /** The app's own peek id for the standing trace (see the sig's note). */
+    peekId: string | null;
+    /** The panel's extras (scores + comment counts), the last read — restored on re-entry. */
+    scores: GovTraceScore[] | null;
+    commentCounts: Record<string, number> | null;
+    els: { header: HTMLElement; tree: HTMLElement; detail: HTMLElement } | null;
+  }>({ bundle: null, traceId: null, obsId: null, appliedObsId: null, peekId: null, scores: null, commentCounts: null, els: null });
+  /** The package resolved for the selected trace (empty = none) — written to the seat,
+      read by the Open in Composer click. */
+  const governanceComposerPackageRef = useRef('');
+  /** THE LATEST composer-open handler, so the seat's listener never holds a stale one. */
+  const openComposerRef = useRef<((sessionId: string) => void) | null>(null);
   /*
    * THE COLUMN THE RUN ASSEMBLED, KEPT FOR THE STATE (owner, 2026-10-05). The model composes
    * the third column on every Run; the components it returns are what the drawing IS, and
@@ -1467,88 +1348,9 @@ export default function Index({
    * console has its own and the Composer has its own. Grace the component is unchanged; she is
    * assembled here, in this render, with her own seat.
    */
-  useEffect(() => {
-    const el = designRendererRef.current;
-    if (!el) return;
-    /*
-     * THE TREE THIS ROOM DRAWS, with the third column added once there is something for it —
-     * see `designPreviewOpen` for the rule and the owner's words. An UNREFERENCED component in
-     * the list is inert to the renderer, which is why the server can declare
-     * `design-middle-container` without drawing it: the reference below is what draws the column,
-     * and nothing else about the assembly changes.
-     */
-    const comps = designTree.components as any[];
-    const openOutput =
-      designPreviewOpen && comps.some((c) => c?.component === "design-middle-container");
-    el.components = openOutput
-      ? comps.map((c) =>
-          c?.id === "root" && c.children && !c.children.middle
-            ? { ...c, children: { ...c.children, middle: "design-middle" } }
-            : c,
-        )
-      : comps;
-    el.dataModel = designTree.dataModel;
-    /*
-     * ── AND THEN THE INJECTION — AFTER THE RENDER, NEVER BEFORE ────────────────────────
-     *
-     * THE ORDER IS THE OWNER'S, and it is the whole mechanism (2026-09-30): *"the assembly
-     * happens. The render of this container happens and then the injection happens. It's in
-     * an order."*
-     *
-     *   1. `components` and `dataModel` are assigned above — that is the ASSEMBLY.
-     *   2. `await el.updateComplete` waits for the container to have been DRAWN — that is the
-     *      RENDER. Awaiting is not politeness: assigning `components` only SCHEDULES Lit's
-     *      update, so a query made in the same tick finds an empty shadow root, reports "no
-     *      container", and the room then draws empty with nothing to explain it.
-     *   3. The container is found and handed to React as a portal target — the INJECTION. It
-     *      can only happen here, because before the render there is no element to inject into.
-     *
-     * WHAT IS FOUND is the room's own `<workspace-layout>`, read from THIS renderer's shadow
-     * root — `el.shadowRoot`, never `document`: the element is drawn inside the shadow tree,
-     * where no document-level query can see it. That boundary is the same one that made Save
-     * write nothing until the model was read instead of the DOM.
-     */
-    let cancelled = false;
-    void (async () => {
-      try {
-        await el.updateComplete;
-      } catch {
-        // `updateComplete` does not reject in Lit. If it ever does, the query still runs and
-        // reports no container rather than taking the effect — and the room — down with it.
-      }
-      if (cancelled) return;
-      // Passing the element itself, not a copy of it: on a re-assembly that keeps the same
-      // container, React bails out of the state update and the injected regions are NOT
-      // remounted — the ingest keeps what it holds across a data-model-only change.
-      setDesignRoomEl((el.shadowRoot?.querySelector('workspace-layout') as HTMLElement | null) ?? null);
-      // AND THE MIDDLE COLUMN'S CONTAINER, read in the same pass for the same reason: it does not
-      // exist until the tree has been drawn. It is the element that OWNS the hole — the ingest's
-      // Preview is loaded inside it rather than left loose beside it in the pane (see the seat's
-      // note below, and `seats` on IngestModal).
-      setDesignMiddleSeat(
-        (el.shadowRoot?.querySelector('design-middle-container') as HTMLElement | null) ?? null,
-      );
-      // AND THE LEFT COLUMN'S PANEL, read in the same pass and for the same reason: it does not
-      // exist until the tree has been drawn. It OWNS the hole the rail is loaded into — the panel
-      // frame with a mount inside its shadow tree, which is where the region is rendered so the
-      // tool keeps its own styles (see `design-left-panel`).
-      //
-      // ITS OWN RENDER IS WAITED FOR, which the middle container does not need: the target here is
-      // a div INSIDE that element's shadow tree, so a portal made before it renders has nowhere to
-      // go. `updateComplete` on the child is the fact that says the div exists.
-      const panelEl = (el.shadowRoot?.querySelector('design-left-panel') as HTMLElement | null) ?? null;
-      if (panelEl) {
-        try {
-          await (panelEl as HTMLElement & { updateComplete?: Promise<unknown> }).updateComplete;
-        } catch {
-          // The same courtesy as above: a child that never settles must not take the effect down.
-        }
-      }
-      if (cancelled) return;
-      setDesignLeftSeat(panelEl);
-    })();
-    return () => { cancelled = true; };
-  }, [designTree, designPreviewOpen]);
+  /* MOVED (2026-10-21): the 167-line block now lives in `@/rooms/design/useDesignSurface`.
+     Same statement, same deps, passed by name. */
+  useDesignSurface({ designPreviewOpen, designRendererRef, designTree });
   /*
    * THE BAR'S ID AND VERSION ARE SET, NOT BOUND — see the effect below the session state,
    * where both `currentPromptSession` and its ref exist to be read.
@@ -1613,26 +1415,67 @@ export default function Index({
   // Without this the renderer talks and nobody hears. The catalog audit counts
   // exactly that as `event-unheard`, and it is how a fully wired component still
   // looks inert: the wire is connected at one end only.
+  //
+  // THE FLOW IS THE COMPOSER PACKAGE. The capture door buckets a counter by
+  // (element, metric, day, dimensions, flow), so an element's performance is
+  // attributable to the business process it served. `currentPromptSessionRef`
+  // is the active package id; it is read AT EVENT TIME because this effect's
+  // dependency list is empty on purpose (one listener for the page's life).
+  // The A2UI surface label cannot serve this — every view is mounted on `main`.
   useEffect(() => {
     const handleA2uiEvent = (event: Event) => {
-      const { sourceId, type, payload } = ((event as CustomEvent).detail || {}) as {
-        sourceId?: string; type?: string; payload?: Record<string, unknown>;
+      const { sourceId, component, type, payload } = ((event as CustomEvent).detail || {}) as {
+        sourceId?: string; component?: string; type?: string; payload?: Record<string, unknown>;
       };
+      const flow = currentPromptSessionRef.current ?? undefined;
       switch (type) {
-        case 'a2ui-action':
+        case 'a2ui-action': {
+          // WHAT IS RECORDED: the action's NAME, from the three shapes the primitive uses
+          // (a string; {name}; the v0.9 {event:{name}}). Nothing else from the payload is sent —
+          // a dimension carries a name or a number, never a person's words, and the door refuses
+          // anything the vocabulary does not name rather than guessing.
+          const actionValue = payload?.action as unknown;
+          const actionName =
+            typeof actionValue === 'string'
+              ? actionValue
+              : typeof (actionValue as { name?: unknown })?.name === 'string'
+                ? String((actionValue as { name: string }).name)
+                : typeof (actionValue as { event?: { name?: unknown } })?.event?.name === 'string'
+                  ? String((actionValue as { event: { name: string } }).event.name)
+                  : '';
+          uxCapture('action', component || '', actionName ? { action: actionName } : {}, {
+            instanceId: sourceId,
+            surface: typeof payload?.surfaceId === 'string' ? payload.surfaceId : undefined,
+            flow,
+          });
           // The generic action channel A2UISurfaceContainer already uses.
           window.dispatchEvent(new CustomEvent('a2ui:action', { detail: { ...payload, sourceId } }));
           break;
-        case 'message-sent':
+        }
+        case 'message-sent': {
+          // THE TEXT IS DELIBERATELY NOT READ. The vocabulary has no text dimension — message
+          // content is a person's words — so only the optional `kind` (an enum/name) travels.
+          const kind = typeof payload?.kind === 'string' ? payload.kind : '';
+          uxCapture('message_sent', component || '', kind ? { kind } : {}, {
+            instanceId: sourceId,
+            flow,
+          });
           // The user spoke through the surface. Distinct from a2ui:system-message,
           // which carries Grace's words in the other direction — the two must not
           // share a channel or her reply would echo back as input.
           window.dispatchEvent(new CustomEvent('a2ui:user-message', { detail: { ...payload, sourceId } }));
           break;
-        case 'command-received':
+        }
+        case 'command-received': {
+          const command = typeof payload?.command === 'string' ? payload.command : '';
+          uxCapture('command_received', component || '', command ? { command } : {}, {
+            instanceId: sourceId,
+            flow,
+          });
           // A rendered command IS a console command.
           window.dispatchEvent(new CustomEvent('a2ui:console-command', { detail: { ...payload, sourceId } }));
           break;
+        }
         default:
           console.warn(`[a2ui] surface event "${type}" from ${sourceId} has no listener mapping.`);
       }
@@ -1640,37 +1483,11 @@ export default function Index({
     window.addEventListener('a2ui-event', handleA2uiEvent);
     return () => window.removeEventListener('a2ui-event', handleA2uiEvent);
   }, []);
+
   // The catalog check's findings, as Grace assembled them into the data model.
   // null = the surface is not a catalog surface.
   const [catalogFindings, setCatalogFindings] = useState<any[] | null>(null);
 
-  /**
-   * Components that are ON SCREEN RIGHT NOW and carry an open annotation finding.
-   *
-   * This is what raises the red alert. Both facts have to be true at once: the
-   * catalogue says the component has no annotation, AND the surface being rendered
-   * contains it anyway. A finding on something nobody is using is a report, not an
-   * incident — the incident is the generated one, which is how invented behaviour
-   * gets shipped to every surface that places it.
-   *
-   * Declared after catalogFindings on purpose: it reads it, and a const evaluated
-   * before its subject is in the temporal dead zone, which is a render-time crash.
-   */
-  const unannotatedInUse: string[] = (() => {
-    const open = new Set(
-      (catalogFindings || [])
-        .filter((f: any) => f.check === 'annotation-missing' || f.check === 'annotation-prose')
-        .map((f: any) => f.component)
-        .filter(Boolean),
-    );
-    if (open.size === 0) return [];
-    const used = new Set<string>();
-    for (const c of surfaceComponents || []) {
-      const name = c?.component;
-      if (typeof name === 'string' && open.has(name)) used.add(name);
-    }
-    return [...used];
-  })();
 
   const [_rightColumnView, _setRightColumnView] = useState<"chat" | "trace">("chat"); // Chat = TeacherEditorChat, Trace = SCE panel
   const [_isPromptPortalOpen, _setIsPromptPortalOpen] = useState<boolean>(false); // Show prompt portal in first column
@@ -1689,7 +1506,6 @@ export default function Index({
   // is the model's `/cards` and the sidebar fetches its own, so it was a request per save
   // whose answer went nowhere. Removed with its loader.
   const [currentPromptSession, setCurrentPromptSession] = useState<PromptSession | null>(null);
-  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 
   // The two busy flags the bottom bar draws. Declared HERE, after the state it reads:
@@ -2490,11 +2306,6 @@ export default function Index({
    * A WRITE THAT FAILS IS SAID, never swallowed: a layout that silently stopped saving is the
    * failure this whole loop exists to prevent.
    */
-  type DraftPayloadShape = {
-    label?: string;
-    nodes: Array<Record<string, unknown>>;
-    positions?: Record<string, { x: number; y: number }>;
-  };
   const draftPayloadRef = useRef<DraftPayloadShape | null>(null);
 
   const writeDraftPayload = useCallback((payload: unknown): void => {
@@ -2571,209 +2382,17 @@ export default function Index({
    * means the Composer's listener and this one can each stand down for the other's canvas
    * (only one room's ref is ever set), so one drag can never write twice.
    */
-  const writeProductDraftPayload = useCallback((payload: unknown): void => {
-    setProductTree((prev) => {
-      const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
-      const session = { ...((model.session ?? {}) as Record<string, any>) };
-      session.draft = payload;
-      model.session = session;
-      return { ...prev, dataModel: model };
-    });
-  }, []);
+  /* MOVED (2026-10-21): the 9-line callback now lives in `@/rooms/product/useWriteProductDraftPayload`, returned by a hook. */
+  const writeProductDraftPayload = useWriteProductDraftPayload({ setProductTree });
 
-  /*
-   * THE PAGE ON THE STAGE (2026-10-03, late — the artifact era). `productArtifactRef` mirrors
-   * `session.artifact` in the tree, exactly as the draft ref above mirrors `session.draft`: the
-   * host HOLDS the page — the sandbox is IN-SESSION (nothing reaches the database until Save /
-   * Submit lands, a later slice on the owner's word) — writes it into the tree on every build,
-   * and sends it back with every ask so she can keep what the request keeps. One name for one
-   * fact: the tree's slot is `session.artifact`, written here and nowhere else.
-   */
-  const productArtifactRef = useRef<string | null>(null);
 
-  const writeProductArtifactPayload = useCallback((artifact: string | null): void => {
-    setProductTree((prev) => {
-      const model = { ...((prev.dataModel ?? {}) as Record<string, any>) };
-      const session = { ...((model.session ?? {}) as Record<string, any>) };
-      session.artifact = artifact;
-      model.session = session;
-      return { ...prev, dataModel: model };
-    });
-  }, []);
 
-  useEffect(() => {
-    const onProductDraftNodeMoved = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as {
-        nodeId?: unknown; x?: unknown; y?: unknown;
-      };
-      const nodeId = typeof detail.nodeId === 'string' ? detail.nodeId : '';
-      const at = (typeof detail.x === 'number' && typeof detail.y === 'number')
-        ? { x: detail.x, y: detail.y }
-        : null;
-      const payload = productDraftPayloadRef.current as DraftPayloadShape | null;
-      if (!nodeId || !at || !payload) return;
-      const next: DraftPayloadShape = {
-        ...payload,
-        positions: { ...(payload.positions ?? {}), [nodeId]: at },
-      };
-      productDraftPayloadRef.current = next;
-      // The model follows the drag immediately — the payload and the drawing stay one fact.
-      writeProductDraftPayload(next);
-      const conversationId = String((currentProductSessionRef.current?.conversation_id) || '');
-      if (!conversationId) {
-        sayInThread('That drag was not saved: this wireframe session has no conversation to keep its draft in.');
-        return;
-      }
-      void (async () => {
-        try {
-          const res = await fetch(
-            `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(next),
-            },
-          );
-          if (!res.ok) {
-            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
-            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
-          }
-        } catch (err) {
-          sayInThread(
-            'That drag was not saved to this conversation: '
-            + `${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      })();
-    };
-    const onProductDraftNodeAdded = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as {
-        nodeId?: unknown; component?: unknown; x?: unknown; y?: unknown;
-      };
-      const nodeId = typeof detail.nodeId === 'string' ? detail.nodeId : '';
-      const component = typeof detail.component === 'string' ? detail.component : '';
-      const at = (typeof detail.x === 'number' && typeof detail.y === 'number')
-        ? { x: detail.x, y: detail.y }
-        : null;
-      if (!nodeId || !component || !at) return;
-      /*
-       * AN ADD ON AN EMPTY STAGE IS A REAL PAYLOAD'S FIRST NODE — no draft row exists yet, so
-       * the base is built here in the store's own shape. The element announced; the host folds
-       * and writes (one write, at the gesture's end), and the model the element draws follows.
-       * THE NAME IS NOT RE-CHECKED HERE: the tray's list IS the server-computed palette, so a
-       * name it cannot offer cannot arrive — and if one ever did, the stage draws the
-       * catalogue's refusal sentence on the node rather than this handler inventing a rule.
-       */
-      const payload = (productDraftPayloadRef.current as DraftPayloadShape | null) ?? { nodes: [], positions: {} };
-      if (payload.nodes.some((n) => (n as Record<string, unknown>).id === nodeId)) return;
-      const next: DraftPayloadShape = {
-        ...payload,
-        nodes: [...payload.nodes, { id: nodeId, component }],
-        positions: { ...(payload.positions ?? {}), [nodeId]: at },
-      };
-      productDraftPayloadRef.current = next;
-      writeProductDraftPayload(next);
-      const conversationId = String((currentProductSessionRef.current?.conversation_id) || '');
-      if (!conversationId) {
-        sayInThread('That component was not saved: this wireframe session has no conversation to keep its draft in.');
-        return;
-      }
-      void (async () => {
-        try {
-          const res = await fetch(
-            `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(next),
-            },
-          );
-          if (!res.ok) {
-            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
-            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
-          }
-        } catch (err) {
-          sayInThread(
-            'That component was not saved to this conversation: '
-            + `${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      })();
-    };
-    /*
-     * AND THE SELECTION IS TRACKED, NOT WRITTEN — the stage's own `draft-select` (one node id,
-     * or null on an empty click) keeps this room's answer to "which tile did the person pick".
-     * It is what a scoped edit names; nothing persists it and nothing draws it (the canvas
-     * already draws its own selection).
-     */
-    const onProductDraftSelect = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as { nodeId?: unknown };
-      productSelectedNodeRef.current =
-        typeof detail.nodeId === 'string' && detail.nodeId ? detail.nodeId : null;
-    };
-    /*
-     * AND THE STAGE CAN BE EMPTIED BY HAND — the rail's Clear announces `draft-cleared` and
-     * the HOST writes the empty layout through the same one draft store every other write
-     * goes through (the spoken "clear the stage" already lands there via the compile — one
-     * fact, both hands, one writer). Nothing rides the event: an empty stage is the host's
-     * payload, not the element's opinion. The selection goes with the stage — a stale node id
-     * on an empty stage would make the next scoped action name a tile that no longer exists.
-     */
-    const onProductDraftCleared = () => {
-      const conversationId = String(currentProductSessionRef.current?.conversation_id || '');
-      if (!conversationId) {
-        sayInThread('The stage was not cleared: this wireframe session has no conversation to keep its draft in.');
-        return;
-      }
-      const next: DraftPayloadShape = { nodes: [], positions: {} };
-      productDraftPayloadRef.current = next;
-      productSelectedNodeRef.current = null;
-      writeProductDraftPayload(next);
-      void (async () => {
-        try {
-          const res = await fetch(
-            `${API_BASE}/conversations/${encodeURIComponent(conversationId)}/draft`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(next),
-            },
-          );
-          if (!res.ok) {
-            const refused = (await res.json().catch(() => null)) as { detail?: string } | null;
-            throw new Error(String(refused?.detail || `HTTP ${res.status}`));
-          }
-        } catch (err) {
-          sayInThread(
-            'The stage was not cleared: '
-            + `${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      })();
-    };
-    window.addEventListener('draft-node-moved', onProductDraftNodeMoved);
-    window.addEventListener('draft-node-added', onProductDraftNodeAdded);
-    window.addEventListener('draft-select', onProductDraftSelect);
-    window.addEventListener('draft-cleared', onProductDraftCleared);
-    /*
-     * AND THE PAGE CAN BE EMPTIED BY HAND — the artifact stage's rail announces
-     * `artifact-cleared`, and the HOST empties the sandbox (the page is in-session; there is
-     * no store to write). One fact, both hands: the spoken "clear the stage" empties it
-     * through the same build route — an empty artifact.
-     */
-    const onArtifactCleared = () => {
-      productArtifactRef.current = null;
-      writeProductArtifactPayload(null);
-    };
-    window.addEventListener('artifact-cleared', onArtifactCleared);
-    return () => {
-      window.removeEventListener('draft-node-moved', onProductDraftNodeMoved);
-      window.removeEventListener('draft-node-added', onProductDraftNodeAdded);
-      window.removeEventListener('draft-select', onProductDraftSelect);
-      window.removeEventListener('draft-cleared', onProductDraftCleared);
-      window.removeEventListener('artifact-cleared', onArtifactCleared);
-    };
-  }, [writeProductDraftPayload, writeProductArtifactPayload, sayInThread]);
+  /* MOVED (2026-10-21): the 9-line callback now lives in `@/rooms/product/useWriteProductArtifactPayload`, returned by a hook. */
+  const writeProductArtifactPayload = useWriteProductArtifactPayload({ setProductTree });
+
+  /* MOVED (2026-10-21): the 173-line block now lives in `@/rooms/product/useProductDraft`.
+     Same statement, same deps, passed by name. */
+  useProductDraft({ currentProductSessionRef, productArtifactRef, productDraftPayloadRef, productSelectedNodeRef, sayInThread, writeProductArtifactPayload, writeProductDraftPayload });
 
   /*
    * ══ THE BUILD — HER OFFER, THE COMPILE, THE STAGE (2026-10-03 evening, Slice B) ═══════════════
@@ -2790,72 +2409,9 @@ export default function Index({
    * name, a prop the catalogue does not carry — is the server's words verbatim in her thread
    * (re-wording it here would be a second authority on the reason), and nothing is written.
    */
-  useEffect(() => {
-    const onBuildWireframe = () => {
-      const session = currentProductSessionRef.current;
-      const sessionId = String(session?.session_id || '');
-      if (!sessionId) {
-        sayInThread('I cannot build yet: this room has not opened a package.');
-        return;
-      }
-      void (async () => {
-        try {
-          const res = await apiFetch(`${API_BASE}/ai/assemble-wireframe`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id: sessionId,
-              conversation_id: String(session?.conversation_id || ''),
-            }),
-          });
-          const payload = (await res.json().catch(() => null)) as
-            | { nodes?: unknown; positions?: unknown; say?: unknown; detail?: string }
-            | null;
-          if (!res.ok) {
-            sayInThread(String(payload?.detail || `The build was refused: HTTP ${res.status}`));
-            return;
-          }
-          const base = (productDraftPayloadRef.current as DraftPayloadShape | null) ?? { nodes: [] };
-          const next: DraftPayloadShape = {
-            ...(base.label ? { label: base.label } : {}),
-            nodes: Array.isArray(payload?.nodes) ? (payload?.nodes as DraftPayloadShape['nodes']) : [],
-            positions: (payload?.positions ?? {}) as DraftPayloadShape['positions'],
-          };
-          // The stage follows the build immediately — the payload and the drawing stay one fact.
-          productDraftPayloadRef.current = next;
-          writeProductDraftPayload(next);
-          const target = String(
-            currentProductSessionRef.current?.conversation_id || session?.conversation_id || '',
-          );
-          if (!target) {
-            sayInThread('The build landed here but could not be saved: this session has no conversation to keep its draft in.');
-            return;
-          }
-          const put = await fetch(
-            `${API_BASE}/conversations/${encodeURIComponent(target)}/draft`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(next),
-            },
-          );
-          if (!put.ok) {
-            const refused = (await put.json().catch(() => null)) as { detail?: string } | null;
-            throw new Error(String(refused?.detail || `HTTP ${put.status}`));
-          }
-          const said = String(payload?.say || '').trim();
-          if (said) sayInThread(said);
-        } catch (err) {
-          sayInThread(
-            'The build did not complete: '
-            + `${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      })();
-    };
-    window.addEventListener('a2ui:build-wireframe', onBuildWireframe);
-    return () => window.removeEventListener('a2ui:build-wireframe', onBuildWireframe);
-  }, [sayInThread, writeProductDraftPayload]);
+  /* MOVED (2026-10-21): the 66-line block now lives in `@/rooms/product/useProductBuildWireframe`.
+     Same statement, same deps, passed by name. */
+  useProductBuildWireframe({ currentProductSessionRef, productDraftPayloadRef, sayInThread, writeProductDraftPayload });
 
   /*
    * ══ THE SCOPED EDIT — "THIS TILE, NOT THE ROOM" (2026-10-03 late, STOLEN FROM THE EXAMPLE) ════
@@ -2872,76 +2428,9 @@ export default function Index({
    * no selection here, no package there, a tile that is no longer in the layout. The server's
    * words arrive verbatim; re-wording them would be a second authority on the reason.
    */
-  useEffect(() => {
-    const onEditNode = () => {
-      const session = currentProductSessionRef.current;
-      const sessionId = String(session?.session_id || '');
-      const nodeId = String(productSelectedNodeRef.current || '');
-      if (!sessionId) {
-        sayInThread('I cannot change a tile yet: this room has not opened a package.');
-        return;
-      }
-      if (!nodeId) {
-        sayInThread('Click the tile you want changed first — I edit the one you select.');
-        return;
-      }
-      void (async () => {
-        try {
-          const res = await apiFetch(`${API_BASE}/ai/edit-node`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              session_id: sessionId,
-              conversation_id: String(session?.conversation_id || ''),
-              node_id: nodeId,
-            }),
-          });
-          const payload = (await res.json().catch(() => null)) as
-            | { layout?: unknown; say?: unknown; detail?: string }
-            | null;
-          if (!res.ok) {
-            sayInThread(String(payload?.detail || `The change was refused: HTTP ${res.status}`));
-            return;
-          }
-          const layout = payload?.layout as DraftPayloadShape | undefined;
-          if (!layout || !Array.isArray(layout.nodes)) {
-            sayInThread('The change came back without a layout — nothing was written.');
-            return;
-          }
-          productDraftPayloadRef.current = layout;
-          writeProductDraftPayload(layout);
-          const target = String(
-            currentProductSessionRef.current?.conversation_id || session?.conversation_id || '',
-          );
-          if (!target) {
-            sayInThread('The change landed here but could not be saved: this session has no conversation to keep its draft in.');
-            return;
-          }
-          const put = await fetch(
-            `${API_BASE}/conversations/${encodeURIComponent(target)}/draft`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(layout),
-            },
-          );
-          if (!put.ok) {
-            const refused = (await put.json().catch(() => null)) as { detail?: string } | null;
-            throw new Error(String(refused?.detail || `HTTP ${put.status}`));
-          }
-          const said = String(payload?.say || '').trim();
-          if (said) sayInThread(said);
-        } catch (err) {
-          sayInThread(
-            'The change did not complete: '
-            + `${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      })();
-    };
-    window.addEventListener('a2ui:edit-node', onEditNode);
-    return () => window.removeEventListener('a2ui:edit-node', onEditNode);
-  }, [sayInThread, writeProductDraftPayload]);
+  /* MOVED (2026-10-21): the 70-line block now lives in `@/rooms/product/useProductNodeEdit`.
+     Same statement, same deps, passed by name. */
+  useProductNodeEdit({ currentProductSessionRef, productDraftPayloadRef, productSelectedNodeRef, sayInThread, writeProductDraftPayload });
 
   /*
    * ══ THE ROOM BUILDS AS THE PERSON SPEAKS (2026-10-03, late — the owner's word) ════════════════
@@ -3194,30 +2683,22 @@ export default function Index({
   // Chat mode is always 'grace' - Keeper removed from chat interface
   // Karen/Mistral is only used for grammar checking (separate feature, not chat)
 
-  const _handleQuestionSubmit = useCallback(() => {
-    // Clear active suggestion when user submits a new question
-    setActiveSuggestion(null);
-  }, []); // No dependencies - stable function
   const [_isLightMode, _setIsLightMode] = useState(false); // Dark mode is default
   const [_isTeacher, setIsTeacher] = useState(false); // Teacher role state
 
-  // Projects management state
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [_editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState<string>("");
-  const [newProjectName, setNewProjectName] = useState<string>("");
-  const [_showNewProjectInput, setShowNewProjectInput] =
-    useState<boolean>(false);
+  // Projects management state — WHAT SURVIVES IS WHAT IS STILL WRITTEN (2026-10-21).
+  // `projects` lost its last reader when the project handlers were deleted; `editingProjectId`,
+  // `editingProjectName`, `newProjectName`, `showNewProjectInput`, `selectedConversationIds`
+  // and the multi-select flag lost their only WRITERS with the same deletion, so they were
+  // state that could never change. What stays is what the pipeline still writes: the project
+  // list, the selected project, and that project's conversations.
+  const [, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   );
   const [_projectConversations, setProjectConversations] = useState<
     Conversation[]
   >([]);
-  const [selectedConversationIds, setSelectedConversationIds] = useState<
-    Set<string>
-  >(new Set());
-  const [_isMultiSelectMode, setIsMultiSelectMode] = useState<boolean>(false);
 
   // Clear active suggestion when suggestions are cleared
   useEffect(() => {
@@ -3457,60 +2938,6 @@ export default function Index({
     setIsTeacher(teacherStatus);
   }, []);
 
-  const handleCreateProject = async () => {
-    if (!newProjectName.trim()) return;
-    const project = await conversationStorage.createProject(
-      newProjectName.trim(),
-    );
-    setProjects([...projects, project]);
-    setNewProjectName("");
-    setShowNewProjectInput(false);
-    setSelectedProjectId(project.id);
-    conversationStorage.setCurrentProjectId(project.id);
-  };
-
-  const _handleStartEditProject = (project: Project) => {
-    setEditingProjectId(project.id);
-    setEditingProjectName(project.name);
-  };
-
-  const _handleSaveEditProject = async (projectId: string) => {
-    if (!editingProjectName.trim()) {
-      setEditingProjectId(null);
-      return;
-    }
-    const project = projects.find((p) => p.id === projectId);
-    if (project) {
-      project.name = editingProjectName.trim();
-      try {
-        const saveResult = await conversationStorage.saveProject(project);
-        if (saveResult.success) {
-          setProjects([...projects]);
-          setEditingProjectId(null);
-          setEditingProjectName("");
-          if (saveResult.error) {
-            // Show warning if saved locally
-            alert(`Saved Locally: ${saveResult.error}`);
-          }
-        } else {
-          // Show error if save failed
-          alert(
-            `Failed to save project: ${saveResult.error || "Unknown error"}`,
-          );
-        }
-      } catch (error) {
-        console.error("Error saving project:", error);
-        alert(
-          `Error saving project: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
-      }
-    }
-  };
-
-  const _handleCancelEditProject = () => {
-    setEditingProjectId(null);
-    setEditingProjectName("");
-  };
 
   // ── Prompt Session CRUD Handlers ──
   // `loadPromptSessions` stood here: a fetch whose only effect was to store the list in a
@@ -3714,7 +3141,7 @@ export default function Index({
       }
 
       // Build sections array - include ALL sections, even empty ones
-      const sections: PromptSection[] = allSections.map((s, index) => ({
+      const sections: PromptSection[] = allSections.map((s) => ({
         id: generateUuid(),
         type: s.name as PromptSection['type'],
         content: s.content,
@@ -4883,73 +4310,12 @@ export default function Index({
     setRepairStages((s) => queuedRepair(s, findingId));
   };
 
-  const handleOpenPromptFromConsole = async (sessionId: string) => {
-    /* LEAVING THE ROOM IS GUARDED ON EVERY WAY OUT (2026-10-04): a console card may open a
-       composer package or another product project — either one abandons the idea standing. */
-    if (productRoomProjectId) {
-      const mayLeave = await guardProductExit();
-      if (!mayLeave) return;
-    }
-    /*
-     * A CARD OPENS THE ROOM THAT OWNS IT (2026-10-03). The console's card data carries each
-     * package's room (`room_domain`): a product card opens the Product room, and every other
-     * card routes exactly where it always has — the Composer. The room's assembly announces
-     * its own arrival (see `assembleProductSurface`), so this path holds no second record.
-     */
-    const openedCard = assembledConsoleCards?.find((c) => String(c?.id) === String(sessionId));
-    if (openedCard?.room_domain === 'product') {
-      /*
-       * THE ROOM IS THE BUILDER (2026-10-04): a bridged card carries its project, and the
-       * click opens the room ON it — the embed loads that project's workspace. A legacy
-       * product package (no `builder_project`: born before the bridge) opens the room's
-       * dashboard. NOTHING IS ASSEMBLED either way — no surface, no package read.
-       */
-      const builderProjectId = (openedCard as any)?.builder_project?.project_id ?? null;
-      console.log(`🤖 [A2UI] Product card → the builder${builderProjectId ? ` on "${builderProjectId}"` : ' (dashboard)'}`);
-      setProductRoomProjectId(builderProjectId ? String(builderProjectId) : null);
-      // THE SAME PRE-ARM THE TAB PATH DOES (2026-10-11, see `handleTabChangeWithGate`): the
-      // room's gate must be standing on its first painted frame — never a fade-in over the
-      // raw application (the flag persists from the last visit).
-      setProductGateDown(false);
-      handleHeaderTabChange('product');
-      return;
-    }
-    // ══════════════════════════════════════════════════════════════════════════
-    // A2UI v0.9: Open session via unified surface assembly
-    // ══════════════════════════════════════════════════════════════════════════
-    console.log(`🤖 [A2UI] Opening session → intent: render-session:${sessionId}`);
-    // Move the assembling flag and the header tab INSTANTLY so the composer's
-    // spinner/surface (not the console's) shows during the assembly — the spinner
-    // already carries the composer background, so the transition is a gentle
-    // dark→composer fade, not the console's image lingering until the cards land.
-    setIsAIAssembling(true);
-    handleHeaderTabChange('composer');
-    // Opening a package ends any repair: the repair prompt belongs to the finding
-    // that produced it, not to the package being opened — so the finding it came from
-    // is released with it, and a Run of this package settles nothing.
-    repairSectionsRef.current = null;
-    repairFindingRef.current = null;
-    /*
-     * AN EXISTING PACKAGE IS BEING OPENED — say so, here, where it is unambiguous.
-     *
-     * Announced before the assembly rather than inferred from it: this function IS the
-     * moment a package opens, and the seat can then be answering by the time the
-     * surface settles. The record carries it if the seat does not exist yet (see
-     * shared/arrival); the event carries it if one is already up.
-     */
-    markArrival('resume', sessionId);
-    // ADDRESSED TO THE PACKAGE BEING OPENED. The announcement is broadcast, so the seat it names
-    // is what keeps another seat's panel from answering it — see shared/arrival for the measurement
-    // that made this necessary.
-    window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'resume', sessionId } }));
-    await assembleSurfaceThenRepairs(`render-session:${sessionId}`);
-
-    // The judged runs this package already has, on screen with the rest of its surface.
-    void refreshEvaluations();
-
-    // Force full re-render to dispatch sections to textareas
-    setPromptLoadKey(k => k + 1);
-  };
+  /* MOVED (2026-10-21): the 88-line bridge now lives in `@/rooms/useOpenCardFromConsole`. Its
+     arguments are read AT CALL TIME from this ref — the route's open and the seat's fresh-handler
+     effect both need the bridge above the functions it closes over, and a hook's arguments
+     evaluate the moment it is called. The ref is filled below `assembleSurfaceThenRepairs`. */
+  const openCardDepsRef = useRef<UseOpenCardFromConsoleDeps | null>(null);
+  const handleOpenPromptFromConsole = useOpenCardFromConsole(openCardDepsRef);
 
   /**
    * IS THE TOOL'S ENGINE UP? (2026-10-04) — the bridge's health door (`/api/builder/health`
@@ -4958,15 +4324,8 @@ export default function Index({
    * tool's own error text, and nothing on screen says the process is missing. This is what
    * the room's banner says out loud. Best-effort — a failed check reads as "down".
    */
-  async function checkBuilderEngine(): Promise<void> {
-    try {
-      const res = await fetch(`${API_BASE}/builder/health`);
-      const body = await res.json();
-      setBuilderEngineDown(!body?.ok);
-    } catch {
-      setBuilderEngineDown(true);
-    }
-  }
+  /* MOVED (2026-10-21): the 9-line function now lives in `@/rooms/product/useCheckBuilderEngine`, returned by a hook. */
+  const checkBuilderEngine = useCheckBuilderEngine({ setBuilderEngineDown });
 
   /**
    * OPEN THE ROOM — RESUME THE PROJECT LAST TOUCHED, OR BIRTH THE FIRST ONE (owner,
@@ -4981,46 +4340,13 @@ export default function Index({
    * banner says why it cannot.
    */
   const creatingProductProjectRef = useRef(false);
-  async function openProductRoom(): Promise<void> {
-    if (creatingProductProjectRef.current) return;
-    creatingProductProjectRef.current = true;
-    try {
-      const res = await fetch(`${API_BASE}/builder/room`, {
-        method: 'POST',
-        headers: { 'X-User-ID': getStoredUserId() },
-      });
-      const body = await res.json();
-      if (body?.ok && body?.project_id) {
-        setBuilderEngineDown(false);
-        setProductRoomProjectId(String(body.project_id));
-      } else if (body?.error === 'engine unreachable') {
-        setBuilderEngineDown(true);
-      }
-    } catch {
-      setBuilderEngineDown(true);
-    } finally {
-      creatingProductProjectRef.current = false;
-    }
-  }
+  /* MOVED (2026-10-21): the 21-line function now lives in `@/rooms/product/useOpenProductRoom`, returned by a hook. */
+  const openProductRoom = useOpenProductRoom({ creatingProductProjectRef, setBuilderEngineDown, setProductRoomProjectId });
 
-  useEffect(() => {
-    if ((headerTab || '') !== 'product') return;
-    // NO TOOL, NO REQUEST (2026-10-04): with no address configured the room is its panel and
-    // there is nothing to check or birth against — a demo without its builder service.
-    if (!builderToolUrl()) return;
-    void checkBuilderEngine();
-    // Entering the room with no project open HANDS THE DECISION TO THE BRIDGE, whose rule is
-    // the holding position (owner, 2026-10-06: *"that's what you're doing when you click on …
-    // product tab … you're creating a new project"*): a HELD project with work in it is
-    // reopened (a reload, a restored tab — *"entering is coming back, not starting over"*);
-    // anything else births a new project/package. ON THE DEMO TOO, from 2026-10-04 (the
-    // owner's decision — visitors may run the builder, capped in the tool's engine): the
-    // engine it births against is the HOSTED one, reached through the bridge like everything
-    // else. The old note here said "not on the demo: there is no engine to birth one against" —
-    // there is one now.
-    if (!productRoomProjectId) void openProductRoom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headerTab]);
+  /* MOVED (2026-10-21): the room's ENTRY — the engine check and the open-a-project decision —
+     now lives in `@/rooms/product/useProductEntry`. The shell's only part is saying which tab is
+     active. */
+  useProductEntry({ checkBuilderEngine, headerTab, openProductRoom, productRoomProjectId });
 
   /**
    * THE ROOM'S EXIT GUARD (owner, 2026-10-04; the save-as-draft door, 2026-10-06: *"You must
@@ -5038,77 +4364,11 @@ export default function Index({
    */
   const [leavePrompt, setLeavePrompt] = useState<{ projectId: string; settle: (choice: 'publish' | 'discard' | 'keep' | 'stay') => void } | null>(null);
 
-  async function discardProductProject(bridgeProjectId: string): Promise<void> {
-    try {
-      await fetch(`${API_BASE}/builder/discard`, {
-        method: 'POST',
-        // X-User-ID rides every builder call (keep, publish, upload) — the discard's own
-        // carrier-row cleanup is user-scoped, so this door names its user too (2026-10-06).
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
-        body: JSON.stringify({ project_id: bridgeProjectId }),
-      });
-    } catch { /* the engine is down — there is nothing to discard against */ }
-  }
+  /* MOVED (2026-10-21): the 11-line function now lives in `@/rooms/product/useDiscardProductProject`, returned by a hook. */
+  const discardProductProject = useDiscardProductProject({  });
 
-  async function guardProductExit(): Promise<boolean> {
-    const bridgeProjectId = productRoomProjectId;
-    if (!bridgeProjectId) return true;
-    let published = true;
-    let hasWork = false;
-    try {
-      const res = await fetch(`${API_BASE}/builder/state?project_id=${encodeURIComponent(bridgeProjectId)}`);
-      const body = await res.json();
-      if (body?.ok) {
-        published = Boolean(body.published);
-        hasWork = Boolean(body.has_work);
-      }
-    } catch { /* unreadable → leave freely (see the note above) */ }
-    // A PUBLISHED PROJECT IS SAFE — its card holds everything — and a BLANK one is dropped in
-    // silence. Either way nothing remains unsaved, and the exit gate's same ref is told so
-    // (see the beforeunload effect): the room and the Composer keep ONE truth.
-    if (published) {
-      hasUnsavedChangesRef.current = false;
-      return true;
-    }
-    if (!hasWork) {
-      await discardProductProject(bridgeProjectId);
-      hasUnsavedChangesRef.current = false;
-      setProductRoomProjectId(null);
-      return true;
-    }
-    const choice = await new Promise<'publish' | 'discard' | 'keep' | 'stay'>((resolve) => {
-      setLeavePrompt({
-        projectId: bridgeProjectId,
-        settle: (chosen) => {
-          setLeavePrompt(null);
-          resolve(chosen);
-        },
-      });
-    });
-    if (choice === 'stay') return false;
-    if (choice === 'publish') {
-      try {
-        await fetch(`${API_BASE}/builder/publish`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_id: bridgeProjectId }),
-        });
-      } catch { /* the card simply stays absent until a publish succeeds */ }
-    } else if (choice === 'keep') {
-      try {
-        await fetch(`${API_BASE}/builder/projects/${encodeURIComponent(bridgeProjectId)}/keep`, {
-          method: 'POST',
-          headers: { 'X-User-ID': getStoredUserId() },
-        });
-      } catch { /* the project stays held — the next room entry reopens it; nothing is lost */ }
-    } else {
-      await discardProductProject(bridgeProjectId);
-    }
-    // SAVED AS A DRAFT, PUBLISHED, OR DISCARDED — resolved; nothing is at risk anymore.
-    hasUnsavedChangesRef.current = false;
-    setProductRoomProjectId(null);
-    return true;
-  }
+  /* MOVED (2026-10-21): the 59-line function now lives in `@/rooms/product/useGuardProductExit`, returned by a hook. */
+  const guardProductExit = useGuardProductExit({ discardProductProject, hasUnsavedChangesRef, productRoomProjectId, setLeavePrompt, setProductRoomProjectId });
 
   /**
    * THE LAB GROUND WARMS HERE — ONCE THE WORKSPACE HAS LANDED (see `warmLabGrounds` above).
@@ -5136,47 +4396,8 @@ export default function Index({
   }, []);
 
   /**
-   * THE DEVELOPMENT ROOM'S OPENING (2026-10-04; loading again 2026-10-06) — the staged
-   * assembly's THREE hands: entering the room restarts them (the gate rises again on every
-   * visit, like the other rooms' spinners), the minimum is three seconds, the frame's own
-   * load event (builder-embed-loaded) is the second, and the seat's binding (the seat effect
-   * below) is the third. The gate spans the WHOLE room — both columns — and drops only when
-   * all three have landed, or at its ceiling; then it fades and the room eases in underneath
-   * it — one cross-fade, 700ms, the same feel as composer and design.
-   */
-  useEffect(() => {
-    if ((headerTab || '') !== 'development') return;
-    setDevelopmentGateDown(false);
-    setDevelopmentToolDown(false);
-    developmentMinElapsedRef.current = false;
-    developmentFrameLoadedRef.current = false;
-    developmentSeatSettledRef.current = false;
-    if (developmentGateTimerRef.current) clearTimeout(developmentGateTimerRef.current);
-    developmentGateTimerRef.current = setTimeout(() => {
-      developmentMinElapsedRef.current = true;
-      dropDevelopmentGateWhenAllLanded();
-    }, DEVELOPMENT_GATE_MIN_MS);
-    // THE CEILING (see DEVELOPMENT_GATE_MAX_MS above): a frame that has not arrived by now reads
-    // as "the tool is down" — the room's panel says so on its own ground, and a late load still
-    // clears it, because the embed stays mounted underneath.
-    // AND THE COVER NEVER OUTLIVES THE CEILING — a frame that arrived but a seat binding that
-    // never settles must not leave the spinner standing: the room reveals on its honest blank
-    // seat instead (the no-fallback rule; a spinner may claim an assembly only while one can
-    // still land within its ceiling).
-    if (developmentGateMaxTimerRef.current) clearTimeout(developmentGateMaxTimerRef.current);
-    developmentGateMaxTimerRef.current = setTimeout(() => {
-      if (!developmentFrameLoadedRef.current) setDevelopmentToolDown(true);
-      setDevelopmentGateDown(true);
-    }, DEVELOPMENT_GATE_MAX_MS);
-    return () => {
-      if (developmentGateMaxTimerRef.current) clearTimeout(developmentGateMaxTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headerTab]);
-
-  /**
-   * THE GOVERNANCE ROOM'S OPENING — the Development effect above, mirrored for the third
-   * room. TWO hands since 2026-10-08 (the application left the room, owner's order — the
+   * THE GOVERNANCE ROOM'S OPENING — the same three-hands shape as the rooms beside it.
+   * TWO hands since 2026-10-08 (the application left the room, owner's order — the
    * frame-load hand went with it): the minimum and the seat's binding restart on every
    * entry; the ceiling still takes the cover down and the room keeps its own ground —
    * no fallbacks, never a trapped blank.
@@ -5184,13 +4405,7 @@ export default function Index({
   useEffect(() => {
     if ((headerTab || '') !== 'governance') return;
     setGovernanceGateDown(false);
-    governanceMinElapsedRef.current = false;
     governanceSeatSettledRef.current = false;
-    if (governanceGateTimerRef.current) clearTimeout(governanceGateTimerRef.current);
-    governanceGateTimerRef.current = setTimeout(() => {
-      governanceMinElapsedRef.current = true;
-      dropGovernanceGateWhenAllLanded();
-    }, GOVERNANCE_GATE_MIN_MS);
     if (governanceGateMaxTimerRef.current) clearTimeout(governanceGateMaxTimerRef.current);
     governanceGateMaxTimerRef.current = setTimeout(() => {
       setGovernanceGateDown(true);
@@ -5201,32 +4416,8 @@ export default function Index({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headerTab]);
 
-  /** THE PRODUCT ROOM'S OWN THREE HANDS — the Development effect above, mirrored exactly. */
-  useEffect(() => {
-    if ((headerTab || '') !== 'product') return;
-    setProductGateDown(false);
-    setProductToolDown(false);
-    productMinElapsedRef.current = false;
-    productFrameLoadedRef.current = false;
-    productSeatSettledRef.current = false;
-    if (productGateTimerRef.current) clearTimeout(productGateTimerRef.current);
-    productGateTimerRef.current = setTimeout(() => {
-      productMinElapsedRef.current = true;
-      dropProductGateWhenAllLanded();
-    }, PRODUCT_GATE_MIN_MS);
-    if (productGateMaxTimerRef.current) clearTimeout(productGateMaxTimerRef.current);
-    productGateMaxTimerRef.current = setTimeout(() => {
-      if (!productFrameLoadedRef.current) setProductToolDown(true);
-      // THE COVER NEVER OUTLIVES THE CEILING — see the development effect above: a seat
-      // binding that never settles reveals the room on its honest blank seat, never a
-      // spinner standing for an assembly that stopped being possible.
-      setProductGateDown(true);
-    }, PRODUCT_GATE_MAX_MS);
-    return () => {
-      if (productGateMaxTimerRef.current) clearTimeout(productGateMaxTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headerTab]);
+  /* THE PRODUCT ROOM'S OWN THREE HANDS — the minimum, the frame's load, the seat's binding —
+     run inside `@/rooms/product/useProductGate` (moved 2026-10-21, same reasons). */
 
   /**
    * THE PRODUCT ROOM'S CHAT LOADS OPEN AT 600 (owner, 2026-10-06, revised the same night:
@@ -5283,118 +4474,9 @@ export default function Index({
    * — live turns ride the seat's own thread, so a rebind after every run would draw each turn
    * twice.
    */
-  useEffect(() => {
-    if ((headerTab || '') !== 'product') return;
-    const seat = productSeatRef.current;
-    if (!seat || !productRoomProjectId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const roomRes = await fetch(
-          `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/room`,
-          { method: 'POST', headers: { 'X-User-ID': getStoredUserId() } },
-        );
-        const room = (await roomRes.json().catch(() => null)) as
-          | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
-          | null;
-        if (!room?.ok || !room.session_id || !room.conversation_id) {
-          /* THE CARRIER SAID NO — SETTLED, so the cover can lift onto the honest blank seat
-             (see the seat-settled note at the refs). */
-          if (!cancelled) {
-            productSeatSettledRef.current = true;
-            dropProductGateWhenAllLanded();
-          }
-          return;
-        }
-        const convRes = await fetch(
-          `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/conversation`,
-        );
-        const conv = (await convRes.json().catch(() => null)) as
-          | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
-          | null;
-        if (cancelled) return;
-        // THE ENGINE'S OWN VOCABULARY, CARRIED THROUGH (2026-10-06): the app's chat design
-        // groups BY `messageType` — `regular` (the person's prompt), `starting` / `building`
-        // (a run's steps), `finished` (the completed card with its ✓), `error` (stops and
-        // failures). The transient filter that used to live here is GONE with the port: the
-        // steps ARE the design now — "Starting a new run…", "Writing the app…", the
-        // builder's spoken lines — exactly as the app's own thread draws them.
-        const thread = (conv?.messages || [])
-          .filter((m) => String(m.content || '').trim())
-          .map((m) => ({
-            role: String(m.role || 'assistant'),
-            content: String(m.content),
-            messageType: (m as { messageType?: string | null }).messageType ?? null,
-          }));
-        // NO VOICE BUT THE BUILDER'S (owner, 2026-10-06: *"take out grace … She is not
-        // supposed to be involved in this conversation. It's a conversation with the
-        // product team and their design and I want to use app builder not grace"*). The
-        // earlier greeting — a welcome drawn over a blank thread — is gone. While the
-        // thread is empty the seat's thread draws the APP'S OWN empty state ("What do you
-        // want to build?" / "Describe your idea below", see `chat-product-thread`), and
-        // every word in this conversation afterwards is the engine's own.
-        const messages = thread;
-        const unreported = assignProps(seat, {
-          sessionId: room.session_id,
-          conversationId: room.conversation_id,
-          packageTitle: String(room.label || ''),
-          allowedTabs: PRODUCT_SEAT_TABS,
-          messages,
-          // THE SEAT'S REQUIRED SCRIPT — PLUMBING, NOT A VOICE. Owner, 2026-10-06: "we're
-          // not taking Grace's behavior in the chat. We're using the application's behavior
-          // in the chat" — "just a styling treatment to the existing capabilities." The seat
-          // refuses sends into a room that binds no `instructions` (chat-panel's
-          // `_gracePrompt`), so the room must state something; on the builder path this text
-          // never reaches any model — the seam runs the engine on the person's own words and
-          // answers with the builder's. It is written as the room's facts, not as a script
-          // for her to speak.
-          instructions:
-            'The Product room\'s chat carries the local app builder\'s own conversation: the person\'s turns are prompts to the builder, and the replies are the builder\'s own words.',
-          // AND THE ROOM STATES WHERE HER LIVE FACTS COME FROM. The seat's third state:
-          // `undefined` is refused outright ("a surface that omits it is refused by the seat
-          // rather than defaulted" — the catalogs say it, `_gracePrompt` enforces it). FALSE
-          // is the product room's truth: the room's script carries what she needs, and this
-          // room binds no workspace seats for `_buildWorkspaceContext()` to read — TRUE would
-          // append an empty block. The live facts here are the engine's (the project and its
-          // conversation), which arrive as the bound thread above, not through her workspace.
-          graceLiveContext: false,
-          // A TAB CLICK IS NOT A TURN — PRODUCT-ROOM BINDING ONLY. Owner, 2026-10-06: "this
-          // chat is not universal. It belongs to product only." The seat's default is
-          // `tracePrompt: true`, so a Trace-tab click sends its trace script as a turn —
-          // measured live today: the click filed a turn and, on a dead carrier, Grace
-          // answered in the room. False: tabs switch views and nothing more; only the
-          // person's own words are prompts. Stated HERE, in the room's own binding, so every
-          // other seat keeps its behavior untouched.
-          tracePrompt: false,
-          // THE PRODUCT FOOT IS THE APPLICATION'S OWN TOOLS (owner, 2026-10-06: *"all of
-          // these stubs go. And you're gonna put the products wiring down"*): the seat swaps
-          // its v.4b tray for the app's own attach · Figma · GitHub · visual-edit row —
-          // wired by the effect below into the product's real doors (the engine's upload
-          // endpoint, the embedded builder's own modals and visual editor). Product-room
-          // binding only: every other seat keeps the tray.
-          productTools: true,
-        });
-        if (unreported.length) {
-          console.warn(`[product seat] unreported bindings: ${unreported.join(', ')}`);
-        }
-        /* THE SEAT IS UP — the third hand lands, and the pane's width is asserted once more
-           from a beat where the room is certainly measurable (see `assertPaneWidth`). */
-        productSeatSettledRef.current = true;
-        assertPaneWidth(productLayoutRef.current);
-        dropProductGateWhenAllLanded();
-      } catch {
-        /* A FAILED CARRIER FETCH LEAVES THE SEAT INVISIBLE, NOT DEFAULTED (owner, 2026-10-06 —
-           no fallbacks): with `productRoom` set and no binding landed, the seat draws NOTHING —
-           the v.4b face never returns — and the next entry tries again. Settled all the same:
-           a cover must not go on standing over a chat that will never arrive. */
-        if (!cancelled) {
-          productSeatSettledRef.current = true;
-          dropProductGateWhenAllLanded();
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [headerTab, productRoomProjectId]);
+  /* MOVED (2026-10-21): the 112-line block now lives in `@/rooms/product/useProductSeat`.
+     Same statement, same deps, passed by name. */
+  useProductSeat({ PRODUCT_SEAT_TABS, assertPaneWidth, dropProductGateWhenAllLanded, headerTab, productLayoutRef, productRoomProjectId, productSeatRef, productSeatSettledRef });
 
   /**
    * THE ATTACH DOOR — THE ENGINE'S OWN UPLOAD ENDPOINT, THE ENGINE'S OWN ANSWER.
@@ -5407,35 +4489,8 @@ export default function Index({
    * gets locally. SUCCESS IS THE FUTURE'S PATH, not a fake: when the engine supports
    * uploads, this same call attaches for real and says so.
    */
-  const uploadProductAttachment = useCallback(async (file: File) => {
-    if (!productRoomProjectId) return;
-    const line = (content: string) =>
-      window.dispatchEvent(new CustomEvent('a2ui:system-message', { detail: { role: 'assistant', content } }));
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch(
-        `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/files/upload`,
-        { method: 'POST', body: form, headers: { 'X-User-ID': getStoredUserId() } },
-      );
-      const body = (await res.json().catch(() => null)) as
-        | { errors?: { errorMessage?: string }; error?: string; message?: string; data?: unknown }
-        | null;
-      const refused = !res.ok || !!body?.errors || !!body?.error;
-      if (!refused) {
-        line(`Attached \u201c${file.name}\u201d to the project.`);
-        return;
-      }
-      line(
-        body?.errors?.errorMessage ||
-          body?.error ||
-          body?.message ||
-          `The engine refused \u201c${file.name}\u201d (HTTP ${res.status}).`,
-      );
-    } catch {
-      line(`The engine did not answer the upload of \u201c${file.name}\u201d.`);
-    }
-  }, [productRoomProjectId]);
+  /* MOVED (2026-10-21): the 29-line callback now lives in `@/rooms/product/useProductAttachment`, returned by a hook. */
+  const uploadProductAttachment = useProductAttachment({ productRoomProjectId });
 
   /**
    * THE PRODUCT FOOT'S WIRING (owner, 2026-10-06: *"all of these stubs go. And you're gonna
@@ -5452,71 +4507,17 @@ export default function Index({
    * props — the foot's dots and the pencil's pressed state mirror the APP, never a guess.
    * PRODUCT-ONLY: the guard is the tab, the listeners live on this room's seat element.
    */
-  useEffect(() => {
-    if ((headerTab || '') !== 'product') return;
-    const seat = productSeatRef.current;
-    if (!seat) return;
-    /*
-     * AND THE GRIP'S SAFETY NET RIDES HERE (see `productGripActive`): the layout's own
-     * `resize-start`/`resize-end` — dispatched on itself when the chat strip's gesture begins and
-     * ends — raise and lower the room's transparent drag overlay.
-     */
-    const layout = productLayoutRef.current;
-    const onGripStart = () => setProductGripActive(true);
-    const onGripEnd = () => setProductGripActive(false);
-    layout?.addEventListener('resize-start', onGripStart);
-    layout?.addEventListener('resize-end', onGripEnd);
-    const onTool = (e: Event) => {
-      const tool = (e as CustomEvent<{ tool?: string }>).detail?.tool;
-      if (!tool) return;
-      const embed = document.querySelector('builder-embed') as
-        | (HTMLElement & { postToBuilder?: (message: Record<string, unknown>) => void })
-        | null;
-      embed?.postToBuilder?.({ type: 'ids:product-tool', tool });
-    };
-    const onAttach = (e: Event) => {
-      const files = (e as CustomEvent<{ files?: File[] }>).detail?.files || [];
-      for (const file of files) void uploadProductAttachment(file);
-    };
-    const onToolState = (e: Event) => {
-      const d =
-        (e as CustomEvent<{ figmaConnected?: boolean; githubConnected?: boolean; visualEditActive?: boolean }>)
-          .detail || {};
-      seat.productFigmaConnected = !!d.figmaConnected;
-      seat.productGithubConnected = !!d.githubConnected;
-      seat.productVisualEditActive = !!d.visualEditActive;
-    };
-    // THE STOP — THE APP'S OWN ACT, THROUGH THE BRIDGE (2026-10-06): the seat's red stop
-    // button asks; this posts the engine's own `agent/stop` (the exact endpoint the app's
-    // Stop button calls), and the engine appends its "Stopped." message — which the poller
-    // then draws as the group's error finish. Nothing to fake: the run really ends.
-    const onProductStop = () => {
-      if (!productRoomProjectId) return;
-      void (async () => {
-        try {
-          await fetch(
-            `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/stop`,
-            { method: 'POST', headers: { 'X-User-ID': getStoredUserId() } },
-          );
-        } catch {
-          /* the poller shows the run's own end when it comes */
-        }
-      })();
-    };
-    seat.addEventListener('product-tool', onTool);
-    seat.addEventListener('product-attach', onAttach);
-    seat.addEventListener('product-stop', onProductStop);
-    window.addEventListener('builder-tool-state', onToolState);
-    return () => {
-      seat.removeEventListener('product-tool', onTool);
-      seat.removeEventListener('product-attach', onAttach);
-      seat.removeEventListener('product-stop', onProductStop);
-      window.removeEventListener('builder-tool-state', onToolState);
-      layout?.removeEventListener('resize-start', onGripStart);
-      layout?.removeEventListener('resize-end', onGripEnd);
-      setProductGripActive(false);
-    };
-  }, [headerTab, productRoomProjectId, uploadProductAttachment]);
+  /* MOVED (2026-10-21): the foot's wiring effect — the tool/attach/stop listeners, the app's
+     tool-state relay and the grip's safety net — now lives in
+     `@/rooms/product/useProductFootWiring`, returned by a hook. */
+  useProductFootWiring({
+    headerTab,
+    productLayoutRef,
+    productRoomProjectId,
+    productSeatRef,
+    setProductGripActive,
+    uploadProductAttachment,
+  });
 
   /**
    * LIVE BUILD PROGRESS — THE APPLICATION'S OWN CHAT BEHAVIOR (owner, 2026-10-06: *"wire up
@@ -5530,157 +4531,13 @@ export default function Index({
    * The FIRST successful read is the baseline — a reopened thread's history is the bound
    * record's business, never replayed as live lines.
    */
-  useEffect(() => {
-    if ((headerTab || '') !== 'product') return;
-    if (!productRoomProjectId) return;
-    let cancelled = false;
-    let seen = -1; // baseline on the first successful read
-    /*
-     * THE POLLER RIDES ITS OWN CHANNEL (owner, 2026-10-06 — the live run must show exactly
-     * like the app's; ROOT CAUSE FOUND AND MEASURED LIVE). The seat's send holds
-     * `/api/teacher/query` open for the WHOLE build (the bridge waits the run out), and on
-     * the dev origin a second request QUEUES BEHIND it: measured tonight, a probe fetch
-     * waited 4.1 SECONDS behind a 4-second run, while the ticks should have come every 2.5.
-     * So the poller never read `init` during a seat-run, the building row never armed, and
-     * the whole thread landed at once on completion (the owner's exact report: "it's
-     * thinking … then 2 build steps / Finished in 47s. / Completed"). On the local stack the
-     * polls therefore ask the backend DIRECTLY — CORS already allows http://localhost:5001
-     * (backend/main.py) — while every other door keeps the proxy; on a deployed origin the
-     * relative path IS the single origin. Same values, unqueued. PRODUCT-ONLY: this poller
-     * is the product room's alone.
-     *
-     * AND THE SWITCH IS THE PAGE'S LOCATION, NOT THE DEMO FLAG (2026-10-06, late — found
-     * live on production: the deployed page was polling http://localhost:8000 — the
-     * VISITOR'S machine — "Access to fetch at 'http://localhost:8000/…' … blocked by CORS
-     * policy" every 2.5s in the console, and Chrome's "wants to access other apps and
-     * services on this device" box on the owner's screen). The old branch read "demo →
-     * relative, otherwise → the Mac" — true while the only states were the deployed demo
-     * and a local run; the moment the demo flag went off, production fell to the local
-     * branch. NO DEPLOYED PAGE MAY EVER PHONE A VISITOR'S MACHINE: a loopback-host page
-     * asks the backend directly (the queue reason above); every deployed origin keeps the
-     * relative path.
-     */
-    const POLL_BASE = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
-      ? 'http://localhost:8000/api'
-      : API_BASE;
-    const timer = window.setInterval(() => {
-      void (async () => {
-        try {
-          const res = await fetch(
-            `${POLL_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/conversation`,
-          );
-          const body = (await res.json().catch(() => null)) as
-            | { ok?: boolean; messages?: Array<{ role?: string; content?: string }> }
-            | null;
-          if (cancelled || !body?.ok) return;
-          // THE RUN'S OWN FACTS RIDE EACH POLL (2026-10-06, the app-design port): the
-          // engine's status + start clock become the seat's `productRunning` /
-          // `productRunStartedAt` — the thread's building row and its estimate ladder read
-          // them exactly as the app's RunProgress reads the same fields from its engine.
-          const pollSeat = productSeatRef.current;
-          if (pollSeat) {
-            const status = String((body as { status?: string }).status || 'idle');
-            const started = (body as { runStartedAt?: string }).runStartedAt;
-            // THE ENGINE'S OWN ESTIMATE RIDES EACH POLL TOO (2026-10-06, the app-design port):
-            // the app's RunProgress fills against `agent/status.expectedMinutes` when the
-            // engine sent one, and climbs its ladder when it did not — same field, same rule.
-            const expected = (body as { expectedMinutes?: number }).expectedMinutes;
-            pollSeat.productRunning = status === 'init';
-            pollSeat.productRunStartedAt = started ? (Date.parse(started) || 0) : 0;
-            pollSeat.productExpectedMinutes =
-              typeof expected === 'number' && expected > 0 ? expected : 0;
-          }
-          const msgs = (body.messages || []).filter((m) => String(m.content || '').trim());
-          // ENTRY CANNOT LEAVE AN EMPTY SEAT (2026-10-06, measured live): the room binds the
-          // thread once at entry, and ONE failed read there left the chat empty for the whole
-          // visit — the seat held nothing while the engine held the whole record (the owner's
-          // "the product tab is not loading the seat"). So the poller heals it: if the first
-          // successful read finds the seat's bound thread EMPTY while the engine has messages,
-          // the entire history is delivered now — the person's prompts included, because the
-          // seat has no local copy of history to echo. After that it is the normal feed.
-          const seatEmpty =
-            pollSeat !== null &&
-            (pollSeat.messages?.length ?? 0) === 0 &&
-            (((pollSeat as unknown as { _thread?: unknown[] })._thread?.length) ?? 0) === 0;
-          const healTick = seen < 0 && seatEmpty && msgs.length > 0;
-          if (seen < 0) {
-            seen = healTick ? 0 : msgs.length;
-            if (!healTick) return;
-          }
-          // DID THIS TICK BRING A NEW PERSON'S TURN? — the delta since the last read (on the
-          // heal tick, the whole history). That is the product's "content changed": the moment
-          // the exit gate's same ref must be consulted (below).
-          const newUserTurn = msgs.slice(seen).some((m) => String(m.role || '') === 'user');
-          // EVERY NEW AGENT MESSAGE RIDES IN WITH ITS OWN TYPE (2026-10-06, the app-design
-          // port): the thread groups by `messageType`, so the poller no longer hand-picks
-          // two transient lines — it hands the seat exactly what the engine wrote, in order.
-          // The person's own prompts are skipped: the seat echoes those the moment they are
-          // sent (a 2.5s-late echo of your own sentence is not the app's behavior).
-          for (let i = seen; i < msgs.length; i++) {
-            const m = msgs[i] as { role?: string; content?: string; messageType?: string | null };
-            if (String(m.role || 'assistant') === 'user' && !healTick) continue;
-            window.dispatchEvent(
-              new CustomEvent('a2ui:system-message', {
-                detail: {
-                  // On a heal tick the REAL role rides (history includes the person's own
-                  // prompts); in the live feed users are skipped — the seat echoed them.
-                  role: healTick && String(m.role) === 'user' ? 'user' : 'assistant',
-                  content: String(m.content || ''),
-                  messageType: m.messageType ?? null,
-                },
-              }),
-            );
-          }
-          if (msgs.length > seen) seen = msgs.length;
-          // THE GATE'S SAME REF, RAISED FROM THE ENGINE'S OWN FACTS — the Composer's rule (see
-          // the beforeunload effect): a spoken turn is unsaved work until the project resolves
-          // (save-as-draft / publish / discard; `guardProductExit` clears the same ref on every
-          // resolution). The guard's own endpoint answers whether anything is at risk — a
-          // published project has nothing left to lose — and it is asked ONLY on ticks that
-          // brought a new person's turn, so quiet ticks make no requests.
-          if (newUserTurn) {
-            void (async () => {
-              try {
-                const st = await fetch(
-                  `${POLL_BASE}/builder/state?project_id=${encodeURIComponent(productRoomProjectId)}`,
-                );
-                const s = (await st.json().catch(() => null)) as
-                  | { ok?: boolean; published?: boolean; has_work?: boolean }
-                  | null;
-                if (s?.ok && !s.published && s.has_work) hasUnsavedChangesRef.current = true;
-              } catch { /* unreadable → the exit guard asks again on the way out */ }
-            })();
-          }
-        } catch {
-          /* engine down or a transient read — the next tick tries again */
-        }
-      })();
-    }, 2500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [headerTab, productRoomProjectId]);
+  /* MOVED (2026-10-21): the 131-line block now lives in `@/rooms/product/useProductConversationPoll`.
+     Same statement, same deps, passed by name. */
+  useProductConversationPoll({ hasUnsavedChangesRef, headerTab, productRoomProjectId, productSeatRef });
 
-  /**
-   * THE DEVELOPMENT ROOM'S CONTAINER LOADS CLOSED — the Product pair's mirror (owner,
-   * 2026-10-05), one room over and for the same reasons, stated once above: `isThirdOpen`
-   * is set as a PROPERTY through the ref (never a JSX attribute — Lit's boolean converter
-   * reads any present attribute, "false" included, as true), nothing is written on the
-   * panel, and `useLayoutEffect` so the first paint is already the closed column. The same
-   * first paint settles the rail's list (DEVELOPMENT_SEAT_TABS, above).
-   */
-  useLayoutEffect(() => {
-    if ((headerTab || '') !== 'development') return;
-    const el = developmentLayoutRef.current;
-    if (el) el.isThirdOpen = false;
-    /* The rail's opening state (see DEVELOPMENT_SEAT_TABS): written only while the seat
-       carries no list — an empty list is the rail's "everything", and the seat effect below
-       never leaves it empty once the Composer's chat is bound, so this fills the room's
-       own answer, never overrides a loaded one. */
-    const seat = developmentSeatRef.current;
-    if (seat && !seat.allowedTabs) seat.allowedTabs = DEVELOPMENT_SEAT_TABS;
-  }, [headerTab]);
+  /* MOVED (2026-10-21): the room's closed-on-entry write and its seat binding now live in
+     `@/rooms/development/useDevelopmentRoom`. Same statements, same deps, passed by name. */
+  useDevelopmentRoom({ headerTab, developmentLayoutRef, developmentSeatRef });
 
   /** THE GOVERNANCE ROOM'S CONTAINER LOADS CLOSED — the Development pair's mirror: the
    *  property write (never the attribute — Lit's boolean converter reads any present
@@ -5692,81 +4549,32 @@ export default function Index({
     if (el) el.isThirdOpen = false;
     const seat = governanceSeatRef.current;
     if (seat && !seat.allowedTabs) seat.allowedTabs = GOVERNANCE_SEAT_TABS;
+    /* THE EVALS EXPERIENCE WEARS THE ROOM'S OWN RAIL — same ids, same labels, same
+       deactivated Preview until a trace stands. One room, one rail. */
+    const evalsSeatEntry = governanceEvalsSeatRef.current as (HTMLElement & {
+      allowedTabs?: string;
+      tabLabels?: string;
+      disabledTabs?: string;
+    }) | null;
+    if (evalsSeatEntry && !evalsSeatEntry.allowedTabs) {
+      evalsSeatEntry.allowedTabs = GOVERNANCE_SEAT_TABS;
+      evalsSeatEntry.tabLabels = '{"tools":{"label":"Preview","tooltip":"Preview the selected trace detail"}}';
+      evalsSeatEntry.disabledTabs = 'tools';
+    }
   }, [headerTab]);
 
-  /**
-   * THE DEVELOPMENT ROOM HAS ITS OWN CHAT NOW — ITS OWN PACKAGE, ITS OWN CONVERSATIONS
-   * (owner, 2026-10-06: *"developers are going to have a package, they're gonna have chats
-   * related to the conversation ID … development processes that are [not] shared … only for
-   * development."* — after watching the room borrow another room's seat: *"It doesn't seem
-   * to own its own chat. It seems to be borrowing a chat from product … un-bind those."*).
-   *
-   * This effect USED to read the Composer's loaded tree — so the room showed ANOTHER room's
-   * conversation whenever the Composer had been opened. That borrow is gone: the bridge
-   * ensures the room's OWN package (a `prompt_sessions` row marked `dev_room`, hidden from
-   * the console's cards) with its own conversation, and the seat binds THAT — the same
-   * per-room isolation Product keeps. The rail is the room's own list
-   * (`DEVELOPMENT_SEAT_TABS`, Versions never offered). Where a development turn should GO
-   * once sent (the platform assistant today, exactly as in the Composer; the tool's own
-   * agent someday) is the owner's call — not guessed here.
+  /* MOVED (2026-10-21): the room's seat is bound to its OWN package in
+     `@/rooms/development/useDevelopmentRoom` — called above, one statement for both. */
+
+  /*
+   * THE COMPOSER-OPEN HANDLER, KEPT FRESH (see the seat's `open-composer` listener wired
+   * in the governance mount block): the handler is recreated on every render, and the
+   * listener wired at room entry must always call the LATEST one — a stale closure would
+   * route to the Composer with stale state standing behind it.
    */
   useEffect(() => {
-    if ((headerTab || '') !== 'development') return;
-    const seat = developmentSeatRef.current;
-    if (!seat) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/builder/development/room`, {
-          method: 'POST',
-          headers: { 'X-User-ID': getStoredUserId() },
-        });
-        const body = (await res.json().catch(() => null)) as
-          | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
-          | null;
-        if (cancelled) return;
-        if (!body?.ok || !body.session_id || !body.conversation_id) {
-          /* THE ROOM SAID NO — SETTLED, so the cover can lift (the seat-settled note at the
-             refs): the seat stands as it is, and the cover never outlives the honest state. */
-          developmentSeatSettledRef.current = true;
-          dropDevelopmentGateWhenAllLanded();
-          return;
-        }
-        const unreported = assignProps(seat, {
-          sessionId: body.session_id,
-          conversationId: body.conversation_id,
-          packageTitle: String(body.label || 'Development'),
-          allowedTabs: DEVELOPMENT_SEAT_TABS,
-          // THE ROOM'S REQUIRED SCRIPT — PLUMBING, NOT A VOICE (the product room's rule, one
-          // room over). The seat refuses a room that binds no words; these words are the
-          // room's facts. What ANSWERS a development turn today is the platform's own
-          // assistant, exactly as in the Composer — stated so, not dressed up.
-          instructions:
-            'The Development room carries the development team\'s own conversations. Answer briefly and about the work in front of the person.',
-          // The seat's third state — omitted is REFUSED, not defaulted (see chat-panel's
-          // `_gracePrompt`). False: this room binds no workspace seats for her to read.
-          graceLiveContext: false,
-          // A tab click is not a turn (the product room's measurement, one room over).
-          tracePrompt: false,
-        });
-        if (unreported.length) {
-          console.warn(`[development seat] unreported bindings: ${unreported.join(', ')}`);
-        }
-        /* THE SEAT IS UP — the third hand lands (see the seat-settled note at the refs). */
-        developmentSeatSettledRef.current = true;
-        dropDevelopmentGateWhenAllLanded();
-      } catch {
-        /* a failed room fetch leaves the seat as it stands — the next entry tries again.
-           Settled all the same: the cover must not keep standing over a chat that will never
-           arrive. */
-        if (!cancelled) {
-          developmentSeatSettledRef.current = true;
-          dropDevelopmentGateWhenAllLanded();
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [headerTab]);
+    openComposerRef.current = (sessionId: string) => void handleOpenPromptFromConsole(sessionId);
+  }, [handleOpenPromptFromConsole]);
 
   /**
    * THE GOVERNANCE ROOM HAS ITS OWN CHAT — ITS OWN PACKAGE, ITS OWN CONVERSATIONS (the
@@ -5777,88 +4585,190 @@ export default function Index({
    * third room. The rail is the room's own list; what answers a governance turn is the
    * platform's own assistant, exactly as in the Composer — stated so, not dressed up.
    */
+  /* MOVED (2026-10-21): the 612-line block now lives in `@/rooms/useGovernanceRoom`.
+     Same statement, same deps, passed by name. */
+  const { governancePath, governanceSectionPrefix, navigateGovernanceTool } = useGovernanceChrome({
+    governanceEmbedRef, governanceLayoutRef, governanceSeatRef, governanceTraceSelRef, setGovernanceTraceSig,
+  });
+  useGovernanceRoom({ GOVERNANCE_SEAT_TABS, dropGovernanceGateWhenAllLanded, governanceComposerPackageRef, governanceEmbedRef, governanceEvalsSeatRef, governanceLayoutRef, governanceSeatRef, governanceSeatSettledRef, governanceSectionPrefix, governanceTraceElsRef, governanceTraceSelRef, headerTab, navigateGovernanceTool, openComposerRef, setGovernanceEvalsSeat, setGovernanceGripActive, setGovernanceTraceSig });
+
+  /**
+   * THE CONSOLE'S EVALS BUTTON USED TO CLAIM A TEACHING HERE — DELETED 2026-10-21.
+   *
+   * What stood here: a walk that found the console's `chat-panel`, wrote `evalsTalk` onto it,
+   * and listened for `tab-change`. It did nothing. `chat-panel` has no `evalsTalk` property —
+   * the capability lives on `evals-chat-panel` ("_evalsDrawsThread") — so `assignProps`
+   * reported it as an unreported binding and dropped it, and the tab-change handler's body
+   * was empty: it read the event and returned. A comment above it claimed an announcement
+   * that no line of it made.
+   *
+   * DELETED RATHER THAN RE-AIMED: the console's seat is a `chat-panel`, which cannot draw the
+   * conversation on its Evals tab, so there is nothing to aim the binding at. If the owner's
+   * 2026-10-16 rule ("she has to talk whenever you click the eval's button") is to hold in
+   * the Console, it needs a real build on an element that carries the behaviour — not this
+   * effect pretending to.
+   */
+
+  /**
+   * THE SEAT'S TRACE READ — the one place the room's selection becomes data.
+   *
+   * Reads the bundle (lib/governance-trace-source.ts) when the TRACE changes, writes the
+   * three views from the shell (views never fetch), and reads the selected node's I/O —
+   * the same two calls the app itself makes for the same screen. The skip condition is
+   * (elements, applied node): re-entering the room re-applies everything (the elements
+   * are new), a repeated report does NOTHING, and a new node reads only its I/O. Values
+   * are written with assignProps — the views' declared properties are their contract.
+   * A failed read is said out loud in the console with its real reason (the honesty
+   * rule); the views simply stay on their waiting faces — never a fabricated state.
+   */
   useEffect(() => {
     if ((headerTab || '') !== 'governance') return;
-    const seat = governanceSeatRef.current;
-    if (!seat) return;
-    /*
-     * AND THE GRIP'S SAFETY NET RIDES HERE (see `governanceGripActive`): the layout's own
-     * `resize-start`/`resize-end` — dispatched on itself when the chat strip's gesture
-     * begins and ends — raise and lower the room's transparent drag overlay, so the hand's
-     * moves keep reaching this document while it is over the frame beside the strip. The
-     * Product room's wiring, one room over.
-     */
-    const layout = governanceLayoutRef.current;
-    const onGripStart = () => setGovernanceGripActive(true);
-    const onGripEnd = () => setGovernanceGripActive(false);
-    layout?.addEventListener('resize-start', onGripStart);
-    layout?.addEventListener('resize-end', onGripEnd);
+    const sig = governanceTraceSig;
+    if (!sig) return;
+    const els = governanceTraceElsRef.current;
+    if (!els) {
+      /* THE VIEWS ARE NOT REGISTERED YET — wait for the mount, then apply. Never a silent
+         drop: without this the selection was lost and the tree stayed blank. */
+      const retry = window.setTimeout(() => setGovernanceTraceElsTick((n) => n + 1), 400);
+      return () => window.clearTimeout(retry);
+    }
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`${API_BASE}/builder/governance/room`, {
-          method: 'POST',
-          headers: { 'X-User-ID': getStoredUserId() },
+        const base = `${window.location.origin}${governanceSectionPrefix()}`;
+        const sel = governanceTraceSelRef.current;
+        let bundle = sel.bundle;
+        let traceChanged = false;
+        if (!bundle || bundle.trace.id !== sig.traceId) {
+          bundle = await fetchGovTrace(base, sig.projectId, sig.traceId, sig.timestampIso, sig.obsId);
+          if (cancelled) return;
+          sel.bundle = bundle;
+          sel.traceId = sig.traceId;
+          sel.peekId = sig.peekId ?? null;
+          traceChanged = true;
+          assignProps(els.header, { trace: bundle.trace, observation: null });
+          assignProps(els.tree, { trace: bundle.trace, observations: bundle.observations, selectedId: null });
+          assignProps(els.detail, { trace: bundle.trace, observation: null, io: null, observations: bundle.observations });
+          /* AND HER OWN EYES — the same snapshot the views draw, written onto the SEAT:
+             `governanceTrace` joins her turn context (see the chat-panel props). Facts
+             only — the same numbers on the screen. */
+          const seatForFacts = governanceSeatRef.current;
+          if (seatForFacts) {
+            assignProps(seatForFacts, { governanceTrace: bundle.trace, governanceObservation: null, disabledTabs: '' });
+          }
+          /* THE PACKAGE LINK — on a Composer run the trace's Langfuse session IS the
+             package's session id (the tap writes trace_session = request.session_id);
+             a UUID that answers from the studio's own session store IS the package, and
+             the action bar then offers Open in Composer for it. Anything else (the
+             assembly modes' constants) resolves to no package: no button, no dead
+             control. */
+          const maybePackage = bundle.trace.sessionId;
+          void (async () => {
+            let packageId = '';
+            if (maybePackage && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(maybePackage)) {
+              try {
+                /* API_BASE ALREADY CARRIES /api — this line used to add a second one
+                   (`${API_BASE}/api/prompt-sessions/…`) and every probe answered 404:
+                   the Open-in-Composer button simply never resolved. Measured live
+                   2026-10-13 late (`GET /api/api/prompt-sessions/… FAILED 404`); every
+                   other call site in this file reads `${API_BASE}/prompt-sessions/…`. */
+                const res = await fetch(`${API_BASE}/prompt-sessions/${encodeURIComponent(maybePackage)}`, {
+                  headers: { 'X-User-ID': getStoredUserId() },
+                });
+                if (res.ok) packageId = maybePackage;
+              } catch {
+                /* the button simply does not draw — no package claim without one */
+              }
+            }
+            if (cancelled) return;
+            governanceComposerPackageRef.current = packageId;
+            const seatElse = governanceSeatRef.current;
+            if (seatElse) assignProps(seatElse, { composerPackageId: packageId });
+          })();
+        }
+        if (traceChanged) {
+          /* THE PANEL'S EXTRAS — the scores and the bulk comment counts, the same two
+             reads the fork's panel makes for this screen. They ride AFTER the bundle so
+             the panel draws its data first; a failure is said out loud in the console,
+             and the panel simply shows no chips — never a fabricated count. */
+          void (async () => {
+            try {
+              const [scores, commentCounts] = await Promise.all([
+                fetchGovTraceScores(base, sig.projectId, sig.traceId, sig.timestampIso),
+                fetchGovObservationCommentCounts(base, sig.projectId),
+              ]);
+              if (cancelled) return;
+              sel.scores = scores;
+              sel.commentCounts = commentCounts;
+              assignProps(els.tree, { scores, commentCounts });
+              assignProps(els.detail, { scores });
+            } catch (err) {
+              if (!cancelled) console.error('[governance trace] extras read failed:', err);
+            }
+          })();
+        }
+        /* A TRACE-LEVEL SELECTION LANDS ITS ROOT NODE (owner, 2026-10-13 late: "we're not
+           autoloading all parts of the default view" — with a trace standing, the Preview
+           must be alive). The app's own row click carries the root's id as `peek`; when the
+           selection legitimately has no node, the ROOT observation (parentObservationId
+           null — the SPAN) stands in: the tree marks it, the detail fills with the prompt
+           (the light preview), the io read fires. Nothing invented: the root IS the
+           trace's own node, and the fork draws the same thing for a trace row. */
+        const rootDefault = bundle.observations.find((o) => !o.parentObservationId)
+          ?? bundle.observations[0]
+          ?? null;
+        /* THE APP'S OWN ROOT WINS WHERE IT HAS ONE (2026-10-13 late, measured): its row
+           click carries `peek` = the observation IT considers the trace's root, and when a
+           trace holds more than one parentless observation our own find() picked a
+           different one — the app then refused to mark the row for a re-navigation built
+           from our pick. The app's dialect is the authority; the parentless find is the
+           fallback. */
+        const appRoot = sig.peekId && bundle.observations.some((o) => o.id === sig.peekId)
+          ? sig.peekId
+          : null;
+        const obsId = sig.obsId ?? appRoot ?? rootDefault?.id ?? null;
+        sel.obsId = obsId;
+        if (!traceChanged && sel.els === els && sel.appliedObsId === obsId) return;
+        const observation = obsId ? (bundle.observations.find((o) => o.id === obsId) ?? null) : null;
+        assignProps(els.header, { trace: bundle.trace, observation });
+        assignProps(els.tree, {
+          trace: bundle.trace,
+          observations: bundle.observations,
+          selectedId: observation?.id ?? null,
         });
-        const body = (await res.json().catch(() => null)) as
-          | { ok?: boolean; session_id?: string; conversation_id?: string; label?: string }
-          | null;
+        assignProps(els.detail, { trace: bundle.trace, observation, io: observation ? undefined : null });
+        const seatForNode = governanceSeatRef.current;
+        if (seatForNode) {
+          assignProps(seatForNode, { governanceTrace: bundle.trace, governanceObservation: observation, disabledTabs: '' });
+        }
+        sel.els = els;
+        sel.appliedObsId = obsId;
+        if (!observation) return;
+        /* THE NODE'S I/O — one batchIO read, the app's own window (min→max start times). */
+        const win = observationWindow(bundle.observations);
+        if (!win) return;
+        const io = await fetchGovObservationIO(base, sig.projectId, sig.traceId, observation.id, win.start, win.end);
         if (cancelled) return;
-        if (!body?.ok || !body.session_id || !body.conversation_id) {
-          /* SETTLED — the seat stands as it is, and the cover never outlives the honest state. */
-          governanceSeatSettledRef.current = true;
-          dropGovernanceGateWhenAllLanded();
-          return;
-        }
-        const unreported = assignProps(seat, {
-          sessionId: body.session_id,
-          conversationId: body.conversation_id,
-          packageTitle: String(body.label || 'Governance'),
-          allowedTabs: GOVERNANCE_SEAT_TABS,
-          instructions:
-            'The Governance room carries the governance team\'s own conversations. Answer briefly and about the work in front of the person.',
-          // The seat's third state — omitted is REFUSED, not defaulted. False: no workspace seats bound.
-          graceLiveContext: false,
-          // A tab click is not a turn (the product room's measurement).
-          tracePrompt: false,
-        });
-        if (unreported.length) {
-          console.warn(`[governance seat] unreported bindings: ${unreported.join(', ')}`);
-        }
-        governanceSeatSettledRef.current = true;
-        dropGovernanceGateWhenAllLanded();
-      } catch {
-        /* a failed room fetch leaves the seat as it stands — settled all the same: the
-           cover must not keep standing over a chat that will never arrive. */
-        if (!cancelled) {
-          governanceSeatSettledRef.current = true;
-          dropGovernanceGateWhenAllLanded();
-        }
+        assignProps(els.detail, { trace: bundle.trace, observation, io });
+      } catch (err) {
+        /* SAID OUT LOUD with its real reason — the views stay waiting, never fake. */
+        if (!cancelled) console.error('[governance trace] read failed:', err);
       }
     })();
     return () => {
       cancelled = true;
-      layout?.removeEventListener('resize-start', onGripStart);
-      layout?.removeEventListener('resize-end', onGripEnd);
-      setGovernanceGripActive(false);
     };
-  }, [headerTab]);
+  }, [governanceTraceSig, headerTab, governanceTraceElsTick]);
 
   useEffect(() => {
-    // BOTH ROOMS' FRAMES ANNOUNCE THEMSELVES HERE (2026-10-05; Development's half is back,
-    // 2026-10-06; the GOVERNANCE branch left with the application, 2026-10-08 — its room has
-    // no frame any more, and the width-assert beat it carried moved to the room's own hands):
-    // the announcement is a bare window event and either embed raises it, so the guard reads
-    // the CURRENT tab — never a stale closure — and routes it to that room's clocks.
+    // THE PRODUCT ROOM'S FRAME ANNOUNCES ITSELF HERE (Development's half left with its gate —
+    // that room opens straight into its workspace and nothing waits on this event; the
+    // GOVERNANCE branch left with the application, 2026-10-08 — its room has no frame):
+    // the announcement is a bare window event and the embed raises it, so the guard reads
+    // the CURRENT tab — never a stale closure.
     // Re-registered per tab.
     const onFrameLoaded = () => {
       const tab = headerTab || '';
-      if (tab === 'development') {
-        developmentFrameLoadedRef.current = true;
-        setDevelopmentToolDown(false);
-        dropDevelopmentGateWhenAllLanded();
-        return;
-      }
       if (tab === 'product') {
         productFrameLoadedRef.current = true;
         setProductToolDown(false);
@@ -5972,555 +4882,8 @@ export default function Index({
   //
   // Intents: "render-console", "render-composer", "render-session:{id}"
   // ═══════════════════════════════════════════════════════════════════════════
-  const assembleSurfaceWithAI = useCallback(async (intent: string, context?: {
-    current_surface?: string;
-    has_unsaved_changes?: boolean;
-    session_id?: string | null;
-    session_title?: string;
-    category?: string;
-    /** The repair brief — see `repairBrief`. Carried only when a repair launched this
-     *  assembly, and declared here because a field the model does not declare is dropped
-     *  in silence (see AISurfaceContext in backend/routes/ai.py). */
-    repair_brief?: string[] | null;
-  }) => {
-    // ✅ DEDUP: If already in flight, skip (user spamming refresh)
-    if (isConsoleAssemblyInFlightRef.current) {
-      console.log('🤖 [A2UI] Request already in flight - skipping duplicate');
-      return;
-    }
-
-    // ✅ ABORT: Cancel any previous request that might still be pending
-    if (consoleAssemblyControllerRef.current) {
-      console.log('🤖 [A2UI] Aborting previous request');
-      consoleAssemblyControllerRef.current.abort();
-    }
-
-    console.log(`🤖 [A2UI] Assembling surface with intent: ${intent}`, context ? `context: ${JSON.stringify(context)}` : '');
-    isConsoleAssemblyInFlightRef.current = true;
-    setIsAIAssembling(true);
-    setAiAssemblyFailed(false);
-    setAiAssemblyReport(null);
-    setIsFailureAcknowledged(false);
-    // Recorded so Retry re-runs the request that actually failed rather than a guess.
-    lastAssemblyIntentRef.current = intent;
-    setAiAssemblyMessage(AI_STANDBY_MESSAGE);
-
-    // Create new abort controller for this request
-    const controller = new AbortController();
-    consoleAssemblyControllerRef.current = controller;
-
-    // Client-side timeout: ASSEMBLY_TIMEOUT_MS (120s, declared at the top of this file).
-    //
-    // This cap is the OUTER bound and it is deliberately loose: it exists to stop a
-    // request that is truly dead, not to police latency. THE REAL BUDGET IS THE
-    // SERVER'S — grace_gui.LLM_TIMEOUT is 20s per attempt with max_retries=1, so a
-    // surface gives up at 40s worst case and returns its own 503 naming the budget that
-    // expired. A client cap BELOW the server's is the failure mode this number exists
-    // to avoid: it aborts a call the backend goes on to finish, and the abort reads as
-    // a network failure rather than a timeout with a reason. That is what happened when
-    // this was 10s against a cold call measured at ~13.5s.
-    //
-    // The catalog check does NOT come through here — it has its own fetch with
-    // no client cap, because it can legitimately run long (measured 5.4–17.4s on
-    // a 12 KB prompt). If it ever moves back onto this path, revisit this number.
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    // Transport facts, carried to the catch as FACTS rather than re-derived from the thrown
-    // message. The message is for humans; this is for the reader (shared/error-registry).
-    // Declared here because the catch is the only place that classifies a failure, and by
-    // then `response` is long out of scope.
-    let failureTransport: { httpStatus?: number; body?: unknown; rawBody?: string } = {};
-
-    try {
-      timeoutId = setTimeout(() => controller.abort(), ASSEMBLY_TIMEOUT_MS);
-
-      // ═══════════════════════════════════════════════════════════════════
-      // SINGLE UNIFIED ENDPOINT - A2UI v0.9 COMPLIANT
-      // Include context so AI knows about unsaved changes
-      // ═══════════════════════════════════════════════════════════════════
-      const response = await fetch(`${API_BASE}/ai/assemble-surface?limit=500`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': getStoredUserId(),
-          // THE PACKAGE THIS CALL IS ABOUT (2026-10-03) — the governance ledger attributes a
-          // call by HEADERS, never by reading a body (a body read in that middleware deadlocked
-          // these very POSTs — measured at 12:54, a curl that never came back). The id rides the
-          // context when it names one, and the intent when the intent names one.
-          ...(() => {
-            const fromIntent = typeof intent === 'string' && intent.includes(':') ? intent.split(':')[1].trim() : '';
-            const ctx = context as { session_id?: string; conversation_id?: string } | undefined;
-            const packageSession = String(ctx?.session_id || fromIntent || '');
-            if (!packageSession) return {};
-            const headers: Record<string, string> = { 'X-Package-Session': packageSession };
-            if (ctx?.conversation_id) headers['X-Conversation-Id'] = String(ctx.conversation_id);
-            return headers;
-          })(),
-        },
-        body: JSON.stringify({ intent, context }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        // Read the body as TEXT first.
-        //
-        // The previous version called response.json() inside a bare `catch {}` and fell back
-        // to the bare status string. Two consequences, both live and both verified: a
-        // non-JSON error page was discarded entirely, and the §1 envelope — an OBJECT —
-        // stringified to "[object Object]", so all four of its fields were lost at the last
-        // meter. That is also why the "A2UI FAILURE:" branch in the catch below could never
-        // match: the throw site emitted a different prefix. text() cannot fail that way.
-        const rawBody = await response.text();
-        let parsedBody: unknown;
-        try {
-          parsedBody = JSON.parse(rawBody);
-        } catch {
-          // Not JSON. rawBody already holds the truth; parsedBody stays undefined and the
-          // classifier falls back to status + raw text instead of inventing a shape.
-        }
-        failureTransport = {
-          httpStatus: response.status,
-          body: parsedBody,
-          rawBody,
-        };
-        console.error('🔴 [A2UI] Backend error', response.status, parsedBody ?? rawBody);
-
-        // §1 says the envelope's `message` is the human sentence — prefer it. Never let its
-        // absence collapse the status into a bare number: the raw body is the fallback.
-        const envelope = parseValidationEnvelope(parsedBody);
-        const detailFromBody =
-          typeof parsedBody === 'object' && parsedBody !== null
-            ? (parsedBody as { detail?: unknown }).detail
-            : undefined;
-        throw new Error(
-          envelope?.message
-            ?? (typeof detailFromBody === 'string' ? detailFromBody : undefined)
-            ?? (rawBody.trim() || `${response.status} ${response.statusText}`),
-        );
-      }
-
-      const rawData = await response.json();
-
-      // ═══════════════════════════════════════════════════════════════════
-      // A2UI v0.9.1 ENVELOPE BOUNDARY — version and surface are read, not assumed.
-      //
-      // Every operation is labeled with the format version it is written in and
-      // the surface it belongs to. Both labels used to be ignored: the operations
-      // were piled together, the last updateComponents and the last
-      // updateDataModel won, and *which surface was on screen* was guessed from
-      // the shape of the data model. So a v1.0 answer drew silently as v0.9.1,
-      // and an answer carrying two surfaces became one pile holding parts of
-      // each. readA2UIEnvelope() reads both labels and REFUSES rather than
-      // guessing — see src/shared/a2ui-envelope.ts for the wire shape.
-      // ═══════════════════════════════════════════════════════════════════
-      const read = readA2UIEnvelope(rawData);
-      // `read.ok === false`, not `!read.ok`: this project compiles with
-      // strictNullChecks off, where truthiness does not narrow a union — only
-      // equality against the literal does.
-      if (read.ok === false) {
-        const { code, message, detail } = read.refusal;
-        console.error(
-          `🤖 [A2UI] ENVELOPE REFUSED — ${code}\n` +
-          `  ${message}\n` +
-          `  detail: ${JSON.stringify(detail)}\n` +
-          `  CAUSE: ${
-            code === 'UNSUPPORTED-VERSION'
-              ? 'the answer is written in a format version this shell does not implement'
-              : 'the answer describes surfaces this shell cannot hold at once'
-          }.\n` +
-          `  Refusing beats guessing: parsing it anyway draws an empty or wrong\n` +
-          `  surface, and says nothing about why.`,
-        );
-        // Thrown into the assembly failure path on purpose: the surface is
-        // cleared, the assembly is marked failed, and the reason is NAMED and
-        // shown. A refusal nobody sees is the same defect as the silent
-        // mis-reading it replaces.
-        throw envelopeRefusalError(read.refusal);
-      }
-
-      const reading = read.reading;
-      const assembledComponents = reading.components as any[];
-      // The page reads a few well-known keys off the model (cards, usage,
-      // session) — the same keys the server puts there. The renderer is handed
-      // the model as it is; it walks paths, it does not read this shape.
-      const dataModel = reading.dataModel as Record<string, any>;
-      // ── WHAT THE ASSEMBLY COULD NOT READ, INTO THE TRACE ───────────────────
-      // The backend collects every failure it survived into the model's `warnings`
-      // (routes/ai.py `_warn`); the trace is where those are looked at (lib/trace-source
-      // subscribes to this logger). A degraded assembly says so instead of looking clean.
-      if (Array.isArray(dataModel.warnings)) {
-        for (const warning of dataModel.warnings) {
-          logger.warn(`[assembly] ${String(warning)}`, { surfaceId: reading.surfaceId ?? null });
-        }
-      }
-      for (const note of reading.notes) console.warn(`🤖 [A2UI] ${note}`);
-      console.log(
-        `🤖 [A2UI] Envelope surface: "${reading.surfaceId ?? '(unnamed)'}"` +
-        `${reading.catalogId ? ` · catalog ${reading.catalogId}` : ''}`,
-      );
-      console.log(`🤖 [A2UI] Model-supplied components:`, assembledComponents.map((c: any) => c?.component || c?.id));
-      console.log(`🤖 [A2UI] Data model received:`, Object.keys(dataModel));
-
-      // Hand both channels to the surface renderer as props.
-      //
-      // WHICH RENDERER IS DECIDED BELOW, by the same inference the view uses — a
-      // tree goes to the slot it was assembled for and nowhere else. The
-      // assignment cannot happen here: `surface` is not known until the model has
-      // been read, and assigning first is what put the composer's columns on the
-      // console (measured 2026-09-17) and dropped the cards from the screen.
-      //
-      // The component list is passed even when empty: an empty list is Grace
-      // saying "no surface", and the renderer draws nothing for it. Keeping the
-      // previous tree on screen instead would make a deliberately cleared surface
-      // look stuck — indistinguishable from a renderer that had stopped
-      // listening, which is the exact failure this wiring exists to make visible.
-
-      // A2UI v0.9.1: the surface LABEL is the spec's `surfaceId`, and it is read by
-      // the envelope boundary above (readA2UIEnvelope) — it names which surface these
-      // operations belong to. It is not the same question as WHICH VIEW to show:
-      // the server mounts the console, the composer and the decision dialog all on
-      // the one surface `main`, so the view is still inferred from the data model
-      // itself — decision payload → decision dialog, cards → console grid, session
-      // payload → composer. Two questions, two answers; this used to be one guess.
-      const surface = dataModel.decision_type
-        ? 'decision'
-        : Array.isArray(dataModel.cards)
-          ? 'console'
-          : dataModel.session
-            ? 'composer'
-            : 'console';
-      console.log(`🤖 [A2UI] Surface inferred from data model: ${surface}`);
-
-      // The tree now goes to the slot it belongs to. A decision payload is drawn
-      // on the composer's side — it is the composer's own question, asked in the
-      // composer's column — so anything that is not the console goes to the
-      // workspace tree.
-      if (surface === 'console') {
-        setConsoleTree({ components: assembledComponents, dataModel });
-      } else {
-        // THE MIDDLE PANE IS A RUN'S PANE — the canvas takes it, and until then a
-        // package opens as two columns: the prompt, and Grace. The model's assembly
-        // sometimes returns a middle child (the compiled-output viewer); rendering
-        // it puts an extra panel on screen at open, holding old run output, when the
-        // results already live in Grace's chat. Strip the middle slot on arrival;
-        // a Run assembles its own column and takes the pane then, and the viewer
-        // component stays in the list so "back to output" can find it by role.
-        setWorkspaceTree({
-          components: assembledComponents.map((c: any) => {
-            if (
-              c?.component === 'workspace-layout' &&
-              c.children &&
-              typeof c.children === 'object' &&
-              !Array.isArray(c.children)
-            ) {
-              const { middle: _middle, ...rest } = c.children as Record<string, unknown>;
-              return { ...c, children: rest };
-            }
-            return c;
-          }),
-          dataModel,
-        });
-      }
-
-      const assemblyTime = dataModel.assembly_time_ms || 0;
-      const aiMessage = dataModel.ai_message || '';
-
-      // ── SHE SPEAKS WHEN SHE WAS ASKED, AND IS SILENT WHEN SHE WAS NOT ────────
-      // The history here is worth keeping: this was suppressed entirely ("an assembly
-      // is not a turn in the conversation — nobody asked"), then re-enabled for every
-      // assembly, and the owner's verdict on that is the second one: opening a package,
-      // switching a tab or loading the console is not a question, and a column that
-      // greets you on every one of them reads as a machine talking to itself.
-      //
-      // The one assembly that IS an ask is a repair: the brief rides the assembly and
-      // comes back as her sentence, which is how a repair tells the person what is open.
-      // So that is the condition — a repair brief, not "the model produced a message".
-      if (aiMessage.trim() && (context?.repair_brief?.length ?? 0) > 0) {
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: { role: 'assistant', content: aiMessage.trim() },
-        }));
-      }
-      // The measured cost of this action, straight from the provider's usage
-      // report — the readout in Grace's seat shows this and nothing else.
-      if (dataModel.usage && typeof dataModel.usage.total_tokens === 'number') {
-        // The spend belongs to the surface it came from, so it carries that
-        // surface's session id. Without it, every listener in every open
-        // conversation pulls the same number — the contract scopes a chat panel
-        // to its own conversationId (catalog.json -> ChatPanel).
-        window.dispatchEvent(new CustomEvent('a2ui:usage', {
-          detail: { ...dataModel.usage, sessionId: dataModel.session_id || currentPromptSessionRef.current || null },
-        }));
-      }
-      console.log(`🤖 [A2UI] Surface assembled in ${assemblyTime}ms`);
-      console.log(`🤖 [A2UI] Grace says: ${aiMessage}`);
-
-      // ═══════════════════════════════════════════════════════════════════
-      // Process based on surface type
-      // ═══════════════════════════════════════════════════════════════════
-      if (surface === 'console') {
-        const cards = dataModel.cards || [];
-        if (!Array.isArray(cards)) {
-          throw new Error("AI did not return valid cards - surface cannot render without AI");
-        }
-        // No setState here. These cards ARE `dataModel.cards`, and the data model was
-        // handed to the renderer two lines up — the console's one authority. A React
-        // copy kept in step beside them is what let the drawn console and the console
-        // this file believed in differ in the first place.
-        setHeaderTab('console');
-        console.log(`✅ [A2UI] Console assembled with ${cards.length} cards`);
-
-      } else if (surface === 'composer') {
-        // Extract session from data model
-        const session = dataModel.session || {};
-        const sections = session.left_column?.sections || [];
-        const metadata = dataModel.metadata || {};
-
-        // Map raw_content if available, otherwise construct from sections
-        const leftColumnContent = session.left_column?.raw_content || JSON.stringify({
-          sections: sections.map((s: any, i: number) => ({
-            name: s.name || s.section || s.role || 'Section',
-            content: s.content || '',
-            type: s.type || s.role || s.name || 'custom',
-            position: i,
-            visible: true,
-          }))
-        });
-
-        const assembledSession = {
-          id: session.id || null,
-          userId: 'default-user',
-          title: session.title || dataModel.suggested_title || 'New Prompt Agent',
-          /*
-           * THE DESCRIPTION RIDES THE SAME HOP AS THE WORKSPACE BELOW, and for the same reason:
-           * the surface holds it (`/session/description`) and this object did not carry it, so the
-           * row's copy was undefined for every package opened — and the pre-Run review, which read
-           * this copy, told the person their description was missing while the seat beside the Run
-           * read it off the surface and disabled the button that would have added it. One fact and
-           * one reader now (shared/packageFacts), and this is the copy that reader falls back to.
-           */
-          description: session.description || '',
-          leftColumnContent,
-          compiledOutput: session.middle_column?.compiled_output || '',
-          conversationId: session.right_column?.conversation_id || null,
-          isActive: true,
-          isArchived: false,
-          currentVersion: metadata.version || 1,
-          createdAt: metadata.created_at || new Date().toISOString(),
-          updatedAt: metadata.updated_at || new Date().toISOString(),
-          lastAccessedAt: metadata.last_accessed_at || new Date().toISOString(),
-          metadata: {},
-          is_unsaved: session.is_unsaved ?? !session.id,
-          // THE PLACE IT WAS LEFT, carried through the assembly the way column_widths is —
-          // the backend puts it under /metadata/workspace, and without this hop the reopen
-          // never saw it: the restore effect reads currentPromptSession.workspace, and a
-          // session built here without it reopens "where it was left" only in the record.
-          workspace: metadata.workspace || undefined,
-        };
-
-        setCurrentPromptSession(assembledSession as any);
-        hasUnsavedChangesRef.current = assembledSession.is_unsaved;
-
-        // A repair names its own package, and this is where it lands — not in the
-        // click handler. A repair can be stopped by the unsaved-changes gate and
-        // resumed by the user's answer, and every resumed assembly arrives HERE;
-        // naming it at click time would leave the resumed one called "Untitled
-        // Prompt". Only a fresh package is renamed: repairing from inside an open
-        // package is an edit of that package, not a new one.
-        if (repairTitleRef.current && (assembledSession.is_unsaved || !assembledSession.id)) {
-          const repairTitle = repairTitleRef.current;
-          repairTitleRef.current = null;
-          setCurrentPromptSession((prev: any) =>
-            prev ? { ...prev, title: repairTitle, is_unsaved: true } : prev,
-          );
-        }
-        setHeaderTab('composer');
-        /*
-         * A SURFACE HAS OPENED — the seat may greet.
-         *
-         * WHICH SURFACE MATTERS. A composer with no package behind it is a blank
-         * page: she introduces herself. An EXISTING package is a place the work was
-         * left: she greets from where it stopped, which is useful whether or not
-         * the thread has turns — the turns are what she is greeting about. The
-         * package's id is what tells them apart; a composer being drafted has none.
-         *
-         * SAID TWICE, ON PURPOSE, because the seat may not exist yet. This host
-         * cannot tell the seat apart from the console's — the only property that
-         * differs arrives as an empty array here rather than as absent — and the
-         * seat is created by the commit this handler is part of, so an event alone
-         * is fired before there is anything to hear it. Measured: announced here,
-         * nothing happened; the same event a moment later produced the greeting
-         * immediately. So the fact is RECORDED as well as sent (shared/arrival),
-         * and whichever reaches the seat first is the one that works.
-         */
-        const arrivalKind = session.id ? 'resume' : 'blank';
-        // Only a BLANK composer is announced from here. A package opening is
-        // announced by handleOpenPromptFromConsole, where "a package is being
-        // opened" is a fact rather than something inferred from an id being
-        // present — and this branch also runs when a session surface is re-applied
-        // without anybody opening anything.
-        if (arrivalKind === 'blank') {
-          markArrival('blank');
-          window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
-            detail: { kind: 'blank' },
-          }));
-        }
-
-        // ── HER GREETING, WHEN IT IS ANSWERING SOMETHING ───────────────────────
-        // Every other assembly's ai_message is deliberately NOT posted (see the note
-        // where `aiMessage` is read): an assembly is not a turn, and nobody asked. A
-        // REPAIR is the exception — the person clicked REPAIR and is looking at a form
-        // they cannot finish alone, so the message that describes it answers what they
-        // just did.
-        //
-        // The flag is the SERVER's, set only when the brief actually rode this assembly.
-        // So the greeting is posted only when she was really given it, and a repair whose
-        // brief went missing does not fake one.
-        // Her reply was posted above, by the surface branch — this adds only the half she
-        // must NOT author: one button per answer, wired to `fill-field`. Sent as its own
-        // message on purpose. Hers is prose and these are app-rendered controls, and a
-        // reader can tell those apart; fused into one bubble they would not be able to.
-        if (dataModel.repair_brief && repairAskRef.current?.buttons) {
-          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-            detail: { role: 'assistant', content: repairAskRef.current.buttons },
-          }));
-          console.log('[repair] answer buttons attached under her reply');
-        }
-        // Either way the ask is consumed: a stale ask must not fire on a later assembly.
-        if (dataModel.repair_brief) repairAskRef.current = null;
-
-        console.log(`✅ [A2UI] Composer assembled with ${sections.length} sections`);
-
-      } else if (surface === 'decision') {
-        // ═══════════════════════════════════════════════════════════════════
-        // A2UI v0.9: AI-driven decision dialog
-        // AI returns a decision surface when user action requires confirmation
-        // ═══════════════════════════════════════════════════════════════════
-        const decisionType = dataModel.decision_type;
-        const actions = dataModel.actions || [];
-        const aiMessage = dataModel.ai_message || 'Please make a choice.';
-        const pendingIntent = dataModel.pending_intent || '';
-        const sessionId = dataModel.session_id || null;
-
-        console.log(`🤖 [A2UI] Decision surface: ${decisionType}`, { actions, pendingIntent });
-
-        setAiDecision({
-          show: true,
-          message: aiMessage,
-          actions,
-          pending_intent: pendingIntent,
-          decision_type: decisionType,
-          session_id: sessionId,
-        });
-      }
-
-      setAiAssemblyFailed(false);
-      setAiAssemblyReport(null);
-
-    } catch (error) {
-      clearTimeout(timeoutId);
-      setIsAIAssembling(false);
-
-      // ── THE FALLBACK: the brief had nowhere to land ──────────────────────────
-      // The assembly failed, so there is no greeting to carry the ask. Post the app's
-      // own sentence after all — as the FALLBACK, not as the design. It exists because
-      // a repair whose assembly gives up must still tell the person what is open; the
-      // alternative is a form with no explanation and no way in, which is the state
-      // this whole path replaced.
-      //
-      // Skipped when this request was SUPERSEDED rather than failed — a newer assembly is
-      // already on its way and the brief will ride that one — so it is guarded on the
-      // controller for the same reason the timeout branch below is.
-      if (repairAskRef.current && consoleAssemblyControllerRef.current === controller) {
-        const unspoken = repairAskRef.current;
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: {
-            role: 'assistant',
-            content: [unspoken.text, unspoken.buttons].filter(Boolean).join('\n\n'),
-          },
-        }));
-        repairAskRef.current = null;
-        console.log('[repair] the assembly did not land — the app-authored ask stands in as the fallback');
-      }
-
-      const errMsg = error instanceof Error ? error.message : String(error);
-      const isAbort = error instanceof Error && (
-        error.name === 'AbortError' ||
-        errMsg.toLowerCase().includes('aborted') ||
-        errMsg.toLowerCase().includes('signal')
-      );
-      if (isAbort) {
-        if (consoleAssemblyControllerRef.current === controller) {
-          // This request itself timed out — see ASSEMBLY_TIMEOUT_MS.
-          console.error(
-            `[A2UI] ASSEMBLY TIMED OUT\n` +
-            `  intent: ${intent}\n` +
-            `  timeout: ${ASSEMBLY_TIMEOUT_MS}ms\n` +
-            `  error.name: ${error instanceof Error ? error.name : 'N/A'}\n` +
-            `  error.message: ${errMsg}\n` +
-            `  timestamp: ${new Date().toISOString()}\n` +
-            `  CAUSE: Backend did not respond within ${ASSEMBLY_TIMEOUT_MS / 1000}s. Typical causes: a cold model call slower than usual, backend down, or network failure.\n` +
-            `  FIX: Check backend logs for the request matching this timestamp. Look for "A2UI FAILURE" or PERF TRACE lines.`
-          );
-          // Classified, not hand-written. The client cap fired — but classifyFailure reads the
-          // actual thrown error and the transport facts, so a real 503 that raced the cap is
-          // reported as a 503 rather than being re-labelled a timeout by proximity.
-          const report = classifyFailure(error, { intent, ...failureTransport });
-          setAiAssemblyReport(report);
-          setAiAssemblyMessage(report.headline);
-          setIsFailureAcknowledged(false);
-          setAiAssemblyFailed(true);
-          setCurrentPromptSession(null);
-          // The surface goes with them. <a2ui-renderer> holds its last tree until it
-          // is handed a new one, so a failure that left the previous components in
-          // state would draw a stale console beside the error — the one thing that
-          // looks like a renderer that stopped listening. No envelope, no surface.
-          // The console's cards are READ from this model, so clearing it is also what
-          // clears them: there is no second list left holding the failed assembly.
-          // Cleared for the surface that FAILED, not for both: the other slot's
-          // tree is not stale — it is simply not what this request was for.
-          if (intent === 'render-console') setConsoleTree({ components: [], dataModel: {} });
-          else setWorkspaceTree({ components: [], dataModel: {} });
-        } else {
-          // Previous request was aborted because a newer user action (tab click, etc.) superseded it
-          console.log('[A2UI] Previous assembly superseded by newer request (normal)');
-        }
-      } else {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(
-          `[A2UI] ASSEMBLY FAILED\n` +
-          `  intent: ${intent}\n` +
-          `  error.type: ${error instanceof Error ? error.constructor.name : typeof error}\n` +
-          `  error.name: ${error instanceof Error ? error.name : 'N/A'}\n` +
-          `  error.message: ${errorMessage}\n` +
-          `  error.stack: ${error instanceof Error && error.stack ? error.stack.split('\n').slice(0, 5).join('\n    ') : 'N/A'}\n` +
-          `  timestamp: ${new Date().toISOString()}\n` +
-          `  state: aiAssemblyFailed=true, currentPromptSession=null, the failed surface's tree cleared (cards go with it)`
-        );
-        // The branch that used to live here tested `errorMessage.startsWith('A2UI FAILURE:')`
-        // against a message the throw site prefixed differently ("A2UI Assembly Failed: "), so
-        // it could never match and the structured payload was never shown directly. The
-        // classifier replaces it: the §1 envelope travels in `failureTransport` as an OBJECT,
-        // so its code / surfaceId / path / message survive instead of becoming "[object Object]".
-        const report = classifyFailure(error, { intent, ...failureTransport });
-        setAiAssemblyReport(report);
-        setAiAssemblyMessage(report.headline);
-        setIsFailureAcknowledged(false);
-        setAiAssemblyFailed(true);
-        setCurrentPromptSession(null);
-        // Same reason as the timeout branch above: the renderer paints its last
-        // tree until it is handed another, and a stale surface beside a failure
-        // reads as a live one. Cleared, so the error is the only thing on screen —
-        // and with the model cleared there are no cards left to disagree with it.
-        if (intent === 'render-console') setConsoleTree({ components: [], dataModel: {} });
-        else setWorkspaceTree({ components: [], dataModel: {} });
-      }
-    } finally {
-      isConsoleAssemblyInFlightRef.current = false;
-      consoleAssemblyControllerRef.current = null;
-      setIsAIAssembling(false);
-    }
-  }, [setHeaderTab]);
+  /* MOVED (2026-10-21): the 549-line callback now lives in `@/console/useAssembleSurface`, returned by a hook. */
+  const assembleSurfaceWithAI = useAssembleSurface({ AI_STANDBY_MESSAGE, ASSEMBLY_TIMEOUT_MS, consoleAssemblyControllerRef, currentPromptSessionRef, hasUnsavedChangesRef, headerTabRef, isConsoleAssemblyInFlightRef, lastAssemblyIntentRef, repairAskRef, repairTitleRef, setAiAssemblyFailed, setAiAssemblyMessage, setAiAssemblyReport, setAiDecision, setConsoleTree, setCurrentPromptSession, setHeaderTab, setIsAIAssembling, setIsFailureAcknowledged, setWorkspaceTree });
 
   /**
    * THE CHECKER'S FINDINGS, READ FROM THE REPORT THE CHECKER WROTE.
@@ -6612,14 +4975,9 @@ export default function Index({
     [assembleSurfaceWithAI, loadCatalogFindings],
   );
 
-  // ── Legacy function wrappers for backward compatibility ──
-  const assembleConsoleWithAI = useCallback(() => assembleSurfaceWithAI('render-console'), [assembleSurfaceWithAI]);
-  const assembleComposerWithAI = useCallback((sessionId?: string) => {
-    if (sessionId) {
-      return assembleSurfaceWithAI(`render-session:${sessionId}`);
-    }
-    return assembleSurfaceWithAI('render-composer');
-  }, [assembleSurfaceWithAI]);
+  /* THE BRIDGE'S ARGUMENTS, FILLED HERE — see its call above. Assigning the ref during render is
+     the page's own standing pattern for a stale-closure read (`headerTabRef`, `openComposerRef`). */
+  openCardDepsRef.current = { assembledConsoleCards, assembleSurfaceThenRepairs, guardProductExit, handleHeaderTabChange, productRoomProjectId, refreshEvaluations, repairFindingRef, repairSectionsRef, setPromptLoadKey, setIsAIAssembling, setProductGateDown, setProductRoomProjectId };
 
   // ── error-banner's own events ────────────────────────────────────────────────
   //
@@ -6677,192 +5035,17 @@ export default function Index({
   // everything else→slot="workspace". AI cannot create new surface types
   // or reorganize which slots exist. See assembly audit above.
   // ══════════════════════════════════════════════════════════════════════════
-  /*
-   * DESIGN'S OWN ASSEMBLY — a rendering process of its own, not the Composer's.
-   *
-   * WHAT WAS WRONG, in the owner's words (2026-09-30): *"it runs through the composer's machinery
-   * — so if the composer has its own machinery, then you need to create a rendering process for
-   * design."* A click on Design called `assembleSurfaceThenRepairs`, which is the Composer's
-   * function and does four Composer things along the way: it forces the header tab to Composer
-   * (`setHeaderTab('composer')`), it adopts the package the response names
-   * (`setCurrentPromptSession`), it runs the repair pass, and it consults the unsaved-changes
-   * gate. That is why a click on Design moved the header and left Design working on a prompt
-   * package.
-   *
-   * THIS FUNCTION DOES NONE OF THE FOUR. It asks the server for `render-design`, which resolves
-   * the DESIGN CONTAINER and emits a surface keyed to it, and it writes exactly two values:
-   * `designTree` and `currentDesignSession`. `currentPromptSession` is not in its body, so no
-   * path from Design can write the Composer's state — blindness by construction rather than by a
-   * guard somebody has to remember.
-   *
-   * THE DEVICE IS SHARED — the same renderer draws this tree, because the two experiences are
-   * meant to look alike. A renderer holds no state, so sharing it costs nothing and leaks nothing.
-   */
-  const assembleDesignSurface = useCallback(async () => {
-    setIsAIAssembling(true);
-    try {
-      const response = await apiFetch(`${API_BASE}/ai/assemble-surface`, {
-        method: "POST",
-        body: JSON.stringify({ intent: "render-design" }),
-      });
-      const rawData = await response.json();
-      const read = readA2UIEnvelope(rawData);
-      if (read.ok === false) {
-        console.error(`🤖 [A2UI] ENVELOPE REFUSED for render-design — ${read.refusal.code}: ${read.refusal.message}`);
-        throw envelopeRefusalError(read.refusal);
-      }
-      const reading = read.reading;
-      setDesignTree({
-        components: reading.components as any[],
-        dataModel: reading.dataModel as Record<string, any>,
-      });
-      const designSession = (reading.dataModel as Record<string, any>)?.session ?? null;
-      setCurrentDesignSession(designSession);
-      /*
-       * ── AND THE ROOM'S ARRIVAL IS ANNOUNCED WITH IT (2026-10-01) ─────────────────────────────
-       * THE DESIGN ROOM'S SEAT WAS NEVER TOLD ANYBODY HAD ARRIVED, so it never greeted. Measured
-       * on the live site in the Design room, with every other gate already open:
-       *
-       *     sessionId 5c1212c9…   conversationId 3b191a7e…   _conversationsRead: true
-       *     _hasResultTurns: false   _historyChecked: true   _historyError: ""
-       *     _greeted: false          _wantsGreeting: ""      ← this, and only this
-       *
-       * `_greetIfArriving` returns at its first gate — `if (!kind || this._greeted || …) return` —
-       * and `kind` is `_wantsGreeting`, which only `_takeArrival` sets. The seat's own automatic
-       * arrival does not cover this case either, and correctly so: it fires only for a package with
-       * NO conversation and an EMPTY list, and this package has a conversation (empty, but a real
-       * thread). So the room drew a silent seat while every condition the owner expected was met —
-       * his words: *"whenever you load design, I expect to see the thinking spinner turning and her
-       * getting ready to say something like hi I'm the design system assistant."*
-       *
-       * `markArrival` is called where a package is OPENED — the composer's open, a blank one, and
-       * the console — and Design opens a package too. The id must be the DESIGN package's own, since
-       * `arrivalIsFor` matches on it: with this seat's session it answers, and the console's seat
-       * refuses it and leaves the record where it is, which is the rule that keeps one seat's arrival
-       * from being eaten by another.
-       *
-       * ANNOUNCED HERE AND NOT AT THE CLICK: `currentDesignSession` is read from THIS assembly, so at
-       * the click the id is not yet known and an arrival sent then would carry nothing to match on.
-       * This runs once per open — `assembleDesignSurface` is the tab's own door — so the arrival is
-       * one per arrival, which is what C7 asks for and what a greeting per frame would violate.
-       *
-       * ── AND ONE FRAME LATER, BECAUSE SHE WAS GREETING BEFORE SHE HAD HER WORDS (2026-10-01) ──
-       * `setDesignTree` above is the write that carries THIS ROOM'S SCRIPT to the seat — the design
-       * assembly puts 423 characters at `/session/grace_instructions` ("You built the Lit components
-       * of this design system from Figma…"), and the seat is bound to them. Recording the arrival in
-       * the same tick meant the seat answered it on the render BEFORE those props landed, found
-       * `instructions` empty, and fell back to the script a COMPOSER room is given. Measured on the
-       * live site: her greeting read *"Hi — I'm your prompt engineer. I'll take your rough ideas and
-       * build the actual prompt…"* — the composer's voice, in the design room — and the same seat read
-       * back a moment later carried the design script in full. The owner noticed the wrongness before
-       * the mechanism did: *"seems fake — did she say this?"*
-       *
-       * A FRAME IS THE UNIT BECAUSE THAT IS WHAT IS BEING WAITED FOR: React commits the tree, the seat
-       * receives its props, and the greeting then runs against the room it is actually in. This is not
-       * a delay for its own sake — nothing else is being timed — and it is deliberately not a fixed
-       * millisecond count, which would be a number nobody's system states.
-       */
-        window.requestAnimationFrame(() => {
-          const kind = designSession?.id ? 'resume' : 'blank';
-          const forSeat = designSession?.id ?? null;
-          markArrival(kind, forSeat);
-          /*
-           * ── AND ANNOUNCED, NOT ONLY RECORDED — WHICH IS WHAT WAS MISSING HERE ─────────────
-           *
-           * The other rooms do both, and this one did only the record: the package open and the
-           * console open SEND `a2ui:composer-opened` and record it, because either channel can be
-           * the one that reaches the seat. A record is read by the seat at exactly two moments —
-           * when it connects, and when its `sessionId` changes — and BOTH of those happen in the
-           * commit that drew this tree, a frame BEFORE this callback runs. So the record was
-           * written after the only two reads there are, nothing ever read it again, and Design's
-           * seat sat silent with `wantsGreeting: ''` while every other room greeted.
-           *
-           * Measured 2026-10-01 in production: the Design conversation held zero messages, her
-           * seat carried this room's script and `greeted: false`. It greeted on the machine it
-           * was written on by timing luck — the element connecting after the record existed —
-           * which is exactly the kind of "it worked once" this repository refuses to call done.
-           */
-          window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
-            detail: { kind, sessionId: forSeat },
-          }));
-        });
-    } finally {
-      setIsAIAssembling(false);
-    }
-  }, []);
+  /* THE TOOLS DOOR IS THE SEAT'S OWN. The console's rail announces the tab with
+     `design-tools-open`; `design/DesignRoom` answers it by rendering `design/ToolsSeat`, which
+     assembles ITSELF. Nothing of that seat is mounted, assembled or gated from this file. */
 
   /*
-   * THE PRODUCT ROOM'S OWN ASSEMBLY (2026-10-03) — Design's shape, aimed at
-   * `render-product:{id}`. It writes `productTree` and `currentProductSession` and NOTHING
-   * else: `currentPromptSession` is not in its body, so no path from Product can write the
-   * Composer's state. The arrival is recorded AND announced one frame after the tree lands
-   * — the same ordering Design's own note explains at length: the seat must have THIS
-   * room's words before it answers an arrival.
+   * THE PRODUCT ROOM'S OWN ASSEMBLY (2026-10-03) — aimed at `render-product:{id}`. It writes
+   * `productTree` and `currentProductSession` and nothing else; the arrival is recorded AND
+   * announced one frame after the tree lands.
    */
-  const assembleProductSurface = useCallback(async (sessionId?: string): Promise<void> => {
-    setIsAIAssembling(true);
-    try {
-      /*
-       * THE STAGE'S ELEMENT MUST EXIST BEFORE THE TREE NAMES IT — found by driving, 2026-10-03:
-       * the room assembled and the stage drew a refusal sentence ABOUT ITSELF ("Resolved to
-       * <draft-canvas>, which no element defines — nothing was drawn"). The Composer's draft
-       * view awaits this same lazy import before its tree-write (`loadDraftElements`, whose own
-       * note states the rule); the product path now does the same. A failure here throws before
-       * any tree is set, so the room never draws a stage it cannot fill.
-       */
-      await loadDraftElements();
-      /*
-       * WITH NO ID THE SERVER IS THE DOOR: `render-product` alone is the room's own
-       * get-or-create — the most recent product package, or one born for this arrival
-       * (the console room's and the design room's own shape). The tab click sends exactly
-       * that; a card click sends the package it opened.
-       */
-      const response = await apiFetch(`${API_BASE}/ai/assemble-surface`, {
-        method: "POST",
-        body: JSON.stringify({ intent: sessionId ? `render-product:${sessionId}` : "render-product" }),
-      });
-      const rawData = await response.json();
-      const read = readA2UIEnvelope(rawData);
-      if (read.ok === false) {
-        console.error(`🤖 [A2UI] ENVELOPE REFUSED for render-product — ${read.refusal.code}: ${read.refusal.message}`);
-        throw envelopeRefusalError(read.refusal);
-      }
-      const reading = read.reading;
-      /*
-       * THE SESSION'S OWN REGISTRY LOADS BEFORE THE TREE NAMES ANY COMPONENT — and since
-       * 2026-10-03 this load is LOAD-BEARING, not a courtesy. By the owner's wall
-       * (PLANS.AGENT/multiple-catalogs.md §10) an ingested system's names are no longer in the
-       * app's allowlist; `resolveTag` reads the CHOSEN system's own table (the partition's
-       * fetched registry.json). Found by driving minutes after the wall went in: the stage drew
-       * *"The catalogue does not know \"ag-select\""* for a session whose own registry maps it —
-       * the map was never fetched on this path (the Composer's draft view has awaited this since
-       * the step that built it; `showDraftColumn`). ABSENT IS A REAL ANSWER — no system chosen
-       * means the app's own tables resolve the draft. A load that FAILS throws BEFORE the tree
-       * is set, so the room never draws a stage whose names it could not resolve.
-       */
-      const chosenSystem = String(
-        ((reading.dataModel as Record<string, any>)?.session?.design_system) || '',
-      );
-      if (chosenSystem) await loadSystemRegistry(chosenSystem);
-      setProductTree({
-        components: reading.components as any[],
-        dataModel: reading.dataModel as Record<string, any>,
-      });
-      const productSession = (reading.dataModel as Record<string, any>)?.session ?? null;
-      setCurrentProductSession(productSession);
-      currentProductSessionRef.current = productSession;
-      window.requestAnimationFrame(() => {
-        const kind = productSession?.session_id ? 'resume' : 'blank';
-        const forSeat = productSession?.session_id ?? null;
-        markArrival(kind, forSeat);
-        window.dispatchEvent(new CustomEvent('a2ui:composer-opened', {
-          detail: { kind, sessionId: forSeat },
-        }));
-      });
-    } finally {
-      setIsAIAssembling(false);
-    }
-  }, []);
+  /* MOVED (2026-10-21): the 64-line callback now lives in `@/rooms/product/useAssembleProductSurface`, returned by a hook. */
+  const assembleProductSurface = useAssembleProductSurface({ currentProductSessionRef, setCurrentProductSession, setIsAIAssembling, setProductTree });
 
   /*
    * THE CHOOSER'S WRITE IS GONE (2026-10-03, late) — REMOVED WITH THE CHOOSER, NOT DISABLED.
@@ -6915,255 +5098,12 @@ export default function Index({
     }
   }, []);
 
-  /*
-   * ══ THE INGEST FORM IN THE ROOM, ANSWERED HERE ══════════════════════════════════════════════
-   *
-   * The room's left column holds the ingestion rail: `figma-ingest-form` (the Figma URL, the Notes
-   * and Submit) over `figma-layers-view` (the catalogue tree). The tree needs nothing from this
-   * shell. The FORM does: its Submit dispatches `ingest-submit` with the raw text and NOTHING ELSE,
-   * because deciding what a typed string means — a Figma URL, a node tag (f-1234-5678), a layer's
-   * name — is `IngestModal.handleIngest`'s logic, and one place decides it.
-   *
-   * SO THIS IS THE HALF THAT KNOWS: it takes the text, parses it with the SAME parser the modal
-   * uses (`@/utils/figmaUrl`, imported, never re-written), and runs the SAME call the modal runs —
-   * `POST /api/figma/ingest` with `{jobId, fileKey, nodeId, notes, sessionId, sessionTitle}`. A
-   * second implementation of the ingest living in the shell is exactly what this avoids: there is
-   * one endpoint and one body shape, and both callers send it.
-   *
-   * THE TWO PROPS THE ELEMENT REFUSES TO DECIDE ARE SET HERE. `busy` is true from the moment the
-   * call leaves until it answers, and `message` carries whatever refused — the host's words, because
-   * only the caller that made the call knows. They are written by patching the emitted component,
-   * since the form is drawn by the renderer inside the surface and not by React: the surface's
-   * components ARE its props.
-   *
-   * WHAT IS NOT HERE, SAID PLAINLY: the modal's other two paths. A typed node tag opens an existing
-   * component (`openByTag`) and a typed name searches the file (`findByName`); both need the
-   * modal's selection machinery and neither is wired into the room yet. A tag or a name sent from
-   * this form reports that it cannot be opened here rather than failing silently.
-   */
-  const [designIngestBusy, setDesignIngestBusy] = useState(false);
+  /* THE INGEST IS THE TOOLS FOLDER'S (`design/tools/ToolsSeat.tsx`). The copy that lived here was
+     dead — the Design tab renders DesignRoom, and the tool owns its own handlers. */
 
-  /*
-   * THE CHANNEL THAT ACTUALLY REACHES THE ELEMENT — AND THE ONE THAT DOES NOT.
-   *
-   * Learned the hard way, measured on the running room: patching the emitted COMPONENT does not
-   * reach anything. `a2ui-renderer.updated()` re-applies props when the DATA MODEL changes and
-   * returns early when the COMPONENTS change (`if (!changed.has('dataModel') ||
-   * changed.has('components')) return`), so a shell that sets `busy` on the component writes into
-   * a channel nothing reads — the owner pressed Submit and the form sat there with no message
-   * while the work happened behind it.
-   *
-   * So the state goes where this repository puts content: the data model, under `/session/ingest`,
-   * which the form's `busy`/`message` and the tree's `refresh` are bound to. One write, and the
-   * renderer re-hands every bound prop.
-   */
-  const setDesignIngest = useCallback(
-    (patch: { busy?: boolean; message?: string; refresh?: number }) => {
-      setDesignTree((prev) => {
-        const session = (prev.dataModel as Record<string, any>)?.session ?? {};
-        const ingest = { busy: false, message: "", refresh: 0, ...(session.ingest ?? {}), ...patch };
-        return {
-          ...prev,
-          dataModel: {
-            ...prev.dataModel,
-            session: { ...session, ingest },
-          },
-        };
-      });
-    },
-    [],
-  );
 
-  useEffect(() => {
-    const onIngestSubmit = async (event: Event) => {
-      const detail = (event as CustomEvent<{ url?: string; notes?: string }>).detail ?? {};
-      const typed = String(detail.url ?? "").trim();
-      if (!typed || designIngestBusy) return;
+  /* The ingest is answered by `design/tools/ToolsSeat.tsx`. */
 
-      setDesignIngestBusy(true);
-      setDesignIngest({ busy: true, message: "" });
-      try {
-        /*
-         * THE INGEST'S OWN WORDS, VERBATIM — NOT A PARAPHRASE. The owner, on the messages in the
-         * ingest form: *"we worked very hard on that react component for ingest figma file to make
-         * sure that the messages and the feedback were all accurate."* So these strings are copied
-         * from `IngestModal.handleIngest` EXACTLY, and they must stay identical:
-         *   "That is neither a Figma URL nor a component id (f-1234-5678)."   — IngestModal.tsx:969
-         *   "The URL needs a node — add ?node-id=… (a file link has no single component to ingest)."
-         *                                                                     — IngestModal.tsx:974
-         * A second wording for one refusal is a second answer to the same question, and the two
-         * would drift. (Better still would be to lift them into one shared module and have both
-         * files read them; the modal is the ingest's own component and this shell is not the place
-         * to move its text, so they are copied here with the source named.)
-         */
-        const neitherUrlNorTag = "That is neither a Figma URL nor a component id (f-1234-5678).";
-        const needsANode =
-          "The URL needs a node — add ?node-id=… (a file link has no single component to ingest).";
-
-        // A LAYER'S NAME IS NOT AN ERROR — it is the search path, and the modal runs it. Not wired
-        // here yet, and said plainly rather than dressed up as a broken link.
-        // A NODE TAG IS ITS OWN PATH AND IT IS NOT WIRED — measured, from the audit: the guard
-        // below used to let `f-1234-5678` through to `parseFigmaUrl`, whose `new URL(...)` throws on
-        // a non-URL, so the person saw "Invalid URL" — a message about a link they did not type.
-        // The tag path is `openByTag` in the modal and it is not carried yet; saying that is the
-        // truth, and it is not the same sentence as "that is not a Figma URL".
-        if (/^f-\d/.test(typed)) {
-          setDesignIngest({
-            busy: false,
-            message: `Opening a component by tag (${typed}) is not wired into this room yet — paste the Figma link with ?node-id=… to ingest, or pick the component in the list.`,
-          });
-          return;
-        }
-        if (!/^https?:\/\//i.test(typed)) {
-          setDesignIngest({
-            busy: false,
-            message: `${neitherUrlNorTag} Searching by layer name is not wired into this room yet.`,
-          });
-          return;
-        }
-        const { fileKey, nodeId } = parseFigmaUrl(typed);
-        if (!fileKey || !nodeId) {
-          setDesignIngest({ busy: false, message: needsANode });
-          return;
-        }
-        const jobId = generateUuid();
-        // THE ROOM SAYS WORK STARTED — here, where the request actually starts, and not at the
-        // submit: the guards above can return without a request, and a wait that nothing would
-        // end must not begin (see workspace-layout's `_onIngestStarted`). The settle goes out in
-        // `finally` below for the same reason read backwards: every outcome ends the wait.
-        window.dispatchEvent(new CustomEvent('ingest-started'));
-        const res = await apiFetch(`${API_BASE}/figma/ingest`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            // One id for the job, held here because the preview carries it: an approve resolves
-            // this job, so the value that goes out is the value the preview must hand back.
-            jobId,
-            fileKey,
-            nodeId,
-            notes: String(detail.notes ?? ""),
-            sessionId: currentDesignSession?.id ?? "",
-            sessionTitle: currentDesignSession?.title ?? "",
-          }),
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.detail || "Failed to ingest");
-        // ── RUN ONE LANDS HERE: THE INGEST'S ANSWER BECOMES THE PREVIEW ────────────────────────
-        // Read exactly as the modal reads it (`data?.result ?? data`), because it is the same
-        // response: the tag it built, the node it measured, and whether the catalogue already held
-        // that tag — which is what makes the approve button say REPLACE instead of add.
-        const result = (data?.result ?? data ?? {}) as Record<string, any>;
-        const details = (result.details ?? {}) as Record<string, any>;
-        /*
-         * ── THE DRAFT'S OWN ADDRESS, TAKEN FROM THE ANSWER AND NOT WORKED OUT HERE ────────────
-         *
-         * The backend writes the draft to a temporary file (`.preview/<jobId>/<tag>.ts`, outside
-         * `src/` and unrelated to the catalogue) and returns where it put it (`result.preview`,
-         * see `_preview_module` in backend/routes/figma.py). That address is what the third column
-         * loads, because THE TAG ALONE IS NOT AN ADDRESS: a re-ingest of a node the catalogue
-         * already holds builds a draft under the same tag as the approved element, so a client left
-         * to derive the path from the name draws the approved component instead of the change. The
-         * shell therefore derives nothing and passes the answer's own two fields through.
-         *
-         * IT IS ALSO WHY NO `component` IS NAMED FOR THE DRAWING. Naming a component here means the
-         * renderer resolves that name through the catalogue — the exact resolution that showed the
-         * owner the old element after he edited Figma.
-         */
-        const draft = (result.preview ?? null) as
-          | { jobId?: string; tag?: string; modulePath?: string; moduleUrl?: string }
-          | null;
-        const hasAddress = !!draft?.moduleUrl;
-        /*
-         * ── THE COMPILE VERDICT, CARRIED FROM THE INGEST FORM (one for one) ──────────────────────
-         *
-         * The form states it above the draft's facts — "Generated code does not compile — approval
-         * will be refused:" with the compiler's own message per tag (IngestModal.tsx, DraftDetails)
-         * — and the room drew a draft without saying whether it builds, so the designer's first
-         * hint was the preview failing to load. `validation` is the ingest's own esbuild verdict on
-         * each draft and it travels on the result; a tag with no entry is not a failure (the commit
-         * reads a missing verdict as "ok", and this reads it the same way).
-         */
-        const validation = (result.validation ?? {}) as Record<string, { ok?: boolean; error?: string }>;
-        const builtTag = String(result.tag ?? details.target_tag ?? "");
-        /*
-         * ── THE QUESTION THE DESIGNER HAS TO ANSWER, CARRIED WITH THE PREVIEW ────────────────────
-         *
-         * The ingest answers with the layers whose NAME the design system already has on a DIFFERENT
-         * component (`nameCollisions`) and the layers that ARE a component it already ships drawn
-         * elsewhere (`nameInstances`) — the same two lists the ingest tool shows above its preview
-         * (IngestModal.tsx). They ride in the preview state so the panel can ask, and the ANSWER
-         * rides back the same way, which is what makes the collide case a decision instead of a
-         * default: an unanswered question commits as "add it as its own component", exactly as the
-         * tool's does.
-         */
-        const collisions = Array.isArray(result.nameCollisions) ? result.nameCollisions : [];
-        const instances = Array.isArray(result.nameInstances) ? result.nameInstances : [];
-        const compile = validation[builtTag];
-        const compileFailed = compile?.ok === false;
-        const compileLine = compileFailed
-          ? `Generated code does not compile — approval will be refused: ${builtTag}: ${
-              compile?.error || "the compiler gave no message"
-            }.`
-          : "Built from the Figma node you submitted. Approving writes it into the catalogue.";
-        setDesignPreview({
-          source: "ingest",
-          tag: builtTag,
-          name: details.target_node_name ?? "",
-          nodeId: details.target_node_id ?? nodeId,
-          alreadyInCatalogue: !!result.alreadyInCatalogue,
-          jobId,
-          draft,
-          collisions,
-          instances,
-          // THE DATA BINDING, IN THE PREVIEW — what this component will be given, from the rows the
-          // database holds (see `previewValues`). A tag with no row yet carries an empty list, which
-          // is a component being created rather than a value being hidden.
-          values: previewValues(
-            ((designTree.dataModel as Record<string, any>)?.session?.elements ?? []) as any[],
-            builtTag,
-          ),
-          // THE ANSWER STARTS UNSET, and unset means "add it as its own component" — the same
-          // default the tool commits as, stated in the panel's own consequence line.
-          collisionAnswer: null,
-          // THE FORM'S OWN WORDS, in the form's own order: the compile verdict first, because it is
-          // the one that changes what the next click does — then the no-address refusal, which is
-          // the form's pane-level sentence ("...a preview does not ask the catalogue what could
-          // draw it") extended with the one diagnostic the room has no other place for.
-          note: [
-            compileLine,
-            hasAddress
-              ? ""
-              : `Nothing to render — the ingest produced no element to draw, and a preview does not ask the catalogue what could draw it. (No draft address came back for job ${jobId}; the record is in backend/logs/figma-ingest.jsonl.)`,
-          ]
-            .filter(Boolean)
-            .join(" "),
-          facts: [
-            // STATED EITHER WAY. "It compiles" is a fact the form reports, and a fact left out when
-            // it is fine, and out when it is not, is silence in both directions.
-            { label: "Compiles", value: compileFailed ? "no — the approval will be refused" : "yes" },
-            { label: "Figma node", value: String(details.target_node_id ?? nodeId) },
-            details.target_node_name ? { label: "Layer", value: String(details.target_node_name) } : null,
-            details.target_node_type ? { label: "Type", value: String(details.target_node_type) } : null,
-            details.target_node_size ? { label: "Size", value: String(details.target_node_size) } : null,
-          ].filter(Boolean) as Array<{ label: string; value: string }>,
-        });
-        // The ingest also recorded this design's layers — read them back so the tree shows the node
-        // it just wrote, which is what the modal does with its own `layersKey`.
-        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
-      } catch (err) {
-        setDesignIngest({
-          busy: false,
-          message: err instanceof Error ? err.message : "Unknown error",
-        });
-      } finally {
-        setDesignIngestBusy(false);
-        // Success, a refusal, a network failure — every outcome settles the room's wait.
-        window.dispatchEvent(new CustomEvent('ingest-settled'));
-      }
-    };
-    window.addEventListener("ingest-submit", onIngestSubmit);
-    return () => window.removeEventListener("ingest-submit", onIngestSubmit);
-  }, [designIngestBusy, setDesignIngest, currentDesignSession]);
 
 
 
@@ -7222,182 +5162,8 @@ export default function Index({
    *
    * Clearing it (null) closes the column again — a Discard leaves the room as it was before the run.
    */
-  const setDesignPreview = useCallback((preview: Record<string, any> | null) => {
-    setDesignTree((prev) => {
-      const session = (prev.dataModel as Record<string, any>)?.session ?? {};
-      const tag = preview?.tag ? String(preview.tag) : "";
-
-      /*
-       * WHAT THIS SURFACE CAN DRAW, DECIDED BEFORE THE TREE IS WALKED.
-       *
-       * A REFERENCE TO AN ELEMENT THAT DOES NOT EXIST IS NOT DRAWN. The renderer reports it
-       * faithfully ("Resolved to <agent-flow>, which no element defines — nothing was drawn"), and
-       * that report is correct but it is not what this room should say: this room draws the design
-       * system's components, and what has no element here is named in words on the preview instead
-       * of drawn as a hole. `resolveTag` is the renderer's OWN resolver — imported, not
-       * re-implemented — so this can never disagree with what would be drawn.
-       *
-       * AND IT IS COMPUTED HERE, ABOVE THE MAP, FOR A MEASURED REASON: the callback below reads it,
-       * and the callback runs while the chain is being built. Declared after the chain it was in its
-       * temporal dead zone — `Cannot access 'drawable' before initialization` — which threw inside
-       * this element's effect and took the whole page down through the error boundary. The crash the
-       * owner saw was mine, and it was a `const` in the wrong place, not a leftover React callback.
-       */
-      const resolved = preview && tag ? resolveTag(tag) : null;
-      const drawable = !!resolved && !!customElements.get(resolved);
-
-      /*
-       * ── AND WHICH RUN PRODUCED THIS, BECAUSE THE TWO ARE DRAWN DIFFERENTLY ──────────────────
-       *
-       * A SUBMIT PRODUCES A DRAFT; A CLICK PRODUCES A COMPONENT. The two are NOT interchangeable
-       * even when they carry the same name — and that is the ordinary case here: a designer edits
-       * Figma and submits a node the catalogue already holds, so the draft's tag and the approved
-       * component's tag are the same string. Drawing that string means asking the renderer to
-       * resolve it, and the renderer resolves a name through the CATALOGUE — so the room drew the
-       * approved component and the fresh draft was never on screen at all. The owner, 2026-09-30:
-       * *"when I go to preview a change, I'm not seeing a change. I'm seeing the old lit component
-       * because it has the same name. It's just reloading it from the lit catalog. I want to use the
-       * temporary folder and it should be blind to whatever is in the lit catalog until I click
-       * approve."*
-       *
-       * SO A DRAFT IS DRAWN BY ITS FILE AND A CLICK BY ITS NAME. The draft's address travels on the
-       * ingest result (`preview.draft`: jobId, tag, modulePath, moduleUrl — the temporary file the
-       * backend wrote under `.preview/<jobId>/`), and `<draft-preview>` loads exactly that file
-       * inside a sandboxed document that cannot read the catalogue at all. A ROW CLICK KEEPS ITS
-       * CURRENT PATH: that component IS in the catalogue, so resolving its name is not a guess —
-       * it is the answer, and its bindings come with it.
-       */
-      const draft = preview?.source === "ingest" ? preview?.draft ?? null : null;
-      const drawsDraft = !!draft?.moduleUrl;
-
-      /*
-       * ── AND WHEN AN INGEST ANSWERS WITHOUT AN ADDRESS, NOTHING IS DRAWN. IT IS NOT FALLEN BACK.
-       *
-       * The tempting line here is "no address, so draw the catalogue's element under the tag" — and
-       * that line IS the defect this column was fixed to remove: it is how a designer who had just
-       * changed the design was shown the approved component instead. A missing address means the
-       * answer cannot say WHICH file it built, so the honest drawing is none, with the reason on the
-       * preview where the designer is looking. Substituting the catalogue's element would put a
-       * component on screen under a name that has two candidates — the exact ambiguity that started
-       * this (owner, 2026-09-30: *"I'm not seeing a change. I'm seeing the old lit component because
-       * it has the same name."*). A row clicked in the tree keeps the catalogue path, because there
-       * the component IS the catalogue's and the name is not ambiguous.
-       */
-      const drawsCatalogue = preview?.source !== "ingest" && !!preview && !!tag && drawable;
-
-      const components = prev.components
-        .filter((c: any) => {
-          // ONE RUN DRAWS ONE THING, so whichever drawing this run did not produce is REMOVED
-          // rather than left in the list — a stale entry kept behind is an entry a reference could
-          // still point at.
-          if (c.id === "preview-draw") return drawsDraft;
-          if (c.id === "preview-target") return drawsCatalogue;
-          return true;
-        })
-        .map((c: any) => {
-          // THE LAYOUT REFERENCES THE COLUMN — a column nothing references is not drawn.
-          if (c.id === "root") {
-            if (!c.children || typeof c.children !== "object") return c;
-            const children = { ...c.children };
-            if (preview) children.middle = "design-middle";
-            else delete children.middle;
-            return { ...c, children };
-          }
-          // THE PREVIEW NAMES ITS OWN DRAWING, by id, per the adjacency rule. The renderer
-          // instantiates it into the frame's slot — the frame component-preview renders — so the
-          // component a run loaded is DRAWN, not only described. A tag the resolver cannot claim is
-          // reported inside that frame by the renderer itself, never silently skipped.
-          if (c.id === "preview") {
-            return {
-              ...c,
-              children: drawsDraft
-                ? { draw: "preview-draw" }
-                : drawsCatalogue
-                  ? { draw: "preview-target" }
-                  : {},
-            };
-          }
-          // THE DRAFT, DRAWN FROM ITS OWN FILE. The element is bound to `/session/preview/draft` —
-          // the address the ingest returned — and it loads that module in a sandboxed document. No
-          // catalogue name is resolved for this drawing, which is the whole point of it.
-          if (c.id === "preview-draw") {
-            return { ...c, component: "draft-preview", draft: { path: "/session/preview/draft" } };
-          }
-          if (c.id === "preview-target") return { ...c, component: tag || c.component };
-          return c;
-        });
-
-      // The entry the reference points at. Emitted by the SHELL because WHICH component to draw is
-      // the run's answer and not the assembly's — the same reason the Composer's RUN moves a view
-      // into its middle column instead of the assembly guessing what was run.
-      if (drawsDraft) {
-        if (!components.some((c: any) => c.id === "preview-draw")) {
-          components.push({
-            id: "preview-draw",
-            component: "draft-preview",
-            draft: { path: "/session/preview/draft" },
-          });
-        }
-      } else if (drawsCatalogue && !components.some((c: any) => c.id === "preview-target")) {
-        /*
-         * PUSHED ONLY WHEN IT IS NOT THERE, and the guard is the whole of a bug the surface reported
-         * on itself (measured 2026-09-30): *"Surface has 1 problem — these were NOT rendered as
-         * written. preview-target ai-surface-sandbox: Duplicate id "preview-target" — ids are the
-         * join key for children, so the later entry replaced the earlier one."*
-         *
-         * The filter above KEEPS this entry while a catalogue component is being drawn, so pushing it
-         * again on every row click made two entries under one id — and the renderer's report is
-         * exactly right about the consequence: one of them was thrown away, silently, at render
-         * time. The entry's `component` is kept current by the map above (`component: tag ||
-         * c.component`), so this push exists for the FIRST row and nothing else.
-         */
-        // AND IT CARRIES THE COMPONENT'S OWN BINDINGS. Measured on the first build of this: the
-        // entry named the tag and nothing else, so the preview drew a real <trace-feed> whose
-        // `entries` prop was unset — the component rendered, in its frame, saying "waiting for the
-        // surface to bind /trace/entries". That is not that component's empty state; it is THIS
-        // ROOM holding the rows and not handing them over, and the owner read it on screen exactly
-        // as the failure it is (2026-09-30: *"I need to see failures. It should fail loud. Waiting
-        // for the surface to bind /trace/entries."*). So the room's OWN entry for the same
-        // component is cloned when there is one (the room already names TraceFeed as `trace-view`,
-        // bound to `/trace/entries`), and its paths come with it. Where the room holds no entry for
-        // that component, the bare name is all there is — and that component's own empty state is
-        // then the truth, not a defect.
-        //
-        // THE TWIN IS FOUND BY THE ELEMENT, NOT BY THE SPELLING. Comparing `c.component === tag`
-        // missed the pairing that matters: the room's entry says `TraceFeed` and the tree's row says
-        // `trace-feed`, and those are two names for one element — `resolveTag` is the app's own
-        // answer to "which element does this name draw", so it is the answer used here. Two names
-        // for one element matched by string equality is how an element came to be drawn without the
-        // data that was sitting in the model beside it.
-        const twin = prev.components.find(
-          (c: any) =>
-            c.id !== "preview-target" &&
-            c.id !== "preview-draw" &&
-            typeof c.component === "string" &&
-            resolveTag(c.component) === resolved,
-        );
-        components.push({ ...(twin ? { ...twin } : {}), id: "preview-target", component: tag });
-      }
-
-      return {
-        ...prev,
-        components,
-        dataModel: {
-          ...prev.dataModel,
-          session: {
-            ...session,
-            /*
-             * `/session/preview` IS WHAT THE FRAME DRAWS (component-preview: identity, facts, the two
-             * actions) AND `/session/preview/draft` IS WHAT THE DRAWING LOADS — the last ingest's
-             * address, read by <draft-preview> for the frame's "draw" slot. One run, one write, and
-             * the two readers take the half that is theirs; nothing derives the other's half.
-             */
-            preview: preview ?? undefined,
-          },
-        },
-      };
-    });
-  }, []);
+  /* MOVED (2026-10-21): the 175-line callback now lives in `@/design/useDesignPreview`, returned by a hook. */
+  const setDesignPreview = useDesignPreview({ setDesignTree });
 
   /*
    * ══ HER COLUMN'S WIDTH — ONE PLACE THAT DECIDES IT, AT THE TWO MOMENTS THAT DECIDE IT ═════════
@@ -7488,677 +5254,18 @@ export default function Index({
   }, [isDesignView, designTree]);
 
   useEffect(() => {
-    /** The room's own rows, read fresh — the rows a row-click resolves against. */
-    const rowsOf = () => ((designTree.dataModel as Record<string, any>)?.session?.elements ?? []) as any[];
 
-    // ── RUN ONE: A ROW CLICKED IN THE TREE ──────────────────────────────────────────────────────
-    // `figma-layers-view` is a NAVIGATION and says so in its own words ("clicking a row is how you
-    // get to that component… a tree whose rows only expand is a list of names you cannot go anywhere
-    // from"). It dispatches `open-component` and nothing had ever answered it.
-    const onOpenComponent = async (event: Event) => {
-      const detail = (
-        event as CustomEvent<{
-          tag?: string;
-          facts?: Array<{ label: string; value: string }>;
-          description?: string;
-        }>
-      ).detail;
-      const tag = String(detail?.tag ?? "");
-      if (!tag) return;
-      /*
-       * ── THE ROW'S OTHER FACTS ARRIVE WITH THE CLICK (owner, 2026-09-30) ─────────────────────
-       *
-       * A component row in the list shows three things now — the name, the code and the description
-       * — and the owner's rule for what it no longer shows is *"the other data should be in the
-       * metadata in the preview panel."* That data is measured by the TREE (it read the catalogue
-       * and the audit), so the tree sends it with the click and this writes it down; re-deriving it
-       * here — fetching the audit again, resolving the drawn-by index again — would be a second
-       * reader of the same facts, and the two would eventually disagree about the row the designer
-       * is looking at.
-       *
-       * THE ROOM'S OWN MODEL STILL CONTRIBUTES what the catalogue cannot know: which catalogues
-       * declared the tag, whether it was ingested, when, and the last verdict. Labels already
-       * carried by the click are skipped, so the panel never shows one fact twice.
-       */
-      const carried = Array.isArray(detail?.facts) ? detail.facts : [];
-      const carriedLabels = new Set(carried.map((f) => f.label));
-      /*
-       * AND THE CANVAS IS NOT LOADED FOR THIS ROOM. An earlier pass called the Composer's
-       * `loadCanvasElements()` here so that a preview of the AgentFlow row would draw. The owner,
-       * 2026-09-30: *"Make sure you've got — we don't need canvas elements. This thing is
-       * completely different from the composer, it's just using the same. … This is not agent flow."*
-       * He is right: the canvas is the COMPOSER's drawing surface, and this room draws components of
-       * the design system. Pulling the Composer's canvas, its artwork and its code into this column
-       * to satisfy one row would be exactly the conflation he is warning against. What a row whose
-       * element is not part of this surface gets instead is said in words, below.
-       */
-      const row = rowsOf().find((r) => r.id === tag || r.name === tag || r.key === tag);
-      // WHAT THIS SURFACE CAN DRAW, SAID RATHER THAN LEFT AS A HOLE. The Composer's canvas pair
-      // (`AgentFlow` / `RoomEmbed`) are catalogue entries of the design system but not elements
-      // of this interface — its drawings belong to the Composer's run view and are not loaded here
-      // on purpose. A row like that gets its facts and one sentence, which is the truth about it;
-      // an empty frame would read as a failure and a renderer error would read as a bug.
-      const resolvedTag = resolveTag(tag);
-      const drawableHere = !!resolvedTag && !!customElements.get(resolvedTag);
-      setDesignPreview({
-        source: "open",
-        tag,
-        name: row?.name ?? tag,
-        // THE SAME DATA BINDING A DRAFT CARRIES (see `previewValues`): a row opened from the list is
-        // the component the catalogue holds, and these are the values it is given in the room.
-        values: previewValues(rowsOf(), tag),
-        note: drawableHere
-          ? /*
-             * THE DESCRIPTION IN FULL, FROM THE ROW THAT CARRIED IT. The tile shows the catalogue's
-             * first sentence (the design's line is one line); the whole text is what belongs in the
-             * panel, and it is also what a row with no model row behind it has. Where neither the
-             * tree nor the model has one, that absence is said rather than left blank — a blank line
-             * under a drawn component reads as "there is nothing to know about this one", a claim
-             * nobody made.
-             */
-            detail?.description ||
-            row?.description ||
-            `No description is recorded for "${tag}" on this surface — the element is drawn, and what is known about it is not.`
-          : `${row?.name ?? tag} is declared in the catalogue but has no element on this surface${resolvedTag ? ` (${resolvedTag})` : ""} — its drawing belongs to the Composer's run view, and this column draws the design system's components.`, 
-        alreadyInCatalogue: row ? !row.removed : true,
-        facts: (() => {
-          /*
-           * THE ROW'S OWN FACTS FIRST — they are about the component itself (its shape, what draws
-           * it, whether the app uses it, what it accepts, the audit's verdict, the node it came
-           * from). The room's model follows with what only it knows.
-           *
-           * AND NOTHING IS SAID TWICE. Two labels carrying one sentence is not two facts: the
-           * model's `status` and its last verdict are often the same catalog-check string, so
-           * TraceFeed's panel read "Ingestion: catalog-check: …" and "Last verdict: catalog-check:
-           * …" one line apart (measured 2026-09-30). A LABEL already carried by the click is
-           * skipped, and so is a VALUE already shown — whichever label reached it first keeps it,
-           * because the second telling adds nothing a reader can use.
-           */
-          const said = new Set(carried.map((f) => f.value));
-          const add = (f: { label: string; value: string } | null) => {
-            if (!f || said.has(f.value)) return null;
-            said.add(f.value);
-            return f;
-          };
-          /*
-           * THE VERDICT IS LISTED BEFORE THE STATUS, so that a row whose status IS the verdict —
-           * which is most of these rows, the catalog-check string — shows it once, under the label
-           * that names it: "Last verdict". A row whose status is a status ("Not ingested",
-           * "ingested") is untouched, because the two values differ and both are kept.
-           */
-          return [
-            ...carried,
-            add(row?.catalogs ? { label: "Catalogues", value: String(row.catalogs) } : null),
-            add(row?.last_ingest?.verdict ? { label: "Last verdict", value: String(row.last_ingest.verdict) } : null),
-            add(
-              row?.figma?.node_id && !carriedLabels.has("Figma node")
-                ? { label: "Figma node", value: String(row.figma.node_id) }
-                : null,
-            ),
-            add(row?.status ? { label: "Ingestion", value: String(row.status) } : null),
-          ].filter(Boolean) as Array<{ label: string; value: string }>;
-        })(),
-      });
-    };
+    /* THE PREVIEW'S ACTS AND THE CARD DOOR ARE THE TOOLS FOLDER'S (`design/tools/ToolsSeat.tsx`).
+       Nothing is registered here; two registrations would run every action twice. */
+  }, [designTree, setDesignPreview]);
 
-    // ── THE PREVIEW'S TWO ACTS ─────────────────────────────────────────────────────────────────
-    const onPreviewApprove = async (event: Event) => {
-      const preview = (event as CustomEvent<{ preview?: Record<string, any> }>).detail?.preview;
-      const jobId = preview?.jobId;
-      // A row opened from the list has no job behind it: that component is already in the
-      // catalogue, and approving it is not a thing this room can do. Said plainly rather than
-      // firing a call that cannot succeed.
-      if (!jobId) {
-        setDesignIngest({ busy: false, message: "That component is already in the catalogue — there is nothing to approve. Approve is for a component an ingest just built." });
-        return;
-      }
-      setDesignIngest({ busy: true, message: "" });
-      try {
-        const res = await apiFetch(`${API_BASE}/figma/commit`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jobId,
-            /*
-             * THE DESIGNER'S ANSWER OUTRANKS THE TAG'S OWN HISTORY. A collision answer names the
-             * component this draft is to be written UNDER, replacing it — that is the one thing the
-             * question exists for. With no answer, the room keeps the behaviour it had: a tag the
-             * catalogue already holds is replaced by this draft (the re-ingest case), and a new one
-             * is added. An unanswered collision commits the same way the tool's does — as its own
-             * component — which is the default the panel states in words.
-             */
-            overwriteTag: preview?.collisionAnswer || (preview?.alreadyInCatalogue ? preview?.tag : undefined),
-          }),
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.detail || "Approve failed");
-        const written = Array.isArray(data?.written) ? data.written.length : 0;
-        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
-        /*
-         * THE DRAWING DOES NOT MOVE. The component is in the catalogue now, and the tempting next
-         * step — re-point the column at the catalogue's element, since it holds these bytes — is
-         * exactly the resolution this column was fixed to stop doing: it would re-render the
-         * drawing through the catalogue, and for a re-ingest of an existing node that is where the
-         * room already showed the owner the wrong element once. What was approved stays what is
-         * drawn, from the draft's own file, and the note says what happened.
-         *
-         * `jobId` IS DROPPED so the approve is spent: the server dropped the draft with the commit
-         * (`_drop_preview`), so a second press has nothing behind it. With no job on the preview,
-         * the press answers with the sentence for "already in the catalogue" instead of firing a
-         * call that can only 404.
-         */
-          /*
-           * THE APPROVE STAYS IN THE ROOM — NO RELOAD, NO TRIP TO THE CONSOLE (owner, 2026-10-09).
-           *
-           * The list on the left is made of TEXT ROWS (`figma-layers-view`), not live renderings of
-           * the components, and it re-reads its files when the host bumps `refresh` — which the call
-           * above this comment already did. So approving refreshes the list in place: the row appears
-           * (or its facts update) right here, in the Design room, and the confirmation below is what
-           * the person sees. A full page reload was the old mechanism, and it is what threw the
-           * person out of the room: a reload has no memory of which room it left, and a fresh load
-           * with no session in the URL boots to the Console. The owner: approving "should approve it
-           * and give a confirmation and I should see the component pop-up in that list on the
-           * left-hand side" — it was never meant to leave the room.
-           *
-           * THE DRAFT ADDRESS IS CLEARED, so the frame does not reach for the temporary file the
-           * commit just deleted (`_drop_preview`): the confirmation replaces the drawing, and the
-           * component's new home is the list on the left.
-           */
-          setDesignPreview({
-            ...preview,
-            jobId: undefined,
-            draft: null,
-            alreadyInCatalogue: true,
-            note:
-              `Approved into the catalogue${written ? ` — ${written} file${written === 1 ? "" : "s"} written` : ""}. ` +
-              `The list on the left now reads the new file, and the room stays put.`,
-          });
-      } catch (err) {
-        setDesignIngest({ busy: false, message: err instanceof Error ? err.message : "Approve failed" });
-      }
-    };
+  /* Guards the room-switch cover against stale owners: every show or instant hide bumps
+     it, and a settle loop or soft fade that finds a newer epoch leaves the cover alone
+     (see `handoffCoverShown` / `handoffCoverHidden` / `handoffCoverFadeOut`). */
+  const handoffCoverEpochRef = useRef(0);
 
-    /*
-     * DISCARD, AND THE TEMPORARY FILE GOES WITH IT (2026-09-30). This cleared the pane and told the
-     * server nothing, so the draft stayed held and `frontend/.preview/<jobId>/` stayed on disk after
-     * a discard — the pane said the work was thrown away while the folder said it was not. Discard
-     * is a decision the designer made, and the server has one call for it (`POST /api/figma/discard`
-     * — the same call the modal's own discard makes), which goes through `_drop_preview` with every
-     * other destruction trigger. So it is made, and it is made for the DRAFT's job: a row opened
-     * from the list has no draft and nothing to discard.
-     */
-    /*
-     * ── THE DESIGNER'S ANSWER TO THE COLLISION QUESTION ─────────────────────────────────────────
-     *
-     * The panel asks (component-preview's question block) and dispatches the answer; this records
-     * it on the preview so the approve can send it and so the panel draws which answer is standing.
-     * It writes the ROOM's state and never the catalogue: approving is what writes, and the answer
-     * is one of the things that approve carries (`overwriteTag`).
-     *
-     * THE ANSWER IS READ BACK OFF THE PREVIEW rather than kept in a second variable: the preview is
-     * where every other fact about this run lives, and a copy beside it would be a second place that
-     * can disagree about what was chosen.
-     */
-    const onCollisionAnswer = (event: Event) => {
-      const overwriteTag = (event as CustomEvent<{ overwriteTag?: string | null }>).detail?.overwriteTag ?? null;
-      const current = (designTree.dataModel as Record<string, any>)?.session?.preview;
-      if (!current) return;
-      setDesignPreview({ ...current, collisionAnswer: overwriteTag });
-    };
-
-    const onPreviewDiscard = async (event: Event) => {      const preview = (event as CustomEvent<{ preview?: Record<string, any> }>).detail?.preview;
-      const jobId = preview?.draft?.jobId ?? preview?.jobId;
-      setDesignPreview(null);
-      if (!jobId) {
-        setDesignIngest({ busy: false, message: "" });
-        return;
-      }
-      try {
-        const res = await apiFetch(`${API_BASE}/figma/discard`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId }),
-        });
-        if (!res.ok) throw new Error(`the server answered ${res.status}`);
-        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
-      } catch (err) {
-        // THE PANE IS CLEARED EITHER WAY, AND THE FAILURE IS SAID RATHER THAN SWALLOWED. The draft
-        // lives in the server's memory, so a server that cannot be reached has already lost it —
-        // holding the pane open would hold the designer hostage to a backend that is down. But a
-        // discard that never arrived is a fact, and this sentence is the same one the ingest form
-        // shows for the same failure, so the two panes cannot disagree about what happened.
-        setDesignIngest({
-          busy: false,
-          message:
-            `A draft was cleared here but the server was not told: ${err instanceof Error ? err.message : String(err)}. ` +
-            `Nothing was written to the catalogue, so nothing is left behind — the temporary file stays in frontend/.preview until a new ingest replaces it or the screen leaves.`,
-          refresh: Date.now(),
-        });
-      }
-    };
-
-    /*
-     * REMOVE, AND IT IS THE CALL THE INGEST FORM ALREADY MAKES.
-     *
-     * `POST /api/figma/remove` takes a component out of everything the catalogue holds it in — its
-     * file, the Figma map, the allowlist, the catalogue, the layer record and the artwork it was
-     * written with (`_remove_component`, backend/routes/figma.py) — so this runs that call and
-     * nothing else. A view never writes to the catalogue: the panel asks, and this is the asking.
-     *
-     * THE CONFIRMATION IS THE PANEL'S, NOT THIS ONE'S. `component-preview` makes it two clicks and
-     * disarms when the preview changes, so by the time this runs the person has named the component
-     * twice. Asking again here would be the same question in two places, and the second one is the
-     * one that would drift.
-     *
-     * A FAILURE IS SAID RATHER THAN SWALLOWED, in the panel where the click was made — and the
-     * wording is deliberate: "nothing was removed" is the only thing that can be promised when the
-     * server could not be reached, because the server may have removed it and failed on the reply.
-     */
-    const onPreviewRemove = async (event: Event) => {
-      const preview = (event as CustomEvent<{ preview?: Record<string, any> }>).detail?.preview;
-      const tag = String(preview?.tag ?? "");
-      if (!tag) return;
-      setDesignIngest({ busy: true, message: "" });
-      try {
-        const res = await apiFetch(`${API_BASE}/figma/remove`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tag, reason: "removed from the catalogue preview" }),
-        });
-        if (!res.ok) {
-          /*
-           * A REFUSAL IS NOT A FAILURE, AND IT CARRIES ITS REASON. `409` is the liveness guard at
-           * work: the component is named by the application's own code and removing it would break
-           * what names it. The server sends `{note, namedBy, nextStep}` — the files that name it and
-           * what to do — so this shows THAT rather than "the server answered 409", which would leave
-           * the person with a number and no next step. Any other status has no such body and falls
-           * back to the status, which is the honest thing to show when nothing else is known.
-           */
-          const body = await res.json().catch(() => null);
-          const detail = body?.detail;
-          if (detail && typeof detail === "object" && detail.note) {
-            throw new Error(`${detail.note} ${detail.nextStep ?? ""}`.trim());
-          }
-          throw new Error(
-            typeof detail === "string" ? detail : `the server answered ${res.status}`,
-          );
-        }
-        setDesignPreview(null);
-        setDesignIngest({ busy: false, message: "", refresh: Date.now() });
-      } catch (err) {
-        setDesignIngest({
-          busy: false,
-          message:
-            `Nothing was removed from here, and the server was not told: ${err instanceof Error ? err.message : String(err)}. ` +
-            `The catalogue still holds ${tag} until a removal actually lands.`,
-          refresh: Date.now(),
-        });
-      }
-    };
-
-    window.addEventListener("open-component", onOpenComponent);
-    window.addEventListener("preview-approve", onPreviewApprove);
-    window.addEventListener("preview-discard", onPreviewDiscard);
-    window.addEventListener("preview-remove", onPreviewRemove);
-    window.addEventListener("preview-collision-answer", onCollisionAnswer);
-    return () => {
-      window.removeEventListener("open-component", onOpenComponent);
-      window.removeEventListener("preview-approve", onPreviewApprove);
-      window.removeEventListener("preview-discard", onPreviewDiscard);
-      window.removeEventListener("preview-remove", onPreviewRemove);
-      // THE ONE THAT WAS NEVER BEING REMOVED. It was added above and left behind on every re-run of
-      // this effect, so each pass stacked another listener that answered the collision question.
-      window.removeEventListener("preview-collision-answer", onCollisionAnswer);
-    };
-  }, [designTree, setDesignIngest, setDesignPreview]);
-
-  const handleTabChangeWithGate = useCallback(async (tabId: string | null) => {
-    /*
-     * ══ THE OUTGOING ROOM COMES DOWN IN THE CLICK'S OWN FRAME (owner, 2026-10-11) ══
-     *
-     * *"you have to move between product and then click development and then click product
-     * again and you'll see the ghost … it appears before assembly … it happens within the 1st
-     * ms."* Measured on that exact switch: after the click, the OLD room stayed painted while
-     * the switch was still being decided — the exit guard's fetch below runs BEFORE any tab
-     * moves, and this shell's own re-render of the tab change lands a frame or two after the
-     * click — so the eye caught the previous room once more before the new room's gate. A
-     * React state change cannot fix this: that update would itself pay the same render delay
-     * before anything changed on screen. So the mounted room roots are hidden IMPERATIVELY,
-     * synchronously, in the click's own task — the first frame after the click already shows
-     * the pane's own ground, never the old room's face. The swap that follows unmounts the
-     * hidden node; `roomRootsShown()` restores it only on the paths where nothing moves.
-     * THE OUTGOING NODE MUST NOT BE REUSABLE — each room root carries its own `key`
-     * (`development-root`, `product-root`, `governance-root`); measured 2026-10-11 without
-     * them: React recycled the hidden node as the incoming room's root and that room stayed
-     * invisible (probe: 109/109 frames hidden-but-mounted). With the keys the incoming room
-     * is a fresh, visible node; probe after the fix: 0 frames showing the outgoing room,
-     * either direction. The 700ms staged openings are untouched — this takes away the
-     * ghost, not the assembly.
-     */
-    const roomRootsShown = () =>
-      document.querySelectorAll<HTMLElement>('[data-room-root]').forEach((el) => { el.style.visibility = ''; });
-    const roomRootsHidden = () =>
-      document.querySelectorAll<HTMLElement>('[data-room-root]').forEach((el) => { el.style.visibility = 'hidden'; });
-    /*
-     * ══ AND THE HAND-OFF IS ONE GROUND, NOT THREE (owner, 2026-10-11, the switch still
-     * jerking after the ghost was taken out: *"It's supposed to be a beautiful assembly
-     * spinner then it fades into the application … there's not supposed to be jumping and
-     * snapping and ghosts."*) ══
-     *
-     * What the eye got on that switch, measured: click → the outgoing room hid → the pane's
-     * own ground (the Composer's paper) showed through for the exit guard's round-trip — 40ms
-     * on the way out of Product — → the incoming room's gate, whose ground is the LAB TILE —
-     * a different color. Paper flashing between two dark rooms IS the snap. So the switch now
-     * lands on ONE ground: `#room-handoff-cover` (the lab tile, no spinner) is shown
-     * imperatively in the click's own frame, over everything; the incoming room's own gate
-     * then mounts on the SAME tile behind it — the cover is removed the moment that room's
-     * root is in the document and visible, and the seam cannot show (identical tile, identical
-     * position; the spinner and its sentence simply appear with the gate). The cover is also
-     * removed when the guard answers "keep working" (nothing moved — beside the room coming
-     * back), and it retires itself after 1.5s no matter what, so a stuck cover is impossible.
-     *
-     * ══ AND THE TARGET ROOM'S GATE IS ARMED BEFORE ITS OWN COMMIT ══
-     *
-     * The gate flags persist while the room is away (a room left after its opening holds
-     * `gateDown = true`), and the entry effect resets them AFTER paint — so on the way back in,
-     * the room's first painted frame held the gate at opacity 0 and the raw iframe at opacity 1,
-     * and then the gate FADED IN over the bare application (its 700ms transition fires on that
-     * 0→1). That fade-in-over-the-raw-app is the jerk — the gate must be UP from the room's
-     * first frame, and only ONE fade may exist: the fade OUT into the application. Clearing
-     * the flag here — synchronously, before the tab change it rides with — mounts the room
-     * with the gate already standing and the frame already hidden under it. The entry effect's
-     * own reset then finds the flag already cleared (a no-op).
-     */
-    /*
-     * The cover wears the TARGET ROOM'S OWN GATE FACE — the tile, the amber ring, the sentence
-     * — for the beat the owner caught on Development after the first cover landed (2026-10-11):
-     * *"it looks like a background is flashing, and then it loads the assembler."* Leaving
-     * Product runs the exit guard's state read BEFORE the tab can move (~40ms), so a
-     * spinnerless cover stood as a flat tile for five frames and the ring then popped in: a
-     * flash, then an assembler. With the ring and sentence in the cover, the assembler is
-     * present from the click's own frame; the room's real gate mounts behind it with an
-     * identical face, and the hand-off is one surface to the eye. (The ring's phase can differ
-     * by the guard's few frames at the hand-off — a one-time arc tick the eye reads as
-     * continuous rotation; the alternative was the pop that was rejected.)
-     */
-    const handoffCoverShown = (room: string) => {
-      const cover = document.getElementById('room-handoff-cover');
-      if (!cover) return;
-      const line = cover.querySelector('p');
-      if (line) {
-        line.textContent = room === 'product'
-          ? 'Standing up the builder\u2026'
-          : room === 'development'
-            ? 'Standing up the development workspace\u2026'
-            : 'Standing up the governance workspace\u2026';
-      }
-      cover.style.display = 'flex';
-    };
-    const handoffCoverHidden = () => {
-      const cover = document.getElementById('room-handoff-cover');
-      if (cover) cover.style.display = 'none';
-    };
-    const isRoomSwitch = !!tabId && tabId !== (headerTab || '');
-    if (isRoomSwitch) {
-      roomRootsHidden();
-      if (tabId === 'product') setProductGateDown(false);
-      else if (tabId === 'development') setDevelopmentGateDown(false);
-      else if (tabId === 'governance') setGovernanceGateDown(false);
-      if (tabId === 'product' || tabId === 'development' || tabId === 'governance') {
-        handoffCoverShown(tabId);
-        const roomTarget = tabId;
-        const coverShownAt = performance.now();
-        const settleCover = () => {
-          const root = document.querySelector<HTMLElement>(`[data-room-root="${roomTarget}"]`);
-          if ((root && getComputedStyle(root).visibility !== 'hidden') || performance.now() - coverShownAt > 1500) {
-            handoffCoverHidden();
-            return;
-          }
-          requestAnimationFrame(settleCover);
-        };
-        requestAnimationFrame(settleCover);
-      }
-    }
-
-    /**
-     * ⭐ THE ROOM'S EXIT GUARD COMES FIRST (owner, 2026-10-04: *"you should probably ask the
-     * user if they try to exit the product team area without saving their project if they
-     * want to save it or not … it's called publish at the top, that would publish it to the
-     * console"* — and "don't save" means DISCARD). Leaving the Product room with an open,
-     * unpublished idea asks the question before ANY tab moves; a blank idea is discarded in
-     * silence; a published one leaves freely. See `guardProductExit`.
-     *
-     * AND IT IS THE EXIT DOOR ONLY (2026-10-11): it no longer runs when the target IS the
-     * product room — entering it abandons nothing (`openProductRoom` reopens the held
-     * project — the confirmed package model) — and running it there bought a network
-     * round-trip before the tab moved for an answer that path never uses. Real switches out
-     * of a published project still pay the guard's own state read — safe by design; the
-     * hide above already keeps that wait from showing the last room's face.
-     */
-    if (productRoomProjectId && tabId !== 'product') {
-      const mayLeave = await guardProductExit();
-      if (!mayLeave) {
-        // NOTHING MOVED — "keep working" — the room gets its face back, and the cover comes
-        // off with it (same frame; the room is never seen behind a leftover cover).
-        roomRootsShown();
-        handoffCoverHidden();
-        return;
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // A2UI v0.9: Tab clicks are AI commands
-    // Send document state to AI - AI decides how to handle unsaved changes
-    // ══════════════════════════════════════════════════════════════════════
-
-    // Build context for AI - includes unsaved changes state
-    const context = {
-      current_surface: headerTab || 'console',
-      has_unsaved_changes: hasUnsavedChangesRef.current,
-      session_id: currentPromptSession?.id || null,
-      session_title: currentPromptSession?.title || '',
-    };
-
-    if (tabId === 'console') {
-      // Set the assembling flag FIRST so the sandbox goes composer → spinner (which
-      // already carries the console background) → console, instead of flashing the
-      // bare console slot for a tick and then snapping. The header tab still moves
-      // instantly for the indicator; the spinner covers the surface during assembly.
-      setIsAIAssembling(true);
-      handleHeaderTabChange('console');
-      /*
-       * THE CONSOLE'S OWN ARRIVAL — it used to announce nothing at all.
-       *
-       * Its panel therefore greeted on whatever record happened to be left pending, and the last
-       * thing to leave one is a package open: that is how a PACKAGE's greeting was written into the
-       * console's own conversation (measured 2026-09-23: 31 of that thread's 69 messages were about
-       * another package's prompt). A landing now says so itself. The kind carries no session id
-       * because the console's session is a server fact that arrives WITH the assembly — the panel
-       * answers this one from its own scope read, which is the same fact its greeting waits on.
-       */
-      markArrival('console');
-      window.dispatchEvent(new CustomEvent('a2ui:composer-opened', { detail: { kind: 'console' } }));
-      // Console is read-only — unsaved changes in the composer do not block navigation.
-      console.log('🤖 [A2UI] Console clicked → intent: render-console (direct, no gate)');
-      await assembleSurfaceThenRepairs('render-console', {
-        current_surface: 'composer',
-        has_unsaved_changes: false,  // ← Console is safe navigation, no decision dialog
-        session_id: currentPromptSession?.id || null,
-        session_title: currentPromptSession?.title || '',
-      });
-      setConsoleRefreshKey((k) => k + 1);
-      return;
-    }
-
-    if (tabId === 'composer') {
-      // A FRESH COMPOSER STARTS CLEAN — whatever Grace had here is not kept.
-      //
-      // The owner, 2026-09-18: "it's almost as if the composer is not clearing… every time I
-      // create a new one by clicking composer, it should clear whatever Grace had and be ready
-      // to accept the new run." The seat is reused across assemblies, so its thread has to be
-      // emptied on purpose here; nothing that was SAVED is affected (a package's conversation
-      // is loaded from its own id when it is opened).
-      // THE SHADOW-PIERCING READ, NOT document.querySelector: the seat is drawn by the
-      // renderer inside its shadow root, so the document-level query returned null on every
-      // click and the thread was silently never emptied — the sentence above was a claim
-      // about behaviour that did not run. `deepFind` is the helper this file already uses
-      // for exactly this boundary (see its note).
-      const seat = deepFind<HTMLElement & { clearThread?: () => void }>('chat-panel');
-      seat?.clearThread?.();
-      // Move the header tab indicator INSTANTLY — don't wait for AI assembly
-      handleHeaderTabChange('composer');
-      // Composer click always starts a FRESH prompt package (same as "Create New")
-      // — never reload the card the user had open.
-      console.log('🤖 [A2UI] Composer clicked → intent: render-composer (fresh package)');
-      await assembleSurfaceThenRepairs('render-composer', {
-        ...context,
-        session_id: null,
-        session_title: '',
-      });
-      return;
-    }
-
-    /*
-     * A SECTION IS A SURFACE LIKE EVERY SURFACE — so it ASSEMBLES, and this branch asks.
-     *
-     * The owner, 2026-09-30, on finding that Design did not: *"No, no it's a surface. It's a
-     * surface just like every surface. I'm not seeing assembly happening. I see a section
-     * loading, but I'm getting a jarring jerk when I click on design — I'm not getting the
-     * assembly process that we have on composer."* He was right, and this is what he was seeing:
-     *
-     * THIS BRANCH USED TO RETURN WITHOUT ASKING. It moved the header indicator and stopped, so
-     * no `assemble-surface` request was ever made — and because that request is what sets the
-     * assembling flag, the sandbox never projected its `spinner` slot either. The React tree in
-     * the slot simply swapped its content in one paint, which is what a web page does and
-     * nothing like a surface arriving. The model was never asked anything.
-     *
-     * `render-section:<id>` is new on the server for the same reason: `assemble-surface` accepted
-     * only render-console, render-composer, render-session and render-run, so asking for a section
-     * would have been a 400. A section assembles the Composer's own tree — the same LAYOUT
-     * CONTRACT, the same five slots — because the owner asked for that architecture reused:
-     * *"I need you to reuse the same architectural structure that we currently use for composer."*
-     *
-     * Product, Development and Governance come through here too. They inherited the same defect
-     * from the line below, which has read "Other tabs - just switch for now (TODO: wire to AI
-     * assembly)" since before this work began — so no unbuilt tab in this shell has ever
-     * assembled.
-     *
-     * The left menu's own "Ingest Design" item still opens the ingest as a modal, unchanged.
-     */
-    if (tabId === 'design') {
-      // DESIGN GOES THROUGH ITS OWN PROCESS. Moving the indicator and asking Design's own
-      // assembly — nothing of the Composer's is called, so nothing of the Composer's can happen:
-      // the tab stays where the person put it, and no package is adopted.
-      handleHeaderTabChange('design');
-      console.log('🤖 [A2UI] Design clicked → intent: render-design (its own process)');
-      void assembleDesignSurface();
-      return;
-    }
-
-    if (tabId === 'product') {
-      /*
-       * PRODUCT GOES THROUGH ITS OWN PROCESS (2026-10-03) — the same shape as Design's above:
-       * the tab moves, the room's own assembly is asked, and nothing of the Composer's is
-       * called: no package adopted, no thread cleared, no `currentPromptSession` written.
-       *
-       * THE ROOM OPENS THE MOST RECENT PRODUCT PACKAGE. The console's cards already carry
-       * each package's room (`room_domain`, from the console's own read), so the door is a
-       * lookup in data that is already on screen. None → the honest empty state with the
-       * create door — never an assembly around nothing.
-       */
-      handleHeaderTabChange('product');
-      console.log('🤖 [A2UI] Product clicked → the builder pane (no assembly: the room IS the builder)');
-      /*
-       * NOTHING IS ASSEMBLED FOR THIS ROOM ANY MORE (owner, 2026-10-04): *"the product room
-       * will just remove the grace chat."* The pane below this branch mounts <builder-embed>
-       * — the whole local app builder — so there is no surface to ask the server for, no
-       * package get-or-create, and no model call on arrival. `assembleProductSurface` and its
-       * tree/state stay in the file, unwired, rather than deleted: the room they served may
-       * come back, and a deleted door is not a decision this host gets to make alone.
-       */
-      /* THE CLICK IS THE DOOR — AND THE DOOR NOW RESUMES (owner, 2026-10-06, the confirmed
-         package model): entering Product reopens the project last touched (*"they may come
-         back and want to do something different to it"*), birthing one only when there is
-         none — see `openProductRoom`. A console card opens an EXISTING project instead;
-         that path belongs to the card (handleOpenPromptFromConsole). */
-      void openProductRoom();
-      return;
-    }
-
-    if (tabId === 'governance') {
-      // THE ROOM IS THE SHELL NOW — the application left it (owner, 2026-10-08: the
-      // Evidently application was removed, everything of it; the container, the
-      // backgrounds, the chat, the slide and the left navigation stay). The product
-      // branch's shape, one room over: the room's own nav and seat stand, the seat binds
-      // its own package (the seat effect below); no surface is asked for and no model call
-      // happens on arrival. `assembleGovernanceSurface` and its tree/state STAY IN THE
-      // FILE, unwired, rather than deleted: the ledger's surface may return, and a deleted
-      // door is not a decision this host gets to make alone.
-      handleHeaderTabChange('governance');
-      return;
-    }
-
-    if (tabId === 'development') {
-      /*
-       * THE DEVELOPMENT TAB IS A ROOM NOW (owner, 2026-10-04: *"you could just drop it right in
-       * there. Can't you under a development tab"*) — the development workspace embedded
-       * whole, exactly the Product room's move: no A2UI assembly, no `render-section`,
-       * nothing of the Composer's touched. It was the LAST dead stub (DEAD_TABS); it stays
-       * listed there so the assemble path keeps refusing it, and this branch — ahead of that
-       * path — is what makes it live.
-       */
-      handleHeaderTabChange('development');
-      console.log('🤖 [A2UI] Development clicked → the development room (no assembly)');
-      return;
-    }
-
-    if (SECTION_TABS.includes(tabId || '')) {
-      /*
-       * A SECTION ASSEMBLES, AND IT TOUCHES NOTHING OF THE COMPOSER'S.
-       *
-       * THIS BRANCH HELD TWO LINES IT SHOULD NEVER HAVE HAD, and they did real damage on
-       * 2026-09-30: the owner clicked a section tab and came back to an empty Composer, reading
-       * it as every package being gone. Nothing was lost — 226 rows, 18 conversations, 0 deleted,
-       * verified — but the UI had cleared WHICH PACKAGE WAS OPEN, and these two lines are why:
-       *
-       *   `seat?.clearThread?.()`  Lifted from the Composer's branch, where it exists to empty the
-       *                            seat for a FRESH package. A section has no business clearing
-       *                            the Composer's seat.
-       *
-       *   `session_id: null`       The Composer's "there is no current package" argument. Copied
-       *   `session_title: ''`      here it told the app the open package was gone — and the
-       *                            assembly's failure path runs `setCurrentPromptSession(null)`,
-       *                            which then made it true.
-       *
-       * Both are gone. And the two fields that replace them are the CONSOLE's own precedent, not
-       * a new idea: `current_surface` names the tab being opened rather than the one being left
-       * (so the server cannot read this as a Composer navigation), and `has_unsaved_changes:
-       * false` says the same thing the console says — *"read-only navigation; unsaved changes in
-       * the composer do not block it"* — because a section cannot discard somebody's work.
-       */
-      handleHeaderTabChange(tabId);
-      /*
-       * AND A DEAD TAB LOADS NOTHING — see DEAD_TABS above for the owner's instruction and for why
-       * the server keeps its `render-section:<id>` path. The indicator moves, no request is made,
-       * no surface is adopted and no package is touched, so clicking Product, Development or
-       * Governance leaves the room exactly as it was.
-       */
-      if (isDeadTab) {
-        console.log(`🤖 [A2UI] ${tabId} clicked → a stub tab: nothing is loaded`);
-        return;
-      }
-      console.log(`🤖 [A2UI] ${tabId} clicked → intent: render-section:${tabId}`);
-      await assembleSurfaceThenRepairs(`render-section:${tabId}`, {
-        ...context,
-        current_surface: tabId,
-        has_unsaved_changes: false,
-      });
-      return;
-    }
-
-    // Other tabs - just switch for now (TODO: wire to AI assembly)
-    handleHeaderTabChange(tabId);
-  }, [handleHeaderTabChange, assembleSurfaceThenRepairs, currentPromptSession?.id, currentPromptSession?.title, headerTab, assembleProductSurface, assembleGovernanceSurface]);
+  /* MOVED (2026-10-21): the 455-line callback now lives in `@/rooms/useTabGate`, returned by a hook. */
+  const handleTabChangeWithGate = useTabGate({ SECTION_TABS, assembleGovernanceSurface, assembleProductSurface, assembleSurfaceThenRepairs, currentPromptSession, guardProductExit, handleHeaderTabChange, handoffCoverEpochRef, hasUnsavedChangesRef, headerTab, isDeadTab, openProductRoom, productRoomProjectId, setConsoleRefreshKey, setGovernanceGateDown, setIsAIAssembling, setProductGateDown });
 
   // The chat rail's mark navigates back to the console — the same
   // path the Console header tab uses.
@@ -8381,15 +5488,6 @@ export default function Index({
     }
   }, [currentPromptSession?.id, removePackageFromConsole]);
 
-  const _handleDeletePromptSession = async (sessionId: string) => {
-    if (isDemoMode()) {
-      alert(DEMO_DISABLED_SENTENCE);
-      return;
-    }
-    if (!confirm('Are you sure you want to delete this prompt? This will remove all versions and the linked chat.')) return;
-    await deletePackage(sessionId);
-    setConsoleRefreshKey(k => k + 1);
-  };
 
   // The card's own event listener sits in an effect that cannot depend on this callback —
   // it is defined below it — so the handler travels through a ref, the same shape the run
@@ -8462,641 +5560,9 @@ export default function Index({
   // ref, no per-element listener. repair-finding starts the repair flow;
   // conversation-change adopts the conversation the first send created for a
   // new package.
-  useEffect(() => {
-    const onRepairFinding = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as { findingId?: string };
-      if (detail.findingId) {
-        void handleRepairFinding(detail.findingId, { current_surface: headerTab || 'composer' });
-      }
-    };
-    const onConversationChange = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as { conversationId?: string };
-      /*
-       * AN EMPTY ID IS A FACT, NOT A MISSING ONE — and dropping it cost a save.
-       *
-       * This returned on any falsy id, so the one case that needed the model to hear it was the
-       * one thrown away: the seat moving OFF a conversation (the person removed the thread they
-       * were in — see _removeConversation). The model kept the deleted id, Save wrote it into
-       * `prompt_sessions.conversation_id`, and the foreign key refused it — "AI save failed: 500",
-       * the owner, 2026-09-23: "if we fix the conversation ID and it works, then suddenly saving a
-       * prompt doesn't work anymore." `undefined` is still nothing to report; an EMPTY STRING is
-       * "this place has no conversation", and it is written like any other value.
-       */
-      if (detail.conversationId === undefined) return;
-      // Which tree raised it decides which path is written. Both seats dispatch this same
-      // event, and each reads its conversation from its own path — the composer's seat from
-      // /session/right_column/conversation_id, the console's from /console/conversation_id —
-      // so the event's path through the DOM is what says which one spoke. The renderer in
-      // the path is the surface.
-      const path = typeof (event as Event & { composedPath?: () => EventTarget[] }).composedPath === 'function'
-        ? (event as Event & { composedPath: () => EventTarget[] }).composedPath()
-        : [];
-      const consoleSpeaking = !!consoleRendererRef.current && path.includes(consoleRendererRef.current);
-      // An empty id travels as NULL — the one value that means "no conversation here", and the one
-      // the save can write into a nullable foreign key.
-      handleConversationChange(detail.conversationId || null, consoleSpeaking ? 'console' : 'composer');
-    };
-    /**
-     * THE CANVAS'S OWN FOUR EVENTS.
-     *
-     * All new names, all heard HERE, in the same pass that emits them: an emitted
-     * event with no listener is what the catalog audit reports as event-unheard, and
-     * it also reads to a person as a control that works. What each does today is
-     * stated rather than invented:
-     *
-     *   flow-node-moved  the node is where the person put it. Positions live in the
-     *                    element for now; this records them so a decision to persist
-     *                    them has somewhere to start.
-     *   flow-select      the selection, recorded. Clicking a node asks nothing of
-     *                    Grace YET — how she speaks about the flow is the open
-     *                    question in AGENTIC_EDITOR/06, not a guess to make here.
-     *   flow-connect     a connection drawn by hand. The graph's edges come from the
-     *                    run, so this records what the canvas cannot yet do.
-     *   flow-action      the node toolbar and the canvas controls.
-     *
-     * Everything lands in the app logger, which is the operator's own view — the
-     * Trace tab reads it. Honest, and out of Grace's seat until we decide her words.
-     */
-    const onFlowNodeMoved = (event: Event) => {
-      logger.info('flow node moved', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
-    };
-    /**
-     * THE LINK, BOTH WAYS — the floor this view was missing.
-     *
-     * A picked note is a question about a piece of the conversation, and the playground has
-     * answered it since the canvas existed: the turn about that note is marked in her thread,
-     * her header says what the note is, and a click on that turn puts the note back under the
-     * person's eye. In the app NONE of it happened, and the reason is structural: her column
-     * and the drawing are SIBLINGS here (the drawing in the middle pane, she in the right), so
-     * the two elements never meet. The canvas unit listens for `flow-select` to mark her turn —
-     * but she is not its child any more, so it finds no seat to mark; and the turn's
-     * `turn-click` never crosses out of the right pane into the middle one. The page is the one
-     * place that knows both halves, so the wiring lives here — the playground's own rule:
-     * "Neither view reaches into the other… the wiring between them is here, in the host."
-     *
-     * WHAT SHE DOES ABOUT A PICK — opening her column, 650 wide — is deliberately NOT here:
-     * the element that owns her width hears `flow-select` itself and performs it.
-     */
-    const onFlowSelect = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as { nodeId?: string | null };
-      logger.info('flow select', detail as Record<string, unknown>);
-      const nodeId = detail.nodeId ?? null;
-      const panel = deepFind<HTMLElement & { statusText?: string }>('chat-panel');
-      const messages = panel?.shadowRoot?.querySelector('chat-messages') as
-        | (HTMLElement & { highlightNodeId?: string | null })
-        | null;
-      if (messages) messages.highlightNodeId = nodeId;
-      if (!nodeId || !panel) return;
-      const nodes = deepFind<HTMLElement & { flow?: { nodes?: Array<{ id: string; title: string; kind: string; state: string }> } }>('agent-flow')?.flow?.nodes ?? [];
-      const node = nodes.find((n) => n.id === nodeId);
-      if (node) panel.statusText = `${node.title} | ${node.kind} — State: ${node.state}`;
-    };
-    /** And the other half: a turn clicked is its note brought back under the eye. */
-    const onTurnClick = (event: Event) => {
-      const nodeId = (((event as CustomEvent).detail || {}) as { nodeId?: string }).nodeId ?? '';
-      if (!nodeId) return;
-      deepFind<HTMLElement & { focusNode?: (id: string) => void }>('agent-flow')?.focusNode?.(nodeId);
-    };
-    const onFlowConnect = (event: Event) => {
-      logger.info('flow connect', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
-    };
-    const onFlowAction = (event: Event) => {
-      const detail = ((event as CustomEvent).detail || {}) as Record<string, unknown>;
-      const action = String(detail.action || '');
-      // The view's own gestures are not news: one line per wheel notch would bury
-      // the operator's feed under the canvas's zoom.
-      if (action === 'zoom' || action === 'fit') return;
-      /*
-       * ONE READER OF THE DRAWING, for the branches below that need a node's own facts. The type
-       * carries `rowIndex` because a node knows the address of the row it is (see FlowNode) — the
-       * same address the trigger branch reads. It used to be declared per-branch, which is how two
-       * readers of one fact drift.
-       */
-      type FlowNodeShape = {
-        id: string; family: string; kind: string; title: string; subtitle?: string; rowIndex?: number;
-      };
-      const nodeById = (nodeId: string): FlowNodeShape | undefined =>
-        (deepFind<HTMLElement & { flow?: { nodes?: FlowNodeShape[] } }>('agent-flow')?.flow?.nodes ?? [])
-          .find((n) => n.id === nodeId);
-      /*
-       * ▶ RUN THIS STEP — THE SAME RUN PATH THE FOOT'S PLAY MAKES.
-       *
-       * The toolbar's play was DEAD: it emitted `flow-action{action:'run'}` and the only thing that
-       * answered was the logger line at the bottom of this handler — measured 2026-10-02 by driving
-       * the app: the event recorded, nothing happened. It now dispatches the same `run-requested`
-       * the canvas footer's Play dispatches, so there is ONE run path: the review gate holds it when
-       * it must, the same spinner runs, and the drawing locks for the run's flight (setCanvasRunning).
-       * Nothing is ever executed "for one step" — a step is what a Run does.
-       */
-      if (action === 'run') {
-        window.dispatchEvent(new CustomEvent('run-requested'));
-        return;
-      }
-      /*
-       * ✨ ASK GRACE ABOUT THIS — HER OWN CHANNEL, WITH THE NODE'S OWN FACTS.
-       *
-       * The same division of labour as the delete branch below: the request carries what the node IS
-       * (whether it is a row, its kind, its title, the first of its line, its row's address when it
-       * has one) so her answer is about THIS node — and nothing is written and nothing is asked of
-       * the person. She answers in the thread, which is where this app does its talking.
-       */
-      if (action === 'ask') {
-        const node = nodeById(String(detail.nodeId || ''));
-        if (!node) return;
-        const rowAddress = typeof node.rowIndex === 'number' ? ` Its row is index ${node.rowIndex} in the prompt.` : '';
-        const line = node.subtitle ? ` Its line reads: "${String(node.subtitle).slice(0, 200)}".` : '';
-        window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
-          detail: {
-            request: `A person pressed "Ask Grace" on the node called "${node.title}" on the canvas. That node is `
-              + (node.family === 'seat'
-                ? `a ROW of the prompt — the ${node.kind} row.${rowAddress}${line}`
-                : `a STEP of the Run (${node.kind}) — part of what the prompt's execution does, not a row of it.${line}`)
-              + ' Say in one or two sentences what it is and what it does in this flow. Do not offer a button and do not change anything.',
-          },
-        }));
-        return;
-      }
-      /*
-       * DELETING A NODE IS DELETING ITS ROW — AND SHE IS THE ONE WHO ASKS.
-       *
-       * The brief's last increment: "Removing a node removes its row — through `remove-seat`, and
-       * with her asking first, exactly as a row removal does today" (READ-ME/CANVAS-AND-PROMPT.md
-       * §4.5). So this does NOT delete anything. It tells her what was pressed and hands her the
-       * facts, and the removal happens the way every other removal in this app happens: as a
-       * button she offers and the person presses (`remove-seat:<name>`, the one destructive repair
-       * that already exists — see actionLink).
-       *
-       * WHAT SHE IS GIVEN, so her sentence is about THIS node: whether it is a row at all, which
-       * row, and whether that row holds words — because "remove it" costs nothing on an empty row
-       * and costs work on a written one, and only one of those deserves a warning. A STEP node is
-       * not a row (it is what a Run does — the answer, the write, the check), so it cannot be
-       * removed here, and she says so rather than offering a button that would remove nothing.
-       */
-      if (action === 'delete') {
-        const nodeId = String(detail.nodeId || '');
-        const node = nodeById(nodeId);
-        if (!node) return;
-        // Matched on the canonical id first — see the note in the `trigger` branch: a node wears the
-        // seat's LABEL and a row answers to its own name, so a name comparison misses.
-        const rows = surfaceSections();
-        const row = rows.find((s: any) => String(seatIdOf(s) || '') === String(node.kind || ''))
-          ?? rows.find((s: any) =>
-            String(s?.name || '').trim().toLowerCase() === String(node.title || '').trim().toLowerCase());
-        const isRow = node.family === 'seat' && Boolean(row);
-        /*
-         * THE TRASH REMOVES, AND SAYS SO. This used to ask instead: it handed her the facts and
-         * waited for a button, so pressing Delete did NOTHING visible — the owner, 2026-09-24:
-         * "I can't delete anything… there is no functionality here."
-         *
-         * He is the authority on that rule and he has just replaced it. The reasoning it was built
-         * on still holds — a destructive act should not be silent — so the act is now LOUD in the
-         * other direction: the row goes (the same `remove-prompt-role` write the rest of the app
-         * uses, so the drawing rebuilds from the rows and the node goes with it), and she is TOLD,
-         * in her own voice, as a record rather than a question. The node in front of the person is
-         * the confirmation; a second one is a quiz.
-         *
-         * A STEP is still refused, and that has not changed: a step is what a Run did, so there is
-         * nothing here to remove, and she says so rather than a control that quietly does nothing.
-         */
-        if (!isRow) {
-          window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
-            detail: {
-              request: `A person pressed Delete on the node called "${node.title}" on the canvas. That node is not a `
-                + 'row of the prompt — it is part of what a Run does (the answer, the write, the check), so '
-                + 'there is nothing to remove and no button to offer. Say that in one sentence: what it is, '
-                + 'and that it goes when the prompt that produced it changes.',
-            },
-          }));
-          return;
-        }
-        const rowName = String((row as { name?: string }).name ?? node.title);
-        const words = String((row as { content?: string }).content || '').trim().length;
-        window.dispatchEvent(new CustomEvent('remove-prompt-role', { detail: { roleName: rowName } }));
-        // AND THE DRAWING FOLLOWS THE ROW OUT — handed the rows as this writer knows them, so the
-        // node goes in the same breath as the row. The element's own `section-remove` still updates
-        // the model; this is the picture keeping step with it rather than waiting for a commit.
-        const at = rows.indexOf(row);
-        if (at >= 0) {
-          publishFlowFromRows(undefined, rows.filter((_: any, i: number) => i !== at) as FlowSeatInput[]);
-        }
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: {
-            role: 'assistant',
-            content: `Removed the ${node.title} row — the node and the row are the same fact, so it went from both.`
-              + (words ? ` ${words} characters were in it, and they are gone with it.` : ''),
-          },
-        }));
-      }
-      /*
-       * A TRIGGER CHOSEN ON THE DRAWING IS WRITTEN INTO ITS ROW — the other half of the symmetry
-       * the owner asked for: "edits on the canvas should be reflected in the prompt, edits on the
-       * prompt should be reflected in the canvas; it's a learning tool."
-       *
-       * The canvas emitted the choice and nothing else, because it holds no copy of the row's text
-       * and must not invent one. The row is found the way the delete branch finds it — by the name
-       * the node wears, which is the row's own name — and the new text is computed by the ONE
-       * function that knows what a re-pick means (`withTrigger`, shared by both views), then
-       * written through the one writer the editor already listens to. So the row changes, the
-       * graph rebuilds from the rows, and the node comes back wearing the same trigger the menu
-       * now ticks: one fact, one writer, two views.
-       */
-      if (action === 'trigger') {
-        const nodeId = String(detail.nodeId || '');
-        const token = String(detail.token || '');
-        if (!nodeId || !token) return;
-        const node = nodeById(nodeId);
-        if (!node || node.family !== 'seat') {
-          // A step is what a run does; nothing starts it but the run it belongs to. Reported rather
-          // than silently dropped, because a control that does nothing reads as a broken control.
-          logger.warn('a trigger was chosen on a node that is not a row', { nodeId });
-          return;
-        }
-        const rows = surfaceSections();
-        /*
-         * BY PATH FIRST, THEN BY CANONICAL ID, THEN BY NAME — in that order, and the order is the
-         * point. The node carries `rowIndex`, which IS the address of its row in the model
-         * (`/session/left_column/sections`), so the common case is an index lookup with nothing to
-         * misspell — A2UI's own rule for an action's context (Data-Binding.md: a data reference is
-         * resolved "by path in the data model or by value"). The id and name fallbacks stay for a
-         * caller that has no index: an older payload, or a node the builder did not place.
-         */
-        const byIndex = typeof detail.rowIndex === 'number' && detail.rowIndex >= 0
-          ? rows[detail.rowIndex as number]
-          : undefined;
-        const row = byIndex
-          ?? rows.find((s: any) => String(seatIdOf(s) || '') === String(node.kind || ''))
-          ?? rows.find((s: any) =>
-            String(s?.name || '').trim().toLowerCase() === String(node.title || '').trim().toLowerCase());
-        if (!row) {
-          logger.warn('a trigger was chosen on a node with no row to write it into', { nodeId, title: node.title });
-          return;
-        }
-        // THE WRITE IS AN UPDATE AT A PATH, WHICH IS A2UI'S OWN SHAPE. Data-Binding.md: a data
-        // reference "is resolvable either by path in the data model or by value". Handling-User-
-        // Actions.md: an action carries `context`, "a hand-picked VIEW of that state", and the
-        // renderer resolves its paths before dispatch. So the node's `rowIndex` IS the address of
-        // its row, and the edit lands at `/session/left_column/sections/<index>` through the host's
-        // one writer for that path. The binding then re-assigns the rows to the editor element, and
-        // the drawing is rebuilt from them — the same direction of travel as every model update in
-        // this application, with no window event and no name to re-match.
-        const index = typeof detail.rowIndex === 'number' && (detail.rowIndex as number) >= 0 && (detail.rowIndex as number) < rows.length
-          ? (detail.rowIndex as number)
-          : rows.indexOf(row);
-        if (index < 0) {
-          logger.warn('a trigger was chosen with no addressable row to write it into', { nodeId: detail.nodeId });
-          return;
-        }
-        const nextContent = withTrigger(String((row as { content?: string }).content || ''), token);
-        patchSectionAt(index, { ...row, content: nextContent });
-        // AND THE DRAWING FOLLOWS THE WRITE, NOT THE MODEL'S NEXT COMMIT — the rows are handed to
-        // the rebuild because this caller is the one that just changed them. See publishFlowFromRows.
-        const nextRows = rows.map((r: any, i: number) => (i === index ? { ...r, content: nextContent } : r)) as FlowSeatInput[];
-        publishFlowFromRows(undefined, nextRows);
-      }
-      logger.info(`flow action: ${action}`, detail);
-    };
-    /**
-     * THE AGENT BUTTON RUNS THE COMPOSER'S OWN CONTROL.
-     *
-     * Its annotation (#40001120:6641) reads:
-     *   On click:  dispatch loads-cards-form-console-in-prompt-area   ← the element does this
-     *   Connects:  loads the console's prompt packages into the left column
-     * and the owner, 2026-09-19, on what the click should do: "it's not opening a new [package]…
-     * you can use the same controls that you have on composer." So it calls the composer's own
-     * control — the same `handleTabChangeWithGate('composer')` the Composer tab calls — which
-     * starts a FRESH package (session_id null, title empty) and never reloads the card the
-     * person had open. Nothing new is invented for it; if the two ever diverge, they diverge in
-     * that one function.
-     *
-     * (The event NAME is the old function's, kept because it is the name the design's note
-     * dispatches — a name is an address, and the note is where this one is written down.)
-     */
-    const onAgentButton = () => {
-      void handleTabChangeWithGate('composer');
-    };
-    /**
-     * ...AND THE SAME BUTTON POINTS THE OTHER WAY FROM A PACKAGE. There it reads "Console" and
-     * opens the console — the same `handleTabChangeWithGate('console')` the Console tab calls,
-     * so the two directions are one pair of controls rather than two lookalikes.
-     * The element decides which name to dispatch from the seat it was told it is
-     * (chat-panel reads that from the session row); this end only listens.
-     */
-    const onOpenConsole = () => {
-      void handleTabChangeWithGate('console');
-    };
-    window.addEventListener('open-console', onOpenConsole);
-    window.addEventListener('loads-cards-form-console-in-prompt-area', onAgentButton);
-    window.addEventListener('repair-finding', onRepairFinding);
-    window.addEventListener('conversation-change', onConversationChange);
-    /**
-     * THE CANVAS ANNOUNCES ITSELF — AND SHE SAYS WHAT IT HOLDS.
-     *
-     * This is the two halves of one loop. The canvas stays the clean working area: it
-     * emits `flow-opened` with what it was handed (counts, and every row it could not
-     * name or step it did not draw). The sentence is HIS app's, spoken through the
-     * same channel the repair verdicts use, so the drawing and the conversation agree
-     * about what just happened — the canvas never carries the noise itself.
-     *
-     * The seat is where it lands; nothing about the conversation model changes.
-     */
-
-    /**
-     * THE BLANK ONES ARE NEWS TOO, and they ride the announcement the canvas already makes.
-     *
-     * A seat with nothing written in it used to pass in silence — an empty tile and a quiet
-     * chat — so the most likely first move in this demo (open a prompt nobody has written in,
-     * run it) produced a picture and no words. The owner, 2026-09-18: "we need to send her a
-     * notification for blank nodes, and tell her to load a section in the chat that represents
-     * them… just simply say they're blank — would you like to work on this one?"
-     *
-     * The turn carries the node's id and its name, which is what makes it a CARD rather than a
-     * sentence: clicking it points the canvas at the seat it is about.
-     */
-    const speakBlankSeats = (blanks: Array<{ id: string; title: string }> | undefined) => {
-      for (const node of blanks ?? []) {
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: {
-            role: 'assistant',
-            content: `"${node.title}" is blank — nothing has been written in this seat yet. Want to work on this one?`,
-            nodeId: node.id,
-            label: node.title,
-          },
-        }));
-      }
-    };
-
-    const onFlowOpened = (event: Event) => {
-      const d = ((event as CustomEvent).detail || {}) as {
-        label?: string;
-        notes?: number;
-        seats?: number;
-        blanks?: Array<{ id: string; title: string }>;
-        steps?: number;
-        unresolved?: string[];
-        absent?: Array<{ step: string; why: string }>;
-      };
-      logger.info('flow opened', d as Record<string, unknown>);
-      // THE BLANKS FIRST, THEN THE SUMMARY — and from HERE, not from a second listener.
-      //
-      // They used to be two `flow-opened` listeners: a named one for this summary, and an
-      // INLINE arrow for the blank seats that the effect's cleanup never removed. The effect
-      // re-runs while a run progresses, so the inline one stacked up — measured in the running
-      // app: 88 copies of two sentences (2 blanks x 44 accumulated listeners) while this summary
-      // spoke once, which is exactly how the duplication looked on screen (owner, 2026-09-18:
-      // "when I run, Grace output — it duplicates"). One event, one listener, one place to
-      // remove it. Order kept: the seats are spoken before the sentence about the flow.
-      speakBlankSeats(d.blanks);
-      const count = (n: number | undefined, one: string): string =>
-        `${n ?? 0} ${(n ?? 0) === 1 ? one : one + 's'}`;
-      let line = `The flow is up — ${d.label || 'this run'}: `
-        + `${count(d.notes, 'note')}, ${count(d.seats, 'seat')}, ${count(d.steps, 'step')}.`;
-      if (d.unresolved?.length) {
-        line += ` One row I cannot name yet — ${d.unresolved.join(', ')} — so it is drawn without a seat claimed.`;
-      }
-      if (d.absent?.length) {
-        line += ` Not drawn: ${d.absent.map((a) => a.step).join(', ')} — ${d.absent.map((a) => a.why).join('; ')}.`;
-      }
-      /*
-       * AND THE SAME TWO FACTS GO WHERE THE PERSON IS ALREADY LOOKING: the message line at the
-       * top of her column. That line is the readout for whatever is on screen — the note you
-       * picked, or what this drawing could not say — and the owner pointed these facts at it
-       * (2026-09-18: "Those messages should appear at the very top of Grace… that's where we're
-       * supposed to have messages like [tool-call: the prompt names no tool…]"). The words are
-       * the graph's own, unchanged, so the drawing's omission and her sentence cannot drift.
-       * The DRAWING no longer prints them: it never narrates (see agent-flow's render).
-       */
-      const notes: string[] = [];
-      if (d.unresolved?.length) {
-        notes.push(
-          `${d.unresolved.length} row${d.unresolved.length === 1 ? '' : 's'} could not be named: ${d.unresolved.join(', ')}`,
-        );
-      }
-      if (d.absent?.length) notes.push(d.absent.map((a) => `${a.step}: ${a.why}`).join(' · '));
-      const readout = deepFind<HTMLElement & { statusText?: string }>('chat-panel');
-      if (readout && notes.length) readout.statusText = notes.join(' · ');
-      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-        detail: { role: 'assistant', content: line },
-      }));
-    };
-    /**
-     * A NODE THE PERSON PULLED OUT OF THE CANVAS IS A ROW IN THE PROMPT.
-     *
-     * THIS USED TO SAY THE OPPOSITE, and it was honest then: the node was a draft, the drawing
-     * had it and the package did not, and nothing was saved. That is the thing this replaces.
-     * The brief's one invariant is that every node action has a prompt meaning or it does not
-     * exist, because a node that lives in the drawing and nowhere else is a lie told by the
-     * picture — and the picture is what a person trusts most (READ-ME/CANVAS-AND-PROMPT.md §2).
-     *
-     * SO THE ADD IS A WRITE, through the person's own path rather than a second one. `_seatFor`
-     * in <prompt-section-editor> already makes a row that is not there — named from the
-     * declaration, label and type together, never a spelling the drawing invented — and it is
-     * reached by the same `set-left-column-text` a chat button uses. The row starts EMPTY: the
-     * words are the person's own, and they are one set of words whether typed in the row or read
-     * off the node. The drawing is rebuilt from the rows the moment it lands (publishFlowFromRows
-     * through the `section-add` listener), which is also what retires the element's draft.
-     *
-     * AND WHEN IT CANNOT BE DONE, GRACE SAYS SO — she is on the right, watching, and this is
-     * her half of it. Two refusals, both hers to deliver:
-     *   · a kind no seat is declared for — a row invented for it would be drawn with a shape
-     *     nobody agreed on (promptSections' UNDECIDED rule);
-     *   · a row the prompt already has — where the only write available would SET that row's
-     *     content and erase words the person cannot see.
-     * Making a mistake on the canvas is ALLOWED, and the node may sit there red. What is not
-     * allowed is silence about it: this is a training tool as much as it is a flow, and the
-     * person learns by being told, in her words, that it does not work here.
-     */
-    const onFlowNodeAdded = (event: Event) => {
-      const d = ((event as CustomEvent).detail || {}) as { nodeId?: string; kind?: string };
-      logger.info('flow node added', d as Record<string, unknown>);
-      const said = (content: string) => {
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: { role: 'assistant', content },
-        }));
-      };
-      const answer = rowForAddedNode(String(d.kind ?? ''), surfaceSections() as FlowSeatInput[]);
-      if (answer.why === 'undeclared') {
-        said(`That node is not a row this prompt can hold, so it was not added. `
-          + `Its kind — "${d.kind || 'unnamed'}" — is not one of the seats a prompt has.`);
-        return;
-      }
-      if (answer.why === 'already') {
-        said(`This prompt already has a ${answer.label} row, and the node is that row — `
-          + `so nothing was added, and nothing in it was touched.`);
-        return;
-      }
-      window.dispatchEvent(new CustomEvent('set-left-column-text', {
-        detail: { target: answer.section, content: '' },
-      }));
-      said(`Added a ${answer.label} row to the prompt. Write in either place — `
-        + `the row and the node are the same thing.`);
-    };
-    window.addEventListener('flow-node-moved', onFlowNodeMoved);
-    window.addEventListener('flow-node-added', onFlowNodeAdded);
-    window.addEventListener('flow-select', onFlowSelect);
-    window.addEventListener('turn-click', onTurnClick);
-    window.addEventListener('flow-connect', onFlowConnect);
-    window.addEventListener('flow-action', onFlowAction);
-    /**
-     * THE TONE SWITCH ASKS, THE HOST WRITES — the same split as every other write here.
-     *
-     * <canvas-footer> carries the master's tone control and emits `theme-change`; it does
-     * not reach across the tree to restyle a sibling, because a footer does not know where
-     * the drawing is (and an element that did would be the wrong model twice over). Two
-     * things take the tone: the CONTAINER, whose ground her column stands on, and the
-     * DRAWING itself, which owns the ink and the grid.
-     */
-    const onThemeChange = (event: Event) => {
-      const theme = String((event as CustomEvent).detail?.theme ?? '');
-      setWorkspaceTree((prev) => {
-        const comps = Array.isArray(prev.components) ? prev.components : [];
-        /*
-         * BY ROLE, NOT BY ID — the tone reaches the three components that take it: the CONTAINER
-         * (whose ground her column stands on), the DRAWING (which owns the ink and the grid) and
-         * the column's FOOT (its own tone switch). This listed the ids the host used to invent
-         * (`canvas-footer-view`, `flow-view`) and the model names its components now, so two of the
-         * three silently stopped taking the tone: the switch moved the canvas and left the foot and
-         * the drawing behind. The component NAMES are the contract — they are what the catalog
-         * validates and what the assembly emits. The owner, on the class of fault: "one fact, one
-         * reader" (READ-ME/CONTINUE-HERE.md §4).
-         */
-        const takesTheme = (c: any) =>
-          c?.component === 'RoomEmbed'
-          || c?.component === 'AgentFlow'
-          || c?.component === 'CanvasFooter';
-        const next = comps.map((c: any) => (takesTheme(c) ? { ...c, theme } : c));
-        return { ...prev, components: next };
-      });
-    };
-    window.addEventListener('theme-change', onThemeChange);
-
-    /**
-     * THE FOOT'S CONTROLS, WIRED TO THE PATHS THAT ALREADY EXIST — none of them is new.
-     *
-     *   canvas-play   the same run the control bar's RUN makes: this dispatches the request
-     *                 the editor's own button dispatches, so there is one run path, not two
-     *   canvas-reset  the way back that the column's own selector was supposed to give: the
-     *                 middle column returns to the last output (showOutputColumn)
-     *   canvas-save   the same save as Save Template, which is also what a Run does before
-     *                 it runs — the owner's "save options… when they run and when they exit"
-     *
-     * A control that emitted into the void would be the `tag-inert` finding this repo keeps
-     * writing checks for: every event here has a listener in the same change.
-     */
-    const onCanvasPlay = () => window.dispatchEvent(new CustomEvent('run-requested'));
-    const onCanvasReset = () => {
-      showOutputColumn();
-      /*
-       * AND THE REST OF THE PLACE GOES BACK WITH IT. The swap above takes the canvas out of the
-       * middle column; the ARRANGEMENT — the prompt out of its rail, her column open at her
-       * width — belongs to the layout that lays it out, so the layout is ASKED to put it back
-       * (owner, 2026-09-18: "it should just reset it… it doesn't look like it does"). Before
-       * this, Reset left the prompt docked where the Run had put it and her column wherever the
-       * last drag had left it: the canvas left, and nothing else did.
-       */
-      deepFind<HTMLElement & { resetArrangement?: () => void }>('workspace-layout')
-        ?.resetArrangement?.();
-    };
-    /* THE FOOT SAYS IT IS WORKING, BECAUSE IT IS. The save control carried no state while
-       the write was in flight (owner, 2026-09-21: "it's not got a spinner like the other
-       buttons… to let the user know it's doing something"). Set here and cleared in the
-       finally below, so the spinner lasts exactly as long as the save — no timer, no
-       minimum display time, no fake progress. */
-    const setFooterSaving = (saving: boolean) => {
-      setWorkspaceTree((prev) => {
-        const comps = Array.isArray(prev.components) ? prev.components : [];
-        /*
-         * BY ROLE, NOT BY ID, and this one was invisible until the owner looked at the button:
-         * "same spinner was on the save button but now it's gone." It matched `canvas-footer-view`
-         * — an id the HOST handed the footer when it wrote the canvas itself — so once the model
-         * began assembling the column (read-run; the footer is `<middle id>-footer` now) this map
-         * matched nothing, and the canvas's Save spun only in the version of the app that no
-         * longer exists. A miss here is silent by construction, which is why the id had to go.
-         */
-        const isFooter = (c: any) =>
-          c?.component === 'CanvasFooter' || c?.component === 'canvas-footer';
-        const next = comps.map((c: any) => (isFooter(c) ? { ...c, saving } : c));
-        return { ...prev, components: next };
-      });
-    };
-    const onCanvasSave = async () => {
-      // THE FOOT'S SAVE TAKES THE SAME TWO READINGS its siblings do — the control bar's Save and
-      // the surface's own save-template both hand the save the sections and the live output.
-      // This one called it with NO arguments, and a save with no sections throws on the way to
-      // its payload: the foot logged "[CRUD] Save failed", no request was sent, and nothing was
-      // written (owner, 2026-09-18: "the save feature on the canvas is not saving"). Same two
-      // helpers as the others, so there is still exactly one way to read the column and one way
-      // to save it.
-      const sections = surfaceSections();
-      const compiledOutput = readLiveOutput();
-      console.log('[canvas-footer] save-click →', sections.length, 'sections +', compiledOutput.length, 'chars of output from the surface');
-      setFooterSaving(true);
-      try {
-        await handleSavePromptRef.current?.(compiledOutput, sections);
-      } finally {
-        setFooterSaving(false);
-      }
-    };
-    /**
-     * THE CONSOLE TOLD US IT TURNED A PAGE. It carries no data the shell must act on — the
-     * grid owns its own page — but an event nobody hears is the `event-unheard` finding this
-     * repo keeps writing checks for, and it is right: a control that says something into a
-     * room with nobody in it is a wire connected at one end. So the page change is recorded,
-     * like the canvas's own events are.
-     */
-    /**
-     * A CARD SAID IT WAS DELETED. Its own two-step confirm is the whole confirmation (arm,
-     * then CONFIRM), so this deletes and takes the card out of the list — see deletePackage:
-     * no re-assembly, because the packages are a list in the data model.
-     */
-    const onCardDelete = (event: Event) => {
-      const sessionId = String((event as CustomEvent).detail?.sessionId ?? '');
-      if (sessionId) void deletePackageRef.current(sessionId);
-    };
-    window.addEventListener('card-delete', onCardDelete);
-
-    const onCardPage = (event: Event) => {
-      logger.info('console page', ((event as CustomEvent).detail || {}) as Record<string, unknown>);
-    };
-    window.addEventListener('card-page', onCardPage);
-    /**
-     * THE COLUMN'S HEADER ASKED FOR ANOTHER VIEW — the one control `<output-controls>` owns, and
-     * the host is what performs it (the header does not know where the column's body lives).
-     *
-     * 'flow' IS NOT HANDLED HERE, deliberately: the drawing exists only while a Run has put one
-     * there, and the header only offers it in that state — so a 'flow' choice can only mean "the
-     * view you are already in", which the element already refuses to emit (see `_choose`).
-     */
-    const onViewChange = (event: Event) => {
-      const view = String((event as CustomEvent).detail?.view || '');
-      if (view === 'draft') void showDraftColumn();
-      else if (view === 'output') showOutputColumn();
-    };
-    window.addEventListener('view-change', onViewChange);
-    window.addEventListener('canvas-play', onCanvasPlay);
-    window.addEventListener('canvas-reset', onCanvasReset);
-    window.addEventListener('canvas-save', onCanvasSave);
-    window.addEventListener('flow-opened', onFlowOpened);
-    return () => {
-      window.removeEventListener('open-console', onOpenConsole);
-      window.removeEventListener('loads-cards-form-console-in-prompt-area', onAgentButton);
-      window.removeEventListener('repair-finding', onRepairFinding);
-      window.removeEventListener('conversation-change', onConversationChange);
-      window.removeEventListener('flow-node-moved', onFlowNodeMoved);
-      window.removeEventListener('flow-node-added', onFlowNodeAdded);
-      window.removeEventListener('flow-select', onFlowSelect);
-      window.removeEventListener('turn-click', onTurnClick);
-      window.removeEventListener('flow-connect', onFlowConnect);
-      window.removeEventListener('flow-action', onFlowAction);
-      window.removeEventListener('card-delete', onCardDelete);
-      window.removeEventListener('card-page', onCardPage);
-      window.removeEventListener('view-change', onViewChange);
-      window.removeEventListener('canvas-play', onCanvasPlay);
-      window.removeEventListener('canvas-reset', onCanvasReset);
-      window.removeEventListener('canvas-save', onCanvasSave);
-      window.removeEventListener('theme-change', onThemeChange);
-      window.removeEventListener('flow-opened', onFlowOpened);
-    };
-  }, [handleRepairFinding, handleConversationChange, handleTabChangeWithGate, headerTab]);
+  /* MOVED (2026-10-21): the 635-line window-event effect now lives in
+     `canvas/useShellEventListeners.ts`. Same statement, same deps, passed by name. */
+  useShellEventListeners({ consoleRendererRef, deletePackageRef, handleConversationChange, handleRepairFinding, handleSavePromptRef, handleTabChangeWithGate, headerTab, patchSectionAt, publishFlowFromRows, readLiveOutput, setWorkspaceTree, showDraftColumn, showOutputColumn, surfaceSections });
 
   /**
    * A PACKAGE OPENS WHERE IT WAS LEFT.
@@ -9110,1547 +5576,15 @@ export default function Index({
    * Only on a change of package: re-running this on every render would fight the operator,
    * who owns the arrangement from the moment they touch it.
    */
-  useEffect(() => {
-    const stored = currentPromptSession?.workspace;
-    storedWidthsRef.current = currentPromptSession?.columnWidths ?? null;
-    /*
-     * THE PLACES THIS PACKAGE WAS LEFT WITH — read here, where its own save is in hand, and
-     * replaced on every open: a package with no graph clears them, so a layout the previous
-     * package carried can never be drawn under this one's rows. The places are NOT applied to a
-     * drawing here (there is none until a Run — see below); they are held for the builder, which
-     * is what draws a Run, and the element's own `drawn` is what writes them back on Save.
-     */
-    const savedNodes = stored?.graph?.nodes;
-    carriedPositionsRef.current = Array.isArray(savedNodes) ? savedNodes : [];
-    /*
-     * AND THE RUN'S COLUMN RIDES WITH IT (owner, 2026-10-05 — see readWorkspaceState): a
-     * package opened on its drawing carries the same column forward, so a manual Save made
-     * on the reopened picture re-writes it — `metadata.workspace` is replaced whole by a
-     * save (jsonb merges only its top level), so a field read live but not re-fed here
-     * would be dropped by the next Save. Cleared on every open: a package with no saved run
-     * must never inherit the previous package's column.
-     */
-    const storedRunColumn = stored?.run_column?.components;
-    assembledRunColumnRef.current = Array.isArray(storedRunColumn) ? storedRunColumn : null;
-    /*
-     * THE PROMPT IS ON SCREEN WHEN A PACKAGE OPENS, AND THAT DOES NOT DEPEND ON A SAVE.
-     *
-     * Above the `stored` guard on purpose: an unsaved package, or one whose workspace was never
-     * recorded, still has to open with its prompt visible — and the pane may be folded from a
-     * Run in the package before this one, because the layout element is reused and the dock
-     * marks it operator-owned. See workspace-layout's `openPrompt`, which opens the column and
-     * hands the pane's ownership back to the payload in the same act.
-     *
-     * What the person reported (2026-09-23): "when I open an existing prompt ... the agent
-     * prompt area is not expanded. It's collapsed and it makes me think that the prompt text
-     * areas are not loading."
-     */
-    const openThePrompt = (): boolean => {
-      const el = deepFind<HTMLElement & {
-        openPrompt?: () => void;
-        setColumnWidths?: (w: { left?: number | null; chat?: number | null } | null) => void;
-      }>('workspace-layout');
-      if (!el?.openPrompt) return false;
-      // A PACKAGE LOADS WITH ITS COLUMNS EQUAL, AND WITH THE WIDTHS IT WAS SAVED WITH.
-      // `openPrompt` puts the split back to the middle and hands the pane to the payload; the
-      // saved widths then override it, because an adjustment a person made and SAVED is their
-      // decision and outranks the default. The owner, 2026-09-23: "each column for a package is
-      // equal width until the user makes adjustments, and then it must remember the user's
-      // adjustment. Only on save."
-      el.openPrompt();
-      el.setColumnWidths?.(currentPromptSessionRef.current ? storedWidthsRef.current : null);
-      return true;
-    };
-    if (!openThePrompt()) {
-      // The layout arrives with the surface, so a package opened from a cold start has no
-      // element to speak to yet. Same retry the stored view uses below, same give-up.
-      let frames = 0;
-      const open = () => {
-        if (openThePrompt() || ++frames >= 40) return;
-        requestAnimationFrame(open);
-      };
-      requestAnimationFrame(open);
-    }
-    if (!stored) return;
-    /*
-     * THE GRAPH COMES BACK — AND THE DRAWING WITH IT WHEN THE PACKAGE HAS RUN (owner,
-     * 2026-10-05; the 2026-09-22 rule below NARROWS, it is not contradicted).
-     *
-     * The owner, 2026-10-05: *"that state should save on run and all card opens after that
-     * open a collapsed left rail 'Agent prompt' and reveals the run state."* The 2026-09-22
-     * ruling stays whole for a package that has NEVER run — *"the canvas is not supposed to
-     * appear until you click run"*: with no saved run there is no drawing to show, and the
-     * prompt stands open as the only thing to look at. A package whose saved state carries
-     * the run's own column HAS run; opening it is the read that state was saved for: the
-     * prompt on its "Agent Prompt" rail, the drawing between the columns, her output beside
-     * it — the state the owner drew. The column comes from `run_column` in the save, never
-     * from a fresh model call: a model call per open would be the second call per run this
-     * app already paid for once and removed.
-     *
-     * `middle` and the graph are honoured as facts either way: the graph is written into
-     * the model, so a Run draws it immediately and nothing about the package is lost. A
-     * package whose save says 'output' has no graph and is untouched.
-     */
-    const graph = stored.graph;
-    if (stored.middle !== 'output' && graph && graph.nodes?.length) {
-      writeFlowToSurface(graph);
-      const runColumn = stored.run_column?.components;
-      if (Array.isArray(runColumn) && runColumn.length) {
-        void (async () => {
-          try {
-            // The canvas's own code — fetched on the way in, only when a drawing is
-            // actually coming (the same rule a Run follows).
-            await loadCanvasElements();
-          } catch (err) {
-            // NOTHING IS SUBSTITUTED: the prompt stays open on the output column, and the
-            // trace carries the reason — a missing canvas is not a state to draw.
-            logger.error('the canvas code could not be loaded, so the saved run opens on its output', {
-              error: err instanceof Error ? err.message : String(err),
-            });
-            return;
-          }
-          // ONE COMMIT: the saved column replaces the output viewer in the middle — the ids
-          // are the house names both assemblies share ("root", "middle-column"), so this is
-          // the same update a Run makes, replayed — and the column's header is told which
-          // view it stands on.
-          setWorkspaceTree((prev) => ({
-            ...prev,
-            components: applyComponentUpdate(prev.components, runColumn),
-          }));
-          setColumnView('flow', COLUMN_VIEWS_RUN);
-          /*
-           * THE PROMPT FOLDS ONLY ONCE THE DRAWING IS REALLY THERE. A folded prompt with an
-           * empty middle is the "prompt text areas are not loading" state (2026-09-23) — so
-           * this waits for the canvas element itself: the collapse and the drawing arrive
-           * together, or the prompt stays out. `openPrompt` above has handed the pane's
-           * ownership back, so the property write lands.
-           */
-          let frames = 0;
-          const settle = () => {
-            const canvas = deepFind<HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean }>('room-embed');
-            if (!canvas?.applyWorkspaceState) {
-              if (++frames < 90) requestAnimationFrame(settle);
-              return;
-            }
-            const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
-            if (layout) layout.leftCollapsed = true;
-            // HER SEAT AND THE DRAWING'S PAN AND ZOOM — the rest of the place, put back by
-            // the element that owns it (room-embed.applyWorkspaceState re-reads `stored`).
-            canvas.applyWorkspaceState(stored);
-          };
-          requestAnimationFrame(settle);
-        })();
-      }
-    }
-    let frames = 0;
-    let applied = false;
-    const apply = () => {
-      if (applied) return;
-      // THE SAME SHADOW-PIERCING READ AS THE SAVE'S (see there): `document.querySelector`
-      // finds neither element in this shell, so both writes below were no-ops and a package
-      // "reopened where it was left" only in the record.
-      const canvas = deepFind<HTMLElement & { applyWorkspaceState?: (s: unknown) => boolean }>('room-embed');
-      if (canvas?.applyWorkspaceState) {
-        canvas.applyWorkspaceState(stored);
-        applied = true;
-      }
-      /*
-       * THE PROMPT IS NOT RESTORED FOLDED WITHOUT A DRAWING — see `openThePrompt` above and
-       * the run-state block above it. `leftCollapsed: true` is in a package's save because a
-       * RUN docked the prompt; a package with no saved run has no drawing to watch instead,
-       * so its prompt stays out, exactly as the owner asked on 2026-09-23 ("it makes me
-       * think that the prompt text areas are not loading"). A package WITH a saved run folds
-       * to its rail in the run-state block, and only once the canvas is really on screen.
-       */
-      if (!applied && ++frames < 40) requestAnimationFrame(apply);
-    };
-    requestAnimationFrame(apply);
+  /* MOVED (2026-10-21): the 193-line block now lives in `@/canvas/useRestorePackageWorkspace`.
+     Same statement, same deps, passed by name. */
+  useRestorePackageWorkspace({ COLUMN_VIEWS_RUN, assembledRunColumnRef, carriedPositionsRef, currentPromptSession, currentPromptSessionRef, setColumnView, setWorkspaceTree, storedWidthsRef, writeFlowToSurface });
 
-  }, [currentPromptSession?.id]);
-
-  const _handleDeleteProject = (projectId: string) => {
-    // The demo refuses DELETE server-side (demo_policy.py) — say so instead of
-    // letting the action fail quietly after a confirm.
-    if (isDemoMode()) {
-      alert(DEMO_DISABLED_SENTENCE);
-      return;
-    }
-    // Prevent deletion of the only project
-    if (projects.length <= 1) {
-      alert(
-        "Cannot delete the only project. At least one project is required.",
-      );
-      return;
-    }
-    if (
-      confirm(
-        "Are you sure you want to delete this project? This will also delete all prompts in this project.",
-      )
-    ) {
-      conversationStorage.deleteProject(projectId);
-      const updatedProjects = projects.filter((p) => p.id !== projectId);
-      setProjects(updatedProjects);
-      if (selectedProjectId === projectId) {
-        setSelectedProjectId(
-          updatedProjects.length > 0 ? updatedProjects[0].id : null,
-        );
-        if (updatedProjects.length > 0) {
-          conversationStorage.setCurrentProjectId(updatedProjects[0].id);
-        }
-      }
-    }
-  };
-
-  const _handleSelectProject = async (projectId: string) => {
-    setSelectedProjectId(projectId);
-    conversationStorage.setCurrentProjectId(projectId);
-    // Load conversations for the selected project
-    const conversations =
-      await conversationStorage.getProjectConversations(projectId, true);
-    setProjectConversations(
-      conversations.sort((a, b) => b.updatedAt - a.updatedAt),
-    );
-    setIsMultiSelectMode(false);
-    setSelectedConversationIds(new Set());
-  };
-
-  const _handleToggleConversationSelect = (conversationId: string) => {
-    const newSelected = new Set(selectedConversationIds);
-    if (newSelected.has(conversationId)) {
-      newSelected.delete(conversationId);
-    } else {
-      newSelected.add(conversationId);
-    }
-    setSelectedConversationIds(newSelected);
-  };
-
-  const _handleDeleteSelectedConversations = async () => {
-    if (selectedConversationIds.size === 0) return;
-
-    if (
-      confirm(
-        `Are you sure you want to delete ${selectedConversationIds.size} prompt(s)?`,
-      )
-    ) {
-      for (const id of selectedConversationIds) {
-        await conversationStorage.deleteConversation(id);
-      }
-      setSelectedConversationIds(new Set());
-      setIsMultiSelectMode(false);
-      // Reload conversations
-      if (selectedProjectId) {
-        const conversations =
-          await conversationStorage.getProjectConversations(selectedProjectId);
-        setProjectConversations(
-          conversations.sort((a, b) => b.updatedAt - a.updatedAt),
-        );
-      }
-    }
-  };
-
-  const _handleDeleteSingleConversation = async (
-    conversationId: string,
-    e: React.MouseEvent,
-  ) => {
-    e.stopPropagation();
-    if (confirm("Are you sure you want to delete this prompt?")) {
-      await conversationStorage.deleteConversation(conversationId);
-      // Reload conversations
-      if (selectedProjectId) {
-        const conversations =
-          await conversationStorage.getProjectConversations(selectedProjectId);
-        setProjectConversations(
-          conversations.sort((a, b) => b.updatedAt - a.updatedAt),
-        );
-      }
-    }
-  };
-
-  const _handleProjectsClick = async () => {
-    setActiveTab("projects");
-    await loadProjects(); // Refresh projects when tab is opened
-  };
 
   // Listen for conversation updates to refresh the list
-  useEffect(() => {
-    const handleConversationUpdate = async () => {
-      // Always refresh projects list when conversationUpdated event fires
-      // This ensures deleted projects are removed from the list
-      // Force refresh to get latest data from API
-      const allProjects = await conversationStorage.getAllProjects(true);
-      setProjects(allProjects);
-
-      // If the currently selected prompt was deleted, switch to default or all prompts
-      const currentProjectId = conversationStorage.getCurrentProjectId();
-      if (
-        currentProjectId &&
-        !allProjects.find((p) => p.id === currentProjectId)
-      ) {
-        // Selected prompt was deleted, switch to all prompts view
-        setSelectedProjectId(null);
-        conversationStorage.setCurrentProjectId("");
-      }
-
-      if (selectedProjectId && activeTab === "projects") {
-        const conversations =
-          await conversationStorage.getProjectConversations(selectedProjectId);
-        setProjectConversations(
-          conversations.sort((a, b) => b.updatedAt - a.updatedAt),
-        );
-      }
-    };
-
-    window.addEventListener("conversationUpdated", handleConversationUpdate);
-
-    // Listen for switchToMemoriesTab event (from TeacherChat project label click)
-    const handleSwitchToMemoriesTab = () => {
-      setActiveTab("memories");
-    };
-
-    // Listen for switchToChatTab event (from MemoriesTab when clicking a conversation)
-    // NOTE: This should NOT trigger when clicking conversations in the projects tab
-    // The projects tab should just load the conversation without switching tabs
-    const handleSwitchToChatTab = (event: Event) => {
-      // Check if event came from projects tab - if so, NEVER switch tabs
-      const customEvent = event as CustomEvent;
-      if (customEvent.detail?.fromProjectsTab) {
-        console.log(
-          "🚫 [Projects Tab] Ignoring switchToChatTab - chat panel is always visible",
-        );
-        return;
-      }
-      // Also check if we're currently on projects tab - don't switch if we are
-      if (activeTab === "projects") {
-        console.log(
-          "🚫 [Projects Tab] Blocking switchToChatTab - staying on projects tab",
-        );
-        return;
-      }
-      // Chat is always visible in the right column — no tab switch needed
-    };
-
-    // Listen for editor-send-to-model event (from MyStoryEditor) — REMOVED: MyStory is retired
-
-  // `toggle-third-column` WAS NEVER SENT BY ANYONE. It was listened for here with a handler
-  // that dispatched `reset-columns-to-equal-widths` — which only the retired React
-  // ResizableSplitter ever heard. The element that owns her column is `workspace-layout`,
-  // and it broadcasts its own fact as `third-column-toggle` (the name its registry entry
-  // declares); the shell has nothing to do with that fact — the layout owns it, and the save
-  // reads her state off the element directly. Both dead ends are gone: a listener is not a
-  // wire when the name it waits for is one nobody speaks.
-
-  // ── A2UI: Wire run-requested / save-requested from Lit <prompt-section-editor> ──
-  // The Lit editor (AI-emitted) is now the source of truth for sections in the AI surface.
-  // Run executes the prompt (real backend call) and streams into compiledOutput.
-  // Middle column appears on Run (even while streaming) and stays if output exists.
-  // Clear-output collapses the middle column. Save persists both left content + compiled output.
-  const handleRunRequested = async (e: Event) => {
-    const detail = ((e as CustomEvent).detail || {}) as { sections?: any[] };
-    // THE ONE READER (rowsForDecision above). It prefers the editor — and reads the ELEMENT
-    // rather than trusting what this event carried, so the list reviewed is the list in the
-    // column whether or not the payload travelled well. Its fallbacks are the repair prompt and
-    // the package's own left column, for the swap window: a Run that arrives while the column
-    // is being replaced reads back an empty editor, and running what the column held a moment
-    // ago beats running nothing (and beats blaming a save for a payload that was never sent).
-    const sections = rowsForDecision();
-    console.log(
-      '[WritingAreaIndex] run-requested from <prompt-section-editor>',
-      `${sections.length} section(s) from the column`,
-      detail.sections?.length === 0 ? '— the event carried none' : '',
-    );
-
-    // ── HER REVIEW, BEFORE THE RUN ───────────────────────────────────────────
-    //
-    // A Run used to go straight to the model. Now it is held and she is asked whether the
-    // prompt is ready — the list is READ-ME/FLOW-REQUIREMENTS.md, and the point is not
-    // compliance but that a bad prompt is caught while it is cheap to fix, by the person
-    // who wrote it, before it becomes a bad flow.
-    //
-    // THE RUN IS RELEASED BY HER SAYING SO, NOT BY HER SILENCE. `<run_ok/>` in her reply
-    // is the only thing that proceeds; a `<run_blocked>` or no tag at all leaves it held.
-    // Defaulting to "go" on a missing answer is how a prompt with a named problem goes
-    // through because the machinery assumed yes.
-    //
-    // AND THAT SWITCH IS NOT THIS GATE — IT WAS, AND IT SILENTLY TOOK THE REVIEW AWAY.
-    //
-    // `autoAdvice` is the "stop offering me suggestions" preference: pressing "No thanks" on one
-    // of her offers sets it, and it is measured per page (shared/autoAdvice). The review was
-    // gated on that same flag, so a person who had waved away ONE suggestion ran every later
-    // prompt unreviewed — no hold, no blockers, no reply — and the requirement this branch exists
-    // for ("if there's an unsaved prompt and somebody tries to run it, Grace is supposed to stop
-    // them", READ-ME/FLOW-REQUIREMENTS.md) was gone while every test still passed. The owner,
-    // 2026-09-23, after pressing "No thanks" once: "When I click on a card and then I click on
-    // run, nothing happens. Grace doesn't talk anymore. Nothing happens. … All of the blockers
-    // checking is gone."
-    //
-    // SO THE REVIEW IS NOT OPTIONAL. It is the app's own gate, asked once per Run, and only her
-    // answer releases it. The advice preference governs what she VOLUNTEERS (a greeting, a
-    // suggestion about where to go next) — not whether a Run is checked before it runs.
-    //
-    // `runApprovedRef` is set by the approval event and read here: the released run
-    // arrives as the same `run-requested` and must pass the gate it was just cleared by.
-    if (!runApprovedRef.current) {
-      // Held, and the held payload is what her approval will release.
-      heldRunRef.current = detail;
-      /*
-       * THE BUTTON ANSWERS THE PRESS. A held run used to leave the controls exactly as they
-       * were — no spinner, no change — so the button read as dead while she was in fact
-       * reading the prompt. The owner, 2026-09-23: "run should not be a dead button."
-       *
-       * NOTHING ELSE OF THE RUN'S OPENING MOVE IS TAKEN: the output is NOT cleared and the
-       * middle column is not told a run is on, because no run started. The spinner is the
-       * whole of it, and she takes it down again — with her verdict (run-approved re-enters
-       * this handler and runs, run-blocked stops it) — never on a timer of the shell's.
-       */
-      setIsComposerRunning(true);
-      const heldSections = sections;
-      /*
-       * BOTH FACTS FROM THE ONE READER THE SEAT USES. The title already read the surface; the
-       * description read the session row, and the assembly never filled that row's copy — so a
-       * package whose description was on screen was reviewed as `(none)`, I2 held the Run, and the
-       * "Add description" button was disabled because the SEAT could see it. See shared/packageFacts.
-       */
-      const title = surfaceTitle();
-      const description = surfaceDescription();
-      // SHE REVIEWS THE WORDS, NOT A SUMMARY OF THEM. "Agent Role: has content" tells her
-      // nothing she can act on — a seat can be non-empty and still be a bad instruction,
-      // which is the thing this gate exists to catch. Each seat goes in whole, cut only
-      // when it runs long, so what she judges is what will be run.
-      const seatLines = heldSections
-        .map((s: any) => {
-          const label = s.name || s.section || s.type || 'section';
-          const body = String(s.content || '').trim();
-          if (!body) return `- ${label}: (EMPTY)`;
-          return `- ${label}: ${body.length > 600 ? `${body.slice(0, 600)}…` : body}`;
-        })
-        .join('\n');
-      /*
-       * WHAT IT NAMES THAT CANNOT RUN — the requirement the gate could not see without this.
-       *
-       * The register has two kinds of tool (backend/tools.py): `read`, which is words the system
-       * follows and works today, and `call`, which asks another program for something. NOTHING
-       * EXECUTES A `call` TOOL YET, so a prompt whose job depends on one is not operational — it
-       * says the system will reach out and no part of the system does. The owner, 2026-09-23:
-       * "we cannot allow a prompt that's not operational to be run."
-       *
-       * SHE IS THE ONE WHO SAYS IT, which is why this is a FACT HANDED OVER and not a refusal
-       * here: the register is read, the prompt's own words are searched for a tool that cannot
-       * run, and the answer becomes a line in her review. Grace stops the run and talks to the
-       * person; the shell does not take that conversation away from her.
-       *
-       * A failure to read the register is NOT a block: the run is held for review either way,
-       * and the list of tools is a fact she is usually given anyway (the workspace context
-       * carries it). An empty answer here says "nothing found", not "nothing exists".
-       */
-      const register = await readToolRegister();
-      const cannotRun = await toolsThatCannotRun(heldSections, register);
-      /*
-       * THE BLOCKERS, COMPUTED HERE — THE WHOLE LIST, ONCE.
-       *
-       * She used to be handed the requirements as prose and left to work out which were unmet,
-       * inside a reply capped at 2000 tokens. What the person got was a slightly different
-       * subset each turn, with "Add description" arriving after the description had been
-       * written. The list is arithmetic — READ-ME/FLOW-REQUIREMENTS.md §8 asks the question
-       * itself ("a review that asks a model to count empty seats is paying for arithmetic") —
-       * so the shell does the arithmetic and she does the talking. The owner, 2026-09-23:
-       * "she only replies to the things that are needed… give the user the ability to apply
-       * all. Previously she was handing those over one at a time, which we don't want."
-       */
-      const unmet = reviewFlow({
-        title,
-        description,
-        // An id is what "saved" means here: no id, no row, no place for a description to live.
-        saved: Boolean(currentPromptSessionObjRef.current?.id),
-        sections: heldSections,
-        register,
-      });
-      window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
-        detail: {
-          // THIS TURN CAN STOP SOMETHING, so the seat is told which kind of turn it is. It owes
-          // a verdict for a run review, and it marks its own reply as an alert when the answer
-          // is no — the message's weight is decided there, not here.
-          review: 'run',
-          request: [
-            'A person has pressed Run and the prompt is held until you say it is ready.',
-            `Its name: ${title || '(none)'}. Its description: ${description || '(none)'}.`,
-            'Its seats, as the person left them:',
-            seatLines || '(the column is empty)',
-            '',
-            ...(cannotRun.length
-              ? [
-                  `THIS PROMPT NAMES TOOLS THAT CANNOT RUN YET: ${cannotRun.join(', ')}.`,
-                  'Those tools have no service behind them, so the step they stand for will not',
-                  'happen — a prompt that needs one is NOT operational and must not be run. That',
-                  'alone is reason enough to block it: say which tool has nothing behind it, name',
-                  'the tools that DO run as buttons the person can press instead, and end with',
-                  '<run_blocked/>.',
-                  '',
-                ]
-              : []),
-            'THE BLOCKERS ARE ALREADY FOUND. This is the WHOLE list — every unmet requirement,',
-            'computed from the prompt itself. Reply only to what is needed: say these, in this',
-            'one reply. Do NOT add to the list, do NOT re-derive it, and do NOT look for more —',
-            'the person can work everything here in one pass, and a list that arrives a piece at',
-            'a time hides how much is left.',
-            ...(unmet.length
-              ? unmet.map((u) => `  · ${u.id}${u.level === 'advisory' ? ' (advisory — worth saying, does not hold the Run)' : ''} — ${u.why}`)
-              : ['  · nothing — every requirement is met.']),
-            'THE SEATS ARE THE DRAWING. What is listed above is exactly what the canvas will',
-            'draw as nodes, so two rows for one step is two nodes for one step, and it is a',
-            'reason to hold this Run. It is not a reason to tell anybody off: the person may',
-            'have made the second row without meaning to, or may want two — say what you see in',
-            'one sentence and offer to combine them as a button the person can press. The merge',
-            'moves their words as they wrote them; it does not retype them.',
-            /*
-             * THE VOCABULARY, NAMED. She was told to offer "a button for each fix" and never told
-             * what a button may SAY, so the blockers came back as `[Save the package](action:save)`
-             * and `[Name the package](action:set-title|…)` — correct intent, names the app did not
-             * answer to, and a person pressing them was told so (measured 2026-09-23). The app now
-             * answers those two as well as the ones below it (actionLink), and this list is the
-             * other half of the same rule: name the action so she is not left to invent one.
-             *
-             * EVERY FORM HERE IS PARSED BY actionLink.ts. Adding a line to this list without a
-             * matcher on the other end is how this list becomes a lie.
-             */
-            'IF YOU OFFER A BUTTON, IT MUST SPELL AN ACTION THE APP KNOWS. These are the ones,',
-            'exactly as written (the words in <angle brackets> are yours to choose):',
-            '  · [Save the package](action:save) — the package has no record yet; nothing else can',
-            '    be written into it until it is saved.',
-            '  · [Name the package](action:set-title|<the name>) — the title a person will see.',
-            '  · [Add a description](action:set-description|<one line>) — what its card will say.',
-            '  · [Fill the <seat>](action:write-seat:<seat>|<the text>) — writes or appends to that',
-            '    row (System Role, User Role, Agent Role, Tool Call…).',
-            '  · [Remove <row>](action:remove-seat:<row>) — the one destructive repair.',
-            '  · [Move the tool](action:move-tool:<tool>|<the seat it belongs in>).',
-            '  · [Apply all](action:fix-all) — the repairs the app can make for itself, in one press.',
-            '  · [Run it](action:run) — ONLY after <run_ok/>, to release the Run you just cleared.',
-            'A button with any other action is a button that does nothing, and the person is told',
-            'the app cannot do it — so if a fix you want to offer is not in this list, say what',
-            'needs doing in words instead of inventing a name.',
-            'NAME EVERYTHING THAT IS WRONG, IN THIS ONE REPLY, AND NEVER ONE AT A TIME. Every',
-            'unmet requirement goes in this single answer, each with its own button, so the person',
-            'can work the whole list in one pass. A reply that names one thing and waits costs',
-            'them a trip to the prompt and back for every item, and hides how much is left — they',
-            'cannot tell a nearly-finished prompt from one that is barely started. Watched at the',
-            'screen, 2026-09-23: "she is making the user click again, then go to the list, then',
-            'click again." This is the whole list, once.',
-            'IF EVERYTHING IS THERE, CONGRATULATE THEM. One short sentence saying the prompt is',
-            'ready, starting with a bottle: 🍾 — the owner, 2026-09-23: "just have her confirm',
-            "everything's good and it's ready to run and put a champagne bottle icon there or",
-            'something to congratulate them." Then end with <run_ok/>. A person who has just',
-            'worked a list of fixes should be told they finished, not left to infer it.',
-            'If something is missing — or it names a tool that is not in the register, or one',
-            'that nothing can run — offer each fix as a button the person can press, and end with',
-            '<run_blocked/>. Do not emit <run_ok/> until it is ready. A prompt that is not',
-            'operational does not run.',
-            'DO NOT recite the rules themselves and do not congratulate; name only what is',
-            'actually wrong with THIS prompt. If nothing is wrong, one short sentence will do.',
-          ].join('\n'),
-        },
-      }));
-      /*
-       * APPLY ALL, PUT ON SCREEN — because until now it was not.
-       *
-       * The whole mechanism existed and nothing could reach it: `onFixAll` listens for
-       * `a2ui:fix-all`, <chat-panel> dispatches it, and `actionLink` names the action — and NO
-       * SURFACE EVER DREW A BUTTON WITH IT, and nothing ever told her to offer one. So the one
-       * control that clears the repairs the app can make for itself, and then runs the prompt by
-       * the button's own path, was unreachable on every screen. What the person got was the
-       * owner's report exactly: a list of blockers, and no way to work them.
-       *
-       * THE APP SAYS IT, NOT HER, and that is the choice rather than the shortfall: this is a
-       * statement about what the APP can do, the same kind of fact as "⚠️ Run did nothing" and the
-       * blank seats it already speaks. She explains the requirements; the app offers its own
-       * capability. The line is written to stand on its own, because her review arrives after it.
-       *
-       * OFFERED EXACTLY WHEN A PRESS WOULD DO SOMETHING, from the SAME predicate the apply uses
-       * (`runHoldingRepairs`) — so the button and the act cannot come apart. The names come from
-       * the repairs actually on this list, so the sentence is about THIS prompt and not a menu.
-       */
-      const applyable = runHoldingRepairs(unmet);
-      if (applyable.length) {
-        const kinds = new Set(applyable.map((u) => u.repair.kind));
-        const named: string[] = [];
-        if (kinds.has('merge-seat')) named.push('a row that stands twice');
-        if (kinds.has('move-tool')) named.push('a tool sitting in the wrong step');
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: {
-            role: 'assistant',
-            content: `Some of what is wrong with this prompt the app can fix by itself — `
-              + `${named.join(' and ')}. [Apply all](action:fix-all) makes those repairs; `
-              + `whatever needs your own words is still yours to write.`,
-            label: 'Apply all',
-          },
-        }));
-      }
-      /*
-       * AND THE ROOM STAYS WHERE IT IS. The Run button docks the prompt and gives the width to
-       * the canvas — the layout's own act, armed the moment the button is clicked (see
-       * workspace-layout's run-click). A held run draws no canvas, so the dock would take the
-       * prompt down to its rail and leave the person looking at a background: measured
-       * 2026-09-23, pressing Run on a package she then blocked collapsed the whole workspace.
-       * A run that never started must not rearrange the screen, so the layout is told.
-       */
-      window.dispatchEvent(new CustomEvent('a2ui:run-held'));
-      console.log('[WritingAreaIndex] Run held for review');
-      return;
-    }
-    heldRunRef.current = null;
-    runApprovedRef.current = false; // one run per approval
-
-    // ── NOTHING TO RUN IS THE ONLY THING THAT STOPS A RUN ────────────────────
-    //
-    // A RUN DOES NOT NEED A PACKAGE. This used to be nested inside "if there is no
-    // session": with no package it tried a save, and when that save did not finish the
-    // run refused — "Run did not execute… the save that creates one did not finish."
-    // The owner, 2026-09-18: "So it does not have to save the package to run — that is
-    // not required." He is right: Run sends the prompt and draws the canvas, and the
-    // package is a place to KEEP the answer, not a permission to ask for one.
-    //
-    // The one real precondition is CONTENT. With nothing in the left column there is no
-    // prompt to send, and that is what this says — where the person is looking, not only
-    // in the console. Nothing else gates a run: the run's own call carries
-    // `session_id: currentPromptSessionRef.current || undefined`, which is what an
-    // unsaved prompt has always meant here.
-    if (!sections.length) {
-      console.warn('[WritingAreaIndex] Run has no sections — nothing was sent anywhere');
-      setCurrentPromptSession((prev: any) =>
-        prev
-          ? { ...prev, compiledOutput: '⚠️ Run did nothing: there was nothing in the left column to run.' }
-          : prev
-      );
-      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-        detail: {
-          role: 'assistant',
-          content:
-            '⚠️ **Run did nothing.** The left column came back empty, so there was no prompt to send ' +
-            'and nothing was changed. Put something in a section — or press Repair on a finding — and press Run again.',
-        },
-      }));
-      return;
-    }
-
-    // The repair prompt has done its job: Run folds these sections into the
-    // session, which owns them from here. Holding the override would make the
-    // NEXT package open still holding the previous repair.
-    repairSectionsRef.current = null;
-    // WHICH finding this run answers, captured before the prompt is let go. The run
-    // is the repair; a fresh check is what settles it (see settleRepair).
-    const repairingFinding = repairFindingRef.current;
-    repairFindingRef.current = null;
-
-    const leftColumnContent = JSON.stringify({ sections });
-
-    // Reset output for fresh run; show middle immediately via isComposerRunning
-    setCurrentPromptSession((prev: any) =>
-      prev ? { ...prev, leftColumnContent, compiledOutput: '' } : prev
-    );
-    setIsComposerRunning(true);
-    // AND THE DRAWING IS TOLD THE SAME FACT IN THE SAME BREATH. It locks while the model execution
-    // loop is in flight and unlocks where the run ends (the run's `finally`) — one fact, two
-    // readers, so the lock cannot outlive the run and cannot lag it.
-    setCanvasRunning(true);
-
-    // ── THE PROMPT DOCKS, AND THE CANVAS TAKES THE WIDTH ────────────────────
-    //
-    // The same process, read and then worked: the sections the left column holds are
-    // the nodes, the finding is the trigger, and the run's own answers are the steps.
-    // The dock itself is the LEFT COLUMN'S OWN act — it hears the Run from its own
-    // footer and keeps its rail and one grip, so opening the prompt back up is a
-    // gesture, not a navigation (see workspace-layout's run-click). Nothing here
-    // forces it, because nothing here owns that width.
-    const repairFinding = repairingFinding
-      ? (catalogFindings || []).find((f: any) => f.id === repairingFinding)
-      : null;
-    // ── EVERY RUN DRAWS. The canvas is what the middle column is for, so it takes the
-    // column on Run whether or not a repair started it. A repair arrives with a note at
-    // the head of the flow; a plain prompt run has no finding, and the flow then starts
-    // at the prompt's own seats — the model draws both (see RepairFlowInput.finding).
-    // Nothing here asks whether there is something else to compile: there is not. The
-    // flow IS the run's output, and the compiled text stays reachable through the
-    // column's own selector and Clear.
-    flowInputRef.current = {
-      finding: repairFinding
-        ? {
-            id: repairFinding.id,
-            check: repairFinding.check,
-            component: repairFinding.component,
-            nodeId: repairFinding.nodeId,
-            file: repairFinding.file,
-            level: repairFinding.level,
-          }
-        : null,
-      /*
-       * THE ROWS GO OVER WHOLE — and they have to, because this used to pick three fields out of
-       * four and the fourth was the name. A SAVED row is `{section, role, content}`: it has no
-       * `name` and no `type`, so `{name: s.name, type: s.type}` handed the drawing two rows per
-       * package that could not be named at all. The canvas said so out loud, honestly and wrongly —
-       * "One row I cannot name yet — a row with no name, a row with no name" — and drew the System
-       * and User seats as unresolved nodes while the prompt beside it was perfectly named.
-       *
-       * `declaredName` is the one reader of that name (promptSections), so this asks it rather than
-       * choosing fields. The rest of the row rides along untouched: the builder decides what it
-       * needs, and a mapping here that chose for it is how the name went missing in the first place.
-       */
-      sections: (sections || []).map((s: any) => ({
-        ...s,
-        name: declaredName(s),
-        type: s.type,
-        content: s.content,
-      })),
-      label: repairTitleRef.current
-        || (repairFinding
-          ? `Repair — ${repairFinding.check}${repairFinding.component ? ` on ${repairFinding.component}` : ''}`
-          : currentPromptSessionObjRef.current?.title || 'This run'),
-    };
-    flowFactsRef.current = { running: true };
-    /*
-     * THE RUN'S OPENING MOVE, IN THE ORDER A PERSON CAN TRACK — and the order is the owner's, from
-     * watching it happen the wrong way round.
-     *
-     * THE CLICK ANSWERS FIRST, AND IT KEEPS ANSWERING. The controls are told at the click (see
-     * `writeBusyToSurface` above), so the RUN button spins under the person's finger while the rest
-     * of this happens — and the button is still there, because nothing has folded yet.
-     *
-     * THEN THE COLUMN IS ASSEMBLED, WITH THE PANELS WHERE THEY ARE. The model composes the third
-     * column against the catalog (`assembleThirdColumn`) while the canvas's code is fetched and
-     * while the run itself is already going out — one wait, three jobs, on screen as a spinner.
-     *
-     * THEN THE DOORS SLIDE — `dockPrompt()`, once the column is in hand. This is the piece the
-     * owner asked for twice and it is load-bearing: "the assembly should start in the background and
-     * then the slide panels should slide back. That's just after you click run." Docking at the
-     * CLICK folded the prompt to its rail before the model had answered, and the rail is where the
-     * control bar — and the spinning RUN button — lives. So the wait began by taking away the only
-     * thing that said the click had been heard.
-     *
-     * AND THE CANVAS MOUNTS INTO A SETTLED LAYOUT: the dock is one movement (the prompt and her
-     * column to their rails on the same 760ms curve — measured: 950 → 60 and 950 → 104 together,
-     * and her pane turns into a layer over the drawing without moving a pixel), the pane has its
-     * own waiting state while the room is empty, and the canvas goes in when the slide is over.
-     * That ordering is the cure for the jump the drawing used to arrive with: a canvas that mounts
-     * while the pane beside it is moving takes its width mid-flight and is seen sliding in (see the
-     * layout's own note, and the prompt's fold, which was cured the same way).
-     *
-     * NOTHING HERE IS TIMED EXCEPT THE SLIDE. There is no beat to hold, no floor to wait out: the
-     * model's own time is the wait, and `RUN_DOCK_MS` is the pane's transition — the one moment the
-     * canvas must not mount into.
-     */
-    const layoutEl = deepFind<HTMLElement & { dockPrompt?: () => void }>('workspace-layout');
-    /*
-     * AND THE COLUMN IS TOLD IT IS WORKING FROM THE CLICK — not from the moment its own assembly
-     * lands. On a SECOND Run the canvas is already on screen with the previous drawing in it, and
-     * the wait for the model is the longest part of the wait: a picture sitting there unchanged
-     * for four seconds is the silence this whole sequence exists to remove. The same call covers
-     * both cases (it is idempotent, and it waits for an element that does not exist yet on a
-     * first Run) — see setCanvasHolding.
-     */
-    setCanvasHolding(true);
-
-    void (async () => {
-      // BOTH ARRIVE BEFORE EITHER IS USED: the canvas's own code (fetched on the way in, never
-      // with the bundle — a package opened and never run pays for neither the drawing nor its
-      // 591KB ground) and the model's composition of the column.
-      const [, assembled] = await Promise.all([loadCanvasElements(), assembleThirdColumn()]);
-
-      /*
-       * AND THE COLUMN IS KEPT WHERE THE STATE WILL FIND IT (owner, 2026-10-05) — see
-       * assembledRunColumnRef. The components the model just returned ARE the drawing; the
-       * run's own state write (saveRunState) and every later manual Save persist them with
-       * the rest of the place, so a reopened card draws this exact column instead of paying
-       * a model for it again.
-       */
-      assembledRunColumnRef.current = Array.isArray(assembled.components) ? (assembled.components as unknown[]) : null;
-
-      /*
-       * THE DOORS OPEN WHEN THE COLUMN IS READY — NOT BEFORE, AND THAT IS THE ORDER THAT KEEPS THE
-       * RUN BUTTON ON SCREEN.
-       *
-       * The dock was called at the CLICK, and the dock is what folds the prompt to its rail — and
-       * the prompt's rail is where the control bar lives, with the RUN button on it. So the one
-       * control the person had just pressed was taken off the screen at the exact moment the wait
-       * began, and there was nothing anywhere that said the click had been heard. The owner,
-       * 2026-09-23: "the user cannot click something and nothing happened, that is not allowed …
-       * there is an animation on that run button and it should run until the panels expand."
-       *
-       * He had said the order a session earlier and it is the same order: "the assembly should start
-       * in the background and then the slide panels should slide back. That's just after you click
-       * run." Both halves are now true:
-       *
-       *   the click        the button spins (the controls are told at the click, see above)
-       *   the assembly     the MODEL composes the column — the wait a person actually has, filled
-       *                    by that spinner, on a button still under their finger
-       *   the colum is ready
-       *                    the doors slide: `dockPrompt()` closes the prompt and her column in one
-       *                    frame, the room opens, and the pane has its own waiting state (see
-       *                    workspace-layout's `_runInFlight`) so it is never an empty rectangle
-       *   RUN_DOCK_MS later  the canvas mounts — into a layout that has already settled, which is
-       *                    the cure for the drawing being seen sliding in — and the drawing follows
-       *                    in the same tick.
-       *
-       * NO FLOOR IS ADDED TO ANY OF IT: the model's own time is the wait, and the only timed thing
-       * here is the pane's own 760ms slide, which is the moment the canvas must not mount into.
-       */
-      layoutEl?.dockPrompt?.();
-      await new Promise((r) => window.setTimeout(r, RUN_DOCK_MS));
-      applyThirdColumn(assembled);
-      // The header is told what this column can now offer — the drawing itself, the output it came
-      // from, and the draft — by the same live write every view switch makes (see setColumnView).
-      setColumnView('flow', COLUMN_VIEWS_RUN);
-      setCanvasHolding(true);
-      // THE FRESH MOUNT TAKES THE LOCK, TOO — this drawing was built while the run already was, so
-      // its constructor default (`false`) is a moment out of date; the same re-assert `holding`
-      // gets above, for the same reason.
-      setCanvasRunning(true);
-
-      // THE DRAWING, in the same breath: the graph is a function of the rows and the run's own
-      // facts, and it is built here — the one writer of `/session/middle_column/flow`.
-      publishRepairFlow();
-      setCanvasHolding(false);
-      // THE DRAWING IS TOLD WHAT IT CAN SEE, the moment both boxes exist: her column is a layer
-      // over the canvas, and a view composed into the full box puts the brain on the seam
-      // between them. (The observer above keeps it true as she narrows.)
-      syncCanvasInset();
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        syncCanvasInset();
-        // THE BAR THAT ARRIVES IS TOLD, NOT ASSUMED — and it is told to STOP. The column that took
-        // the busy flag at the click is gone, and the one now on screen was created while the run
-        // was already in flight; without this it keeps a spinner that belongs to a control the
-        // person is no longer looking at. (This used to RE-ASSERT the spinner here, and a separate
-        // 3200ms floor — MIN_RUN_BUSY_MS — was what turned it off. That floor is gone with the other
-        // artificial waits: the drawing is on screen, so the work being waited for is presented.)
-        setIsComposerRunning(false);
-        window.dispatchEvent(new CustomEvent('flow-view-ready'));
-      }));
-    })().catch((err: unknown) => {
-      /*
-       * FAIL LOUD. The column could not be assembled or the canvas's code could not be fetched,
-       * so there is no drawing — and the one thing that must not happen is the output column
-       * sitting there as if the Run had worked. This was a logger line only, which is the silent
-       * fallback READ-ME/THE_METHOD.md names as the enemy: the person sees nothing and only the
-       * trace holds the reason. So the failure goes through the app's own channel — the banner
-       * the assembly uses, whose Retry re-runs the Run — and NOTHING is substituted for the
-       * canvas: the column keeps the output it had, and the person is told why there is no
-       * picture.
-       */
-      const report = classifyFailure(err, { intent: 'render-run' });
-      setAiAssemblyReport(report);
-      setAiAssemblyMessage(report.headline);
-      setIsFailureAcknowledged(false);
-      setAiAssemblyFailed(true);
-      // AND THE SPINNER STOPS, because the thing it was standing for is over. NOT a fallback and
-      // nothing is substituted: the failure is a banner with a name and a reason, the column keeps
-      // the output it had, and a control that went on spinning would be the one lie left — a Run
-      // that is not running, shown as running.
-      setIsComposerRunning(false);
-      logger.error('the third column could not be assembled, so there is no drawing to show', {
-        error: String((err as Error)?.message ?? err),
-      });
-    });
-    // THE SPINNER RUNS FOR THE RUN, AND STOPS WHEN THE RUN'S OWN WORK IS PRESENTED. Nothing is held
-    // for a floor: the frame above stops it the moment the drawing is on screen, and a Run that
-    // ends some other way (a failure, a stop) clears it in its own handler. The 3200ms floor that
-    // used to be here — "so the canvas is PRESENTED rather than watched arriving" — was written
-    // against a canvas that appeared in a moment; with the model composing the column the wait is
-    // seconds already, and the floor only ever extended a spinner past the thing it was waiting for.
-    // (There is nothing to release here: the busy flag is set above and cleared by the signals.)
-
-    // ── The Run URL is RELATIVE, like every other call in this app ────────────
-    //
-    // It used to be `${import.meta.env.VITE_API_URL || ''}/api/teacher/query`.
-    // VITE_API_URL is set in `backend/.env` to the DOCKER SERVICE NAME —
-    // `http://prompt-composer-console:5001` — and RESTART-LOCAL.sh exports that file
-    // into the shell before starting Vite, so the dev server inlined it. Every Run
-    // therefore went to a hostname that resolves only inside the container and died
-    // before it left the browser: `TypeError: Failed to fetch`, with nothing in any
-    // server log, because nothing arrived.
-    //
-    // Every other endpoint already used the relative `API_BASE` ("/api") — the
-    // backend serves this app from the same origin in every environment, dev and
-    // deployed (see shared/apiHelper.ts) — which is exactly why only Run broke, and
-    // why the proxy, the tunnel and the endpoint all looked healthy.
-    //
-    // Declared outside the try so the failure message can name the REAL address
-    // instead of a path it was never sent to.
-    const runUrl = `${API_BASE}/teacher/query`;
-
-    try {
-      const { getApiKey } = await import('@/services/authService');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const apiKey = getApiKey();
-      if (apiKey) headers['X-API-Key'] = apiKey;
-
-      // Build the structured context the backend _assemble_prompt_output expects:
-      // { core_roles: { "System Role": ... }, custom_roles: [...] }.
-      // (Previously sent markdown, which json.loads() rejected, so the backend fell
-      // back to a bare "Execute the prompt configuration." with no real prompt.)
-      // Which sections the model receives as core roles, and which fall through to
-      // custom_roles. Declared in @/shared/promptSections so a seat added to the
-      // left column cannot be silently dropped from the model's view by a list
-      // nobody remembered to update — the failure was one missing string away.
-      const CORE_ROLES = CORE_ROLE_LABELS;
-      const coreRoles: Record<string, string> = {};
-      const customRoles: { name: string; content: string }[] = [];
-      for (const s of sections || []) {
-        const name = s.name || s.section || s.role || s.type || 'Section';
-        const content = (s.content || '').trim();
-        if (!content) continue;
-        if (CORE_ROLES.includes(name)) {
-          coreRoles[name] = content;
-        } else {
-          customRoles.push({ name, content });
-        }
-      }
-      const promptContext = JSON.stringify({ core_roles: coreRoles, custom_roles: customRoles });
-
-      // ── Tool calls: the prompt's declaration, made real ──────────────────
-      // The Tool Call section names the tool and carries the address. This turns
-      // that into an actual call the SERVER executes before the model runs, so the
-      // design is in the prompt instead of something the model is asked to imagine.
-      // Read from the sections the user can see and edit — change the node in the
-      // column and the check follows, rather than a hidden copy of the finding.
-      const toolNode = (sections || [])
-        .map((s: any) => String(s?.content || ''))
-        .join('\n')
-        .match(/figma node\s+(\d+:\d+)/)?.[1];
-      const toolCalls = toolNode
-        ? [{ name: 'figma.get_design_context', nodeId: toolNode, fileKey: FIGMA_FILE_KEY }]
-        : [];
-
-      const resp = await fetch(runUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          question: 'Execute the prompt configuration.',
-          context: promptContext,
-          mode: 'prompt_output',
-          // NO temperature here. It sent 0.45 while the mode decides: grace_gui.py pins
-          // 0.0 for every mode that is not `chat` (and turns reasoning off with it), so
-          // this number was read by nobody and claimed otherwise. The chat is the only
-          // place with a temperature — CHAT_TEMPERATURE, 1.5 — and the run is not a chat.
-          // Executed server-side before the model runs. Empty when the prompt
-          // declares no tool, which is not an error and changes nothing.
-          tool_calls: toolCalls,
-          // The prompt package this run belongs to. The backend uses it to
-          // attach/reuse the conversation row (conversations.session_id is NOT
-          // NULL), so every chat turn actually persists.
-          session_id: currentPromptSessionRef.current || undefined,
-          // The package's title, so the fresh conversation the backend files the
-          // run's results in can be named after it (see routes/teacher.py).
-          run_title: surfaceTitle(),
-          // No `model` — let the provider's configured default apply.
-        }),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        setCurrentPromptSession((prev: any) =>
-          prev ? { ...prev, compiledOutput: `Error: ${resp.status} ${errText}` } : prev
-        );
-        setIsComposerRunning(false);
-        return;
-      }
-
-      // The backend returns a single JSON object ({ content, error, conversation_id })
-      // — not a Server-Sent Events stream. Parse it directly instead of expecting
-      // `data: ` lines (which never arrive, so output stayed empty → "(No output returned.)").
-      const data = await resp.json();
-      const output = (data && (data.content || data.error || '')) || '';
-
-      // A declared tool call that could not run is not a detail. The answer was
-      // written WITHOUT the design, so the answer has to say so — otherwise a
-      // design-blind reply arrives looking like a checked one. The ⚠️ prefix is
-      // also what makes the middle column render its "could not be generated"
-      // marker rather than passing this off as a finished result.
-      const toolWarnings: string[] = Array.isArray(data?.tool_warnings) ? data.tool_warnings : [];
-      if (toolWarnings.length) {
-        console.warn('[run] tool warnings:', toolWarnings);
-        window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-          detail: {
-            role: 'assistant',
-            content:
-              '⚠️ **The tool call did not return what it was asked for.**\n\n'
-              + toolWarnings.map((w) => `- ${w}`).join('\n')
-              + '\n\nThis prompt was answered without it — treat the result as '
-              + 'unverified, and press Run again once the tool can answer.',
-          },
-        }));
-      }
-
-      setCurrentPromptSession((prev: any) =>
-        prev
-          ? {
-              ...prev,
-              compiledOutput: toolWarnings.length
-                ? `⚠️ ${toolWarnings.join('\n')}\n\n---\n\n${output || '(No output returned.)'}`
-                : (output || '(No output returned.)'),
-            }
-          : prev
-      );
-
-      /*
-       * THE RUN'S RESULTS LAND IN A FRESH CONVERSATION, WHICH THE SEAT ADOPTS.
-       *
-       * The owner, 2026-09-24: "the other conversation save it, and it automatically
-       * creates a new conversation and loads the results." The backend filed the
-       * findings and the answer in a new conversation and returned its id; the seat
-       * moves to it and loads them, so the chat shows the results — headed "Your
-       * Results", in rich text — while the conversation the person was in stays
-       * saved in the list. The package is also repointed at the new conversation,
-       * the same hop the seat's own "new conversation" makes, so a reload lands on
-       * it rather than resurrecting the old thread.
-       *
-       * WITHOUT A PACKAGE (an unsaved prompt) there is no conversation to file into
-       * — the backend returns none — so the results are said in the thread directly,
-       * carrying the same marks (result turns), and a later Save persists them
-       * through the seat's own pending path.
-       */
-      const runConvId = typeof data?.conversation_id === 'string' && data.conversation_id ? data.conversation_id : '';
-      if (runConvId) {
-        const panel = deepFind<HTMLElement & { adoptConversation?: (id: string) => void }>('chat-panel');
-        panel?.adoptConversation?.(runConvId);
-        if (currentPromptSessionRef.current) {
-          try {
-            const res = await fetch(`${API_BASE}/prompt-sessions/${currentPromptSessionRef.current}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ conversation_id: runConvId }),
-            });
-            if (!res.ok) {
-              logger.error('the run conversation could not be bound to the package', {
-                sessionId: currentPromptSessionRef.current,
-                status: res.status,
-              });
-            }
-          } catch (e) {
-            logger.error('the run conversation binding never reached the backend', {
-              sessionId: currentPromptSessionRef.current,
-              error: String(e),
-            });
-          }
-        }
-      } else if (!data?.error) {
-        const toolResults: string[] = Array.isArray(data?.tool_results) ? data.tool_results : [];
-        if (toolResults.length) {
-          const joined = toolResults.join('\n\n');
-          const shown = joined.length > 4000 ? `${joined.slice(0, 4000)}…` : joined;
-          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-            detail: {
-              role: 'assistant',
-              label: 'Tool answer',
-              content: `**Your Results**\n\n${shown}`,
-              result: true,
-            },
-          }));
-        }
-        if ((output || '').trim()) {
-          window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-            detail: {
-              role: 'assistant',
-              label: 'Run result',
-              content: toolResults.length ? output : `**Your Results**\n\n${output}`,
-              result: true,
-            },
-          }));
-        }
-      }
-
-      // The answer is a fact the canvas draws: the Answer node's news, and the tool
-      // node's warning when the declared call did not return the design. No claim is
-      // made about the file here — that is the write's to make, below.
-      if (flowInputRef.current) {
-        flowFactsRef.current = {
-          ...flowFactsRef.current,
-          running: false,
-          answer: data?.error ? 'error' : 'received',
-          answerLine: firstLineOf(output),
-          toolWarning: toolWarnings[0],
-        };
-        publishRepairFlow();
-      }
-
-      // EVERY RUN IS JUDGED, and the Evals tab is where the verdicts collect — one row per
-      // run, newest first, the same one-for-one list n8n's Evaluations view draws. The
-      // backend asks Qwen to judge the answer (a repair's later check-verdict supersedes it,
-      // written by settleRepair); this end only records and republishes what came back.
-      if (!data?.error && (output || '').trim() && !repairingFinding) {
-        const sessionId = currentPromptSessionRef.current;
-        if (sessionId) {
-          try {
-            const res = await fetch(`${API_BASE}/prompt-sessions/${sessionId}/evaluations`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ output, ask: askOf(surfaceSections()), trigger: 'Run' }),
-            });
-            if (!res.ok) {
-              logger.error('the run could not be recorded for evaluation', { sessionId, status: res.status });
-            }
-          } catch (e) {
-            logger.error('the evaluation request never reached the backend', { sessionId, error: String(e) });
-          }
-        }
-        void refreshEvaluations();
-      }
-
-      // ── THE RUN'S ANSWER IS NOT WRITTEN DOWN HERE ANY MORE ─────────────────
-      //
-      // It was: the output was saved through the same AI endpoint Save uses, because the
-      // output column drew an answer the package kept nothing of (measured 2026-09-17: the
-      // column held 279 characters while `compiled_output` was still 0, so a reload took it
-      // off the screen). That fix was right about the SYMPTOM and wrong about the mechanism —
-      // it made every Run call the model a second time, to save.
-      //
-      // The owner's rule (2026-09-18) is the one that holds: "people need to save manually
-      // using the button, or get them an alert if they try to exit with unsaved changes."
-      // Save does that job, and it is one click. A Run now runs and nothing else.
-      //
-      // THE COST, STATED: an answer that has not been saved is not on screen after a reload.
-      // That is the same contract as every other edit in this column, and the person has a
-      // button for it.
-
-      // ── THE ANSWER BECOMES A FILE, AND ONLY THEN IS IT CHECKED ─────────────
-      //
-      // This is the step that was missing, and its absence is why the last run read
-      // as a claim about a file: the answer was text, nothing put it anywhere, so
-      // "Correction applied" could not have been true. The write comes FIRST and the
-      // check comes after it, in that order, because the check has to read the new
-      // file — and the chat says what the write returned, not what the model said.
-      //
-      // Two cases still do not settle anything, exactly as before: the run errored,
-      // or the declared tool call did not return the design (in which case a change
-      // was made without the thing it had to match — those lines are written down
-      // here and go into the prompt, not into a file).
-      if (repairingFinding && !data?.error && toolWarnings.length === 0) {
-        const outcome = await writeAnswerBack(output || '', repairingFinding);
-        // What the APP wrote, in the server's own numbers — the Data insert node's
-        // only honest source. The model's claim about the file never was one.
-        if (flowInputRef.current) {
-          flowFactsRef.current = { ...flowFactsRef.current, write: outcome.report };
-          publishRepairFlow();
-        }
-        // The repair is done being MADE. Whether it is done being REPAIRED is the
-        // check's call, not this app's and not the model's: a fresh report settles it.
-        //
-        // Both halves have to be true for a verdict to exist at all — a file was
-        // written, AND the checker was re-run against it. With nothing written there is
-        // nothing to settle (the finding stays open, which is the truth, and the chat
-        // above has just said why); with no re-run the only report available predates
-        // the change, so reading it would be inventing a verdict.
-        if (outcome.written && outcome.checked) {
-          void settleRepair(repairingFinding);
-        }
-      } else if (repairingFinding) {
-        // Nothing was written — and that is said here rather than left implied, because
-        // a run that wrote nothing looks identical to a run that worked once the tab is
-        // closed.
-        speakRepairVerdict(
-          "Nothing written — " +
-          (data?.error
-            ? "the run failed."
-            : "the tool call returned no design, so the file was left alone."),
-        );
-      }
-
-      /*
-       * AND THE RUN'S STATE IS WRITTEN DOWN — HERE, WHERE EVERYTHING THE RUN MADE IS MADE
-       * (owner, 2026-10-05: *"it has already RUN and that state should save on run"*).
-       *
-       * THIS IS THE SPOT THE OLD ANSWER-SAVE WAS DELETED FROM (see the note above): it used
-       * to send the output through the full AI save — a second model call per Run — and the
-       * cure for that cost was to save nothing automatic at all, which left the RUN's state
-       * unwritten: the drawing, the folded prompt, the column it is made of. saveRunState
-       * writes exactly that state and nothing else — no sections, no output, no model call —
-       * so the rule that made the old save wrong ("people need to save manually") and the
-       * rule this answers to ("that state should save on run") hold at the same time.
-       *
-       * A repair writes it once more when the check settles (settleRepair): the verdict is
-       * the repair's last word, and the graph the card reopens on must carry it.
-       */
-      void saveRunState();
-    } catch (err: any) {
-      console.error('[WritingAreaIndex] Run execution failed', err);
-      // Name the call. "Failed to fetch" on its own says nothing about WHICH
-      // request died, and this path can fail before the request is even sent
-      // (the dynamic import of authService) as well as during it.
-      const why = err?.message || String(err);
-      setCurrentPromptSession((prev: any) =>
-        prev
-          ? {
-              ...prev,
-              compiledOutput:
-                `Error: ${why}\n\n` +
-                // Name the address the request actually went to, resolved, plus the
-                // page it was made from — the two facts that turn "Failed to fetch"
-                // into something diagnosable. This message previously named a
-                // RELATIVE path the browser had never been sent to, which sent the
-                // reader looking at a proxy that was fine.
-                `${runUrl}  (resolved: ${new URL(runUrl, location.origin).href}, from ${location.origin})\n\n` +
-                `If this reads "Failed to fetch", the browser never got a response: the ` +
-                `host is unreachable, the connection was dropped, or a module reloaded ` +
-                `mid-flight. It is not a rejected prompt.`,
-            }
-          : prev
-      );
-      // And say it in the CHAT. Save failures already speak here
-      // (a2ui:system-message); Run failures only wrote to the middle pane, so a
-      // Run that died was silent everywhere a person actually looks.
-      window.dispatchEvent(new CustomEvent('a2ui:system-message', {
-        detail: {
-          role: 'assistant',
-          content:
-            `⚠️ **Run failed.**\n\n\`POST /api/teacher/query\` did not complete: ${why}\n\n` +
-            'The prompt itself was sent only if the request got that far. ' +
-            '"Failed to fetch" means the browser got no response at all — the request was ' +
-            'dropped or aborted, not rejected.',
-        },
-      }));
-    } finally {
-      setIsComposerRunning(false);
-      // AND THE DRAWING IS UNLOCKED WITH THE SPINNER — the same fact, the same breath, every exit
-      // from the run: success, a rejected request, or a thrown one all pass through here, so the
-      // lock can never outlive the work it was protecting.
-      setCanvasRunning(false);
-      // Optional: give the layout a hint to equalize widths when middle appears
-      window.dispatchEvent(new CustomEvent('reset-columns-to-equal-widths', { detail: { isThirdColumnOpening: true } }));
-    }
-  };
-
-  // `save-requested` HAD NO SENDER, so this whole path was unreachable — the registry
-  // declared it as the editor's event, but <prompt-section-editor> emits none of that kind
-  // (its contract is section-update/add/remove/reorder), and the control bar's Save speaks
-  // through `save-click` (below) into the same handler this used. Removed rather than kept:
-  // a listener nobody can fire is a claim that something is wired.
-
-  // Clear from the compiled-output-viewer "Clear" button → collapse middle column
-  const handleClearOutput = () => {
-    console.log('[WritingAreaIndex] clear-output — collapsing middle column');
-    setCurrentPromptSession((prev: any) =>
-      prev ? { ...prev, compiledOutput: '' } : prev
-    );
-    // The column's CLOSE was never implemented: the flag this used to write (`middleOpen`)
-    // was read by nothing, and the middle column's presence is the model's. Clearing the
-    // output empties the viewer; it does not take the column away.
-  };
-
-    console.log('✅ [WritingAreaIndex] Setting up event listeners');
-    window.addEventListener("switchToMemoriesTab", handleSwitchToMemoriesTab);
-    window.addEventListener("switchToChatTab", handleSwitchToChatTab);
-
-    // Listen for save-template event. Sections come from the surface's data model — the
-    // composer column's binding. No DOM read, no fallback.
-    const handleSaveTemplateEvent = () => {
-      const sections = surfaceSections();
-      const compiledOutput = readLiveOutput();
-      console.log('[save-template] Reading', sections.length, 'sections +', compiledOutput.length, 'chars of output from the surface');
-      handleSavePromptRef.current?.(compiledOutput, sections);
-    };
-    window.addEventListener("save-template", handleSaveTemplateEvent);
-
-    window.addEventListener("run-requested", handleRunRequested);
-
-    /*
-     * THE RUN SHE APPROVED IS THE RUN THAT GOES.
-     *
-     * The chat panel speaks this event when her reply carries `<run_ok/>`. It releases the
-     * Run this file is holding, and it releases exactly that one: the sections kept in
-     * `heldRunRef` are re-dispatched as the same `run-requested`, which now passes a gate
-     * that has already been answered and clears both records on the way through.
-     *
-     * AN APPROVAL WITH NOTHING HELD IS IGNORED. She can emit `<run_ok/>` in a conversation
-     * about something else, and a flag set then would silently wave through the NEXT run —
-     * which is a person's prompt going out unreviewed because of a sentence she wrote
-     * about a different one. With nothing held there is nothing to release.
-     */
-    const handleRunApproved = () => {
-      const held = heldRunRef.current;
-      if (!held) {
-        console.log('[WritingAreaIndex] Run approval arrived with nothing held — ignored');
-        return;
-      }
-      heldRunRef.current = null;
-      runApprovedRef.current = true;
-      console.log('[WritingAreaIndex] Run released by her review');
-      window.dispatchEvent(new CustomEvent('run-requested', { detail: held }));
-    };
-    window.addEventListener('a2ui:run-approved', handleRunApproved);
-
-    /*
-     * AND SHE SAID NO. The run stays held and the button comes back out of its spin — the whole
-     * of what this event does. Nothing here closes the panel, clears the column, or takes her
-     * words off the screen: she has just told the person what to fix, and the next thing they
-     * do is read it and fix it.
-     */
-    const handleRunBlocked = () => {
-      if (!heldRunRef.current) return;
-      setIsComposerRunning(false);
-      /*
-       * AND THE HELD RUN IS RELEASED — NOT KEPT. It used to stay in the ref, so the NEXT
-       * `<run_ok/>` in ANY later reply — a `review-prompt` turn, an unrelated question —
-       * released a Run she had already blocked, with a payload the person had since edited.
-       * A block means this Run is over; pressing Run again is what starts the next review.
-       */
-      heldRunRef.current = null;
-      runApprovedRef.current = false;
-      console.log('[WritingAreaIndex] Run stays held — she blocked it');
-    };
-    window.addEventListener('a2ui:run-blocked', handleRunBlocked);
-
-    /*
-     * APPLY ALL — THE WHOLE LIST WORKED IN ONE PRESS, AND THEN THE RUN GOES.
-     *
-     * The owner, 2026-09-23: "she should automatically run it… we should just give a user the
-     * ability to apply all. Previously she was handing those over one at a time, which we don't
-     * want," and "expose the canvas layer as the third column, just like if she had to click the
-     * button."
-     *
-     * WHAT THE APP MAY APPLY IS THE CHECKLIST'S OWN LINE (`repair.via`): `action` is the app's
-     * business (move a tool into the Tool Call step, merge a row that stands twice), `ask` is
-     * offered and never done uninvited (a save makes a package that did not exist), `words` is
-     * the person's (a name, a description, a row's content) — never invented into somebody's
-     * prompt by a button. So Fix all clears what holds the Run and STOPS, telling her the rest.
-     *
-     * AND IT RUNS BY THE BUTTON'S OWN PATH — `a2ui:run-approved` is what a person's Run press
-     * ends in (see handleRunApproved), which re-enters `handleRunRequested` with the held payload
-     * and this flag set. Not a shortcut around the gate: the gate has been passed, on the list
-     * this shell computed, and the canvas arrives as the third column exactly as it would have.
-     *
-     * WHAT IS LEFT IS THE LIST MINUS WHAT WAS JUST APPLIED — computed here rather than re-read,
-     * because the writes are still being committed by React and a second read would answer with
-     * the prompt as it was a moment ago.
-     */
-    const onFixAll = async (): Promise<void> => {
-      const unmet = reviewFlow({
-        title: surfaceTitle(),
-        description: surfaceDescription(),
-        saved: Boolean(currentPromptSessionObjRef.current?.id),
-        // THE ONE READER, the same one handleRunRequested reviews and the same one the run below
-        // sends. It was `surfaceSections()` here and the event's payload there: the same list
-        // twice, and only by the luck of who called it.
-        sections: rowsForDecision() as FlowSeatInput[],
-        register: await readToolRegister(),
-      });
-      // THE SAME PREDICATE THE OFFER USED — see runHoldingRepairs. One definition, so the button
-      // that was drawn and the repairs this press makes cannot come apart.
-      const applyable = runHoldingRepairs(unmet);
-      const left = unmet.filter((u) => !applyable.includes(u));
-      for (const u of applyable) {
-        if (u.repair.kind === 'move-tool') {
-          window.dispatchEvent(new CustomEvent('move-tool', {
-            detail: { name: u.repair.tool, into: u.repair.into },
-          }));
-        } else if (u.repair.kind === 'merge-seat') {
-          window.dispatchEvent(new CustomEvent('merge-seat', {
-            detail: { from: u.repair.from, into: u.repair.into },
-          }));
-        }
-      }
-      /*
-       * NOTHING HOLDS IT ANY MORE — SO IT RUNS, AND IT RUNS WHETHER OR NOT A RUN IS STILL HELD.
-       *
-       * The held Run used to be the only way this could go, and that is where the owner's flow
-       * stopped: "when those blockers are satisfied, she should automatically run the prompt and
-       * expose the canvas layer." A held Run is released through `a2ui:run-approved` — but Grace
-       * BLOCKING a Run ENDS it (`handleRunBlocked` clears the held payload, deliberately: a block
-       * means that Run is over). So by the time the person has worked the list and pressed Apply
-       * all, there is usually nothing left to release, and the press cleared the blockers and then
-       * asked her a question that could not run anything. Watched on the live package, 2026-09-23:
-       * the list came back "nothing — every requirement is met" and no canvas appeared.
-       *
-       * SO THIS STARTS THE RUN ITSELF when nothing is held. It is not a shortcut around the gate:
-       * the gate is this list, the shell has just computed it, and it is EMPTY — there is nothing
-       * for her to hold it on. `runApprovedRef` is set for the same reason she sets it in
-       * `handleAiRun`, so the released run passes the gate it has already cleared.
-       *
-       * THE ROWS COME FROM THE EDITOR, NOT THE SURFACE, and that is the whole of getting the run
-       * right. The repairs above were DISPATCHED, not awaited: the editor applies them to its own
-       * list synchronously, while the surface's copy is committed by React on the next render. Read
-       * the surface here and the run would send the prompt as it was BEFORE the repairs — the
-       * canvas would draw the old picture over a repaired prompt. The editor IS the source of truth
-       * for the rows and it answers now.
-       */
-      if (!holdsRun(left)) {
-        if (heldRunRef.current) {
-          window.dispatchEvent(new CustomEvent('a2ui:run-approved'));
-          return;
-        }
-        // THE ROWS COME FROM THE ONE READER, through the listener rather than by hand: the
-        // repairs above were DISPATCHED, not awaited, and rowsForDecision reads the editor
-        // first — so the run sends the prompt WITH the repairs, not the one from a moment ago.
-        runApprovedRef.current = true;
-        console.log('[WritingAreaIndex] Apply all cleared the list — starting the run');
-        window.dispatchEvent(new CustomEvent('run-requested', { detail: { sections: rowsForDecision() } }));
-        return;
-      }
-      window.dispatchEvent(new CustomEvent('a2ui:ask-grace', {
-        detail: {
-          review: 'run',
-          request: [
-            'A person pressed Apply all. The app has made every repair it can make on its own —',
-            'the moves and the merges — and it may not do the rest: a save is theirs to agree to,',
-            'and the words in a prompt are theirs to write.',
-            left.length
-              ? 'THIS IS THE WHOLE LIST OF WHAT IS STILL UNMET. Reply only to what is needed: say'
-              : 'NOTHING IS UNMET any more. Reply only to what is needed: say',
-            ...left.map((u) => `  · ${u.id}${u.level === 'advisory' ? ' (advisory — worth saying, does not hold the Run)' : ''} — ${u.why}`),
-            left.length
-              ? 'Offer each repair as a button the person can press and end with <run_blocked/>.'
-              : 'Congratulate them in one short sentence starting with 🍾 and end with <run_ok/>.',
-          ].join('\n'),
-        },
-      }));
-    };
-    window.addEventListener('a2ui:fix-all', onFixAll as EventListener);
-
-    /*
-     * SHE ASKS FOR THE RUN HERSELF — `<run_prompt/>` in a reply.
-     *
-     * The tag has been in her instructions since the retired React seat, and it has been
-     * dispatching `ai-run-prompt` the whole time with NOTHING on the other end (the listener
-     * that used to exist went with the seat). So a reply that said "I'll run it now" ran
-     * nothing: the person read a promise and watched a screen that did not change. The owner,
-     * 2026-09-23: "the AI can initiate the run again — I want to see the spinner."
-     *
-     * IT SKIPS THE REVIEW, AND MUST. The gate exists so that a prompt is checked before it
-     * runs; she IS the check, and asking her to re-approve her own decision is a loop — she
-     * would review it, answer `<run_ok/>`, and the released run would arrive at the same gate
-     * again. `runApprovedRef` is set here for exactly that reason, and the released run clears
-     * it on the way through like any other approval.
-     *
-     * THE SPINNER IS THE RUN'S OWN, from the same place the button's click gets it: the
-     * controls are told the run is on, so a run she starts looks identical to one the person
-     * pressed — which is the whole point of her being able to start one.
-     */
-    const handleAiRun = () => {
-      if (runApprovedRef.current) return; // a run is already released and on its way
-      const held = heldRunRef.current;
-      heldRunRef.current = null;
-      runApprovedRef.current = true;
-      console.log('[WritingAreaIndex] Run asked for by Grace');
-      if (!held) setIsComposerRunning(true);
-      window.dispatchEvent(new CustomEvent('run-requested', { detail: held ?? { sections: surfaceSections() } }));
-    };
-    window.addEventListener('ai-run-prompt', handleAiRun);
-    window.addEventListener("clear-output", handleClearOutput);
-
-    /*
-     * THE PROMPT'S TITLE, FROM WHICHEVER END WROTE IT.
-     *
-     * Two things can set it and they must land in the same place: the person typing in
-     * <left-column-header> (`title-change`, composed out of the surface) and Grace
-     * writing <set_title> in the chat (`set-prompt-title`, dispatched by the panel when
-     * it strips the tag). Both go through the ONE rename path that already existed,
-     * `handlePromptTitleChange`, so the database, the React copy and the console card are
-     * updated by the same code whichever end started it. A second writer would have been
-     * a second truth about what this package is called.
-     */
-    const handleTitleSet = (e: Event) => {
-      const next = String(((e as CustomEvent).detail || {}).title ?? '').trim();
-      if (next) void handlePromptTitleChange(next);
-    };
-    window.addEventListener("title-change", handleTitleSet);
-    window.addEventListener("set-prompt-title", handleTitleSet);
-
-    /*
-     * THE DESCRIPTION, WHICH HAD NO WRITER.
-     *
-     * The package's one-line description is on the console card and is asked for by name in the
-     * review before a Run — and nothing in the app could write it. Grace tried, with a tag she
-     * invented, and the description stayed empty while her reply said it was added (measured
-     * 2026-09-23).
-     *
-     * IT GOES THROUGH THE SAVE PATH, because the description lives on the session row and that
-     * path is what knows how to reach it. Unsaved packages are not a special case: a name on a
-     * draft lives on the surface until the first save, and the same is true of this.
-     */
-    const handleDescriptionSet = (e: Event) => {
-      const description = String(((e as CustomEvent).detail || {}).description ?? '').trim();
-      if (!description) return;
-      void handlePromptDescriptionChange(description);
-    };
-    window.addEventListener("set-package-description", handleDescriptionSet);
-
-    // Wire the bottom control bar (control-bar from Figma node 40000761:261) to the *existing* CRUD paths only.
-    // No new save/run/version logic — re-uses handleSavePromptRef + run-requested dispatch exactly as the Lit editor does.
-    // Control-bar save: sections from the surface's data model (same as save-template).
-    const handleControlBarSave = () => {
-      const sections = surfaceSections();
-      const compiledOutput = readLiveOutput();
-      console.log('[control-bar] save-click →', sections.length, 'sections +', compiledOutput.length, 'chars of output from the surface');
-      handleSavePromptRef.current?.(compiledOutput, sections);
-    };
-    const handleControlBarRun = () => {
-      const sections = surfaceSections();
-      console.log('[control-bar] run-click → dispatching run-requested (existing path)');
-      window.dispatchEvent(new CustomEvent('run-requested', { detail: { sections } }));
-    };
-    window.addEventListener('save-click', handleControlBarSave as EventListener);
-    window.addEventListener('run-click', handleControlBarRun as EventListener);
-
-    // Wire undo-click from control-bar (Figma node 40000761:271 "undo-last-state-milivis")
-    // TODO: undo-last-state-milivis has no backend handler yet. Wire the event now,
-    // implement the Milvus state rollback when the backend supports it.
-    const handleControlBarUndo = () => {
-      console.log('[control-bar] undo-click → undo-last-state-milivis (no backend handler yet)');
-      // Future: dispatch undo to Milvus state manager
-      // window.dispatchEvent(new CustomEvent('undo-last-state'));
-    };
-    window.addEventListener('undo-click', handleControlBarUndo as EventListener);
-
-    // DELETED: prompt-session-loaded listener - was database fallback bypassing AI assembly
-    // All session loads MUST go through AI assembly via handleOpenPromptFromConsole
-    const handlePromptSessionLoaded = (event: Event) => {
-      const detail = (event as CustomEvent).detail || {};
-      if (detail.sessionId) {
-        handleOpenPromptFromConsole(detail.sessionId);
-      }
-    };
-    window.addEventListener("prompt-session-loaded", handlePromptSessionLoaded);
-
-    // Listen for prompt-session-deleted from LeftVerticalMenu
-    // Uses ref to avoid stale closure (effect deps don't change on prompt load)
-    const handlePromptSessionDeleted = (event: Event) => {
-      const detail = (event as CustomEvent).detail || {};
-      if (detail.id && currentPromptSessionRef.current === detail.id) {
-        setCurrentPromptSession(null);
-      }
-    };
-    window.addEventListener("prompt-session-deleted", handlePromptSessionDeleted);
-
-    // Listen for start-new-prompt from LeftVerticalMenu — clear workspace without DB save
-    const handleStartNewPrompt = () => {
-      setCurrentPromptSession(null);
-      setPromptLoadKey(prev => prev + 1);
-    };
-    window.addEventListener("start-new-prompt", handleStartNewPrompt);
-    console.log('✅ [WritingAreaIndex] Event listeners set up');
-
-    return () => {
-      window.removeEventListener(
-        "conversationUpdated",
-        handleConversationUpdate,
-      );
-      window.removeEventListener(
-        "switchToMemoriesTab",
-        handleSwitchToMemoriesTab,
-      );
-      window.removeEventListener("switchToChatTab", handleSwitchToChatTab);
-      window.removeEventListener("save-template", handleSaveTemplateEvent);
-      window.removeEventListener("run-requested", handleRunRequested);
-      window.removeEventListener('a2ui:run-approved', handleRunApproved);
-      window.removeEventListener('a2ui:run-blocked', handleRunBlocked);
-      window.removeEventListener('a2ui:fix-all', onFixAll as EventListener);
-      window.removeEventListener('ai-run-prompt', handleAiRun);
-      window.removeEventListener("clear-output", handleClearOutput);
-      window.removeEventListener("title-change", handleTitleSet);
-      window.removeEventListener("set-prompt-title", handleTitleSet);
-      window.removeEventListener("set-package-description", handleDescriptionSet);
-      window.removeEventListener('save-click', handleControlBarSave as EventListener);
-      window.removeEventListener('run-click', handleControlBarRun as EventListener);
-      window.removeEventListener('undo-click', handleControlBarUndo as EventListener);
-      window.removeEventListener("prompt-session-loaded", handlePromptSessionLoaded);
-      window.removeEventListener("prompt-session-deleted", handlePromptSessionDeleted);
-      window.removeEventListener("start-new-prompt", handleStartNewPrompt);
-    };
-  }, [selectedProjectId, activeTab]);
+  /* MOVED (2026-10-21): the 1286-line block now lives in `@/canvas/useRunPipeline`.
+     Same statement, same deps, passed by name. */
+  useRunPipeline({ COLUMN_VIEWS_RUN, activeTab, applyThirdColumn, askOf, assembleThirdColumn, assembledRunColumnRef, catalogFindings, currentPromptSessionObjRef, currentPromptSessionRef, firstLineOf, flowFactsRef, flowInputRef, handleOpenPromptFromConsole, handlePromptDescriptionChange, handlePromptTitleChange, handleSavePromptRef, heldRunRef, publishRepairFlow, readLiveOutput, readToolRegister, refreshEvaluations, repairFindingRef, repairSectionsRef, repairTitleRef, rowsForDecision, runApprovedRef, saveRunState, selectedProjectId, setActiveTab, setAiAssemblyFailed, setAiAssemblyMessage, setAiAssemblyReport, setCanvasHolding, setCanvasRunning, setColumnView, setCurrentPromptSession, setIsComposerRunning, setIsFailureAcknowledged, setProjectConversations, setProjects, setPromptLoadKey, setSelectedProjectId, settleRepair, speakRepairVerdict, surfaceDescription, surfaceSections, surfaceTitle, syncCanvasInset, toolsThatCannotRun, writeAnswerBack });
 
   // When a project is selected/activated in Projects tab, default to Keeper chat
   // NOTE: Chat mode switching is now handled in onProjectChange callback based on user clicks
@@ -10679,8 +5613,9 @@ export default function Index({
         />
       )}
 
-      {/* Min-width warning overlay for desktop */}
-      {!isMobile && <MinWidthWarning />}
+      {/* NO VIEWPORT-WIDTH WARNING (owner, 2026-10-18): "We don't need to give him a
+          message. He should show the card. It should just be covered." A narrow window
+          clips the content it cannot fit; it never covers the room with a notice. */}
 
       {/* A2UI v0.9: AI Decision Dialog - AI drives this interaction */}
       {aiDecision?.show && (
@@ -10954,114 +5889,35 @@ export default function Index({
                        whatever composer surface happened to be in it: a room showing another
                        room's contents, which is the opposite of "should not load anything". */
                     !isConsoleView && (headerTab === 'development'
-                      /* THE DEVELOPMENT ROOM IS THE CONSOLE'S CONTAINER + THE WORKSPACE
-                         (owner, 2026-10-06: *"show the modified open hands application that we
-                         just made sovereign"*). The shape is yesterday's (owner, 2026-10-05):
-                         the room wears the console's container — `workspace-layout` — with the
-                         room's own workspace as its left column and the platform chat seat as
-                         its right column, CLOSED on entry. The seat is the one element the
-                         console and composer use, and — like Product's — it reads the
-                         COMPOSER'S loaded chat (the seat effect beside the development clocks
-                         below); no surface is assembled for this room and no new conversation
-                         is created.
-                         THE WORKSPACE IS THE REPO-RUN COPY (development/OpenHands-main, :8090 —
-                         started by RESTART-LOCAL.sh), telemetry cut so nothing reaches any
-                         other server (development/CHANGELOG.md, 2026-10-06). The staged
-                         opening (DEVELOPMENT_GATE_MIN_MS, above) covers the load so nothing
-                         pops; a stopped workspace draws NOTHING — the fallback panel is gone
-                         (owner: *"there is no fallback ever"*). */
+                      /* THE DEVELOPMENT ROOM'S PANE LIVES IN ITS OWN FOLDER (2026-10-21) — see
+                         `@/rooms/development/DevelopmentRoom`. The markup and the room's own
+                         record moved with it; the page states the branch and nothing else. */
                       ? (
-                        <>
-                          {/* KEY: A ROOM IS ITS OWN INSTANCE (2026-10-06 — owner: "It seems to be
-                              borrowing a chat from product … un-bind those."). Without these keys,
-                              React reconciles Product's and Development's frames as ONE subtree: the
-                              same seat node carries Product's conversation into Development, and
-                              the layout keeps the previous room's pane state. The keys force each
-                              room to mount its own instance. */}
-                          {/* THE ROOM'S OWN RELATIVE GROUND — THE COVER'S FRAME (2026-10-06): the
-                              staged opening spans the WHOLE room now (both columns — see the gate
-                              states above), so it cannot live inside the left column's box. This
-                              wrapper is layout-neutral: a flex column handing the layout the same
-                              box the sandbox's viewport gave it, and clipping it as that viewport
-                              did. */}
-                          <div key="development-root" data-room-root="development" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
-                          <workspace-layout key="development-room" ref={developmentLayoutRef} className="flex-1 min-h-0">
-                            {/* THE ROOM'S WORKSPACE + THE STAGED OPENING (2026-10-06): the
-                                left column loads the repo-run workspace — the modified copy
-                                whose telemetry is cut (development/CHANGELOG.md) — covered by
-                                the three-second gate so nothing pops; a stopped workspace
-                                draws NOTHING (no fallback — the owner's law). */}
-                            <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
-                          {developmentToolUrl() && (
-                          <builder-embed
-                            key="dev-workspace"
-                            src={developmentToolUrl()}
-                            style={{
-                              display: 'block', width: '100%', height: '100%',
-                              opacity: developmentGateDown ? 1 : 0,
-                              transition: 'opacity 700ms ease',
-                            }}
-                          />
-                          )}
-                          {/* THE FALLBACK PANEL IS GONE (owner, 2026-10-06, late: *"there's
-                              not supposed to be any fallbacks in this application. You should
-                              remove the fallbacks … there is no fallback ever."*). It drew
-                              "The development workspace isn't reachable right now. / It runs
-                              from this repository — start it with RESTART-LOCAL.sh." — an
-                              excuse worn where the workspace goes. No address, or a frame
-                              that never arrived: the pane keeps its own ground and draws
-                              NOTHING, exactly as the Product room does. */}
-                            </div>
-                            {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the console and
-                                composer mount, in the container's right pane. CLOSED on entry:
-                                the development clocks effect sets `isThirdOpen = false` as a
-                                PROPERTY (never the attribute — Lit's boolean converter reads
-                                the string "false" as true), so the gripper strip and the rail
-                                are what show, and the panel's settings arrive from the
-                                Composer's loaded chat (the seat effect below). Until then
-                                nothing is bound — an empty seat, never another room's. Its
-                                rail is the room's own list: every drawable tab except
-                                Versions (DEVELOPMENT_SEAT_TABS). */}
-                            <chat-panel key="development-seat" slot="right" ref={developmentSeatRef}></chat-panel>
-                          </workspace-layout>
-                          {developmentToolUrl() && !developmentToolDown && (
-                          /* THE STAGED OPENING — THE WHOLE ROOM'S NOW (owner, 2026-10-04; three
-                             seconds from 2026-10-06; both columns and the seat hand the same
-                             night: *"put back the assembly illusion … it creates a nice fade
-                             into the application and there's no popping and snapping of
-                             components."*). The ground is his own graph-paper tile (dark,
-                             neutral — *"god knows it's gotta be gray"*), the ring is the
-                             assembly gate's amber, and the room eases in UNDER the gate — one
-                             700ms cross-fade. It spans BOTH columns because the seat binds on
-                             its own clock: covered only as far as the left, the chat arrived
-                             beside a standing workspace — measured 2026-10-06 — which is the
-                             pop this cover exists to remove. It drops when all three hands
-                             have landed (the minimum, the frame, the seat — see the clocks
-                             above), or at the ceiling, honestly. */
-                          <div
-                            aria-hidden={developmentGateDown}
-                            style={{
-                              position: 'absolute', inset: 0, zIndex: 3,
-                              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                              backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
-                              opacity: developmentGateDown ? 0 : 1,
-                              transition: 'opacity 700ms ease',
-                              pointerEvents: developmentGateDown ? 'none' : 'auto',
-                            }}
-                          >
-                            <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                            <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                              {"Standing up the development workspace\u2026"}
-                            </p>
-                          </div>
-                          )}
-                          </div>
-                        </>
+                        <DevelopmentRoom developmentLayoutRef={developmentLayoutRef} developmentSeatRef={developmentSeatRef} />
                       )
                       : isDeadTab
                       ? null
                       : headerTab === 'design'
-                        ? <a2ui-renderer key="design-render" ref={designRendererRef} />
+                        /* THE DESIGN BUTTON LOADS A FILE (owner, 2026-10-18). `<DesignRoom />` is
+                           the Design tab's own entry point, and it holds the room's SEATS: the
+                           console seat and the Tools seat (`design/ToolsSeat`, the Figma
+                           ingestion section with its own columns, its own chat and its own
+                           conversation). The shell hands it the assembly flag and draws
+                           nothing of any seat itself.
+                           AND IT IS A ROOM ROOT LIKE THE OTHERS (`data-room-root="design"`):
+                           the switch's own mechanics — the synchronous hide of the outgoing
+                           root and the hand-off cover's retirement at root-visible — read
+                           that attribute, and without it a product→design switch paid the
+                           exit guard on the pane's bare ground and the cover had nothing to
+                           wait for. The wrapper is the same layout-neutral flex box the other
+                           rooms wear. */
+                        ? (
+                          <div key="design-root" data-room-root="design" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
+                            <Suspense fallback={null}>
+                              <DesignRoom key="design-room" onAssemblingChange={setIsAIAssembling} />
+                            </Suspense>
+                          </div>
+                        )
                         : headerTab === 'product'
                           /* THE PRODUCT ROOM IS THE CONSOLE'S CONTAINER + THE BUILDER (owner,
                              2026-10-05): *"just dropping the app iframe into a copy of the console
@@ -11082,285 +5938,23 @@ export default function Index({
                              project's workspace; with none, a new one is born (never the
                              dashboard — the room's own rule). */
                           ? (
-                            <>
-                              {/* THE GRIP'S SAFETY NET — up only while the chat strip has a live
-                                  gesture (the layout's own resize-start/resize-end). Transparent
-                                  and fixed over the whole window, so the hand's moves keep
-                                  reaching THIS document even while the pointer is over the
-                                  builder frame beside the strip (see `productGripActive`).
-                                  The builder app's own resize already draws the same thing. */}
-                              {productGripActive && (
-                                <div
-                                  aria-hidden="true"
-                                  style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }}
-                                />
-                              )}
-                              {/* THE ROOM'S OWN RELATIVE GROUND — THE COVER'S FRAME (2026-10-06): the
-                                  staged gate spans the WHOLE room now (both columns — see the gate
-                                  states above), so it cannot live inside the left column's box.
-                                  The wrapper is layout-neutral: a flex column handing the layout
-                                  the same box the sandbox's viewport gave it, and clipping it as
-                                  that viewport did. */}
-                              <div key="product-root" data-room-root="product" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
-                              <workspace-layout key="product-room" ref={productLayoutRef} className="flex-1 min-h-0">
-                                <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
-                              {/* NO DASHBOARD, EVER (owner, 2026-10-04): the frame exists only
-                                  once a project does. While one is being born — or while the
-                                  engine is down — the pane is quiet; it is never pointed at the
-                                  tool's project list. The key carries the project id so a new
-                                  project remounts the frame clean rather than reusing one.
-                                  THE ADDRESS IS RUNTIME CONFIG NOW (2026-10-04, HOST-THE-TOOLS):
-                                  `builderToolUrl()` — the hosted builder service on the demo, the
-                                  Mac's own :3223 locally. The states the old fallback panel drew
-                                  (no address at all, the demo's engine unreadable) draw NOTHING
-                                  now — see the note under this block; a stopped local engine
-                                  keeps the red banner below. */}
-                              {/* THE FALLBACK PANEL IS GONE (owner, 2026-10-06: *"I want all of
-                                  the fallbacks all the dumb shit out … I would rather it just
-                                  be a blank page than have a fallback."*). Every state it drew —
-                                  no address configured, the demo's engine unreadable, a frame
-                                  that never arrived — draws NOTHING now: the pane keeps its own
-                                  ground. A stopped LOCAL engine still gets its red banner below,
-                                  which names the real process and the command that starts it. */}
-                              {!builderToolUrl() || (isDemoMode() && builderEngineDown) || productToolDown ? null : productRoomProjectId ? (
-                                <builder-embed
-                                  key={`product-builder-${productRoomProjectId}-${productStageKey}`}
-                                  src={`${builderToolUrl()}/project/${encodeURIComponent(productRoomProjectId)}`}
-                                  style={{
-                                    display: 'block', width: '100%', height: '100%',
-                                    opacity: productGateDown ? 1 : 0,
-                                    transition: 'opacity 700ms ease',
-                                  }}
-                                />
-                              ) : (
-                                /* THE GATE WEARS THE SAME LAB TEXTURE (owner, 2026-10-04) —
-                                   "no project loaded" is an empty state too, and the gate's
-                                   ground image is this file (`developmentLabBackground`);
-                                   the ROOM's own ground is the composer's now (2026-10-05). */
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%', height: '100%', color: '#c9c9c9', fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
-                                  {/* THE SAME GATE'S RING (2026-10-04): the Product room's own
-                                      opening state is an assembly gate too — it gets the amber
-                                      indicator, not a bare line of text. */}
-                                  {!builderEngineDown && (
-                                    <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                                  )}
-                                  {builderEngineDown ? '' : "Opening the project\u2026"}
-                                </div>
-                              )}
-                              {/* A STOPPED ENGINE GETS SAID PLAINLY — else the tool's own errors read
-                                  like broken features. NEVER ON THE DEMO (2026-10-04): its copy names
-                                  the repo's own start script, which is developer text, and on the
-                                  deployed site it reads to a visitor as "this program cannot run". */}
-                              {builderEngineDown && !isDemoMode() && (
-                                <div
-                                  role="status"
-                                  style={{
-                                    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2,
-                                    padding: '8px 12px', background: '#7f1d1d', color: '#ffffff',
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12,
-                                  }}
-                                >
-                                  {"The builder's engine isn't running. Start it with: npm run dev:local  (in wireframe-lab/ai-app-builder-open)"}
-                                </div>
-                              )}
-                                </div>
-                                {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the console
-                                    and composer mount, in the container's right pane. CLOSED on
-                                    entry: the product room's own effect sets the column open
-                                    as a PROPERTY (never the attribute — Lit's boolean converter
-                                    reads the string "false" as true), so the gripper strip and
-                                    the rail are what show, and the panel's binding arrives from
-                                    the engine's carrier (the seat effect below). Until that
-                                    binding lands the seat draws NOTHING AT ALL — `productRoom`,
-                                    set where the column opens: never an empty chat, never
-                                    another room's face (owner, 2026-10-06: *"I would rather it
-                                    just be a blank page than have a fallback."*). */}
-                                <chat-panel key="product-seat" slot="right" ref={productSeatRef}></chat-panel>
-                              </workspace-layout>
-                              {builderToolUrl() && !productToolDown && !builderEngineDown && (
-                              /* THE SAME STAGED GATE AS DEVELOPMENT (2026-10-05) — now over the
-                                 WHOLE room (2026-10-06): the chat column here sat frozen at its
-                                 104px rail floor until an unrelated re-render unfroze it, and
-                                 beside a left-only gate that unfreeze WAS the pop. The cover
-                                 spans both columns and drops only when the minimum, the
-                                 frame's load, and the seat have all landed (see the clocks
-                                 above): one 700ms cross-fade, and neither the builder's white
-                                 first paint nor the chat's late face ever shows alone.
-                                 NEVER WHILE THE ENGINE IS DOWN (owner, 2026-10-06): nothing is
-                                 standing up, and a spinner claiming otherwise is the same lie
-                                 the seat's old face told — the banner below says the real state. */
-                              <div
-                                aria-hidden={productGateDown}
-                                style={{
-                                  position: 'absolute', inset: 0, zIndex: 3,
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                                  backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
-                                  opacity: productGateDown ? 0 : 1,
-                                  transition: 'opacity 700ms ease',
-                                  pointerEvents: productGateDown ? 'none' : 'auto',
-                                }}
-                              >
-                                <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                                <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                  {"Standing up the builder\u2026"}
-                                </p>
-                              </div>
-                              )}
-                              </div>
-                              {/* THE EXIT GUARD'S QUESTION (owner, 2026-10-04; its save-as-draft
-                                  door, 2026-10-06: *"You must save this before we can continue
-                                  or offer them a saved draft option."*). ONE LEVEL UP since the
-                                  column arrived (2026-10-05): it must cover the WHOLE room, and
-                                  a fixed overlay inside a transformed pane would be positioned
-                                  against that pane, not the window. Save as a draft, publish
-                                  the idea to the console, discard it for good, or keep
-                                  working. Explicit buttons and no ambiguous "Cancel" —
-                                  discarding is destructive and must be chosen on purpose. */}
-                              {leavePrompt && (
-                                <div
-                                  style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17, 24, 39, 0.45)' }}
-                                  role="dialog"
-                                  aria-modal="true"
-                                  aria-label="Publish this idea"
-                                >
-                                  <div style={{ width: 430, maxWidth: 'calc(100vw - 40px)', background: '#ffffff', borderRadius: 14, padding: '20px 22px', boxShadow: '0 20px 60px rgba(0, 0, 0, 0.35)', fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                    <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#111827' }}>What should happen to this idea?</h3>
-                                    <p style={{ margin: '0 0 18px', fontSize: 13.5, lineHeight: 1.55, color: '#4B5563' }}>
-                                      {"This idea isn't in the console yet — it's held in the room. Saving it as a draft keeps it as your private package; publishing makes it a card the team can see; discarding removes it for good."}
-                                    </p>
-                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                      <button type="button" onClick={() => leavePrompt.settle('stay')}
-                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #E5E7EB', background: '#ffffff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-                                        Keep working
-                                      </button>
-                                      <button type="button" onClick={() => leavePrompt.settle('keep')}
-                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #111827', background: '#ffffff', color: '#111827', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                                        Save as draft
-                                      </button>
-                                      <button type="button" onClick={() => leavePrompt.settle('discard')}
-                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                                        Discard idea
-                                      </button>
-                                      <button type="button" onClick={() => leavePrompt.settle('publish')}
-                                        style={{ padding: '7px 12px', borderRadius: 9, border: '1px solid #111827', background: '#111827', color: '#ffffff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                                        Publish to console
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </>
+                            <ProductRoom builderEngineDown={builderEngineDown} productGripActive={productGripActive} productToolDown={productToolDown} productRoomProjectId={productRoomProjectId} productStageKey={productStageKey} productGateDown={productGateDown} leavePrompt={leavePrompt} productLayoutRef={productLayoutRef} productSeatRef={productSeatRef} />
                           )
                           : headerTab === 'governance'
                             ? (
-                              <>
-                                {/* THE ROOM IS THE SHELL — THE APPLICATION LEFT (owner,
-                                    2026-10-08: *"remove the evidently AI application from the
-                                    governance section — everything … keep the container, the
-                                    backgrounds, the chat, the sliding effect … keep the left
-                                    navigation … don't rip out the architecture … take out the
-                                    application and anything related to the application
-                                    itself."*). The Development room's structure holds, third
-                                    instance: the room's own left navigation and the
-                                    platform's chat seat (its own package, its own
-                                    conversations). Where the embedded application stood, the
-                                    room draws NOTHING — its own ground, no fallbacks. No
-                                    surface is assembled for this room and no model call
-                                    happens on arrival; the assembled ledger surface stays
-                                    unwired in the file. */}
-                                {/* THE GRIP'S SAFETY NET — up only while the chat strip has a live
-                                    gesture (the layout's own resize-start/resize-end). Transparent
-                                    and fixed over the whole window, so the hand's moves keep
-                                    reaching THIS document even while the pointer is over the
-                                    Langfuse frame beside the strip (see `governanceGripActive`).
-                                    The Product room's own overlay, one room over. */}
-                                {governanceGripActive && (
-                                  <div
-                                    aria-hidden="true"
-                                    style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }}
-                                  />
-                                )}
-                                {/* THE ROOM'S OWN RELATIVE GROUND — THE COVER'S FRAME (the
-                                    development room's pattern): the staged opening spans the
-                                    WHOLE room, both columns. Layout-neutral wrapper, clipped
-                                    like the sandbox's viewport. */}
-                                <div key="governance-root" data-room-root="governance" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
-                                <workspace-layout key="governance-room" ref={governanceLayoutRef} className="flex-1 min-h-0">
-                                {/* THE SLOT ADDS NOTHING — ONE WAVE FOR THE WHOLE ROOM (late
-                                    2026-10-07; the application's own transparent page grounds
-                                    left with it, 2026-10-08): the room-level ground (the
-                                    "workspace" slot) wears the wave (cover, centred), so this
-                                    slot goes transparent — the left nav's floor and the chat
-                                    side show the SAME single wave, edge to edge, with no seam. */}
-                                  <div slot="left" style={{ position: 'relative', display: 'flex', flexDirection: 'row', width: '100%', height: '100%', minHeight: 0, paddingLeft: '75px' }}>
-                                {/* THE ROOM'S TOOL (2026-10-08): Langfuse, self-hosted in
-                                    governance/langfuse-main, embedded full-page through the
-                                    frame proxy. The room's nav is GovernanceNav, rendered at
-                                    the page level in the shell rail's own pattern (see the
-                                    nav render above). THE 75px LEFT SHIFT (owner, 2026-10-09)
-                                    lives on the slot's paddingLeft — the embed itself keeps
-                                    margin-left: 0, so the app is never pushed by a margin.
-                                    colorScheme: 'dark' IS LOAD-BEARING (diagnosed 2026-10-09):
-                                    Langfuse's document declares `color-scheme: dark`, and when
-                                    the embedding element's used color-scheme differs, the
-                                    browser paints the iframe canvas with an OPAQUE backdrop —
-                                    the frame's transparent backgrounds can never show the
-                                    room's wave. Matching the schemes is what makes the canvas
-                                    transparent. Do not remove this line.
-                                    AND THE DEAD PARAMS DO NOT TRAVEL HERE (F1a, owner-approved
-                                    2026-10-09): Langfuse reads neither `embedded=console` nor
-                                    `house_door` (grep-verified), and their query string tripped
-                                    the vendor settings-nav route guard — fixed in the vendor
-                                    source the same day — but this frame takes a clean address:
-                                    the attribute below tells <builder-embed> to skip both params
-                                    for THIS mount only. The builder mounts (product,
-                                    development) keep them byte-for-byte. */}
-                                {governanceToolUrl() && (
-                                  <builder-embed
-                                    key="governance-workspace"
-                                    ref={governanceEmbedRef}
-                                    no-embedded-params
-                                    src={governanceToolUrl()}
-                                    style={{
-                                      display: 'block', flex: '1 1 0%', minWidth: 0, height: '100%',
-                                      colorScheme: 'dark',
-                                      opacity: governanceGateDown ? 1 : 0,
-                                      transition: 'opacity 700ms ease',
-                                    }}
-                                  />
-                                )}
-                                  </div>
-                                  {/* THE PLATFORM'S CHAT SEAT — the same <chat-panel> the
-                                      console and composer mount, in the container's right
-                                      pane. CLOSED on entry (the layout effect sets
-                                      `isThirdOpen = false` as a PROPERTY); the seat binds
-                                      the room's OWN package (the seat effect above) and its
-                                      rail is the room's own list (GOVERNANCE_SEAT_TABS). */}
-                                  <chat-panel key="governance-seat" slot="right" ref={governanceSeatRef}></chat-panel>
-                                </workspace-layout>
-                                {/* THE STAGED OPENING — the Development gate's pattern, third
-                                   room: TWO hands since 2026-10-08 (minimum + seat; the frame
-                                   hand left with the application), one 700ms cross-fade, the
-                                   room eases in underneath; the ceiling drops the cover
-                                   honestly if a hand never lands. */}
-                                <div
-                                  aria-hidden={governanceGateDown}
-                                  style={{
-                                    position: 'absolute', inset: 0, zIndex: 3,
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                                    backgroundImage: `url(${dataWave4Background})`, backgroundRepeat: 'no-repeat', backgroundSize: 'cover', backgroundPosition: 'center',
-                                    opacity: governanceGateDown ? 0 : 1,
-                                    transition: 'opacity 700ms ease',
-                                    pointerEvents: governanceGateDown ? 'none' : 'auto',
-                                  }}
-                                >
-                                  <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
-                                  <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-                                    {"Standing up the governance workspace\u2026"}
-                                  </p>
-                                </div>
-                                </div>
-                              </>
+                              /* THE GOVERNANCE ROOM'S PANE LIVES IN ITS OWN FOLDER (2026-10-21) —
+                                 see `@/rooms/governance/GovernanceRoom`. The markup and the
+                                 room's own record moved with it; the page states the branch
+                                 and nothing else. */
+                              <GovernanceRoom
+                                governanceGripActive={governanceGripActive}
+                                governanceGateDown={governanceGateDown}
+                                governanceEvalsSeat={governanceEvalsSeat}
+                                governanceLayoutRef={governanceLayoutRef}
+                                governanceSeatRef={governanceSeatRef}
+                                governanceEvalsSeatRef={governanceEvalsSeatRef}
+                                governanceEmbedRef={governanceEmbedRef}
+                              />
                             )
                             : <a2ui-renderer key="composer-render" ref={composerRendererRef} />)
                   )}
@@ -11425,26 +6019,34 @@ export default function Index({
                     The ingest tool itself is untouched and still opens from the left menu, which
                     is what a host mount is for.
                   */}
-                  {/* ── THE ROOM SWITCH'S ONE GROUND (2026-10-11) — see `handoffCoverShown` in
-                      `handleTabChangeWithGate`: it wears the TARGET ROOM'S OWN GATE FACE — the
-                      lab tile, the amber ring, the sentence — shown imperatively in the
-                      click's own frame and removed once the incoming room's own gate stands
-                      behind it (identical face — the seam cannot show). `display:none` by
-                      default, and NOTHING here is ever driven by React state, on purpose: the
-                      cover must exist in the click's own task, before any render runs. */}
+                  {/* ── THE ROOM SWITCH'S COVER — see `handoffCoverShown` in
+                      `handleTabChangeWithGate`: it wears the TARGET room's own face, set
+                      imperatively per switch (the lab tile for Development, the assembly
+                      image for Product, the wave for Governance, the design sheet for
+                      Design — measured 2026-10-16: the
+                      tile is an OPAQUE purple sheet, avg RGB 64,54,79, so the old
+                      "transparent grid" note here was wrong; the #2b2635 base below is only
+                      what the active face sits on while its image decodes). The ring and the
+                      sentence belong to Product and Governance ONLY — Development's cover is
+                      bare ground: no spinner of ours may stand over that room. Shown
+                      imperatively in the click's own frame; `display:none` by default, and
+                      NOTHING here is ever driven by React state, on purpose: the cover must
+                      exist in the click's own task, before any render runs. The JSX
+                      backgroundImage below is only the pre-first-switch default
+                      (Development's tile); every switch rewrites the face itself. */}
                   <div
                     id="room-handoff-cover"
                     aria-hidden="true"
                     style={{
                       position: 'absolute', inset: 0, zIndex: 60, display: 'none', pointerEvents: 'none',
                       flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                      backgroundColor: '#2b2635',
                       backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat',
                     }}
                   >
-                    {/* The gates' own ring and sentence, verbatim — the hand-off is only seam-
-                        less if the face is the same. The sentence is set imperatively per
-                        target (the three gates' texts above); it stays empty while hidden. */}
-                    <div aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
+                    {/* The ring and the sentence are Product's and Governance's; DEVELOPMENT
+                        gets NEITHER. Text set imperatively per target; empty while hidden. */}
+                    <div data-cover-ring aria-hidden="true" className="animate-spin" style={{ width: 26, height: 26, borderRadius: '50%', border: '3px solid rgba(240, 179, 35, 0.25)', borderTopColor: 'rgb(240, 179, 35)' }} />
                     <p style={{ color: '#c9c9c9', fontSize: 13, fontWeight: 500, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }} />
                   </div>
                 </div>

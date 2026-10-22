@@ -46,6 +46,13 @@ export class AgentCardElement extends LitElement {
      * indicator — see the note in the render.
      */
     headerLabel: { type: String, attribute: 'header-label' },
+    /**
+     * DESIGN CARDS HAVE NO DELETE (2026-10-18). The card's trash control deletes a PROMPT
+     * PACKAGE. A design element is a catalogue record, not a package — its card comes from
+     * the design room's own `design_master` rows — so the control would dispatch a delete
+     * for something that is not a package. The grid sets this for `room_domain: 'design'`.
+     */
+    nodelete: { type: Boolean },
     // Owner-instructed control (not in the Figma pull): arm → confirm.
     _deleteArmed: { state: true },
   };
@@ -62,6 +69,7 @@ export class AgentCardElement extends LitElement {
   declare categoryTitleColor: string;
   declare categoryTextColor: string;
   declare headerLabel: string;
+  declare nodelete: boolean;
   /** First confirmation step: trash clicked once, waiting for the second click. */
   declare _deleteArmed: boolean;
   /** Auto-disarm timer so an armed trash never stays armed. */
@@ -507,7 +515,7 @@ export class AgentCardElement extends LitElement {
         <!-- owner-instructed delete control — step 1 of 2 (trash → CONFIRM).
              Not in the Figma pull. Absent on the demo, where the server refuses
              the delete it would dispatch (demo_policy.py). -->
-        ${isDemoMode() ? nothing : html`
+        ${isDemoMode() || this.nodelete ? nothing : html`
         <button
           class="card-delete ${this._deleteArmed ? 'armed' : ''}"
           type="button"

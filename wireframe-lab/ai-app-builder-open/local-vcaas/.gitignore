@@ -1,3 +1,0 @@
-# The engine's own store and its key — runtime state, never source.
-data/
-.env

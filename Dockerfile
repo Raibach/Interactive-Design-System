@@ -66,6 +66,12 @@ RUN apt-get update && apt-get install -y \
 # Backend dependencies, then code
 COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r backend/requirements.txt
+# THE APP'S FILTER CONFIG, BESIDE THE BACKEND. The sessions lane generates its catalogue from
+# the Langfuse fork's own `sessions-config.ts`, and the fork is not part of this image — only the
+# paths named here are copied. Measured 2026-10-18: without this line the deployed studio answered
+# the catalogue with `FileNotFoundError: /app/governance/langfuse-main/...`.
+COPY filter-config ./filter-config
+
 COPY backend/ ./backend/
 
 # config.py was moved to the repo root (from backend/config.py); the backend's

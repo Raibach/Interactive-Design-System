@@ -55,7 +55,7 @@ router = APIRouter()
 
 # ── ADD DESIGN SYSTEM: A ZIP BECOMES A PARTITION ────────────────────────────────────────────────
 #
-# THE CONTRACT (wireframe-lab/ADD-A-DESIGN-SYSTEM.md §6). The archive carries two members, read IN
+# THE CONTRACT (product/ADD-A-DESIGN-SYSTEM.md §6). The archive carries two members, read IN
 # MEMORY and never extracted:
 #
 #   system.json      {"id": "carbon-ui", "label": "Carbon"}
@@ -78,14 +78,14 @@ _PROP_TYPES = {"string", "number", "boolean", "object", "array"}
 
 
 # WHERE THE PARTITION IS WRITTEN, AND WHERE THE APP READS IT (owner, 2026-10-03). The lab is the
-# SOURCE: `wireframe-lab/catalogs/<id>/` holds the real `catalog.json` + `registry.json` (the
-# decision is recorded in `wireframe-lab/catalogs/README.md`). The app tree holds ONE SYMLINK per
+# SOURCE: `product/catalogs/<id>/` holds the real `catalog.json` + `registry.json` (the
+# decision is recorded in `product/catalogs/README.md`). The app tree holds ONE SYMLINK per
 # partition — `frontend/src/components/A2UI/catalogs/<id>` — which is what keeps every existing
 # reader (deps.py's scan, the bundle's `import.meta.glob`, the audit) reading the same path it
 # always has. The two are written together by the ingest and never diverge: one writer per fact.
 def _catalogs_dir() -> str:
     """The lab — where a partition's files really live."""
-    return os.path.join(os.path.dirname(__file__), "..", "..", "wireframe-lab", "catalogs")
+    return os.path.join(os.path.dirname(__file__), "..", "..", "product", "catalogs")
 
 
 def _app_catalogs_dir() -> str:
@@ -281,7 +281,7 @@ async def ingest_design_system(
     return {
         "system": system_id,
         "label": system_label,
-        "partition": f"wireframe-lab/catalogs/{system_id}",
+        "partition": f"product/catalogs/{system_id}",
         "appTreeLink": f"catalogs/{system_id} (symlink)",
         "components": [entry["name"] for entry in parsed],
         "entries": "proposed (draft: false) — an authorized person accepts each one",
@@ -1289,6 +1289,82 @@ def _catalog_check() -> dict[str, Any]:
         "verdict": verdict,
         "findings": [line.strip() for line in output.splitlines() if line.strip().startswith("[")][:20],
     }
+
+
+def _register_element_row(tag: str, meta: dict, actor: str) -> str:
+    """THE ELEMENT'S OWN RECORD, CREATED BY THE APPROVAL THAT PUBLISHED IT.
+
+    Every Figma node already carries its identity — the file key, the node id and the label — and
+    the tag `f-<node id>` is derived from them. Approving a component used to leave the record to
+    a separate catalogue sync, so the capture door refused the component until that sync ran: an
+    approved element that could not record a single interaction. This closes that gap: the same
+    approval that writes the file and the registrations also ensures the `design_master` row the
+    door resolves against.
+
+    IDEMPOTENT BY THE DATABASE'S OWN RULE. `get_or_create_design_container` inserts with
+    ON CONFLICT DO NOTHING against the partial unique index on (catalogue_id, element_key), so
+    approving the same component again finds the row and writes nothing. The lookup keys are the
+    identity only (catalogue_id + element_key): a row is the same element whatever its catalogue
+    list says later.
+
+    A failure here is a REGISTRATION FAILURE and is said so — an approved component that cannot
+    be recorded is exactly the half-state this route refuses to hide.
+    """
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        return "could not create the element row: DATABASE_URL is not set"
+    try:
+        from prompt_sessions_api import PromptSessionsAPI
+
+        api = PromptSessionsAPI(database_url)
+        user_id = os.getenv("DEFAULT_USER_ID", "00000000-0000-0000-0000-000000000001")
+        catalogue = api.get_or_create_design_container(
+            user_id=user_id,
+            kind="design_catalogue",
+            title="Raibach IDS",
+            description="The catalogue this design system's components are drawn from.",
+            keys={"design_system": "raibach-ids"},
+        )
+        if not catalogue:
+            return "could not create the element row: the design catalogue row did not resolve"
+
+        node_id = meta.get("nodeId") or ""
+        label = meta.get("figmaName") or tag
+        row = api.get_or_create_design_container(
+            user_id=user_id,
+            kind="design_master",
+            title=label,
+            description=f"Figma component {label} ({node_id}) approved from the Design room.",
+            keys={"catalogue_id": str(catalogue["id"]), "element_key": tag},
+        )
+        if not row:
+            return "could not create the element row: the design_master row did not resolve"
+
+        # ONE TRAIL LINE — the lifecycle fact, read row by row like every other trail entry. The
+        # three identifiers travel with it: file key, node id, label.
+        with api.get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO design_element_activity (element_id, user_id, actor, action, detail)
+                   VALUES (%s, NULL, 'figma-ingest', 'element-registered', %s::jsonb)""",
+                (
+                    row["id"],
+                    json.dumps(
+                        {
+                            "element_key": tag,
+                            "file_key": meta.get("fileKey") or "",
+                            "node_id": node_id,
+                            "figma_name": label,
+                            "figma_type": meta.get("figmaType") or "",
+                            "approved_by": actor or None,
+                        }
+                    ),
+                ),
+            )
+            conn.commit()
+        return f"element row {row['id']} registered for {tag}"
+    except Exception as exc:  # noqa: BLE001 — the sentence is the report
+        return f"could not create the element row: {type(exc).__name__}: {exc}"
 
 
 def _register_in_figma_map(tag: str, node_id: str, figma_name: str) -> str | None:
@@ -6695,6 +6771,17 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                     vendored,
                 )
                 registration["layers"] = f"{layers_note['layers']} layers to {layers_note['file']}"
+
+            # THE ELEMENT'S OWN RECORD — created by the approval that publishes it. Every Figma
+            # node already carries its identity (file key, node id, label), so there is no
+            # separate tagging pass; see _register_element_row. A component the door cannot
+            # resolve is a registration failure and is reported with the rest.
+            registration["elementRow"] = await asyncio.to_thread(
+                _register_element_row,
+                target_tag,
+                meta,
+                _resolve_actor(http_request) or meta.get("actor", ""),
+            )
         else:
             registration["skipped"] = f"target {target_tag} was not part of this commit"
 

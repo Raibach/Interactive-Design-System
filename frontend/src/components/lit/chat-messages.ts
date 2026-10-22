@@ -366,26 +366,6 @@ export class ChatMessages extends LitElement {
     /* A button that is not pressable must not invite a press with a pointing hand, and it
        must not be reachable by keyboard as though it were still an answer. */
     .turn .action.spent:disabled { pointer-events: none; }
-    /* THE EMPTY THREAD IS HER GREETING, IN THE CARD'S OWN TYPE.
-       Every value here is the drawing's, from the results card "chat-output-area-results" #40001130:5060
-       (drawn as "chat-output-header" #40001119:6327 when this element was built, and its line
-       there was Inter Medium 500 / 13px / 20px / #171717, #40001119:6358, :6337) —
-       and none of it is mine. Nothing else is declared: no opacity, no grey, no italic, no
-       padding of its own, because the card already supplies the inset (padding 10px) and the
-       drawing has no such treatment.
-       WHAT WAS HERE BEFORE WAS NONCOMPLIANT, AND IT IS WORTH THE RECORD. Measured against the
-       card's real surface (rgba(117,142,135,0.35) over #CBE6E3 → rgb(173,199,195)), AA for
-       normal text needing 4.5:1:
-         the grey I briefly put here (#6c757d) ........ 2.62:1  FAIL
-         the 60%-opacity treatment it replaced ........ 3.80:1  FAIL
-         the drawing's own #171717 ................... 10.02:1  PASS
-       The owner caught it: "I've got noncompliant WCAG text, it's barely visible. Why are you
-       changing the color of the text?" — and the answer was that I had been inventing a style
-       for a line the drawing does not draw, instead of taking the card's own.
-       The sentence itself is hardcoded, which the owner allowed for exactly this ("you know
-       it's supposed to be gray, so if you're gonna hardcode something just say hi, how can I
-       help you today… if it's gotta be hardcoded"): her real words come from an assembly, and
-       a brand-new conversation has had none. */
     .empty {
       /* Nunito, per the owner's face ruling — see .thread above. */
       font-family: 'Nunito', 'Inter', system-ui, sans-serif;

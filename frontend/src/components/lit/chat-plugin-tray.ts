@@ -10,76 +10,33 @@
  *   up and expands the section below it."
  *
  *   the card #40001123:6690 — 500×53, radius 8, fill rgba(117,142,135,0.35), 1px stroke
- *   rgba(117,142,135,0.5), padding 7px 14px, gap 10. Inside it: the label "Active
- *   Plugins" (#40001123:6832) then FIVE marks 32×32, 20 apart (#40001124:7035,
- *   #40001124:7032, #40001123:6728, #40001123:6732, #40001123:6724), and the credit
- *   (#40001123:6740) at the end of the row.
+ *   rgba(117,142,135,0.5), padding 7px 14px, gap 10. It used to carry the label "Active
+ *   Plugins" and the credit line; BOTH LEFT ON THE OWNER'S WORD, 2026-10-19: *"You can
+ *   remove the active plug-in and the copyright"* — the card is now the RESERVED SPACE FOR
+ *   THE ROOM'S OWN CHAT CONTROLS (the owner's own note on it: *"we have this space at the
+ *   bottom for chat controls related to post hog … that's what that space is reserved for
+ *   customization"*). An empty card is what an unclaimed reservation looks like; nothing
+ *   stands in it until a room fills it.
  *
- * THE ONE DIMMED MARK IS THE WHOLE STATE SYSTEM. "chat history" (#40001123:6728) is
- * drawn at opacity 0.5 while the marks beside it are solid. The owner, 2026-09-20:
- * "the chat conversations history is kind of deactivated in that bottom panel ... the
- * reason it's deactivated is because the conversations are being displayed at the top.
- * So this is a user's choice — if you click on that again it will remove those from the
- * top." So DIMMED MEANS ITS WINDOW IS ALREADY PLACED, and a mark is a toggle. That is
- * a STATE, not a disabled condition — which is why the mark stays clickable.
+ * THE FIVE MARKS RETIRED — 2026-10-14, on the owner's word: *"take away these inactive
+ * icons at the bottom of the chat for every section… filler icons that are inactive or
+ * stubs"* — the attached set: forum, model reference, chat history, new conversation, user
+ * feedback. The label, the credit and the marks have all left since; the gripper and the
+ * readouts stay. The product room never drew this tray (its foot is <chat-product-tools>),
+ * so the removal reaches every other section and nothing of product's. Two marks had
+ * behaviour — the history toggle and the wired add mark — both went with the set; the add
+ * mark's function lives on where it was always also called (a package opened with no
+ * conversation — see chat-panel's `_startNewConversation`). The five artwork files stay in
+ * assets, referenced by nothing.
  *
- * THE MARKS EMIT NOTHING YET, DELIBERATELY, ON THE FOOTER'S OWN PRECEDENT. The toggle
- * needs an event name, the name belongs in the annotation, and none of these nodes
- * carries one — so drawing a name here would be inventing the thing the annotation rule
- * exists to stop (see <chat-footer>, which refuses the same way for the same reason).
- * The exception is the mark the project has already named: "add-new-conversation"
- * emits `conversation-new`, which the seat hears and turns into the three writes.
- *
- * TYPE: the drawing sets the label in Arial Rounded MT Bold 400 / 12px and the credit in
- * Inter 700 / 9px. The owner's face ruling, 2026-10-07 — "Arial or rounded fonts -> becomes
- * Nunito (found in chat interfaces for Grace)... Use our fonts only - no API calls" — draws
- * the label's rounded face as Nunito at the drawing's own 12/400; the credit and the
- * readouts keep the application face (.block's Inter).
+ * TYPE: the credit and the readouts keep the application face (.block's Inter).
  *
  * Part of the <chat-panel> composition. Not a catalog entry on its own.
  */
 import { LitElement, html, css } from 'lit';
-// THE DRAWING'S OWN ARTWORK, pulled from the tray's mark nodes — not the old footer's
-// assets. The footer's five were drawn for the navy bar and carry that bar's colours;
-// these carry the design's, so the fill is the file's and not a tint applied here.
-import forumIcon from '@/assets/figma-tray-forum.svg';
-import modelRefIcon from '@/assets/figma-tray-model.svg';
-import historyIcon from '@/assets/figma-tray-history.svg';
-import newConversationIcon from '@/assets/figma-tray-new-conversation.svg';
-import feedbackIcon from '@/assets/figma-tray-feedback.svg';
-
-/**
- * The five marks in the drawing's order, each with its node.
- *
- * `placed` is the drawing's own state: the history mark is the one the design shows
- * dimmed, because the conversations window is up. A host sets it from what its stack
- * actually holds — this element composes nothing and reaches nothing.
- */
-const MARKS = [
-  { nodeId: '40001124:7035', src: forumIcon, label: 'forum' },
-  { nodeId: '40001124:7032', src: modelRefIcon, label: 'model reference' },
-  {
-    nodeId: '40001123:6728',
-    src: historyIcon,
-    label: 'chat history',
-    placed: true,
-    /* THE FOOTER COPY OF THE HISTORY MARK TOGGLES THE CONVERSATIONS WINDOW. The copy
-       drawn inside that window (same artwork, same layer name) removes the window; this
-       copy adds the window and removes the window. The annotation on each copy carries
-       the behaviour; the name is shared because the artwork is shared. */
-    event: 'toggle-output-window',
-    detail: { window: 'conversations' },
-  },
-  { nodeId: '40001123:6732', src: newConversationIcon, label: 'new conversation', event: 'conversation-new' },
-  { nodeId: '40001123:6724', src: feedbackIcon, label: 'user feedback' },
-];
 
 export class ChatPluginTray extends LitElement {
   static properties = {
-    /** The label the block carries in the drawing. */
-    label: { type: String },
-    /** Mark labels the host's stack currently holds, comma-separated. */
-    placed: { type: String },
     /* THE TOKEN READOUTS — kept, not drawn by this frame (see the header note). They
        arrive from the seat exactly as <chat-footer> took them, because the function is
        the seat's and only the bar it sits on has changed. */
@@ -91,8 +48,6 @@ export class ChatPluginTray extends LitElement {
     lastCall: { type: String, attribute: 'last-call' },
   };
 
-  declare label: string;
-  declare placed: string;
   declare unattributed: boolean;
   declare tokens: number;
   declare inTokens: number;
@@ -102,22 +57,12 @@ export class ChatPluginTray extends LitElement {
 
   constructor() {
     super();
-    this.label = 'Active Plugins';
-    this.placed = '';
     this.unattributed = false;
     this.tokens = 0;
     this.inTokens = 0;
     this.outTokens = 0;
     this.calls = 0;
     this.lastCall = '';
-  }
-
-  /** A mark is dimmed when its window is placed — the host's answer first, the drawing's second. */
-  private _isPlaced(m: { label: string; placed?: boolean }): boolean {
-    if (this.placed) {
-      return this.placed.split(',').map((s) => s.trim().toLowerCase()).includes(m.label.toLowerCase());
-    }
-    return !!m.placed;
   }
 
   private _fmt(n: number): string {
@@ -188,8 +133,9 @@ export class ChatPluginTray extends LitElement {
       border-radius: 50%;
       box-sizing: border-box;
     }
-    /* The card #40001123:6690: 500×53, radius 8, translucent #758E87, 1px edge, and a
-       COLUMN in the drawing — the row, then whatever else the card carries. */
+    /* THE CARD IS THE ROOM'S RESERVATION. Its own rows left on the owner's word (see the
+       header), so what is left is the box the room fills — the drawing's radius, edge and
+       ground, and nothing drawn inside it until something is said there. */
     .card {
       display: flex;
       flex-direction: column;
@@ -200,65 +146,6 @@ export class ChatPluginTray extends LitElement {
       background: rgba(117, 142, 135, 0.35);
       border: 1px solid rgba(117, 142, 135, 0.5);
       box-sizing: border-box;
-    }
-    .row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 9px;
-      width: 100%;
-      min-width: 0;
-    }
-    /* #40001123:6723 — the label and the five marks, 20 apart. */
-    .marks {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      min-width: 0;
-    }
-    .label {
-      color: #3D515B;
-      /* NUNITO, per the owner's face ruling, 2026-10-07 — "Arial or rounded fonts -> becomes
-         Nunito... Use our fonts only - no API calls"; this label is chat furniture and keeps
-         the drawing's rounded face, drawn locally. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
-      font-size: 12px;
-      font-weight: 400;
-      white-space: pre-line;
-    }
-    /* A mark is 32×32 of artwork and nothing else — no border, no fill. */
-    .mark {
-      width: 32px;
-      height: 32px;
-      padding: 0;
-      border: none;
-      background: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: inherit;
-      /* The drawing's placed state: half opacity, still a control. */
-      opacity: 1;
-    }
-    .mark[data-placed='true'] {
-      opacity: 0.5;
-    }
-    .mark img {
-      display: block;
-      width: 32px;
-      height: 32px;
-      pointer-events: none;
-    }
-    /* #40001123:6740 — the credit, at the end of the row. */
-    .credit {
-      color: #3D515B;
-      font-size: 9px;
-      font-weight: 700;
-      text-align: right;
-      white-space: pre-line;
-      flex: 1 1 auto;
-      min-width: 0;
     }
     /* THE READOUTS, KEPT — the footer's own line on the tray's ground. One line,
        ellipsised rather than wrapped so the card keeps its 53px floor and the row's
@@ -283,33 +170,7 @@ export class ChatPluginTray extends LitElement {
             <span class="dot" data-node-id="40001123:6694"></span><span class="dot" data-node-id="40001123:6695"></span><span class="dot" data-node-id="40001123:6696"></span><span class="dot" data-node-id="40001123:6697"></span>
           </div>
         </div>
-        <div class="card" data-node-id="40001123:6690">
-          <div class="row" data-node-id="40001123:6722">
-            <div class="marks" data-node-id="40001123:6723">
-              <span class="label" data-node-id="40001123:6832">${this.label}</span>
-              ${MARKS.map(
-                (m) => html`
-                  <button
-                    class="mark"
-                    type="button"
-                    data-node-id=${m.nodeId}
-                    data-placed=${this._isPlaced(m) ? 'true' : 'false'}
-                    aria-pressed=${this._isPlaced(m) ? 'true' : 'false'}
-                    aria-label=${m.label}
-                    title=${m.label}
-                    @click=${() => {
-                      if (m.event) this.dispatchEvent(new CustomEvent(m.event, { bubbles: true, composed: true, detail: (m as { detail?: unknown }).detail }));
-                    }}
-                  >
-                    <img src=${m.src} alt="" />
-                  </button>
-                `,
-              )}
-            </div>
-            <span class="credit" data-node-id="40001123:6740">Created by John Travis Holt
-Raibach.net © 2026 Raibach IDS</span>
-          </div>
-        </div>
+        <div class="card" data-node-id="40001123:6690"></div>
       </div>
     `;
   }
@@ -329,7 +190,6 @@ declare module 'react' {
       'chat-plugin-tray': React.DetailedHTMLProps<
         React.HTMLAttributes<ChatPluginTray> & {
           label?: string;
-          placed?: string;
           ref?: React.Ref<ChatPluginTray>;
         },
         ChatPluginTray

@@ -20,14 +20,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { appConfigReady } from "@/shared/appConfig";
-import { retireLegacyAuthFlags } from "@/shared/session";
 import "./index.css";
 
-/* THE LEGACY DOOR CACHE DIES AT BOOT (owner, 2026-10-04): pre-sessionStorage sign-ins lived
-   in localStorage, so a returning browser skipped the gate. index.html already deletes them
-   at parse; this is the belt to that suspender for any environment where the inline script
-   did not run — after it, only sessionStorage can say a sign-in exists. */
-retireLegacyAuthFlags();
 
 /*
  * ── FIRST RENDER, AND THE READ THAT NO LONGER BLOCKS IT ────────────────────────
@@ -45,19 +39,11 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 /*
- * THE STATIC GATE'S EXIT — AND ONLY FOR A SIGNED-IN VISITOR. The card in index.html IS
- * the door (it checks the pin itself, before any bundle exists); while unauthenticated
- * it stays, because removing it would hand the screen to a `null` App — a door nobody
- * can knock on. A signed-in boot removes it one frame after React commits, and the page
- * behind it is the same #110E1F, so the swap cannot flash white.
- */
-if (sessionStorage.getItem("grace_is_authenticated") === "true") {
-  // SYNCHRONOUS, AND THAT IS A FIX — measured 2026-10-03, late: this removal was scheduled on
-  // requestAnimationFrame, and rAF DOES NOT FIRE IN A HIDDEN PANE (the in-app browser behind
-  // another window, a backgrounded tab). The splash then stayed over a fully-rendered app until
-  // the pane was looked at again — "I can't read it… nothing works" from the other side of the
-  // glass, and a driver's clicks timing out against a full-screen overlay. The one-frame delay
-  // was only ever for the flash this comment's neighbours say cannot happen (#splash and the page
-  // behind it are the same #110E1F); a synchronous remove has no such window at all.
-  document.getElementById("splash")?.remove();
-}
+ * THE STATIC GATE'S EXIT MOVED TO THE REACT HOLD (2026-10-19). It used to be removed here,
+ * synchronously after createRoot().render() — but render only SCHEDULES the commit, so the
+ * static card could vanish before GateSplash existed and a bare #110E1F frame showed between
+ * the two cards ("it disappears … it loads again"). GateSplash now removes it in its own
+ * layout effect: after React commits, before the browser paints — one frame, one card. The
+ * decision is unchanged: App renders GateSplash only for a signed-in session; an
+ * unauthenticated visitor keeps this card, because removing it would hand the screen to a
+ * null App. */

@@ -1,0 +1,22 @@
+### raibach.net
+
+A     @                      
+A     www                    
+TXT   @                      protonmail-verification=f22a07da22d5d53905f3f593f06f6f36ca73905d google-site-verification=Dvo39gwO0nAI7zyoPxEccKbPk7vOM0yh7CjULwhFp8A zone-ownership-verification-408880232baa40294e126f2f7249f0b21011d6c0ae509158d6275cb8e0f278fe v=spf1 include:_spf.protonmail.ch ~all 
+TXT   _dmarc                 v=DMARC1; p=quarantine
+TXT   protonmail._domainkey  protonmail.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch.v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz2sCVvX1w6JTAyKxTmfimYXk0LSKFImRTmMBBo3b8hKGpg21BhppKGdxetHAdzL9YZ8AdMiPrshgCPIRblfHlm0Y42o05mfnMkgUYNIxSQhA4A/zXf0T305Dxtuz8ZvDoHaXlFhhxFroSfkODoL+usGfuPrB4ctoymHzuMhbb9fuAYfuxN+VKAgChmFJXHeNb7O 7G8bErhV8WtrVJa+PPrZeXzZ2PSgiI8R6bPYRQtDj3+X7XK2E1atM/JWnKmybJfQJdynqJ2J9Ia+oP6nlS2UHpUSkbf+OSojH2gk5h7GhqegMOsMKmiDpX/45cITZ4d9BTo4GY6pA++sGqbPvewIDAQAB;
+CNAME protonmail2._domainkey protonmail2.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch.
+CNAME protonmail3._domainkey protonmail3.domainkey.dzrebbfryivxadwbpe4b3jnpydyszhw72vzpb2bohhrn4s6agpkra.domains.proton.ch.
+
+### holtportfolio.com
+
+A     @                      46.225.45.132
+A     www                    46.225.45.132
+MX    @                      10 mail.protonmail.ch.
+MX    @                      20 mailsec.protonmail.ch.
+TXT   @                      v=spf1 include:_spf.protonmail.ch ~all protonmail-verification=85a4bc4cfd48f51a1fd84d6348f50d4dce361cdc 
+TXT   _dmarc                 v=DMARC1; p=quarantine
+TXT   protonmail._domainkey  protonmail.domainkey.dauvbe7zslpx3ezj5w6ua4tyrnsohfb5wismii4jinod4pmg2qydq.domains.proton.ch.v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwBRNW+ODX8ijWq9FVvmfRL7LL4dQhNCvFdWNZ7xe/RwE6q7yLSBa3H+XLc/56Rc4ktUpsTyJcirChrFUZjkS3X4M162xhMhK1QWrbTqCpTUtf24HAZmzDPIvhis7MO4MNIg+TG+OWd5X/bphJOl9S/zARAMLZnAy4pQSe4Hhkp77/tYBf4v2aHRtDWhOH8wpGdF duuw2qLhuBq+HFOHIWVpVislNj/zg4792MjlLMJdWC4fUAvZtoJsvwJ00LzoJN9KrQ6wgieh7od1ht5Sg7yqnJJdaZ9F3GlVa/aYRSzv8nGASF/KbiHCSIzS1u+IZnSxS+LnxUFYV7ROiidybNQIDAQAB;
+CNAME protonmail2._domainkey protonmail2.domainkey.dauvbe7zslpx3ezj5w6ua4tyrnsohfb5wismii4jinod4pmg2qydq.domains.proton.ch.
+CNAME protonmail3._domainkey protonmail3.domainkey.dauvbe7zslpx3ezj5w6ua4tyrnsohfb5wismii4jinod4pmg2qydq.domains.proton.ch.
+

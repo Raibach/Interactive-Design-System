@@ -205,12 +205,31 @@ n8n-data/
 # visitor data — nothing here is ever pushed.
 /wordpress/
 
-# ── THE REPO'S OWN ENGINE COPY (2026-10-10) ─────────────────────────────────
-# runtime/node/ is a full copy of Node.js (82 MB) kept on disk so every local
-# service starts from the repository's own engine instead of the machine's
-# shared install. A toolchain is not source — kept out of the history, same
-# rule as the vendored trees above. Delete runtime/ to fall back to the
-# machine's install.
+# ── RAW DATA AND SITE COPIES (2026-10-22) ────────────────────────────────────
+# Measured while preparing this repository for GitHub: the root held database dumps
+# (holt-/rai-*.sql), a WordPress export and a copy of the old raibach.net webroot. They are
+# other people's rows — emails, prompt text, password hashes — and site files with live
+# credentials. Kept on disk, never in the history. filter-config/ is a symlink into the
+# Langfuse fork, which is itself excluded, so a committed link would dangle.
+/*.sql
+/_hetzner-export/
+/raibach.net/
+/filter-config/
+
+# ── ARCHIVES AND ARCHIVE SHELVES (2026-10-22) ────────────────────────────────
+# The same rule the root's /*.zip line above follows, one level down: third-party source
+# archives kept for review (budibase-master.zip 61 MB, processmaker-develop.zip 33 MB), a
+# product build export, and the `_old/` shelves that retired files are moved into. Weight
+# that is not source; it stays on disk and out of the history.
+approval-reviews/**/*.zip
+product/PRODUCT-build.archives/
+**/_old/
+
+# ── runtime/ — RETIRED (2026-10-15, owner's direction) ──────────────────────
+# runtime/node/ was a full copy of Node.js (82 MB) kept on disk so local
+# services started from the repository's own engine. The copy is retired:
+# every launcher uses the standard PATH now and nothing reads runtime/. The
+# line below stays only as a guard for any stray copy; runtime/ may be deleted.
 runtime/
 
 # A dump of THIS repository's database, taken before it is changed. Same rule as the
@@ -229,35 +248,42 @@ runtime/
 # committed (backend/routes/figma.py _write_preview_files / _drop_preview_files).
 frontend/.preview/
 
+# ── THE TAB APPLICATIONS ARE NOT IN THIS REPOSITORY (2026-10-22, owner's direction) ─────────
+# Owner: "we do not need to put the tabs apps or code. Mark them as ignore. Just the core and the
+# first 3 tabs. no posthog or openhands or langfuse should be put."
+# What this repository carries = the core (frontend/ + backend/) and the Console, Composer and
+# Design tabs. The programs the other rooms frame are third-party trees kept on disk only:
+#   design/posthog-master/        the UX tab's analytics program   (covered by /design/ below)
+#   development/OpenHands-main/   the Development room's tool
+#   development/vendor/           that tool's Python side (software-agent-sdk + automation)
+#   governance/langfuse-main/     the Governance room's app        (covered by governance/)
+#   product/ai-app-builder-open/  the Product room's builder app
+The explicit lines sit beside the rules that already cover the other two.
+development/OpenHands-main/
+development/vendor/
+product/ai-app-builder-open/
+
 # ── THE VENDORED SHELF AND THE DEVELOPMENT CLONES (2026-10-04) ─────────────────────────────
 # Reference material adopted whole, never ours to version: the sample repos under
-# wireframe-lab/ and every clone under development/.
+# product/ and every clone under development/.
 # …EXCEPT THE PRODUCT ROOM'S TOOL (owner, 2026-10-05): the builder app AND the engine it runs
-# on (wireframe-lab/ai-app-builder-open/ — its local-vcaas/) ARE this repository's now. They
+# on (product/ai-app-builder-open/ — its local-vcaas/) ARE this repository's now. They
 # were versioned in a fork of the vendor's repo; the owner's ruling moved them here and
 # retired the fork. The two builder services build from this path.
-wireframe-lab/agent-native/
-wireframe-lab/ai-elements-main/
-wireframe-lab/builder-main/
-wireframe-lab/chatbot-main/
-wireframe-lab/mitosis-main/
+product/agent-native/
+product/ai-elements-main/
+product/builder-main/
+product/chatbot-main/
+product/mitosis-main/
 development/*
 # …except the Development zone's own records — the clones stay out, these belong in git.
 !development/CHANGELOG.md
 !development/openhands-patch.sh
-# …and the hosted workspace's build (2026-10-05, wireframe-lab/HOST-THE-TOOLS.md): the
+# …and the hosted workspace's build (2026-10-05, product/HOST-THE-TOOLS.md): the
 # Development room's tool runs as its own service now, and its Dockerfile + entrypoint are
 # source — the service builds them straight from this branch.
 !development/agent-canvas/
-# …and THE TOOL'S OWN SOURCE (2026-10-04). The Development room's tool is built from THIS copy
-# rather than downloaded from the vendor, so these files travel with the repository. Until this
-# line existed the rule above kept them off GitHub — which is why a cloud build could never see
-# them. This is the one deliberate exception to "the clones stay out": it is not a clone kept for
-# reading, it is the thing the room runs.
-!development/OpenHands-main/
-# …and THE PYTHON SIDE OF THE SAME TOOL (2026-10-04). The agent server, the SDK, the tools, the
-# workspaces and the automation backend: four packages from OpenHands/software-agent-sdk and one
-# from OpenHands/automation. The tool can be pointed at these instead of PyPI — that override is
-# built in and documented by the vendor (`OH_AGENT_SERVER_LOCAL_PATH`, "highest precedence") — and
-# they have to travel with the repository for a cloud build to see them.
-!development/vendor/
+# THE TOOL'S OWN SOURCE IS NO LONGER AN EXCEPTION (2026-10-22). Two lines used to re-include
+# development/OpenHands-main/ and development/vendor/ so a cloud build could see them; the owner's
+# direction above ends that. The trees stay on disk, and the Development room keeps running from
+# them locally — they are simply never committed or pushed.

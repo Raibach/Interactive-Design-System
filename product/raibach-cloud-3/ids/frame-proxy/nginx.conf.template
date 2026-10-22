@@ -1,0 +1,77 @@
+# Raibach frame-proxy — BOX variant template (prefix-aware).
+# Values substituted at boot: ${RAIBACH_SESSION_COOKIE} ${STUDIO_ORIGIN} ${LANGFUSE_WEB_UPSTREAM}
+#
+# COMBINED COOKIE HEADER (2026-10-11 fix, cost: the owner saw a sign-in page):
+# the CLIENT's own cookies pass through AND the pre-minted session tokens are
+# APPENDED. Replacing the header outright starved Langfuse's client-side
+# session check on the auth endpoints; pass-through alone starved it
+# everywhere else. Both locations use this combined value: csrf minting still
+# sees the client's csrf cookie, and the room always sees the session.
+map $http_cookie $raibach_client_cookies {
+  default "$http_cookie; ";
+  ""      "";
+}
+
+server {
+  listen 8080;
+  server_name _;
+
+  # Re-resolve the upstream (2026-10-09 lesson): nginx resolves a proxy_pass
+  # hostname once at boot; the variable form keeps it fresh via Docker's DNS.
+  resolver 127.0.0.11 valid=10s ipv6=off;
+  set $lf_upstream "http://${LANGFUSE_WEB_UPSTREAM}";
+
+  # Hashed static assets under the base path — pass through untouched (their
+  # immutable cache headers stand; the house script must never run on them).
+  location /governance/_next/static/ {
+    proxy_pass $lf_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+  }
+
+  # Operator bootstrapping path: the auth endpoints must see the CLIENT'S OWN
+  # cookies (the csrf + credentials dance that mints the session once per
+  # server). The session-cookie injection below would overwrite them, so this
+  # location deliberately passes cookies through untouched. Normal room
+  # traffic never depends on it (the room is always pre-signed-in via the
+  # injected cookie).
+  location /governance/api/auth/ {
+    proxy_pass $lf_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # Combined: client cookies + the injected session (see the map note).
+    proxy_set_header Cookie "${raibach_client_cookies}next-auth.session-token=${RAIBACH_SESSION_COOKIE}; __Secure-next-auth.session-token=${RAIBACH_SESSION_COOKIE}";
+  }
+
+  location / {
+    proxy_pass $lf_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_buffering off;
+    proxy_set_header Accept-Encoding "";
+    # The seeded admin session (minted once on the box, 10-year expiry via
+    # AUTH_SESSION_MAX_AGE). Client cookies pass through; both session-cookie
+    # name variants are appended — same token either way, so one tree serves
+    # http and https worlds AND the client-side session check finds it.
+    proxy_set_header Cookie "${raibach_client_cookies}next-auth.session-token=${RAIBACH_SESSION_COOKIE}; __Secure-next-auth.session-token=${RAIBACH_SESSION_COOKIE}";
+
+    proxy_hide_header X-Frame-Options;
+    proxy_hide_header Content-Security-Policy;
+    add_header Content-Security-Policy "frame-ancestors 'self' ${STUDIO_ORIGIN};" always;
+
+    # The document must never be cached: the house script is injected into it.
+    add_header Cache-Control "no-store" always;
+
+    # THE HOUSE GROUND + THE HOUSE TYPE + the location reporter (kept byte-identical with the local conf's block).
+    sub_filter_once on;
+    sub_filter '</head>' '<style id="raibach-house-ground">html,body{background:transparent !important}.bg-background,.bg-surface,.dark\:bg-background{background-color:transparent !important}button.bg-background,a.bg-background{background-color:rgba(17,14,31,0.75) !important}button.bg-background:hover,a.bg-background:hover{background-color:hsl(var(--accent)) !important}.bg-card,.bg-muted,.bg-secondary,.bg-popover,.dark\:bg-card,.dark\:bg-muted,.dark\:bg-secondary,.dark\:bg-popover,.aria-expanded\:bg-muted[aria-expanded="true"],.cm-editor,.cm-gutters,.cm-scroller{background-color:rgba(17,14,31,0.75) !important}.bg-muted\/50{background-color:rgba(17,14,31,0.38) !important}.bg-muted\/25{background-color:rgba(17,14,31,0.19) !important}.hover\:bg-border:hover,.aria-expanded\:bg-border[aria-expanded="true"],.hover\:bg-input:hover{background-color:hsl(var(--accent)) !important}::-webkit-scrollbar{width:12px;height:12px;background:transparent !important}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent !important}::-webkit-scrollbar-button{display:none !important}::-webkit-scrollbar-thumb{background-color:hsl(var(--accent)) !important;border-radius:999px;border:3px solid transparent;background-clip:padding-box}.dark{--background:250.6 37.8% 8.8% / 0;--header:250.6 37.8% 8.8% / 0;--card:250.6 37.8% 8.8% / 0.75;--muted:250.6 37.8% 8.8% / 0.75;--secondary:250.6 37.8% 8.8% / 0.75;--tertiary:250.6 37.8% 8.8% / 0.75;--popover:250.6 37.8% 8.8% / 0.75;--modal:250.6 37.8% 8.8% / 0.75;--surface-sunken:250.6 37.8% 8.8% / 0.75;--surface-code:250.6 37.8% 8.8% / 0.75;--surface-code-header:250.6 37.8% 8.8% / 0.75;--accent:243.5 30.9% 10.8%}</style><style id="raibach-house-type">@font-face{font-family:Inter;src:url(/governance/house-fonts/inter-latin.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}html,body{font-family:Inter,ui-sans-serif,system-ui,sans-serif !important}body{font-weight:500}h1,h2,h3,h4,h5,h6{font-size:16px !important;font-weight:600 !important}.text-xs{font-size:14px !important;font-weight:500 !important}td,th{font-weight:500 !important}.tabular-nums{font-weight:500 !important}div[class*=scrollbar-gutter]{background-color:rgba(17,14,31,0.75) !important;border-radius:6px}#page-header nav[class*="role=tab"]{margin-top:8px}#page-header nav[class*="role=tab"]>a:first-child{padding-left:16px}</style><script>(function(){var last=null;function r(){try{var p=location.pathname+location.search;if(p===last){return;}last=p;parent.postMessage({type:"langfuse-location",path:p},"*");}catch(e){}}r();setInterval(r,500);})();</script></head>';
+  }
+}

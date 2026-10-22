@@ -2,13 +2,13 @@
 /**
  * prepare_design_system.mjs — THE DETERMINISTIC HALF, IN ITS FIRST REAL FORM (2026-10-03).
  *
- * wireframe-lab/IMPORT-A-DESIGN-SYSTEM.md named this automation `prepare_design_system.py`; it
+ * product/IMPORT-A-DESIGN-SYSTEM.md named this automation `prepare_design_system.py`; it
  * landed as a `.mjs` beside the catalogue tools it belongs to (this folder is Node tooling, and
  * the source it reads — a package's Custom Elements Manifest in node_modules — is the toolchain's
  * own neighbourhood). The name is corrected here, visibly, the way the record demands.
  *
  * WHAT IT DOES: reads a design system's OWN machine-readable source and writes its partition —
- * `wireframe-lab/catalogs/<id>/catalog.json` (the catalogue entries) and `registry.json` (the
+ * `product/catalogs/<id>/catalog.json` (the catalogue entries) and `registry.json` (the
  * name→tag table). It PROPOSES and DECLARES; it never accepts and it never touches another
  * catalogue. That keeps the law: the machine measures, a person accepts (the accept list this
  * run is given IS the person's act, recorded in the entries' `accepted` mark).
@@ -187,7 +187,7 @@ const registry = {
   components: Object.fromEntries(chosen.map((t) => [t.name, t.name])),
 };
 
-const outDir = join(REPO, 'wireframe-lab', 'catalogs', systemId);
+const outDir = join(REPO, 'product', 'catalogs', systemId);
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, 'catalog.json'), JSON.stringify(catalog, null, 2) + '\n');
 writeFileSync(join(outDir, 'registry.json'), JSON.stringify(registry, null, 2) + '\n');

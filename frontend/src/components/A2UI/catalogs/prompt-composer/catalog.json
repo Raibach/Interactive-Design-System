@@ -267,6 +267,57 @@
         }
       ]
     },
+    "trace-context-header": {
+      "type": "object",
+      "description": "The trace facts at the very top of the chat seat's output area (its content-header slot). Implemented by <trace-context-header> in src/components/lit/trace-context-header.ts. A VIEW: it fetches nothing \u2014 the governance shell reads lib/governance-trace-source.ts and writes trace/observation; state 1 draws the selected trace's row facts, an observation switches to the node's detail header. No trace chosen is a fact, not a placeholder to fill: with no trace and no metrics the bar keeps its own face; with metrics bound (the room's landing read) it draws the newest-window model usage \u2014 traces, observations, cost, tokens, model. Mounted by the shell with slot=\"content-header\".",
+      "properties": {
+        "component": {
+          "const": "trace-context-header"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "trace-tree": {
+      "type": "object",
+      "description": "The selected trace's observation tree, for the seat's Trace tab. Implemented by <trace-tree> in src/components/lit/trace-tree.ts. A VIEW: it fetches nothing \u2014 the shell writes trace/observations/selectedId from lib/governance-trace-source.ts; a row click emits trace-node-selected and the shell answers by writing selectedId back. Unset trace = no trace chosen; observations [] = the trace has none \u2014 different claims. Mounted by the shell with slot=\"view\" + view-tab=\"trace\" (the seat's per-tab door for a room's own view).",
+      "properties": {
+        "component": {
+          "const": "trace-tree"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "trace-detail": {
+      "type": "object",
+      "description": "The selected observation's detail, for the seat's Preview tab \u2014 the full inner strip (Preview | Attributes | Scores | Log View | Formatted | Raw) over the node's IO. Implemented by <trace-detail> in src/components/lit/trace-detail.ts. A VIEW: it fetches nothing \u2014 the shell writes trace/observation/io/scores/observations; io undefined = being read, {input:null,output:null} = nothing captured. No inner scroll boxes \u2014 the chat column's one scroller carries everything. Open in Composer absent until its door is confirmed (gate M4). Mounted by the shell with slot=\"view\" + view-tab=\"tools\".",
+      "properties": {
+        "component": {
+          "const": "trace-detail"
+        },
+        "id": {
+          "type": "string"
+        },
+        "scores": {
+          "type": "array"
+        },
+        "observations": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
     "ai-surface-sandbox": {
       "type": "object",
       "allOf": [
@@ -1211,6 +1262,22 @@
         "graceLiveContext": {
           "type": "boolean",
           "description": "Whether the seat appends its LIVE WORKSPACE to those words \u2014 the package, its prompt seats and the tool register, or the console's cards. FALSE where the room's script already carries its live facts, as Design's does. Never sent by a model: a surface that omits it is refused by the seat rather than defaulted. Written by routes/ai.py `_seat_grace`."
+        },
+        "governanceTrace": {
+          "type": "object",
+          "description": "The trace the person has selected in the governance room \u2014 written by the SHELL from its own read (lib/governance-trace-source.ts), never by a model, and only for that room's seat. When graceLiveContext is true the seat appends it to her turn context as the TRACE ON SCREEN block, so her answers are about what is on the screen. Absent = no selection \u2014 the context then says nothing about a trace."
+        },
+        "governanceObservation": {
+          "type": "object",
+          "description": "The NODE selected within that trace \u2014 same channel as governanceTrace; absent when none is selected."
+        },
+        "composerPackageId": {
+          "type": "string",
+          "description": "The trace's prompt package \u2014 resolved by the SHELL (on a Composer run the trace's Langfuse session IS the package's session id) and written only when the package answers; the action bar then offers Open in Composer. Empty = no package for this trace \u2014 no button."
+        },
+        "disabledTabs": {
+          "type": "string",
+          "description": "Comma-separated rail tab ids the room has DEACTIVATED \u2014 visible on the rail but unpushable (governance deactivates 'tools' \u2014 Preview \u2014 until a trace is selected: the defaults are what teach the relation between the tabs and the selection)."
         }
       },
       "required": [

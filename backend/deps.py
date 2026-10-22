@@ -76,7 +76,7 @@ def a2ui_registry_for(system: str) -> dict[str, str]:
     `registry.json` sits beside `catalog.json` and maps a component NAME to a custom-element TAG.
     It is DATA on purpose: a `registry.ts` written while the server runs is a file the browser can
     never import — the bundle was built long before — so the mapping is FETCHED and consulted at
-    runtime, never compiled (wireframe-lab/ADD-A-DESIGN-SYSTEM.md §6).
+    runtime, never compiled (product/ADD-A-DESIGN-SYSTEM.md §6).
 
     A partition with no `registry.json` maps NOTHING, and that is a real answer rather than an
     error: it means no component of this system has an implementation yet, and the drafting canvas
