@@ -130,6 +130,31 @@ export class FigmaIngestForm extends LitElement {
       button:disabled { opacity: 0.4; cursor: not-allowed; }
       button:not(:disabled):hover { background: var(--ds-text-strong); }
       .message { margin: 0; font-size: var(--ds-fs-meta); color: var(--ds-amber); }
+      /* THE SPINNER WHILE AN INGEST RUNS, WITH THE STEP IT IS ON. The step text is the backend's
+         own, written as the work advances — never a canned sequence. */
+      .progress {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 8px 0 0;
+      }
+      .spin {
+        flex: 0 0 auto;
+        width: 14px;
+        height: 14px;
+        margin-top: 2px;
+        border-radius: 50%;
+        border: 2px solid rgba(35, 67, 84, 0.18);
+        border-top-color: var(--ds-amber, #b58b00);
+        animation: ing-spin 0.8s linear infinite;
+      }
+      @keyframes ing-spin { to { transform: rotate(360deg); } }
+      .step {
+        font-size: var(--ds-fs-meta);
+        line-height: 1.45;
+        color: var(--ds-text);
+        overflow-wrap: anywhere;
+      }
     `,
   ];
 

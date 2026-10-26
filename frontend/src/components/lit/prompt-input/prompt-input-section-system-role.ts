@@ -116,7 +116,7 @@ export class PromptInputSectionSystemRole extends LitElement {
       min-width: 0;
     }
     .tile-label {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 18px;
       font-weight: 700;
       color: #171717;
@@ -153,7 +153,7 @@ export class PromptInputSectionSystemRole extends LitElement {
       box-sizing: border-box;
     }
     .system-tools-btn-label {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 16px;
       font-weight: 700;
       color: #8B8B8B;
@@ -183,7 +183,7 @@ export class PromptInputSectionSystemRole extends LitElement {
       border: none;
       cursor: pointer;
       text-align: left;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 700;
       color: #171717;
@@ -226,7 +226,7 @@ export class PromptInputSectionSystemRole extends LitElement {
     .text-input-area {
       width: 100%;
       min-height: 25px;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 16px;
       font-weight: 500;
       line-height: 25px;

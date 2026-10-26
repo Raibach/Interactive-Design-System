@@ -530,7 +530,7 @@ export class RoomEmbed extends LitElement {
       }
       .holding p {
         margin: 0;
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
         font-size: 14px;
         font-weight: 500;
         /* THE SAME MUTED TONE THE OUTPUT COLUMN SPEAKS IN, so the two columns' waits read as

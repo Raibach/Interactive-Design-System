@@ -21,6 +21,13 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { appConfigReady } from "@/shared/appConfig";
 import "./index.css";
+// ── EVERY INGESTED `f-*` COMPONENT, DEFINED ──────────────────────────────────────────────────
+// Approval writes the file, the catalogue entry, the allowlist and the Figma map — and none of
+// those DEFINES a custom element: an element is defined by an IMPORT. `ingested.ts` globs
+// `./f-*.ts` and defines them all; it existed and NOTHING IMPORTED IT, so every approved
+// component resolved to a tag no element defined. Measured 2026-10-26: `ingested.ts` was not in
+// the module graph, so a catalogue row could not draw its own element.
+import "./components/lit/ingested";
 
 
 /*

@@ -36,7 +36,13 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
 import services as state
-from deps import get_user_id_from_header
+from deps import (
+    NO_DESIGN_SYSTEM,
+    a2ui_catalog_for,
+    a2ui_catalog_surfaces,
+    design_system_of,
+    get_user_id_from_header,
+)
 
 router = APIRouter(prefix="/api/builder", tags=["builder"])
 
@@ -77,11 +83,11 @@ CATEGORY_TEXT_COLOR = "#FFFFFF"
 # its specifics replaced, because its exact words name the retired drafting canvas and the
 # test fixture itself. It is WRITTEN INTO THE ROW — the card stays a faithful read of its
 # row (the assembler never invents card text), and the engine replaces it with the
-# project's own description the moment the first prompt lands (see `runAgent`: the first
-# prompt BECOMES the description).
+# project's own description the moment a prompt lands — the LATEST one, so the card says what
+# the project is working on now (see `runAgent`: the latest prompt BECOMES the description).
 PLACEHOLDER_DESCRIPTION = (
     "A package for the product team's sandbox: it exists so an idea can be prompted, "
-    "built and reviewed end to end. Its description follows the first prompt."
+    "built and reviewed end to end. Its description follows the latest prompt."
 )
 
 # ── THE DEFAULT NAME FOR A NEW IDEA (owner, 2026-10-04: *"product-idea-m1r — instead say
@@ -691,6 +697,60 @@ def _engine_conversation(project_id: str):
         return None
 
 
+def _design_system_for_turn(user_id, session_id) -> str:
+    """The system THIS package builds in — its own record, read the one way every reader reads it.
+
+    Owner, 2026-10-25: *"I want to create a relationship with that tool in the builder and then
+    its instance in the design system tool under design."* The package's record IS that
+    relationship: the design-system tool and the builder name the same system because they read
+    the same row. A package born before the record existed reads the fallback.
+    """
+    if not session_id:
+        return design_system_of(None)
+    try:
+        package = state.prompt_sessions_api.get_session(user_id=user_id, session_id=session_id)
+    except Exception as error:  # noqa: BLE001 — the fallback is the answer, and it is said
+        print(f"[builder] the package's design system could not be read ({error})")
+        return design_system_of(None)
+    return design_system_of(package)
+
+
+def _design_reference(system: str) -> str:
+    """THE SYSTEM, HANDED TO THE BUILDER — built from the catalogue the design tool holds.
+
+    ONE AUTHORITY, ONE HANDOVER. This is not a copy the builder keeps: it is built from
+    `_catalogue_contract` at the moment of the turn and travels with the turn, so a change made in
+    the Design tab is what the next build uses and the two cannot drift.
+
+    NO SYSTEM (the unbound builder, `"Default (No DS)"`) hands NOTHING over: the builder builds
+    freely, which is the mode its own instruction already describes.
+
+    WHAT IT SAYS ABOUT TODAY'S PAGE: the engine's preview does not carry the system's stylesheet
+    yet, so a page that names these components draws nothing. The reference therefore names the
+    vocabulary and asks for plain semantic elements that follow the system's rules; the
+    stylesheet is the next step, not this one.
+    """
+    if not system:
+        return ""
+    try:
+        from routes.ai import _catalogue_contract
+
+        contract, _declared = _catalogue_contract(system)
+    except Exception as error:  # noqa: BLE001 — no reference is better than a false one
+        print(f"[builder] the design reference for '{system}' could not be read ({error})")
+        return ""
+    return (
+        f"THE DESIGN SYSTEM FOR THIS PROJECT IS '{system}' — THE SAME SYSTEM THE DESIGN TAB'S "
+        "TOOL HOLDS, WITH THIS VOCABULARY:\n"
+        f"{contract}\n"
+        "Build with its components where they fit. Where the system has no component for "
+        "something — a heading, a paragraph, a piece of layout — write a plain semantic element "
+        "that follows the same type and spacing instead of inventing a visual language. Your "
+        "page is served without the system's stylesheet today, so name the structure in plain "
+        "HTML and follow these rules; do not fake the system's look with invented styling."
+    )
+
+
 def builder_turn_reply(user_id, session_id, conversation_id, question):
     """A seated turn in a builder conversation IS a build.
 
@@ -709,10 +769,17 @@ def builder_turn_reply(user_id, session_id, conversation_id, question):
     # month to one project"). A conversation still wearing its default name takes the first
     # prompt as its label; a titled one is never touched. See the helper for the scoping.
     _label_default_conversation(user_id, conversation_id, prompt)
+    system = _design_system_for_turn(user_id, session_id)
     try:
         response = httpx.post(
             f"{ENGINE_URL}/api/v1/vcaas/projects/{project_id}/agent/start",
-            json={"prompt": prompt},
+            json={
+                "prompt": prompt,
+                # THE HANDOVER: the system and its reference travel WITH the turn, so the builder
+                # builds in the system the design tool is holding and keeps no second copy.
+                "design_system": system,
+                "design_reference": _design_reference(system),
+            },
             timeout=8.0,
         )
         body = response.json()
@@ -1355,6 +1422,103 @@ def builder_project_conversation(project_id: str) -> dict:
     if isinstance(expected, (int, float)) and expected > 0:
         payload["expectedMinutes"] = int(expected)
     return payload
+
+
+def _design_systems() -> list[dict]:
+    """THE SYSTEMS A PACKAGE MAY BUILD IN — the catalogue partitions that exist RIGHT NOW.
+
+    A directory scan, the same one the gate uses, so the foot can never offer a system the
+    backend would refuse. The title is the catalogue's own. THE FIRST ENTRY IS THE UNBOUND
+    BUILDER (owner, 2026-10-25: *"we need to have one that's not binding. It can do whatever it
+    wants and returns it to a default"*): the choice hands the builder no reference at all.
+    """
+    systems: list[dict] = [{"name": NO_DESIGN_SYSTEM, "title": "Default (No DS)"}]
+    for name in a2ui_catalog_surfaces():
+        try:
+            title = (a2ui_catalog_for(name) or {}).get("title") or name
+        except Exception:  # noqa: BLE001 — a name is still a usable answer
+            title = name
+        systems.append({"name": name, "title": str(title)})
+    return systems
+
+
+def _package_for_project(user_id: str, project_id: str):
+    """The package row that REFERENCES this builder project — the project's own record."""
+    api = state.prompt_sessions_api
+    try:
+        with api.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT id FROM prompt_sessions "
+                "WHERE metadata->>'builder_project_id' = %s AND user_id = %s LIMIT 1",
+                (project_id, user_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return api.get_session(user_id=user_id, session_id=str(row["id"]))
+    except Exception as error:  # noqa: BLE001 — None is the answer, and it is said
+        print(f"[builder] the project's package could not be read ({error})")
+        return None
+
+
+@router.get("/projects/{project_id}/design-system")
+def builder_project_design_system(
+    project_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
+) -> dict:
+    """The system THIS package builds in, and the systems it may choose from.
+
+    The record is the package's own (`metadata.design_system`), read the one way every reader
+    reads it (`design_system_of`) — so the foot, the builder's turn and the room's compiler
+    cannot name different systems.
+    """
+    user_id = get_user_id_from_header(x_user_id)
+    package = _package_for_project(user_id, project_id)
+    if not package:
+        return JSONResponse(
+            status_code=404, content={"ok": False, "error": "no package references this project"}
+        )
+    return {
+        "ok": True,
+        "system": design_system_of(package) or NO_DESIGN_SYSTEM,
+        "systems": _design_systems(),
+    }
+
+
+@router.post("/projects/{project_id}/design-system")
+async def builder_project_set_design_system(
+    project_id: str, request: Request, x_user_id: str | None = Header(None, alias="X-User-ID")
+) -> dict:
+    """Choose the design system for this package — the foot's ask, written to its own record.
+
+    The next builder turn and the next compile read it; nothing is copied into the project or
+    the engine, so a change here is the one answer both halves follow.
+    """
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — a body that is not JSON is an empty ask
+        body = {}
+    system = str((body or {}).get("system") or "").strip()
+    # THE UNBOUND BUILDER IS A REAL CHOICE, not a missing one: it stores the sentinel so the
+    # record can never be confused with a package that never chose.
+    if system != NO_DESIGN_SYSTEM and system not in a2ui_catalog_surfaces():
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": f"no catalogue named {system!r} exists"},
+        )
+    user_id = get_user_id_from_header(x_user_id)
+    package = _package_for_project(user_id, project_id)
+    if not package:
+        return JSONResponse(
+            status_code=404, content={"ok": False, "error": "no package references this project"}
+        )
+    state.prompt_sessions_api.update_session(
+        session_id=str(package["id"]),
+        user_id=user_id,
+        metadata={"design_system": system},
+    )
+    return {"ok": True, "system": system, "systems": _design_systems()}
 
 
 @router.post("/projects/{project_id}/stop")

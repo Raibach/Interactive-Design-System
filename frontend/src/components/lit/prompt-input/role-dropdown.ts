@@ -62,7 +62,7 @@ export class RoleDropdown extends LitElement {
       width: 100%;
       box-sizing: border-box;
       padding: 10px;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 700;
       color: #171717;

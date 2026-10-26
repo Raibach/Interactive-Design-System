@@ -63,7 +63,7 @@ ROLE_CAPABILITIES: dict[str, dict[str, Any]] = {
         # history, and the rail now names it for what it shows.
         "tabs": ["chat", "trace", "tools", "versions"],
         "allowed_tags": [
-            "prompt-section-editor", "compiled-output-viewer", "workspace-layout",
+            "prompt-section-editor", "compiled-output-viewer", "workspace-layout", "composer-workspace",
             "toggle_code_view", "output-panel", "version-trace",
             "status-indicator", "error-banner", "dynamic-button",
         ],
@@ -111,7 +111,7 @@ ROLE_CAPABILITIES: dict[str, dict[str, Any]] = {
         "allowed_tags": [
             "prompt-section", "save-button", "run-button",
             "output-panel", "version-trace", "layout-row", "layout-col",
-            "prompt-section-editor", "compiled-output-viewer", "workspace-layout",
+            "prompt-section-editor", "compiled-output-viewer", "workspace-layout", "composer-workspace",
             "chat-panel", "status-indicator", "error-banner", "dynamic-button",
         ],
         "governance_tables": [

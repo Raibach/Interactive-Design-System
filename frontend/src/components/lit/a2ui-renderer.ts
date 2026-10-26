@@ -422,7 +422,7 @@ export class A2UIRenderer extends LitElement {
       padding: 8px 10px;
       border-radius: 6px;
       margin: 0 0 10px;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
     }
     .a2ui-errors .hdr { font-weight: 700; margin-bottom: 4px; }
@@ -721,7 +721,7 @@ if (!customElements.get('a2ui-renderer')) {
 }
 
 // JSX for React hosts, declared here per element — the pattern every Lit element
-// in this repository follows (see ai-surface-sandbox.ts). Without it the tag is
+// in this repository follows. Without it the tag is
 // "Property 'a2ui-renderer' does not exist on type 'JSX.IntrinsicElements'" and
 // React cannot mount it at all.
 //

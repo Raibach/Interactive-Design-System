@@ -17,7 +17,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=True)
 
 # ── Provider registry ──────────────────────────────────────────────────
 PROVIDERS = {
@@ -28,12 +28,11 @@ PROVIDERS = {
     # module's job is to REPORT on the same model the runtime uses, and the id in both
     # places has to be the one actually being served.
     #
-    # DeepSeek took the seat 2026-09-24 (the owner chose a hosted model after the local
-    # Qwen measured 17–30s per surface assembly). One entry, one model — nothing else.
+    # Back to DeepSeek's hosted API (deepseek-flash) on 2026-10-22 — the balance was topped up.
     "deepseek": {
-        "name": "DeepSeek (hosted API)",
-        "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "name": "DeepSeek (Flash)",
+        "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
         "api_key_env": "DEEPSEEK_API_KEY",
         "api_key_required": True,
     },

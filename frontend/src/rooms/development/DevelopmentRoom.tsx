@@ -20,7 +20,10 @@
  * behind a spinner); a stopped workspace draws NOTHING — no fallback, ever.
  */
 import { developmentToolUrl } from '@/shared/appConfig';
-import developmentLabBackground from '@/assets/canvas-development-lab-bkg.webp';
+import '@/rooms/development/development-workspace';
+// THE ROOM'S OWN SEAT — its own file, its own tag (2026-10-24). The shared `<chat-panel>` stays
+// with the Composer; this room mounts its own copy.
+import '@/rooms/development/development-chat-panel';
 
 export interface DevelopmentRoomProps {
   /** The room's own container element — the seat-closed write and the nav's target. */
@@ -42,11 +45,14 @@ export function DevelopmentRoom({ developmentLayoutRef, developmentSeatRef }: De
           column handing the layout the same box the sandbox's viewport gave
           it, and clipping it as that viewport did. */}
       <div key="development-root" data-room-root="development" style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
-      <workspace-layout key="development-room" ref={developmentLayoutRef} className="flex-1 min-h-0">
+      <development-workspace key="development-room" ref={developmentLayoutRef} className="flex-1 min-h-0">
         {/* THE ROOM'S WORKSPACE — opens straight in; no staged opening
             covers it (the gate, its clocks and its ceiling are removed);
             a stopped workspace draws NOTHING — no fallback. */}
-        <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0, backgroundColor: '#2b2635', backgroundImage: `url(${developmentLabBackground})`, backgroundRepeat: 'repeat' }}>
+        {/* THE GROUND IS THE BOX'S (2026-10-24): <DevelopmentBox> paints the lab tile
+            behind both columns. The left slot paints nothing of its own; the embedded
+            application's transparent ground lets the box's tile show through. */}
+        <div slot="left" style={{ position: 'relative', width: '100%', height: '100%', minHeight: 0 }}>
       {/* THE ARRIVAL'S READY SIGNAL (2026-10-16): the room-switch cover
           holds over this room until the canvas has actually painted —
           `ready-selector` makes <builder-embed> announce
@@ -81,8 +87,8 @@ export function DevelopmentRoom({ developmentLayoutRef, developmentSeatRef }: De
             — an empty seat, never another room's. Its rail is the room's
             own list: every drawable tab except Versions
             (DEVELOPMENT_SEAT_TABS). */}
-        <chat-panel key="development-seat" slot="right" ref={developmentSeatRef}></chat-panel>
-      </workspace-layout>
+        <development-chat-panel key="development-seat" slot="right" ref={developmentSeatRef}></development-chat-panel>
+      </development-workspace>
       </div>
     </>
   );

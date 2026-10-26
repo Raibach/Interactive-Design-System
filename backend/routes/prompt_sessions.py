@@ -24,6 +24,10 @@ router = APIRouter()
 class CreatePromptSessionRequest(BaseModel):
     title: str = "Untitled Prompt Session"
     description: str | None = None
+    # A DRAFT IS A PACKAGE THAT EXISTS SO A CONVERSATION HAS A HOME (2026-10-24). The first
+    # spoken turn in a blank Composer creates one; the Console excludes it until Save clears
+    # the flag. The conversation is created with the row, and every turn is written to it.
+    draft: bool = False
     # A PACKAGE'S ROOM (PRODUCT-ROOM.md §2): a package born in the Product room is
     # sent room_domain 'product'; the Composer's path sends 'composer'. ABSENT IS A
     # REAL ANSWER — every legacy package has no room and keeps belonging where it
@@ -243,6 +247,78 @@ async def get_console_session(
         )
 
 
+@router.get("/api/prompt-sessions/stats")
+async def get_prompt_session_stats(
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """Get statistics for user's prompt sessions"""
+    if not state.prompt_sessions_api:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Please check your connection.",
+        )
+
+    try:
+        uid = get_user_id_from_header(x_user_id)
+        stats = state.prompt_sessions_api.get_session_stats(uid)
+        return {"stats": stats, "error": None}
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        import traceback
+
+        error_detail = (
+            f"Error getting prompt session stats: {e!s}\n{traceback.format_exc()}"
+        )
+        print(f"❌ Get prompt session stats error: {error_detail}")
+        raise HTTPException(
+            status_code=500, detail=f"Error getting prompt session stats: {e!s}"
+        )
+
+
+@router.get("/api/prompt-sessions/search")
+async def search_prompt_sessions(
+    query: str = Query(..., min_length=1),
+    include_content: bool = Query(False),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    """Search prompt sessions by title, description, or content"""
+    if not state.prompt_sessions_api:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Please check your connection.",
+        )
+
+    try:
+        uid = get_user_id_from_header(x_user_id)
+        sessions = state.prompt_sessions_api.search_sessions(
+            user_id=uid,
+            query=query,
+            include_content=include_content,
+            limit=limit,
+            offset=offset,
+        )
+        return {"sessions": sessions, "error": None}
+    except HTTPException:
+        raise
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        import traceback
+
+        error_detail = (
+            f"Error searching prompt sessions: {e!s}\n{traceback.format_exc()}"
+        )
+        print(f"❌ Search prompt sessions error: {error_detail}")
+        raise HTTPException(
+            status_code=500, detail=f"Error searching prompt sessions: {e!s}"
+        )
+
+
 @router.get("/api/prompt-sessions/{session_id}")
 async def get_prompt_session(
     session_id: str, x_user_id: str | None = Header(None, alias="X-User-ID")
@@ -292,7 +368,7 @@ async def create_prompt_session(
         uid = get_user_id_from_header(x_user_id)
         session = state.prompt_sessions_api.create_session(
             user_id=uid, title=request.title, description=request.description,
-            room_domain=request.room_domain,
+            room_domain=request.room_domain, draft=request.draft,
         )
         return {"session": session, "error": None}
     except HTTPException:
@@ -1300,74 +1376,3 @@ async def delete_context_entry(
             status_code=500, detail=f"Error deleting context entry: {e!s}"
         )
 
-
-@router.get("/api/prompt-sessions/stats")
-async def get_prompt_session_stats(
-    x_user_id: str | None = Header(None, alias="X-User-ID"),
-):
-    """Get statistics for user's prompt sessions"""
-    if not state.prompt_sessions_api:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Please check your connection.",
-        )
-
-    try:
-        uid = get_user_id_from_header(x_user_id)
-        stats = state.prompt_sessions_api.get_session_stats(uid)
-        return {"stats": stats, "error": None}
-    except HTTPException:
-        raise
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        import traceback
-
-        error_detail = (
-            f"Error getting prompt session stats: {e!s}\n{traceback.format_exc()}"
-        )
-        print(f"❌ Get prompt session stats error: {error_detail}")
-        raise HTTPException(
-            status_code=500, detail=f"Error getting prompt session stats: {e!s}"
-        )
-
-
-@router.get("/api/prompt-sessions/search")
-async def search_prompt_sessions(
-    query: str = Query(..., min_length=1),
-    include_content: bool = Query(False),
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    x_user_id: str | None = Header(None, alias="X-User-ID"),
-):
-    """Search prompt sessions by title, description, or content"""
-    if not state.prompt_sessions_api:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Please check your connection.",
-        )
-
-    try:
-        uid = get_user_id_from_header(x_user_id)
-        sessions = state.prompt_sessions_api.search_sessions(
-            user_id=uid,
-            query=query,
-            include_content=include_content,
-            limit=limit,
-            offset=offset,
-        )
-        return {"sessions": sessions, "error": None}
-    except HTTPException:
-        raise
-    except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        import traceback
-
-        error_detail = (
-            f"Error searching prompt sessions: {e!s}\n{traceback.format_exc()}"
-        )
-        print(f"❌ Search prompt sessions error: {error_detail}")
-        raise HTTPException(
-            status_code=500, detail=f"Error searching prompt sessions: {e!s}"
-        )

@@ -215,7 +215,7 @@ export class ChatMessages extends LitElement {
          Grace). Inter -> everywhere else. Numbers -> Inter. Use our fonts only - no API
          calls." The thread is chat: it takes the rounded face, and its figures (the work
          clock's "12s") render Inter through the figures helper. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;
       color: var(--chat-text, #171717);
@@ -285,7 +285,7 @@ export class ChatMessages extends LitElement {
       font-size: 13px; cursor: pointer;
     }
     .turn.result details.fold summary:hover { background: #f3f4f6; }
-    .turn.result details.fold .fold-title { font-family: ui-monospace, 'SF Mono', monospace; }
+    .turn.result details.fold .fold-title { font-family: 'IBM Plex Mono', 'IBM Plex Mono', monospace; }
     /* The small note above a linked turn: which part of the flow this is about. */
     .turn .note {
       font-size: 13px;
@@ -368,7 +368,7 @@ export class ChatMessages extends LitElement {
     .turn .action.spent:disabled { pointer-events: none; }
     .empty {
       /* Nunito, per the owner's face ruling — see .thread above. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 20px;

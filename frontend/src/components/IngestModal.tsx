@@ -1195,7 +1195,7 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
     if (!modulePath) {
       return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style=\"margin:0;padding:16px;" +
-        "font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#b91c1c\">" +
+        "font-family:'IBM Plex Mono',Menlo,monospace;font-size:13px;color:#b91c1c\">" +
         "Nothing to render: this ingest produced no element to load" +
         (rawTag ? ` for ${rawTag}` : "") +
         ". There is no preview and nothing was substituted for one.</body></html>"
@@ -1259,7 +1259,7 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
       // is 775px wide — and the pane scrolls when that is bigger than the space. Scaling it
       // to fit is what made it tiny and half of it disappear under the other column.
       "html, body { margin: 0; }" +
-      "body { padding: 16px; background: #fafafa; font-family: Inter, system-ui, sans-serif; overflow: auto; }" +
+      "body { padding: 16px; background: #fafafa; font-family: IBM Plex Sans, system-ui, sans-serif; overflow: auto; }" +
       // THE ELEMENT'S OWN BOX, MADE VISIBLE — because an element with no content draws no
       // border, no background and nothing else, so a container being a container looks exactly
       // like a preview that failed. What you are seeing IS the element: its box, at its size,
@@ -1267,8 +1267,8 @@ export function IngestModal({ open, onClose, apiFetch, sessionId, sessionTitle, 
       // never do), and the caption says which one it is, so the empty case and the broken case
       // can never be read as the same thing.
       "body > " + tag + " { outline: 1px dashed rgba(31,172,194,0.55); outline-offset: 4px; }" +
-      "#preview-caption { font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: #8a9499; margin-bottom: 8px; }" +
-      "#preview-status { display: none; max-width: 520px; font-size: 13px; color: #b91c1c; font-family: ui-monospace, monospace; white-space: pre-wrap; text-align: left; }" +
+      "#preview-caption { font-family: 'IBM Plex Mono', Menlo, monospace; font-size: 10px; color: #8a9499; margin-bottom: 8px; }" +
+      "#preview-status { display: none; max-width: 520px; font-size: 13px; color: #b91c1c; font-family: 'IBM Plex Mono', monospace; white-space: pre-wrap; text-align: left; }" +
       "</style>" +
       "</head>" +
       "<body>" +

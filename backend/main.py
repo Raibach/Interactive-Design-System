@@ -17,7 +17,7 @@ import sys
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 # SENTRY IS GONE (owner, 2026-10-06: nothing connected that is not local or Northflank). The
 # init block that stood here read SENTRY_DSN and — on any deployment where that variable was
@@ -53,6 +53,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5001",  # Local backend + UI (serves frontend/dist)
+        # THE SAME PAGE, THE OTHER LOOPBACK NAME (2026-10-25). The product room's 2.5s poller
+        # asks this backend DIRECTLY (the dev proxy queues behind the seat's long send), so the
+        # page's own origin must be allowed. A page opened at 127.0.0.1:5001 is a different
+        # origin from localhost:5001 to the browser, and with only the first allowed every poll
+        # was refused and swallowed — the builder's steps and replies never reached the seat.
+        "http://127.0.0.1:5001",
     ],
     allow_credentials=True,
     allow_methods=["*"],

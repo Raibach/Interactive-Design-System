@@ -1,8 +1,0 @@
-[Unit]
-Description=Daily Docker prune at 04:00 box time
-[Timer]
-OnCalendar=*-*-* 04:00:00
-RandomizedDelaySec=30m
-Persistent=true
-[Install]
-WantedBy=timers.target

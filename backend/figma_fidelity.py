@@ -41,7 +41,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from design_renderer import _class_name, _lines_in_box, render_spec
+from design_renderer import (
+    SHAPE_TYPES, _SYSTEM_FACE, _class_name, _lines_in_box, _local_face, render_spec,
+)
 
 # ── DECLARATIONS THAT ARE PRESENT AND DO NOTHING ─────────────────────────────────────────────
 # Every entry is a MEASUREMENT, not a deduction: the date, the engine, and the numbers. A fact
@@ -218,7 +220,13 @@ def _states(raw_node: dict[str, Any], key: str) -> bool:
     # check must decide it the same way or it invents a loss. Where the fix draws its boundary:
     # a VISIBLE stroke the renderer cannot draw (a gradient border, measured) still states its
     # fact and still blocks.
-    if key in ("strokes", "fills") and not any(
+    #
+    # AN EFFECT THE DESIGNER SWITCHED OFF IS THE SAME FACT. Measured 2026-10-26 on node
+    # 40001421:5467: `controlBar` carried an effect with `visible: false`, the ingest skipped it on
+    # purpose, and this check reported `effects` as "stated and never reached the spec" — a loss
+    # that did not exist, printed beside a 100% count. An instrument that invents a failure is as
+    # wrong as one that hides a failure, and it teaches a reader to distrust the real ones.
+    if key in ("strokes", "fills", "effects") and not any(
         p.get("visible", True) for p in raw_node.get(key) or []
     ):
         return False
@@ -248,104 +256,942 @@ STROKE_DEPENDENT = {
 }
 # Geometry is a shape's own outline, and a frame has none to read.
 SHAPE_ONLY = {"fillGeometry", "strokeGeometry", "vectorNetwork", "fillOverrideTable"}
-SHAPE_TYPES = {"VECTOR", "BOOLEAN_OPERATION", "STAR", "ELLIPSE", "POLYGON", "LINE", "REGULAR_POLYGON"}
+# SHAPE_TYPES comes from design_renderer — the single definition of which layers draw as a path.
 
 
-def _declarations_for(spec_node: dict[str, Any], key: str, decls: list[str], source: str) -> tuple[bool, str]:
-    """Whether the drawing carries this fact. Returns (drawn, what-it-is).
+# ── A WORD IS NOT A VALUE ─────────────────────────────────────────────────────────────────────
+# THE BLIND CHECK THIS REPLACES, said plainly because it is the whole reason this section exists.
+# For each fact it looked for a WORD in the layer's declarations: `absoluteBoundingBox` asked
+# whether `width` appeared, `fills` asked whether `background` appeared, `style` asked whether
+# `font-family` appeared. Every layer with a width therefore passed the position check, every
+# layer with a background passed the colour check, and a design moved by ONE PIXEL or recoloured
+# by ONE DIGIT passed both. The measurement was right and the instrument could not see it — which
+# is how a pipeline reports "every fact drawn" about a drawing that is wrong.
+#
+# SO EVERY FACT IS NOW A PAIR OF VALUES: what Figma states, and what the drawing carries. The
+# verdict is equality between those two, at the precision the drawing keeps. Nothing here
+# re-measures the design: it reads the raw node and the emitted file and compares them.
+#
+# WHAT A ROW CARRIES NOW: `source` (the Figma value, as written), `drawn` (the value in the
+# component, as written), and `delta` (the difference, when there is one). A designer reading the
+# answer sees `y 41 → 42`, or `#1a2b3c → #1a2b3d`, instead of the word "drawn".
 
-    NOT EVERY FACT IS A CSS DECLARATION, and a check that only reads the stylesheet reports the
-    markup's own facts as lost. Four kinds, each probed where the renderer actually puts it:
+_PX_EPS = 5e-5      # the last digit `_px` keeps: 40.55 equals 40.55, and 40.5 does not
+_ALPHA_EPS = 5e-4   # the last digit a colour's alpha keeps
+_STOP_EPS = 0.005   # a gradient stop is written in whole percent
+_ANGLE_EPS = 0.1    # a gradient angle is written to one decimal
 
-      * a declaration in the rule (`background`, `padding-left`, `align-self`);
-      * a declaration on the box the vector gets when the design places it by offset;
-      * the ARTWORK — a vector's size, position and paint live in its `<svg width height viewBox>`
-        and the `fill` on its `<path>`, and a vector with no rule at all is a vector that was
-        drawn entirely in its markup;
-      * a TEXT layer's paint, which is the COLOUR OF THE WORDS (`color`) and never a background,
-        and its runs, which are spans in the markup and not declarations at all.
+# The raw keys that name more than one fact. A bounding box is a size AND a position; a text
+# style is nine facts that fail separately, so a font size that changed must not hide behind a
+# font family that did not.
+_STYLE_FACTS = (
+    "fontFamily", "fontWeight", "fontSize", "lineHeightPx", "letterSpacing",
+    "textAlignHorizontal", "textCase", "textDecoration", "textAlignVertical",
+)
+_FACT_LABELS: dict[str, tuple[str, ...]] = {
+    "absoluteBoundingBox": ("size", "position"),
+    "style": tuple(f"style.{key}" for key in _STYLE_FACTS),
+}
+
+
+def _decl(decls: list[str], prop: str) -> str | None:
+    """The value of the LAST declaration carrying this property — which is the one CSS keeps."""
+    found: str | None = None
+    for declaration in decls:
+        head, _, tail = declaration.partition(":")
+        if head.strip() == prop:
+            found = tail.strip()
+    return found
+
+
+def _decl_any(decls: list[str], *props: str) -> tuple[str | None, str | None]:
+    """The first property from this list that the layer declares, with its value."""
+    for prop in props:
+        value = _decl(decls, prop)
+        if value is not None:
+            return prop, value
+    return None, None
+
+
+def _num(text: Any) -> float | None:
+    """A CSS length as a number. `41px` is 41.0; `auto` is None, which is not a value."""
+    if text is None:
+        return None
+    raw = str(text).strip().rstrip(";").strip()
+    if raw.endswith("px"):
+        raw = raw[:-2]
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _same(a: float | None, b: float | None, eps: float = _PX_EPS) -> bool:
+    return a is not None and b is not None and abs(a - b) <= eps
+
+
+def _n(value: float) -> str:
+    """A number as the reading shows it: no trailing zeros, no noise."""
+    if float(value) == int(value):
+        return str(int(value))
+    return f"{round(float(value), 4)}"
+
+
+def _unquote_family(value: str | None) -> str:
+    """`"Inter", sans-serif` → `Inter`. The fallback is not part of the design's fact."""
+    text = str(value or "").strip()
+    out: list[str] = []
+    quote: str | None = None
+    for char in text:
+        if quote:
+            if char == quote:
+                quote = None
+            else:
+                out.append(char)
+        elif char in "\"'":
+            quote = char
+        elif char == ",":
+            break
+        else:
+            out.append(char)
+    return "".join(out).strip()
+
+
+def _paint_css(paint: dict[str, Any]) -> str | None:
+    """A solid paint as the CSS colour it must become, computed HERE and not by the ingest.
+
+    Computed independently on purpose: if this called the ingest's own converter, a fault in that
+    converter would appear on both sides of the comparison and cancel itself out.
     """
+    color = (paint or {}).get("color") or {}
+    try:
+        r = round(float(color.get("r", 0)) * 255)
+        g = round(float(color.get("g", 0)) * 255)
+        b = round(float(color.get("b", 0)) * 255)
+        alpha = color.get("a")
+        alpha = 1.0 if alpha is None else float(alpha)
+    except (TypeError, ValueError):
+        return None
+    fill_opacity = paint.get("opacity")
+    if fill_opacity is not None:
+        try:
+            alpha *= float(fill_opacity)
+        except (TypeError, ValueError):
+            pass
+    if alpha >= 0.999:
+        return f"#{r:02x}{g:02x}{b:02x}"
+    return f"rgba({r}, {g}, {b}, {round(alpha, 3)})"
+
+
+def _channels(css: str | None) -> tuple[float, float, float, float] | None:
+    """A CSS colour as channels 0..1, so two spellings of one colour compare equal."""
+    import re
+
+    text = str(css or "").strip()
+    match = re.fullmatch(r"#([0-9a-fA-F]{6})", text)
+    if match:
+        hexes = match.group(1)
+        return tuple(int(hexes[i:i + 2], 16) / 255 for i in (0, 2, 4)) + (1.0,)  # type: ignore[return-value]
+    match = re.fullmatch(r"rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)", text)
+    if match:
+        r, g, b = (float(match.group(i)) / 255 for i in (1, 2, 3))
+        a = float(match.group(4)) if match.group(4) is not None else 1.0
+        return (r, g, b, a)  # type: ignore[return-value]
+    return None
+
+
+def _same_colour(a: str | None, b: str | None) -> bool:
+    ca, cb = _channels(a), _channels(b)
+    if ca is None or cb is None:
+        return False
+    return all(abs(x - y) <= _ALPHA_EPS for x, y in zip(ca, cb))
+
+
+def _visible_paints(raw_node: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    return [p for p in raw_node.get(key) or [] if isinstance(p, dict) and p.get("visible", True)]
+
+
+def _gradient_css(paint: dict[str, Any]) -> str | None:
+    """The gradient a paint states, as CSS — computed here, independent of the ingest."""
+    import math
+
+    stops = sorted(
+        (s for s in paint.get("gradientStops") or [] if isinstance(s, dict)),
+        key=lambda s: s.get("position", 0),
+    )
+    if len(stops) < 2:
+        return None
+    parts: list[str] = []
+    for stop in stops:
+        colour = _paint_css({"color": stop.get("color")})
+        if not colour:
+            return None
+        parts.append(f"{colour} {round(float(stop.get('position', 0)) * 100)}%")
+    stops_css = ", ".join(parts)
+    kind = str(paint.get("type") or "").upper()
+    handles = paint.get("gradientHandlePositions") or []
+    if kind == "GRADIENT_LINEAR" and len(handles) >= 2:
+        dx = float(handles[1].get("x", 0)) - float(handles[0].get("x", 0))
+        dy = float(handles[1].get("y", 0)) - float(handles[0].get("y", 0))
+        angle = math.degrees(math.atan2(dy, dx)) + 90.0
+        return f"linear-gradient({round(angle % 360, 1)}deg, {stops_css})"
+    if kind in ("GRADIENT_RADIAL", "GRADIENT_DIAMOND"):
+        return f"radial-gradient(circle at 50% 50%, {stops_css})"
+    if kind == "GRADIENT_ANGULAR":
+        return f"conic-gradient({stops_css})"
+    return None
+
+
+def _shadow_css(effect: dict[str, Any]) -> str | None:
+    """One measured effect as the shadow it must become, computed here."""
+    kind = str((effect or {}).get("type") or "").upper()
+    if kind not in ("DROP_SHADOW", "INNER_SHADOW"):
+        return None
+    # FIGMA PUTS THE OFFSET IN A NESTED `offset` FIELD, and the spec carries it flat. Reading the
+    # raw node's own shape here is what keeps this check independent of the ingest's conversion.
+    offset = effect.get("offset") or {}
+    dx_raw = offset["x"] if "x" in offset else effect.get("x")
+    dy_raw = offset["y"] if "y" in offset else effect.get("y")
+    dx = _n(float(dx_raw or 0))
+    dy = _n(float(dy_raw or 0))
+    blur = _n(float(effect.get("radius") or 0))
+    parts = [f"{dx}px", f"{dy}px", f"{blur}px"]
+    if effect.get("spread") is not None:
+        parts.append(f"{_n(float(effect['spread']))}px")
+    colour = effect.get("color")
+    if isinstance(colour, dict):
+        # Figma sends an effect's colour as channels, and the spec carries it as CSS. Convert it
+        # here rather than borrowing the ingest's converter, so a fault there cannot cancel itself.
+        colour = _paint_css({"color": colour})
+    parts.append(colour or "rgba(0, 0, 0, 0.25)")
+    return ("inset " if kind == "INNER_SHADOW" else "") + " ".join(parts)
+
+
+def _split_top_level(text: str) -> list[str]:
+    """Split on commas that are not inside parentheses — a gradient is ONE background layer."""
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:index].strip())
+            start = index + 1
+    parts.append(text[start:].strip())
+    return [part for part in parts if part]
+
+
+def _is_gradient(paint: dict[str, Any]) -> bool:
+    return str((paint or {}).get("type") or "").upper().startswith("GRADIENT")
+
+
+def _same_gradient(expected: str | None, drawn: str | None) -> bool:
+    """Two gradients carrying the same direction and the same stops, value for value.
+
+    Parsed rather than compared as text, so the check does not certify a formatting match: the
+    angle is read from Figma's handles and checked against the drawn one, and every stop's colour
+    and position is compared separately. A one-digit change in a stop colour fails this.
+    """
+    import re
+
+    if not expected or not drawn:
+        return False
+    if expected.strip() == drawn.strip():
+        return True
+    pattern = re.compile(r"^(linear-gradient|radial-gradient|conic-gradient)\((.*)\)$", re.S)
+    left, right = pattern.match(expected.strip()), pattern.match(drawn.strip())
+    if not left or not right or left.group(1) != right.group(1):
+        return False
+
+    def parse(body: str) -> tuple[float | None, list[tuple[str, float]]] | tuple[None, None]:
+        parts = _split_top_level(body)
+        angle: float | None = None
+        if parts and parts[0].endswith("deg"):
+            angle = float(parts[0][:-3])
+            parts = parts[1:]
+        stops: list[tuple[str, float]] = []
+        for part in parts:
+            match = re.match(r"^(.*?)\s+([\d.]+)%$", part)
+            if not match:
+                return None, None
+            stops.append((match.group(1).strip(), float(match.group(2))))
+        return angle, stops
+
+    angle_a, stops_a = parse(left.group(2))
+    angle_b, stops_b = parse(right.group(2))
+    if stops_a is None or stops_b is None or len(stops_a) != len(stops_b):
+        return False
+    if (angle_a is None) != (angle_b is None):
+        return False
+    if angle_a is not None and abs(angle_a - angle_b) > _ANGLE_EPS:
+        return False
+    return all(
+        _same_colour(colour_a, colour_b) and abs(pos_a - pos_b) <= _STOP_EPS
+        for (colour_a, pos_a), (colour_b, pos_b) in zip(stops_a, stops_b)
+    )
+
+
+def _svg_attr(spec_node: dict[str, Any], name: str) -> str | None:
+    """An attribute the artwork itself carries: `width`, `height`, `viewBox`, `fill`, `stroke`."""
+    import re
+
+    svg = str(spec_node.get("svg") or "")
+    if not svg:
+        return None
+    if name == "fill":
+        # THE PAINT IS ON THE PATH. The root `<svg>` carries `fill="none"` on purpose — it is not
+        # the design's colour — so reading the first `fill=` in the string reported every drawn
+        # shape as having no fill at all.
+        match = re.search(r'<path\b[^>]*\bfill="([^"]*)"', svg)
+        return match.group(1) if match else None
+    match = re.search(rf'\b{name}="([^"]*)"', svg)
+    return match.group(1) if match else None
+
+
+def _markup_for_class(source: str, class_name: str) -> str:
+    """This layer's own element and everything inside it, taken from the emitted markup.
+
+    Taken by scanning the element's own tags rather than by searching the whole file: a check that
+    reads the whole file lets one layer's `<path>` satisfy every layer's artwork check.
+    """
+    import re
+
+    needle = f'class="{class_name}"'
+    at = source.find(needle)
+    if at < 0:
+        return ""
+    start = source.rfind("<", 0, at)
+    if start < 0:
+        return ""
+    depth = 0
+    for match in re.finditer(r"<(/?)div\b[^>]*>", source[start:]):
+        if match.group(1):
+            depth -= 1
+        else:
+            depth += 1
+        if depth <= 0:
+            return source[start:start + match.end()]
+    return source[start:]
+
+
+def _own_text(markup: str) -> str:
+    """The words inside this layer's own box, before any child layer begins."""
+    import html as _html
+    import re
+
+    # THE LAYER'S OWN OPENING TAG IS NOT A CHILD. Cutting at the first `<div` cut the whole box
+    # away — the layer's own `<div class="…">` IS the first one — so every text layer read as
+    # empty and reported its words as lost.
+    body = re.sub(r"^<div\b[^>]*>", "", markup.strip())
+    leading = re.split(r"<div\b", body, maxsplit=1)[0]
+    leading = re.sub(r"<br\s*/?>", "\n", leading)
+    leading = re.sub(r"<[^>]*>", "", leading)
+    return _html.unescape(leading)
+
+
+def _clip(text: Any, limit: int = 58) -> str:
+    """A value for a table cell, without the quoting a JSON dump adds around a plain string."""
+    plain = "" if text is None else str(text)
+    return plain if len(plain) <= limit else plain[: limit - 1] + "…"
+
+
+def _runs_drawn(markup: str) -> list[dict[str, str]]:
+    """Every span the drawing emitted for this layer, with its text and its colour."""
+    import re
+
+    out: list[dict[str, str]] = []
+    for match in re.finditer(r'<span style="([^"]*)">(.*?)</span>', markup, re.S):
+        declarations = [d.strip() for d in match.group(1).split(";") if d.strip()]
+        out.append({
+            "text": _own_text(match.group(2)),
+            "color": _decl(declarations, "color") or "",
+            "fontFamily": _unquote_family(_decl(declarations, "font-family")),
+            "fontSize": _decl(declarations, "font-size") or "",
+        })
+    return out
+
+
+def _stroke_drawn(spec_node: dict[str, Any], decls: list[str]) -> dict[str, Any]:
+    """How this layer's border was emitted: colour, weight, and by which declaration."""
+    svg = str(spec_node.get("svg") or "")
+    if svg:
+        import re
+
+        colour = re.search(r'\bstroke="([^"]*)"', svg)
+        weight = re.search(r'\bstroke-width="([^"]*)"', svg)
+        if colour:
+            return {"color": colour.group(1), "weight": _num(weight.group(1)) if weight else None, "by": "svg"}
+
+    prop, value = _decl_any(decls, "border", "outline")
+    if value:
+        import re
+
+        match = re.match(r"(?:([\d.]+)px)\s+solid\s+(\S+)", value)
+        if match:
+            return {"color": match.group(2), "weight": float(match.group(1)), "by": prop or ""}
+    colour = _decl(decls, "border-color")
+    widths = _decl(decls, "border-width")
+    if colour:
+        first = _num((widths or "").split()[0]) if widths else None
+        return {"color": colour, "weight": first, "by": "border-color"}
+    return {"color": None, "weight": None, "by": ""}
+
+
+def _compare_fact(
+    raw_node: dict[str, Any],
+    spec_node: dict[str, Any],
+    fact: str,
+    decls: list[str],
+    markup: str,
+    parent_spec: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """One fact as two values. Returns the row's pieces, or None when the fact is not stated.
+
+    `fact` is a label from `_FACT_LABELS`, or a raw Figma key.
+    """
+    from design_renderer import _child_offset, unrendered_keys
+
     is_text = (spec_node.get("type") or "").upper() == "TEXT" or spec_node.get("text") is not None
     is_vector = (spec_node.get("type") or "").upper() in SHAPE_TYPES
+    box = raw_node.get("absoluteBoundingBox") or {}
+    style = raw_node.get("style") or {}
 
-    if key in ("fillGeometry", "strokeGeometry", "vectorNetwork"):
-        return ("<path" in source, "<path d=…")
-    if key == "fills":
+    def row(source: str, drawn: str, why: str, state: str = "exact", delta: str = "") -> dict[str, Any]:
+        return {"source": source, "drawn": drawn, "why": why, "state": state, "delta": delta}
+
+    def differs(source: str, drawn: str, why: str) -> dict[str, Any]:
+        return row(source, drawn, why, "differs", f"{source} → {drawn}")
+
+    # ── GEOMETRY ────────────────────────────────────────────────────────────────────────────
+    if fact in ("size", "position"):
+        if not box:
+            return None
+        if fact == "size":
+            wanted = (float(box.get("width", 0)), float(box.get("height", 0)))
+            if is_vector and spec_node.get("svg"):
+                # A DRAWN SHAPE'S BOX IS ITS ARTWORK, not a style rule: a bare `<svg>` carries
+                # width, height and viewBox and no class of its own, so reading declarations
+                # reported every shape's size as missing when it was written on the svg.
+                got = (_num(_svg_attr(spec_node, "width")), _num(_svg_attr(spec_node, "height")))
+            else:
+                got = (_num(_decl(decls, "width")), _num(_decl(decls, "height")))
+            source = f"{_n(wanted[0])} × {_n(wanted[1])}"
+            drawn = f"{_n(got[0]) if got[0] is not None else '—'} × {_n(got[1]) if got[1] is not None else '—'}"
+            if _same(wanted[0], got[0]) and _same(wanted[1], got[1]):
+                return row(source, drawn, "the box the design measured")
+            return differs(source, drawn, "the box drawn is not the box the design measured")
+
+        wanted = (float(box.get("x", 0)), float(box.get("y", 0)))
+        place = _child_offset(spec_node, parent_spec)
+        if place is not None:
+            got = (_num(_decl(decls, "left")), _num(_decl(decls, "top")))
+            # THE FACT IS THE LAYER'S OWN OFFSET INSIDE ITS PARENT, not its coordinate on Figma's
+            # canvas. The canvas coordinate moves whenever the designer drags the whole component,
+            # and it changes nothing about the design; measured 2026-10-26, moving the component 18px
+            # on the canvas reported every child as changed. The offset inside the parent is what
+            # the drawing uses, and it only changes when the DESIGN changes.
+            source = f"left {_n(place['left'])}, top {_n(place['top'])}"
+            drawn = (f"left {_n(got[0]) if got[0] is not None else '—'}, "
+                     f"top {_n(got[1]) if got[1] is not None else '—'}")
+            # The emitted offset is the placement the measurement decided. When the node states a
+            # transform, that placement IS the transform's translation — the design's own number,
+            # carried verbatim — and the absolute box is only the post-transform extent.
+            expect_left = place["left"]
+            expect_top = place["top"]
+            if _same(expect_left, got[0], 1e-4) and _same(expect_top, got[1], 1e-4):
+                return row(source, drawn, "placed at the design's own offset inside its parent")
+            return differs(source, drawn, "the layer is not where the design places it")
+
+        if (spec_node.get("sizing") or {}).get("layoutPositioning") == "ABSOLUTE":
+            return differs(
+                "taken out of its parent's flow", "drawn in its parent's flow",
+                "the design takes this layer OUT of its parent's flow, and the drawing puts it in",
+            )
+        if parent_spec is None:
+            # THE ROOT HAS NO PARENT TO BE PLACED BY: its coordinate is where the designer parked
+            # the frame on the Figma canvas, and a component does not carry the canvas. It is
+            # therefore NOT a value to compare — it is the same component wherever the frame sits,
+            # so the row carries a constant and a compare between two ingests never reports the
+            # canvas moving as a change to the design.
+            return row(
+                "placed by whoever uses the component", "placed by whoever uses the component",
+                "the frame's coordinate on the Figma canvas is not a drawing value; a component is "
+                "placed where it is used",
+            )
+        return row(
+            f"x {_n(wanted[0])}, y {_n(wanted[1])}", "determined by its parent's flow",
+            "the parent lays this layer out: the position is the RESULT of the parent's own gap, "
+            "padding, alignment and child order, and each of those is compared on the parent",
+        )
+
+    # ── PAINT ───────────────────────────────────────────────────────────────────────────────
+    if fact == "fills":
+        paints = _visible_paints(raw_node, "fills")
+        if not paints:
+            return None
+        unsupported = [p for p in paints if str(p.get("type") or "").upper() != "SOLID" and not _is_gradient(p)]
+        if unsupported:
+            kinds = ", ".join(sorted({str(p.get("type")) for p in unsupported}))
+            return row(kinds, "not drawn", f"a {kinds} fill is not drawn by this renderer yet", "differs",
+                       f"{kinds} → nothing")
+        wanted_parts = [(_gradient_css(p) if _is_gradient(p) else _paint_css(p)) for p in paints]
+        if any(value is None for value in wanted_parts):
+            return row("a paint", "not drawn", "the paint could not be expressed as a colour", "differs",
+                       "paint → nothing")
+        wanted = ", ".join(v for v in wanted_parts if v)
+        prop, value = _decl_any(decls, "color", "background")
+        if not value and is_vector:
+            # A DRAWN SHAPE'S PAINT IS ON ITS PATH (`fill="#ffffff"`), not in a rule.
+            value = _svg_attr(spec_node, "fill")
+            prop = "fill"
+        if not value:
+            return differs(wanted, "no declaration", "the design states a fill and nothing is drawn")
+        drawn_parts = _split_top_level(value)
+        if len(drawn_parts) != len(paints):
+            return differs(wanted, value,
+                           "the number of fills drawn is not the number the design states")
+        for paint, drawn in zip(paints, drawn_parts):
+            if _is_gradient(paint):
+                if not _same_gradient(_gradient_css(paint), drawn):
+                    return differs(wanted, value,
+                                   "the gradient drawn is not the gradient the design states")
+            elif not _same_colour(_paint_css(paint), drawn):
+                return differs(wanted, value,
+                               "the fill drawn is not the fill the design states")
+        why = ("the fill the design states" if len(paints) == 1
+               else f"{len(paints)} fills, drawn in the design's order")
+        return row(wanted, value, why)
+
+    if fact == "strokes":
+        paints = _visible_paints(raw_node, "strokes")
+        if not paints:
+            return None
+        solid = next((p for p in paints if str(p.get("type") or "").upper() == "SOLID"), None)
+        if solid is None:
+            return row(str(paints[0].get("type")), "not drawn",
+                       "a stroke that is not a solid colour is not drawn by this renderer yet",
+                       "differs", f"{paints[0].get('type')} → nothing")
+        wanted = _paint_css(solid)
+        got = _stroke_drawn(spec_node, decls)
+        if got["color"] is None:
+            return differs(wanted or "", "no border", "the design states a border and nothing is drawn")
+        if _same_colour(wanted, got["color"]):
+            return row(wanted or "", got["color"], f"drawn by {got['by'] or 'the border'}")
+        return differs(wanted or "", got["color"], "the border drawn is not the border the design states")
+
+    if fact in ("strokeWeight", "individualStrokeWeights"):
+        weights = raw_node.get("individualStrokeWeights") or {}
+        if fact == "individualStrokeWeights" and not weights:
+            return None
+        if fact == "strokeWeight" and raw_node.get("strokeWeight") is None:
+            return None
+        got = _stroke_drawn(spec_node, decls)
+        if fact == "strokeWeight":
+            wanted = float(raw_node.get("strokeWeight"))
+            if _same(wanted, got["weight"]):
+                return row(f"{_n(wanted)}px", f"{_n(got['weight'] or 0)}px", "the border the design states")
+            return differs(f"{_n(wanted)}px",
+                           f"{_n(got['weight']) + 'px' if got['weight'] is not None else 'no border'}",
+                           "the border weight drawn is not the weight the design states")
+        widths = _decl(decls, "border-width")
+        drawn = [float(part[:-2]) for part in (widths or "").split() if part.endswith("px")]
+        wanted_parts = [float(weights.get(side, raw_node.get("strokeWeight") or 1))
+                        for side in ("top", "right", "bottom", "left")]
+        if len(drawn) == 4 and all(_same(w, g) for w, g in zip(wanted_parts, drawn)):
+            return row(" ".join(_n(v) + "px" for v in wanted_parts),
+                       " ".join(_n(v) + "px" for v in drawn), "each side's own weight")
+        return differs(" ".join(_n(v) + "px" for v in wanted_parts),
+                       " ".join(_n(v) + "px" for v in drawn) or "one weight",
+                       "the per-side weights drawn are not the weights the design states")
+
+    if fact == "cornerRadius":
+        wanted = raw_node.get("cornerRadius")
+        if wanted is None:
+            return None
         if is_vector:
-            return ("fill=" in source, "<path fill=…")
-        if is_text:
-            hit = next((d for d in decls if d.startswith("color")), None)
-            return (bool(hit), hit or "")
-        hit = next((d for d in decls if d.startswith("background")), None)
-        return (bool(hit), hit or "")
-    if key in ("characterStyleOverrides", "styleOverrideTable"):
-        return ("<span style=" in source, "<span style=…>")
-    if key == "annotations":
-        # A Designer's annotation is read by kind, and each kind lands somewhere different:
-        # `Data: x` becomes a prop rendered in the box, `On click:` becomes a listener on the
-        # layer, and a SENTENCE is prose that no element can act on — for which drawing nothing is
-        # the correct outcome and not a lost fact. The renderer's own reader decides which.
-        from design_renderer import _data_field, _on_click_event
+            # A DRAWN SHAPE'S CORNERS ARE IN ITS PATH. Nothing in the stylesheet should repeat
+            # them, so this is recorded as carried by the artwork rather than compared against a
+            # declaration that must not exist. The limit is stated: this check reads the artwork,
+            # not the transform that produced it.
+            return row(f"{_n(float(wanted))}px", "carried by the artwork's own path",
+                       "the shape's corners are drawn in its path", "carried")
+        got = _num(_decl(decls, "border-radius"))
+        if _same(float(wanted), got):
+            return row(f"{_n(float(wanted))}px", f"{_n(got or 0)}px", "the radius the design states")
+        if float(wanted) == 0 and got is None:
+            return row("0px", "square", "no radius, which is what the design states")
+        return differs(f"{_n(float(wanted))}px", f"{_n(got) + 'px' if got is not None else 'square'}",
+                       "the radius drawn is not the radius the design states")
+
+    if fact == "rectangleCornerRadii":
+        radii = raw_node.get("rectangleCornerRadii") or []
+        if not radii:
+            return None
+        if is_vector:
+            return row(" ".join(_n(float(v)) for v in radii), "carried by the artwork's own path",
+                       "each corner is drawn in the shape's path", "carried")
+        value = _decl(decls, "border-radius") or ""
+        drawn = [_num(part) for part in value.split()]
+        wanted = [float(v) for v in radii]
+        if len(drawn) == 4 and all(_same(w, g) for w, g in zip(wanted, drawn)):
+            return row(" ".join(_n(v) for v in wanted), " ".join(_n(v or 0) for v in drawn),
+                       "each corner's own radius")
+        if not value and all(v == 0 for v in wanted):
+            return row(" ".join(_n(v) for v in wanted), "square",
+                       "no radius on any corner, which is what the design states")
+        return differs(" ".join(_n(v) for v in wanted), value or "square",
+                       "the corners drawn are not the corners the design states")
+
+    # ── LAYOUT ──────────────────────────────────────────────────────────────────────────────
+    if fact == "layoutMode":
+        wanted = str(raw_node.get("layoutMode") or "").upper()
+        if wanted not in ("HORIZONTAL", "VERTICAL"):
+            return None
+        direction = "row" if wanted == "HORIZONTAL" else "column"
+        display = _decl(decls, "display")
+        got = _decl(decls, "flex-direction")
+        drawn = f"{display or '—'} / {got or '—'}"
+        if display == "flex" and (got or "row") == direction:
+            return row(f"{wanted} (flex {direction})", drawn, "the layout the design states")
+        return differs(f"{wanted} (flex {direction})", drawn,
+                       "the layer is not laid out the way the design lays it out")
+
+    if fact in ("primaryAxisAlignItems", "counterAxisAlignItems"):
+        wanted = str(raw_node.get(fact) or "")
+        if wanted not in ("MIN", "CENTER", "MAX", "SPACE_BETWEEN", "BASELINE"):
+            return None
+        prop = "justify-content" if fact == "primaryAxisAlignItems" else "align-items"
+        got = _decl(decls, prop)
+        expected = {"MIN": "flex-start", "CENTER": "center", "MAX": "flex-end",
+                    "SPACE_BETWEEN": "space-between", "BASELINE": "baseline"}[wanted]
+        if got == expected:
+            return row(f"{wanted} ({expected})", got, "the alignment the design states")
+        return differs(f"{wanted} ({expected})", got or "default",
+                       "the alignment drawn is not the alignment the design states")
+
+    if fact == "layoutWrap":
+        if str(raw_node.get("layoutWrap") or "") != "WRAP":
+            return None
+        got = _decl(decls, "flex-wrap")
+        if got == "wrap":
+            return row("WRAP", got, "the design wraps")
+        return differs("WRAP", got or "no wrap", "the design wraps and the drawing does not")
+
+    if fact in ("itemSpacing", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom"):
+        wanted = raw_node.get(fact)
+        if wanted is None:
+            return None
+        prop = {"itemSpacing": "gap", "paddingLeft": "padding-left", "paddingRight": "padding-right",
+                "paddingTop": "padding-top", "paddingBottom": "padding-bottom"}[fact]
+        got = _num(_decl(decls, prop))
+        if _same(float(wanted), got):
+            return row(f"{_n(float(wanted))}px", f"{_n(got or 0)}px", "the spacing the design states")
+        return differs(f"{_n(float(wanted))}px", f"{_n(got) + 'px' if got is not None else 'none'}",
+                       "the spacing drawn is not the spacing the design states")
+
+    # ── HOW THE LAYER SITS IN ITS PARENT ───────────────────────────────────────────────────
+    if fact in ("layoutSizingHorizontal", "layoutSizingVertical"):
+        wanted = str(raw_node.get(fact) or "")
+        if wanted != "FILL":
+            return None
+        got = _decl(decls, "align-self")
+        if got == "stretch":
+            return row("FILL (stretch)", got, "the layer fills its parent's axis")
+        return differs("FILL (stretch)", got or "its measured size",
+                       "the design stretches this layer along its parent's axis and the drawing does not")
+
+    if fact == "layoutAlign":
+        wanted = str(raw_node.get("layoutAlign") or "")
+        if wanted not in ("STRETCH", "MIN", "CENTER", "MAX"):
+            return None
+        expected = {"STRETCH": "stretch", "MIN": "flex-start", "CENTER": "center", "MAX": "flex-end"}[wanted]
+        got = _decl(decls, "align-self")
+        if got == expected:
+            return row(f"{wanted} ({expected})", got, "the alignment in its parent the design states")
+        return differs(f"{wanted} ({expected})", got or "auto",
+                       "the alignment drawn is not the alignment the design states")
+
+    if fact == "layoutGrow":
+        wanted = raw_node.get("layoutGrow")
+        if not wanted:
+            return None
+        got = _num(_decl(decls, "flex-grow"))
+        if got == 1:
+            return row(f"grow {_n(float(wanted))}", "flex-grow 1", "the layer grows in its parent's flow")
+        return differs(f"grow {_n(float(wanted))}", "no growth",
+                       "the design lets this layer grow and the drawing fixes its size")
+
+    if fact == "layoutPositioning":
+        wanted = str(raw_node.get("layoutPositioning") or "")
+        if wanted != "ABSOLUTE":
+            return None
+        return differs("ABSOLUTE (out of its parent's flow)", "placed inside the flow",
+                       "the design takes this layer out of its parent's flow, and nothing places it "
+                       "at its own offset — this is a fact the drawing cannot carry yet")
+
+    if fact == "counterAxisSpacing":
+        spacing = raw_node.get("counterAxisSpacing")
+        if spacing is None:
+            return None
+        return differs(f"{_n(float(spacing))}px between wrapped lines", "no row gap",
+                       "the design states the space between wrapped lines and no declaration carries it")
+
+    if fact == "strokeAlign":
+        wanted = str(raw_node.get("strokeAlign") or "")
+        if wanted != "OUTSIDE":
+            return None
+        got = _decl(decls, "outline")
+        if got:
+            return row("OUTSIDE", got, "the border is drawn outside the box, which costs no layout")
+        return differs("OUTSIDE", "a border inside the box",
+                       "the design draws the border outside and the drawing puts it inside")
+
+    # ── WHAT THE LAYER DOES TO ITSELF ──────────────────────────────────────────────────────
+    if fact == "opacity":
+        wanted = raw_node.get("opacity")
+        if wanted is None:
+            return None
+        got = _num(_decl(decls, "opacity"))
+        if _same(float(wanted), got, _ALPHA_EPS):
+            return row(_n(float(wanted)), _n(got if got is not None else 1.0), "the opacity the design states")
+        return differs(_n(float(wanted)), _n(got if got is not None else 1.0),
+                       "the opacity drawn is not the opacity the design states")
+
+    if fact == "visible":
+        if raw_node.get("visible") is not False:
+            return None
+        got = _decl(decls, "display")
+        if got == "none":
+            return row("hidden", got, "the layer the design hides")
+        return differs("hidden", got or "visible", "the design hides this layer and the drawing shows it")
+
+    if fact == "clipsContent":
+        if raw_node.get("clipsContent") is not True:
+            return None
+        got = _decl(decls, "overflow")
+        if got == "hidden":
+            return row("clips", got, "the design clips what leaves this box")
+        return differs("clips", got or "visible overflow",
+                       "the design clips what leaves this box and the drawing does not")
+
+    if fact == "rotation":
+        wanted = raw_node.get("rotation")
+        if not wanted:
+            return None
+        if str(raw_node.get("type") or "").upper() == "GROUP":
+            # A GROUP'S ANGLE IS ITS CHILDREN'S. Figma reports an absolute rotation on every node,
+            # so the group states the same angle each child states; drawing it on the group as well
+            # would turn the artwork twice. Carried by the children, and said so.
+            return row(f"{_n(float(wanted))}°", "carried by the group's children",
+                       "a group is a grouping; each child carries its own absolute rotation, so the "
+                       "group does not repeat it", "carried")
+        matrix = spec_node.get("transform")
+        is_transformed = False
+        if isinstance(matrix, list) and len(matrix) >= 2:
+            try:
+                a, b = float(matrix[0][0]), float(matrix[0][1])
+                c, d = float(matrix[1][0]), float(matrix[1][1])
+                is_transformed = (
+                    abs(b) > 1e-9 or abs(c) > 1e-9 or abs(a - 1) > 1e-9 or abs(d - 1) > 1e-9
+                )
+            except (TypeError, ValueError, IndexError):
+                is_transformed = False
+        if is_transformed:
+            # THE MATRIX IS THE PICTURE. A node whose transform is not the identity — mirrored,
+            # turned, scaled — is drawn by that matrix with its origin at the corner, so the angle
+            # in the `rotation` field is not a separate declaration. On a mirror the field reads
+            # 3.14159 and the matrix is a flip; the matrix is what Figma draws.
+            return row(f"{_n(float(wanted))}°", "carried by the node's transform matrix",
+                       "Figma states the node's transform; the matrix carries its rotation and any "
+                       "mirror, and the drawing composes it", "carried")
+        if is_vector:
+            # A ROTATED SHAPE IS ROTATED IN ITS COORDINATES — `_transform_path` bakes the angle into
+            # the path, and a wrapper that repeated it would turn the artwork twice.
+            return row(f"{_n(float(wanted))}°", "baked into the artwork's coordinates",
+                       "the rotation is drawn into the path, not declared on a box", "carried")
+        got = _decl(decls, "transform") or ""
+        drawn = _num(str(got).replace("rotate(", "").replace("deg)", ""))
+        if _same(-float(wanted), drawn, 1e-3):
+            return row(f"{_n(float(wanted))}°", got, "the rotation the design states, drawn inverted")
+        return differs(f"{_n(float(wanted))}°", got or "no rotation",
+                       "the rotation drawn is not the rotation the design states")
+
+    if fact == "effects":
+        effects = [e for e in raw_node.get("effects") or [] if isinstance(e, dict) and e.get("visible", True)]
+        if not effects:
+            return None
+        wanted = [_shadow_css(e) for e in effects]
+        unsupported = [str(e.get("type")) for e, css in zip(effects, wanted) if css is None]
+        if unsupported:
+            kinds = ", ".join(sorted(set(unsupported)))
+            return row(kinds, "not drawn", f"a {kinds} effect is not drawn by this renderer yet",
+                       "differs", f"{kinds} → nothing")
+        got = [d.split(":", 1)[1].strip() for d in decls if d.startswith("box-shadow:")]
+        # One declaration may carry several shadows, which is how CSS states more than one.
+        drawn = [part.strip() for value in got for part in value.split(", ")]
+        wanted_text = ", ".join(v for v in wanted if v)
+        drawn_text = ", ".join(drawn)
+        if wanted_text == drawn_text:
+            return row(wanted_text, drawn_text, "the effect the design states")
+        return differs(wanted_text, drawn_text or "no shadow",
+                       "the shadow drawn is not the shadow the design states")
+
+    # ── TYPE ───────────────────────────────────────────────────────────────────────────────
+    if fact.startswith("style."):
+        key = fact.split(".", 1)[1]
+        wanted = style.get(key)
+        if wanted is None:
+            return None
+        prop = {
+            "fontFamily": "font-family", "fontWeight": "font-weight", "fontSize": "font-size",
+            "lineHeightPx": "line-height", "letterSpacing": "letter-spacing",
+            "textAlignHorizontal": "text-align", "textCase": "text-transform",
+            "textDecoration": "text-decoration",
+        }.get(key)
+        if key == "textAlignVertical":
+            got = _decl(decls, "justify-content") if _decl(decls, "display") == "flex" else None
+            expected = {"TOP": None, "CENTER": "center", "BOTTOM": "flex-end"}.get(str(wanted))
+            if expected is None and got is None:
+                return row(str(wanted), "top (no declaration needed)", "the design places the text at the top")
+            if expected == got:
+                return row(str(wanted), str(got), "the vertical alignment the design states")
+            return differs(str(wanted), str(got or "top"), "the vertical alignment drawn is not the design's")
+        if prop is None:
+            return None
+        value = _decl(decls, prop)
+        if key == "fontFamily":
+            got = _unquote_family(value)
+            if got == str(wanted):
+                return row(str(wanted), got or "—", "the face the design states")
+            if got == _local_face(str(wanted)):
+                # A RECORDED SUBSTITUTION, NOT A FAILURE AND NOT A SILENT MATCH. The application
+                # ships one face, IBM Plex Sans, and the design states another; the stated family is
+                # kept in this row, so nothing about the design is lost, and the drawing is reported
+                # as a decision rather than counted as the design's own value.
+                return row(
+                    str(wanted), f"{got} (the system's one face)",
+                    f"The design states {wanted}. The application draws its one self-hosted face, "
+                    f"{_SYSTEM_FACE}; the stated family is kept in this record.",
+                    "carried",
+                )
+            return differs(str(wanted), got or "no family", "the face drawn is not the face the design states")
+        if key == "fontWeight":
+            got = _num(value)
+            if _same(float(wanted), got, 1e-3):
+                return row(_n(float(wanted)), _n(got or 0), "the weight the design states")
+            return differs(_n(float(wanted)), _n(got) if got is not None else str(value or "default"),
+                           "the weight drawn is not the weight the design states")
+        if key in ("fontSize", "lineHeightPx", "letterSpacing"):
+            if key == "letterSpacing" and float(wanted) == 0 and value is None:
+                return row("0", "0 (no declaration needed)", "no letter spacing, which is what the design states")
+            got = _num(value)
+            if _same(float(wanted), got, 1e-4):
+                return row(f"{_n(float(wanted))}px", f"{_n(got or 0)}px", "the value the design states")
+            return differs(f"{_n(float(wanted))}px", f"{_n(got) + 'px' if got is not None else 'missing'}",
+                           "the value drawn is not the value the design states")
+        if key == "textAlignHorizontal":
+            expected = str(wanted).lower()
+            if value == expected:
+                return row(str(wanted), value, "the alignment the design states")
+            return differs(str(wanted), value or "start", "the alignment drawn is not the design's")
+        if key == "textCase":
+            expected = {"UPPER": "uppercase", "LOWER": "lowercase", "TITLE": "capitalize",
+                        "SMALL_CAPS": "lowercase"}.get(str(wanted))
+            if expected is None and value is None:
+                return row(str(wanted), "no change", "the design asks for no case change")
+            if value == expected:
+                return row(str(wanted), value or "", "the case the design states")
+            return differs(str(wanted), value or "no change", "the case drawn is not the case the design states")
+        if key == "textDecoration":
+            expected = {"UNDERLINE": "underline", "STRIKETHROUGH": "line-through"}.get(str(wanted))
+            if expected is None and value is None:
+                return row(str(wanted), "no decoration", "the design asks for no decoration")
+            if value == expected:
+                return row(str(wanted), value or "", "the decoration the design states")
+            return differs(str(wanted), value or "no decoration",
+                           "the decoration drawn is not the decoration the design states")
+        return None
+
+    if fact == "characters":
+        wanted = raw_node.get("characters")
+        if wanted is None:
+            return None
+        from design_renderer import _data_field
 
         if _data_field(spec_node):
-            return ("${this." in source, "${this.<field>}")
-        if _on_click_event(spec_node):
-            return ("@click=" in source, "@click=${() => this._fire(…)}")
-        return (True, "prose — no instruction to draw, correctly absent")
-    if key in ("rotation", "rectangleCornerRadii", "cornerRadius") and is_vector:
-        # A vector's rotation and corner radii are IN ITS PATH: `_transform_path` bakes the
-        # rotation into the coordinates and the fitted geometry carries its own corners, so a
-        # wrapper that repeated either would paint a filled rectangle behind the arrow.
-        return (True, "carried by the artwork's own path")
-    if key in ("strokes", "strokeWeight", "strokeAlign", "individualStrokeWeights") and is_vector:
-        # A VECTOR'S BORDER IS DRAWN BY ITS ARTWORK, not by a CSS border. `_svg_for_vector` fits
-        # the path and writes the paint onto it — measured on `Polygon 4`, the emitted `<path>`
-        # carries `fill="#e4d48e" stroke="#d29207" stroke-width="1.0"` — so a styled vector has
-        # no rule of its own in the stylesheet at all, and a check that reads only the stylesheet
-        # reports the stroke as missing when it is on the path.
-        needle = {"strokes": "stroke=", "strokeWeight": "stroke-width=",
-                  "strokeAlign": "stroke=", "individualStrokeWeights": "stroke-width="}[key]
-        return (needle in source, f"<path {needle}…")
+            return row(_clip(wanted), "${this." + str(_data_field(spec_node)) + "}",
+                       "the layer is bound to data, so the design's words are the placeholder and "
+                       "the drawing shows the value it is given", "carried")
+        got = _own_text(markup)
+        if got == str(wanted):
+            return row(_clip(wanted), _clip(got), "the words the design states")
+        return differs(_clip(wanted), _clip(got) or "no words",
+                       "the words drawn are not the words the design states")
 
-    probe: dict[str, str] = {
-        "layoutMode": "display",
-        "itemSpacing": "gap",
-        "paddingLeft": "padding-left",
-        "paddingRight": "padding-right",
-        "paddingTop": "padding-top",
-        "paddingBottom": "padding-bottom",
-        "primaryAxisAlignItems": "justify-content",
-        "counterAxisAlignItems": "align-items",
-        "layoutWrap": "flex-wrap",
-        "strokes": "border",
-        "strokeWeight": "border",
-        "strokeAlign": "outline",
-        "individualStrokeWeights": "border-width",
-        "cornerRadius": "border-radius",
-        "rectangleCornerRadii": "border-radius",
-        "effects": "box-shadow",
-        "opacity": "opacity",
-        "visible": "display: none",
-        "clipsContent": "overflow",
-        "rotation": "transform",
-        "characters": "color",
-        "style": "font-family",
-        "absoluteBoundingBox": "width",
-        "layoutSizingHorizontal": "align-self",
-        "layoutSizingVertical": "align-self",
-        "layoutAlign": "align-self",
-        "layoutGrow": "flex-grow",
-        "textTruncation": "-webkit-line-clamp",
-        "maxLines": "-webkit-line-clamp",
-    }
-    needle = probe.get(key, "")
-    if not needle:
-        return False, "no declaration is defined for this fact"
-    if is_vector and needle in ("width", "transform"):
-        # A vector placed by a flex parent has no box of its own: its size is the svg's.
-        return ("viewBox" in source, "<svg width height viewBox>")
-    hit = next((d for d in decls if needle in d), None)
-    return (bool(hit), hit or "")
+    if fact in ("characterStyleOverrides", "styleOverrideTable"):
+        runs = spec_node.get("runs") or []
+        drawn = _runs_drawn(markup)
+        if not runs and not drawn:
+            return row("no styled ranges", "no spans", "the layer has no styled ranges")
+        if len(runs) != len(drawn):
+            return differs(f"{len(runs)} range(s)", f"{len(drawn)} span(s)",
+                           "the number of styled ranges drawn is not the number the design states")
+        problems: list[str] = []
+        for index, (run, span) in enumerate(zip(runs, drawn)):
+            run_style = run.get("style") or {}
+            if run.get("text") is not None and span["text"] != str(run.get("text")):
+                problems.append(f"range {index + 1} words differ")
+            if run_style.get("fill") and span["color"] and not _same_colour(run_style["fill"], span["color"]):
+                problems.append(f"range {index + 1} {run_style['fill']} → {span['color']}")
+            if run_style.get("fontFamily"):
+                stated_family = str(run_style["fontFamily"])
+                # THE SYSTEM'S ONE FACE IS A RECORDED SUBSTITUTION HERE TOO, not a defect of the
+                # run. A span drawn in IBM Plex Sans for a run that states Inter is the system's
+                # rule taking effect; the warning at the root of the answer names it.
+                if span["fontFamily"] != stated_family and span["fontFamily"] != _local_face(stated_family):
+                    problems.append(f"range {index + 1} face {stated_family} → {span['fontFamily']}")
+        if problems:
+            return differs("; ".join(problems), "drawn ranges differ",
+                           "the styled ranges drawn are not the ranges the design states")
+        return row(f"{len(runs)} range(s)", f"{len(drawn)} span(s)", "every styled range the design states")
+
+    if fact in ("fillGeometry", "strokeGeometry"):
+        if not is_vector:
+            return None
+        paths = spec_node.get("paths") or []
+        svg = str(spec_node.get("svg") or "")
+        if not paths:
+            return differs("artwork", "nothing", "the design states artwork and the spec has none")
+        if not svg:
+            return differs(f"{len(paths)} path(s)", "no svg",
+                           "the artwork is measured and the drawing has no svg to carry it")
+        if svg not in markup and svg not in str(spec_node.get("svg")):
+            return differs(f"{len(paths)} path(s)", "svg not emitted",
+                           "the artwork is measured and the drawing does not emit it")
+        return row(f"{len(paths)} path(s), {_n(float(box.get('width') or 0))} × "
+                   f"{_n(float(box.get('height') or 0))}",
+                   f"{len(paths)} path(s) in the svg",
+                   "the artwork is Figma's own geometry, transformed into the layer's box")
+
+    if fact == "componentId":
+        return None  # decided by the caller: an instance is not composed in a blind preview
+
+    if fact == "textTruncation" or fact == "maxLines":
+        return None  # its own row, below
+
+    if fact == "annotations":
+        return None  # decided by the caller
+
+    # A stated key this table has no comparison for. It is not "drawn" on the strength of a word:
+    # if the renderer names no declaration for it, it is a fact nobody can see.
+    if fact in unrendered_keys(spec_node):
+        return differs(_short(str(raw_node.get(fact)), 40), "not drawn",
+                       "the design states it and no declaration carries it")
+    return row(_short(str(raw_node.get(fact)), 40), "carried, not a declaration",
+               "a fact the drawing carries without a declaration of its own")
 
 
 # ── CARRIED KEYS THAT HAVE BEEN EXAMINED, AND WHAT WAS FOUND ─────────────────────────────────
@@ -570,6 +1416,286 @@ def _short(value: Any, limit: int = 58) -> str:
 _DECIDED_AS = {"textTruncation": "truncation", "maxLines": "truncation"}
 
 
+def annotation_report(raw_document: dict[str, Any]) -> list[dict[str, Any]]:
+    """EVERY ANNOTATION IN THE FILE, AS READ — the designer's own notes and property marks.
+
+    Figma carries two kinds of annotation, and the answer must not blur them:
+      * a NOTE — the designer's words. It may be an instruction (`Data: field`, `On click: name`)
+        or plain prose. The words are quoted VERBATIM; nothing is summarised.
+      * a PROPERTY mark — only a list of property names (height, width, fills…). It names which
+        properties are exposed on the layer; it draws nothing.
+
+    Reported per layer with the name path, because an annotation on one button is not an annotation
+    on the frame around it. This is what the answer shows the designer when he asks what the file
+    actually says.
+    """
+    out: list[dict[str, Any]] = []
+
+    def walk(node: dict[str, Any], path: str = "") -> None:
+        name = str(node.get("name") or "").strip() or "unnamed"
+        here = f"{path} / {name}" if path else name
+        for ann in node.get("annotations") or []:
+            if not isinstance(ann, dict):
+                continue
+            label = ann.get("labelMarkdown") or ann.get("label") or ""
+            properties = [
+                str(p.get("type"))
+                for p in (ann.get("properties") or [])
+                if isinstance(p, dict) and p.get("type")
+            ]
+            out.append({
+                "layer": f"{name} ({node.get('type')})",
+                "path": here,
+                "nodeId": node.get("id"),
+                "note": str(label).strip() or None,
+                "properties": properties,
+                "kind": "note" if str(label).strip() else "property",
+            })
+        for child in node.get("children") or []:
+            walk(child, here)
+
+    walk(raw_document)
+    return out
+
+
+def design_findings(raw_document: dict[str, Any]) -> list[dict[str, Any]]:
+    """FACTS IN THE FILE THAT CANNOT BE DRAWN AS THE FILE STATES THEM — the designer's to fix.
+
+    WHY THIS EXISTS (owner, 2026-10-26): *"See if you can't determine if it's an AI ingestion program
+    problem or if it's a designer problem, then a designer is not empowered to go correct it. It
+    simply has to lay out honestly."*
+
+    A REPORT THAT BLAMES THE PROGRAM FOR EVERYTHING IS AS USELESS AS ONE THAT BLAMES THE DESIGN.
+    So this is deliberately narrow: it reports only contradictions between numbers THE FILE ITSELF
+    STATES, with the arithmetic shown. It never says a design is ugly, wrong or should be drawn
+    differently — only that two of its own measurements cannot both hold:
+
+      * a box with no width or no height that still contains visible content;
+      * a text box shorter than one line of its own line height (the words cannot fit);
+      * an auto-layout frame smaller than its own children, gaps and padding, with no wrapping, no
+        child that fills the axis, and no clipping (the content must spill out of the frame).
+
+    Everything else — an ellipsis this engine cannot draw, a blur, an image fill, a key the ingest
+    has no meaning for — is the PROGRAM's, and the confession says so.
+    """
+    out: list[dict[str, Any]] = []
+
+    def layer_of(node: dict[str, Any]) -> str:
+        return f"{node.get('name')} ({node.get('type')})"
+
+    def walk(node: dict[str, Any]) -> None:
+        box = node.get("absoluteBoundingBox") or {}
+        try:
+            width = float(box.get("width") or 0)
+            height = float(box.get("height") or 0)
+        except (TypeError, ValueError):
+            width = height = 0.0
+        node_type = str(node.get("type") or "").upper()
+        kids = [c for c in node.get("children") or [] if c.get("visible", True)]
+        text = node.get("characters")
+        style = node.get("style") or {}
+
+        if box and (width <= 0 or height <= 0) and (kids or (text is not None and str(text).strip())):
+            content = f"{len(kids)} visible child layer(s)" if kids else "text"
+            out.append({
+                "layer": layer_of(node), "id": node.get("id"), "kind": "empty box",
+                "observation": (
+                    f"This layer's box is {_n(width)} × {_n(height)} and it contains {content}, "
+                    "so the content has no box to sit in. Fix the layer's size in Figma, or let it "
+                    "hug its contents."
+                ),
+            })
+
+        line_height = style.get("lineHeightPx")
+        if node_type == "TEXT" and line_height and box and height > 0:
+            try:
+                one_line = float(line_height)
+            except (TypeError, ValueError):
+                one_line = 0.0
+            if one_line and height + 0.01 < one_line:
+                out.append({
+                    "layer": layer_of(node), "id": node.get("id"), "kind": "text box shorter than a line",
+                    "observation": (
+                        f"This text box is {_n(height)} high and its own line height is {_n(one_line)}, "
+                        "so not one whole line fits. Make the box at least one line tall, or remove "
+                        "the fixed height."
+                    ),
+                })
+
+        layout = node.get("layoutMode")
+        if layout in ("HORIZONTAL", "VERTICAL") and kids and not node.get("clipsContent"):
+            if str(node.get("layoutWrap") or "") != "WRAP":
+                horizontal = layout == "HORIZONTAL"
+                along = "width" if horizontal else "height"
+                fills = any(
+                    (c.get("layoutSizingHorizontal") if horizontal else c.get("layoutSizingVertical")) == "FILL"
+                    or c.get("layoutGrow")
+                    for c in kids
+                )
+                # A CHILD TAKEN OUT OF THE FLOW DOES NOT OCCUPY IT, so it is not in the sum. Counting
+                # it would report an overflow that the file does not have.
+                in_flow = [c for c in kids if str(c.get("layoutPositioning") or "") != "ABSOLUTE"]
+                if not fills and in_flow:
+                    total = 0.0
+                    for child in in_flow:
+                        child_box = child.get("absoluteBoundingBox") or {}
+                        total += float(child_box.get(along) or 0)
+                    gap = float(node.get("itemSpacing") or 0)
+                    total += gap * max(0, len(in_flow) - 1)
+                    total += float((node.get("paddingLeft") if horizontal else node.get("paddingTop")) or 0)
+                    total += float((node.get("paddingRight") if horizontal else node.get("paddingBottom")) or 0)
+                    available = width if horizontal else height
+                    if total > available + 0.5:
+                        out.append({
+                            "layer": layer_of(node), "id": node.get("id"), "kind": "contents larger than frame",
+                            "observation": (
+                                f"This frame is {_n(available)} across and its children, gaps and padding "
+                                f"add up to {_n(total)}, with no wrapping, no child filling the axis and "
+                                "clipping off — so the content must spill out of the frame. Let the frame "
+                                "hug its contents, make it larger, or set it to clip."
+                            ),
+                        })
+
+        for child in node.get("children") or []:
+            walk(child)
+
+    walk(raw_document)
+    return out
+
+
+def confession(report: dict[str, Any]) -> dict[str, Any]:
+    """WHAT COULD NOT BE READ OR DRAWN, IN PLAIN SENTENCES — the first thing the answer says.
+
+    WHY THIS EXISTS, in the owner's words (2026-10-26): *"Just report it. Say I can't read this, or
+    I built it anyway and did not read this, this, this. That's how I can diagnose problems."*
+
+    A COUNT IS NOT A CONFESSION. `74 of 74 exact` is true of the facts the check could compare and
+    says nothing about the ones it could not — and printed first, it reads as success. So the
+    answer leads with the missing things, each one a sentence naming the layer, the fact, the value
+    that was found, and the consequence: the component was built without it. The count follows as
+    evidence, never as the headline.
+
+    NOTHING IS TURNED INTO A SUCCESS. A gap that is examined and known (a truncating layer) is
+    still a gap the designer must see; it is listed here with its reason, not quietly counted as
+    acceptable.
+    """
+    missing: list[dict[str, str]] = []
+    accepted = 0
+    for row in report["rows"]:
+        verdict = row["verdict"]
+        if verdict in ("drawn", "accepted"):
+            if verdict == "accepted":
+                accepted += 1
+            continue
+        layer = str(row.get("layer") or "a layer")
+        fact = str(row.get("fact") or "an unnamed fact")
+        source = str(row.get("source") or "").strip()
+        drawn = str(row.get("drawn") or "").strip()
+        why = str(row.get("why") or "").strip().rstrip(".")
+        reason = f" {why[:1].upper() + why[1:]}." if why else ""
+        if verdict == "not-read":
+            value = f" — the value I found was {source}" if source else " — I could not read its value either"
+            sentence = (
+                f"I could not read {layer} · {fact}{value}.{reason} "
+                "I built the component without it."
+            )
+        elif verdict == "not-drawn":
+            value = f" = {source}" if source else ""
+            sentence = (
+                f"I could not draw {layer} · {fact}{value}.{reason} "
+                "I built the component without it."
+            )
+        elif verdict == "differs":
+            if drawn.lower() in ("not drawn", "no declaration", "nothing", ""):
+                sentence = f"I read {layer} · {fact} = {source or '(no value)'} and could not draw it.{reason}"
+            else:
+                sentence = (
+                    f"I read {layer} · {fact} = {source or '(no value)'} and the component carries "
+                    f"{drawn}.{reason}"
+                )
+        elif verdict == "uncomparable":
+            sentence = f"I could not check {layer} · {fact}: {why or 'no reason was recorded'}"
+        elif verdict == "defect":
+            if fact in ("textTruncation", "maxLines"):
+                # THE SHORT FORM OF A LONG MEASUREMENT. The full finding (six spellings, the engine
+                # version, the pixel numbers) stays in the ledger; the sentence a designer reads
+                # must be one line, or it stops being read at all.
+                sentence = (
+                    f"I read {layer} · {fact} and did not draw the ellipsis it asks for: this engine "
+                    "cannot draw a multi-line ellipsis (measured 2026-09-30 on Chrome 146 / Electron 41). "
+                    "The whole lines that fit are drawn; the ellipsis is not."
+                )
+            else:
+                sentence = f"I read {layer} · {fact} and did not draw it: {_clip(why, 200)}"
+        else:
+            sentence = f"{layer} · {fact}: {verdict}"
+        missing.append({
+            "layer": layer, "id": row.get("id"), "fact": fact, "verdict": verdict,
+            "source": source, "drawn": drawn, "sentence": sentence,
+            # THE CAUSE, SAID PLAINLY. A fact the file states that the component does not carry is
+            # the PROGRAM's: the file did its part. A design-side cause is only claimed when the
+            # file's own numbers contradict each other, and those are listed separately below.
+            "cause": "program",
+            "nextStep": "This is the pipeline's to fix, not yours.",
+        })
+
+    design = report.get("design") or []
+
+    # ── THE FONT WARNING ──────────────────────────────────────────────────────────────────────
+    # A DESIGN THAT NAMES A FACE THIS SYSTEM DOES NOT SHIP IS TOLD SO, BY NAME (owner, 2026-10-26):
+    # *"If I'm ingesting Inter and Inter is not our default font… then that's something that the
+    # user needs to be warned about. I'm going to replace this font, you did not use the system
+    # font."* So every layer whose stated family is not the system's face is collected here and
+    # said in the verdict — not buried in the table, and not treated as a defect of the design.
+    fonts: list[dict[str, str]] = []
+    for row in report["rows"]:
+        if row.get("fact") != "style.fontFamily":
+            continue
+        stated = str(row.get("source") or "").strip()
+        if stated and stated != _SYSTEM_FACE:
+            fonts.append({
+                "layer": str(row.get("layer") or ""),
+                "path": str(row.get("path") or ""),
+                "stated": stated,
+                "drawn": _SYSTEM_FACE,
+            })
+    if fonts:
+        stated_faces = ", ".join(sorted({entry["stated"] for entry in fonts}))
+        warning = (
+            f" FONT WARNING: {len(fonts)} layer(s) use {stated_faces}, which this system does not "
+            f"ship. The application will draw {_SYSTEM_FACE}, its one face, in place of it. Each "
+            "layer is named in this answer."
+        )
+    else:
+        warning = ""
+
+    drawn_count = report["counts"].get("drawn", 0)
+    if missing:
+        things = "1 thing" if len(missing) == 1 else f"{len(missing)} things"
+        mine = ("It is the pipeline's to fix, not your file's." if len(missing) == 1
+                else "They are the pipeline's to fix, not your file's.")
+        about_file = (
+            f" {len(design)} observation(s) about the file itself are listed separately, with the numbers."
+            if design else ""
+        )
+        sentence = (
+            f"I could not read or draw {things} in this design, and I built the component anyway. "
+            f"{mine}{about_file} Each one is named with the value I found.{warning}"
+        )
+    else:
+        sentence = (
+            f"I read every fact this design states that asks for a drawing — {drawn_count} of them — "
+            "and every one is in the component."
+            + (f" {accepted} further fact(s) ask for no drawing, each with its reason written down."
+               if accepted else "")
+            + (f" {len(design)} observation(s) about the file itself are listed separately, with the numbers."
+               if design else "")
+            + warning
+        )
+    return {"missing": missing, "count": len(missing), "accepted": accepted, "design": design,
+            "fonts": fonts, "sentence": sentence}
+
+
 def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
     """The proof as a GATE: what must STOP an ingest, and what is only reported.
 
@@ -610,9 +1736,19 @@ def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
         )
 
     ellipses = 0
+    mismatches: list[dict[str, Any]] = []
     for row in report["rows"]:
         where = f"{row['layer']} · {row['fact']}"
-        if row["verdict"] == "not-read":
+        if row["verdict"] == "differs":
+            # THE VALUE THE COMPONENT CARRIES IS NOT THE VALUE THE DESIGN STATES. This is the
+            # verdict the old check could not produce: it asked whether `background` appeared and
+            # the answer was yes, whatever colour stood beside it.
+            mismatches.append(row)
+            blocking.append(f"{where}: {row.get('delta') or row['why']}")
+        elif row["verdict"] == "uncomparable":
+            mismatches.append(row)
+            blocking.append(f"{where}: {row['why']}")
+        elif row["verdict"] == "not-read":
             blocking.append(f"{where}: stated and never reached the spec")
         elif row["verdict"] == "not-drawn":
             blocking.append(f"{where}: in the spec and the renderer emitted no declaration")
@@ -629,11 +1765,29 @@ def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
                     "cannot be a known gap"
                 )
 
+    # THE CONFESSION AND THE COUNT ARE BOTH COMPUTED FROM THESE ROWS, in one place, so the sentence
+    # that leads the answer cannot disagree with the table beneath it.
+    spoken = confession(report)
+
     return {
         "blocks": bool(blocking),
         "blocking": blocking,
+        # WHAT COULD NOT BE READ OR DRAWN, as sentences, for the top of the answer.
+        "verdict": spoken["sentence"],
+        "unread": spoken["missing"],
+        "unreadCount": spoken["count"],
+        # CONTRADICTIONS IN THE FILE, for the designer — separate from the program's own gaps.
+        "design": spoken["design"],
+        # THE FACES THE DESIGN NAMED THAT THE SYSTEM DOES NOT SHIP, with the face it will draw.
+        "fonts": spoken["fonts"],
+        # EVERY ANNOTATION IN THE FILE, verbatim, per layer.
+        "annotations": report.get("annotations") or [],
+        # EVERY FACT WHOSE TWO VALUES DISAGREE, with both values and the difference. This is what a
+        # commit is refused on, and what the designer reads to see what the ingest changed.
+        "mismatches": mismatches,
         "reported": reported,
         "counts": report["counts"],
+        "exactness": report.get("exactness", {}),
         "missing_ellipses": ellipses,
         # One sentence for the root of the ingest's own answer, so the gap is visible without a
         # reader opening the ledger: what is missing, how many, and what it is a gap IN.
@@ -650,7 +1804,8 @@ def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def fidelity_report(raw_document: dict[str, Any], tag: str | None = None) -> dict[str, Any]:
+def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
+                    on_layer: Any = None) -> dict[str, Any]:
     """One row per layer per stated fact, with the verdict and the reason.
 
     The layer walk is the renderer's own: `_class_name` is imported, and only the ordering is
@@ -674,10 +1829,18 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None) -> dic
     rows: list[dict[str, Any]] = []
     used: dict[str, int] = {}
 
-    def walk(raw_node: dict[str, Any], spec_node: dict[str, Any], is_root: bool) -> None:
+    def walk(raw_node: dict[str, Any], spec_node: dict[str, Any], is_root: bool,
+             parent_spec: dict[str, Any] | None = None, path: str = "") -> None:
         class_name = class_of(spec_node, used)
         decls = host if is_root else rules.get(class_name, [])
+        markup = _markup_for_class(source, class_name)
         layer = f"{raw_node.get('name')} ({raw_node.get('type')})"
+        # THE LAYER'S NAME PATH — the identity that survives a re-drawn Figma file. Node ids change
+        # when a designer replaces a design; the layer names are what stay the same, so a comparison
+        # between two ingests is keyed on THIS and never on the id alone.
+        layer_name = str(raw_node.get("name") or "").strip() or "unnamed"
+        layer_path = f"{path} / {layer_name}" if path else layer_name
+        started = len(rows)
 
         for key in sorted(set(raw_node) | set(TRUNCATION_KEYS)):
             if key in NOT_A_FACT or key not in RAW_TO_SPEC:
@@ -686,15 +1849,71 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None) -> dic
                 continue  # the design does not state it: not a finding
             if not _asks(raw_node, key):
                 continue  # the design states a value that asks for no declaration
+            if key == "annotations":
+                # AN ANNOTATION IS HANDLED BEFORE "DID IT REACH THE SPEC", because two kinds exist
+                # and only one could ever land there. A PROPERTY mark carries no words — it names
+                # which properties are exposed — so there is nothing to put in the spec and nothing
+                # to draw; it is read and recorded, not reported as a loss. A NOTE carries the
+                # designer's words, quoted verbatim in the row.
+                from design_renderer import _data_field, _on_click_event
+
+                notes = [a for a in raw_node.get(key) or [] if isinstance(a, dict)]
+                labels = [
+                    (a.get("labelMarkdown") or a.get("label") or "").strip()
+                    for a in notes
+                ]
+                labels = [label for label in labels if label]
+                if not labels:
+                    properties = sorted({
+                        str(p.get("type"))
+                        for ann in notes
+                        for p in (ann.get("properties") or [])
+                        if isinstance(p, dict) and p.get("type")
+                    })
+                    rows.append(_row(
+                        layer, raw_node, key, class_name, "accepted",
+                        "property annotation — it names which properties are exposed and draws "
+                        "nothing. Read and recorded; there is nothing to draw.",
+                        ", ".join(properties) or "(no property named)", "nothing to draw",
+                    ))
+                    continue
+                if _data_field(spec_node):
+                    hit = "${this." in markup
+                    rows.append(_row(layer, raw_node, key, class_name, "drawn" if hit else "not-drawn",
+                                     "${this.<field>}" if hit else "the bound field is not drawn",
+                                     " | ".join(labels), "${this.<field>}"))
+                elif _on_click_event(spec_node):
+                    hit = "@click=" in markup
+                    rows.append(_row(layer, raw_node, key, class_name, "drawn" if hit else "not-drawn",
+                                     "@click=${() => this._fire(…)}" if hit else "the click is not drawn",
+                                     " | ".join(labels), "@click=…"))
+                else:
+                    rows.append(_row(layer, raw_node, key, class_name, "drawn",
+                                     "prose — no instruction to draw, correctly absent",
+                                     " | ".join(labels), "nothing to draw"))
+                continue
             spec_paths = RAW_TO_SPEC[key]
             landed = next((p for p in spec_paths if _spec_value(spec_node, p) is not None), None)
             if landed is None:
-                rows.append(_row(layer, raw_node, key, class_name, "not-read", "the ingest did not put it in the spec"))
+                # THE VALUE THE DESIGN STATED GOES IN THE ROW. A row that says "never reached the
+                # spec" and names no value cannot be diagnosed — the reader cannot tell whether a
+                # shadow, a blur or a whole nested tree was lost.
+                rows.append(_row(
+                    layer, raw_node, key, class_name, "not-read",
+                    "the ingest did not put it in the spec",
+                    _clip(raw_node.get(key)), "not in the component",
+                ))
                 continue
             if key == "textTruncation":
                 rows.append(_truncation_row(layer, raw_node, spec_node, class_name))
                 continue
-            drawn, declaration = _declarations_for(spec_node, key, decls, source)
+            if key in ACCEPTED_UNRENDERED:
+                # DELIBERATE, AND SAID SO. The renderer names these as measured facts it will not
+                # draw, each with its reason written down — the opposite of a silent loss, and a
+                # different verdict from one. Checked BEFORE the value comparison, because a fact
+                # that is deliberately not declared has no drawn value to compare against.
+                rows.append(_row(layer, raw_node, key, class_name, "accepted", ACCEPTED_UNRENDERED[key]))
+                continue
             if key == "componentId" and (raw_node.get("type") or "").upper() == "INSTANCE":
                 # AN INSTANCE IS NOT "MISSING" HERE — THE PREVIEW IS BLIND ON PURPOSE. The owner
                 # ruled that a preview draws the design and reads no catalogue ("The preview should
@@ -716,35 +1935,72 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None) -> dic
                         "instance is drawn from its own measured subtree. Its master IS measured now — "
                         "fetched by the id below and drafted as its own component. Composition into an "
                         "existing tag is a question for approval.",
+                        str(raw_node.get("componentId") or ""),
+                        _tag_for(raw_node.get("componentId")) if composed else "its own measured subtree",
                     )
                 )
-            elif not drawn and key in ACCEPTED_UNRENDERED:
-                # DELIBERATE, AND SAID SO. The renderer names these as measured facts it will not
-                # draw, each with its reason written down — the opposite of a silent loss, and a
-                # different verdict from one.
-                rows.append(_row(layer, raw_node, key, class_name, "accepted", ACCEPTED_UNRENDERED[key]))
-            elif not drawn:
-                rows.append(
-                    _row(layer, raw_node, key, class_name, "not-drawn", "in the spec, and the renderer emitted no declaration")
-                )
-            elif key in INERT_DECLARATIONS:
-                # DECLARED, AND MEASURED NOT TO DO ANYTHING. This is the verdict the module exists
-                # for: no check that reads a file can see it, because the file is right — the
-                # DECLARATION is there, well-formed, and the engine ignores it.
-                entry = INERT_DECLARATIONS[key]
-                rows.append(
-                    _row(
-                        layer, raw_node, key, class_name, "defect",
-                        f"declared and INERT — {entry['measured']} on {entry['engine']}: {entry['finding']}",
+                continue
+
+            # ── THE VALUE COMPARISON ────────────────────────────────────────────────────────────
+            # One row per fact, carrying the Figma value and the drawn value. A row is `drawn` when
+            # the two are equal at the precision the drawing keeps, and `differs` when they are not
+            # — never on the strength of a declaration's NAME appearing.
+            for fact in _FACT_LABELS.get(key, (key,)):
+                try:
+                    compared = _compare_fact(raw_node, spec_node, fact, decls, markup, parent_spec)
+                except Exception as error:  # noqa: BLE001 — a proof must never stop the work
+                    # A VALUE THIS CHECK CANNOT READ IS NOT A PASS. It is named, counted as not
+                    # exact, and it blocks a commit like any other difference — the alternative is
+                    # an instrument that goes quiet on the one design it did not understand.
+                    rows.append(
+                        _row(layer, raw_node, fact, class_name, "uncomparable",
+                             f"the comparison could not be made: {type(error).__name__}: {error}",
+                             _clip(raw_node.get(key)), "—")
                     )
+                    continue
+                if compared is None:
+                    continue
+                if compared["state"] == "differs":
+                    verdict, why = "differs", compared["why"]
+                elif compared["state"] == "carried":
+                    # Measured, deliberately not a declaration, with the reason written down —
+                    # a drawn shape's corners and rotation live in its path. Not counted as an
+                    # exact DECLARATION, and not counted against the design either.
+                    verdict, why = "accepted", compared["why"]
+                else:
+                    verdict, why = "drawn", compared["why"]
+                if verdict == "drawn" and fact in INERT_DECLARATIONS:
+                    entry = INERT_DECLARATIONS[fact]
+                    verdict = "defect"
+                    why = f"declared and INERT — {entry['measured']} on {entry['engine']}: {entry['finding']}"
+                rows.append(
+                    _row(layer, raw_node, fact, class_name, verdict, why,
+                         str(compared.get("source") or ""), str(compared.get("drawn") or ""),
+                         str(compared.get("delta") or ""))
                 )
-            else:
-                rows.append(_row(layer, raw_node, key, class_name, "drawn", declaration))
 
         raw_kids = raw_node.get("children") or []
         spec_kids = spec_node.get("children") or []
-        for index, child in enumerate(raw_kids):
-            walk(child, spec_kids[index] if index < len(spec_kids) else {}, False)
+        # PAIRED BY ID, NOT BY POSITION. A spec that drops one child (an invisible layer, a node the
+        # builder cannot place) shifts every later index, and index pairing then compares one layer's
+        # facts against another layer's rule — which reports a difference that is not there and
+        # hides the one that is.
+        # EVERY ROW THIS LAYER PRODUCED CARRIES ITS NAME PATH, whichever branch wrote it. Set before
+        # the walk descends, so a child's rows keep the child's path and are not overwritten here.
+        for row in rows[started:]:
+            row["path"] = layer_path
+
+        # AND SAY SO, AS IT HAPPENS. The callback is how an in-flight ingest reports "checking this
+        # layer" from inside the walk that is checking it, rather than from a timer guessing.
+        if on_layer is not None:
+            try:
+                on_layer(layer_path, len(rows) - started)
+            except Exception:
+                pass
+
+        by_id = {child.get("id"): child for child in spec_kids}
+        for child in raw_kids:
+            walk(child, by_id.get(child.get("id")) or {}, False, spec_node, layer_path)
 
     walk(raw_document, spec, True)
 
@@ -752,20 +2008,47 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None) -> dic
     for row in rows:
         counts[row["verdict"]] = counts.get(row["verdict"], 0) + 1
 
+    exact = counts.get("drawn", 0)
+    # THE TOTAL IS EVERY FACT THAT ASKS FOR A DRAWING. A fact that was never read, never drawn, or
+    # drawn and measured to fall short is IN the total, so a percentage can never read 100 while
+    # the same answer names a failure. `accepted` rows ask for nothing and carry a written reason;
+    # they are counted separately and named in the verdict sentence.
+    not_exact = sum(
+        counts.get(verdict, 0)
+        for verdict in ("differs", "uncomparable", "not-read", "not-drawn", "defect")
+    )
+    compared = exact + not_exact
+
     return {
         "tag": tag,
         "node": raw_document.get("id"),
         "layers": sum(1 for _ in _walk_nodes(raw_document)),
         "rows": rows,
         "counts": counts,
+        # THE ONE NUMBER THE DESIGNER READS FIRST: how many facts were compared value for value,
+        # and how many of them the drawing carries exactly. A design is 100% when this says 100,
+        # and it is not 100 by omission — a fact that could not be compared is not counted here,
+        # it is named in `key_coverage` and in `counts`.
+        "exactness": {
+            "exact": exact,
+            "compared": compared,
+            "differs": counts.get("differs", 0),
+            "percent": round(exact / compared * 100, 2) if compared else 100.0,
+        },
         "accepted_unrendered": sorted(ACCEPTED_UNRENDERED),
+        # CONTRADICTIONS IN THE FILE ITSELF, with the numbers — the designer's to fix. Empty when
+        # the file's own measurements are consistent, which is the ordinary case.
+        "design": design_findings(raw_document),
+        # THE DESIGNER'S OWN NOTES AND PROPERTY MARKS, quoted verbatim, per layer.
+        "annotations": annotation_report(raw_document),
         "key_coverage": key_coverage(spec),
         "interactions": interaction_report(spec),
         "source_chars": len(source),
     }
 
 
-def _row(layer: str, raw_node: dict[str, Any], key: str, class_name: str, verdict: str, why: str) -> dict[str, Any]:
+def _row(layer: str, raw_node: dict[str, Any], key: str, class_name: str, verdict: str, why: str,
+         source_value: str = "", drawn_value: str = "", delta: str = "") -> dict[str, Any]:
     return {
         "layer": layer,
         "id": raw_node.get("id"),
@@ -773,6 +2056,11 @@ def _row(layer: str, raw_node: dict[str, Any], key: str, class_name: str, verdic
         "fact": key,
         "verdict": verdict,
         "why": why,
+        # THE TWO VALUES, SIDE BY SIDE. `source` is what Figma states; `drawn` is what the
+        # component carries. `delta` is the difference in one line, for a reader scanning a table.
+        "source": source_value,
+        "drawn": drawn_value,
+        "delta": delta,
     }
 
 
@@ -786,6 +2074,12 @@ def _truncation_row(layer: str, raw_node: dict[str, Any], spec_node: dict[str, A
         "class": class_name,
         "fact": "textTruncation",
         "verdict": "defect",
+        # WHAT THE DESIGN STATED, beside what was drawn — a defect named without its value is a
+        # complaint, not a diagnosis.
+        "source": f"{raw_node.get('textTruncation') or 'ENDING'}"
+                  + (f", maxLines {raw_node.get('maxLines')}" if raw_node.get("maxLines") else ""),
+        "drawn": f"{lines} whole line(s), ending without the ellipsis",
+        "delta": "",
         "why": (
             f"the design truncates and THIS ENGINE CANNOT DRAW THE ELLIPSIS — {entry['measured']} on "
             f"{entry['engine']}: {entry['finding']} The layer's own measured line count is {lines}."
@@ -816,7 +2110,13 @@ def _walk_nodes(node: dict[str, Any]):
 
 def _print(report: dict[str, Any], verbose: bool) -> None:
     coverage = report["key_coverage"]
+    exactness = report.get("exactness") or {}
     print(f"node {report['node']}  layers {report['layers']}  facts checked {len(report['rows'])}  {report['counts']}")
+    print(
+        f"   EXACT: {exactness.get('exact', 0)} of {exactness.get('compared', 0)} facts compared "
+        f"({exactness.get('percent', 0)}%) — the values the component carries are the values the "
+        "design states"
+    )
     print()
     print("── WHAT FIGMA STATED THAT NO RENDERER MAPPING EXISTS FOR ──")
     print("   (carried verbatim into the spec, placed by nothing, reported here by name)")
@@ -842,13 +2142,17 @@ def _print(report: dict[str, Any], verbose: bool) -> None:
         for row in report["interactions"]:
             print(f"   {row['verdict']:<20} {row['layer']:<26} {row['detail']}")
     print()
-    print("── FACTS STATED AND NOT DRAWN, OR DRAWN AND INERT ──")
-    interesting = [r for r in report["rows"] if r["verdict"] in ("not-read", "not-drawn", "defect")]
+    print("── FACTS WHOSE TWO VALUES DISAGREE, OR THAT ARE NOT DRAWN, OR DRAWN AND INERT ──")
+    interesting = [
+        r for r in report["rows"]
+        if r["verdict"] in ("differs", "uncomparable", "not-read", "not-drawn", "defect")
+    ]
     if not interesting:
         print("   none")
     width = max((len(r["layer"]) for r in interesting), default=10)
     for row in interesting:
-        print(f"   {row['verdict']:>9}  {row['layer']:<{width}}  {row['fact']:<24} {row['why'][:110]}")
+        values = f"   [{row.get('delta')}]" if row.get("delta") else ""
+        print(f"   {row['verdict']:>12}  {row['layer']:<{width}}  {row['fact']:<24} {row['why'][:90]}{values}")
     if verbose:
         print()
         print("── DRAWN ──")

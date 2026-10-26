@@ -80,7 +80,7 @@ export class ChatFold extends LitElement {
            Nunito (found in chat interfaces for Grace)... Use our fonts only - no API
            calls." The count chip's figure ("13 advisory") renders Inter via the figures
            helper; the words keep the rounded face. */
-        font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
         overflow: hidden;
       }
       .header {

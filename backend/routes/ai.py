@@ -12,9 +12,11 @@ from pydantic import BaseModel
 import services as state
 from deps import (
     A2UI_CATALOG_ID,
+    DEFAULT_DESIGN_SYSTEM,
     a2ui_catalog,
     a2ui_catalog_for,
     a2ui_catalog_id,
+    design_system_of,
     get_user_id_from_header,
     user_is_admin,
     validate_a2ui_components,
@@ -484,10 +486,24 @@ should know. If a request is ambiguous, make the sensible choice and say which o
 """
 
 
+# ── THE CHAT SEAT, BY THE NAME EACH ROOM'S ASSEMBLY EMITS ──────────────────────────────
+#
+# The Console has its own seat (rooms/console/console-chat-panel.ts, owner 2026-10-23: its chat
+# "is the search and filter and sort and organize and discovery method for those cards"). The
+# Composer, a package, the Product room and the Governance room still draw the shared
+# <chat-panel>. These two helpers dress whichever seat the room emitted, so a room's script and
+# rail tabs can never silently miss their own seat because its name changed.
+CHAT_SEAT_COMPONENTS = frozenset({"chat-panel", "console-chat-panel", "composer-chat-panel"})
+
+
+def _is_chat_seat(component: object) -> bool:
+    return isinstance(component, dict) and component.get("component") in CHAT_SEAT_COMPONENTS
+
+
 def _seat_tabs(components: list, tabs: str) -> None:
     """Set every chat seat's allowed-tabs. Idempotent, and it never adds a component."""
     for c in components:
-        if isinstance(c, dict) and c.get("component") == "chat-panel":
+        if _is_chat_seat(c):
             c["allowedTabs"] = tabs
 
 
@@ -514,7 +530,7 @@ def _seat_grace(components: list, base: str, live_context: bool) -> None:
     `tracePrompt` and `allowedTabs` beside it, and not a value any model produces.
     """
     for c in components:
-        if isinstance(c, dict) and c.get("component") == "chat-panel":
+        if _is_chat_seat(c):
             c["instructions"] = {"path": f"{base}/grace_instructions"}
             c["graceLiveContext"] = live_context
 
@@ -566,14 +582,14 @@ def _design_surface_components() -> list[dict[str, Any]]:
 
     THE MIDDLE COLUMN IS EMITTED, and it is the one element here that is Design's own:
     `design-middle-container` is the Composer's middle column WITH A HOLE (`<slot name="middle">`),
-    and it is in `design-artifacts` and not in the Composer's catalogue, so no Composer surface
-    can name it. It has to exist before the Preview can be seated inside it, which is why it is
+    and it is a name in the one catalogue that no Composer surface emits. It has to exist before
+    the Preview can be seated inside it, which is why it is
     part of the frame rather than part of the injection.
     """
     return [
         {
             "id": "root",
-            "component": "workspace-layout",
+            "component": "design-workspace",
             # STATED, NOT LEFT OUT. A prop an assembly omits is not reset: the renderer re-assigns
             # what the tree carries and the element keeps everything else. The console — and a
             # Run's flow view — sets `isThirdOpen: false`, so a design tree that said nothing
@@ -581,9 +597,10 @@ def _design_surface_components() -> list[dict[str, Any]]:
             # not sure why the chat's loading collapsed."
             "isThirdOpen": True,
             # THE PANES ARE NAMED SLOTS, so children is an OBJECT keyed by slot name — the array
-            # form carries no slot and fills nothing. Only two slots are named; see the note on
-            # the panes above.
-            "children": {"left-header": "left-header", "middle": "design-middle"},
+            # form carries no slot and fills nothing. THE FOOTER IS THE COMPOSER BAR'S PLATE,
+            # EMPTY (owner, 2026-10-25: "we do not need the CTAs save or run or undo. just blank
+            # for now"): the column ends on the same bar the Composer's does, holding nothing.
+            "children": {"left-header": "left-header", "middle": "design-middle", "left-footer": "left-footer"},
         },
         {
             "id": "left-header",
@@ -594,6 +611,10 @@ def _design_surface_components() -> list[dict[str, Any]]:
             # are working in. That value arrives at /session/title from the resolved catalogue row
             # — one read, and the bar is not told a second time.
             "title": {"path": "/session/title"},
+        },
+        {
+            "id": "left-footer",
+            "component": "design-left-footer",
         },
         {
             "id": "design-middle",
@@ -692,11 +713,14 @@ def _session_catalog_vocabulary(system: str) -> str:
 # ONE LINE to change: this name. The partition must exist — the palette and vocabulary reads
 # below fail LOUD, with the path named, when it does not (deps.py's own rule).
 #
-# NOTHING of the application's appears in this room: the four system catalogues (prompt-composer,
-# design-artifacts, ecommerce, primitives) serve the application's own work — the partition works
+# NOTHING of the application's appears in this room: the one catalogue (prompt-composer) serves
+# the application's own work — the partition works
 # both ways (owner, 2026-10-03: *"I can't use one of these other catalogs to work on the harness…
 # I'm restricted to only using the application's design system"*).
-_PRODUCT_ROOM_DESIGN_SYSTEM = "carbon"
+# THE PRODUCT ROOM'S FIRST SYSTEM — the value a newly born package records. Every later read
+# goes through the package's own record (`design_system_of`), so a package that chose a system is
+# honoured and the room, the compiler, the scoped edit and the builder's turn cannot disagree.
+_PRODUCT_ROOM_DESIGN_SYSTEM = DEFAULT_DESIGN_SYSTEM
 
 # ── THE SIZE LADDER (2026-10-03) ────────────────────────────────────────────────────────────────
 # The owner, watching a contact form render "1 inch wide": *"That's not a form size. Is she not
@@ -1343,9 +1367,13 @@ REQUIREMENTS:
    panes are NAMED slots, so "children" is an OBJECT keyed by slot name; the
    array form fills nothing.
 2. "card-grid": ConsoleCardGrid in slot "left", items bound to {{"path": "/cards"}}
-3. "console-chat": "chat-panel" in slot "right", bound to the console's own
-   conversation: conversationId {{"path": "/console/conversation_id"}},
-   sessionId {{"path": "/console/session_id"}}. There is no middle slot.
+3. "console-chat": "console-chat-panel" in slot "right" — THE CONSOLE'S OWN SEAT, not
+   the shared "chat-panel" (the Composer, a package and the Governance room use that
+   one). Bind it to the console's own conversation AND to the library she organises:
+   conversationId {{"path": "/console/conversation_id"}},
+   sessionId {{"path": "/console/session_id"}},
+   consoleCards {{"path": "/cards"}} — the same list the grid draws, so every question
+   about the index is answered from the index itself. There is no middle slot.
 4. "isThirdOpen": false — the chat column loads CLOSED. This is the container's
    own state and it owns the column's width, so it is the only flag needed: at
    false the right pane sits at its designed 60px collapsed floor with the rail
@@ -1385,7 +1413,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
   "components": [
     {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "console-chat"}}}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
-    {{"id": "console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "chat,eval,tools,approvals,settings", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
+    {{"id": "console-chat", "component": "console-chat-panel", "tracePrompt": false, "allowedTabs": "chat,eval,tools,approvals,settings", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "consoleCards": {{"path": "/cards"}}, "children": {{"view": "repair-view"}}}},
     {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
   ],
   "ai_message": "Your message"
@@ -1799,13 +1827,10 @@ Output ONLY JSON in exactly this shape (no markdown fences, no commentary):
                 )
             product_draft = stored.get("draft") if stored else None
 
-        # THE ROOM'S SYSTEM — THE CONSTANT, AND NOTHING ELSE (the owner removed the chooser,
-        # 2026-10-03 late: the person does not select). The package's metadata fact is no longer
-        # READ here — with no writer there is no reader, and the constant above is the one
-        # authority every read below goes through (the palette, the vocabulary, the compile). The
-        # data model still CARRIES the name — the host reads it to pre-load the system's registry
-        # before the tree names any component — but nothing offers it and nothing writes it.
-        chosen_system = _PRODUCT_ROOM_DESIGN_SYSTEM
+        # THE ROOM'S SYSTEM IS THE PACKAGE'S OWN RECORD (owner, 2026-10-25: one system, so the
+        # design-system tool and the builder cannot state two). A package born before the record
+        # existed reads the fallback; nothing here offers a chooser.
+        chosen_system = design_system_of(session)
 
         # THE TRAY'S OWN LIST — the draft-safe palette of the catalogue this stage draws from,
         # computed by the SAME filter the compiler will read (one reader, two uses: the tray
@@ -2312,14 +2337,14 @@ LAYOUT CONTRACT — the container's NAMED slots, which you fill:
   every non-chat tab, and a panel emitted without it shows the Trace tab loading forever.
   Both paths are written by the client; do not invent values for them.
 
-"root" IS "workspace-layout" — do not put a Column above it. Its panes are NAMED
+"root" IS "composer-workspace" — do not put a Column above it. Its panes are NAMED
 slots, so its "children" is an OBJECT keyed by slot name ({{"left": ...,
 "middle": ..., "right": ...}}), not an array: the array form carries no slot and
 fills nothing.
 
 REQUIREMENTS:
 1. Component objects use key "component" (NOT "type"). Every object needs "id".
-2. id "root", component "workspace-layout", children keyed by slot name.
+2. id "root", component "composer-workspace", children keyed by slot name.
 3. initial_sections: {sections_requirement}
 4. One short friendly ai_message and one short suggested_title.
    "isThirdOpen": true IS STATED, NOT LEFT OUT — and that is load-bearing. A prop an assembly
@@ -2347,12 +2372,12 @@ REQUIREMENTS:
 Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array, no extra keys, no text after the JSON:
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left-header": "left-header", "left": "left-column", "left-footer": "control-bar", "right": "right-column"}}}},
+    {{"id": "root", "component": "composer-workspace", "isThirdOpen": true, "children": {{"left-header": "left-header", "left": "left-column", "left-footer": "control-bar", "right": "right-column"}}}},
     {{"id": "left-header", "component": "left-column-header", "title": {{"path": "/session/title"}}, "version": {{"path": "/session/version"}}, "promptId": {{"path": "/session/id"}}}},
     {{"id": "left-column", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-column", "component": "compiled-output-viewer", "content": ""}},
-    {{"id": "right-column", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": ["trace-view", "eval-view"]}}}},
+    {{"id": "right-column", "component": "composer-chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": ["trace-view", "eval-view"]}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
     {{"id": "eval-view", "component": "EvalFeed", "evaluations": {{"path": "/session/middle_column/evaluations"}}}}
   ],
@@ -2471,12 +2496,11 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
         # Design surface over a name nobody renders.
         #
         # WHAT THAT GAP ACTUALLY COST, measured 2026-09-30: `design-middle-container` and
-        # `design-left-panel` are in `design-artifacts` and in NO other catalogue, and they
-        # are appended after this line — so the only two components that are Design's own
-        # were the only two nothing checked. The gate below is what closes it, and it is
-        # the owner's own rule that says so: a name has to be *"entered in composer, and
-        # then ... re-entered into the design"* — which is only a rule if the design's
-        # catalogue is the one that rejects it.
+        # `design-left-panel` were in the second catalogue and in no other, and they are
+        # appended after this line — so the only two components that are Design's own were the
+        # only two nothing checked. The gate below is what closes it. Since 2026-10-26 that
+        # second catalogue is gone: its five room-only names live in the one catalogue, so the
+        # gate below checks them against the same file every other surface uses.
         if not intent.startswith("render-design"):
             validate_a2ui_components(components)
 
@@ -2894,13 +2918,25 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 "id": "left-rail",
                 "component": "figma-layers-view",
                 "inline": True,
-                "pipeline": "prompt-composer",
+                # THE CHOSEN CATALOGUE IS THE MODEL'S FACT (owner, 2026-10-25): this used to be
+                # the literal "prompt-composer", re-handed on every draw, so the menu jumped back
+                # mid-work. The tool writes the chosen catalogue to /session/design_catalogue on
+                # every switch, and this binding re-hands it across re-draws and remounts.
+                "pipeline": {"path": "/session/design_catalogue"},
+                # THE ROW THE PERSON IS LOOKING AT IS MARKED (owner, 2026-10-25): the list
+                # highlights the open component; the tool writes this on every selection.
+                "selected": {"path": "/session/design_selected"},
                 # The head above the rows IS the ingested element — drawn by this element's own
                 # template, so `showHead` keeps its default (true) and the order is tabs, head, rows.
 
                 # The re-read trigger, on the same channel and for the same reason: the shell bumps
                 # this number after an ingest lands and the tree reads the layers back.
                 "refresh": {"path": "/session/ingest/refresh"},
+                # THE TREE THE INGEST JUST MEASURED — the submitted component with every child
+                # under it, written by the tool from the answer's own measured tree. The record
+                # file holds only what has been approved, so without this the column has no row to
+                # open for a component that was just measured, and its children cannot be seen.
+                "tree": {"path": "/session/ingest/tree"},
                 # (THE IN-FLIGHT FACT WAS BOUND HERE — `/session/design_system_ingest/busy`, the
                 # same fact the add-design-system form's button read. The form and the writer are
                 # both gone (2026-10-04), so the tree's `busy` has nothing to read and the binding
@@ -2921,19 +2957,24 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
 
             # ── AND THE GATE IS THIS SURFACE'S OWN ──────────────────────────────────────
             #
-            # THE WHOLE TREE, AFTER EVERY COMPONENT IS IN IT, checked against the catalogue
-            # DESIGN validates against (`design-artifacts`) — not the Composer's, and not
-            # before the design's own elements have been added. Both halves of that matter:
-            # `design-left-panel` and `design-middle-container` exist in `design-artifacts`
-            # and in no other catalogue, so a gate that ran any earlier never saw them (see
-            # the note where the shared call is skipped above), and a COMPOSER gate would
-            # reject them by name the moment it did.
-            #
-            # The catalogue carries the Composer's names too — the owner's *"entered in
-            # composer, and then ... re-entered into the design"* — which is why one gate is
-            # enough for a surface that wears the Composer's container and holds Design's
-            # own columns.
-            validate_a2ui_components(components, "design-artifacts")
+            # THE WHOLE TREE, AFTER EVERY COMPONENT IS IN IT, checked against the one catalogue
+            # — not before the design's own elements have been added, because
+            # `design-left-panel` and `design-middle-container` are names in it now (they moved
+            # from the deleted design-artifacts copy on 2026-10-26), and a gate that ran any
+            # earlier never saw them (see the note where the shared call is skipped above).
+            # THE SHARED CONTRACT'S NAMES, TRANSLATED FOR THIS ROOM (2026-10-25): the one
+            # prompt serves the Composer and the design sections together. The Composer now
+            # wears its own retagged frame and seat; the design room wears ITS OWN frame
+            # (`design-workspace`, the room's copy of the shared layout) and the shared seat —
+            # the names its own catalogue knows and its wiring matches. The translation
+            # happens BEFORE the gate, so the gate checks what this room will actually draw.
+            for _c in components:
+                if _c.get("component") == "composer-workspace":
+                    _c["component"] = "design-workspace"
+                elif _c.get("component") == "composer-chat-panel":
+                    _c["component"] = "chat-panel"
+
+            validate_a2ui_components(components)
 
             design_container = state.prompt_sessions_api.get_or_create_design_container(
                 user_id=uid,
@@ -2941,26 +2982,41 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 title="Design",
                 description="The Design experience's own session — a division, not a prompt package.",
             )
-            # THE FIGMA SECTION'S OWN CONVERSATION ROOM (`conversations.tab = 'tools'`). The
-            # console's Chat room is a different row — the console is the console, and the design
-            # system's thread is the Figma section's, so the two never share messages.
-            design_conversation = state.prompt_sessions_api.get_or_create_design_conversation(
+            # THE FIGMA SECTION'S OWN CONVERSATION PACKAGE. One tab, one package, one
+            # conversation — the shape the UX route already uses and the console reads. The
+            # package's conversation is the Figma section's own, so the console's Chat room can
+            # never share its messages.
+            design_tools_tab = state.prompt_sessions_api.get_or_create_design_tab(
                 user_id=uid, tab="tools"
             )
+            if not design_tools_tab:
+                raise HTTPException(
+                    status_code=503,
+                    detail="DESIGN FAILURE: the Tools tab's package did not resolve (not created).",
+                )
+            design_conversation = design_tools_tab["conversationId"]
 
-            # ── THE CONVERSATIONS THAT HANG OFF THE DESIGN CONTAINER, READ ON ASSEMBLY ────
+            # ── THE CONVERSATIONS THAT HANG OFF THE TOOLS PACKAGE, READ ON ASSEMBLY ──────
             #
             # Read the one way this codebase reads conversations (`conversations.session_id`),
             # never from a copy on a session row. This is the list her seat is given — and the
             # beginning of the metadata the assembly pulls from the database rather than guessing.
             design_conversations_list = []
-            if state.conversation_api and design_container:
+            if state.conversation_api:
                 try:
                     design_conversations_list = state.conversation_api.get_conversations_by_session(
-                        str(design_container["id"]), uid
+                        design_tools_tab["packageId"], uid
                     )
                 except Exception as e:
-                    _warn(f"the design section's conversation list could not be read: {e}")
+                    _warn(f"the Tools tab's conversation list could not be read: {e}")
+
+            # THE TOOLS VIEW'S OWN SESSION IS THE PACKAGE, NOT THE DESIGN CONTAINER. The
+            # assembly binds every chat seat to that package here, so the Tools view can send its
+            # turn with both ids and the server files it under the Tools conversation. The
+            # conversation id itself travels through `/session/right_column/conversation_id`.
+            for _c in components:
+                if _is_chat_seat(_c):
+                    _c["sessionId"] = design_tools_tab["packageId"]
 
             # ── WHO SHE IS IN THIS ROOM, GIVEN BY THE ROOM ───────────────────────────────
             #
@@ -3332,11 +3388,9 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
         # components is a lie about where its names come from, and since the client resolves
         # names against its own tables (`tag-registry.ts`), the announcement is exactly how
         # the two halves are kept honest — see `a2ui_catalog_id` in deps.py.
-        surface_catalog_id = (
-            a2ui_catalog_id("design-artifacts")
-            if intent.startswith("render-design")
-            else A2UI_CATALOG_ID
-        )
+        # ONE CATALOGUE (owner, 2026-10-26). The room's own names now live in the official
+        # catalogue, so there is no second gate to announce and nothing to choose between.
+        surface_catalog_id = A2UI_CATALOG_ID
 
         return [
             {
@@ -3495,10 +3549,10 @@ CATALOG (use these):
 - compiled-output-viewer (content: {{"path": "/session/middle_column/compiled_output"}})
 - chat-panel (conversationId: {{"path": "/session/right_column/conversation_id"}})
 - TraceFeed (entries: {{"path": "/trace/entries"}}, breadcrumbCount: {{"path": "/trace/breadcrumbCount"}}) — the chat panel's "view" slot child, for the rail's Trace tab
-- workspace-layout (resizable host for the three panes)
+- composer-workspace (resizable host for the three panes)
 
 REQUIREMENTS:
-1. id "root", component "workspace-layout" — the host IS the root, with no Column
+1. id "root", component "composer-workspace" — the host IS the root, with no Column
    above it. Its panes are NAMED slots, so "children" is an OBJECT keyed by slot
    name; the array form fills nothing.
 2. Bind the panes to the paths above
@@ -3514,12 +3568,12 @@ no return salutation — the operator is already in the session they opened.
 Output ONLY this JSON (no markdown):
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": true, "children": {{"left-header": "left-hdr", "left": "left-col", "left-footer": "control-bar", "right": "right-col"}}}},
+    {{"id": "root", "component": "composer-workspace", "isThirdOpen": true, "children": {{"left-header": "left-hdr", "left": "left-col", "left-footer": "control-bar", "right": "right-col"}}}},
     {{"id": "left-hdr", "component": "left-column-header", "title": {{"path": "/session/title"}}, "version": {{"path": "/session/version"}}, "promptId": {{"path": "/session/id"}}}},
     {{"id": "left-col", "component": "prompt-section-editor", "sections": {{"path": "/session/left_column/sections"}}}},
     {{"id": "control-bar", "component": "control-bar", "isSaving": {{"path": "/session/left_column/saving"}}, "isRunning": {{"path": "/session/middle_column/running"}}}},
     {{"id": "middle-col", "component": "compiled-output-viewer", "content": {{"path": "/session/middle_column/compiled_output"}}}},
-    {{"id": "right-col", "component": "chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": ["trace-view", "eval-view"]}}}},
+    {{"id": "right-col", "component": "composer-chat-panel", "allowedTabs": "chat,trace,tools,executions,eval,settings", "conversationId": {{"path": "/session/right_column/conversation_id"}}, "conversations": {{"path": "/session/right_column/conversations"}}, "sessionId": {{"path": "/session/id"}}, "packageTitle": {{"path": "/session/title"}}, "packageDescription": {{"path": "/session/description"}}, "leftColumnContent": {{"path": "/session/left_column/sections"}}, "compiledOutput": {{"path": "/session/middle_column/compiled_output"}}, "children": {{"view": ["trace-view", "eval-view"]}}}},
     {{"id": "trace-view", "component": "TraceFeed", "entries": {{"path": "/trace/entries"}}, "breadcrumbCount": {{"path": "/trace/breadcrumbCount"}}}}
     {{"id": "eval-view", "component": "EvalFeed", "evaluations": {{"path": "/session/middle_column/evaluations"}}}}
   ],
@@ -3763,7 +3817,7 @@ THE SESSION'S FACTS
 {json.dumps(run_info)}
 
 THE SURFACE YOU ARE UPDATING — read this as a fact, not as a suggestion:
-- The layout's root is "{layout_id}" (workspace-layout). Its OTHER slots are already filled
+- The layout's root is "{layout_id}" (composer-workspace). Its OTHER slots are already filled
   and MUST come back exactly as given here:
 {json.dumps(slots, indent=2)}
 - The component standing in the middle column today is "{middle_id or '(none yet)'}". It is
@@ -3789,7 +3843,7 @@ REQUIREMENTS (a Run's column, drawn against the catalog):
 Output ONLY this JSON (no markdown, no envelope wrapper, no text after it):
 {{
   "components": [
-    {{"id": "{layout_id}", "component": "workspace-layout", "children": {{...the slots above..., "middle": "{middle_id}"}}}},
+    {{"id": "{layout_id}", "component": "composer-workspace", "children": {{...the slots above..., "middle": "{middle_id}"}}}},
     {{"id": "{middle_id}", "component": "RoomEmbed", "theme": "dark", "children": {{"header": "{middle_id}-header", "flow": "{middle_id}-flow", "footer": "{middle_id}-footer"}}}},
     {{"id": "{middle_id}-header", "component": "OutputControls", "outputType": "Agent Flow"}},
     {{"id": "{middle_id}-flow", "component": "AgentFlow", "theme": "dark", "flow": {{"path": "/session/middle_column/flow"}}}},
@@ -3985,10 +4039,10 @@ def ai_assemble_wireframe(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # ── THE SESSION'S OWN WORLD — the same ONE system the room's assembly reads (the owner
-    # removed the chooser, 2026-10-03 late: no selection, no per-package choice, no outside
-    # world to refuse — the constant is the authority and its own reads fail loud without it).
-    chosen_system = _PRODUCT_ROOM_DESIGN_SYSTEM
+    # ── THE SESSION'S OWN WORLD — the system ITS PACKAGE records, the same one the room and the
+    # builder's turn read. The UNBOUND choice ("Default (No DS)") has none, and the compiler
+    # returns to the app's own default process.
+    chosen_system = design_system_of(session) or "prompt-composer"
 
     # ── THE THREAD, AND THE ASK ──
     conversation_id = (request.conversation_id or "").strip()
@@ -4325,8 +4379,10 @@ def ai_edit_node(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # ── THE SESSION'S OWN WORLD — the same ONE system the room and the compile read ──
-    chosen_system = _PRODUCT_ROOM_DESIGN_SYSTEM
+    # ── THE SESSION'S OWN WORLD — the system ITS PACKAGE records, the same one the room and the
+    # compile read. The UNBOUND choice ("Default (No DS)") has none, and the edit returns to the
+    # app's own default process.
+    chosen_system = design_system_of(session) or "prompt-composer"
 
     # ── THE THREAD, AND THE ASK — the same rule as the compile: the last person turn IS the
     # instruction; the button carries no words of its own ──
@@ -4991,13 +5047,30 @@ Output ONLY valid JSON:
                 and request.title in [None, "", "Untitled", "New Prompt Agent"]):
             request.title = ai_compilation["suggested_title"]
 
+        # Read what the row holds BEFORE this save, so the version written below can be
+        # compared against it — and so a save the model answered without a summary keeps
+        # the person's own description instead of blanking it.
+        previous_state = None
+        if request.session_id:
+            try:
+                previous_state = state.prompt_sessions_api.get_session(
+                    session_id=request.session_id, user_id=uid
+                )
+            except Exception as e:
+                _warn(f"the row could not be read before this save, so no version was written to compare against: {e}")
+
         # The row keeps the model's description, or none at all. There is
         # deliberately no fallback string: the caller used to receive
         # f"Prompt with {len(sections)} sections" whenever the model gave nothing,
         # which reads as a description of the package but describes only how many
         # sections it happens to contain. That literal is now written into no row.
         ai_description = ai_compilation.get("description", "") if ai_compilation else ""
-        session_description = ai_description or ""
+        # THE MODEL'S SUMMARY WINS WHEN IT SPEAKS. When it does not, the row's own
+        # description is KEPT (2026-10-25): a save that carried no description used to
+        # blank the person's words — the model's silence read as a deletion.
+        session_description = ai_description or (
+            (previous_state or {}).get("description") if request.session_id else ""
+        ) or ""
 
         # Build metadata including AI compilation info + column widths
         save_metadata = {
@@ -5018,18 +5091,6 @@ Output ONLY valid JSON:
         # otherwise blank a stored one on the next save. Same reason the field is optional.
         if request.workspace:
             save_metadata["workspace"] = request.workspace
-
-        # Read what the row holds BEFORE this save, so the version written below
-        # can be compared against it. Without this, a Save where nothing changed
-        # would manufacture a version recording no change.
-        previous_state = None
-        if request.session_id:
-            try:
-                previous_state = state.prompt_sessions_api.get_session(
-                    session_id=request.session_id, user_id=uid
-                )
-            except Exception as e:
-                _warn(f"the row could not be read before this save, so no version was written to compare against: {e}")
 
         if request.session_id:
             # UPDATE existing session

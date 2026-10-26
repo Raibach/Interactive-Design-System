@@ -233,18 +233,6 @@
    }
   },
   {
-   "figmaName": "ai-surface-sandbox",
-   "figmaNodeId": null,
-   "litComponent": "ai-surface-sandbox",
-   "file": "frontend/src/components/lit/ai-surface-sandbox.ts",
-   "status": "built",
-   "managed": "manual",
-   "provenance": {
-    "behavior": "inferred",
-    "note": "The dispatched event names are this component's own. Built before the annotation discipline: no design annotation states them, so they are recorded as inferred rather than presented as traced."
-   }
-  },
-  {
    "figmaName": "Component 24/Frame 886946",
    "figmaNodeId": "40000934:22851",
    "litComponent": "role-dropdown",
@@ -330,7 +318,8 @@
    "provenance": {
     "geometry": "verbatim",
     "fills": "verbatim",
-    "typography": "verbatim",
+    "typography": "substituted",
+    "typographyNote": "Figma states Inter at 13px, weight 700. This component is the application's own furniture and draws IBM Plex Sans, which Carbon owns. It is recorded as substituted rather than verbatim, because the claim and the file must not disagree. An INGESTED design is never substituted (owner, 2026-10-26: 'Figma wins, no exception').",
     "selectedState": "verbatim",
     "closedState": "verbatim",
     "onClick": "verbatim",

@@ -73,7 +73,7 @@ export class SmallDropdown extends LitElement {
       border: 1px solid rgba(255, 255, 255, 0.35);
       border-radius: 4px;
       cursor: pointer;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       text-align: left;
       transition: border-color 120ms linear;
     }

@@ -27,6 +27,9 @@ export class ErrorBanner extends LitElement {
     message: { type: String },
     code: { type: String },
     retry: { type: Boolean },
+    /** Whether the banner offers a way to dismiss itself. Errors fail loud: set false
+        where an error must stand until a retry actually succeeds. */
+    dismissable: { type: Boolean },
   };
 
   declare message: string;
@@ -34,10 +37,13 @@ export class ErrorBanner extends LitElement {
   declare code: string;
   /** Offer a Retry button. Off unless the caller can actually retry something. */
   declare retry: boolean;
+  /** Whether the banner offers a way to dismiss itself. True everywhere by default. */
+  declare dismissable: boolean;
 
   constructor() {
     super();
     this.message = '';
+    this.dismissable = true;
     this.code = '';
     this.retry = false;
   }
@@ -45,7 +51,7 @@ export class ErrorBanner extends LitElement {
   static styles = css`
     :host {
       display: block;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* A banner with no message is a red bar that reports nothing — and a red bar
        that reports nothing teaches people to ignore the shape. So: nothing to
@@ -74,7 +80,7 @@ export class ErrorBanner extends LitElement {
       min-width: 0;
     }
     .code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.04em;
@@ -127,14 +133,16 @@ export class ErrorBanner extends LitElement {
           ${this.retry
             ? html`<button type="button" @click=${() => this._emit('error-retry')}>Retry</button>`
             : ''}
-          <button
+          ${this.dismissable
+            ? html`<button
             type="button"
             @click=${() => this._emit('error-dismiss')}
             aria-label="Dismiss"
             title="Dismiss"
           >
             &#10005;
-          </button>
+          </button>`
+            : ''}
         </div>
       </div>
     `;
@@ -157,6 +165,7 @@ declare module 'react' {
           message?: string;
           code?: string;
           retry?: boolean;
+          dismissable?: boolean;
           ref?: React.Ref<ErrorBanner>;
         },
         ErrorBanner

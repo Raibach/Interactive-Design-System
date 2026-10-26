@@ -3381,7 +3381,7 @@
    ]
   }
  },
- "generatedAt": "2026-10-19T02:32:02.132895Z",
+ "generatedAt": "2026-10-26T15:05:24.831169Z",
  "removed": {
   "40001206:3422": {
    "tag": "f-40001206-3422",
@@ -3400,6 +3400,30 @@
    "removedAt": "2026-09-29T16:48:02.817561Z",
    "actor": "00000000-0000-0000-0000-000000000001",
    "reason": "removed from the tool"
+  },
+  "40001421:5469": {
+   "tag": "f-40001421-5469",
+   "removedAt": "2026-10-26T15:01:29.284780Z",
+   "actor": "",
+   "reason": "removed a component created by a verification approval, not by the designer"
+  },
+  "40001421:5467": {
+   "tag": "f-40001421-5467",
+   "removedAt": "2026-10-26T15:02:12.974556Z",
+   "actor": "00000000-0000-0000-0000-000000000001",
+   "reason": "removed from the catalogue preview"
+  },
+  "40001421:5471": {
+   "tag": "f-40001421-5471",
+   "removedAt": "2026-10-26T15:04:32.678848Z",
+   "actor": "",
+   "reason": "removed a component created by a verification approval, not by the designer"
+  },
+  "40001421:5500": {
+   "tag": "f-40001421-5500",
+   "removedAt": "2026-10-26T15:05:24.831140Z",
+   "actor": "",
+   "reason": "removed a component created by a verification approval, not by the designer"
   }
  }
 }

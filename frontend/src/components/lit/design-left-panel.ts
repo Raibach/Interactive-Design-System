@@ -109,6 +109,12 @@ export class DesignLeftPanel extends LitElement {
       /* No backticks in this stylesheet: it is a tagged template literal. */
 
       :host {
+        /* THE TOOL'S BREATHING ROOM (owner, 2026-10-25: "Add a 20 pixel margin to the left of our
+           list and our Figma ingest. It's too close to the edge."): the ingest form and the
+           list sit 20px clear of the pane's left edge, and 20px down from its top. */
+        padding-left: 20px;
+        padding-top: 20px;
+        box-sizing: border-box;
         /* THE PANE IS A FLEX CONTAINER, so display:block alone is not enough: a flex child with
            no flex-basis and no width is sized to its CONTENT, and this element's content is a hole
            that has not been laid out yet — the same measurement that put design-middle-container at

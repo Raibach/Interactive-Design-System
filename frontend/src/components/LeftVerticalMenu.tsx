@@ -134,7 +134,7 @@ export default function LeftVerticalMenu({
    * THE DESIGN ARTIFACTS TAB OPENS THIS MODAL, and this listener is the whole of that wiring.
    *
    * The header tab dispatches `open-ingest` from the shell (WritingAreaIndex,
-   * `handleTabChangeWithGate`); the component that ALREADY owns the ingest modal answers it.
+   * `handleTabChange`); the component that ALREADY owns the ingest modal answers it.
    * Nothing moved, and IngestModal itself was not touched — the owner, 2026-09-30: "design
    * artifacts tab will open up exactly what we have now on ingestion… You can just add a link
    * to that actually you don't even have to change it. You don't have to move it."
@@ -347,7 +347,7 @@ const LogoutIcon = () => (
                 <StarburstIcon logo={raibachLogo} />
               </div>
               <div className="flex flex-col leading-tight flex-1 min-w-0">
-                <span style={{ color: "#ffffff", fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 700, letterSpacing: "-0.02em", fontSize: "24px" }}>RAIBACH IDS</span>
+                <span style={{ color: "#ffffff", fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontWeight: 700, letterSpacing: "-0.02em", fontSize: "24px" }}>RAIBACH IDS</span>
                 <span style={{ color: "#ffffff", letterSpacing: "0.06em", fontSize: "13px", fontWeight: 600 }}>Interactive Design System</span>
               </div>
               <button
@@ -578,7 +578,7 @@ const LogoutIcon = () => (
                 * protocol's (tag-registry.ts:201, :920).
                 *
                 * ONLY DESIGN AND PRODUCT DO ANYTHING HERE. The header's tabs go through
-                * `handleTabChangeWithGate`, which this component is not given — it receives
+                * `handleTabChange`, which this component is not given — it receives
                 * `currentTab` and no callback — so the others close the drawer and stop, exactly
                 * as they did before. Design opens the ingest tool through the `open-ingest`
                 * window event the header's ingest tab uses; PRODUCT (a real room since
@@ -590,35 +590,28 @@ const LogoutIcon = () => (
                 { id: "composer", label: "Composer" },
                 { id: "design", label: "Design" },
                 /*
-                 * ONE STUB REMAINS, AND THE FLAG IS READ, NOT THE LABEL — so the two lists
-                 * cannot drift into disagreeing about which tabs exist. Product and Governance
-                 * left this set on 2026-10-03 — both are real rooms now, and the drawer hands
-                 * their switches over through `navigate-tab`; Development is still a compartment
-                 * with nothing behind it.
+                 * EVERY TAB IS A ROOM, AND EVERY TAB IS A DOOR (2026-10-23). Product and
+                 * Governance left the stub set on 2026-10-03; Development left it on 2026-10-04,
+                 * when the owner's own workspace was dropped under its tab. The disabled entry
+                 * that remained here was stale: it kept Development locked out of the drawer
+                 * while the header opened the room normally. Development now takes the same
+                 * door as Product and Governance — the shell's own gate, never a second path.
                  */
                 { id: "product", label: "Product" },
-                { id: "development", label: "Development", disabled: true },
+                { id: "development", label: "Development" },
                 { id: "governance", label: "Governance" },
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  disabled={(tab as { disabled?: boolean }).disabled === true}
-                  aria-disabled={(tab as { disabled?: boolean }).disabled === true || undefined}
-                  title={(tab as { disabled?: boolean }).disabled ? 'Not wired up yet' : undefined}
                   onClick={() => {
-                    if ((tab as { disabled?: boolean }).disabled === true) return;
                     setMobileMenuOpen(false);
                     if (tab.id === "design") {
                       window.dispatchEvent(new CustomEvent("open-ingest"));
-                    } else if (tab.id === "product" || tab.id === "governance") {
+                    } else if (tab.id === "product" || tab.id === "development" || tab.id === "governance") {
                       window.dispatchEvent(new CustomEvent("navigate-tab", { detail: { tabId: tab.id } }));
                     }
                   }}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-                    (tab as { disabled?: boolean }).disabled
-                      ? 'text-gray-500 cursor-default'
-                      : 'text-gray-200 hover:bg-white/10 hover:text-white'
-                  }`}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors text-left text-gray-200 hover:bg-white/10 hover:text-white"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
                   {tab.label}

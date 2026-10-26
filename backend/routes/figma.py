@@ -29,13 +29,14 @@ from pydantic import BaseModel
 from deps import (
     a2ui_catalog,
 )
-from design_renderer import accepted_unrendered, render_spec
+from design_renderer import SHAPE_TYPES, accepted_unrendered, render_spec
 from design_renderer import unrendered_keys as unrendered_spec_keys
 
 # THE PROOF, AND THE GATE BUILT ON IT. `figma_fidelity` reads this module's own measurement
 # (`_figma_spec_for_model`) and its renderer, so it is imported here rather than beside them —
 # and it imports THIS module only inside functions, which is what keeps the two from cycling.
 from figma_fidelity import fidelity_gate, fidelity_report
+import figma_facts
 from figma_service import (
     get_cached_spec,
     get_component,
@@ -297,7 +298,7 @@ async def ingest_design_system(
 # the moment this returns. Who/when is written onto the entry itself, beside the ingest's own
 # `proposed` mark, and the system catalogues are never opened: their markers are hand
 # declarations, reviewed in git, exactly like the ingest states.
-_ACCEPT_SYSTEM_CATALOGUES = {"prompt-composer", "design-artifacts", "ecommerce", "primitives"}
+_ACCEPT_SYSTEM_CATALOGUES = {"prompt-composer"}
 
 
 @router.post("/api/catalog/{system}/accept")
@@ -661,6 +662,86 @@ class JobStatus(BaseModel):
 # In-memory job queue (simple, sequential processing per user spec)
 ingest_jobs: dict[str, JobStatus] = {}
 
+# ── WHAT THE INGEST IS DOING RIGHT NOW, IN ORDER ─────────────────────────────────────────────
+# THE OWNER'S REQUEST (2026-10-26): *"for ingestion or overwriting you should do a step-by-step…
+# as it's spinning because you've got lots of time there for a spinner to report. I'm checking this
+# layer, I'm checking that layer, I'm checking the auto layout now…"*
+#
+# These are REAL events, written at the moment the work happens — never an animation standing in
+# for progress. A step that says a layer was checked is written from inside the walk that checked
+# it, so the list cannot claim work that did not happen. The client polls the job and shows the
+# last line; the whole list travels back with the status.
+INGEST_STEPS: dict[str, list[dict[str, str]]] = {}
+
+
+def _step(job_id: str, text: str) -> None:
+    """Record one real step of an ingest. Printed too, so the terminal shows the same list."""
+    try:
+        entry = {"at": datetime.utcnow().isoformat() + "Z", "text": text}
+        steps = INGEST_STEPS.setdefault(job_id, [])
+        steps.append(entry)
+        # A CAP ON THE LIST, NOT ON THE WORK: a 400-layer design would otherwise keep a long tail
+        # nobody reads. The last 300 steps are the ones a person can see.
+        if len(steps) > 300:
+            del steps[: len(steps) - 300]
+        print(f"   · [figma-ingest] {text}")
+    except Exception:
+        pass
+
+# ── THE STAGE RECORD FOR AN APPROVAL OR A REMOVAL ──────────────────────────────────────────────
+# THE OWNER'S REQUEST (2026-10-26): *"I would like to know what's actually happening… Step-by-step
+# and if it fails, then we can stop at that level to report the failure."* An approval and a removal
+# are lists of real stages — write the file, re-derive the manifest, register the map, register the
+# allowlist, register the catalogue, run the gate — and each one records itself as it begins so the
+# pane can name the stage that is running right now.
+#
+# KEYED BY AN ID THE CLIENT GENERATES, because a removal has no job: the request that starts it is
+# the same request that finishes it, so nothing else would give the client a handle to poll.
+OP_STEPS: dict[str, list[dict[str, str]]] = {}
+
+
+def _op_step(op_id: str | None, text: str) -> None:
+    """One stage of an approval or a removal, written when the stage begins."""
+    if not op_id:
+        return
+    try:
+        steps = OP_STEPS.setdefault(op_id, [])
+        steps.append({"at": datetime.utcnow().isoformat() + "Z", "text": text})
+        # The last two hundred stages are what a person can read; the tail beyond that is memory.
+        if len(steps) > 200:
+            del steps[: len(steps) - 200]
+        if len(OP_STEPS) > 40:
+            for key in [k for k in OP_STEPS if k != op_id][: len(OP_STEPS) - 40]:
+                OP_STEPS.pop(key, None)
+        print(f"   · [figma-write] {text}")
+    except Exception:
+        pass
+
+
+def _chosen_write_set(
+    tags: list[str], root_tag: str | None, pattern_tags: list[str] | None
+) -> list[str]:
+    """WHICH DRAFTED FILES AN APPROVAL MAY WRITE — the root, plus the patterns that were ticked.
+
+    `pattern_tags is None` means the caller sent no choice, and every drafted tag is written: that is
+    the behaviour for a caller that does not draw the boxes. An explicit list — including an empty
+    one — is a choice, and it is obeyed: the root is always written, and a pattern absent from the
+    list is not written at all. It is not "skipped": nothing touches it.
+    """
+    if pattern_tags is None:
+        return tags
+    keep = set(pattern_tags) | {root_tag}
+    return [tag for tag in tags if tag in keep]
+
+
+@router.get("/api/figma/steps/{op_id}")
+async def api_figma_steps(op_id: str):
+    """The stages an approval or a removal has reached, in order. Read-only; empty before it starts."""
+    if not re.match(r"^[A-Za-z0-9-]{1,80}$", op_id):
+        raise HTTPException(status_code=400, detail=f"Not an operation id: {op_id!r}")
+    return {"opId": op_id, "steps": OP_STEPS.get(op_id, [])}
+
+
 # Frontend directories — the catalog the ingest writes into, and the app root
 # (whose node_modules supplies esbuild for validating generated code).
 FRONTEND_DIR = os.path.join(
@@ -740,6 +821,91 @@ def _keep_preview(job_id: str | None = None) -> None:
         ingest_preview_abandoned.pop(job_id, None)
 
 
+def _preview_audit(job_id: str) -> dict[str, Any]:
+    """WHAT IS LEFT AFTER A DISCARD — checked, not assumed.
+
+    THE OWNER'S QUESTION (2026-10-26): *"Maybe there should be a log saying was it discarded, was
+    everything removed? Is it leaving elements? Is there a ghost living somewhere?"*
+
+    A discard removes one entry from four in-memory maps and one folder from disk. That IS the
+    whole of it, but "the whole of it" is a claim, and a claim that is not measured is how a ghost
+    survives a session. This walks what actually remains and names it:
+
+      * whether each in-memory entry still exists;
+      * whether the folder still exists, and every file still inside it;
+      * whether the job's fact table is still on disk;
+      * whether ANY other preview folder exists — a second folder is the classic ghost, because the
+        preview is supposed to be one at a time.
+
+    `clean` is true only when nothing above remains. The fact table is listed separately and is
+    NOT counted as an unclean preview: it is the measurement record the comparison reads, it lives
+    under `backend/logs/`, and it never draws anything.
+    """
+    folder = os.path.join(PREVIEW_DIR, job_id)
+    files: list[str] = []
+    if os.path.isdir(folder):
+        for base, _dirs, names in os.walk(folder):
+            for name in names:
+                files.append(os.path.relpath(os.path.join(base, name), PREVIEW_DIR))
+    others: list[str] = []
+    if os.path.isdir(PREVIEW_DIR):
+        others = sorted(name for name in os.listdir(PREVIEW_DIR) if name != job_id)
+    in_memory = {
+        "drafts": job_id in ingest_drafts,
+        "validation": job_id in ingest_draft_validation,
+        "meta": job_id in ingest_job_meta,
+        "job": job_id in ingest_jobs,
+        "abandoned": job_id in ingest_preview_abandoned,
+    }
+    # THE MEASUREMENT LIVES INSIDE THE PREVIEW'S FOLDER now, so it is counted in `files` and dies
+    # with the folder. It is reported here only to name it while it is alive.
+    facts_file = figma_facts.path_for(job_id)
+    return {
+        "jobId": job_id,
+        "inMemory": in_memory,
+        "entryLeft": any(in_memory.values()),
+        "folder": os.path.isdir(folder),
+        "files": sorted(files),
+        "otherPreviewFolders": others,
+        "factsRecord": os.path.relpath(facts_file, os.path.dirname(PREVIEW_DIR))
+                       if os.path.exists(facts_file) else None,
+        "clean": (not any(in_memory.values())) and not os.path.isdir(folder) and not others,
+    }
+
+
+def _preview_audit_report(job_id: str) -> str:
+    """The audit as one sentence a person reads in the activity log."""
+    audit = _preview_audit(job_id)
+    if audit["clean"] and not audit["factsRecord"]:
+        return "discarded cleanly: no entry, no folder, no files, no other preview"
+    parts = []
+    if audit["entryLeft"]:
+        parts.append("ENTRY STILL IN MEMORY: " + ", ".join(k for k, v in audit["inMemory"].items() if v))
+    if audit["folder"]:
+        parts.append(f"FOLDER STILL THERE with {len(audit['files'])} file(s): " + ", ".join(audit["files"]))
+    if audit["otherPreviewFolders"]:
+        parts.append("OTHER PREVIEW FOLDER(S): " + ", ".join(audit["otherPreviewFolders"]))
+    if audit["factsRecord"]:
+        parts.append("the measurement record remains at " + audit["factsRecord"] + " (a record, not a preview)")
+    return "discarded; " + "; ".join(parts) if parts else "discarded cleanly"
+
+
+def _preview_audit_clean_note(audit: dict[str, Any]) -> str:
+    """One line for the response: clean, or exactly what remained."""
+    if audit["clean"] and not audit["factsRecord"]:
+        return "Removed completely: no entry, no folder, no files, no other preview."
+    bits = []
+    if audit["entryLeft"]:
+        bits.append("an entry is still in memory (" + ", ".join(k for k, v in audit["inMemory"].items() if v) + ")")
+    if audit["folder"]:
+        bits.append(f"the folder is still there with {len(audit['files'])} file(s)")
+    if audit["otherPreviewFolders"]:
+        bits.append("other preview folder(s) exist: " + ", ".join(audit["otherPreviewFolders"]))
+    if audit["factsRecord"]:
+        bits.append("the measurement record remains at " + audit["factsRecord"] + " and is not a preview")
+    return "Not fully removed: " + "; ".join(bits) + "."
+
+
 def _drop_preview(job_id: str) -> None:
     """Take one preview out of the world: its entries here, and its folder on disk.
 
@@ -751,6 +917,7 @@ def _drop_preview(job_id: str) -> None:
     ingest_job_meta.pop(job_id, None)
     ingest_jobs.pop(job_id, None)
     ingest_preview_abandoned.pop(job_id, None)
+    figma_facts.forget(job_id)
     _drop_preview_files(job_id)
 
 
@@ -799,6 +966,43 @@ def _drop_preview_files(job_id: str = "") -> None:
         shutil.rmtree(target)
     except Exception as e:
         print(f"⚠️ [figma-ingest] the preview folder {target} could not be removed: {e}")
+
+
+def _sweep_orphaned_previews() -> None:
+    """DELETE ANY PREVIEW FOLDER THAT NO RESTART COULD STILL BE HOLDING.
+
+    THE GHOST THIS PREVENTS (measured 2026-10-26). The preview's entries live in this process; the
+    folder lives on disk. A reload — which happens on every code save — clears the entries and
+    leaves the folder. The screen still draws that file, but there is no draft to approve and no
+    entry to clear, so it is a preview that looks alive and is already dead. Measured on job
+    `1886e733-…`: folder present with both files, every in-memory entry absent.
+
+    A preview is ephemeral by rule (*"it is ditched whenever it is discarded… nothing is ever held
+    there"*). A folder that outlives the process that wrote it is held, so it goes. The removal is
+    REPORTED, never silent: the line names the folders it removed.
+    """
+    if not os.path.isdir(PREVIEW_DIR):
+        return
+    try:
+        # The same shape a job id has; a local rule so this can run before the rest of the module
+        # names its own.
+        import re as _re
+
+        orphans = sorted(
+            name for name in os.listdir(PREVIEW_DIR)
+            if _re.fullmatch(r"[0-9a-fA-F-]{20,64}", name)
+        )
+    except OSError:
+        return
+    if not orphans:
+        return
+    for name in orphans:
+        _drop_preview_files(name)
+    print(f"🧹 [figma-ingest] removed {len(orphans)} preview folder(s) left by a previous process: " + ", ".join(orphans))
+
+
+# A PREVIEW DOES NOT SURVIVE A RESTART. Run once, when this module is loaded.
+_sweep_orphaned_previews()
 
 
 # ── THE PREVIEW'S OWN SEAM, AND WHY IT IS A STUB ───────────────────────────────
@@ -1108,17 +1312,22 @@ def _register_in_allowlist(tag: str, meta: dict[str, Any]) -> str:
     return "allowlisted"
 
 
-def _catalog_file_path() -> str | None:
-    """The catalogue file that actually exists.
+def _catalog_file_path(pipeline: str = INGEST_CATALOG_PIPELINE) -> str | None:
+    """The catalogue file that actually exists, for the named pipeline.
 
     There have been two copies of this file — one at the repository root and one the backend
     loads from the frontend tree (backend/deps.py). Registration writes to whichever is
     present, because writing to the one that is gone is how an approval fails after the
     component has already been written to disk.
+
+    THE PIPELINE IS NAMED (owner, 2026-10-25): the removal used to edit the ingest's own
+    catalogue whatever catalogue the designer had selected, so a removal from ecommerce or
+    carbon left the entry in place and only the shared registrations changed — the component
+    was deactivated, not removed.
     """
     for candidate in (
-        os.path.join(REPO_ROOT, "A2UI", "catalogs", INGEST_CATALOG_PIPELINE, "catalog.json"),
-        os.path.join(FRONTEND_DIR, "src", "components", "A2UI", "catalogs", INGEST_CATALOG_PIPELINE, "catalog.json"),
+        os.path.join(REPO_ROOT, "A2UI", "catalogs", pipeline, "catalog.json"),
+        os.path.join(FRONTEND_DIR, "src", "components", "A2UI", "catalogs", pipeline, "catalog.json"),
     ):
         if os.path.exists(candidate):
             return candidate
@@ -1362,7 +1571,49 @@ def _register_element_row(tag: str, meta: dict, actor: str) -> str:
                 ),
             )
             conn.commit()
-        return f"element row {row['id']} registered for {tag}"
+
+        # ── EVERY LAYER UNDER IT, RECORDED BY ITS NAME PATH ─────────────────────────────────────
+        # THE LEVEL EXISTS AND WAS NEVER WRITTEN. `get_or_create_design_container` documents
+        # `design_child` rows keyed `{master_id, element_key}`; approval wrote the master and
+        # stopped, so a child layer had no row to select, replace, or date. Each layer of the
+        # measured tree is written here under the master, with the LAYER'S NAME PATH as its
+        # `element_key` — the identity that survives a re-drawn Figma file, where node ids change.
+        #
+        # Idempotent by the same rule as the master: the partial unique index on (master, element
+        # key) plus ON CONFLICT DO NOTHING. Approving the same design twice finds the rows.
+        layers = [layer for layer in _layer_index(meta.get("targetNode") or {}) if layer.get("depth", 1) > 1]
+        recorded = 0
+        for layer in layers:
+            child = api.get_or_create_design_container(
+                user_id=user_id,
+                kind="design_child",
+                title=layer["name"],
+                description=(
+                    f"Layer {layer['path']} of {label} ({node_id}), approved from the Design room. "
+                    f"Type {layer.get('type')}."
+                ),
+                keys={"master_id": str(row["id"]), "element_key": layer["path"]},
+            )
+            if child:
+                recorded += 1
+        if layers:
+            with api.get_db() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """INSERT INTO design_element_activity (element_id, user_id, actor, action, detail)
+                       VALUES (%s, NULL, 'figma-ingest', 'layers-registered', %s::jsonb)""",
+                    (
+                        row["id"],
+                        json.dumps({
+                            "count": recorded,
+                            "layers": [layer["path"] for layer in layers],
+                            "master_id": str(row["id"]),
+                            "approved_by": actor or None,
+                        }),
+                    ),
+                )
+                conn.commit()
+        return f"element row {row['id']} registered for {tag}; {recorded} layer row(s)"
     except Exception as exc:  # noqa: BLE001 — the sentence is the report
         return f"could not create the element row: {type(exc).__name__}: {exc}"
 
@@ -1815,8 +2066,13 @@ def _resolve_actor(request: Request) -> str:
     return request.headers.get("X-User-ID", "")
 
 
-def _log_ingest(record: dict[str, Any]) -> None:
+def _log_ingest(record: dict[str, Any], to_db: bool = True) -> None:
     """Append one line per ingest to backend/logs/figma-ingest.jsonl.
+
+    `to_db=False` KEEPS A PRE-APPROVAL EVENT OUT OF THE DATABASE (owner, 2026-10-26: *"you
+    shouldn't even be adding it to the database until approval"*). An ingest and a discard are
+    ephemeral: the line is written to the log file, and the database is touched only by the
+    approval that publishes a component.
 
     Errors are not suppressed anywhere in this pipeline, and a failure that only existed
     in a response body would be unreadable a minute later. Every ingest leaves a record:
@@ -1832,8 +2088,9 @@ def _log_ingest(record: dict[str, Any]) -> None:
         print(f"⚠️ [figma-ingest] could not write the ingest log: {e}")
     # The SAME record, timestamp included, goes to the table: inserting without it made the
     # two copies disagree, and every backfill then inserted the row again — which is how the
-    # activity panel filled with identical approvals.
-    _activity_insert(stamped)
+    # activity panel filled with identical approvals. BEFORE APPROVAL THERE IS NO ROW.
+    if to_db:
+        _activity_insert(stamped)
 
 
 _ASSET_URI_RE = re.compile(r"data:image/(?:svg\+xml|png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]{40,}", re.IGNORECASE)
@@ -2487,8 +2744,13 @@ def _merge_mcp_rest(mcp_context: dict | None, rest_response: dict) -> dict[str, 
     return merged
 
 
-def _figma_color(fill: dict[str, Any]) -> str | None:
-    """A Figma paint as a CSS colour, when it is a plain solid one."""
+def _figma_color(fill: dict[str, Any], opacity: float | None = None) -> str | None:
+    """A Figma paint as a CSS colour, when it is a plain solid one.
+
+    `opacity` is the PAINT's own opacity, which multiplies the colour's alpha. It used to be
+    appended as prose — `#000000 (fill opacity 0.5)` — which is not a CSS colour at all, so
+    `background` carried a value the browser discarded and a translucent fill was not drawn.
+    """
     color = (fill or {}).get("color")
     if not color:
         return None
@@ -2496,9 +2758,12 @@ def _figma_color(fill: dict[str, Any]) -> str | None:
     g = round(float(color.get("g", 0)) * 255)
     b = round(float(color.get("b", 0)) * 255)
     a = color.get("a", 1)
-    if a is None or float(a) >= 0.999:
+    alpha = 1.0 if a is None else float(a)
+    if opacity is not None:
+        alpha *= float(opacity)
+    if alpha >= 0.999:
         return f"#{r:02x}{g:02x}{b:02x}"
-    return f"rgba({r}, {g}, {b}, {round(float(a), 3)})"
+    return f"rgba({r}, {g}, {b}, {round(alpha, 3)})"
 
 
 def _figma_gradient(fill: dict[str, Any]) -> str | None:
@@ -2537,25 +2802,22 @@ def _figma_gradient(fill: dict[str, Any]) -> str | None:
 
 
 def _figma_paint(fill: dict[str, Any]) -> str | None:
-    """Any Figma paint as CSS: a flat colour, a gradient, or a noted image."""
+    """Any Figma paint as CSS the browser can actually read: a flat colour, or a gradient.
+
+    NOTHING IS APPENDED AS PROSE. A suffix such as `(gradient, 2 stops)` or `(fill opacity 0.5)`
+    makes the whole declaration invalid, so the browser drops the paint and the layer draws with
+    no colour at all — measured 2026-10-26 on a two-stop gradient and on a solid at 50% opacity,
+    both of which reached the style as text the engine discarded. A paint that cannot be drawn is
+    named as a gap (`None`), never spelled as a colour-shaped sentence.
+    """
     if not isinstance(fill, dict) or not fill.get("visible", True):
         return None
     kind = (fill.get("type") or "").upper()
     if kind == "SOLID":
-        colour = _figma_color(fill)
-        if not colour:
-            return None
-        opacity = fill.get("opacity")
-        if opacity is not None and float(opacity) < 0.999:
-            return f"{colour} (fill opacity {round(float(opacity), 3)})"
-        return colour
+        return _figma_color(fill, fill.get("opacity"))
     if kind.startswith("GRADIENT"):
-        gradient = _figma_gradient(fill)
-        if gradient:
-            return f"{gradient} (gradient, {len(fill.get('gradientStops') or [])} stops)"
-        return None
-    if kind == "IMAGE":
-        return "image fill (its asset arrives over the MCP channel)"
+        return _figma_gradient(fill)
+    # An IMAGE fill's asset arrives over the other channel; there is no CSS colour to write for it.
     return None
 
 
@@ -2821,8 +3083,27 @@ def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dic
         "type": node.get("type"),
     }
     if box:
-        spec["size"] = [round(box.get("width", 0), 1), round(box.get("height", 0), 1)]
-        spec["position"] = [round(box.get("x", 0), 1), round(box.get("y", 0), 1)]
+        # THE DESIGN'S OWN NUMBERS, NOT A ROUNDED COPY OF THEM. These were rounded to one decimal,
+        # which is a silent edit of any value with more precision than that — and a check that
+        # compares values cannot pass a rounding it cannot see. `_px` keeps four decimals in the
+        # emitted CSS, so a fractional position reaches the drawing as the design states it.
+        spec["size"] = [float(box.get("width", 0)), float(box.get("height", 0))]
+        spec["position"] = [float(box.get("x", 0)), float(box.get("y", 0))]
+    # ── THE NODE'S OWN TRANSFORM, AS FIGMA STATES IT ────────────────────────────────────────────
+    # `relativeTransform` maps the node's local space to its parent's: the 2x2 part is the rotation
+    # and mirror, the translation is the node's origin inside the parent. THIS IS THE PICTURE; the
+    # `rotation` field is one derived number and cannot express a mirror. Measured 2026-10-26 on
+    # `figma-ingest-results-footer`: the transform is `[[-1,0,624],[0,1,13]]` — a horizontal flip —
+    # while `rotation` reads 3.14159, and drawing the field produced a 3.14° turn that the file never
+    # asked for. Carried as it stands, so the drawing can compose it instead of guessing from a name.
+    relative = node.get("relativeTransform")
+    if isinstance(relative, list) and len(relative) >= 2:
+        try:
+            a, b, tx = (float(v) for v in relative[0][:3])
+            c, d, ty = (float(v) for v in relative[1][:3])
+            spec["transform"] = [[a, b, tx], [c, d, ty]]
+        except (TypeError, ValueError, IndexError):
+            pass
 
     layout = {}
     for key in ("layoutMode", "itemSpacing", "paddingLeft", "paddingRight", "paddingTop", "paddingBottom",
@@ -2838,12 +3119,18 @@ def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dic
     stroke = next((_figma_color(s) for s in node.get("strokes", []) if s.get("visible", True) and s.get("type") == "SOLID"), None)
     if stroke:
         spec["stroke"] = {"color": stroke, "weight": node.get("strokeWeight")}
-    # A VECTOR'S SHAPE IS ITS PATH, and nothing else in this spec is the shape. It comes from
+    # A DRAWN SHAPE'S OUTLINE IS ITS PATH, and nothing else in this spec is the shape. It comes from
     # Figma's own `fillGeometry`/`strokeGeometry`, asked for with `geometry=paths` (see
-    # _fetch_figma_nodes). Without it the model has a box and a fill and must invent the rest —
-    # which is how an icon ends up drawn as a picture of the node that CONTAINS it instead of the
-    # artwork inside it. With it, the icon is exact and nothing is interpreted.
-    if node.get("type") == "VECTOR":
+    # _fetch_figma_nodes). Without it the model has a box and a fill and must invent the rest — which
+    # is how an icon ends up drawn as a picture of the node that CONTAINS it instead of the artwork
+    # inside it. With it, the shape is exact and nothing is interpreted.
+    #
+    # EVERY TYPE THAT DRAWS A PATH, NOT JUST `VECTOR` (measured 2026-10-26, and named in the
+    # 2026-10-05 findings as the open geometry gap): Figma sends path data on a BOOLEAN_OPERATION, a
+    # STAR, an ELLIPSE and a POLYGON too. Reading it only for `VECTOR` dropped the outline of every
+    # one of them — a subtract shape arrived as a plain box with a fill, and the fact was reported as
+    # "never reached the spec". The type decides nothing about how a shape is carried.
+    if str(node.get("type") or "").upper() in SHAPE_TYPES:
         geometry = (node.get("fillGeometry") or node.get("strokeGeometry") or [])
         paths = [g.get("path") for g in geometry if g.get("path")]
         if paths:
@@ -3066,12 +3353,286 @@ FIGMA_LAYERS_DIR = os.path.join(FRONTEND_DIR, "public", "catalog-figma")
 FIGMA_LAYERS_DEPTH = 4
 
 
+def _display_declarations(declarations: list[str]) -> list[str]:
+    """The declarations as a person writes CSS: shorthand where the four sides agree.
+
+    THE LIST IS READ BESIDE THE FIGMA PANEL (owner, 2026-10-26): *"I'm expecting: display: flex;
+    width: 662px; padding: 13px 20px; … border-radius: 0 0 10px 0; background: #B5CCCE;"*. Figma
+    shows `13px 38px` and `0 0 10px 0`; the component carries four longhands and `0px 0px 10px 0px`.
+    The values are identical — this is the same declaration written the way the design panel writes
+    it, so the two can be put side by side and read line for line. Nothing is rounded or dropped.
+    """
+    padding: dict[str, str] = {}
+    for declaration in declarations:
+        prop, _, value = declaration.partition(":")
+        prop = prop.strip()
+        if prop.startswith("padding-"):
+            padding[prop[len("padding-"):]] = value.strip()
+
+    out: list[str] = []
+    wrote_padding = False
+    for declaration in declarations:
+        prop, _, value = declaration.partition(":")
+        prop, value = prop.strip(), value.strip()
+        if prop.startswith("padding-"):
+            if wrote_padding:
+                continue
+            wrote_padding = True
+            top, right = padding.get("top"), padding.get("right")
+            bottom, left = padding.get("bottom"), padding.get("left")
+            if top and right and bottom and left:
+                if top == bottom and right == left:
+                    out.append(f"padding: {top}" if top == right else f"padding: {top} {right}")
+                else:
+                    out.append(f"padding: {top} {right} {bottom} {left}")
+            continue
+        if prop == "border-radius":
+            parts = ["0" if part in ("0px", "0.0px") else part for part in value.split()]
+            if len(parts) == 4 and parts[0] == parts[2] and parts[1] == parts[3]:
+                parts = [parts[0]] if parts[0] == parts[1] else [parts[0], parts[1]]
+            out.append(f"border-radius: {' '.join(parts)}")
+            continue
+        out.append(f"{prop}: {value}")
+    return out
+
+
+def _specs_from_draft(draft: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """THE DRAWN DECLARATIONS, LAYER BY LAYER, AS A LIST A PERSON READS.
+
+    THE OWNER'S REQUEST (2026-10-26): *"You need to show the specs as a list of specs like this
+    `display: flex; width: 662px; padding: 13px 38px; justify-content: flex-end; align-items:
+    center; gap: 10px;`"*
+
+    Read from the DRAFT ITSELF, not from a second derivation: the stylesheet the preview loads is
+    the only place that knows what was actually emitted for this layer, including the positions and
+    transforms that only exist per layer. Nothing is reformatted, reordered or shorthand-ed — the
+    list is what the component carries, line for line, so a reader can compare it with Figma without
+    trusting a summary.
+    """
+    from design_renderer import _class_name
+    from figma_fidelity import _rules
+
+    rules = _rules(draft)
+    host = rules.get(":host") or []
+    used: dict[str, int] = {}
+    out: list[dict[str, Any]] = []
+
+    def walk(node: dict[str, Any], path: str = "") -> None:
+        name = str(node.get("name") or "").strip() or "unnamed"
+        here = f"{path} / {name}" if path else name
+        base = _class_name(name, "layer")
+        count = used.get(base, 0) + 1
+        used[base] = count
+        cls = base if count == 1 else f"{base}-{count}"
+        declarations = host if not path else rules.get(f".{cls}", [])
+        out.append({
+            "path": here,
+            "name": name,
+            "type": node.get("type"),
+            "selector": ":host" if not path else f".{cls}",
+            "declarations": declarations,
+            # THE SAME VALUES, WRITTEN THE WAY CSS IS READ: `padding: 13px 38px`,
+            # `border-radius: 0 0 10px 0`. The raw list travels beside it as the evidence.
+            "display": _display_declarations(declarations),
+        })
+        for child in node.get("children") or []:
+            walk(child, here)
+
+    walk(spec)
+    return out
+
+
+# ── WHAT COUNTS AS A PATTERN ─────────────────────────────────────────────────────────────────
+# The owner's rule (2026-10-26): a design system is a PATTERN LIBRARY. A button is a pattern; the
+# name is its identity. A child whose layer name matches an existing pattern IS that pattern and
+# replaces it everywhere; a child with a name of its own becomes a new pattern, even when it looks
+# identical to another one. Fifty uniquely named buttons are fifty patterns, and that is the
+# designer's choice to make — the program follows the name, it does not merge lookalikes.
+#
+# A pattern is a BOX OR AN ARTWORK: a frame, a component, an instance, or a vector (an icon).
+# A text layer is content, and a group is a grouping — neither is a reusable pattern, and both stay
+# layers inside their parent. Their annotations still travel with the parent's record.
+_PATTERN_TYPES = {"FRAME", "COMPONENT", "INSTANCE", "VECTOR"}
+
+
+def _node_by_id(root: dict[str, Any], node_id: Any) -> dict[str, Any] | None:
+    """The layer with this id, inside the measured tree — the occurrence a pattern came from."""
+    if not node_id:
+        return None
+    if str(root.get("id")) == str(node_id):
+        return root
+    for child in root.get("children") or []:
+        found = _node_by_id(child, node_id)
+        if found:
+            return found
+    return None
+
+
+def _component_set(target_node: dict[str, Any]) -> list[dict[str, Any]]:
+    """EVERY CHILD THAT STANDS AS A PATTERN — named, with the occurrence it was measured in.
+
+    THE NAME DECIDES IDENTITY. `existing` is the catalogue component with this exact layer name, if
+    one exists: when it is set, this child IS that component and the approval replaces it. When it
+    is null, the child is a new pattern and gets the tag derived from its own node.
+
+    THE OCCURRENCE IS KEPT BESIDE IT: the path of the parent it was found under, and its own
+    annotations from that place. An annotation describes how a child behaves inside its parent; the
+    same button in another parent can behave differently, and its words are recorded there.
+    """
+    out: list[dict[str, Any]] = []
+    # THE DESIGN SYSTEM'S OWN COMPONENTS, READ ONCE. An INSTANCE of one of these is the design
+    # reusing its design system — `_name_instances` states it and nothing is written for it. It is
+    # not a pattern, and listing it as one (with a tag nothing can write) put four phantom entries
+    # in the approval list for one true fact, measured 2026-10-26 on `System_Role`.
+    system_index = _name_index()
+    shipped_ids = {
+        str(entry.get("figmaNodeId") or "")
+        for entry in system_index.values()
+        if entry.get("figmaNodeId")
+    }
+
+    def is_shipped_instance(node: dict[str, Any]) -> bool:
+        """AN INSTANCE WHOSE COMPONENT IS ONE THIS SYSTEM SHIPS — the design using itself.
+
+        The test is the component reference, not the occurrence: an instance's own node id is the
+        place it is drawn, while `componentId` names the thing it is. A shipped component drawn here
+        is `_name_instances` — stated, and nothing written — never a pattern.
+        """
+        component = str(node.get("componentId") or "")
+        if not component:
+            return False
+        return any(node_ids_match(shipped, component) for shipped in shipped_ids)
+
+    def annotations_of(node: dict[str, Any]) -> list[dict[str, Any]]:
+        found: list[dict[str, Any]] = []
+        for ann in node.get("annotations") or []:
+            if not isinstance(ann, dict):
+                continue
+            label = ann.get("labelMarkdown") or ann.get("label") or ""
+            found.append({
+                "note": str(label).strip() or None,
+                "properties": [
+                    str(prop.get("type"))
+                    for prop in (ann.get("properties") or [])
+                    if isinstance(prop, dict) and prop.get("type")
+                ],
+            })
+        return found
+
+    def walk(node: dict[str, Any], path: str = "") -> None:
+        name = str(node.get("name") or "").strip() or "unnamed"
+        here = f"{path} / {name}" if path else name
+        kind = str(node.get("type") or "").upper()
+        if path and kind in _PATTERN_TYPES:
+            if kind == "INSTANCE" and is_shipped_instance(node):
+                # Its children belong to the component the system ships, not to this design.
+                return
+            existing = _existing_by_layer_name(name)
+            out.append({
+                # THE TAG: the existing pattern's tag when the name matches, otherwise this node's.
+                "tag": (existing or {}).get("tag") or f"-".join(["f", str(node.get("id") or "").replace(":", "-")]),
+                "name": name,
+                "path": here,
+                "nodeId": node.get("id"),
+                # THE OCCURRENCE IS THE NODE ITSELF — what the drafting loop resolves back to the
+                # layer, and what an annotation on this use of the pattern belongs to.
+                "occurrenceId": node.get("id"),
+                "kind": kind,
+                "parent": path or None,
+                # A CHILD THAT IS AN INSTANCE STATES ITS COMPONENT; a frame is its own pattern.
+                "componentId": node.get("componentId"),
+                "existing": existing,
+                "replaces": bool(existing),
+                "annotations": annotations_of(node),
+            })
+        # THE INTERNALS OF AN INSTANCE ARE THAT COMPONENT'S OWN DRAWING, NOT THIS DESIGN'S PATTERNS.
+        # Walking into one turned a single reuse of the system's chevron into two phantom patterns
+        # with tags nothing can write (measured 2026-10-26 on `System_Role`: `Arrow_drop_down` and
+        # `Vector 10`). The instance is the fact; its insides were measured as part of it.
+        if kind == "INSTANCE":
+            return
+        for child in node.get("children") or []:
+            walk(child, here)
+
+    walk(target_node)
+    return out
+
+
+def _layer_index(node: dict[str, Any], path: str = "", depth: int = 1) -> list[dict[str, Any]]:
+    """EVERY LAYER, WITH ITS NAME PATH — the flat list a component list is drawn from.
+
+    WHY THIS EXISTS (owner, 2026-10-26): *"I'm not seeing children… I should see the full component
+    and then I should be able to click on the blue arrow in the list and it will expand and show the
+    children."* The result used to carry the measured tree ONE level deep, so the children of the
+    submitted component were not in the answer at all — there was nothing to expand.
+
+    One entry per layer, in design order, each carrying the same name path the fact table uses. The
+    path is the identity: node ids change when a design is re-drawn, the names do not. Nothing here
+    interprets a layer — the name, the type, the node it came from, its measured box, and how many
+    children it has.
+    """
+    name = str(node.get("name") or "").strip() or "unnamed"
+    layer_path = f"{path} / {name}" if path else name
+    box = node.get("absoluteBoundingBox") or {}
+    kids = node.get("children") or []
+    out = [{
+        "path": layer_path,
+        "name": name,
+        "type": node.get("type"),
+        "nodeId": node.get("id"),
+        "depth": depth,
+        "children": len(kids),
+        "size": [box.get("width"), box.get("height")],
+        "parent": path or None,
+    }]
+    for child in kids:
+        out.extend(_layer_index(child, layer_path, depth + 1))
+    return out
+
+
+def _existing_by_layer_name(name: str) -> dict[str, Any] | None:
+    """The approved component carrying this exact layer name — THE NAME, AND NOTHING ELSE.
+
+    THE CATALOGUE IS BLIND TO THIS PIPELINE'S READING, and this function is where that is kept
+    honest. The owner's ruling (2026-10-26): *"It's not a comparison — you're not comparing what is
+    ingested to what's there. The only thing you're looking at is the name of the layer. It's blind
+    to the specs, because that means the AI is interpreting and we don't allow that."*
+
+    So this reads exactly one field from the approved record — the root layer's name — and answers
+    three facts about the match: the tag it was approved under, the node it came from, and when.
+    It never reads a measured value from the record, and nothing downstream may compare this
+    design's values with the approved component's. Identity by name is the whole of the relationship.
+
+    Match is STRICT and exact: no case folding, no trimming beyond the string itself, no nearest
+    name. A layer called `controlBar` and one called `ControlBar` are two layers.
+    """
+    if not name:
+        return None
+    path = os.path.join(FIGMA_LAYERS_DIR, f"{INGEST_CATALOG_PIPELINE}.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            document = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    for record in (document.get("nodes") or {}).values():
+        tree = record.get("tree") or {}
+        if tree.get("name") == name:
+            return {
+                "tag": record.get("tag"),
+                "nodeId": record.get("nodeId"),
+                "approvedAt": record.get("approvedAt"),
+            }
+    return None
+
+
 def _write_figma_layers(
     pipeline: str,
     tag: str,
     node_id: str,
     spec: dict[str, Any],
     assets: list[dict[str, Any]] | None = None,
+    facts: list[dict[str, Any]] | None = None,
+    annotations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Persist one node's measured layer tree for the screen.
 
@@ -3105,6 +3666,12 @@ def _write_figma_layers(
         # tree is what was measured about the layers; this is what the design came with, and a
         # reader of the record needs both — one to see the structure, one to see the picture.
         "assets": assets or [],
+        # ── THE SAME RECORD THE INGEST SHOWED, KEPT WITH THE COMPONENT ──────────────────────────
+        # Selecting this component from the catalogue must show exactly what the ingest showed:
+        # every fact read, and every annotation in the designer's words. They are stored at approval
+        # and read back when the row is opened — the panel has ONE display, used in both places.
+        "facts": facts or [],
+        "annotations": annotations or [],
     }
     document["pipeline"] = pipeline
     document["generatedAt"] = datetime.utcnow().isoformat() + "Z"
@@ -3607,8 +4174,11 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
     # declared a third of the width it should be and the glyph was drawn stretched and clipped.
     #
     # A regex cannot read a path. A mathematical inverse of a known transform can, and does.
-    width = round(float(measured.get("width") or 0), 2)
-    height = round(float(measured.get("height") or 0), 2)
+    # THE DESIGN'S OWN PRECISION, KEPT TO FOUR DECIMALS. Two decimals is a silent edit of any
+    # box that states more — a 17.2443-wide glyph was drawn 17.24 — and a check that compares
+    # values cannot pass a rounding it cannot see. The emitted CSS keeps four decimals too.
+    width = round(float(measured.get("width") or 0), 4)
+    height = round(float(measured.get("height") or 0), 4)
     box = None
     if transform:
         inverse = _invert_matrix(transform)
@@ -3758,8 +4328,8 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
     drawn = (origin[0], origin[1], width, height)
 
     parts = [
-        f'<svg width="{width}" height="{height}" viewBox="{round(drawn[0], 2)} {round(drawn[1], 2)} '
-        f'{round(drawn[2], 2)} {round(drawn[3], 2)}" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        f'<svg width="{width}" height="{height}" viewBox="{round(drawn[0], 4)} {round(drawn[1], 4)} '
+        f'{round(drawn[2], 4)} {round(drawn[3], 4)}" fill="none" xmlns="http://www.w3.org/2000/svg">'
     ]
     for out in paths_out:
         attrs = [f'd="{out}"']
@@ -3769,7 +4339,7 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
             attrs.append('fill="none"')
         if stroke:
             attrs.append(f'stroke="{stroke}"')
-            attrs.append(f'stroke-width="{round(float(node.get("strokeWeight") or 1), 2)}"')
+            attrs.append(f'stroke-width="{round(float(node.get("strokeWeight") or 1), 4)}"')
         if winding and winding != "NONZERO":
             attrs.append(f'fill-rule="{winding.lower()}"')
         parts.append(f'<path {" ".join(attrs)}/>')
@@ -4008,6 +4578,7 @@ def _name_instances(spec: dict[str, Any]) -> list[dict[str, Any]]:
     the location differs" is the sentence that stops a second component being made for it.
     """
     index = _name_index()
+    shipped = _catalogue_by_reference()
     seen: dict[str, dict[str, Any]] = {}
     for node in _walk_spec(spec):
         if node is spec:
@@ -4016,12 +4587,20 @@ def _name_instances(spec: dict[str, Any]) -> list[dict[str, Any]]:
         node_id = node.get("id") or ""
         if not isinstance(name, str) or not name:
             continue
-        entry = index.get(name)
-        if not entry:
-            continue
+        # AN INSTANCE IS KNOWN BY THE COMPONENT IT NAMES, not by where it sits: its own id is the
+        # occurrence, and `componentId` is the thing. Without this test a design reusing the system's
+        # chevron was reported as a new pattern instead of as the reuse it is (measured 2026-10-26).
+        component = node_code_identity(node.get("componentId"))
+        entry = shipped.get(component) if component else None
+        if entry is None:
+            named = index.get(name)
+            if not named:
+                continue
+            existing_node = named.get("figmaNodeId") or ""
+            if not node_ids_match(existing_node, node_id):
+                continue
+            entry = named
         existing_node = entry.get("figmaNodeId") or ""
-        if not node_ids_match(existing_node, node_id):
-            continue
         if name in seen:
             continue
         seen[name] = {
@@ -4301,6 +4880,12 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     """
     # Initialize job status
     job = ingest_jobs.get(job_id)
+    _step(job_id, f"Reading node {node_id} from Figma…")
+    # THE PREVIOUS MEASUREMENT IS READ FIRST, BEFORE ANYTHING CAN EVICT IT. Remembering this job's
+    # preview drops the previous preview, and dropping it forgets its measurement — which happened
+    # before the comparison and made every second ingest say "this is the first" (measured
+    # 2026-10-26). Read here, the two sides of the comparison both exist when it runs.
+    previous_facts = await asyncio.to_thread(figma_facts.latest_for, node_id, None)
     if job:
         job.mcp_status = "pending"
         job.rest_status = "pending"
@@ -4313,18 +4898,27 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     except Exception as e:
         if job:
             job.rest_status = f"error: {e}"
+        _step(job_id, f"Figma did not answer: {e}")
         raise
+    _step(job_id, "Figma answered. Reading the layer tree.")
     
-    # ── Step 2: Fetch from MCP (optional, desktop-only) ──
+    # ── Step 2: Fetch from MCP (required — enriches annotations, descriptions, reference code) ──
+    # MCP failure is REPORTED in the output, not suppressed. The designer sees exactly which
+    # channels were read. Continuing without MCP is allowed only when Figma Desktop is not open
+    # (the MCP server is a local desktop process); a network or protocol failure is reported loudly.
     mcp_context = None
+    mcp_failure: str | None = None
     try:
         mcp_context = await asyncio.to_thread(_fetch_figma_mcp, file_key, node_id)
         if job:
-            job.mcp_status = "success" if mcp_context else "unavailable"
+            job.mcp_status = "success" if mcp_context else "unavailable — Figma Desktop not open"
+        if not mcp_context:
+            mcp_failure = "MCP unavailable — Figma Desktop is not open or the file is not loaded there. Annotations and reference code were not read. The preview is built from REST geometry only."
     except Exception as e:
         if job:
-            job.mcp_status = f"unavailable: {e}"
-        mcp_context = None  # Continue with REST only
+            job.mcp_status = f"failed: {e}"
+        mcp_failure = f"MCP failed: {e}. Annotations and reference code were not read. The preview is built from REST geometry only."
+        mcp_context = None
     
     # ── Step 3: Merge MCP + REST data ──
     merged = _merge_mcp_rest(mcp_context, rest_response)
@@ -4608,6 +5202,38 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # them while the designer is still looking at the result. The job's own facts are
     # kept too: commit registers the component by them, and never by anything the
     # request body claims.
+    # ── THE CHILDREN THAT ARE PATTERNS, EACH DRAFTED AND PROVED ─────────────────────────────────
+    # Owner's rule: the LAYER NAME is the identity. A child whose name matches an existing component
+    # IS that component, so it carries that component's tag and approval replaces it; a child with a
+    # name of its own is a new pattern and carries its own tag. Each is rendered from ITS OWN
+    # measurement and put through the same proof, so an approval never writes a pattern nobody
+    # measured. The occurrence — the parent path and the layer's own annotations — travels with it.
+    patterns_meta: list[dict[str, Any]] = []
+    for entry in _component_set(target_node):
+        tag = str(entry.get("tag") or "")
+        node = _node_by_id(target_node, entry.get("occurrenceId"))
+        if not node or not _SAFE_TAG_RE.match(tag):
+            patterns_meta.append({**entry, "drafted": False, "reason": "the layer or its tag is not usable"})
+            continue
+        if tag in drafts:
+            patterns_meta.append({**entry, "drafted": True, "reason": "", "alreadyDrafted": True})
+            continue
+        pattern_report = await asyncio.to_thread(fidelity_report, node, tag)
+        pattern_gate = await asyncio.to_thread(fidelity_gate, pattern_report)
+        code = await asyncio.to_thread(render_spec, _figma_spec_for_model(node), tag, {})
+        compiled = bool(code) and (await asyncio.to_thread(_validate_generated_module, code)).get("ok", False)
+        if compiled:
+            drafts[tag] = code
+        patterns_meta.append({
+            **entry,
+            "drafted": compiled,
+            "exactness": pattern_gate.get("exactness") or {},
+            "blocking": (pattern_gate.get("blocking") or [])[:10],
+            "facts": pattern_report.get("rows") or [],
+            "annotations": entry.get("annotations") or [],
+            "reason": "" if compiled else "the pattern could not be rendered or did not compile",
+        })
+
     validation = {tag: await asyncio.to_thread(_validate_generated_module, code) for tag, code in drafts.items()}
     _remember_drafts(
         job_id,
@@ -4638,6 +5264,9 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             # the vectors are used for one model call and then lost, which is how a component
             # came to reference Figma's server for a chevron instead of holding the file.
             "assets": ((mcp_context or {}).get("parsed") or {}).get("assets") or [],
+            # The patterns this design stands on, with their occurrence, their facts and whether
+            # each one is draftable. The commit registers the ones that are exact.
+            "patterns": patterns_meta,
         },
     )
     
@@ -4652,28 +5281,56 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # ── THE FIDELITY GATE, AND THE ONE GAP THAT GOES IN THE ANSWER ITSELF ───────────────────────
     # The proof runs on every ingest and there are exactly two outcomes. UNEXAMINED VARIANCE — a
     # Figma key no examination covers, a stated fact that never reached the spec, a declaration with
-    # no measurement behind it — is a REFUSAL, raised here with the facts named, because a design
-    # whose measurement contains something nobody has looked at must not be written. A defect whose
-    # measurement IS recorded (the ellipsis this engine cannot draw) is REPORTED, per layer, counted
-    # at the root of this answer, and does not stop the work — the owner's ruling is that the Figma
-    # file is the authority and the burden is the renderer's, not the design's, and a gate that
-    # refuses every design protected by it is a wall in front of the door.
-    #
-    # IT RUNS BEFORE THE RECORD IS WRITTEN. The record carries the same proof, and a record written
-    # before the refusal would describe work that did not happen.
-    fidelity = await asyncio.to_thread(fidelity_report, target_node, target_tag)
+    # REPORTED, NOT BLOCKED (owner ruling). The fidelity gate names every fact the design stated
+    # that the pipeline cannot account for — unexamined keys, facts that never reached the spec,
+    # declarations that drew nothing. ALL of these travel in the response as findings the designer
+    # reads in the middle column output. NOTHING stops the ingest: the design reaches the preview
+    # and the designer sees exactly what was and was not matched. A gate that refuses ingestion
+    # because a Figma key is new is suppression wearing zero-trust clothes — the correct behaviour
+    # is to report the gap loudly and let the designer decide.
+    _step(job_id, "Checking every stated fact against the component, layer by layer…")
+    fidelity = await asyncio.to_thread(
+        fidelity_report, target_node, target_tag,
+        on_layer=lambda path, count: _step(job_id, f"Checked layer: {path} ({count} fact(s))"),
+    )
+    _step(
+        job_id,
+        f"Checked {len(fidelity['rows'])} rows: {fidelity['exactness']['exact']} exact, "
+        f"{fidelity['exactness']['compared'] - fidelity['exactness']['exact']} not exact, "
+        f"{fidelity['counts'].get('accepted', 0)} ask for no drawing.",
+    )
     gate = await asyncio.to_thread(fidelity_gate, fidelity)
-    if gate["blocks"]:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Nothing was written: this design states something the pipeline cannot account for, "
-                "and a fact nobody has examined must not pass. "
-                + " · ".join(gate["blocking"])
-                + " — nothing was interpreted and nothing was guessed: the measurement is complete, "
-                "and what is missing is that someone must look at it."
-            ),
-        )
+
+    # ── THE FACTS OF THIS INGEST, KEPT FOR THE NEXT ONE ────────────────────────────────────────
+    # Every layer, every fact, both values. Without this the previous measurement is gone the
+    # moment the next ingest replaces it, and "what did I change?" has no answer the application
+    # can give — only a screenshot and a memory. The fingerprint names the DESIGN, so two runs of
+    # one file match and a one-pixel move does not.
+    facts_record = figma_facts.build(
+        job_id, fidelity,
+        file_key=file_key, node_id=node_id, tag=target_tag,
+        at=datetime.utcnow().isoformat() + "Z",
+    )
+    # THE PREVIOUS MEASUREMENT IS READ FIRST: it lives in memory, and writing this one replaces the
+    # entry that names it. The comparison below therefore still has both sides.
+    _step(
+        job_id,
+        "Comparing with the previous ingest of this node (job " + previous_facts.get("jobId") + ")."
+        if previous_facts else
+        # NOT "THE FIRST INGEST" — that is a claim about the node's history, which this process
+        # cannot know. What is true: nothing is held any more, so there is nothing to compare to.
+        "No earlier measurement is held for this node — nothing to compare against.",
+    )
+    changes = figma_facts.compare(previous_facts, facts_record) if previous_facts else None
+    facts_path = await asyncio.to_thread(figma_facts.write, facts_record)
+
+
+    # ── DOES THIS LAYER NAME ALREADY EXIST IN THE CATALOGUE? ──────────────────────────────────
+    # A NAME LOOKUP, NOT A COMPARISON. The approved record is read for one field — the layer's
+    # name — so the designer learns that this design already has a component and which tag it wears.
+    # Its measured values are never read here: comparing them would be the AI interpreting one
+    # design against another, which this system does not do.
+    existing_name = await asyncio.to_thread(_existing_by_layer_name, target_node.get("name") or "")
 
     _log_ingest({
         "kind": "ingested",
@@ -4706,10 +5363,21 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         # sentence, the one gap a designer has to know about WITHOUT opening anything. A gap that
         # lives only in a ledger file is a gap nobody reads.
         "fidelity": {
+            "verdict": gate["verdict"],
+            "unreadCount": gate["unreadCount"],
+            # WHETHER THIS LAYER NAME IS ALREADY IN THE CATALOGUE, by exact name and nothing more.
+            "existingName": existing_name,
             "counts": gate["counts"],
             "missingEllipses": gate["missing_ellipses"],
             "sentence": gate["sentence"],
             "reported": gate["reported"],
+            # HOW EXACT THIS INGEST WAS, and a fingerprint of the values it measured — so the
+            # activity history can show which design each run measured without a second table.
+            "exactness": gate["exactness"],
+            "fingerprint": facts_record["fingerprint"],
+            # How many facts the design changed since the previous ingest of this node — the
+            # number a designer reads after moving one node by one pixel. None when first.
+            "changedSinceLast": None if changes is None else len(changes["changed"]),
             "examined": fidelity["key_coverage"]["examined"],
             "omissions": fidelity["key_coverage"]["omissions"],
             "interactions": fidelity["interactions"],
@@ -4723,7 +5391,7 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         "channels": _channel_report(merged, mcp_context, component_descriptions),
         "drafts": {tag: {"chars": len(code), "compiles": validation.get(tag, {}).get("ok")} for tag, code in drafts.items()},
         "rawReply": assembled.get("rawReply", ""),
-    })
+    }, to_db=False)
 
     catalog_warning = "" if _catalog_component_names() else (
         "The A2UI catalogue could not be read, so this component was built without the design system in "
@@ -4750,20 +5418,80 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         "alreadyInCatalogue": already_in_catalogue,
         # ── THE PROOF, AT THE ROOT OF THE DESIGNER'S OWN ANSWER ──────────────────────────────────
         # Every fact the design stated and what became of it: drawn, measured-not-drawn with a
-        # reason, or a defect. `missingEllipses` and its sentence are the one gap a designer has to
-        # know about WITHOUT opening anything — the whole lines that fit are drawn, and the ellipsis
-        # this engine cannot draw is counted and named per layer. The gate has already refused this
-        # ingest if any fact was unexamined, so what is here is a known, recorded gap and not a
-        # surprise. A gap that lives only in a ledger file is a gap nobody reads.
+        # reason, or a defect. This is a PREVIEW — nothing is written, nothing enters the design
+        # system. The point of a preview is to show the designer exactly what matched and what did
+        # not. `blocking` carries every fact the pipeline could not account for — the designer reads
+        # these in the output panel and decides whether to approve or discard.
         "fidelity": {
+            # ── THE FIRST THING THE DESIGNER READS: WHAT COULD NOT BE READ OR DRAWN ────────────
+            # Plain sentences, each naming the layer, the fact and the value found. This leads the
+            # answer; the count below it is evidence, not a verdict on its own.
+            "verdict": gate["verdict"],
+            "unread": gate["unread"],
+            "unreadCount": gate["unreadCount"],
+            # CONTRADICTIONS IN THE FILE ITSELF — the designer's to fix, with the numbers and the
+            # change that would resolve each. Separate from the program's own gaps on purpose.
+            "design": gate["design"],
+            # THE FACES THE DESIGN NAMED THAT THE SYSTEM DOES NOT SHIP, and the face it will draw.
+            # A warning, not a gap: the system's one face replaces it, and the designer is told.
+            "fonts": gate["fonts"],
+            # EVERY ANNOTATION THE FILE CARRIES, in the designer's own words, with the layer.
+            "annotations": gate["annotations"],
+            # ── EVERY FACT READ, AS A LIST ──────────────────────────────────────────────────────
+            # NOT A COUNT AND NOT A SUMMARY (owner, 2026-10-26: *"See a list of every single thing
+            # the application read, including annotations… Why are you summarizing the structure of
+            # a file instead of providing its output"*). One row per layer per fact: what Figma
+            # stated, what the component carries, and which of the two verdicts applies. The facts
+            # that ask for no drawing are in the list too, with their reason — they are read facts,
+            # not absent ones.
+            "readings": facts_record["rows"],
             "counts": gate["counts"],
             "missingEllipses": gate["missing_ellipses"],
             "sentence": gate["sentence"],
             "reported": gate["reported"],
+            "blocking": gate["blocking"],
+            # THE NUMBER THE DESIGNER READS FIRST: how many facts were compared value for value,
+            # and how many the drawing carries exactly.
+            "exactness": gate["exactness"],
+            # EVERY FACT WHOSE TWO VALUES DISAGREE, with both values and the difference.
+            "mismatches": gate["mismatches"],
+            "fingerprint": facts_record["fingerprint"],
+            # WHERE THE FULL TABLE IS: one row per layer per fact, both values, every time.
+            "factsJobId": job_id,
             "examined": fidelity["key_coverage"]["examined"],
             "omissions": fidelity["key_coverage"]["omissions"],
             "interactions": fidelity["interactions"],
         },
+        # The kept measurement, addressed by job, so a second ingest can be compared against it.
+        "facts": {
+            "jobId": job_id,
+            "fingerprint": facts_record["fingerprint"],
+            "exactness": facts_record["exactness"],
+            "layers": facts_record["layers"],
+            "rows": len(facts_record["rows"]),
+            "file": os.path.relpath(facts_path, REPO_ROOT),
+        },
+        # THE LAYER'S NAME, AND WHETHER THE CATALOGUE ALREADY HAS IT. Three facts only — the tag,
+        # the node it came from, when it was approved — and no measured value from the approved
+        # component is read or compared. A strict, exact name match.
+        "existingName": existing_name,
+        # ── AND WHAT CHANGED SINCE THE LAST TIME THIS NODE WAS MEASURED ─────────────────────────
+        # The one-pixel move, named. `None` when this is the first ingest of the node. `changed`
+        # carries both values per fact, so the answer says what moved rather than that something
+        # did — and `unchanged` says how much stood still.
+        "changesSinceLast": (            None if changes is None else {
+                "jobId": changes["before"]["jobId"],
+                "fingerprintBefore": changes["before"]["fingerprint"],
+                "designChanged": changes["designChanged"],
+                "summary": changes["summary"],
+                "changed": changes["changed"],
+                "added": changes["added"][:40],
+                "removed": changes["removed"][:40],
+                "addedCount": len(changes["added"]),
+                "removedCount": len(changes["removed"]),
+                "unchanged": changes["unchanged"],
+            }
+        ),
         # What the model was actually given. The preview exists to show that both
         # channels were read — REST always, MCP when Figma Desktop has the file open.
         "channels": _channel_report(merged, mcp_context, component_descriptions),
@@ -4790,6 +5518,9 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             "note": assembly_note or catalog_warning,
             "compliance": compliance,
             "alreadyInCatalogue": already_in_catalogue,
+            # MCP failure reported here so the designer sees it in the output panel.
+            # None means MCP succeeded or was not attempted yet.
+            "mcpFailure": mcp_failure,
         },
         # What the component was read from, so the designer reviewing it can see the
         # evidence rather than take the generated code on faith.
@@ -4801,10 +5532,48 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             "target_node_type": target_node.get("type", ""),
             "components_found": component_tags,
             "generated_files": [f"{t}.ts" for t in drafts],
+            # EVERY LAYER, WITH ITS NAME PATH, in design order — the list a component tree is drawn
+            # from. The flat list is the same walk the fact table uses, so a row in the list and a
+            # row in the facts cannot name the same layer differently.
+            "layers": _layer_index(target_node),
+            # ── EVERY CHILD THAT IS A COMPONENT, WITH ITS OCCURRENCE CONTEXT ────────────────────
+            # The layer's own annotations and the parent it was measured under. A child that is a
+            # plain frame stays a layer; its annotations still travel in `fidelity.annotations`.
+            "componentSet": [
+                {
+                    **entry,
+                    "drafted": (entry["tag"] in drafts),
+                    # THE DRAFTING PASS'S OWN REASON for a pattern that was not built. Without it the
+                    # panel had to choose words for a cause nobody measured, and "the pattern could
+                    # not be built" is an invented explanation beside a real one the server holds.
+                    "reason": next(
+                        (m.get("reason") or "" for m in patterns_meta if m.get("tag") == entry["tag"]),
+                        "",
+                    ),
+                }
+                for entry in _component_set(target_node)
+            ],
+            # THE DRAWN DECLARATIONS PER LAYER, in the order the component carries them — the
+            # list the panel shows beside the drawing.
+            "specs": _specs_from_draft(drafts.get(target_tag, ""), _figma_spec_for_model(target_node)),
+            # ── EVERYTHING ELSE THAT WENT INTO THE DRAWING ──────────────────────────────────────
+            # THE OWNER'S INSTRUCTION (2026-10-26): *"don't try to prune. Give it all and then we'll
+            # prune it together… I want you to be honest about what you're saying, what you're
+            # reading and what's being used to build the component in the preview."*
+            #
+            # So the answer carries the whole run: every step the ingest took, in order, and the
+            # exact source the preview loads. The panel can show them; nothing is summarised here
+            # for it to hide.
+            "steps": INGEST_STEPS.get(job_id, []),
+            "source": drafts.get(target_tag, ""),
+            "sourceBytes": len(drafts.get(target_tag, "") or ""),
             # The measured facts behind the component, for the panel beside the preview:
             # size, colour, stroke, radius, effects, typography. A designer approving a
             # component should be able to read what it was built from.
-            "spec": _figma_spec_for_model(target_node, depth=1),
+            #
+            # THE WHOLE TREE, NOT ONE LEVEL. `depth=1` cut every child off the result — a component
+            # with three buttons arrived with no buttons in its own answer, so nothing could expand.
+            "spec": _figma_spec_for_model(target_node),
         },
     }
 
@@ -5163,6 +5932,10 @@ async def api_figma_ingest_status(job_id: str):
         "status": job.status,
         "mcp_status": job.mcp_status,
         "rest_status": job.rest_status,
+        # WHAT THE INGEST IS DOING, IN ORDER, AS IT HAPPENS. Real events written by the work
+        # itself; the client shows the last line under its spinner and the whole list on the
+        # answer. No step exists that the backend did not actually take.
+        "steps": INGEST_STEPS.get(job_id, []),
         "result": job.result,
         "error": job.error,
     }
@@ -5504,9 +6277,9 @@ def _remove_from_allowlist(tag: str) -> str:
     return "removed from the allowlist"
 
 
-def _remove_from_catalog(tag: str) -> str:
-    """Take the definition and its oneOf reference out of the pipeline catalogue."""
-    path = _catalog_file_path()
+def _remove_from_catalog(tag: str, pipeline: str = INGEST_CATALOG_PIPELINE) -> str:
+    """Take the definition and its oneOf reference out of the named pipeline's catalogue."""
+    path = _catalog_file_path(pipeline)
     if not path:
         return "no catalogue file found"
     try:
@@ -5528,6 +6301,13 @@ def _remove_from_catalog(tag: str) -> str:
 class RemoveRequest(BaseModel):
     tag: str
     reason: str = ""
+    # THE STAGE ID FOR THIS REMOVAL. The client generates it and polls
+    # `GET /api/figma/steps/<id>` while the request runs, so each real stage is named as it begins.
+    opId: str | None = None
+    # THE CATALOGUE THE DESIGNER HAS SELECTED (owner, 2026-10-25). Without it the removal
+    # always edited the ingest's own catalogue, so a row in another catalogue only lost its
+    # shared registrations — deactivated, not removed.
+    catalog: str | None = None
 
 
 @router.get("/api/figma/usage")
@@ -5739,17 +6519,34 @@ async def api_figma_remove(request: RemoveRequest, http_request: Request):
     tag = request.tag.strip()
     if not _SAFE_COMPONENT_RE.match(tag):
         raise HTTPException(status_code=400, detail=f"Not a component name: {tag!r}")
+    # THE SELECTED CATALOGUE MUST EXIST (owner, 2026-10-25): a removal names the catalogue the
+    # designer is standing in, and a name that has no catalogue file is refused before anything
+    # is touched — never guessed back to the ingest's own.
+    catalog = request.catalog.strip() if isinstance(request.catalog, str) and request.catalog.strip() else None
+    if catalog and not re.match(r"^[a-z0-9][a-z0-9-]*$", catalog):
+        raise HTTPException(status_code=400, detail=f"Not a catalogue name: {catalog!r}")
+    if catalog and not _catalog_file_path(catalog):
+        raise HTTPException(status_code=404, detail=f"No catalogue named {catalog!r} exists.")
 
     try:
-        return await _remove_component(tag, request.reason, http_request)
+        return await _remove_component(tag, request.reason, http_request, catalog, request.opId)
     except HTTPException:
         raise
     except Exception as e:
+        # THE READOUT STOPS ON THE STAGE THAT FAILED. The last stage recorded is the one that was
+        # running, so the sentence names it and then says what is still there.
+        last = (OP_STEPS.get(request.opId or "") or [{}])[-1].get("text", "the removal")
+        _op_step(
+            request.opId,
+            f"Stopped at: {last} — {type(e).__name__}: {e}. {tag} is still in the catalogue until a "
+            "removal lands.",
+        )
         _log_ingest({
             "kind": "removal-failed",
             "actor": _resolve_actor(http_request),
             "tag": tag,
             "reason": request.reason,
+            "catalog": catalog or INGEST_CATALOG_PIPELINE,
             "error": str(e),
             "nextStep": "this component is still in the catalogue — remove it again, or by hand: file, Figma map, allowlist, catalog",
         })
@@ -5757,8 +6554,16 @@ async def api_figma_remove(request: RemoveRequest, http_request: Request):
         raise HTTPException(status_code=500, detail=f"The removal failed and the component is still in the catalogue: {e}")
 
 
-async def _remove_component(tag: str, reason: str, http_request: Request):
+async def _remove_component(
+    tag: str,
+    reason: str,
+    http_request: Request,
+    catalog: str | None = None,
+    op_id: str | None = None,
+):
     actor = _resolve_actor(http_request)
+    pipeline = catalog or INGEST_CATALOG_PIPELINE
+    _op_step(op_id, f"Checking whether {tag} is used by the application's own code…")
 
     # ── THE LIVENESS CHECK, BEFORE ANYTHING IS TOUCHED ──────────────────────────────────────────
     # A component the application's own code names is not a catalogue entry any more; it is part of
@@ -5766,7 +6571,15 @@ async def _remove_component(tag: str, reason: str, http_request: Request):
     # every catalogue row with `<f-40001207-3497>`, so removing that one would empty the left column
     # while reporting success. The refusal NAMES the files, so the next step is a real one: stop
     # naming it, and then it can be removed.
-    live_in = await asyncio.to_thread(_liveness_references, tag)
+    # THE CHECK IS TIED TO THE COMPONENT'S OWN ELEMENT — its id, which is a file named for it.
+    # A catalogue's schema key (`Column`, `Text`, `Card`) is a DECLARATION the renderer resolves to
+    # a primitive; it has no file here and no element to break (measured 2026-10-25: no `Column.ts`,
+    # while ingested components such as `f-40001177-2476` each have one). The word "Column" is all
+    # through the application's code for unrelated reasons — `LeftColumnHeader`, `leftColumn`,
+    # `ColumnFlipToggle` — so a name-keyed search refuses every removal in a schema catalogue.
+    # Owner, 2026-10-25: *"Should be tied to the ID and if there is no ID, we should just remove…"*
+    file_path = os.path.join(FRONTEND_COMPONENTS_DIR, f"{tag}.ts")
+    live_in = await asyncio.to_thread(_liveness_references, tag) if os.path.exists(file_path) else []
     if live_in:
         note = (
             f"{tag} is live in the application's own code, so removing it would break what names it. "
@@ -5788,6 +6601,11 @@ async def _remove_component(tag: str, reason: str, http_request: Request):
             ),
         })
         print(f"[!] [figma-ingest] {tag} was NOT removed — live in {', '.join(live_in)}")
+        _op_step(
+            op_id,
+            f"Stopped at: checking whether {tag} is used by the application's own code — it is, in "
+            f"{', '.join(live_in)}. Nothing was removed.",
+        )
         raise HTTPException(
             status_code=409,
             detail={
@@ -5802,8 +6620,8 @@ async def _remove_component(tag: str, reason: str, http_request: Request):
             },
         )
 
-    file_path = os.path.join(FRONTEND_COMPONENTS_DIR, f"{tag}.ts")
     file_outcome = "no file found"
+    _op_step(op_id, f"Deleting the component's file ({tag}.ts)…")
     if os.path.exists(file_path):
         os.remove(file_path)
         file_outcome = f"deleted {os.path.relpath(file_path, REPO_ROOT)}"
@@ -5824,37 +6642,43 @@ async def _remove_component(tag: str, reason: str, http_request: Request):
             if os.path.exists(companion)
             else "none"
         ),
-        "figmaMap": await asyncio.to_thread(_remove_from_figma_map, tag),
-        "allowlist": await asyncio.to_thread(_remove_from_allowlist, tag),
-        "catalog": await asyncio.to_thread(_remove_from_catalog, tag),
-        # AND THE RECORD LEARNS IT TOO. The file, the map, the allowlist and the catalogue are what
-        # the component IS; the layer record is the other half — what was measured and approved —
-        # and it is the half the screen reads its tree from. Left unmarked, the record went on
-        # showing a design the owner had deleted, under a heading that read as a claim about now.
-        # The removal is written where the approval is, so the record and the activity table agree
-        # about what happened, and the front can stay silent about it.
-        "record": await asyncio.to_thread(
-            _mark_removed_in_figma_layers,
-            INGEST_CATALOG_PIPELINE,
-            tag,
-            "",
-            actor,
-            reason,
-        ),
     }
+    _op_step(op_id, "Removing the Figma map entry…")
+    outcome["figmaMap"] = await asyncio.to_thread(_remove_from_figma_map, tag)
+    _op_step(op_id, "Removing the allowlist entry…")
+    outcome["allowlist"] = await asyncio.to_thread(_remove_from_allowlist, tag)
+    _op_step(op_id, "Removing the catalogue entry…")
+    outcome["catalog"] = await asyncio.to_thread(_remove_from_catalog, tag, pipeline)
+    # AND THE RECORD LEARNS IT TOO. The file, the map, the allowlist and the catalogue are what
+    # the component IS; the layer record is the other half — what was measured and approved —
+    # and it is the half the screen reads its tree from. Left unmarked, the record went on
+    # showing a design the owner had deleted, under a heading that read as a claim about now.
+    # The removal is written where the approval is, so the record and the activity table agree
+    # about what happened, and the front can stay silent about it.
+    _op_step(op_id, "Marking the layer record as removed…")
+    outcome["record"] = await asyncio.to_thread(
+        _mark_removed_in_figma_layers,
+        pipeline,
+        tag,
+        "",
+        actor,
+        reason,
+    )
     # ── AND THE PICTURES GO WITH IT ─────────────────────────────────────────
     # The artwork is written beside the component at approval and taken back here, in the same
     # pass as everything else the approval wrote. This runs AFTER the record write on purpose:
     # the record is one of the things that can be referring to an asset, so pruning before its
     # node is dropped would see the removed design's own entry and keep the file it names.
+    _op_step(op_id, "Deleting artwork nothing refers to any more…")
     outcome["assets"] = await asyncio.to_thread(_prune_unreferenced_assets)
 
     # The manifest is generated FROM the files: deleting one without regenerating leaves the
     # catalogue describing an element that no longer exists (verified: f-40001185-2176 stayed in
     # custom-elements.json after its file was deleted).
+    _op_step(op_id, "Rebuilding the element manifest…")
     await asyncio.to_thread(_run_cem_analyze)
 
-    catalog_path = _catalog_file_path()
+    catalog_path = _catalog_file_path(pipeline)
     total = None
     if catalog_path:
         try:
@@ -5862,8 +6686,14 @@ async def _remove_component(tag: str, reason: str, http_request: Request):
                 total = len(json.load(f).get("components", {}))
         except Exception:
             total = None
+    _op_step(op_id, "Re-deriving the catalogue's counts…")
     outcome["counts"] = await asyncio.to_thread(_sync_catalog_claims, total) if total is not None else "catalog unreadable"
+    _op_step(op_id, "Running the catalogue gate…")
     check = await asyncio.to_thread(_catalog_check)
+    _op_step(
+        op_id,
+        f"Removed {tag}: its file, Figma map entry, allowlist entry, catalogue entry and layer record.",
+    )
 
     _log_ingest({
         "kind": "removed",
@@ -6269,6 +7099,32 @@ async def api_figma_component_by_tag(tag: str):
         history[0].get("at") if (history and figma_map is not None and os.path.exists(file_path)) else None
     )
 
+    # ── THE SAME DISPLAY AS AN INGEST ──────────────────────────────────────────────────────────
+    # A row selected from the catalogue shows the record kept at approval: the drawn declarations
+    # per layer, every fact read, every annotation and the source. ONE display, used in both
+    # places (owner, 2026-10-26). A component approved before that record existed answers with the
+    # declarations and the source and says which part is missing.
+    source = ""
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, encoding="utf-8") as handle:
+                source = handle.read()
+        except OSError:
+            source = ""
+    record = None
+    try:
+        with open(os.path.join(FIGMA_LAYERS_DIR, f"{INGEST_CATALOG_PIPELINE}.json"), encoding="utf-8") as handle:
+            document = json.load(handle)
+        record = next(
+            (node for node in (document.get("nodes") or {}).values() if node.get("tag") == tag),
+            None,
+        )
+    except (OSError, ValueError):
+        record = None
+    tree = (record or {}).get("tree") or {}
+    specs = _specs_from_draft(source, tree) if source and tree else []
+    facts = (record or {}).get("facts") or []
+
     return {
         "tag": tag,
         "file": file_rel,
@@ -6280,6 +7136,18 @@ async def api_figma_component_by_tag(tag: str):
         "lastSeen": history[0].get("at") if history else None,
         "approvedAt": approved_at,
         "history": history,
+        # WHAT THE PANEL SHOWS: the same record the ingest answer carries.
+        "specs": specs,
+        "readings": facts,
+        "annotations": (record or {}).get("annotations") or [],
+        "source": source,
+        "sourceBytes": len(source),
+        "recordNote": (
+            "The record kept at approval: every fact read, every annotation, and the source."
+            if facts else
+            "This component was approved before the fact table was kept with it. The declarations "
+            "and the source are here; ingest the design again to record what was read."
+        ),
     }
 
 
@@ -6470,6 +7338,118 @@ async def api_figma_ingest_log(job_id: str):
     return {"jobId": job_id, "records": records}
 
 
+@router.get("/api/figma/element/{reference}")
+async def api_figma_element(reference: str):
+    """ONE RECORDED ELEMENT, BY NODE ID OR BY EXACT LAYER NAME — its name, its children, its date.
+
+    THE LOOKUP THE WORKFLOW NEEDS (owner, 2026-10-26): *"I will give you an ID or a layer name…
+    take that ID and connect it to it and understand all of its children."* This is that
+    connection, and it answers with identity only.
+
+    WHAT IT MAY READ FROM THE APPROVED RECORD: the element's tag, its node id, its layer name and
+    path, the same for each child, and when it was approved. IT READS NO MEASURED VALUE. Comparing
+    or reusing the approved component's numbers would be the AI interpreting one design against
+    another, which this system does not do — the names are the identity and the values come from
+    the design being ingested now.
+
+    A node id may be written with a colon or a hyphen; only a string that IS a node id is
+    normalised, so a layer name with hyphens in it is never rewritten.
+    """
+    ref = reference.strip()
+    import re as _re
+
+    node_ref = ref
+    if _re.fullmatch(r"\d+-\d+", ref):
+        node_ref = ref.replace("-", ":", 1)
+
+    path = os.path.join(FIGMA_LAYERS_DIR, f"{INGEST_CATALOG_PIPELINE}.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            document = json.load(handle)
+    except (OSError, ValueError):
+        raise HTTPException(status_code=404, detail="The layer record does not exist yet — nothing has been approved.")
+
+    def identity(tree: dict[str, Any], layer_path: str = "") -> dict[str, Any]:
+        name = str(tree.get("name") or "").strip() or "unnamed"
+        here = f"{layer_path} / {name}" if layer_path else name
+        return {"path": here, "name": name, "type": tree.get("type"), "nodeId": tree.get("id")}
+
+    def find(tree: dict[str, Any], layer_path: str = "") -> tuple[dict[str, Any], dict[str, Any]] | None:
+        name = str(tree.get("name") or "").strip() or "unnamed"
+        here = f"{layer_path} / {name}" if layer_path else name
+        if tree.get("id") == node_ref or name == ref or here == ref:
+            return tree, identity(tree, layer_path)
+        for child in tree.get("children") or []:
+            found = find(child, here)
+            if found:
+                return found
+        return None
+
+    for record in (document.get("nodes") or {}).values():
+        tree = record.get("tree") or {}
+        if not tree:
+            continue
+        matched = find(tree)
+        if not matched:
+            continue
+        layer, where = matched
+        return {
+            "found": True,
+            "tag": record.get("tag"),
+            "nodeId": record.get("nodeId"),
+            "approvedAt": record.get("approvedAt"),
+            "element": where,
+            # THE CHILDREN, NESTED, with the same name paths the fact table uses — so an element
+            # named here is the element named in an ingest of the same design.
+            "children": [
+                identity(child, where["path"]) for child in layer.get("children") or []
+            ],
+            "layers": sum(1 for _ in _walk_spec(layer)),
+            "note": "Identity only: names, types, node ids and the approval date. No measured value "
+                    "from the approved component is read or compared.",
+        }
+    raise HTTPException(status_code=404, detail=f"No approved element or layer matches {ref!r}.")
+
+
+@router.get("/api/figma/ingest/{job_id}/facts")
+async def api_figma_ingest_facts(job_id: str):
+    """Every fact one ingest measured, with the Figma value and the drawn value beside it.
+
+    ONE ROW PER LAYER PER FACT. This is the table the answer's count is computed from, kept on
+    disk under the job's own name, so a designer can read the value behind a count instead of
+    trusting it.
+    """
+    record = await asyncio.to_thread(figma_facts.read, job_id)
+    if not record:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No measured facts are kept for job {job_id}. A fact table is written by an ingest "
+                "that ran after this was added; ingest the design again to produce one."
+            ),
+        )
+    return record
+
+
+@router.get("/api/figma/ingest/{job_id}/compare/{other_job_id}")
+async def api_figma_ingest_compare(job_id: str, other_job_id: str):
+    """What changed between two ingests of one design: added, removed, and changed facts.
+
+    THE ONE-PIXEL TEST, IN WRITING. A changed fact carries both values — `x 16, y 20 → x 16, y 21`
+    — so a designer sees what moved without opening the component, and `designChanged` says whether
+    the fingerprint of the measured values moved at all.
+    """
+    before = await asyncio.to_thread(figma_facts.read, job_id)
+    after = await asyncio.to_thread(figma_facts.read, other_job_id)
+    missing = [job for job, record in ((job_id, before), (other_job_id, after)) if not record]
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No measured facts are kept for job(s): {', '.join(missing)}.",
+        )
+    return figma_facts.compare(before, after)
+
+
 @router.get("/api/figma/ingest/{job_id}/code/{tag}")
 async def api_figma_ingest_code(job_id: str, tag: str):
     """The uncommitted source of one draft, as plain text.
@@ -6499,6 +7479,12 @@ class CommitRequest(BaseModel):
     # _name_collisions for how the collision is found, and the retag below for what the answer
     # does. Unset means "no" — the copy is added as its own component.
     overwriteTag: str | None = None
+    # WHICH CHILD PATTERNS TO WRITE. The panel lists every pattern with a checkbox: new ones
+    # ticked, existing ones unticked (replacing a component is a deliberate act). Unset means
+    # "every drafted pattern", which is the old behaviour for callers that send no choice.
+    patternTags: list[str] | None = None
+    # THE STAGE ID FOR THIS APPROVAL, polled through `GET /api/figma/steps/<id>` while it runs.
+    opId: str | None = None
 
 
 class AskRequest(BaseModel):
@@ -6564,6 +7550,17 @@ async def api_figma_ask(request: AskRequest):
     return {"ok": True, "jobId": request.jobId, "tag": tag, "question": question, "answer": (reply or "").strip()}
 
 
+@router.get("/api/figma/preview/audit/{job_id}")
+async def api_figma_preview_audit(job_id: str):
+    """What remains for this job right now — the check a discard is verified with.
+
+    Read-only. Answers with the in-memory entries, the folder and every file in it, any other
+    preview folder, and the measurement record. `clean` is true only when no entry and no folder
+    remain.
+    """
+    return await asyncio.to_thread(_preview_audit, job_id)
+
+
 @router.post("/api/figma/discard")
 async def api_figma_discard(request: CommitRequest, http_request: Request):
     """Throw a job's preview away — the entry and the temporary file it was presented from.
@@ -6577,6 +7574,13 @@ async def api_figma_discard(request: CommitRequest, http_request: Request):
     _drop_departed_previews()
     held = ingest_drafts.get(request.jobId)
     _drop_preview(request.jobId)
+    # ── AND THE CHECK THAT IT IS ACTUALLY GONE ────────────────────────────────────────────────
+    # The discard is four map removals and one folder deletion. This measures what remains and
+    # writes it into the same activity record, so "was it discarded, was everything removed, is
+    # there a ghost" is answerable from the log rather than from trust.
+    audit = await asyncio.to_thread(_preview_audit, request.jobId)
+    note = _preview_audit_clean_note(audit)
+    print(f"🗑️ [figma-ingest] discard {request.jobId}: {note}")
     _log_ingest({
         "kind": "discarded",
         "sessionId": meta.get("sessionId", ""),
@@ -6586,8 +7590,16 @@ async def api_figma_discard(request: CommitRequest, http_request: Request):
         "nodeId": meta.get("nodeId", ""),
         "nodeName": meta.get("figmaName", ""),
         "discarded": sorted(held.keys()) if held else [],
-    })
-    return {"ok": True, "jobId": request.jobId, "discarded": sorted(held.keys()) if held else []}
+        "audit": audit,
+        "note": note,
+    }, to_db=False)
+    return {
+        "ok": True,
+        "jobId": request.jobId,
+        "discarded": sorted(held.keys()) if held else [],
+        "audit": audit,
+        "note": note,
+    }
 
 
 @router.post("/api/figma/commit")
@@ -6607,11 +7619,87 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     drafts = ingest_drafts.get(request.jobId)
     if not drafts:
         raise HTTPException(status_code=404, detail=f"No drafts held for job {request.jobId}")
+
+    _op_step(request.opId, "Reading the measured fact table…")
+    # ── NOTHING ENTERS THE CATALOGUE WITH A VALUE THAT IS NOT THE DESIGN'S ──────────────────────
+    # THE OWNER'S RULING (2026-10-26): block the commit, not the ingest. The designer can always
+    # run an ingest, always see the preview, and always read the comparison — what a commit may not
+    # do is write a component whose font, colour, position or text is something other than what the
+    # Figma file states. Checked before the retag, before the write, before every registration, so a
+    # refusal leaves the catalogue exactly as it was.
+    facts = await asyncio.to_thread(figma_facts.read, request.jobId)
+    if not facts:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "UNMEASURED",
+                "message": (
+                    "This draft has no measured fact table, so it cannot be shown to be the design's "
+                    "own values. Nothing was written."
+                ),
+                "nextStep": "Ingest the design again; the fact table is written by the ingest.",
+            },
+        )
+    not_exact = [
+        row for row in facts.get("rows") or []
+        if row.get("verdict") in ("differs", "uncomparable", "not-read", "not-drawn")
+    ]
+    _op_step(
+        request.opId,
+        f"Checking every measured fact against the component — {len(not_exact)} not exact.",
+    )
+    if not_exact:
+        _op_step(
+            request.opId,
+            f"Stopped at: the fidelity gate — {len(not_exact)} fact(s) are not carried exactly. "
+            "Nothing was written.",
+        )
+        shown = [
+            {
+                "layer": row.get("layer"),
+                "fact": row.get("fact"),
+                "source": row.get("source"),
+                "drawn": row.get("drawn"),
+                "verdict": row.get("verdict"),
+            }
+            for row in not_exact[:40]
+        ]
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "NOT_EXACT",
+                "message": (
+                    f"Nothing was written: {len(not_exact)} fact(s) in this design are not carried "
+                    "exactly by the component. A commit writes only a component that is the design's "
+                    "own values."
+                ),
+                "exactness": facts.get("exactness"),
+                "facts": shown,
+                "total": len(not_exact),
+                "more": max(0, len(not_exact) - len(shown)),
+                "nextStep": (
+                    "Read the named facts against the design; each one names the Figma value and the "
+                    "value the component would carry. Re-ingest after the cause is fixed."
+                ),
+            },
+        )
     # An approval is the strongest possible sign of life: the preview was just looked at, and
     # this is the request that ends it. Nothing about a commit waits for a heartbeat.
     _keep_preview(request.jobId)
 
     tags = request.tags if request.tags else list(drafts)
+    # ── THE TICKED PATTERNS ARE THE WHOLE WRITE SET ─────────────────────────
+    # The panel lists every child pattern with a box, and the approval sends the tags that were
+    # ticked. A pattern left unticked must not touch the catalogue at all — no file, no Figma map
+    # entry, no allowlist entry, no catalogue entry, no layer record. The narrowing happens here,
+    # before the retag, before the compile check, before the write and before every registration
+    # below; the root itself is always written, because approving is about the design in front of
+    # the designer.
+    tags = _chosen_write_set(
+        tags,
+        (ingest_job_meta.get(request.jobId) or {}).get("targetTag"),
+        request.patternTags,
+    )
     unknown = [t for t in tags if t not in drafts]
     if unknown:
         raise HTTPException(status_code=400, detail=f"Not part of job {request.jobId}: {', '.join(unknown)}")
@@ -6697,6 +7785,7 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     # a chevron that disappears when they close it. The record is given the same list, so the
     # audit can SHOW the artwork rather than only name it.
     job_assets = (ingest_job_meta.get(request.jobId) or {}).get("assets") or []
+    _op_step(request.opId, "Keeping the artwork the design carries…")
     vendored = await asyncio.to_thread(_vendor_assets, job_assets)
     for tag in list(drafts):
         drafts[tag] = _repoint_assets(drafts[tag], vendored)
@@ -6705,6 +7794,7 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     written = []
     replaced: dict[str, Any] = {}
     for tag in tags:
+        _op_step(request.opId, f"Writing the component's file ({tag}.ts)…")
         if not _SAFE_TAG_RE.match(tag):
             raise HTTPException(status_code=400, detail=f"Refusing to write an unexpected tag: {tag!r}")
         file_path = os.path.join(FRONTEND_COMPONENTS_DIR, f"{tag}.ts")
@@ -6717,6 +7807,7 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
         if previous is not None:
             replaced[tag] = {"previousBytes": previous, "nowBytes": len(drafts[tag])}
 
+    _op_step(request.opId, "Rebuilding the element manifest…")
     await asyncio.to_thread(_run_cem_analyze)
 
     meta = ingest_job_meta.get(request.jobId, {})
@@ -6733,9 +7824,11 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     if request.addToCatalogue and meta:
         target_tag = meta.get("targetTag")
         if target_tag in tags:
+            _op_step(request.opId, "Registering the Figma map entry…")
             registration["figmaMap"] = await asyncio.to_thread(
                 _register_in_figma_map, target_tag, meta.get("nodeId", ""), meta.get("figmaName", "")
             )
+            _op_step(request.opId, "Registering the allowlist entry…")
             registration["allowlist"] = await asyncio.to_thread(_register_in_allowlist, target_tag, meta)
             catalog_path = _catalog_file_path() or ""
             declared_before = False
@@ -6744,6 +7837,7 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                     declared_before = target_tag in json.load(f).get("components", {})
             except Exception:
                 pass
+            _op_step(request.opId, "Registering the catalogue entry…")
             registration["catalog"] = await asyncio.to_thread(
                 _register_in_catalog, target_tag, meta, INGEST_CATALOG_PIPELINE
             )
@@ -6754,6 +7848,7 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                     registration["countClaims"] = await asyncio.to_thread(_sync_catalog_claims, total)
                 except Exception as e:
                     registration["countClaims"] = f"could not re-read the catalog ({e})"
+            _op_step(request.opId, "Running the catalogue gate…")
             catalog_check = await asyncio.to_thread(_catalog_check)
 
             # THE LAYER RECORD, written with the rest of the registrations and from the same
@@ -6762,6 +7857,9 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
             # not. Raises rather than reporting an approve whose tree went missing.
             target_node = meta.get("targetNode") or {}
             if target_node:
+                # THE RECORD THE PANEL READS WHEN THE ROW IS OPENED LATER: the fact table and the
+                # annotations from this job's own measurement, stored beside the tree.
+                measured = await asyncio.to_thread(figma_facts.read, request.jobId)
                 layers_note = await asyncio.to_thread(
                     _write_figma_layers,
                     INGEST_CATALOG_PIPELINE,
@@ -6769,6 +7867,8 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
                     meta.get("nodeId") or target_node.get("id") or "",
                     _figma_spec_for_model(target_node),
                     vendored,
+                    (measured or {}).get("rows") or [],
+                    (measured or {}).get("annotations") or [],
                 )
                 registration["layers"] = f"{layers_note['layers']} layers to {layers_note['file']}"
 
@@ -6784,6 +7884,82 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
             )
         else:
             registration["skipped"] = f"target {target_tag} was not part of this commit"
+
+        # ── AND THE CHILDREN THAT ARE PATTERNS, EACH REGISTERED BY ITS OWN NAME ────────────────
+        # The owner's rule: a child whose layer name matches an existing component IS that
+        # component and replaces it; a child with a name of its own is a new pattern. Only a
+        # pattern that is exact is written — an approval never publishes a component whose values
+        # were not carried — and one that is not exact is NAMED in the confirmation with its
+        # reason, never skipped in silence.
+        added_patterns: list[str] = []
+        replaced_patterns: list[str] = []
+        skipped_patterns: list[dict[str, str]] = []
+        left_alone: list[str] = []
+        chosen = set(request.patternTags) if request.patternTags is not None else None
+        for entry in (meta.get("patterns") or []):
+            pattern_tag = str(entry.get("tag") or "")
+            if not pattern_tag or pattern_tag == target_tag:
+                continue
+            # A PATTERN THE DESIGNER DID NOT TICK IS LEFT EXACTLY AS IT IS. Not skipped, not failed:
+            # untouched, and named as untouched so the answer says so. Checked before the write-set
+            # test, because an unticked pattern is also absent from `tags` and would otherwise be
+            # invisible in the confirmation.
+            if chosen is not None and pattern_tag not in chosen:
+                if pattern_tag in drafts:
+                    left_alone.append(pattern_tag)
+                continue
+            if pattern_tag not in tags:
+                continue
+            if not entry.get("drafted"):
+                skipped_patterns.append({"tag": pattern_tag, "reason": entry.get("reason") or "not drafted"})
+                continue
+            exactness = entry.get("exactness") or {}
+            if (exactness.get("differs") or 0) or (exactness.get("percent", 100) < 100) or entry.get("blocking"):
+                skipped_patterns.append({
+                    "tag": pattern_tag,
+                    "reason": "not exact: " + "; ".join(entry.get("blocking") or [])[:220],
+                })
+                continue
+            pattern_node = _node_by_id(meta.get("targetNode") or {}, entry.get("occurrenceId"))
+            if not pattern_node:
+                skipped_patterns.append({"tag": pattern_tag, "reason": "the layer is no longer in the measured tree"})
+                continue
+            pattern_meta = {
+                "nodeId": entry.get("occurrenceId"),
+                "fileKey": meta.get("fileKey"),
+                "figmaName": entry.get("name") or "",
+                "figmaType": entry.get("kind") or pattern_node.get("type") or "",
+                "targetTag": pattern_tag,
+                "targetNode": pattern_node,
+                "contract": _component_contract(pattern_node),
+            }
+            pattern_spec = _figma_spec_for_model(pattern_node)
+            _op_step(
+                request.opId,
+                f"Registering the pattern {entry.get('name') or pattern_tag} ({pattern_tag})…",
+            )
+            await asyncio.to_thread(
+                _register_in_figma_map, pattern_tag, str(entry.get("occurrenceId") or ""),
+                str(entry.get("name") or ""),
+            )
+            await asyncio.to_thread(_register_in_allowlist, pattern_tag, pattern_meta)
+            await asyncio.to_thread(_register_in_catalog, pattern_tag, pattern_meta, INGEST_CATALOG_PIPELINE)
+            await asyncio.to_thread(
+                _write_figma_layers,
+                INGEST_CATALOG_PIPELINE, pattern_tag, str(entry.get("occurrenceId") or ""),
+                pattern_spec, [], entry.get("facts") or [], entry.get("annotations") or [],
+            )
+            await asyncio.to_thread(
+                _register_element_row, pattern_tag, pattern_meta,
+                _resolve_actor(http_request) or meta.get("actor", ""),
+            )
+            (replaced_patterns if entry.get("replaces") else added_patterns).append(pattern_tag)
+        registration["patterns"] = {
+            "added": added_patterns,
+            "replaced": replaced_patterns,
+            "skipped": skipped_patterns,
+            "leftAlone": left_alone,
+        }
 
     # ── AND WHAT THIS WRITE SUPERSEDED ──────────────────────────────────────
     # Approval is where an asset is written; it is also where one is left behind, because a design
@@ -6813,6 +7989,11 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     failures = [msg for step, result in registration.items()
                 if step != "skipped" and (msg := _registration_failure(step, result))]
     if failures:
+        _op_step(
+            request.opId,
+            "Stopped at registration — the files were written but the component is NOT usable: "
+            + "; ".join(failures),
+        )
         print(f"❌ [figma-ingest] job {request.jobId}: the files were written but registration failed — {'; '.join(failures)}")
         _log_ingest({
             "kind": "commit-failed",
@@ -6840,6 +8021,12 @@ async def api_figma_commit(request: CommitRequest, http_request: Request):
     if catalog_check and catalog_check.get("ran") is False:
         print(f"❌ [figma-ingest] job {request.jobId}: the catalog gate did not run — {catalog_check.get('summary')}")
 
+    _op_step(
+        request.opId,
+        f"Approved {(meta or {}).get('targetTag') or request.jobId}: "
+        f"{len(written)} file(s) written, {len(registration.get('patterns', {}).get('added') or [])} "
+        f"pattern(s) added, {len(registration.get('patterns', {}).get('replaced') or [])} replaced.",
+    )
     return {
         "ok": True,
         "jobId": request.jobId,

@@ -10,6 +10,41 @@ from typing import Any
 from database_pool import DatabasePoolManager
 
 
+# ── THE DESIGN ROOM'S CONVERSATION TABS ────────────────────────────────────────────────────────
+# One package per conversation tab, and one conversation under that package. The titles are the
+# tab's own name; the introductions are the first assistant message, written once when the
+# conversation is created. The owner supplies the final copy; these carry the facts each tab must
+# state. Executions and Settings have no conversation, so they have no entry here.
+DESIGN_TAB_PACKAGE_TITLES = {
+    "chat": "Design — Chat",
+    "tools": "Design — Tools",
+    "ux": "Design — UX",
+}
+DESIGN_TAB_PACKAGE_DESCRIPTIONS = {
+    "chat": "The Design room's Chat tab — the design console's own conversation, saved under its tab.",
+    "tools": "The Design room's Tools tab — the Figma ingestion conversation, saved under its tab.",
+    "ux": "The Design room's UX tab — the analytics application's conversation, saved under its tab.",
+}
+DESIGN_TAB_INTROS = {
+    "chat": (
+        "I am Grace, your design system assistant. This is the design console: the "
+        "catalogue's components, what was measured, and the checks that did not pass. Ask me "
+        "about a component, a check, or what to work on next. I will not change the catalogue "
+        "without your instruction."
+    ),
+    "tools": (
+        "I am Grace, your design system assistant. This is the Figma ingestion tool: "
+        "you load a Figma file, read its layers, submit a node, review the draft, and "
+        "approve it into the catalogue. Ask me about a layer, an ingest that failed, what "
+        "an element is missing, or what to change before you approve it. I will not approve "
+        "or edit the design for you."
+    ),
+    # THE UX TAB HAS NO SEEDED INTRODUCTION. Its welcome is the PostHog screen the room draws
+    # before the first person turn (rooms/design/ux/posthog-prechat.ts). A second stored greeting
+    # would introduce the tab twice, so this helper deliberately leaves the UX conversation empty.
+}
+
+
 class PromptSessionsAPI:
     """PostgreSQL service for prompt engineering sessions"""
 
@@ -39,6 +74,7 @@ class PromptSessionsAPI:
         description: str | None = None,
         room_domain: str | None = None,
         design_system: str | None = None,
+        draft: bool = False,
         builder_project_id: str | None = None,
         builder_preview_url: str | None = None,
         builder_runs: int | None = None,
@@ -96,6 +132,9 @@ class PromptSessionsAPI:
                     meta_keys["room_domain"] = room_domain
                 if design_system:
                     meta_keys["design_system"] = design_system
+                # A DRAFT IS HIDDEN FROM THE CONSOLE UNTIL SAVE (exclude_drafts reads this key).
+                if draft:
+                    meta_keys["draft"] = "true"
                 # THE BRIDGED BUILDER PROJECT (2026-10-04, routes/builder_bridge.py). A
                 # package that stands for a project in the Product room's tool carries the
                 # project's own id, preview URL and run count — the console's card reads
@@ -519,6 +558,212 @@ class PromptSessionsAPI:
             conversation_id = cursor.fetchone()["id"]
             conn.commit()
             return str(conversation_id)
+
+    def get_or_create_design_tab(
+        self,
+        user_id: str,
+        tab: str,
+        title: str | None = None,
+        description: str | None = None,
+        introduction: str | None = None,
+    ) -> dict[str, Any] | None:
+        """The Design room's tab package, its conversation, and its first message.
+
+        ONE WRITER FOR ONE SHAPE. The row is `prompt_sessions` with
+        `metadata.session_type = 'design_tab'` and `metadata.design_tab = <tab>`; its
+        conversation hangs off that row (`conversations.session_id = package.id`) and carries
+        the same tab name. The console reads exactly this shape, so the database and the tabs on
+        screen cannot drift.
+
+        THE INTRODUCTION IS SEEDED ONCE. It is the conversation's first assistant message, not a
+        greeting that runs on every entry and not a model call. An existing thread keeps every
+        turn it has; the seed writes only when the conversation is empty.
+
+        A LOSING INSERT RE-READS THE WINNER. The partial unique index (`init_db.py`) permits one
+        `design_tab` row per person per tab, so a second caller that arrives at the same moment
+        loses the write and reads the row the first caller made.
+
+        Returns `{packageId, conversationId, conversationIds}`; `conversationIds` is the package's
+        live threads, newest first, for a caller that draws a conversation list.
+        """
+        if not tab:
+            return None
+        title = title or DESIGN_TAB_PACKAGE_TITLES.get(tab, f"Design — {tab.title()}")
+        description = description or DESIGN_TAB_PACKAGE_DESCRIPTIONS.get(
+            tab, f"The Design room's {tab} tab, saved under its own package."
+        )
+        intro = introduction if introduction is not None else DESIGN_TAB_INTROS.get(tab)
+
+        def read_package() -> dict[str, Any] | None:
+            with self.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SET app.current_user_id = %s", (user_id,))
+                cursor.execute(
+                    """
+                    SELECT ps.id::text AS id, ps.title, ps.description,
+                           c.id::text AS conversation_id
+                      FROM prompt_sessions ps
+                      LEFT JOIN conversations c
+                        ON ps.conversation_id = c.id
+                       AND c.session_id = ps.id
+                     WHERE ps.user_id = %s
+                       AND ps.metadata->>'session_type' = 'design_tab'
+                       AND ps.metadata->>'design_tab' = %s
+                     LIMIT 1
+                    """,
+                    (user_id, tab),
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+
+        package = read_package()
+        if not package:
+            try:
+                created = self.create_session(
+                    user_id,
+                    title=title,
+                    description=description,
+                )
+                if not created or not created.get("id"):
+                    return None
+                with self.get_db() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SET app.current_user_id = %s", (user_id,))
+                    cursor.execute(
+                        """
+                        UPDATE prompt_sessions
+                           SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
+                         WHERE id = %s
+                        """,
+                        (
+                            json.dumps({"session_type": "design_tab", "design_tab": tab}),
+                            created["id"],
+                        ),
+                    )
+                    conn.commit()
+                package = read_package()
+            except Exception:
+                # The unique index is the guarantee, not this read: a losing creator reads the
+                # winner instead of reporting a failure or making a second package.
+                package = read_package()
+                if not package:
+                    raise
+        if not package:
+            return None
+
+        package_id = str(package["id"])
+        conversation_id = package.get("conversation_id")
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            if conversation_id:
+                # The tab and its metadata are the package's facts and are safe to restate. The
+                # title is NOT restated for an existing thread: the first question names it, and
+                # an assembly must never rename a conversation a person has used.
+                cursor.execute(
+                    """
+                    UPDATE conversations
+                       SET tab = %s,
+                           metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
+                     WHERE id = %s AND session_id = %s
+                    """,
+                    (
+                        tab,
+                        json.dumps(
+                            {
+                                "session_type": "design_tab",
+                                "design_tab": tab,
+                                "prompt_session_id": package_id,
+                            }
+                        ),
+                        conversation_id,
+                        package_id,
+                    ),
+                )
+                if cursor.rowcount == 0:
+                    conversation_id = None
+                else:
+                    # A tab's conversation carries the tab's name until a person's first turn
+                    # names it. Only a placeholder is replaced; a real title is left alone.
+                    cursor.execute(
+                        "SELECT title FROM conversations WHERE id = %s",
+                        (conversation_id,),
+                    )
+                    current_title = str((cursor.fetchone() or {}).get("title") or "")
+                    if current_title in ("New Chat", "Untitled Conversation") or current_title.endswith(" - Chat"):
+                        cursor.execute(
+                            "UPDATE conversations SET title = %s WHERE id = %s",
+                            (title, conversation_id),
+                        )
+            if not conversation_id:
+                cursor.execute(
+                    """
+                    INSERT INTO conversations
+                        (session_id, user_id, created_by, title, message_count, metadata, tab)
+                    VALUES (%s, %s, %s, %s, 0, %s::jsonb, %s)
+                    RETURNING id
+                    """,
+                    (
+                        package_id,
+                        user_id,
+                        user_id,
+                        title,
+                        json.dumps(
+                            {
+                                "session_type": "design_tab",
+                                "design_tab": tab,
+                                "prompt_session_id": package_id,
+                            }
+                        ),
+                        tab,
+                    ),
+                )
+                conversation_id = str(cursor.fetchone()["id"])
+                cursor.execute(
+                    "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
+                    (conversation_id, package_id),
+                )
+            if intro:
+                cursor.execute(
+                    "SELECT COUNT(*) AS count FROM conversation_messages WHERE conversation_id = %s",
+                    (conversation_id,),
+                )
+                if int(cursor.fetchone()["count"] or 0) == 0:
+                    cursor.execute(
+                        """
+                        INSERT INTO conversation_messages
+                            (conversation_id, user_id, role, content, metadata)
+                        VALUES (%s, %s, 'assistant', %s, %s::jsonb)
+                        """,
+                        (
+                            conversation_id,
+                            user_id,
+                            intro,
+                            json.dumps({"kind": "intro", "save_to_memory": False}),
+                        ),
+                    )
+                    cursor.execute(
+                        "UPDATE conversations SET message_count = 1, updated_at = NOW() WHERE id = %s",
+                        (conversation_id,),
+                    )
+
+            cursor.execute(
+                """
+                SELECT id::text AS id
+                  FROM conversations
+                 WHERE session_id = %s AND (is_archived IS NOT TRUE)
+                 ORDER BY updated_at DESC
+                """,
+                (package_id,),
+            )
+            conversation_ids = [str(row["id"]) for row in cursor.fetchall()]
+            conn.commit()
+
+        return {
+            "packageId": package_id,
+            "conversationId": str(conversation_id),
+            "conversationIds": conversation_ids,
+        }
 
     def get_sessions(
         self,
@@ -1709,6 +1954,7 @@ class PromptSessionsAPI:
                     FROM (
                         SELECT
                             ps.id,
+                            ps.is_archived,
                             COUNT(DISTINCT pv.id) as version_count,
                             COUNT(DISTINCT asug.id) as suggestion_count,
                             COUNT(DISTINCT CASE WHEN asug.used = TRUE THEN asug.id END) as used_suggestion_count
@@ -1716,7 +1962,7 @@ class PromptSessionsAPI:
                         LEFT JOIN prompt_versions pv ON ps.id = pv.session_id
                         LEFT JOIN ai_suggestions asug ON ps.id = asug.session_id
                         WHERE ps.user_id = %s
-                        GROUP BY ps.id
+                        GROUP BY ps.id, ps.is_archived
                     ) session_stats
                 """,
                     (user_id,),

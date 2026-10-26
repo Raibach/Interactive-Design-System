@@ -22,9 +22,9 @@ visible defect in this file, not a silent loss in a component.
 WHAT IT DOES NOT DO:
   * it never invents a value — a missing measurement produces no declaration, not a plausible one;
   * it never renames or reinterprets — layer names are kept, and the class name is derived from the
-    name by the same rule everywhere; the ONE declared translation is the font-face map (see
-    `_FONT_SUBSTITUTIONS` — the owner's font ruling, 2026-10-07), applied openly at the two
-    places a family is emitted, never anywhere else;
+    name by the same rule everywhere. There is NO translation of a measured value: the font-face
+    substitution that used to sit at the two places a family is emitted was removed on the owner's
+    ruling (2026-10-26), because a design that is copied must not be translated on the way;
   * it is unaware of the model. Nothing in this module imports, calls or waits for one.
 """
 
@@ -74,6 +74,10 @@ RENDERED_KEYS = {
     "radii", "effects", "text", "type_style", "runs", "textAutoResize",
     "path", "paths", "windingRule", "svg", "componentId", "annotation", "children",
     "opacity", "visible", "clips", "rotation", "sizing", "counterAxisSpacing",
+    # THE NODE'S OWN MATRIX — Figma's `relativeTransform`, drawn with `transform: matrix(...)` and
+    # the origin at the corner. It carries rotation, mirror and scale in one value, which the
+    # `rotation` field cannot express.
+    "transform",
     "strokeAlign", "strokeWeights", "strokeCap", "strokeJoin", "dashPattern", "constraints",
     # ── WHAT FIGMA STATED AND NOBODY PLACES YET ───────────────────────────────────────────────
     # `stated` is the carrier for every key Figma sent that this renderer has no mapping for
@@ -91,8 +95,19 @@ RENDERED_KEYS = {
 # against the draft (so the gap is visible and countable, and the preview says it in words) rather
 # than refused, because each one is a decision about what the element is allowed to do, not a value
 # being dropped in silence.
-ACCEPTED_UNRENDERED = {
-    "constraints": "Figma resizing constraints govern how a layer behaves when its frame is "
+# ── THE LAYERS WHOSE DRAWING IS A PATH ────────────────────────────────────────────────────────
+# Figma sends a drawn shape as path data on `fillGeometry`/`strokeGeometry`, whatever its type is.
+# This list is the ONE definition of which layer types carry a path, imported by the ingest (which
+# must READ it) and used here (which must DRAW it), so the two cannot disagree about a shape.
+#
+# WHY IT EXISTS AT ALL: the ingest read geometry only for `VECTOR`, so a boolean union, a star, an
+# ellipse or a polygon arrived with no outline and was reported as a fact that never reached the
+# spec. A drawn shape is a drawn shape; its type decides nothing about how it is carried.
+SHAPE_TYPES = frozenset({
+    "VECTOR", "BOOLEAN_OPERATION", "STAR", "ELLIPSE", "POLYGON", "LINE", "REGULAR_POLYGON",
+})
+
+ACCEPTED_UNRENDERED = {    "constraints": "Figma resizing constraints govern how a layer behaves when its frame is "
                    "resized; an element fixed at its measured size has nothing to obey them.",
     "strokeCap": "applies to an open path's ends; a border has no ends.",
     "strokeJoin": "applies to a path's corners; a border's corners are covered by radius.",
@@ -366,26 +381,23 @@ def _on_click_events(spec: dict[str, Any]) -> list[str]:
     return found
 
 
-# ── THE FACE SUBSTITUTIONS (the owner's font ruling, 2026-10-07) ─────────────────────────────
-# "Arial or rounded fonts -> becomes Nunito (found in chat interfaces for Grace). Inter ->
-# everywhere else. Numbers -> Inter. Use our fonts only - no API calls." A measured design that
-# states one of the faces below is EMITTED with the local face that draws it — the same rule the
-# hand-carried chat components wear since the same day — because a component that asks for a
-# face this repository does not ship falls back to whatever the machine happens to have, which
-# is the drift the ruling exists to end. Everything not listed keeps the design's own family:
-# this is a declared translation, not an interpretation, and this map is the whole of it.
-_FONT_SUBSTITUTIONS = {
-    "Arial Rounded MT Bold": "Nunito",
-    "Arial": "Nunito",
-    # The conversations card's face in chat-header; the owner ruled both chat cards Nunito
-    # (2026-10-07, asked which local family replaces DM Sans).
-    "DM Sans": "Nunito",
-}
+# ── THE SYSTEM'S ONE FACE ─────────────────────────────────────────────────────────────────────
+# THE APPLICATION SHIPS ONE TYPEFACE, IBM Plex Sans, SELF-HOSTED (owner, 2026-10-25: Carbon's type
+# "becomes the one face the whole application speaks"; restated 2026-10-26: *"We should be using
+# IBM's font. I added it as a ubiquitous font that replaces font everywhere in the system"*).
+#
+# SO A DESIGN'S FAMILY NAME IS MEASURED AND RECORDED, AND THE DRAWING USES THE SYSTEM'S FACE. That
+# is not a hidden translation: the fact table keeps `Inter` as the value Figma stated, and the
+# proof reports the family as a RECORDED SUBSTITUTION with the reason — it does not count it as an
+# exact match, and it does not call the design wrong. A component that asked for a family this
+# repository does not ship would otherwise fall back to whatever the machine happens to have, which
+# is what made the tool look like Times.
+_SYSTEM_FACE = "IBM Plex Sans"
 
 
 def _local_face(family: str) -> str:
-    """The family as emitted: substituted per the owner's ruling, or the design's own."""
-    return _FONT_SUBSTITUTIONS.get(family, family)
+    """The family as emitted: the system's one face. The stated family stays in the facts."""
+    return _SYSTEM_FACE
 
 
 def _text_html(node: dict[str, Any]) -> str:
@@ -494,6 +506,11 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
     size = node.get("size") or []
 
     if layout.get("layoutMode") in ("HORIZONTAL", "VERTICAL"):
+        # A POSITIONING CONTEXT FOR ANY CHILD THAT CARRIES A TRANSFORM. A transformed child is
+        # placed by its own matrix, not by the flow (its transform states where it belongs), and an
+        # absolutely positioned child anchors to the nearest positioned ancestor — without this it
+        # would anchor to the page and the mirror would move it outside the component.
+        out.append("position: relative")
         out.append("display: flex")
         out.append(f"flex-direction: {'row' if layout['layoutMode'] == 'HORIZONTAL' else 'column'}")
         for key, css in _LAYOUT_PROPERTIES.items():
@@ -526,6 +543,14 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
         # pixels, which is what "two hours for a two pixel padding" was looking at (owner,
         # 2026-09-29: *"Two hours for a two pixel padding… is it still serving half percentages?"*).
         out.append("position: absolute" if place is not None else "position: relative")
+        # A CUSTOM ELEMENT IS `display: inline` UNTIL SOMETHING SAYS OTHERWISE, and an inline box
+        # ignores width and height. Measured 2026-10-26 on a free frame whose root has no
+        # auto-layout: the element drew its 120 × 120 box at 0 × 0, because nothing in this rule
+        # declared a display. A layer with no layout mode is still a box, so it is declared as one.
+        # Text is excluded: its own branch below decides `display`, and two declarations for one
+        # property would write a CONFLICT into the stylesheet.
+        if place is None and not (node.get("type", "").upper() == "TEXT" or node.get("text") is not None):
+            out.append("display: block")
         if place is not None:
             out.append(f"left: {_px(place['left'])}")
             out.append(f"top: {_px(place['top'])}")
@@ -539,12 +564,14 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
     # text layer as a solid box: on a shape it is the BACKGROUND, on a TEXT layer it is the COLOUR
     # OF THE WORDS. A text layer never gets a background from its fill.
     is_text = node.get("type", "").upper() == "TEXT" or node.get("text") is not None
-    if node.get("fill") and not is_text:
-        out.append(f"background: {node['fill']}")
-    # SEVERAL FILLS ARE A STACK, and Figma lists them top-first — the same order CSS layers
-    # backgrounds in. Only the first was read before, so everything under it was invisible.
-    elif node.get("fills") and not is_text:
-        out.append(f"background: {', '.join(node['fills'])}")
+    if not is_text:
+        # A FILL STACK IS ONE DECLARATION. Figma lists fills top-first, which is the order CSS
+        # layers backgrounds in — and the ingest sets `fill` to the first paint AS WELL AS `fills`
+        # to the stack, so testing `fill` first made this branch unreachable: every fill under the
+        # first was invisible. `fills` is read first now, and `fill` is the single-paint case.
+        stack = node.get("fills") or ([node["fill"]] if node.get("fill") else [])
+        if stack:
+            out.append(f"background: {', '.join(stack)}")
     if node.get("radius") is not None:
         out.append(f"border-radius: {_px(node['radius'])}")
     elif node.get("radii"):
@@ -582,9 +609,25 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
         # A frame that clips lets nothing spill; without this a child larger than its box draws
         # over whatever is beside it.
         out.append("overflow: hidden")
-    if node.get("rotation") is not None:
-        # Figma's rotation is degrees counter-clockwise; CSS rotates clockwise, so the sign
-        # inverts. A rotated vector is placed by its own svg transform and never reaches here.
+    # ── THE NODE'S TRANSFORM, COMPOSED — NOT THE `rotation` FIELD ───────────────────────────────
+    # Figma supplies the node's own matrix (`relativeTransform`): rotation, mirror and scale in one
+    # value. `rotation` is a derived number and CANNOT express a mirror: on a mirrored node it reads
+    # 3.14159, and drawing it produced a 3.14° turn the file never asked for (measured 2026-10-26 on
+    # `figma-ingest-results-footer`, whose transform is `[[-1,0,624],[0,1,13]]`).
+    #
+    # SO THE MATRIX IS EMITTED AT EVERY LEVEL, GROUP INCLUDED, WITH THE ORIGIN AT THE CORNER. CSS
+    # composes nested transforms, and Figma's transform is relative to the parent, so the two agree
+    # level for level: a mirrored group, mirrored buttons, and text that reads normally because the
+    # two mirrors cancel. `transform-origin: 0 0` is Figma's origin — the node's own corner — where
+    # a rotation about the centre would move a turned box off its measured position.
+    linear: tuple[float, float, float, float] | None = _linear_of(node)
+    if linear is not None:
+        a, b, c, d = linear
+        out.append(f"transform: matrix({a:g}, {b:g}, {c:g}, {d:g}, 0, 0)")
+        out.append("transform-origin: 0 0")
+    elif node.get("rotation") is not None:
+        # No matrix on this node, and an angle is stated: the degrade path, kept for a response
+        # that carries one field and not the other. Never used when the transform is present.
         out.append(f"transform: rotate({round(-float(node['rotation']), 3)}deg)")
     sizing = node.get("sizing") or {}
     if sizing.get("layoutGrow"):
@@ -595,10 +638,12 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
     if align in ("STRETCH", "MIN", "CENTER", "MAX"):
         out.append(f"align-self: {'stretch' if align == 'STRETCH' else _ALIGNMENTS.get(align, 'auto')}")
 
-    for effect in node.get("effects") or []:
-        shadow = _shadow(effect)
-        if shadow:
-            out.append(f"box-shadow: {shadow}")
+    shadows = [shadow for effect in node.get("effects") or [] if (shadow := _shadow(effect))]
+    if shadows:
+        # SEVERAL SHADOWS ARE ONE DECLARATION. Emitted one per line, `_settled` saw the same
+        # property twice, kept the last value and wrote a CONFLICT comment — so a layer the design
+        # gave two shadows drew one of them.
+        out.append(f"box-shadow: {', '.join(shadows)}")
 
     style = node.get("type_style") or {}
     if style.get("fontFamily"):
@@ -719,6 +764,26 @@ def _shadow(effect: dict[str, Any]) -> str | None:
     return ("inset " if kind == "INNER_SHADOW" else "") + " ".join(parts)
 
 
+def _linear_of(node: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    """The 2x2 part of a node's stated transform, or None when it is the identity.
+
+    ONE DEFINITION, used by the placement (whether the flow may place this layer) and by the
+    declaration (whether a matrix is emitted), so the two cannot disagree about whether a layer is
+    transformed.
+    """
+    transform = node.get("transform")
+    if not isinstance(transform, list) or len(transform) < 2:
+        return None
+    try:
+        a, b = float(transform[0][0]), float(transform[0][1])
+        c, d = float(transform[1][0]), float(transform[1][1])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if abs(b) > 1e-9 or abs(c) > 1e-9 or abs(a - 1) > 1e-9 or abs(d - 1) > 1e-9:
+        return a, b, c, d
+    return None
+
+
 def _child_offset(node: dict[str, Any], parent: dict[str, Any] | None) -> dict[str, float] | None:
     """Where a child sits inside a parent that does not lay it out — the measured offset.
 
@@ -731,15 +796,45 @@ def _child_offset(node: dict[str, Any], parent: dict[str, Any] | None) -> dict[s
     relative to the box inside its parent's border, while Figma's offsets are from the frame's
     outer corner — so a parent with a stroke has its border width taken off the offset.
     """
-    if parent is None or (parent.get("layout") or {}).get("layoutMode"):
+    if parent is None:
+        # THE ROOT IS PLACED BY WHOEVER USES THE COMPONENT. Its transform is relative to Figma's
+        # canvas, not to a parent element — emitting it would move the component to the canvas
+        # coordinates Figma happened to give it (measured: -23327, -4023).
         return None
+    parent_lays_out = bool(parent is not None and (parent.get("layout") or {}).get("layoutMode"))
+    # A NODE THAT STATES A TRANSFORM IS PLACED BY IT, not by its parent's flow. Its transform gives
+    # its own origin in the parent's space; `justify-content`, `gap` and the flow would otherwise
+    # override that origin, which is what pushed a mirrored group 415px outside its own frame.
+    linear = _linear_of(node)
+    if parent_lays_out and linear is None:
+        return None
+    # THE NODE'S OWN ORIGIN, WHEN FIGMA STATES THE TRANSFORM. `relativeTransform`'s translation is
+    # where the node's local origin sits in the parent's space — the position BEFORE the box was
+    # turned or mirrored. The absolute bounding box cannot give that: it is the box AFTER the
+    # transform, so an offset derived from it is off by the transform's own extent. Measured
+    # 2026-10-26: the mirrored footer's buttons are 0/134/273 into the group by transform and
+    # 1–3 px different by bounding box.
+    transform = node.get("transform")
+    if isinstance(transform, list) and len(transform) >= 2:
+        try:
+            return {
+                "left": round(float(transform[0][2]), 4),
+                "top": round(float(transform[1][2]), 4),
+            }
+        except (TypeError, ValueError, IndexError):
+            pass
     pos, parent_pos = node.get("position"), parent.get("position")
     if not (pos and parent_pos and len(pos) == 2 and len(parent_pos) == 2):
         return None
     inset = float(((parent.get("stroke") or {}).get("weight")) or 0)
     return {
-        "left": round(pos[0] - parent_pos[0] - inset, 2),
-        "top": round(pos[1] - parent_pos[1] - inset, 2),
+        # FOUR DECIMALS, THE SAME AS `_px`. These were rounded to two, which is a silent edit of the
+        # design's own offset: measured 2026-10-26 on node `I40001207:3564;40001207:3441`, the
+        # design puts the vector 8.4883px into its parent and the file said 8.49 — a difference the
+        # value check then reported as a misplacement, which it was not. Tidy bytes are not worth a
+        # changed number.
+        "left": round(pos[0] - parent_pos[0] - inset, 4),
+        "top": round(pos[1] - parent_pos[1] - inset, 4),
     }
 
 def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None = None) -> str:
@@ -866,7 +961,7 @@ def render_spec(spec: dict[str, Any], tag: str, catalog: dict[str, str] | None =
             return f"<{supplied}{click_attr(node)}></{supplied}>"
 
         # A vector is the artwork the measurement produced — the finished svg, never a redraw.
-        if node_type == "VECTOR" and (node.get("svg") or node.get("paths") or node.get("path")):
+        if node_type in SHAPE_TYPES and (node.get("svg") or node.get("paths") or node.get("path")):
             svg = node.get("svg")
             if not svg:
                 # EVERY PATH THE VECTOR HAS, for the same reason the svg above carries them: a

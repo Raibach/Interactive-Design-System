@@ -338,7 +338,7 @@ export class PromptInputSection extends LitElement {
       border: none;
       cursor: pointer;
       text-align: left;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 700;
       color: #171717;
@@ -416,7 +416,7 @@ export class PromptInputSection extends LitElement {
       pointer-events: none;
     }
     .seat-tip-title {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 700;
       color: #171717;
@@ -424,7 +424,7 @@ export class PromptInputSection extends LitElement {
     }
     .seat-tip-body {
       margin: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 1.45;
@@ -444,7 +444,7 @@ export class PromptInputSection extends LitElement {
       height: 43px;
       width: 165px;
       padding: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       white-space: nowrap;
     }
     /* Figma 40000909-4323 — " | " separator is light weight inside "Functions | Tools". Drawn
@@ -493,7 +493,7 @@ export class PromptInputSection extends LitElement {
       border-left: 4px solid #8b8b8b;
       background: #f7f7f7;
       color: #404040;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 600;
       line-height: 16px;

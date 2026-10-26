@@ -35,7 +35,17 @@ const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = join(FRONTEND, '..');
 const CATALOG_NAME = 'prompt-composer';
 const CATALOG_PATH = join(FRONTEND, 'src', 'components', 'A2UI', 'catalogs', CATALOG_NAME, 'catalog.json');
-const ELEMENTS_DIR = join(FRONTEND, 'src', 'components', 'lit');
+/*
+ * WHERE AN ELEMENT CAN BE DEFINED — the whole source tree, not one folder.
+ *
+ * It used to be `src/components/lit` alone, on the assumption that every element lived there. A
+ * tab's seat is now its OWN FILE in the tab's own folder (owner, 2026-10-18: "a tab's seat is its
+ * own file; the only things shared are the lit components and the styling"), so the Design room's
+ * seat lives in `src/design` and the Console's in `src/rooms/console`. Scanning one folder reported
+ * a tag those files DO define as "nothing defines that tag" — a blocking finding that was false.
+ * The check reads every source file so what it reports is what the app actually contains.
+ */
+const ELEMENTS_DIR = join(FRONTEND, 'src');
 const REPORT_DIR = join(FRONTEND, 'catalog-audit');
 
 /**
@@ -390,6 +400,69 @@ const main = async () => {
     });
   }
 
+  // ── CHECK: a record that says "verbatim" must BE verbatim ──────────────────
+  /*
+   * THE FIGMA MAP IS A CLAIM ABOUT A FILE, so it can be compared against the file.
+   *
+   * This check exists because the two disagreed and nothing noticed: a font sweep rewrote the
+   * families in five generated components from Figma's `Inter` to `IBM Plex Sans`, and one
+   * hand-built component's record went on declaring `"typography": "verbatim"` while its file drew
+   * another family. A record is only worth reading if a run can catch it lying, so:
+   *
+   *   verbatim     — every font-family in the file must be the family the record names;
+   *   substituted  — allowed, and it must say what was drawn and why.
+   *
+   * The generated components of an ingest are never substituted (owner, 2026-10-26: "Figma wins,
+   * no exception"), and that is enforced where a design is measured, not here — here the record
+   * is the subject.
+   */
+  const REGISTRY_PATH = join(FRONTEND, 'src', 'components', 'registry.json');
+  if (existsSync(REGISTRY_PATH)) {
+    const registry = JSON.parse(await readFile(REGISTRY_PATH, 'utf8'));
+    for (const entry of registry.components ?? []) {
+      const recorded = entry.values?.label?.fontFamily;
+      if (!recorded) continue;
+      const file = entry.file ? join(REPO, entry.file) : null;
+      if (!file || !existsSync(file)) continue;
+      const text = await readFile(file, 'utf8');
+      const used = [...text.matchAll(/font-family:\s*(['"])([^'"]+)\1/g)].map((m) => m[2]);
+      // `inherit` is a keyword, not a family: a descendant that inherits is not a substitution.
+      const families = [...new Set(used)].filter(
+        (family) => !['inherit', 'initial', 'unset', 'revert', 'currentcolor'].includes(family.toLowerCase()),
+      );
+      const differing = families.filter((family) => family !== recorded);
+      const claim = entry.provenance?.typography;
+      if (claim === 'verbatim' && differing.length) {
+        add({
+          id: `typography-verbatim:${entry.figmaName}`,
+          check: 'typography-verbatim',
+          stage: 'deliver',
+          owner: 'pipeline',
+          level: 'blocking',
+          component: entry.litComponent,
+          file: entry.file,
+          what: `The record says the typography is verbatim and names "${recorded}"; the file draws ` +
+            `${differing.map((f) => `"${f}"`).join(', ')}.`,
+          fix: `Draw "${recorded}", or record the substitution: provenance.typography = "substituted" ` +
+            'with a note naming the family drawn and why.',
+        });
+      }
+      if (claim === 'substituted' && !entry.provenance?.typographyNote) {
+        add({
+          id: `typography-unnamed:${entry.figmaName}`,
+          check: 'typography-verbatim',
+          stage: 'deliver',
+          owner: 'pipeline',
+          level: 'advisory',
+          component: entry.litComponent,
+          file: entry.file,
+          what: `The record says the typography is substituted and does not say what was drawn or why.`,
+          fix: 'Add provenance.typographyNote naming the family the file draws.',
+        });
+      }
+    }
+  }
+
   // ── MEASUREMENT: IS ANYTHING USING IT? ────────────────────────────────────
   /*
    * DRAWABLE AND USED ARE TWO DIFFERENT QUESTIONS, and a tree that answers only the first
@@ -497,7 +570,7 @@ const main = async () => {
   // If nothing was wrong anywhere, say so once per check — a report of only failures cannot
   // tell "checked and clean" from "did not check".
   const checks = [...new Set(findings.map((f) => f.check))];
-  const allChecks = ['catalog-member', 'component-resolves', 'slots', 'props', 'events', 'doc-claim-drift'];
+  const allChecks = ['catalog-member', 'component-resolves', 'slots', 'props', 'events', 'typography-verbatim', 'doc-claim-drift'];
 
   const report = {
     generatedAt: new Date().toISOString(),

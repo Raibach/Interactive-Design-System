@@ -14,7 +14,7 @@ console's branch in `routes/ai.py` is not imported, branched, or changed by anyt
 
 WHAT DIFFERS, AND ONLY THIS: the cards are the `design_master` rows (design elements), the
 seat is the room's own element (`design-chat-panel`, a whole duplicate of `chat-panel`), and the
-tree is gated against the catalogue that gates Design (`design-artifacts`).
+tree is gated against the one catalogue.
 
 THE FIGMA INGESTION TOOL IS NOT TOUCHED BY THIS FILE. It belongs to the Tools tab and its
 files stay whole; this endpoint serves the design console's cards and seat, nothing else.
@@ -31,7 +31,7 @@ import psycopg2.extras
 from fastapi import APIRouter, Header, HTTPException
 
 import services as state
-from deps import a2ui_catalog_for, a2ui_catalog_id, validate_a2ui_components
+from deps import A2UI_CATALOG_ID, a2ui_catalog_for, validate_a2ui_components
 from grace_gui import LAST_USAGE, query_llm
 from tools import render_tools_block
 
@@ -66,12 +66,12 @@ not speak for it here, and you do not edit an element from this room.
 
 def _design_vocabulary() -> str:
     """The component list for the design console's prompt, generated from the catalogue that
-    gates it (`design-artifacts`) — the console's own generator, copied and pointed at this
+    gates it (the official catalogue) — the console's own generator, copied and pointed at this
     room's catalogue. Derived, never hand-typed: the prompt and the validator cannot disagree."""
-    components = (a2ui_catalog_for("design-artifacts") or {}).get("components") or {}
+    components = (a2ui_catalog_for("prompt-composer") or {}).get("components") or {}
     if not components:
         raise RuntimeError(
-            "the design-artifacts catalogue is empty — refusing to assemble a prompt with no "
+            "the catalogue is empty — refusing to assemble a prompt with no "
             "component vocabulary. Every payload is validated against it, so without it the "
             "model can only invent components that will be rejected with a 503."
         )
@@ -240,9 +240,30 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                         }
     except Exception as e:  # noqa: BLE001 — a missing package is SAID, never silent
         print(f"[Design Console] the design tab packages could not be read: {e}")
-    console_conversation = (
-        design_packages.get("chat", {}).get("conversationId") or package["conversation_id"]
-    )
+
+    # THE CHAT TAB'S OWN PACKAGE — created by the one writer every conversation tab uses, so a
+    # missing row is repaired here rather than silently falling back to the Design container.
+    # The fallback was the old shape: a conversation keyed by a tab name on the container's own
+    # row. The console now reads the Chat package's conversation and nothing else.
+    try:
+        design_chat_tab = state.prompt_sessions_api.get_or_create_design_tab(
+            user_id=x_user_id, tab="chat"
+        )
+    except Exception as e:  # noqa: BLE001 — a failure to resolve is stated with its cause
+        raise HTTPException(
+            status_code=503,
+            detail=f"DESIGN CONSOLE FAILURE: the Chat tab's package could not be resolved — {e}",
+        ) from e
+    if not design_chat_tab:
+        raise HTTPException(
+            status_code=503,
+            detail="DESIGN CONSOLE FAILURE: the Chat tab's package did not resolve (not created).",
+        )
+    design_packages["chat"] = {
+        "packageId": design_chat_tab["packageId"],
+        "conversationId": design_chat_tab["conversationId"],
+    }
+    console_conversation = design_chat_tab["conversationId"]
 
     try:
         with psycopg2.connect(DATABASE_URL) as conn:
@@ -343,7 +364,7 @@ REQUIREMENTS (the console's own surface, copied: the card grid left, the seat ri
 is the ROOM's own — the buttons `DESIGN_CONSOLE_TABS` names, and nothing else. The UX entry is
 gone from this room: the framed application it opened took a minute to draw a white column, and
 the owner's call was to take it out rather than wait):
-1. id "root", component "workspace-layout" — the composer's own container. Its
+1. id "root", component "design-workspace" — the Design room's own frame. Its
    panes are NAMED slots, so "children" is an OBJECT keyed by slot name; the
    array form fills nothing.
 2. "card-grid": ConsoleCardGrid in slot "left", items bound to {{"path": "/cards"}}
@@ -361,7 +382,7 @@ Emit nothing else — no greeting, no header, no Text above them.
 Output ONLY this exact JSON (no markdown, no extra text):
 {{
   "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "design-console-chat"}}}},
+    {{"id": "root", "component": "design-workspace", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "design-console-chat"}}}},
     {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
     {{"id": "design-console-chat", "component": "chat-panel", "tracePrompt": false, "allowedTabs": "{DESIGN_CONSOLE_TABS}", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "children": {{"view": "repair-view"}}}},
     {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
@@ -397,7 +418,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
         if not isinstance(components, list) or not components:
             raise ValueError("components must be non-empty array")
         # THE TRUSTED NAME IS THE CATALOGUE'S, and the room draws its own element regardless.
-        # `chat-panel` is the seat name the design-artifacts catalogue gates; the room's
+        # `chat-panel` is the seat name the catalogue gates; the room's
         # element tag is `design-chat`, and `design-chat-panel` is in NO catalogue — emitting
         # it failed this route's own validator (measured 2026-10-19: the door answered 503,
         # "Component 'design-chat-panel' is not in the trusted catalog (Design Artifacts)").
@@ -407,6 +428,28 @@ Output ONLY this exact JSON (no markdown, no extra text):
         for c in components:
             if isinstance(c, dict) and c.get("component") == "design-chat-panel":
                 c["component"] = "chat-panel"
+        # THE CONSOLE HAS NO COLUMN FOOTER. Owner, 2026-10-25: the footer is *"a footer for
+        # tools … that does not show on the console"*, and the controls are *"only served in to
+        # tools"*. The plate is the TOOLS container's control, named where that container is
+        # composed; this surface carries none — not even one the model named. It is REMOVED, not
+        # ignored: leaving the root pointing at it would be a reference to something not sent.
+        _footers = {
+            _c.get("id")
+            for _c in components
+            if isinstance(_c, dict)
+            and (_c.get("component") == "design-left-footer" or _c.get("id") == "left-footer")
+        }
+        if _footers:
+            components = [
+                _c for _c in components
+                if not (isinstance(_c, dict) and _c.get("id") in _footers)
+            ]
+            for _c in components:
+                if isinstance(_c, dict) and _c.get("id") == "root":
+                    _kids = _c.get("children") if isinstance(_c.get("children"), dict) else {}
+                    _kids.pop("left-footer", None)
+                    _c["children"] = _kids
+                    break
         _design_seat_tabs(components, DESIGN_CONSOLE_TABS)
         _design_seat_grace(components, "/console", True)
         ai_message = parsed.get("ai_message", f"{len(cards)} design elements ready.")
@@ -429,7 +472,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
         )
 
     # THE GATE IS DESIGN'S OWN — the whole tree, after every component is in it.
-    validate_a2ui_components(components, "design-artifacts")
+    validate_a2ui_components(components)
 
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     print(f"[PERF TRACE] POST /api/design/console | total={elapsed_ms}ms")
@@ -439,7 +482,7 @@ Output ONLY this exact JSON (no markdown, no extra text):
             "version": "v0.9.1",
             "createSurface": {
                 "surfaceId": "main",
-                "catalogId": a2ui_catalog_id("design-artifacts"),
+                "catalogId": A2UI_CATALOG_ID,
             },
         },
         {
@@ -480,3 +523,33 @@ Output ONLY this exact JSON (no markdown, no extra text):
             },
         },
     ]
+
+
+@router.post("/api/design/apply-carbon")
+async def apply_carbon(x_user_id: str | None = Header(None, alias="X-User-ID")):
+    """THE DESIGNER'S OWN BUTTON (2026-10-25): applies Carbon as a dedicated design system and
+    IBM Plex as the application's face, by running the repository's own script
+    (`frontend/scripts/apply-carbon-system.mjs`). The script is idempotent — a second run
+    writes nothing that already stands. The button in the Design seat calls this door; nothing
+    here changes any room's running surface by itself."""
+    import subprocess
+
+    try:
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        frontend_dir = os.path.join(repo_root, "frontend")
+        proc = subprocess.run(
+            ["node", "scripts/apply-carbon-system.mjs"],
+            cwd=frontend_dir,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        stdout_tail = "\n".join((proc.stdout or "").strip().splitlines()[-60:])
+        if proc.returncode != 0:
+            detail = (proc.stderr or stdout_tail or "no output").strip()[-800:]
+            raise HTTPException(status_code=500, detail=f"apply-carbon failed ({proc.returncode}): {detail}")
+        return {"ok": True, "output": stdout_tail}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"apply-carbon could not run: {e}")

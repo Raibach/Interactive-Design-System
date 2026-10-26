@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#110E1F" />
     <!-- Inter + Nunito, SELF-HOSTED (owner, 2026-10-06): the two preconnects and the Google
          stylesheet that stood here made every page load reach Google's font hosts —
          the one third-party request left in the entry. The files now live in public/fonts/ and
@@ -20,6 +19,16 @@
          face went unused within its window). The stylesheet loads the face when the styles that
          need it arrive; nothing is warmed ahead of being needed. -->
     <link rel="stylesheet" href="/fonts/fonts.css">
+    <!-- THE GROUND IS WARMED AT DOCUMENT START (owner, 2026-10-23): a preload fetches
+         the shell's background image the moment the page begins, so the shell's first
+         frame paints the image itself — never its bare base, never white. -->
+    <link rel="preload" as="image" href="/src/assets/composer-image-bg.webp" />
+    <!-- THE ROOMS' OWN GROUNDS START WITH THE DOCUMENT TOO (owner, 2026-10-24): no room may
+         open onto a bare fill while its own background is still on the wire. They carry a low
+         priority so the first screen's code and its own ground keep the front of the queue. -->
+    <link rel="preload" as="image" fetchpriority="low" href="/src/assets/design-section2-bkg.webp" />
+    <link rel="preload" as="image" fetchpriority="low" href="/src/assets/canvas-development-lab-bkg.webp" />
+    <link rel="preload" as="image" fetchpriority="low" href="/src/assets/data-wave4-flipped.webp" />
     <title>Raibach — Interactive Design Systems</title>
     <!--
       NO ACCESS CODE LIVES IN THIS FILE (2026-10-22).
@@ -29,12 +38,153 @@
       not a door. Access is by request; neither this document nor the bundle carries a pin, and
       no document in the repository repeats one.
     -->
+
+
+
+    <!--
+      ── THE DOOR (owner, 2026-10-23) ─────────────────────────────────────────────────────────
+      A curtain over the page, and nothing more. It is NOT authentication: no session, no
+      provider, no route, no request, and the application knows nothing about it. It exists so a
+      visitor reads the branding and types the pin instead of landing straight in the studio.
+
+      IT IS A SIBLING OF #root, IN THE DOCUMENT. That is deliberate: it is mounted once per
+      page load, never per room, and there is no code path from here into a room, a chat, or
+      the server.
+
+      IT LIFTS WHEN THE APP HAS DRAWN, and only then. The test is a READ of the document — the
+      app puts its first element into #root — never a contract the application has to honour.
+      Two bounds: a 400 ms floor so a warm cache cannot make it flicker, and a 10 s dead stop,
+      because a cover may never outlive the truth it stands over.
+
+      THE PIN IS READABLE IN THIS FILE, stated plainly: it keeps a casual visitor out. It is not
+      security, and the server never consults it.
+    -->
     <style>
       html, body { margin: 0; background: #110E1F; }
+      #door {
+        position: fixed; inset: 0; z-index: 2147483647;
+        display: flex; align-items: center; justify-content: center;
+        background: #110E1F; font-family: 'IBM Plex Sans', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        transition: opacity 320ms ease;
+      }
+      #door .card {
+        display: flex; flex-direction: column; align-items: center;
+        width: 380px; max-width: calc(100vw - 32px); box-sizing: border-box;
+        background: #231f2e; border-radius: 16px; padding: 48px 40px 44px;
+        box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+      #door .logo {
+        width: 72px; height: 72px; border-radius: 14px; overflow: hidden;
+        margin-bottom: 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); background: #110E1F;
+      }
+      #door .logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+      #door .name { font-weight: 900; font-size: 32px; letter-spacing: -0.02em; color: #f5f0e8; line-height: 1; }
+      #door .sub { font-weight: 500; font-size: 14px; color: rgba(245,240,232,0.35); margin-top: 4px; }
+      #door .tag { font-size: 13px; color: rgba(245,240,232,0.55); margin-top: 6px; }
+      #door .rule {
+        width: 40px; height: 2px; border-radius: 2px; margin: 20px 0;
+        background: linear-gradient(-90deg, rgb(240,179,35), rgb(254,209,65));
+      }
+      #door form { display: flex; flex-direction: column; align-items: center; width: 100%; }
+      #door input {
+        width: 100%; box-sizing: border-box; height: 48px; padding: 0 14px; margin-bottom: 12px;
+        display: block; font: inherit; font-size: 14px; color: #f5f0e8;
+        background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px; outline: none;
+      }
+      #door input:focus { border-color: rgba(240,179,35,0.55); }
+      #door .err { display: none; font-size: 12px; color: #ff6b6b; margin: 4px 0 12px; text-align: center; }
+      #door .err.on { display: block; }
+      #door button {
+        width: 100%; height: 46px; margin-top: 8px; display: flex; align-items: center;
+        justify-content: center; font: inherit; font-weight: 700; font-size: 14px; color: #110E1F;
+        background: linear-gradient(-90deg, rgb(240,179,35), rgb(254,209,65));
+        border: none; border-radius: 10px; cursor: pointer;
+      }
+      #door .wait { display: none; flex-direction: column; align-items: center; gap: 16px; padding: 8px 0; }
+      #door .ring {
+        width: 26px; height: 26px; border-radius: 50%;
+        border: 3px solid rgba(240,179,35,0.25); border-top-color: rgb(240,179,35);
+        animation: door-spin 900ms linear infinite;
+      }
+      #door .wait p { margin: 0; font-size: 13px; color: rgba(245,240,232,0.55); }
+      /* After the pin: the form steps aside for the ring while the console draws beneath. */
+      #door.waiting form { display: none; }
+      #door.waiting .wait { display: flex; }
+      @keyframes door-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #door .ring { animation: none; } }
     </style>
   </head>
   <body>
+    <div id="door">
+      <div class="card">
+        <div class="logo"><img src="/raibach-logo.jpg" alt="Raibach" /></div>
+        <div class="name">Raibach</div>
+        <div class="sub">Interactive Design Systems</div>
+        <div class="tag">AI-Driven Design System Management</div>
+        <div class="rule"></div>
+        <form id="door-form" novalidate>
+          <input type="text" value="dev@local" readonly aria-label="Email" />
+          <!-- THE BROWSER IS TOLD THIS IS NOT A CREDENTIAL (owner, 2026-10-25): the pin is a
+               demo door, never a stored password, so no browser may fill it from its vault or
+               offer to save it. `new-password` is the declaration that removes both. -->
+          <input type="password" id="door-pin" placeholder="PIN code (See resume)" autocomplete="new-password" aria-label="PIN code" />
+          <p class="err" id="door-err" role="alert"></p>
+          <button type="submit">Sign in</button>
+        </form>
+        <div class="wait"><div class="ring" aria-hidden="true"></div><p>Preparing…</p></div>
+      </div>
+    </div>
     <div id="root"></div>
+<script>
+      (function () {
+        var PIN = '7377';
+        var door = document.getElementById('door');
+        var form = document.getElementById('door-form');
+        var pin = document.getElementById('door-pin');
+        var err = document.getElementById('door-err');
+        var MIN_MS = 400, MAX_MS = 10000;
+
+        function lift() {
+          door.style.opacity = '0';
+          setTimeout(function () { if (door && door.parentNode) door.parentNode.removeChild(door); }, 340);
+        }
+
+        /* The app has drawn when it has put its first element into #root. Read-only. */
+        function drawn() {
+          var root = document.getElementById('root');
+          return !!(root && root.childElementCount > 0);
+        }
+
+        /*
+         * NO MEMORY, ON PURPOSE (owner, 2026-10-23): there is no stored flag here at all — no
+         * sessionStorage, no localStorage, no cookie. The pin is asked for on EVERY page load,
+         * in every tab, in every window, incognito or not — there is no state anywhere that
+         * could remember a previous visit and skip the door.
+         */
+
+        form.addEventListener('submit', function (ev) {
+          ev.preventDefault();
+          if (pin.value !== PIN) {
+            err.textContent = 'Invalid email or PIN code';
+            err.className = 'err on';
+            pin.value = '';
+            return;
+          }
+          err.className = 'err';
+          door.className = 'waiting';
+          var started = Date.now();
+          var timer = setInterval(function () {
+            var t = Date.now() - started;
+            if (t >= MAX_MS || (t >= MIN_MS && drawn())) { clearInterval(timer); lift(); }
+          }, 100);
+        });
+        pin.addEventListener('input', function () { err.className = 'err'; });
+        pin.focus();
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

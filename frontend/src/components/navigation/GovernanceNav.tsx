@@ -46,9 +46,6 @@ const stroke = {
 const HomeIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M3 10.5L12 3l9 7.5M5 9.5V21h14V9.5" /></svg>
 );
-const SessionsIcon = ({ className }: IconProps) => (
-  <svg viewBox="0 0 24 24" className={className} {...stroke}><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
-);
 const UsersIcon = ({ className }: IconProps) => (
   <svg viewBox="0 0 24 24" className={className} {...stroke}>
     <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
@@ -125,7 +122,8 @@ const NAV_ITEMS: NavItem[] = [
   // the configuration-level items — stay (owner: *"you can click on the Home
   // icon on the left-hand side which will remain. It's just going to be more
   // high-level configuration than it is navigation."*).
-  { label: "Sessions", href: langfuseHref("/sessions"), icon: SessionsIcon, group: "Observability" },
+  // SESSIONS IS NOT HERE (owner, 2026-10-24): it is the chat panel's own tab. The left
+  // nav must not open a second Sessions interface.
   { label: "Users", href: langfuseHref("/users"), icon: UsersIcon, group: "Observability" },
   { label: "Alerts", href: langfuseHref("/alerts"), icon: AlertsIcon, group: "Observability" },
   { label: "Prompts", href: langfuseHref("/prompts"), icon: PromptsIcon, group: "Prompt Management" },
@@ -236,7 +234,7 @@ export default function GovernanceNav({ onNavigate, activePath }: GovernanceNavP
         <img src={raibachLogo} alt="Raibach" className="rounded object-cover shrink-0" style={{ width: 28, height: 28 }} />
         {!isCollapsed && (
           <div className="flex flex-col items-start leading-tight flex-1 min-w-0" style={{ marginLeft: 8 }}>
-            <span style={{ color: "#ffffff", fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 700, letterSpacing: "-0.02em", fontSize: "18px" }}>RAIBACH IDS</span>
+            <span style={{ color: "#ffffff", fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontWeight: 700, letterSpacing: "-0.02em", fontSize: "18px" }}>RAIBACH IDS</span>
             <span style={{ color: "#ffffff", letterSpacing: "0.06em", fontSize: "11px", fontWeight: 600 }}>Interactive Design System</span>
           </div>
         )}

@@ -10,14 +10,13 @@ import { useEffect } from 'react';
 
 /** Exactly what the block needs from the shell, by name. */
 export interface UseProductConversationPollDeps {
-  hasUnsavedChangesRef: any;
   headerTab: any;
   productRoomProjectId: any;
   productSeatRef: any;
 }
 
 export function useProductConversationPoll(deps: UseProductConversationPollDeps) {
-  const { hasUnsavedChangesRef, headerTab, productRoomProjectId, productSeatRef } = deps;
+  const { headerTab, productRoomProjectId, productSeatRef } = deps;
   useEffect(() => {
     if ((headerTab || '') !== 'product') return;
     if (!productRoomProjectId) return;
@@ -95,10 +94,6 @@ export function useProductConversationPoll(deps: UseProductConversationPollDeps)
             seen = healTick ? 0 : msgs.length;
             if (!healTick) return;
           }
-          // DID THIS TICK BRING A NEW PERSON'S TURN? — the delta since the last read (on the
-          // heal tick, the whole history). That is the product's "content changed": the moment
-          // the exit gate's same ref must be consulted (below).
-          const newUserTurn = msgs.slice(seen).some((m) => String(m.role || '') === 'user');
           // EVERY NEW AGENT MESSAGE RIDES IN WITH ITS OWN TYPE (2026-10-06, the app-design
           // port): the thread groups by `messageType`, so the poller no longer hand-picks
           // two transient lines — it hands the seat exactly what the engine wrote, in order.
@@ -120,25 +115,6 @@ export function useProductConversationPoll(deps: UseProductConversationPollDeps)
             );
           }
           if (msgs.length > seen) seen = msgs.length;
-          // THE GATE'S SAME REF, RAISED FROM THE ENGINE'S OWN FACTS — the Composer's rule (see
-          // the beforeunload effect): a spoken turn is unsaved work until the project resolves
-          // (save-as-draft / publish / discard; `guardProductExit` clears the same ref on every
-          // resolution). The guard's own endpoint answers whether anything is at risk — a
-          // published project has nothing left to lose — and it is asked ONLY on ticks that
-          // brought a new person's turn, so quiet ticks make no requests.
-          if (newUserTurn) {
-            void (async () => {
-              try {
-                const st = await fetch(
-                  `${POLL_BASE}/builder/state?project_id=${encodeURIComponent(productRoomProjectId)}`,
-                );
-                const s = (await st.json().catch(() => null)) as
-                  | { ok?: boolean; published?: boolean; has_work?: boolean }
-                  | null;
-                if (s?.ok && !s.published && s.has_work) hasUnsavedChangesRef.current = true;
-              } catch { /* unreadable → the exit guard asks again on the way out */ }
-            })();
-          }
         } catch {
           /* engine down or a transient read — the next tick tries again */
         }

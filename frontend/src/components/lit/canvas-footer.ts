@@ -183,7 +183,7 @@ export class CanvasFooter extends LitElement {
        primary: 43px, radius 6, the gold gradient, the drop shadow, Inter ExtraBold 18
        black. secondary: 43px, radius 6, white, the same shadow, Inter Bold 16 #5A5A5A. */
     .bar button {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       height: 43px; padding: 0 18px;
       border: none; border-radius: 6px; cursor: pointer;
       box-shadow: 0px 4px 4px 0px rgba(0, 0, 0, 0.25), -4px -4px 10px 0px rgba(0, 0, 0, 0.15);
@@ -234,7 +234,7 @@ export class CanvasFooter extends LitElement {
 
     /* THE MASTER'S SECONDARY, at the chip's size — one voice for the whole bar. */
     .chip {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       height: 32px; padding: 0 10px;
       font-size: 13px; font-weight: 700; color: #5A5A5A;
       background: #F7F8F2;

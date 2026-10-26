@@ -1,11 +1,9 @@
 /**
- * THE FIGURES RULE — a number renders in Inter, whatever face surrounds it.
+ * THE FIGURES RULE — a number renders in the system's mono face, whatever face surrounds it.
  *
- * The owner's font ruling, 2026-10-07: "Arial or rounded fonts -> becomes Nunito (found in
- * chat interfaces for Grace). Inter -> everywhere else. Numbers -> Inter." The chat's text
- * is Nunito; the readouts and counts inside it are figures, and figures are Inter — a figure
- * renders in ONE face, unit and sign included ("12s", "89.38%", "28.495s", "1,234"), while
- * the words around it keep the chat's rounded voice.
+ * The owner's font ruling, 2026-10-25: Carbon's type — IBM Plex — becomes the one face the
+ * application speaks; figures and code take IBM Plex Mono, everything else IBM Plex Sans.
+ * The chat's words and the readouts inside it stay distinguishable by family, as before.
  *
  * HOW TO USE IT. Spread `figureStyles` into the element's styles and render any generated
  * line that may carry figures through the helper:
@@ -31,10 +29,12 @@ import { css, html, type TemplateResult } from 'lit';
  */
 const FIGURE = /(\d[\d.,]*\d|\d)(?:%|[a-z]{1,2}(?![a-z]))?/g;
 
-/** The figure face — spread this wherever `figures()` output is rendered. */
+/** The figure face — spread this wherever `figures()` output is rendered. Numbers render in
+    the system's mono face, so a figure reads as a figure wherever it stands (owner, 2026-10-25:
+    IBM Plex everywhere; figures and code take the Mono). */
 export const figureStyles = css`
   .num {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'IBM Plex Mono', monospace;
   }
 `;
 

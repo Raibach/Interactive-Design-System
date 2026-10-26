@@ -9,7 +9,7 @@
  *   1. THE SCHEMA — enforced, loaded at startup, exits 1 if it fails.
  *        `system-role · user-role · tool-call · few-shot · constraints`
  *        tag-registry.ts:47 (PromptSectionSchema) and the `type` enum in
- *        A2UI/catalogs/prompt-composer/catalog.json (also ecommerce).
+ *        A2UI/catalogs/prompt-composer/catalog.json.
  *   2. THE EDITOR — the value actually stored in `_sections[].type`:
  *        'system' | 'user' | 'agent' | 'tool-call' | 'custom-data'
  *        | 'custom'   (prompt-section-editor.ts:248, "Add Section")
@@ -58,11 +58,10 @@
  * reads the live `PromptSectionSchema` and asserts this list equals its options,
  * so the two cannot drift apart again.
  *
- * Four places carry this enum and all four were updated together:
+ * Three places carry this enum and all three were updated together:
  *   tag-registry.ts:47   (the zod schema — enforced)
  *   tag-registry.ts:686  (TAG_REGISTRY's descriptor)
  *   catalogs/prompt-composer/catalog.json
- *   catalogs/ecommerce/catalog.json
  */
 export const SCHEMA_SECTION_TYPES = [
   'system-role',

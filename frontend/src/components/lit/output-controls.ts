@@ -242,7 +242,7 @@ export class OutputControls extends LitElement {
     .output-type {
       flex: 1 0 0;                  /* 40001034:1189 flex-[1_0_0] */
       min-width: 1px;               /* 40001034:1189 min-w-px */
-      font-family: 'Inter', system-ui, sans-serif;  /* 40001034:1190 Inter:Bold */
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;  /* 40001034:1190 Inter:Bold */
       font-size: 18px;              /* 40001034:1190 text-[18px] */
       font-weight: 700;             /* 40001034:1190 font-bold */
       line-height: normal;          /* 40001034:1190 leading-[normal] */
@@ -277,7 +277,7 @@ export class OutputControls extends LitElement {
       box-shadow: -4px -4px 5px rgba(0, 0, 0, 0.10), 4px 4px 5px rgba(0, 0, 0, 0.10);
     }
     .view-item {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px; font-weight: 600;
       text-align: left; padding: 8px 10px;
       border: none; border-radius: 4px;

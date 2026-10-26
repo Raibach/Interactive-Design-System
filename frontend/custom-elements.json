@@ -1983,249 +1983,6 @@
     },
     {
       "kind": "javascript-module",
-      "path": "src/components/lit/ai-surface-sandbox.ts",
-      "declarations": [
-        {
-          "kind": "class",
-          "description": "",
-          "name": "AISurfaceSandbox",
-          "members": [
-            {
-              "kind": "field",
-              "name": "isAIAssembling",
-              "privacy": "public",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "When true, the \"spinner\" slot is projected. The AI is assembling the\nsurface and no interactive content should be shown.\nLit Boolean converter: attribute present → true, absent → false.",
-              "default": "false",
-              "attribute": "is-ai-assembling"
-            },
-            {
-              "kind": "field",
-              "name": "headerTab",
-              "privacy": "public",
-              "type": {
-                "text": "string"
-              },
-              "description": "Which tab is active in the header. Controls which content slot is shown:\n  \"console\"   → projects slot=\"console\"\n  any other   → projects slot=\"workspace\"",
-              "default": "'console'",
-              "attribute": "header-tab"
-            },
-            {
-              "kind": "field",
-              "name": "consoleVideoSrc",
-              "privacy": "public",
-              "type": {
-                "text": "string"
-              },
-              "description": "The console's ground layer: a looping video the shell hands in, painted\nbehind the viewport as the console's backdrop. Handed in rather than\nimported so this element stays asset-free. Empty means no layer — the\nflat ground colour alone, which is what every other shell gets.",
-              "default": "''",
-              "attribute": "console-video-src"
-            },
-            {
-              "kind": "field",
-              "name": "_committedSlot",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "default": "''",
-              "description": "The slot being PROJECTED right now. Follows `headerTab`/`isAIAssembling`; the\nincoming surface fades in over the dark ground on each change."
-            },
-            {
-              "kind": "field",
-              "name": "_committedTab",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "default": "''",
-              "description": "THE SECTION ALREADY FADED IN (2026-10-02) — the second half of the change detection.\n\nThe slot alone cannot see every section change: the composer and the design room\nboth live in the `workspace` slot, so entering one from the other is a change of\nSCENE with no change of slot — and the owner, measuring exactly that: \"there is a\nvery soft easing into that user interface that's gone now … it has to be a jarring\nslap in the face.\" The tab is the section's name, so a tab change inside one slot\nfades the same way a slot change does. It is deliberately NOT \"fade on every\nupdate\": data-model refreshes within one section (a keystroke, a version save)\nmust never strobe the surface, and gating on (slot, tab) keeps the fade to section\ntransitions only."
-            },
-            {
-              "kind": "field",
-              "name": "_fadePhase",
-              "type": {
-                "text": "'' | 'out' | 'in'"
-              },
-              "privacy": "private",
-              "default": "''",
-              "description": "Cross-fade phase: '' (settled) | 'out' (fading the old away) | 'in' (fading the new in)."
-            },
-            {
-              "kind": "field",
-              "name": "_fadeTimer",
-              "type": {
-                "text": "ReturnType<typeof setTimeout> | null"
-              },
-              "privacy": "private",
-              "default": "null"
-            },
-            {
-              "kind": "field",
-              "name": "_fadeClass",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "description": "The fade class — a single gentle fade-in on the incoming surface.",
-              "readonly": true
-            },
-            {
-              "kind": "field",
-              "name": "_activeSlot",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "description": "The slot the shell is asking for, right now — the same three-way contract render()\nuses: spinner while assembling, console for the console header tab, workspace\notherwise.",
-              "readonly": true
-            },
-            {
-              "kind": "field",
-              "name": "_onSlotError",
-              "privacy": "private",
-              "description": "Catch errors bubbling up from slotted child elements."
-            },
-            {
-              "kind": "method",
-              "name": "_handleReset",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "void"
-                }
-              },
-              "description": "Reset the error boundary and request the React shell to re-mount content."
-            },
-            {
-              "kind": "field",
-              "name": "_hasRuntimeError",
-              "privacy": "public",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "Internal error boundary state. NOT reflected as an attribute —\nmanaged entirely inside the Shadow DOM. When true, the viewport\nis replaced with an inline error panel.",
-              "default": "false",
-              "attribute": "_hasRuntimeError"
-            },
-            {
-              "kind": "field",
-              "name": "_errorMessage",
-              "privacy": "public",
-              "type": {
-                "text": "string"
-              },
-              "description": "Human-readable error summary for the inline panel.",
-              "default": "''",
-              "attribute": "_errorMessage"
-            },
-            {
-              "kind": "field",
-              "name": "_errorStack",
-              "privacy": "public",
-              "type": {
-                "text": "string"
-              },
-              "description": "Full stack trace for diagnostics.",
-              "default": "''",
-              "attribute": "_errorStack"
-            }
-          ],
-          "events": [
-            {
-              "name": "surface-error-reset",
-              "type": {
-                "text": "CustomEvent"
-              }
-            }
-          ],
-          "attributes": [
-            {
-              "name": "is-ai-assembling",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "When true, the \"spinner\" slot is projected. The AI is assembling the\nsurface and no interactive content should be shown.\nLit Boolean converter: attribute present → true, absent → false.",
-              "default": "false",
-              "fieldName": "isAIAssembling"
-            },
-            {
-              "name": "header-tab",
-              "type": {
-                "text": "string"
-              },
-              "description": "Which tab is active in the header. Controls which content slot is shown:\n  \"console\"   → projects slot=\"console\"\n  any other   → projects slot=\"workspace\"",
-              "default": "'console'",
-              "fieldName": "headerTab"
-            },
-            {
-              "name": "console-video-src",
-              "type": {
-                "text": "string"
-              },
-              "description": "The console's ground layer: a looping video the shell hands in, painted\nbehind the viewport as the console's backdrop. Handed in rather than\nimported so this element stays asset-free. Empty means no layer — the\nflat ground colour alone, which is what every other shell gets.",
-              "default": "''",
-              "fieldName": "consoleVideoSrc"
-            },
-            {
-              "name": "_hasRuntimeError",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "Internal error boundary state. NOT reflected as an attribute —\nmanaged entirely inside the Shadow DOM. When true, the viewport\nis replaced with an inline error panel.",
-              "default": "false",
-              "fieldName": "_hasRuntimeError"
-            },
-            {
-              "name": "_errorMessage",
-              "type": {
-                "text": "string"
-              },
-              "description": "Human-readable error summary for the inline panel.",
-              "default": "''",
-              "fieldName": "_errorMessage"
-            },
-            {
-              "name": "_errorStack",
-              "type": {
-                "text": "string"
-              },
-              "description": "Full stack trace for diagnostics.",
-              "default": "''",
-              "fieldName": "_errorStack"
-            }
-          ],
-          "superclass": {
-            "name": "LitElement",
-            "package": "lit"
-          },
-          "tagName": "ai-surface-sandbox",
-          "customElement": true
-        }
-      ],
-      "exports": [
-        {
-          "kind": "js",
-          "name": "AISurfaceSandbox",
-          "declaration": {
-            "name": "AISurfaceSandbox",
-            "module": "src/components/lit/ai-surface-sandbox.ts"
-          }
-        },
-        {
-          "kind": "custom-element-definition",
-          "name": "ai-surface-sandbox",
-          "declaration": {
-            "name": "AISurfaceSandbox",
-            "module": "src/components/lit/ai-surface-sandbox.ts"
-          }
-        }
-      ]
-    },
-    {
-      "kind": "javascript-module",
       "path": "src/components/lit/artifact-canvas.ts",
       "declarations": [
         {
@@ -2304,6 +2061,25 @@
               },
               "description": "Opt-in readiness watch — see `_watchReady`. The Development mount passes `h1`.",
               "attribute": "ready-selector"
+            },
+            {
+              "kind": "field",
+              "name": "hideUntilLoad",
+              "privacy": "public",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Opt-in: keep the frame hidden until its own document has loaded. An iframe's\n`about:blank` document paints a white canvas before the real page arrives; the Product\nroom opts in so its ground and spinner show instead of that white flash.",
+              "attribute": "hide-until-load"
+            },
+            {
+              "kind": "field",
+              "name": "_loaded",
+              "privacy": "public",
+              "type": {
+                "text": "boolean"
+              },
+              "attribute": "_loaded"
             },
             {
               "kind": "method",
@@ -2401,6 +2177,21 @@
               },
               "description": "Opt-in readiness watch — see `_watchReady`. The Development mount passes `h1`.",
               "fieldName": "readySelector"
+            },
+            {
+              "name": "hide-until-load",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Opt-in: keep the frame hidden until its own document has loaded. An iframe's\n`about:blank` document paints a white canvas before the real page arrives; the Product\nroom opts in so its ground and spinner show instead of that white flash.",
+              "fieldName": "hideUntilLoad"
+            },
+            {
+              "name": "_loaded",
+              "type": {
+                "text": "boolean"
+              },
+              "fieldName": "_loaded"
             }
           ],
           "superclass": {
@@ -2609,6 +2400,12 @@
           }
         }
       ]
+    },
+    {
+      "kind": "javascript-module",
+      "path": "src/components/lit/carbon-elements.ts",
+      "declarations": [],
+      "exports": []
     },
     {
       "kind": "javascript-module",
@@ -4748,26 +4545,6 @@
             },
             {
               "kind": "field",
-              "name": "evalsTalk",
-              "privacy": "public",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "See the `evalsTalk` note in `static properties` — the room's own binding alone.",
-              "attribute": "evals-talk"
-            },
-            {
-              "kind": "field",
-              "name": "uxTalk",
-              "privacy": "public",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "See the `uxTalk` note in `static properties` — the design room's binding alone.",
-              "attribute": "ux-talk"
-            },
-            {
-              "kind": "field",
               "name": "productRoom",
               "privacy": "public",
               "type": {
@@ -5558,42 +5335,6 @@
             },
             {
               "kind": "field",
-              "name": "_laneRows",
-              "type": {
-                "text": "SessionsLaneRow[] | null"
-              },
-              "privacy": "private",
-              "default": "null"
-            },
-            {
-              "kind": "field",
-              "name": "_laneReceipt",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "default": "''"
-            },
-            {
-              "kind": "field",
-              "name": "_laneError",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "default": "''"
-            },
-            {
-              "kind": "field",
-              "name": "_laneBusy",
-              "type": {
-                "text": "boolean"
-              },
-              "privacy": "private",
-              "default": "false"
-            },
-            {
-              "kind": "field",
               "name": "_abort",
               "type": {
                 "text": "AbortController | null"
@@ -5792,49 +5533,6 @@
               "kind": "method",
               "name": "_onSendCommand",
               "privacy": "private"
-            },
-            {
-              "kind": "method",
-              "name": "_runSessionsLane",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "Promise<void>"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "text",
-                  "type": {
-                    "text": "string"
-                  }
-                }
-              ]
-            },
-            {
-              "kind": "field",
-              "name": "_onSessionsLaneClear",
-              "privacy": "private",
-              "description": "Back to the unfiltered feed — the person's own act, on the receipt line's button."
-            },
-            {
-              "kind": "method",
-              "name": "_replayLaneQuery",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "Promise<void>"
-                }
-              },
-              "parameters": [
-                {
-                  "name": "conversationId",
-                  "type": {
-                    "text": "string"
-                  }
-                }
-              ],
-              "description": "A STORED QUERY, OPENED AGAIN (owner, 2026-10-18): *\"I can go back as a user and select that\nconversation in sessions, and it will reload my exact query.\"*\n\nIt replays the RECORD — the validated filter saved on the conversation — rather than asking\nthe model again, so opening an old query can never show something different from what was\nasked. The lane writes no turn; the feed redraws its rows and the receipt line."
             },
             {
               "kind": "method",
@@ -6082,17 +5780,6 @@
               "readonly": true
             },
             {
-              "kind": "method",
-              "name": "_evalsDrawsThread",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "boolean"
-                }
-              },
-              "description": "THE TAB-EXPERIENCE DOOR IS GONE with its styles: a tab's output is the catalog's own view\nin the `view` slot (the trace tree, the evaluators index), never a second output area.\n`_evalsDrawsThread` below still reads the slot the right way — a view claiming the tab\nstands aside from her thread, exactly as the Trace tab does."
-            },
-            {
               "kind": "field",
               "name": "_hasStatusLine",
               "type": {
@@ -6234,17 +5921,6 @@
             },
             {
               "kind": "method",
-              "name": "_currentRowIsLane",
-              "privacy": "private",
-              "return": {
-                "type": {
-                  "text": "boolean"
-                }
-              },
-              "description": "IS THE SEAT BOUND TO A QUERY RECORD? A conversation filed with `tab = \"sessions\"` holds a\nvalidated filter, not a thread. Answering it from both lists, because either can be the one\nthat knows the row (the surface's array, or the package's own server read)."
-            },
-            {
-              "kind": "method",
               "name": "_userId",
               "privacy": "private",
               "return": {
@@ -6293,8 +5969,7 @@
                 "type": {
                   "text": "{ ok: true; text: string } | { ok: false; why: string }"
                 }
-              },
-              "description": "HER INSTRUCTIONS, FROM THE ROOM, OR A REFUSAL THAT NAMES WHY THERE ARE NONE.\n\nWHAT WAS HERE (removed 2026-10-01): 11,562 characters of the composer's script, compiled\ninto the bundle and sent as the context of EVERY turn in EVERY room. In Design she\nintroduced herself as the Agentic Flow Architect and reasoned about prompt pipelines while\nthe room's left column held a component tree — the owner: *\"she's not talking, she's not\nthinking, because some dumb ass AI has put a hardcoded mess in there to trick me\"* — and its\nreplacement was a fallback: a room that bound no words got those same words anyway.\n\nTHERE ARE NO FALLBACKS. The rule is the owner's, 2026-10-01, and it decides this function:\na seat that has no words for its room must not borrow another room's, and it must not decide\nquietly which one it is. It refuses, and the refusal is legible.\n\nWHO SHE IS IS THE ROOM'S FACT, so the room states it — never this element, and never a model.\n`_seat_grace` (backend/routes/ai.py) writes two props on every seat of every surface it\nassembles:\n\n  instructions      the path to THIS room's script, in the surface's data model:\n                    `CONSOLE_GRACE_INSTRUCTIONS` in the console, `COMPOSER_GRACE_INSTRUCTIONS`\n                    in a package (composer, session canvas, run), and the design room's own\n                    database-backed script in Design. Measured 2026-10-01 on the live\n                    `render-design` surface: that binding used to arrive only because the\n                    model's answer happened to reproduce the contract's line, which is a hope\n                    about a language model, not an assembly.\n  graceLiveContext  whether this seat's live workspace follows those words. A composer's\n                    script is an identity, so the package, its seats and the tool register\n                    ride after it; the design room's script already carries its live facts\n                    (read from the database on every assembly), so nothing follows it.\n\nTHE THIRD STATE IS THE POINT OF THE UNION: `undefined` is not `false`. A surface that did not\nstate the flag has not been examined, and an undefined flag resolved either way would be a\nguess — the same class of defect as a missing script, so it gets the same refusal. Both\nflags are written by the assemblies named above; a new room that forgets one is told here,\nin its own thread, the first time somebody speaks in it."
+              }
             },
             {
               "kind": "method",
@@ -7107,22 +6782,6 @@
               "fieldName": "productTools"
             },
             {
-              "name": "evals-talk",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "See the `evalsTalk` note in `static properties` — the room's own binding alone.",
-              "fieldName": "evalsTalk"
-            },
-            {
-              "name": "ux-talk",
-              "type": {
-                "text": "boolean"
-              },
-              "description": "See the `uxTalk` note in `static properties` — the design room's binding alone.",
-              "fieldName": "uxTalk"
-            },
-            {
               "name": "product-room",
               "type": {
                 "text": "boolean"
@@ -7214,17 +6873,6 @@
           "description": "",
           "name": "ChatPluginTray",
           "members": [
-            {
-              "kind": "field",
-              "name": "label",
-              "privacy": "public",
-              "type": {
-                "text": "string"
-              },
-              "description": "The label the block carries in the drawing.",
-              "default": "'Active Plugins'",
-              "attribute": "label"
-            },
             {
               "kind": "field",
               "name": "unattributed",
@@ -7333,15 +6981,6 @@
             }
           ],
           "attributes": [
-            {
-              "name": "label",
-              "type": {
-                "text": "string"
-              },
-              "description": "The label the block carries in the drawing.",
-              "default": "'Active Plugins'",
-              "fieldName": "label"
-            },
             {
               "name": "unattributed",
               "type": {
@@ -8311,6 +7950,16 @@
               "description": "Whether the Remove button is armed. Deliberately NOT a reactive property: it is a state of the\nbutton, not a fact about the component, and nothing outside this element has any business\nreading or setting it. A render is asked for by hand when it changes."
             },
             {
+              "kind": "field",
+              "name": "_confirmingApprove",
+              "type": {
+                "text": "boolean"
+              },
+              "privacy": "private",
+              "default": "false",
+              "description": "APPROVING A REPLACEMENT TAKES A SECOND PRESS, AND THE REASON IS A READOUT.\n\nOwner, 2026-10-26: *\"We're gonna have to tell the user they're replacing it — that can't be the\nlabel inside of a button, it has to be an error message or warning message that pops up upon\nthe attempt to approve it, and then the user will have to confirm.\"* So the first press does\nnot write: it draws the warning above the actions, naming the component that will be replaced.\nThe button's own label stays neutral; the sentence carries the fact."
+            },
+            {
               "kind": "method",
               "name": "_act",
               "privacy": "private",
@@ -8320,6 +7969,10 @@
                   "type": {
                     "text": "'preview-approve' | 'preview-discard' | 'preview-remove'"
                   }
+                },
+                {
+                  "name": "confirmed",
+                  "default": "false"
                 }
               ]
             },
@@ -9233,6 +8886,17 @@
               "attribute": "retry"
             },
             {
+              "kind": "field",
+              "name": "dismissable",
+              "privacy": "public",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Whether the banner offers a way to dismiss itself. True everywhere by default.",
+              "default": "true",
+              "attribute": "dismissable"
+            },
+            {
               "kind": "method",
               "name": "_emit",
               "privacy": "private",
@@ -9280,6 +8944,15 @@
               "description": "Offer a Retry button. Off unless the caller can actually retry something.",
               "default": "false",
               "fieldName": "retry"
+            },
+            {
+              "name": "dismissable",
+              "type": {
+                "text": "boolean"
+              },
+              "description": "Whether the banner offers a way to dismiss itself. True everywhere by default.",
+              "default": "true",
+              "fieldName": "dismissable"
             }
           ],
           "superclass": {
@@ -10972,8 +10645,7 @@
                 "type": {
                   "text": "{ ok: true; text: string } | { ok: false; why: string }"
                 }
-              },
-              "description": "HER INSTRUCTIONS, FROM THE ROOM, OR A REFUSAL THAT NAMES WHY THERE ARE NONE.\n\nWHAT WAS HERE (removed 2026-10-01): 11,562 characters of the composer's script, compiled\ninto the bundle and sent as the context of EVERY turn in EVERY room. In Design she\nintroduced herself as the Agentic Flow Architect and reasoned about prompt pipelines while\nthe room's left column held a component tree — the owner: *\"she's not talking, she's not\nthinking, because some dumb ass AI has put a hardcoded mess in there to trick me\"* — and its\nreplacement was a fallback: a room that bound no words got those same words anyway.\n\nTHERE ARE NO FALLBACKS. The rule is the owner's, 2026-10-01, and it decides this function:\na seat that has no words for its room must not borrow another room's, and it must not decide\nquietly which one it is. It refuses, and the refusal is legible.\n\nWHO SHE IS IS THE ROOM'S FACT, so the room states it — never this element, and never a model.\n`_seat_grace` (backend/routes/ai.py) writes two props on every seat of every surface it\nassembles:\n\n  instructions      the path to THIS room's script, in the surface's data model:\n                    `CONSOLE_GRACE_INSTRUCTIONS` in the console, `COMPOSER_GRACE_INSTRUCTIONS`\n                    in a package (composer, session canvas, run), and the design room's own\n                    database-backed script in Design. Measured 2026-10-01 on the live\n                    `render-design` surface: that binding used to arrive only because the\n                    model's answer happened to reproduce the contract's line, which is a hope\n                    about a language model, not an assembly.\n  graceLiveContext  whether this seat's live workspace follows those words. A composer's\n                    script is an identity, so the package, its seats and the tool register\n                    ride after it; the design room's script already carries its live facts\n                    (read from the database on every assembly), so nothing follows it.\n\nTHE THIRD STATE IS THE POINT OF THE UNION: `undefined` is not `false`. A surface that did not\nstate the flag has not been examined, and an undefined flag resolved either way would be a\nguess — the same class of defect as a missing script, so it gets the same refusal. Both\nflags are written by the assemblies named above; a new room that forgets one is told here,\nin its own thread, the first time somebody speaks in it."
+              }
             },
             {
               "kind": "method",
@@ -13108,7 +12780,6 @@
               "type": {
                 "text": "string"
               },
-              "default": "'prompt-composer'",
               "attribute": "pipeline"
             },
             {
@@ -13121,6 +12792,17 @@
               "description": "Show one node's tree instead of every node recorded for the pipeline.",
               "default": "''",
               "attribute": "node-id"
+            },
+            {
+              "kind": "field",
+              "name": "tree",
+              "privacy": "public",
+              "type": {
+                "text": "Layer | undefined"
+              },
+              "description": "THE TREE THE INGEST JUST MEASURED — the component that was submitted, with every child under\nit, drawn at the top of the column.\n\nA NAME-AND-VALUE TREE, NOT A RECORD. `public/catalog-figma/<pipeline>.json` holds only what\nhas been APPROVED, so a component that has just been measured is not in it and the column had\nnothing to open: the answer carried the layers and the list could not see them. This property\nis that bridge. Its shape is the measured tree's own, which is the same shape the record\nstores — nothing is converted on the way in.",
+              "default": "undefined",
+              "attribute": "tree"
             },
             {
               "kind": "field",
@@ -13302,15 +12984,6 @@
               "privacy": "private",
               "default": "null",
               "description": "IS ANYTHING USING IT? — the audit's own measurement, per catalogue name.\n\nDRAWABLE AND USED ARE DIFFERENT QUESTIONS and a tree that answers only the first misleads.\n`agent-card` read \"nothing draws this\" while the console drew that card under a different\ntag; a component can equally be drawable and wired to nothing. The audit measures both —\n`sent` (a payload the app sends names it) and `renderedIn` (a module's template draws it) —\nand writes them into the report this reads.\n\nKeyed by the catalogue's own name, not by tag, so a component listed under two names can\nhonestly read differently on its two rows: `TraceFeed` is sent by the app, `trace-feed` is\nnot, and they are the same element."
-            },
-            {
-              "kind": "field",
-              "name": "_usageError",
-              "type": {
-                "text": "string"
-              },
-              "privacy": "private",
-              "default": "''"
             },
             {
               "kind": "field",
@@ -13666,6 +13339,25 @@
             },
             {
               "kind": "method",
+              "name": "_modifiedFor",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "number"
+                }
+              },
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": {
+                    "text": "string"
+                  }
+                }
+              ],
+              "description": "WHEN THIS COMPONENT LAST CHANGED, for ordering the list.\n\nOwner, 2026-10-26: *\"The list should be organized by last modified.\"* The approval date is the\nonly date the record states for a component, so it is the one used; a component with no\nrecorded approval sorts below every dated one, and the list falls back to its catalogue order\nfor those. `0` is not a date — it is \"no date\", and it is placed last on purpose."
+            },
+            {
+              "kind": "method",
               "name": "_originFor",
               "privacy": "private",
               "return": {
@@ -13680,8 +13372,7 @@
                     "text": "string"
                   }
                 }
-              ],
-              "description": "The Figma layer a component was drawn from, as a chip beside its key: the layer name and\nthe node id, from the map.\n\nASKED BY TAG, NOT BY NAME. The map is keyed by `litComponent`, which is the ELEMENT tag —\nso `AgentFlow` misses and `<agent-flow>` hits, which is the same name-is-not-a-tag mistake\nthat made these rows unreadable in the first place.\n\nNull when the map holds nothing for it: an origin that is not recorded is said by the\nabsence of the chip, and a guessed one would be believed."
+              ]
             },
             {
               "kind": "method",
@@ -14122,6 +13813,17 @@
                 }
               },
               "description": "The catalogue, as its own file declares it — the level these components sit under.\n\nIt is drawn from catalog.json, not from the layer record, because the catalogue is the\nauthority on its own name and its own id. Two sources, two facts: the catalogue says what\nit is, the layer record says what has been approved into it."
+            },
+            {
+              "kind": "method",
+              "name": "_renderIngested",
+              "privacy": "private",
+              "return": {
+                "type": {
+                  "text": "TemplateResult"
+                }
+              },
+              "description": "THE COMPONENT THAT WAS JUST MEASURED, WITH ITS CHILDREN — drawn above the catalogue.\n\nThe record below is the APPROVED catalogue; a component that has only been measured is not in\nit, so before this the column had no row to open and no arrow to press. The root is drawn as a\nrow (so it carries its own expander), and `_renderLayer` nests the children under it exactly\nas it does for a recorded node."
             }
           ],
           "events": [
@@ -14162,7 +13864,6 @@
               "type": {
                 "text": "string"
               },
-              "default": "'prompt-composer'",
               "fieldName": "pipeline"
             },
             {
@@ -14173,6 +13874,15 @@
               "description": "Show one node's tree instead of every node recorded for the pipeline.",
               "default": "''",
               "fieldName": "nodeId"
+            },
+            {
+              "name": "tree",
+              "type": {
+                "text": "Layer | undefined"
+              },
+              "description": "THE TREE THE INGEST JUST MEASURED — the component that was submitted, with every child under\nit, drawn at the top of the column.\n\nA NAME-AND-VALUE TREE, NOT A RECORD. `public/catalog-figma/<pipeline>.json` holds only what\nhas been APPROVED, so a component that has just been measured is not in it and the column had\nnothing to open: the answer carried the layers and the list could not see them. This property\nis that bridge. Its shape is the measured tree's own, which is the same shape the record\nstores — nothing is converted on the way in.",
+              "default": "undefined",
+              "fieldName": "tree"
             },
             {
               "name": "inline",
@@ -17625,90 +17335,6 @@
           "declaration": {
             "name": "UserResponseBubble",
             "module": "src/components/lit/user-response-bubble.ts"
-          }
-        }
-      ]
-    },
-    {
-      "kind": "javascript-module",
-      "path": "src/components/lit/ux-app-frame.ts",
-      "declarations": [
-        {
-          "kind": "class",
-          "description": "",
-          "name": "UxAppFrame",
-          "members": [
-            {
-              "kind": "field",
-              "name": "src",
-              "privacy": "public",
-              "type": {
-                "text": "string"
-              },
-              "description": "The framed application's address. Attribute: src.",
-              "default": "'http://localhost:8200'",
-              "attribute": "src"
-            },
-            {
-              "kind": "field",
-              "name": "_unreachable",
-              "privacy": "private",
-              "description": "True only when the frame reported that it could not load the document at all.",
-              "type": {
-                "text": "boolean"
-              },
-              "default": "false",
-              "attribute": "_unreachable"
-            },
-            {
-              "kind": "field",
-              "name": "_onError",
-              "privacy": "private"
-            }
-          ],
-          "attributes": [
-            {
-              "name": "src",
-              "type": {
-                "text": "string"
-              },
-              "description": "The framed application's address. Attribute: src.",
-              "default": "'http://localhost:8200'",
-              "fieldName": "src"
-            },
-            {
-              "name": "_unreachable",
-              "description": "True only when the frame reported that it could not load the document at all.",
-              "type": {
-                "text": "boolean"
-              },
-              "default": "false",
-              "fieldName": "_unreachable"
-            }
-          ],
-          "superclass": {
-            "name": "LitElement",
-            "package": "lit"
-          },
-          "tagName": "ux-app-frame",
-          "customElement": true
-        }
-      ],
-      "exports": [
-        {
-          "kind": "js",
-          "name": "UxAppFrame",
-          "declaration": {
-            "name": "UxAppFrame",
-            "module": "src/components/lit/ux-app-frame.ts"
-          }
-        },
-        {
-          "kind": "custom-element-definition",
-          "name": "ux-app-frame",
-          "declaration": {
-            "name": "UxAppFrame",
-            "module": "src/components/lit/ux-app-frame.ts"
           }
         }
       ]

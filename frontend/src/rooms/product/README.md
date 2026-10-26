@@ -1,148 +1,87 @@
-# The Product Room — the untangling, 2026-10-23
+# The Product Room — the sovereign tab, and the recipe for the others
 
-## What this room is now
+## The ruling principles
 
-Product is its own application inside the studio. It is mounted only while the Product tab is
-selected, and it is destroyed when the person leaves. Nothing of its state survives on another
-tab.
+- **The React shell persists always.** Nothing loads or paints outside it. The document
+  (`index.html`) declares no fill, no door and no background of its own; the shell paints
+  everything, from its very first commit.
+- **The shell owns the boot paint.** `App.tsx`'s wrapper carries the system's one background —
+  the composer ground image over its dark base, stretched with the browser — and the document
+  preloads that image at its start, so the first frame is the ground itself: never white,
+  never a bare base, never a door.
+- **Errors are clues, and the browser is the truth.** An error names the global requirement
+  that was removed or moved. The rendered page is the authority; the code's self-description
+  is not. Test by opening the browser and clicking the tabs, on `localhost:5001`.
 
-The surface is three files:
+## The room's structure
 
-- `ProductBox.tsx` — the stage the room stands on, including the composer ground image.
-- `ProductRoomContainer.tsx` — the room's state and behaviour: project, seat, pollers, foot
-  wiring, draft machinery, builder events.
-- `ProductRoom.tsx` — the pane the person sees: the builder frame and the chat seat.
+The Product tab is a closed box inside the shell. The shell mounts it only while the Product
+tab is selected, and unmounts it on leaving.
 
-The shell's only contract with the room is small:
+- `ProductBox.tsx` — the room's stage. It paints the room's own ground: the composer image
+  over the dark base, stretched with the browser.
+- `ProductRoomContainer.tsx` — the room's state and behaviour: the project, the seat, the
+  pollers, the entry flow and the foot wiring. It takes one small contract from the shell:
+  the Console card's action and the shared writer helpers.
+- `ProductRoom.tsx` — the pane the person sees: the canvas on the left, the chat on the
+  right, the small wait ring, the engine banner.
 
-- `requestedProjectId` — the project a Console card asked for;
-- `onRequestConsumed` — the room has taken it;
-- `sayInThread`, `writeDraftSystem`, `assertPaneWidth` — shared helpers the room already used.
+## The room's own elements
 
-Everything else lives under `frontend/src/rooms/product/`.
+Every element the room draws is a copy that lives in this folder under a Product-owned name,
+registered by the room's own files:
 
-## What was removed
+- `product-workspace.ts` — the exact copy of the shared two-column layout, with its own
+  element name and the room's 600-pixel open width. The shared `workspace-layout` is not
+  mounted on the Product page.
+- `product-chat-panel.ts` and the fourteen parts in `chat/` — the exact copies of the shared
+  chat, with Product tags. The shared `chat-panel` and its parts are not mounted on the
+  Product page.
+- The chat's conversation block — the bar, the list and the delete — is the shared chat's own
+  structure, line for line. Its data is the room's own: one conversation per project, created
+  and carried by the bridge, never a studio package list and never a fabricated row.
 
-Before this work, the Product state, gate, seat, pollers, listeners and exit guard lived in
-`pages/WritingAreaIndex.tsx`. The room was one branch of a 6,000-line shell, and the shell
-owned its memory.
+## The application inside
 
-Removed from Product:
+The builder application is framed at `/builder/project/<project id>`. Its own surfaces — the
+header bands and the not-found screen — are transparent while embedded, so the room's ground
+runs continuous through the frame. The application accepts its embedded mode only when it
+truly has a parent frame.
 
-- the full-room gate, its ring, its sentence and the builder's opacity rule;
-- the room's own loading text and the shared tab-switch cover on its path;
-- the exit-guard modal (“What should happen to this idea?”) and the leave question the shell
-  carried for it;
-- the Product unsaved-work flag and its browser leave warning;
-- Product's branch inside `ai-surface-sandbox` — the sandbox is not rendered on the Product
-  page at all;
-- the Product assembly image and the dead room-face imports in the tab gate.
+## The Console card's door
 
-The builder application's own loading screen was removed in its own files, and its document is
-transparent from the first paint, so the room's ground shows behind it instead of a white or
-grey sheet.
+A Console card dispatches the protocol action `open_room` with the project; the shell routes
+it to the box, which opens the room on that project. Verified end to end: the card opens the
+room, the seat binds the project's row, and the poller delivers the application's
+conversation into the thread.
 
-## What was measured
+## The workflow
 
-- Product page: zero `ai-surface-sandbox` elements. The Product box and its builder frame are
-  present; the shared cover, gate, spinner and pre-load text are absent.
-- A 90-frame entry sample: zero cover frames, zero gate frames, zero loading-text frames, zero
-  white frames.
-- Leaving Product unmounts the room completely; returning mounts a fresh one and reopens a
-  project.
-- A Console card opens Product on that card's project.
-- Console and Development still mount the sandbox and work as before.
+- Iterate and test on `localhost:5001` — the live source.
+- The preview on port 4173 — and the tunnel that serves it — holds the approved reference
+  build. It is rebuilt only after the owner approves.
+- Verify with the browser and with pixel measurement of the painted frames.
 
-## The shell's size
+## The recipe for the next tab
 
-- `WritingAreaIndex.tsx` at the checkpoint: 6,078 lines.
-- After the Product migration: 5,654 lines.
-- Change in this file: 100 insertions, 524 deletions.
-- Product hooks still in the shell: 0.
+Each remaining tab follows the same steps, one at a time:
 
-The shell is smaller, and the Product seam is untangled. It is not yet a small file because the
-other five tabs are still inside it. Each one moves the same way, and the sandbox is deleted
-when the last one leaves.
+1. Give the tab its own box mounted by the shell only while the tab is selected.
+2. Copy the layout element into the tab's folder under the tab's own name and register it
+   from the tab's own files; stop mounting the shared one.
+3. Copy the chat into the tab's folder with the tab's own tags, keeping the shared chat's
+   structure line for line; feed it the tab's own conversation, never a shared list.
+4. Keep every room's ground inside the room's own box; the shell paints only the boot
+   background.
+5. Verify in the browser: the shared elements are absent from the tab's page, the tab's own
+   conversation is the one in the chat, and the first frame is the ground.
 
-## The A2UI shape of this room (next)
+## Open items, stated plainly
 
-The room is sovereign. The next step is to make its chat a protocol surface, not only an
-imperatively bound host. The protocol references live in:
-
-- `AGENTS-instructions/Data-Binding.md` — a binding is `{ "path": "/x/y" }`; only the object
-  form is a path; literal values are written directly.
-- `AGENTS-instructions/Data-Flow.md` — structure travels in `updateComponents`, values in
-  `updateDataModel`; never both in one message.
-- `AGENTS-instructions/Handling-User-Actions.md` — an action is
-  `{ version, action: { name, surfaceId, sourceComponentId, context } }`; input components
-  write their local model synchronously before an action resolves.
-
-### The surface
-
-`surfaceId: "product-room"` (the room's own). Its data model holds only this room:
-
-```json
-{
-  "session": {
-    "session_id": "...",
-    "conversation_id": "...",
-    "project_id": "...",
-    "title": "..."
-  },
-  "thread": { "messages": [] },
-  "status": { "label": "", "text": "" }
-}
-```
-
-The ids come from the database row the bridge creates or reuses for the project
-(`POST /builder/projects/{project_id}/room`). They are exclusive to this room; no other surface
-receives them.
-
-### The seat
-
-`chat-panel` is already a catalog element with the right properties. The target is a declared
-seat in this surface:
-
-```json
-{
-  "id": "product-seat",
-  "component": "chat-panel",
-  "conversationId": { "path": "/session/conversation_id" },
-  "sessionId": { "path": "/session/session_id" },
-  "messages": { "path": "/thread/messages" }
-}
-```
-
-Today `useProductSeat.ts` fetches the room and assigns those props with `assignProps`. The
-fetched ids are correct; the binding is imperative. The surface model becomes the single source
-those values come from.
-
-### The actions
-
-- The Console card is an A2UI action: `name: "open_room"`, `surfaceId: "console"`,
-  `sourceComponentId: <card id>`, `context: { room: "product", project_id: <builder project id> }`.
-  The shell is the orchestrator: it routes the action to the Product surface. It must not keep
-  the project as its own state. Today `useOpenCardFromConsole.ts` writes
-  `requestedProductProjectId`; that is the shortcut this step replaces.
-- A chat send is an action on the Product surface: `name: "send_message"`,
-  `surfaceId: "product-room"`, `sourceComponentId: "product-seat"`,
-  `context: { conversation_id, text }`. The reply is a data-model update at
-  `/thread/messages`, not a separate imperative write.
-- Data model sync, when enabled, carries only the Product surface. The Console's card model
-  never enters it.
-
-### Order
-
-1. Add the Product surface and its data model under `rooms/product/`.
-2. Bind the seat to the model paths; keep the database ids as the only source.
-3. Replace the shell's project-state handoff with the Console card action.
-4. Then update this record and the Product changelog, and move to the next tab.
-
-The embedded OpenHands application is untouched by all of this. Its own chat is hidden when it
-is embedded; the room's chat seat is the protocol surface, and it is exclusive to this room.
-
-## The next tabs
-
-Development, Governance, Design, Console and Composer, one at a time, each with its own box and
-its own state. The shell keeps the header, the tab selection and the services every application
-shares. The rule is the same for every move: the shell selects, the room owns.
+- The Product row's timestamp: the room's binding carries no saved time; the bridge must
+  supply it for the row to show one.
+- What a delete means for the room's one conversation is undecided — the copied path deletes
+  the studio's row and moves the seat to the package's next conversation, which does not
+  apply to a room with one application-owned conversation.
+- The room's files still import some shared services (the configuration reader, the address
+  helper, the profile read and others); they are the next layer, taken one at a time.

@@ -45,7 +45,8 @@ from langfuse import get_client
 # SECOND row and double-count the cost — one client, one receipt.
 from openai import OpenAI
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+# ── THEEnvLoad: override=True so uvicorn --reload picks up .env updates immediately.
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Provider config — ONE model, for every mode.
@@ -85,12 +86,14 @@ MODEL_PROVIDERS = [
         # (`product/ai-app-builder-open/local-vcaas/.env`). Measured on the switch: a
         # builder build 5s vs 12s for the same prompt, a console assembly 2s. The env value is
         # still the knob — one line per system to move back.
-        "name": "DeepSeek (hosted API)",
-        "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+        # Back to DeepSeek's hosted API (deepseek-flash) on 2026-10-22 — the account
+        # balance was topped up (the OpenRouter switch was for the 402).
+        "name": "DeepSeek (Flash)",
+        "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
         "api_key_env": "DEEPSEEK_API_KEY",
         "api_key_required": True,
-        # DeepSeek accepts json_object — the constraint the local server refused (LM
+        # Accepts json_object — the constraint the local server refused (LM
         # Studio answered it with HTTP 400, and strict json_schema with empty content).
         # An assembly that is guaranteed valid JSON is a transcription done once.
         "json_mode": {"type": "json_object"},
@@ -137,7 +140,7 @@ def _provider_hint(mode: str) -> str:
     return (
         "No model is configured. Every mode runs on DeepSeek's hosted API: set "
         f"DEEPSEEK_API_KEY (and optionally DEEPSEEK_BASE_URL / DEEPSEEK_MODEL, "
-        f"currently {os.getenv('DEEPSEEK_MODEL', 'deepseek-v4-pro')}). There is no second "
+        f"currently {os.getenv('DEEPSEEK_MODEL', 'deepseek-flash')}). There is no second "
         "model: nothing is assembled or written by anything else."
     )
 
@@ -662,9 +665,10 @@ def query_llm(
     # The owner, 2026-09-28: "make it zero".
     #
     # Kept as an explicit assignment rather than by deleting the parameter, so a caller
-    # passing reasoning=True is overruled HERE, in one place, instead of rediscovering
-    # the delay through a request that looked fine.
-    payload["reasoning_effort"] = "none"
+    # Gemini 3.x endpoints on OpenRouter reject "none" with HTTP 400 ("Reasoning is mandatory
+    # for this endpoint and cannot be disabled"); "minimal" is the lowest allowed floor there.
+    _active_model = model or ( _provider_for_mode(mode) or {} ).get("model", "")
+    payload["reasoning_effort"] = "minimal" if "gemini" in str(_active_model).lower() else "none"
 
     # A THINKING TURN NEEDS A CEILING FOR BOTH, and this is the only place that can be
     # decided: it depends on the setting written two lines up, and the payload is where
@@ -677,7 +681,7 @@ def query_llm(
     # read a name that had not been bound yet, so every chat request raised
     # "local variable 'payload' referenced before assignment" and the seat drew
     # "(no answer)" — a wrong order that looked exactly like a model that would not talk.
-    if mode == "chat" and payload.get("reasoning_effort", "default") != "none":
+    if mode == "chat" and payload.get("reasoning_effort", "default") not in ("none", "minimal"):
         max_tokens = CHAT_REASONING_MAX_TOKENS
 
     # ── ONE PROVIDER, ONE ATTEMPT. No fallback, no retry. ───────────
@@ -747,21 +751,39 @@ def query_llm(
         # generation latency percentiles, and no step-by-step observation pipelines."*
         # What is left is one receipt per call: the provider's own token counts and the
         # exact cost the studio already computes, written to a generation and nothing else.
-        # NO PROMPT, NO ANSWER, NO METADATA, NO STAGES, NO TAGS, NO USER/SESSION: the
-        # receipt says what was spent, never what was said.
+        # NO PROMPT, NO ANSWER, NO METADATA, NO STAGES, NO TAGS, NO USER: the receipt says
+        # what was spent, never what was said.
+        #
+        # AND THE SESSION IS BACK, AND ONLY IT (owner, 2026-10-23: *"proceed with repairs"*).
+        # The strip of 2026-10-17 removed the session too, and a session is not content: it is
+        # the grouping LABEL the Sessions view reads, and the app's own page groups trace rows
+        # by it. Measured before this change: 1,697 events in two days, not one carrying a
+        # label, and the newest labelled event six days old — so the room's Sessions tab had
+        # nothing to group and drew nothing, and the app's own page agreed with it. The
+        # caller states the session it already knows (`trace_session`, the package's or the
+        # room's own); a call whose caller names none stays ungrouped, which is the truth.
         # Langfuse's smallest unit is a trace row — there is no cost-only endpoint — so a
         # receipt still creates one trace. That is its floor, and the only telemetry this
         # system now emits.
         _trace_id_now: str | None = None
         _receipt_obj = None
         try:
+            from contextlib import nullcontext
+
+            if trace_session:
+                from langfuse import propagate_attributes
+
+                _receipt_ctx = propagate_attributes(session_id=str(trace_session))
+            else:
+                _receipt_ctx = nullcontext()
             _trace_id_now = get_client().create_trace_id()
-            _receipt_obj = get_client().start_observation(
-                name="receipt",
-                as_type="generation",
-                model=model_name,
-                trace_context={"trace_id": _trace_id_now},
-            )
+            with _receipt_ctx:
+                _receipt_obj = get_client().start_observation(
+                    name="receipt",
+                    as_type="generation",
+                    model=model_name,
+                    trace_context={"trace_id": _trace_id_now},
+                )
         except Exception as _receipt_exc:  # noqa: BLE001
             _trace_id_now = None
             _receipt_obj = None

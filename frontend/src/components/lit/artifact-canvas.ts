@@ -97,7 +97,7 @@ export class ArtifactCanvas extends LitElement {
          where they exist, and nothing here invents a variable the theme may not hold. */
       .rail { position: absolute; top: 12px; left: 12px; z-index: 4; display: flex; gap: 8px; }
       .rail-btn {
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
         font-size: 13px; font-weight: 600;
         color: var(--ds-ink, #234354); background: var(--ds-surface);
         border: 1px solid var(--ds-rule); border-radius: var(--ds-radius);

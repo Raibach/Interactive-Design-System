@@ -19,7 +19,10 @@ router = APIRouter()
 
 class CreateConversationRequest(BaseModel):
     project_id: str | None = None
-    session_id: str | None = None   # required by the DB (conversations.session_id NOT NULL)
+    # REQUIRED (2026-10-25): a conversation belongs to a package — the doctrine. The field
+    # used to be optional, and a call that named no package walked into the database's
+    # NOT NULL column and came back as a raw 500. Refused at the door now, with the reason.
+    session_id: str
     title: str | None = None
     metadata: dict | None = None
 

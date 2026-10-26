@@ -198,19 +198,6 @@ export const ErrorBannerSchema = z.object({
   constraints: z.array(z.string()),
 });
 
-// ── STRUCTURAL — Sandbox Viewport (P5: registered 2026-07-26) ───────────────
-
-export const AiSurfaceSandboxSchema = z.object({
-  tag: z.literal('ai-surface-sandbox'),
-  props: z.object({
-    'is-ai-assembling': z.boolean().default(false),
-    'header-tab': z.enum(['console', 'composer', 'design', 'product', 'development', 'governance']).default('console'),
-  }),
-  events: z.tuple([]),
-  surface: z.literal('both'),
-  description: z.string(),
-  constraints: z.array(z.string()),
-});
 
 // ── COMPOSER — Middle Column — Lexical Editor Tool ──────────────────────────
 
@@ -814,7 +801,7 @@ export const TAG_REGISTRY = {
     tag: 'chat-panel',
     surface: 'both',
     column: 'right',
-    description: 'AI conversation interface. Shared between Console and Composer.',
+    description: 'AI conversation interface for the Composer and the Governance room. The Console draws its own seat: console-chat-panel.',
     props: {
       conversationId: { type: 'string', format: 'uuid', optional: true },
       sessionId: { type: 'string', format: 'uuid', optional: true },
@@ -863,6 +850,69 @@ export const TAG_REGISTRY = {
     },
     events: ['message-sent', 'command-received'],
     constraints: [],
+  },
+  // THE COMPOSER'S OWN SEAT (2026-10-24) — a whole copy of <chat-panel>, retagged. The
+  // Composer was the last room still naming the shared seat; its own file means a change made
+  // for another room cannot reach it, and a change made for it cannot reach them. The
+  // Governance room still binds the shared <chat-panel>.
+  'composer-chat-panel': {
+    tag: 'composer-chat-panel',
+    surface: 'composer',
+    column: 'right',
+    description: 'The Composer\'s own chat seat: a whole copy of chat-panel, retagged. Bound to the open package\'s session and conversation.',
+    props: {
+      conversationId: { type: 'string', format: 'uuid', optional: true },
+      sessionId: { type: 'string', format: 'uuid', optional: true },
+      state: { type: 'enum', values: ['idle', 'streaming', 'error'], default: 'idle' },
+      instructions: { type: 'string', optional: true },
+      graceLiveContext: { type: 'boolean', optional: true },
+      governanceTrace: { type: 'object', optional: true },
+      governanceObservation: { type: 'object', optional: true },
+      composerPackageId: { type: 'string', optional: true },
+      disabledTabs: { type: 'string', optional: true },
+    },
+    events: ['message-sent', 'command-received'],
+    constraints: ['the Composer\'s seat only: the Governance room binds chat-panel'],
+  },
+  // THE CONSOLE'S OWN SEAT — its own file, its own room, its own facts (owner, 2026-10-23: the
+  // console chat "is the search and filter and sort and organize and discovery method for those
+  // cards"). The shared <chat-panel> still serves the Composer and the Governance room; this one is
+  // drawn only by the Console's assembled surface, and nothing either of those rooms changes
+  // reaches it.
+  'console-chat-panel': {
+    tag: 'console-chat-panel',
+    surface: 'console',
+    column: 'right',
+    description:
+      'The Console\'s own chat seat: the index of every prompt package, and how the person searches, filters, sorts and discovers what is in it. Bound to the Console\'s own session and conversation; the library it organises arrives as consoleCards from /cards.',
+    props: {
+      conversationId: { type: 'string', format: 'uuid', optional: true },
+      sessionId: { type: 'string', format: 'uuid', optional: true },
+      /** WHO SHE IS HERE — /console/grace_instructions, written by the console's assembly. */
+      instructions: { type: 'string', optional: true },
+      /** Whether her turn carries the library. The console states TRUE, with the cards bound. */
+      graceLiveContext: { type: 'boolean', optional: true },
+      /** THE LIBRARY — every prompt package, bound to /cards. */
+      consoleCards: { type: 'array', optional: true },
+      /** The Console's conversations, bound to /console/conversations. */
+      conversations: { type: 'array', optional: true },
+      /** The Console's rail: chat, eval, tools, approvals, settings. */
+      allowedTabs: { type: 'string', optional: true },
+      tracePrompt: { type: 'boolean', optional: true },
+    },
+    events: [
+      // The two the shared seat also names: the input's send and a command from a rendered child.
+      'message-sent', 'command-received',
+      // The Console's own acts and notices.
+      'conversation-change', 'conversation-select', 'tab-change',
+      'a2ui:console-command', 'a2ui:system-message', 'a2ui:person-turn', 'a2ui:usage',
+      'input-resize-start', 'input-resize-move', 'input-resize-end',
+    ],
+    constraints: [
+      'the Console\'s seat only: the Composer, a package and the Governance room bind chat-panel',
+      'consoleCards is the library she organises — bound to /cards by the console assembly',
+      'her one control over the room is <reassemble-console sort="…" filter="…"/>',
+    ],
   },
   // THE RESPONSE ROW — v.4b's "user-response-bubble" (#40001119:6352), the row the
   // output card draws for something the person said. It is the user's turn in a
@@ -1019,23 +1069,6 @@ export const TAG_REGISTRY = {
     // dispatcher is a control a reader believes exists.
     events: ['card-open', 'card-delete'],
     constraints: ['id must be a valid session UUID'],
-  },
-
-  // Structural — Sandbox Viewport
-  'ai-surface-sandbox': {
-    tag: 'ai-surface-sandbox',
-    surface: 'both',
-    description: 'Shadow DOM-isolated A2UI rendering sandbox. Structural viewport that wraps console/composer content. AI must NOT render child components outside the named slots.',
-    props: {
-      'is-ai-assembling': { type: 'boolean', default: false },
-      'header-tab': { type: 'enum', values: ['console', 'composer', 'design', 'product', 'development', 'governance'], default: 'console' },
-    },
-    events: [],
-    constraints: [
-      'AI must not render child components outside named slots',
-      'Only one slot is visible at a time — controlled by is-ai-assembling and header-tab',
-      'Named slots: spinner, console, workspace',
-    ],
   },
 
   // Structural — right-column navigation. A real element (lit/chat-navigation-bar.ts)
@@ -1758,15 +1791,18 @@ export const TAG_REGISTRY = {
    * element; what it did not have was the two registrations that let a SURFACE name it. It has them
    * now, and this entry is one of the two.
    *
-   * WHAT IT DRAWS (the ingest form's left column, above the Preview): the catalogue strip — every
-   * catalogue the build knows (`design-artifacts`, `prompt-composer`, `ecommerce`, `primitives`)
-   * with its entry count; the selected catalogue's head and `catalogId`; then "Declared in this
-   * catalogue" — one row per component carrying its shape (`allOf(3)` / `flat`), its Figma node, the
-   * file that DRAWS it (`drawn by lit/<file>`), and a status dot from the checker's own audit. It is
-   * the same element, instantiated unchanged and never restyled.
+   * WHAT IT DRAWS (the ingest form's left column, above the Preview): a search box; the catalogue's
+   * own head and `catalogId`; then "Declared in this catalogue" — one row per component carrying its
+   * shape (`allOf(3)` / `flat`), its Figma node, the file that DRAWS it (`drawn by lit/<file>`), and
+   * a status dot from the checker's own audit. It is the same element, instantiated unchanged and
+   * never restyled.
    *
-   * IT READS THE BUILD, AND THAT IS ITS NATURE, NOT AN OVERSIGHT: the catalogues come from
-   * `import.meta.glob` over `catalogs/*​/catalog.json` and the audit from
+   * ONE CATALOGUE (owner, 2026-10-26: *"We only need the official one."*). There is no strip of
+   * catalogues and no switch: the official catalogue (`prompt-composer`) is the one it reads, its
+   * path is named in the module, and the Design room's own names live there too.
+   *
+   * IT READS THE BUILD, AND THAT IS ITS NATURE, NOT AN OVERSIGHT: the catalogue comes from
+   * `import.meta.glob` over the official path and the audit from
    * `/api/catalog/audit/<pipeline>`. There is no data-model binding for those and none should be
    * invented — the files ARE the source, and a copy of them in the data model would be a second
    * catalogue that could disagree with the first.
@@ -1775,15 +1811,7 @@ export const TAG_REGISTRY = {
    * `src/components/A2UI/catalogs/`. The room's data model carries `/session/catalogue/system`,
    * whose value is `raibach-ids` — a design SYSTEM, not a catalogue — so binding this prop to that
    * path would name a catalogue that does not exist and the tree would draw its "no catalogue"
-   * failure. `render-design` sends `prompt-composer`: it is the element's own default, it is what
-   * the ingest form shows, and it is the catalogue the section's 58 rows are declared in.
-   *
-   * THE STRIP IS LIVE INSIDE THE ELEMENT. Clicking a catalogue at the top sets this element's own
-   * `pipeline` and re-reads, so switching catalogues needs no host and no event round trip.
-   *
-   * BOTH PLACES. In `design-artifacts` (this room's own catalogue) and in `prompt-composer`, because
-   * the catalog audit validates the names `routes/ai.py` emits against prompt-composer — the owner's
-   * *"entered in composer, and then ... re-entered into the design"*, enforced rather than advised.
+   * failure.
    *
    * DESIGN ONLY at present: the Composer's surface never names it.
    */
@@ -1791,9 +1819,9 @@ export const TAG_REGISTRY = {
     tag: 'figma-layers-view',
     surface: 'design',
     column: 'left',
-    description: 'The ingestion left rail\'s own component tree, reused unchanged: the catalogue strip, the selected catalogue\'s head, and one row per declared component carrying its shape (`allOf(3)` / `flat`), its Figma node, the file that draws it (`drawn by lit/<file>`), and a status dot from the checker\'s audit. Reads the catalogues off the build (`import.meta.glob`) and the audit from `/api/catalog/audit/<pipeline>` — it takes no binding for those, and the strip switches catalogues inside the element itself.',
+    description: 'The ingestion left rail\'s own component tree, reused unchanged: a search box, the catalogue\'s head, and one row per declared component carrying its shape (`allOf(3)` / `flat`), its Figma node, the file that draws it (`drawn by lit/<file>`), and a status dot from the checker\'s audit. It reads the one official catalogue off the build (`import.meta.glob`) and the audit from `/api/catalog/audit/<pipeline>`, and takes no binding for either.',
     props: {
-      /** A catalogue FOLDER name (prompt-composer, design-artifacts, ecommerce, primitives). */
+      /** The catalogue FOLDER it reads — `prompt-composer`, the only one offered. */
       pipeline: { type: 'string', optional: true },
       /** Show one node's tree instead of the whole declared list. */
       nodeId: { type: 'string', optional: true },
@@ -1839,6 +1867,461 @@ export const TAG_REGISTRY = {
         '`chat-overlays-content` IS THE ROOM\'S OWN WORD, and the layout checks the left slot really holds a builder-embed before it obeys: set, her column is a LAYER over the embedded application (absolute, z-3 — the application keeps every pixel behind her, the drag still sizes and closes her, the drag ceiling frees the application floor of 60 instead of the prompt\'s 420). Unset: every other room keeps the pane law exactly as it was',
         'IT DOCKS HER FOR THE DESIGN ROOM\'S RUNS AND FOR NOTHING ELSE (2026-10-01). `ingest-submit` (the form) and `open-component` (a catalogue row) close the right column to its rail, because in that room the output is a drawing that wants the width (owner: *"dock the chat when someone clicks submit or tries to view one of our components… dock Grace to give the user full view"*). A COMPOSER Run does NOT dock her, and that is deliberate: the owner reversed exactly that on 2026-09-24, because the prompt contents, the tool results and the run\'s answer all land in her column, so docking at the click hid the output the Run produces. Verified in a page: `open-component` and `ingest-submit` take her 637 → 104; `flow-view-ready` leaves her open at 610. Only the layout on screen obeys — a hidden composer must not have her shut behind the operator\'s back — and nothing re-closes her on render, so an operator who reopens her keeps her open',
       ],
+  },
+  'tools-workspace': {
+    tag: 'tools-workspace',
+    surface: 'design',
+    description: "THE TOOLS TAB'S OWN CONTAINER (owner, 2026-10-25): the chat's three-column layout under a name only the Tools tab draws, so the column's footer and structure belong to Tools alone. Same slots, same grippers, same events.",
+    props: {
+      isThirdOpen: { type: 'boolean', optional: true },
+      chatLoadWidth: { type: 'number', optional: true },
+      chatOverlaysContent: { type: 'boolean', optional: true },
+    },
+    events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
+    constraints: ['drawn only while the Tools tab stands; the design frame (design-workspace) serves the other sub-sections and carries no footer'],
+  },
+  'design-left-footer': {
+    tag: 'design-left-footer',
+    surface: 'design',
+    description: "THE DESIGN ROOM'S COLUMN FOOTER, EMPTY ON PURPOSE (owner, 2026-10-25): the Composer bar's plate — same height, fill, corner and inner shadow — with no Save, no RUN and no undo.",
+    props: {},
+    events: [],
+  },
+  'design-workspace': {
+    tag: 'design-workspace',
+    surface: 'design',
+    column: undefined,
+    description: 'THE DESIGN ROOM\'S OWN FRAME (owner, 2026-10-25): the retagged copy of `workspace-layout` (`rooms/design/design-workspace.ts`), so a change to the Design room\'s frame can never reach the Console\'s or another room\'s. Same columns, same grippers, same slots, same events.',
+    props: {
+      isThirdOpen: { type: 'boolean', optional: true },
+      chatLoadWidth: { type: 'number', optional: true },
+      chatOverlaysContent: { type: 'boolean', optional: true },
+    },
+    events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
+    constraints: [
+      'the shared `workspace-layout` stays with the Console, the Governance room and Development; this name is the Design room\'s alone',
+    ],
+  },
+  'composer-workspace': {
+    tag: 'composer-workspace',
+    surface: 'composer',
+    column: undefined,
+    description: 'THE COMPOSER\'S OWN FRAME (owner, 2026-10-25): the retagged copy of `workspace-layout` (`rooms/composer/composer-workspace.ts`), so a change to the Composer\'s frame can never reach the Console\'s. Same columns, same grippers, same slots, same events.',
+    props: {
+      isThirdOpen: { type: 'boolean', optional: true },
+      chatLoadWidth: { type: 'number', optional: true },
+      chatOverlaysContent: { type: 'boolean', optional: true },
+    },
+    events: ['resize-start', 'resize', 'resize-end', 'third-column-toggle'],
+    constraints: [
+      'the shared `workspace-layout` stays with the Console, the Governance room, Development and the Design room; this name is the Composer\'s alone',
+    ],
+  },
+  /*
+   * CARBON'S OWN NAMES (owner, 2026-10-25): the installed @carbon/web-components elements,
+   * declared so the Carbon catalogue's names resolve through the same table every other
+   * component resolves through — a name the renderer cannot resolve draws nothing, which is
+   * what the Design tool's preview was reporting. The tag IS the name; each element is
+   * registered by components/lit/carbon-elements.ts.
+   */
+  'cds-accordion': {
+    tag: 'cds-accordion',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-accordion> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-action-set': {
+    tag: 'cds-action-set',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-action-set> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-ai-label': {
+    tag: 'cds-ai-label',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-ai-label> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-ai-skeleton-text': {
+    tag: 'cds-ai-skeleton-text',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-ai-skeleton-text> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-badge-indicator': {
+    tag: 'cds-badge-indicator',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-badge-indicator> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-big-number': {
+    tag: 'cds-big-number',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-big-number> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-breadcrumb': {
+    tag: 'cds-breadcrumb',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-breadcrumb> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-button': {
+    tag: 'cds-button',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-button> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-card': {
+    tag: 'cds-card',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-card> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-chat-button': {
+    tag: 'cds-chat-button',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-chat-button> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-checkbox': {
+    tag: 'cds-checkbox',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-checkbox> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-coachmark': {
+    tag: 'cds-coachmark',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-coachmark> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-code-snippet': {
+    tag: 'cds-code-snippet',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-code-snippet> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-combo-box': {
+    tag: 'cds-combo-box',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-combo-box> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-combo-button': {
+    tag: 'cds-combo-button',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-combo-button> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-contained-list': {
+    tag: 'cds-contained-list',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-contained-list> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-content-switcher': {
+    tag: 'cds-content-switcher',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-content-switcher> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-copy': {
+    tag: 'cds-copy',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-copy> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-copy-button': {
+    tag: 'cds-copy-button',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-copy-button> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-date-picker': {
+    tag: 'cds-date-picker',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-date-picker> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-dialog': {
+    tag: 'cds-dialog',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-dialog> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-dropdown': {
+    tag: 'cds-dropdown',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-dropdown> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-edit-in-place': {
+    tag: 'cds-edit-in-place',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-edit-in-place> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-file-uploader': {
+    tag: 'cds-file-uploader',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-file-uploader> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-form': {
+    tag: 'cds-form',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-form> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-header': {
+    tag: 'cds-header',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-header> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-link': {
+    tag: 'cds-link',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-link> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-list-item': {
+    tag: 'cds-list-item',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-list-item> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-loading': {
+    tag: 'cds-loading',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-loading> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-modal': {
+    tag: 'cds-modal',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-modal> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-multi-select': {
+    tag: 'cds-multi-select',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-multi-select> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-notification': {
+    tag: 'cds-notification',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-notification> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-number-input': {
+    tag: 'cds-number-input',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-number-input> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-overflow-menu': {
+    tag: 'cds-overflow-menu',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-overflow-menu> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-password-input': {
+    tag: 'cds-password-input',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-password-input> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-popover': {
+    tag: 'cds-popover',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-popover> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-progress-bar': {
+    tag: 'cds-progress-bar',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-progress-bar> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-progress-indicator': {
+    tag: 'cds-progress-indicator',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-progress-indicator> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-radio-button': {
+    tag: 'cds-radio-button',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-radio-button> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-search': {
+    tag: 'cds-search',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-search> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-select': {
+    tag: 'cds-select',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-select> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-skeleton-text': {
+    tag: 'cds-skeleton-text',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-skeleton-text> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-skip-to-content': {
+    tag: 'cds-skip-to-content',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-skip-to-content> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-slider': {
+    tag: 'cds-slider',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-slider> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-structured-list': {
+    tag: 'cds-structured-list',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-structured-list> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-table': {
+    tag: 'cds-table',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-table> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-tabs': {
+    tag: 'cds-tabs',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-tabs> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-tag': {
+    tag: 'cds-tag',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-tag> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-text-input': {
+    tag: 'cds-text-input',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-text-input> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-textarea': {
+    tag: 'cds-textarea',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-textarea> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-tile': {
+    tag: 'cds-tile',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-tile> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-time-picker': {
+    tag: 'cds-time-picker',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-time-picker> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-toast-notification': {
+    tag: 'cds-toast-notification',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-toast-notification> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-toggle': {
+    tag: 'cds-toggle',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-toggle> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-tooltip': {
+    tag: 'cds-tooltip',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-tooltip> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-tree-view': {
+    tag: 'cds-tree-view',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-tree-view> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
+  },
+  'cds-truncated-text': {
+    tag: 'cds-truncated-text',
+    surface: 'design',
+    description: "IBM Carbon Design System's <cds-truncated-text> (the installed @carbon/web-components package), declared so the Carbon catalogue's names resolve and the Design tool can draw them.",
+    props: {},
+    events: [],
   },
   // Ingested from Figma — System_Role (40001204:5752)
   'f-40001204-5752': {
@@ -1977,7 +2460,7 @@ export const CATALOG_TIERS = {
   primitives: TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'both'),
   'prompt-composer': TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'composer'),
   console: TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'console'),
-  'design-artifacts': TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'design'),
+  design: TAG_NAMES.filter((t) => TAG_REGISTRY[t].surface === 'design'),
 } as const;
 
 export type CatalogTier = keyof typeof CATALOG_TIERS;
@@ -2030,6 +2513,7 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
   'prompt-section-editor',
   'compiled-output-viewer',
   'workspace-layout',
+  'composer-workspace',
   'f-40001204-5752',
   'f-40001207-3497',
   'f-40001207-3559',
@@ -2038,7 +2522,6 @@ export const AI_PLAYGROUND_TAGS: TagName[] = [
 
 /** Tags belonging to the shell — AI must never touch these */
 export const SHELL_TAGS: TagName[] = [
-  'ai-surface-sandbox',  // P5: structural viewport — React shell owns this frame
   'agent-card',
 ];
 

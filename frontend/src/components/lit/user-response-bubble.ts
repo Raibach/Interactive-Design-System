@@ -178,7 +178,7 @@ export class UserResponseBubble extends LitElement {
       /* NUNITO, per the owner's face ruling, 2026-10-07 — "Arial or rounded fonts -> becomes
          Nunito (found in chat interfaces for Grace)... Use our fonts only - no API calls."
          The bubble is chat; the person's words draw in the rounded face. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 20px;
@@ -201,7 +201,7 @@ export class UserResponseBubble extends LitElement {
       flex: 1 1 auto;
       min-width: 0;
       /* Nunito, per the owner's face ruling — see .line above. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 500;
       line-height: 20px;

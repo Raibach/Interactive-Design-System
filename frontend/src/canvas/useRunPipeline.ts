@@ -10,7 +10,6 @@ import { CORE_ROLE_LABELS, declaredName } from '@/shared/promptSections';
 import { FIGMA_FILE_KEY, RUN_DOCK_MS, deepFind, loadCanvasElements } from '@/canvas/pageHelpers';
 import { type FlowSeatInput } from '@/shared/agentFlow';
 import { classifyFailure } from '@/shared/error-registry';
-import { conversationStorage } from '@/services/conversationStorage';
 import { holdsRun, reviewFlow, runHoldingRepairs } from '@/shared/flowReview';
 import { logger } from '@/lib/logger';
 import { useEffect } from 'react';
@@ -18,7 +17,6 @@ import { useEffect } from 'react';
 /** Exactly what the block needs from the shell, by name. */
 export interface UseRunPipelineDeps {
   COLUMN_VIEWS_RUN: any;
-  activeTab: any;
   applyThirdColumn: any;
   askOf: any;
   assembleThirdColumn: any;
@@ -44,8 +42,6 @@ export interface UseRunPipelineDeps {
   rowsForDecision: any;
   runApprovedRef: any;
   saveRunState: any;
-  selectedProjectId: any;
-  setActiveTab: any;
   setAiAssemblyFailed: any;
   setAiAssemblyMessage: any;
   setAiAssemblyReport: any;
@@ -55,10 +51,7 @@ export interface UseRunPipelineDeps {
   setCurrentPromptSession: any;
   setIsComposerRunning: any;
   setIsFailureAcknowledged: any;
-  setProjectConversations: any;
-  setProjects: any;
   setPromptLoadKey: any;
-  setSelectedProjectId: any;
   settleRepair: any;
   speakRepairVerdict: any;
   surfaceDescription: any;
@@ -70,69 +63,14 @@ export interface UseRunPipelineDeps {
 }
 
 export function useRunPipeline(deps: UseRunPipelineDeps) {
-  const { COLUMN_VIEWS_RUN, activeTab, applyThirdColumn, askOf, assembleThirdColumn, assembledRunColumnRef, catalogFindings, currentPromptSessionObjRef, currentPromptSessionRef, firstLineOf, flowFactsRef, flowInputRef, handleOpenPromptFromConsole, handlePromptDescriptionChange, handlePromptTitleChange, handleSavePromptRef, heldRunRef, publishRepairFlow, readLiveOutput, readToolRegister, refreshEvaluations, repairFindingRef, repairSectionsRef, repairTitleRef, rowsForDecision, runApprovedRef, saveRunState, selectedProjectId, setActiveTab, setAiAssemblyFailed, setAiAssemblyMessage, setAiAssemblyReport, setCanvasHolding, setCanvasRunning, setColumnView, setCurrentPromptSession, setIsComposerRunning, setIsFailureAcknowledged, setProjectConversations, setProjects, setPromptLoadKey, setSelectedProjectId, settleRepair, speakRepairVerdict, surfaceDescription, surfaceSections, surfaceTitle, syncCanvasInset, toolsThatCannotRun, writeAnswerBack } = deps;
+  const { COLUMN_VIEWS_RUN, applyThirdColumn, askOf, assembleThirdColumn, assembledRunColumnRef, catalogFindings, currentPromptSessionObjRef, currentPromptSessionRef, firstLineOf, flowFactsRef, flowInputRef, handleOpenPromptFromConsole, handlePromptDescriptionChange, handlePromptTitleChange, handleSavePromptRef, heldRunRef, publishRepairFlow, readLiveOutput, readToolRegister, refreshEvaluations, repairFindingRef, repairSectionsRef, repairTitleRef, rowsForDecision, runApprovedRef, saveRunState, setAiAssemblyFailed, setAiAssemblyMessage, setAiAssemblyReport, setCanvasHolding, setCanvasRunning, setColumnView, setCurrentPromptSession, setIsComposerRunning, setIsFailureAcknowledged, setPromptLoadKey, settleRepair, speakRepairVerdict, surfaceDescription, surfaceSections, surfaceTitle, syncCanvasInset, toolsThatCannotRun, writeAnswerBack } = deps;
   useEffect(() => {
-    const handleConversationUpdate = async () => {
-      // Always refresh projects list when conversationUpdated event fires
-      // This ensures deleted projects are removed from the list
-      // Force refresh to get latest data from API
-      const allProjects = await conversationStorage.getAllProjects(true);
-      setProjects(allProjects);
-
-      // If the currently selected prompt was deleted, switch to default or all prompts
-      const currentProjectId = conversationStorage.getCurrentProjectId();
-      if (
-        currentProjectId &&
-        !allProjects.find((p) => p.id === currentProjectId)
-      ) {
-        // Selected prompt was deleted, switch to all prompts view
-        setSelectedProjectId(null);
-        conversationStorage.setCurrentProjectId("");
-      }
-
-      if (selectedProjectId && activeTab === "projects") {
-        const conversations =
-          await conversationStorage.getProjectConversations(selectedProjectId);
-        setProjectConversations(
-          conversations.sort((a, b) => b.updatedAt - a.updatedAt),
-        );
-      }
-    };
-
-    window.addEventListener("conversationUpdated", handleConversationUpdate);
-
-    // Listen for switchToMemoriesTab event (from TeacherChat project label click)
-    const handleSwitchToMemoriesTab = () => {
-      setActiveTab("memories");
-    };
-
-    // Listen for switchToChatTab event (from MemoriesTab when clicking a conversation)
-    // NOTE: This should NOT trigger when clicking conversations in the projects tab
-    // The projects tab should just load the conversation without switching tabs
-    const handleSwitchToChatTab = (event: Event) => {
-      // Check if event came from projects tab - if so, NEVER switch tabs
-      const customEvent = event as CustomEvent;
-      if (customEvent.detail?.fromProjectsTab) {
-        console.log(
-          "🚫 [Projects Tab] Ignoring switchToChatTab - chat panel is always visible",
-        );
-        return;
-      }
-      // Also check if we're currently on projects tab - don't switch if we are
-      if (activeTab === "projects") {
-        console.log(
-          "🚫 [Projects Tab] Blocking switchToChatTab - staying on projects tab",
-        );
-        return;
-      }
-      // Chat is always visible in the right column — no tab switch needed
-    };
 
     // Listen for editor-send-to-model event (from MyStoryEditor) — REMOVED: MyStory is retired
 
   // `toggle-third-column` WAS NEVER SENT BY ANYONE. It was listened for here with a handler
   // that dispatched `reset-columns-to-equal-widths` — which only the retired React
-  // ResizableSplitter ever heard. The element that owns her column is `workspace-layout`,
+  // ResizableSplitter ever heard. The element that owns her column is `composer-workspace`,
   // and it broadcasts its own fact as `third-column-toggle` (the name its registry entry
   // declares); the shell has nothing to do with that fact — the layout owns it, and the save
   // reads her state off the element directly. Both dead ends are gone: a listener is not a
@@ -385,7 +323,7 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
       /*
        * AND THE ROOM STAYS WHERE IT IS. The Run button docks the prompt and gives the width to
        * the canvas — the layout's own act, armed the moment the button is clicked (see
-       * workspace-layout's run-click). A held run draws no canvas, so the dock would take the
+       * composer-workspace's run-click). A held run draws no canvas, so the dock would take the
        * prompt down to its rail and leave the person looking at a background: measured
        * 2026-09-23, pressing Run on a package she then blocked collapsed the whole workspace.
        * A run that never started must not rearrange the screen, so the layout is told.
@@ -456,7 +394,7 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
     // the nodes, the finding is the trigger, and the run's own answers are the steps.
     // The dock itself is the LEFT COLUMN'S OWN act — it hears the Run from its own
     // footer and keeps its rail and one grip, so opening the prompt back up is a
-    // gesture, not a navigation (see workspace-layout's run-click). Nothing here
+    // gesture, not a navigation (see composer-workspace's run-click). Nothing here
     // forces it, because nothing here owns that width.
     const repairFinding = repairingFinding
       ? (catalogFindings || []).find((f: any) => f.id === repairingFinding)
@@ -534,7 +472,7 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
      * model's own time is the wait, and `RUN_DOCK_MS` is the pane's transition — the one moment the
      * canvas must not mount into.
      */
-    const layoutEl = deepFind<HTMLElement & { dockPrompt?: () => void }>('workspace-layout');
+    const layoutEl = deepFind<HTMLElement & { dockPrompt?: () => void }>('composer-workspace');
     /*
      * AND THE COLUMN IS TOLD IT IS WORKING FROM THE CLICK — not from the moment its own assembly
      * lands. On a SECOND Run the canvas is already on screen with the previous drawing in it, and
@@ -564,7 +502,7 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
        * picture is made of, and the replay derives the middle pointer from it.
        */
       assembledRunColumnRef.current = Array.isArray(assembled.components)
-        ? (assembled.components as any[]).filter((c) => c?.component !== 'workspace-layout' && c?.id !== 'root')
+        ? (assembled.components as any[]).filter((c) => c?.component !== 'composer-workspace' && c?.id !== 'root')
         : null;
 
       /*
@@ -588,7 +526,7 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
        *   the colum is ready
        *                    the doors slide: `dockPrompt()` closes the prompt and her column in one
        *                    frame, the room opens, and the pane has its own waiting state (see
-       *                    workspace-layout's `_runInFlight`) so it is never an empty rectangle
+       *                    composer-workspace's `_runInFlight`) so it is never an empty rectangle
        *   RUN_DOCK_MS later  the canvas mounts — into a layout that has already settled, which is
        *                    the cure for the drawing being seen sliding in — and the drawing follows
        *                    in the same tick.
@@ -812,7 +750,7 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
        */
       const runConvId = typeof data?.conversation_id === 'string' && data.conversation_id ? data.conversation_id : '';
       if (runConvId) {
-        const panel = deepFind<HTMLElement & { adoptConversation?: (id: string) => void }>('chat-panel');
+        const panel = deepFind<HTMLElement & { adoptConversation?: (id: string) => void }>('composer-chat-panel');
         panel?.adoptConversation?.(runConvId);
         if (currentPromptSessionRef.current) {
           try {
@@ -1038,8 +976,6 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
   };
 
     console.log('✅ [WritingAreaIndex] Setting up event listeners');
-    window.addEventListener("switchToMemoriesTab", handleSwitchToMemoriesTab);
-    window.addEventListener("switchToChatTab", handleSwitchToChatTab);
 
     // Listen for save-template event. Sections come from the surface's data model — the
     // composer column's binding. No DOM read, no fallback.
@@ -1330,15 +1266,6 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
     console.log('✅ [WritingAreaIndex] Event listeners set up');
 
     return () => {
-      window.removeEventListener(
-        "conversationUpdated",
-        handleConversationUpdate,
-      );
-      window.removeEventListener(
-        "switchToMemoriesTab",
-        handleSwitchToMemoriesTab,
-      );
-      window.removeEventListener("switchToChatTab", handleSwitchToChatTab);
       window.removeEventListener("save-template", handleSaveTemplateEvent);
       window.removeEventListener("run-requested", handleRunRequested);
       window.removeEventListener('a2ui:run-approved', handleRunApproved);
@@ -1356,5 +1283,5 @@ export function useRunPipeline(deps: UseRunPipelineDeps) {
       window.removeEventListener("prompt-session-deleted", handlePromptSessionDeleted);
       window.removeEventListener("start-new-prompt", handleStartNewPrompt);
     };
-  }, [selectedProjectId, activeTab]);
+  }, []);
 }

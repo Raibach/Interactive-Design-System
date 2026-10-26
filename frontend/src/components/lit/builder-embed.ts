@@ -26,10 +26,19 @@ export class BuilderEmbed extends LitElement {
     src: { type: String },
     /** Opt-in readiness watch — see `_watchReady`. The Development mount passes `h1`. */
     readySelector: { type: String, attribute: 'ready-selector' },
+    /**
+     * Opt-in: keep the frame hidden until its own document has loaded. An iframe's
+     * `about:blank` document paints a white canvas before the real page arrives; the Product
+     * room opts in so its ground and spinner show instead of that white flash.
+     */
+    hideUntilLoad: { type: Boolean, attribute: 'hide-until-load' },
+    _loaded: { type: Boolean, state: true },
   };
 
   declare src: string | null;
   declare readySelector: string | null;
+  declare hideUntilLoad: boolean;
+  declare _loaded: boolean;
 
   /**
    * EVERY PAGE IS LOADED WITH `?embedded=console` — the header the builder's back arrow
@@ -150,9 +159,15 @@ export class BuilderEmbed extends LitElement {
    * like every other cross-boundary announcement in this app.
    */
   private _onFrameLoaded = (): void => {
+    this._loaded = true;
     window.dispatchEvent(new CustomEvent('builder-embed-loaded'));
     this._watchReady();
   };
+
+  /** A new address is a new document: the frame waits for its own load again. */
+  updated(changed: Map<string, unknown>): void {
+    if (changed.has('src')) this._loaded = false;
+  }
 
   /**
    * THE APP HAS PAINTED (2026-10-16, opt-in via `ready-selector`).
@@ -253,6 +268,9 @@ export class BuilderEmbed extends LitElement {
         class="frame"
         title="App builder"
         src=${this._embeddedSrc()}
+        style=${this.hideUntilLoad
+          ? `visibility:${this._loaded ? 'visible' : 'hidden'};opacity:${this._loaded ? '1' : '0'};transition:opacity 260ms ease;`
+          : ''}
         @load=${this._onFrameLoaded}
       ></iframe>
     `;
@@ -288,6 +306,9 @@ declare module 'react' {
            *  `builder-embed-ready` once it appears. The Development room passes
            *  "h1". See `_watchReady`. */
           'ready-selector'?: string;
+          /** Opt-in: keep the frame hidden until its document loads. Product uses it to
+           *  prevent the iframe's white `about:blank` flash. */
+          'hide-until-load'?: boolean | string;
         },
         BuilderEmbed
       >;

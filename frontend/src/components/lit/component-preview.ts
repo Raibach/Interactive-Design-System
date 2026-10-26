@@ -39,12 +39,72 @@ export interface PreviewState {
   nodeId?: string;
   /** True when the catalogue already holds this tag, so approving replaces rather than adds. */
   alreadyInCatalogue?: boolean;
+  /**
+   * THE COMPONENT THIS DESIGN ALREADY IS — the catalogue entry whose layer name matches this
+   * design's. The name is the identity, so this is a NAME LOOKUP and nothing about the existing
+   * component's measured values is read (that would be interpreting one design against another).
+   */
+  existing?: { tag?: string; nodeId?: string; approvedAt?: string };
   /** The job's id, when an ingest produced this — what an approve resolves. */
   jobId?: string;
   /** Free label/value facts to draw under the identity, in order. */
   facts?: Array<{ label: string; value: string }>;
   /** One line about what this is, from the row or the ingest. */
   note?: string;
+  /** True while the discard request is in flight — the button says so and turns. */
+  discarding?: boolean;
+  /** True while the approval is in flight — the button says so and turns. */
+  approving?: boolean;
+  /** The tag the approval wrote, once it has. The confirmation is read from this. */
+  approvedTag?: string;
+  /** The child patterns this design stands on — each with its name, tag and whether it replaces. */
+  patterns?: Array<Record<string, any>>;
+  /**
+   * THE STAGE AN APPROVAL OR A REMOVAL HAS REACHED, as the server records it. It is the real step
+   * that is running — never an animation standing in for progress — and a failure stops here with
+   * the stage named.
+   */
+  progress?: string;
+  /** True while the removal request is in flight — the button says so and turns. */
+  removing?: boolean;
+  /** True once the component has been removed: the actions are gone and the readout says so. */
+  removed?: boolean;
+  /** TRUE WHILE THE INGEST RUNS. The column is open and says what it is doing, never blank. */
+  pending?: boolean;
+  /**
+   * THE DRAWN DECLARATIONS PER LAYER, as the component's own stylesheet carries them.
+   *
+   * A LIST, NOT A SUMMARY (owner, 2026-10-26): *"You need to show the specs as a list of specs like
+   * this `display: flex; width: 662px; padding: 13px 38px; …`"*. Read from the draft the preview
+   * loads, so a reader can put the list beside the drawing and compare it with Figma without
+   * trusting a count.
+   */
+  specs?: Array<{
+    path?: string; name?: string; type?: string; selector?: string;
+    declarations?: string[]; display?: string[];
+  }>;
+  /**
+   * EVERY FACT THE INGEST READ, layer by layer: what Figma stated, what the component carries,
+   * and the verdict. This is the list the designer compares against the Figma file — a count is
+   * not a list, and a summary cannot be checked against anything.
+   */
+  readings?: Array<{
+    layer?: string; path?: string; fact?: string; source?: string; drawn?: string;
+    verdict?: string; why?: string;
+  }>;
+  /**
+   * EVERY ANNOTATION IN THE FILE — the designer's notes quoted verbatim, and the property marks
+   * with the properties they expose. No exception and no slice: if the file carries it, it is here.
+   */
+  annotations?: Array<{
+    layer?: string; path?: string; nodeId?: string; note?: string | null;
+    properties?: string[]; kind?: string;
+  }>;
+  /** Every step the ingest took, in order, as it happened. */
+  steps?: Array<{ at?: string; text?: string }>;
+  /** The source the preview loads — the component the drawing is built from. */
+  componentSource?: string;
+  sourceBytes?: number;
   /**
    * THE DATA BINDING, SHOWN AND NEVER SUBSTITUTED: the values this component will be given, from the
    * application's own rows (`/session/elements` — one `design_master` row per component). A preview
@@ -99,6 +159,13 @@ export class ComponentPreview extends LitElement {
    */
   private _confirmingRemove = false;
 
+  /**
+   * WHICH CHILD PATTERNS THE DESIGNER HAS TICKED. New patterns start ticked; an existing pattern
+   * starts unticked, because replacing a component is a deliberate act and never a default. The
+   * set belongs to one preview and is rebuilt when the preview's tag changes.
+   */
+  private _patternChecked = new Set<string>();
+
   constructor() {
     super();
     this.preview = undefined;
@@ -136,7 +203,7 @@ export class ComponentPreview extends LitElement {
         color: var(--ds-text-strong);
       }
       .tag {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
         font-size: var(--ds-fs-meta);
         color: var(--ds-muted);
       }
@@ -181,12 +248,11 @@ export class ComponentPreview extends LitElement {
         padding: 12px;
         border: 1px solid var(--ds-rule);
         border-radius: var(--ds-radius);
-        /* TRANSPARENT — THE EDGE IS THE FRAME (owner, 2026-09-30: *"there's backgrounds on the
-           containers inside of the third column, they should be transparent"*). The room's own
-           ground shows through, so the column does not read as a stack of panels bolted inside
-           the canvas; the 1px edge is what makes a white component visible, which was the whole
-           reason the React pane had an outline in the first place. */
-        background: transparent;
+        /* WHITE, AND ONLY THIS BOX (owner, 2026-10-25: "make the background on the output pane
+           white, just the container for the element, not the entire column"). The drawing's own
+           frame is the white surface; the column around it keeps the room's ground. This replaces
+           the 2026-09-30 transparent rule for this pane. */
+        background: #ffffff;
         min-height: 120px;
         max-height: 46vh;
         overflow: auto;
@@ -248,10 +314,368 @@ export class ComponentPreview extends LitElement {
         color: var(--ds-text);
         overflow-wrap: anywhere;
       }
+      /* THE RING ITSELF AT THE EXACT MIDDLE OF THE COLUMN. Centring the ring and the message
+         together leaves the ring above the middle by half the message; the ring is what the eye
+         follows, so it is placed at 50%/50% by margin (not transform, which the rotation needs) and
+         the message hangs beneath it. */
+      /* WHILE PENDING THE HOST IS A COLUMN WITH A REAL SIZE, so the centre exists. */
+      /* A COMPONENT THAT HAS BEEN REMOVED HAS NO ACTIONS: the readout is the whole answer. */
+      :host([data-removed]) .actions {
+        display: none;
+      }
+      .btnspin.dark {
+        border-color: rgba(185, 28, 28, 0.25);
+        border-top-color: #b91c1c;
+      }
+      :host([data-pending]) {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-width: 240px;
+        min-height: 260px;
+      }
+      /*
+       * WHAT APPROVING WILL WRITE — the standing block, above the actions, that names the
+       * component this design already is and lists every child pattern with a tick. It is not a
+       * sentence in the note: prose gets pruned, a block that states a fact does not.
+       */
+      .writes {
+        margin: 0 0 12px;
+        border: 1px solid var(--ds-rule);
+        border-left: 3px solid #b5884a;
+        border-radius: var(--ds-radius, 6px);
+        padding: 10px 12px;
+      }
+      /* THE STAGE LINE — the real step that is running, under the note and above the block. */
+      .progress {
+        margin: 6px 0 10px;
+        padding-left: 9px;
+        border-left: 2px solid #b5884a;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--ds-text);
+      }
+      .whead {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: var(--ds-muted);
+      }
+      .wroot {
+        margin: 6px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--ds-text);
+      }
+      .wroot code,
+      .ptag {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+      }
+      .plist {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .prow {
+        display: grid;
+        grid-template-columns: 16px auto 1fr;
+        gap: 2px 8px;
+        align-items: baseline;
+        font-size: 12px;
+        color: var(--ds-text);
+        cursor: pointer;
+      }
+      .prow.off {
+        cursor: default;
+        opacity: 0.7;
+      }
+      .prow input {
+        margin: 0;
+      }
+      .pname {
+        font-weight: 600;
+        color: var(--ds-text-strong);
+      }
+      .ptag {
+        color: var(--ds-muted);
+      }
+      .pstate {
+        grid-column: 2 / -1;
+        font-size: 11px;
+        color: var(--ds-muted);
+      }
+      .prow.exists .pstate {
+        color: #92400e;
+      }
+      /* THE REPLACEMENT WARNING — a readout above the actions, never a button label. */
+      .replacewarn {
+        margin: 0 0 12px;
+        border: 1px solid #b91c1c;
+        border-left: 4px solid #b91c1c;
+        border-radius: var(--ds-radius, 6px);
+        background: rgba(185, 28, 28, 0.06);
+        padding: 10px 12px;
+      }
+      .rwtitle {
+        font-size: 12px;
+        font-weight: 700;
+        color: #b91c1c;
+        text-transform: none;
+      }
+      .rwbody {
+        margin: 5px 0 9px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--ds-text);
+      }
+      .rwbody code {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+      }
+      .rwactions {
+        display: flex;
+        gap: 8px;
+      }
+      .rwgo {
+        border: none;
+        border-radius: var(--ds-radius, 6px);
+        background: #b91c1c;
+        color: #fff;
+        padding: 6px 12px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .rwstop {
+        border: 1px solid rgba(35, 67, 84, 0.3);
+        border-radius: var(--ds-radius, 6px);
+        background: transparent;
+        padding: 6px 12px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .pending {
+        position: relative;
+        flex: 1 1 auto;
+        width: 100%;
+        min-height: 240px;
+        box-sizing: border-box;
+      }
+      .bigspin {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 26px;
+        height: 26px;
+        box-sizing: border-box;
+        border-radius: 50%;
+        border: 3px solid rgba(35, 67, 84, 0.18);
+        border-top-color: var(--ds-amber, #b58b00);
+        /* THE TRANSLATE IS IN THE KEYFRAMES TOO, or the animation would overwrite the centring
+           transform on its first frame and drop the ring by half its size. */
+        transform: translate(-50%, -50%);
+        animation: bigspin 0.9s linear infinite;
+      }
+      @keyframes bigspin {
+        from { transform: translate(-50%, -50%) rotate(0deg); }
+        to { transform: translate(-50%, -50%) rotate(360deg); }
+      }
+      .ptext {
+        position: absolute;
+        left: 50%;
+        top: calc(50% + 24px);
+        transform: translateX(-50%);
+        width: 80%;
+        max-width: 420px;
+        text-align: center;
+        font-size: var(--ds-fs-sm);
+        color: var(--ds-text);
+        overflow-wrap: anywhere;
+      }
       .note {
         margin: 0 0 10px;
         font-size: var(--ds-fs-sm);
         color: var(--ds-text);
+      }
+      /* ACCORDIONS: each result collapses on its own, so the panel is long only when a reader asks
+         it to be. The specs section opens; each layer inside it is collapsed until opened, which is
+         what keeps a fifteen-layer component readable. */
+      .acc {
+        margin: 0 0 12px;
+        border: 1px solid rgba(35, 67, 84, 0.12);
+        border-radius: var(--ds-radius, 6px);
+        background: rgba(35, 67, 84, 0.02);
+      }
+      .acc > summary {
+        padding: 7px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ds-text);
+        cursor: pointer;
+        list-style-position: inside;
+      }
+      .acc[open] > summary {
+        border-bottom: 1px solid rgba(35, 67, 84, 0.08);
+      }
+      .speclayer {
+        border-top: 1px solid rgba(35, 67, 84, 0.06);
+      }
+      .speclayer > summary {
+        padding: 5px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        list-style-position: inside;
+      }
+      .speclayer > pre {
+        margin: 0;
+        padding: 4px 10px 8px 24px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      /* THE SPECS LIST — one block per layer, no inner scroll. The panel itself scrolls; a second
+         scrollbar inside a list inside a panel is a trap for the wheel. */
+      .specs {
+        margin: 0 0 12px;
+        padding: 8px 10px;
+        border: 1px solid rgba(35, 67, 84, 0.12);
+        border-radius: var(--ds-radius, 6px);
+        background: rgba(35, 67, 84, 0.03);
+      }
+      .spec + .spec {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(35, 67, 84, 0.08);
+      }
+      .spechead {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ds-text);
+        margin-bottom: 3px;
+      }
+      .specsel {
+        font-family: 'IBM Plex Mono', monospace;
+        font-weight: 400;
+        opacity: 0.6;
+      }
+      .spec pre {
+        margin: 0;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--ds-text);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      /* THE STEPS AND THE SOURCE — both are evidence, both are shown whole. */
+      .steps,
+      .src {
+        margin: 0 0 12px;
+        border: 1px solid rgba(35, 67, 84, 0.12);
+        border-radius: var(--ds-radius, 6px);
+      }
+      .step {
+        padding: 2px 10px;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .sat {
+        font-family: 'IBM Plex Mono', monospace;
+        opacity: 0.5;
+        margin-right: 6px;
+      }
+      .src pre {
+        margin: 0;
+        padding: 8px 10px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      /* THE ANNOTATIONS — every one, quoted, with its layer. A note is the designer's words; a
+         property mark names what it exposes. Neither is shortened. */
+      .annots {
+        margin: 0 0 12px;
+        border: 1px solid rgba(35, 67, 84, 0.12);
+        border-radius: var(--ds-radius, 6px);
+      }
+      .annot {
+        padding: 6px 10px;
+        border-top: 1px solid rgba(35, 67, 84, 0.06);
+      }
+      .alayer {
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .apath {
+        font-family: 'IBM Plex Mono', monospace;
+        font-weight: 400;
+        opacity: 0.6;
+      }
+      .anote {
+        font-size: 12px;
+        line-height: 1.5;
+        margin-top: 2px;
+      }
+      .aprop {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        margin-top: 2px;
+      }
+      /* THE READINGS — every fact, one line each, scrollable. The verdict is the last column so a
+         reader scans down the values and stops where the word is not "drawn". */
+      .readings {
+        margin: 0 0 12px;
+        border: 1px solid rgba(35, 67, 84, 0.12);
+        border-radius: var(--ds-radius, 6px);
+      }
+      .readhead {
+        padding: 6px 10px;
+        background: rgba(35, 67, 84, 0.06);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .reading {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1.2fr 1.2fr 0.7fr;
+        gap: 8px;
+        padding: 3px 10px;
+        font-size: 11px;
+        line-height: 1.5;
+        border-top: 1px solid rgba(35, 67, 84, 0.06);
+      }
+      .reading.differs,
+      .reading.not-read,
+      .reading.not-drawn,
+      .reading.uncomparable {
+        background: rgba(185, 28, 28, 0.06);
+      }
+      .reading.accepted {
+        opacity: 0.72;
+      }
+      .rlayer {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .rfact {
+        font-family: 'IBM Plex Mono', monospace;
+      }
+      .rvalue,
+      .rdrawn {
+        font-family: 'IBM Plex Mono', monospace;
+        overflow-wrap: anywhere;
+      }
+      .rverdict {
+        font-weight: 600;
       }
       .actions {
         display: flex;
@@ -272,6 +696,19 @@ export class ComponentPreview extends LitElement {
         background: var(--ds-green);
         color: #fff;
       }
+      /* THE DISCARD SPINNER — the button's own, while the removal is in flight. */
+      .btnspin {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-right: 6px;
+        vertical-align: -1px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.45);
+        border-top-color: #fff;
+        animation: btnspin 0.8s linear infinite;
+      }
+      @keyframes btnspin { to { transform: rotate(360deg); } }
       button.discard {
         border: 1px solid var(--ds-rule);
         background: #fff;
@@ -358,7 +795,7 @@ export class ComponentPreview extends LitElement {
         color: var(--ds-text);
       }
       .qline code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
         font-weight: 600;
       }
       .qa {
@@ -399,17 +836,108 @@ export class ComponentPreview extends LitElement {
         color: var(--ds-muted);
         max-width: 46ch;
       }
+      .warn {
+        margin: 8px 0 0;
+        font-size: 12px;
+        color: #a3331f;
+        line-height: 1.4;
+      }
     `,
   ];
 
-  private _act(kind: 'preview-approve' | 'preview-discard' | 'preview-remove') {
+  /**
+   * APPROVING A REPLACEMENT TAKES A SECOND PRESS, AND THE REASON IS A READOUT.
+   *
+   * Owner, 2026-10-26: *"We're gonna have to tell the user they're replacing it — that can't be the
+   * label inside of a button, it has to be an error message or warning message that pops up upon
+   * the attempt to approve it, and then the user will have to confirm."* So the first press does
+   * not write: it draws the warning above the actions, naming the component that will be replaced.
+   * The button's own label stays neutral; the sentence carries the fact.
+   */
+  private _confirmingApprove = false;
+
+  private _act(kind: 'preview-approve' | 'preview-discard' | 'preview-remove', confirmed = false) {
+    if (kind === 'preview-approve' && this.preview?.alreadyInCatalogue && !confirmed) {
+      this._confirmingApprove = true;
+      this.requestUpdate();
+      return;
+    }
     this.dispatchEvent(
       new CustomEvent(kind, {
         bubbles: true,
         composed: true,
-        detail: { preview: this.preview },
+        detail: {
+          preview: this.preview,
+          // WHICH CHILD PATTERNS THE APPROVAL SHOULD WRITE. The shell sends these tags, and the
+          // server writes exactly those and leaves every other pattern untouched.
+          patterns: kind === 'preview-approve' ? [...this._patternChecked] : undefined,
+        },
       }),
     );
+  }
+
+  private _togglePattern(tag: string, checked: boolean): void {
+    if (!tag) return;
+    if (checked) this._patternChecked.add(tag);
+    else this._patternChecked.delete(tag);
+    this.requestUpdate();
+  }
+
+  /**
+   * WHAT APPROVING WILL WRITE, STATED BEFORE ANY PRESS — the root and every child pattern.
+   *
+   * Owner, 2026-10-26: *"I'm trying to replace it. I might be trying to replace it… it should show
+   * me what's there, what's being overwritten."* The root's line names the component and its
+   * approval date; each pattern is a row with a checkbox, so replacing a child is a choice the
+   * designer makes here rather than a consequence of pressing Approve. The block renders nothing
+   * when nothing exists and no pattern is drafted — an empty frame is a claim that there is
+   * something to show.
+   */
+  private _writes(p: PreviewState) {
+    const patterns = Array.isArray(p.patterns) ? p.patterns : [];
+    const rootTag = String(p.existing?.tag ?? '');
+    if (!rootTag && !patterns.length) return nothing;
+    const approved = p.existing?.approvedAt ? String(p.existing.approvedAt).slice(0, 10) : '';
+    return html`
+      <div class="writes">
+        <div class="whead">${rootTag ? 'Already in the catalogue' : 'What approving writes'}</div>
+        ${rootTag
+          ? html`<p class="wroot">
+              This design already exists as <code>${rootTag}</code>${approved
+                ? html`, approved ${approved}`
+                : nothing}. Approving replaces it. Its own measured values were not read — the
+              match is the layer name.
+            </p>`
+          : nothing}
+        ${patterns.length
+          ? html`<div class="plist">
+              ${patterns.map((entry) => {
+                const tag = String(entry.tag ?? '');
+                const drafted = entry.drafted !== false;
+                // THE REASON IS THE SERVER'S OR IT IS NOTHING. A panel that supplies a cause of
+                // its own is a second answer beside the measured one (owner: never interpret).
+                const state = !drafted
+                  ? `Not written${entry.reason ? ` — ${entry.reason}` : '.'}`
+                  : entry.replaces
+                    ? 'Existing — tick to replace it'
+                    : 'New — will be added';
+                return html`<label class="prow ${entry.replaces ? 'exists' : 'new'} ${drafted ? '' : 'off'}">
+                  <input
+                    type="checkbox"
+                    .checked=${this._patternChecked.has(tag)}
+                    ?disabled=${!drafted}
+                    @change=${(event: Event) =>
+                      this._togglePattern(tag, (event.target as HTMLInputElement).checked)}
+                  />
+                  <span class="pname">${entry.name || tag}</span>
+                  <code class="ptag">${tag}</code>
+                  <span class="pstate">${state}</span>
+                </label>`;
+              })}
+            </div>`
+          : nothing}
+      </div>
+    `;
   }
 
   /**
@@ -424,14 +952,11 @@ export class ComponentPreview extends LitElement {
    * catalogue and I can remove it"*).
    */
   private _remove(): void {
-    if (!this._confirmingRemove) {
-      this._confirmingRemove = true;
-      // The label IS the confirmation, and this field is not reactive, so the render is asked for.
-      this.requestUpdate();
-      return;
-    }
-    this._confirmingRemove = false;
-    this._act('preview-remove');
+    // THE FIRST CLICK ONLY ARMS. The confirmation is a readout above the actions, never the
+    // button's label (owner, 2026-10-26: *"that can't be the label inside of a button, it has to be
+    // an error message or warning message… and then the user will have to confirm"*).
+    this._confirmingRemove = true;
+    this.requestUpdate();
   }
 
   /**
@@ -445,6 +970,15 @@ export class ComponentPreview extends LitElement {
    */
   protected willUpdate(changed: Map<PropertyKey, unknown>): void {
     if (changed.has('preview') && this._confirmingRemove) this._confirmingRemove = false;
+    // A NEW PREVIEW GETS ITS OWN TICKS, BEFORE THE FIRST PAINT — so the boxes are drawn in the
+    // state the approval would send, not one render behind it.
+    if (changed.has('preview') && this.preview?.tag !== (changed.get('preview') as any)?.tag) {
+      this._patternChecked = new Set(
+        (this.preview?.patterns ?? [])
+          .filter((entry) => entry.drafted !== false && !entry.replaces)
+          .map((entry) => String(entry.tag ?? '')),
+      );
+    }
   }
 
   /**
@@ -589,7 +1123,61 @@ export class ComponentPreview extends LitElement {
     );
   }
 
+  /**
+   * THE HOST CARRIES THE PENDING STATE, because it is the host that has to have a size.
+   *
+   * Measured 2026-10-26 in the real room: the element was 15 pixels wide while pending. Its
+   * content was absolutely positioned, so it contributed no width and the host sized to nothing —
+   * there was no column to centre in. The attribute lets the host declare its own width and height
+   * for exactly this state, and the drawing path is untouched.
+   */
+  /** Keeps the pending pane the size of the column it sits in, without CSS guessing. */
+  private _pendingObserver: ResizeObserver | null = null;
+
+  private _sizeToParent(active: boolean): void {
+    if (!active) {
+      this.style.width = '';
+      this.style.height = '';
+      this._pendingObserver?.disconnect();
+      this._pendingObserver = null;
+      return;
+    }
+    const parent = this.parentElement;
+    if (!parent) return;
+    const apply = () => {
+      // MEASURED, NOT GUESSED: the pane takes the column's own box, so fifty percent of it is the
+      // column's centre. `width: 100%` resolved to zero here because the element is slotted, and a
+      // ring centred in a zero-width box is not centred — it is invisible.
+      this.style.width = `${parent.clientWidth}px`;
+      this.style.height = `${parent.clientHeight}px`;
+    };
+    apply();
+    if (!this._pendingObserver) {
+      this._pendingObserver = new ResizeObserver(apply);
+      this._pendingObserver.observe(parent);
+    }
+  }
+
+  protected updated(changed: Map<string, unknown>): void {
+    this.toggleAttribute('data-pending', !!this.preview?.pending);
+    this.toggleAttribute('data-removed', !!this.preview?.removed);
+    this._sizeToParent(!!this.preview?.pending);
+    // A NEW PREVIEW IS A NEW QUESTION: an armed replacement must not carry over to another design.
+    if (changed.has('preview') && this.preview?.tag !== (changed.get('preview') as any)?.tag) {
+      this._confirmingApprove = false;
+    }
+  }
+
   render() {
+    // THE INGEST IS RUNNING: THE COLUMN IS OPEN AND SAYS SO. Owner, 2026-10-26: *"in the third
+    // column opens then you drop the spinner there so that the user is not staring at a blank
+    // third column while it's ingesting."*
+    if (this.preview?.pending) {
+      return html`<div class="pending">
+        <span class="bigspin" aria-hidden="true"></span>
+        <p class="ptext">${this.preview.note || "Ingesting — reading the node from Figma…"}</p>
+      </div>`;
+    }
     // NO RUN YET. Said in words: an empty pane and a preview of nothing are different claims.
     if (this.preview === undefined || this.preview === null) {
       return html`
@@ -620,6 +1208,115 @@ export class ComponentPreview extends LitElement {
       ${this._binding(p)}
       <div class="body">
         ${p.note ? html`<p class="note">${p.note}</p>` : nothing}
+        ${p.progress ? html`<p class="progress" role="status">${p.progress}</p>` : nothing}
+        ${this._writes(p)}
+        ${this._confirmingRemove && p.alreadyInCatalogue
+          ? html`<div class="replacewarn" role="alert">
+              <div class="rwtitle">Remove ${p.tag} from the catalogue?</div>
+              <p class="rwbody">
+                This deletes the component's file, its Figma map entry, its allowlist entry, its
+                catalogue entry and its layer record. It can be ingested again, but the removal is
+                recorded, and the component is gone from the catalogue until then.
+              </p>
+              <div class="rwactions">
+                <button class="rwgo" type="button" @click=${() => {
+                  this._confirmingRemove = false;
+                  this._act('preview-remove');
+                }}>Remove ${p.tag}</button>
+                <button class="rwstop" type="button" @click=${() => {
+                  this._confirmingRemove = false;
+                  this.requestUpdate();
+                }}>Cancel</button>
+              </div>
+            </div>`
+          : nothing}
+        ${this._confirmingApprove && p.alreadyInCatalogue
+          ? html`<div class="replacewarn" role="alert">
+              <div class="rwtitle">This will REPLACE a component that is already in the catalogue</div>
+              <p class="rwbody">
+                The design you are approving is already in the catalogue as
+                <code>${p.tag}</code>. Approving now replaces that component — its file, its Figma
+                map entry, its allowlist entry and its catalogue entry. Nothing else is touched.
+              </p>
+              ${(p.patterns ?? []).filter(
+                (entry) => entry.replaces && this._patternChecked.has(String(entry.tag ?? '')),
+              ).length
+                ? html`<p class="rwbody">
+                    Patterns that will be replaced as well:
+                    ${(p.patterns ?? [])
+                      .filter(
+                        (entry) => entry.replaces && this._patternChecked.has(String(entry.tag ?? '')),
+                      )
+                      .map((entry) => html`<code>${entry.name}</code> (${entry.tag}) `)}
+                  </p>`
+                : nothing}
+              <div class="rwactions">
+                <button class="rwgo" type="button" @click=${() => {
+                  this._confirmingApprove = false;
+                  this._act('preview-approve', true);
+                }}>Replace ${p.tag} and approve</button>
+                <button class="rwstop" type="button" @click=${() => {
+                  this._confirmingApprove = false;
+                  this.requestUpdate();
+                }}>Cancel</button>
+              </div>
+            </div>`
+          : nothing}
+        ${(p.specs ?? []).length
+          ? html`<details class="acc" open>
+              <summary>Specs — ${(p.specs ?? []).length} layer(s)</summary>
+              ${(p.specs ?? []).map(
+                (s) => html`<details class="speclayer">
+                  <summary>
+                    ${s.name || s.path}${s.type ? html` <span class="specsel">${s.type}</span>` : nothing}
+                  </summary>
+                  <pre>${(s.display ?? s.declarations ?? []).join(";\n")};</pre>
+                </details>`
+              )}
+            </details>`
+          : nothing}
+        ${(p.annotations ?? []).length
+          ? html`<details class="acc" open>
+              <summary>Annotations — every one the file carries, ${(p.annotations ?? []).length}</summary>
+              <div class="annots">
+              ${(p.annotations ?? []).map(
+                (a) => html`<div class="annot">
+                  <div class="alayer">${a.layer} <span class="apath">${a.path || ""}</span></div>
+                  ${a.note
+                    ? html`<div class="anote">“${a.note}”</div>`
+                    : html`<div class="aprop">property mark: ${(a.properties ?? []).join(", ") || "(none named)"}</div>`}
+                </div>`
+              )}
+              </div>
+            </details>`
+          : nothing}
+        ${(p.readings ?? []).length
+          ? html`<details class="acc" open>
+              <summary>
+                Facts read, layer by layer — what Figma stated, what the component carries, and the
+                verdict. ${(p.readings ?? []).length} facts.
+              </summary>
+              <div class="readings">
+              ${(p.readings ?? []).map(
+                (r) => html`<div class="reading ${r.verdict || ''}">
+                  <span class="rlayer">${r.layer}</span>
+                  <code class="rfact">${r.fact}</code>
+                  <span class="rvalue">${r.source || "—"}</span>
+                  ${r.drawn ? html`<span class="rdrawn">→ ${r.drawn}</span>` : nothing}
+                  <span class="rverdict">${r.verdict}</span>
+                </div>`
+              )}
+              </div>
+            </details>`
+          : nothing}
+        ${p.componentSource
+          ? html`<details class="acc">
+              <summary>
+                The component source the preview loads — ${p.sourceBytes ?? (p.componentSource || '').length} bytes
+              </summary>
+              <div class="src"><pre>${p.componentSource}</pre></div>
+            </details>`
+          : nothing}
         ${facts.length
           ? html`
               <dl>
@@ -643,18 +1340,22 @@ export class ComponentPreview extends LitElement {
           <button
             class="approve"
             type="button"
-            ?disabled=${this.busy}
+            ?disabled=${this.busy || p.approving || p.discarding || p.removing}
             @click=${() => this._act('preview-approve')}
           >
-            ${p.alreadyInCatalogue ? 'Approve & REPLACE the existing component' : 'Approve & add to catalogue'}
+            ${p.approving
+              ? html`<span class="btnspin" aria-hidden="true"></span>Approving — writing it into the catalogue…`
+              : 'Approve & add to catalogue'}
           </button>
           <button
             class="discard"
             type="button"
-            ?disabled=${this.busy}
+            ?disabled=${this.busy || p.discarding || p.removing}
             @click=${() => this._act('preview-discard')}
           >
-            Discard
+            ${p.discarding
+              ? html`<span class="btnspin" aria-hidden="true"></span>Discarding…`
+              : 'Discard'}
           </button>
           ${/*
             REMOVE, AND ONLY WHEN THERE IS SOMETHING TO REMOVE. A draft that has never been
@@ -667,15 +1368,21 @@ export class ComponentPreview extends LitElement {
                 class="remove"
                 type="button"
                 data-armed=${this._confirmingRemove ? 'true' : 'false'}
-                ?disabled=${this.busy}
+                ?disabled=${this.busy || p.removing}
                 @click=${() => this._remove()}
               >
-                ${this._confirmingRemove
-                  ? `Click again to remove ${p.tag} from the catalogue`
+                ${p.removing
+                  ? html`<span class="btnspin dark" aria-hidden="true"></span>Removing…`
                   : 'Remove from the catalogue'}
               </button>`
             : nothing}
         </span>
+        ${this._confirmingRemove
+          ? html`<p class="warn">
+              This next click deletes ${p.tag} from the catalogue and its file. Bringing it back
+              will require re-ingesting it — the record keeps who removed it, not a copy of it.
+            </p>`
+          : nothing}
       </div>
     `;
   }

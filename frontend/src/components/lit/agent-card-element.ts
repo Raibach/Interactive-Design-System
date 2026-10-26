@@ -140,7 +140,7 @@ export class AgentCardElement extends LitElement {
       /* THE FACE RULING, 2026-10-07: "Arial or rounded fonts -> becomes Nunito (found in
          chat interfaces for Grace)... Use our fonts only - no API calls." The card's rounded
          face draws as Nunito; its figures (Version 4, the like count) render Inter. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* The hover IS the border: the rail's teal, on the card that has the hand. */
     .card:hover { border-color: #1FACC2; }
@@ -337,7 +337,7 @@ export class AgentCardElement extends LitElement {
       /* A FIGURE, SO INTER — the owner's numbers ruling, 2026-10-07: "Numbers -> Inter."
          This slot is a count and nothing else, so the whole element is a figure; the card's
          words around it keep Nunito. */
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       /* SECONDARY LIKE THE REST — the owner, 2026-09-19: "do the same thing with the count
          that sits next to the heart." Faint at rest, full under the hand. */
       color: rgba(255, 255, 255, 0.35);
@@ -401,7 +401,7 @@ export class AgentCardElement extends LitElement {
     }
     .card-delete-label {
       /* Nunito, per the owner's face ruling — see .card above. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 0.04em;

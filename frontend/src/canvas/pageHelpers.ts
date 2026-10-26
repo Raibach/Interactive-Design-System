@@ -14,7 +14,7 @@
  * WHAT IT IS NOT: no room's behaviour, no assembly, no gates. Those move to their own tab folders
  * (see `development/ops/WRITING-AREA-EXTRACTION-PLAN.md`, phase 2 onward).
  */
-import productAssemblyBackground from "@/assets/product-assembly-bg.webp";
+import composerBackground from "@/assets/composer-image-bg.webp";
 import designSectionBackground from "@/assets/design-section2-bkg.webp";
 import developmentLabBackground from "@/assets/canvas-development-lab-bkg.webp";
 import dataWave4Background from "@/assets/data-wave4-flipped.webp";
@@ -62,11 +62,11 @@ export function loadCanvasElements(): Promise<void> {
 /**
  * THE ROOM GROUNDS, WARMED AT LANDING (owner, 2026-10-05: *"an awful paint progressive JPEG effect
  * … load those backgrounds early somewhere else in the application, maybe after the user lands"*).
- * The Development room paints its lab tile the moment it opens, and the room-switch cover can wear
- * any room's own face: the lab tile (Development), the assembly image (Product), the wave
- * (Governance), the design sheet (Design). Fetched cold they visibly paint themselves in
- * mid-switch, so all four decode here — deliberately not awaited, and failure is nothing: every
- * room still fetches its own ground; this buys only that the usual path spends no time on it.
+ * The Development room paints its lab tile the moment it opens; Governance and Design wear their
+ * own grounds, and the Composer/Product ground is the composer image. Fetched cold they visibly
+ * paint themselves in mid-switch, so the grounds decode here — deliberately not awaited, and
+ * failure is nothing: every room still fetches its own ground; this buys only that the usual path
+ * spends no time on it.
  */
 let labGroundWarmed = false;
 
@@ -75,9 +75,9 @@ export function warmLabGrounds(): void {
   labGroundWarmed = true;
   for (const ground of [
     developmentLabBackground,
-    productAssemblyBackground,
     dataWave4Background,
     designSectionBackground,
+    composerBackground,
   ]) {
     const img = new Image();
     img.src = ground;

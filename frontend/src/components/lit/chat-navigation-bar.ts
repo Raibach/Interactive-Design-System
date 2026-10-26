@@ -128,6 +128,13 @@ interface TabDef {
    */
   iconSrc?: string;
   /**
+   * The icon as a MONOCHROME mask the rail paints in its own teal, when the exported asset is
+   * black artwork rather than a coloured icon. Preferred over iconSrc. (This field was lost from
+   * the working tree on 2026-10-26 when the shared rail was restored from git; it is restored
+   * here, in the shared file and in the Design room's own copy.)
+   */
+  maskSrc?: string;
+  /**
    * The button as the DESIGN draws it. Per tab, because the two designs do NOT
    * share numbers yet: chat is 74 tall with a 38px icon at (18, 8); trace is still
    * 77 tall with a 42×39 icon at (16, 8). Same frame name in Figma, different
@@ -589,9 +596,21 @@ export class ChatNavigationBar extends LitElement {
       cursor: pointer;
       padding: 0;
     }
-    .nb:hover {
-      background: #CBE6E3;
-      height: 77px;
+    /*
+     * A SELECTED TAB DOES NOT ANSWER THE POINTER (owner, 2026-10-26: *"when a user clicks on tools
+     * the hover effect should disable and the selected effect should take over"*). Once a tab is
+     * open, the style on screen is the selected tile and nothing else: hovering it adds no fill, no
+     * growth and no bold. The other tabs still lift under the pointer.
+     */
+    /*
+     * THE HOVER IS THE ICON, NOT THE TILE (owner, 2026-10-26: *"Let's switch the hover effect so
+     * that the icon grows slightly instead of the whole tab changing color on hover"*). A second
+     * filled tile beside the open one is what made the rail unreadable: with a fill on hover, the
+     * tab under the pointer looked open too. The fill belongs to the selected tab alone; hover
+     * moves the icon a little.
+     */
+    .nb:not(.na):hover {
+      background: none;
     }
     .na {
       background: #CBE6E3;
@@ -617,7 +636,6 @@ export class ChatNavigationBar extends LitElement {
       transition: top 0.2s;
     }
     .ns,
-    .nb:hover .ni,
     .na .ni {
       top: 15px;
     }
@@ -636,6 +654,11 @@ export class ChatNavigationBar extends LitElement {
       width: 100%;
       position: relative;
       flex-shrink: 0;
+      transition: transform 0.16s ease;
+      transform-origin: 50% 50%;
+    }
+    .nb:not(.na):hover .ic {
+      transform: scale(1.08);
     }
 
     /* ── SVG layers ───────────────────────────────────────────────────── */
@@ -669,7 +692,6 @@ export class ChatNavigationBar extends LitElement {
       transition: top 0.2s;
     }
     .ls,
-    .nb:hover .lw,
     .na .lw {
       top: 33px;
     }
@@ -688,7 +710,7 @@ export class ChatNavigationBar extends LitElement {
       color: rgb(78, 207, 213);
       display: block;
     }
-    .nb:not(:hover):not(.na) .lt {
+    .nb:not(.na) .lt {
       font-weight: 500;
     }
 
@@ -810,7 +832,7 @@ export class ChatNavigationBar extends LitElement {
     .nb.nbc.nb-closed {
       background: none;
     }
-    .nb.nbc.nb-closed:hover {
+    .nb.nbc.nb-closed:not(.na):hover {
       background: #CBE6E3;
     }
 

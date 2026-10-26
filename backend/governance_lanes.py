@@ -53,9 +53,11 @@ def _sessions_config_candidates() -> list[str]:
 
     THE FILE IS SMALL AND IT IS THE AUTHORITY, so it travels with the build. In this repo it sits
     in the Langfuse fork; inside the studio image that fork does not exist — the copy is shipped
-    beside the backend (`filter-config/`) because the image only copies the paths its Dockerfile
-    names. Measured 2026-10-18: the deployed studio answered the catalogue with
-    `FileNotFoundError: /app/governance/langfuse-main/...`, which is this path being assumed.
+    under `governance/filter-config/` because the image only copies the paths its Dockerfile names.
+    Measured 2026-10-18: the deployed studio answered the catalogue with
+    `FileNotFoundError: /app/governance/langfuse-main/...`, which is this path being assumed. The
+    copy moved from the repository root into the governance folder on 2026-10-26, where it belongs
+    with the room that reads it.
     """
     candidates: list[str] = []
     explicit = os.getenv("LANGFUSE_FILTER_CONFIG", "").strip()
@@ -70,7 +72,9 @@ def _sessions_config_candidates() -> list[str]:
             "config", SESSIONS_CONFIG_NAME,
         )
     )
-    candidates.append(os.path.join(REPO_ROOT, "filter-config", SESSIONS_CONFIG_NAME))
+    candidates.append(
+        os.path.join(REPO_ROOT, "governance", "filter-config", SESSIONS_CONFIG_NAME)
+    )
     return candidates
 
 

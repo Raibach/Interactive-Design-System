@@ -39,13 +39,22 @@ import type { TemplateResult } from 'lit';
 import { loadDrawn, drawnBy, tagFor, type DrawnBy, type DrawnIndex } from '@/shared/component-drawn-by';
 import { contractFor } from '@/shared/component-contract';
 import { nodeIdentity, nodeLocation, describeNodeId } from '@/shared/node-id';
+import carbonMeta from '@/components/lit/carbon-meta.json';
 
 // ── The catalogue this pipeline's components live in ─────────────────────────
 // The level ABOVE a component. A tree that starts at a component cannot say which
-// catalogue that component belongs to — and there is more than one catalogue, so that
-// is a fact the reader has to be able to see rather than assume. Read the same way
-// <catalog-schema-view> reads it, from the same files, so the two cannot disagree.
-const CATALOG_MODULES = import.meta.glob('../A2UI/catalogs/*/catalog.json');
+// catalogue that component belongs to. Read the same way <catalog-schema-view> reads it,
+// from the same file, so the two cannot disagree.
+/*
+ * THE ONE CATALOGUE, NAMED IN THE GLOB RATHER THAN DISCOVERED BY IT.
+ *
+ * A glob over the catalogues directory lists the folders at BUILD TIME, so a catalogue deleted
+ * from disk stayed in the pattern the browser already held and every read of it failed with
+ * "Failed to fetch dynamically imported module". Naming the directory removes that whole class:
+ * there is one catalogue, its path is written here, and a deleted folder cannot appear in a list
+ * that does not enumerate folders.
+ */
+const CATALOG_MODULES = import.meta.glob('../A2UI/catalogs/prompt-composer/catalog.json');
 
 // ── The Figma layer name behind a generated component ────────────────────────
 // A component the ingest built is NAMED after its node — `f-<node id>` — so its catalogue key
@@ -242,6 +251,17 @@ export class FigmaLayersView extends LitElement {
     pipeline: { type: String },
     /** Show one node's tree instead of every node recorded for the pipeline. */
     nodeId: { type: String, attribute: 'node-id' },
+    /**
+     * THE TREE THE INGEST JUST MEASURED — the component that was submitted, with every child under
+     * it, drawn at the top of the column.
+     *
+     * A NAME-AND-VALUE TREE, NOT A RECORD. `public/catalog-figma/<pipeline>.json` holds only what
+     * has been APPROVED, so a component that has just been measured is not in it and the column had
+     * nothing to open: the answer carried the layers and the list could not see them. This property
+     * is that bridge. Its shape is the measured tree's own, which is the same shape the record
+     * stores — nothing is converted on the way in.
+     */
+    tree: { type: Object },
     /** Sit in the flow of a form rather than float over the screen. */
     inline: { type: Boolean },
     /** Bumped by the host to force a re-read — after an ingest lands, or a commit. */
@@ -279,6 +299,7 @@ export class FigmaLayersView extends LitElement {
 
   declare pipeline: string;
   declare nodeId: string;
+  declare tree: Layer | undefined;
   declare inline: boolean;
   declare refresh: number;
   declare busy: boolean;
@@ -303,8 +324,6 @@ export class FigmaLayersView extends LitElement {
    * a parent. So this row is drawn as what it is — a list of the catalogues that exist, with
    * the one being viewed marked — rather than as a node the data says is above them.
    */
-  private _catalogues: CatalogHead[] = [];
-  private _cataloguesError = '';
 
   /** Where the catalogue on screen was read from — a stale answer must not pass for a fresh one. */
   private _catalogFrom = '';
@@ -348,7 +367,6 @@ export class FigmaLayersView extends LitElement {
       drawable?: boolean;
     }
   > | null = null;
-  private _usageError = '';
   /**
    * The audit's findings, per component — what the dot beside each row is made of.
    *
@@ -393,6 +411,18 @@ export class FigmaLayersView extends LitElement {
   private _lastApproved = '';
   private _lastApprovedNote = '';
 
+  /**
+   * THE FILTER TYPED ABOVE THE LIST. It narrows what is drawn and changes nothing the catalogue
+   * holds — the owner's word for it: *"that would change what's listed in the data tree it's a
+   * filter."*
+   *
+   * IT MATCHES THE NAME, THE TAG AND THE FIGMA LAYER — the three things a row can be known by. Not
+   * a meaning-based search: there is no index of these components anywhere, so a box that claimed
+   * to understand "the button we use to approve" would be inventing an answer. This says what it
+   * does in the count line under it.
+   */
+  private _query = '';
+
   /** Whether the operator has toggled the panel, so `inline` can default it open only once. */
   private _toggled = false;
 
@@ -418,8 +448,12 @@ export class FigmaLayersView extends LitElement {
 
   constructor() {
     super();
+    // ONE CATALOGUE (owner, 2026-10-26): *"We only need the official one."* The rail used to offer
+    // four and remember the last choice; the memory is gone with the menu, so nothing on this
+    // machine can put the list back on a catalogue that is no longer offered.
     this.pipeline = 'prompt-composer';
     this.nodeId = '';
+    this.tree = undefined;
     this.inline = false;
     this.refresh = 0;
     this.reset = 0;
@@ -572,24 +606,6 @@ export class FigmaLayersView extends LitElement {
     return mod?.default ?? mod;
   }
 
-  /** Every catalogue that exists, read from the files themselves. Failures are listed. */
-  private async _loadCatalogues(): Promise<void> {
-    const heads: CatalogHead[] = [];
-    const failures: string[] = [];
-    for (const key of Object.keys(CATALOG_MODULES).sort()) {
-      const id = key.split('/').slice(-2)[0];
-      try {
-        const doc = await this._readCatalog(id);
-        if (doc) heads.push(headFrom(id, doc));
-        else failures.push(`${id}: not found`);
-      } catch (error) {
-        failures.push(`${id}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    this._catalogues = heads;
-    this._cataloguesError = failures.join('; ');
-  }
-
   /**
    * Read the map — the Figma layer name, and the node, behind each tag.
    *
@@ -676,6 +692,47 @@ export class FigmaLayersView extends LitElement {
     return this._figmaNames.get(name) || name;
   }
 
+  /** Does this row answer the typed words? Its name, its tag, or the Figma layer behind it. */
+  private _matches(name: string): boolean {
+    const query = this._query.trim().toLowerCase();
+    if (!query) return true;
+    return `${name} ${this._label(name)}`.toLowerCase().includes(query);
+  }
+
+  /**
+   * THE SEARCH BOX, ABOVE THE CATALOGUE IT FILTERS.
+   *
+   * Owner, 2026-10-26: *"add a search box for that data table at the top… it's a filter."* It sits
+   * above the catalogue's own block and the rows beneath it, and it says how many rows it is
+   * showing out of how many, so a short list is understood as a filter rather than as a catalogue
+   * that lost its components.
+   */
+  private _renderSearch(): TemplateResult {
+    const query = this._query.trim();
+    const total = this._catalog?.declared.length ?? 0;
+    const shown = query
+      ? (this._catalog?.declared ?? []).filter((comp) => this._matches(comp.name)).length
+      : total;
+    return html`<div class="searchbar">
+      <input
+        type="search"
+        class="searchinput"
+        placeholder="Search this catalogue by name"
+        aria-label="Search this catalogue by name"
+        .value=${this._query}
+        @input=${(event: Event) => {
+          this._query = (event.target as HTMLInputElement).value;
+          this.requestUpdate();
+        }}
+      />
+      ${query
+        ? html`<div class="searchcount">
+            ${shown} of ${total} components match “${query}”.
+          </div>`
+        : nothing}
+    </div>`;
+  }
+
   /**
    * Read the newest approval from the activity record. See `_lastApproved` for why the
    * catalogue's own order is not used.
@@ -721,7 +778,6 @@ export class FigmaLayersView extends LitElement {
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
       const doc = await res.json();
       this._usage = doc?.usage ?? null;
-      this._usageError = this._usage ? '' : 'the report carries no usage measurement';
       const byComponent: Record<string, { blocking: string[]; advisory: string[] }> = {};
       for (const finding of doc?.findings ?? []) {
         const name = String(finding?.component ?? '');
@@ -735,7 +791,9 @@ export class FigmaLayersView extends LitElement {
     } catch (error) {
       this._usage = null;
       this._findings = null;
-      this._usageError = error instanceof Error ? error.message : String(error);
+      // THE COMPONENTS SAY IT THEMSELVES (owner, 2026-10-25): a failed audit read leaves each
+      // row's own status at "not measured by the audit"; the catalogue carries no banner for it.
+      console.warn('the audit report could not be read, so every row reports not measured:', error);
     }
     this.requestUpdate();
   }
@@ -906,6 +964,28 @@ export class FigmaLayersView extends LitElement {
    * Null when the map holds nothing for it: an origin that is not recorded is said by the
    * absence of the chip, and a guessed one would be believed.
    */
+  /**
+   * WHEN THIS COMPONENT LAST CHANGED, for ordering the list.
+   *
+   * Owner, 2026-10-26: *"The list should be organized by last modified."* The approval date is the
+   * only date the record states for a component, so it is the one used; a component with no
+   * recorded approval sorts below every dated one, and the list falls back to its catalogue order
+   * for those. `0` is not a date — it is "no date", and it is placed last on purpose.
+   *
+   * THE FILE'S OWN WRITE TIME WAS TRIED AND REMOVED THE SAME DAY. It is not the component's date
+   * when the program is being worked on: the three rows at the top of the list became
+   * `component-preview`, `figma-layers-view` and `figma-ingest-form` because those files were being
+   * edited, which is not a design change and not something the designer did. A component with no
+   * approval has no date this system recorded, and that is what it says.
+   */
+  private _modifiedFor(name: string): number {
+    const tag = tagFor(name);
+    const node = this._figmaNodeIds.get(tag) || '';
+    const rec = node ? (this._doc?.nodes?.[node] as Record<string, any> | undefined) : undefined;
+    const approved = Date.parse(String(rec?.approvedAt ?? ''));
+    return Number.isNaN(approved) ? 0 : approved;
+  }
+
   private _originFor(name: string): { text: string; title: string } | null {
     const tag = tagFor(name);
     const layer = this._figmaNames.get(tag);
@@ -927,32 +1007,12 @@ export class FigmaLayersView extends LitElement {
     };
   }
 
-  /** Move to another catalogue. The host is told too, so a screen showing both can follow. */
-  private _selectPipeline(id: string): void {
-    if (id === this.pipeline) return;
-    this.pipeline = id;
-    // Both expansion sets are cleared: they are keyed by layer id and by component NAME, and a
-    // name like "Text" exists in more than one catalogue — so a row opened here would come up
-    // opened in a catalogue nobody opened it in.
-    this._collapsed = new Set();
-    this._expandedDeclared = new Set();
-    void this._load();
-    this.dispatchEvent(
-      new CustomEvent('catalog-change', {
-        detail: { catalogId: id },
-        bubbles: true,
-        composed: true,
-      })
-    );
-  }
-
   private async _load(): Promise<void> {
     const token = ++this._loadToken;
     this._state = 'loading';
     this._reason = '';
     this.requestUpdate();
 
-    await this._loadCatalogues();
     await this._loadCatalog();
     await this._loadFigmaNames();
     await this._loadLastApproved();
@@ -1272,6 +1332,25 @@ export class FigmaLayersView extends LitElement {
     facts: Array<{ label: string; value: string }> = [],
     description = ''
   ): void {
+    // THE PRESSED ROW MARKS ITSELF AT ONCE (owner, 2026-10-25): the mark used to depend on the
+    // host writing the selection back through the model, and the person saw nothing when that
+    // round trip was slow or missed. The list marks the row it was told to open, right here.
+    this.selected = tag;
+    /*
+     * CARBON'S OWN METADATA TRAVELS WITH THE CHOICE (owner, 2026-10-25): the package's manifest
+     * knows each element's attributes and properties. They are added when the map has them, and
+     * when it has none the panel is simply left with the facts it already had.
+     */
+    let carried = facts;
+    const meta = (carbonMeta as Record<string, { attributes?: string[]; properties?: string[] }>)[tag];
+    if (meta) {
+      if (meta.attributes && meta.attributes.length) {
+        carried = [...carried, { label: 'Attributes', value: meta.attributes.join(', ') }];
+      }
+      if (meta.properties && meta.properties.length) {
+        carried = [...carried, { label: 'Properties', value: meta.properties.join(', ') }];
+      }
+    }
     this.dispatchEvent(
       new CustomEvent('open-component', {
         // THE ROW'S FACTS TRAVEL WITH THE CLICK (owner, 2026-09-30). A component row shows three
@@ -1281,7 +1360,7 @@ export class FigmaLayersView extends LitElement {
         // preview. The tree is where those facts are measured, so the tree is where they come from:
         // the panel does not re-derive them, and the two can never disagree. A caller with nothing
         // to add passes none, and the panel keeps whatever else it knows about the tag.
-        detail: { tag, facts, description },
+        detail: { tag, facts: carried, description },
         bubbles: true,
         composed: true,
       })
@@ -1492,12 +1571,9 @@ export class FigmaLayersView extends LitElement {
             is the failure reports: a read that did not happen is a fact about the list, and this
             repository reports those rather than drawing a shorter list that looks complete. They are
             drawn only when something actually failed. */ ''}
-      ${this._usageError || this._figmaNamesError || this._lastApprovedNote
+      ${this._figmaNamesError || this._lastApprovedNote
         ? html`<div class="setbad">
-            ${this._usageError
-              ? html` Whether anything uses a component could not be read (${this._usageError}), so no
-                  row says. `
-              : nothing}${this._figmaNamesError
+            ${this._figmaNamesError
               ? html` Figma layer names could not be read from the map (${this._figmaNamesError}), so
                   generated components below are shown under their ids. `
               : nothing}${this._lastApprovedNote
@@ -1521,7 +1597,10 @@ export class FigmaLayersView extends LitElement {
           </div>`
         : nothing}
 
-      ${catalog.declared.map((comp) => {
+      ${[...catalog.declared]
+        .filter((comp) => this._matches(comp.name))
+        .sort((a, b) => this._modifiedFor(b.name) - this._modifiedFor(a.name))
+        .map((comp) => {
         const key = `declared/${comp.name}`;
         const isOpen = this._expandedDeclared.has(key);
         const isSelected = !!this.selected && comp.name === this.selected;
@@ -1590,9 +1669,13 @@ export class FigmaLayersView extends LitElement {
          */
         const descriptionLine =
           comp.description || 'No description is declared for this component in this catalogue.';
+        // THE COMPONENT THIS LIST WAS JUST CHANGED BY, MARKED. Newest first is not enough on its
+        // own: two rows can share a date, and a reader needs to see which one the last action
+        // wrote. The record names the newest approval; this compares it by tag.
+        const isJust = !!this._lastApproved && tagFor(comp.name) === this._lastApproved;
         return html`
           <div
-            class="lrow branch ${isSelected ? 'on' : ''}"
+            class="lrow branch ${isSelected ? 'on' : ''} ${isJust ? 'just' : ''}"
             style="--d:0"
             role="button"
             tabindex="0"
@@ -1612,6 +1695,7 @@ export class FigmaLayersView extends LitElement {
                   (the name, the code, the description), it draws its own chevron, and the dot goes
                   in the status well it reserves. Nothing about the row is rebuilt here: the tree
                   supplies the data and answers the two events. */ ''}
+            ${isJust ? html`<span class="newmark">just added</span>` : nothing}
             <f-40001207-3497
               class="lrow-tile"
               .name=${this._label(comp.name)}
@@ -1664,6 +1748,12 @@ export class FigmaLayersView extends LitElement {
             : nothing}
         `;
       })}
+      ${this._query.trim() && !catalog.declared.some((comp) => this._matches(comp.name))
+        ? html`<div class="empty">
+            Nothing in this catalogue matches “${this._query.trim()}”. The catalogue still holds
+            ${count} components; the search box only narrows what is shown.
+          </div>`
+        : nothing}
     </div>`;
   }
 
@@ -1679,50 +1769,6 @@ export class FigmaLayersView extends LitElement {
     const { identity, location } = describeNodeId(id);
     if (!location) return `${id} — this node IS the component (no occurrence: it is not an instance)`;
     return `${id} — component ${identity}, instance at ${location} (a location, not the component)`;
-  }
-
-  /**
-   * THE LEVEL ABOVE THE CATALOGUE — the catalogues that exist, and which one is being read.
-   *
-   * Drawn as a list rather than as a parent node, because a list is what the data has: three
-   * documents side by side with nothing holding them. The heading names the three fields every
-   * catalogue carries, so the level says what identifies one.
-   *
-   * A catalogue that failed to read is REPORTED here, not dropped from the list: a list that
-   * quietly loses one says "there are two", which is a different claim from "there are three
-   * and one could not be read".
-   */
-  private _renderCatalogueSet(): TemplateResult {
-    /*
-     * THE TABS, AND NOTHING ABOVE THEM (owner, 2026-09-30: *"you've got the catalogue. You've got a
-     * bunch of sub headers. None of that's necessary… Yes move the tabs up right just move them up.
-     * This is not a styling exercise."*).
-     *
-     * IT DREW THREE THINGS AND NEEDS ONE. Above the tabs were a title ("Raibach IDS Catalogs") and a
-     * paragraph explaining what a catalogue is — a heading and a definition, stacked over the only
-     * row that does anything. The tabs say which catalogue is open and switch it; the catalogue's
-     * own block below already carries its name, its component count and its catalogId. So the title
-     * and the paragraph are gone and the tabs move to the top of the column, which is where the
-     * owner wants them.
-     */
-    return html`<div class="set">
-      <div class="setlist">
-        ${this._catalogues.map(
-          (c) => html`<button
-            type="button"
-            class="setitem ${c.id === this.pipeline ? 'on' : ''}"
-            title=${c.title}
-            @click=${() => this._selectPipeline(c.id)}
-          >
-            <span class="setid">${c.id}</span>
-            <span class="setcount">${c.components}</span>
-          </button>`
-        )}
-      </div>
-      ${this._cataloguesError
-        ? html`<div class="setbad">Not read: ${this._cataloguesError}</div>`
-        : nothing}
-    </div>`;
   }
 
   /**
@@ -1750,7 +1796,10 @@ export class FigmaLayersView extends LitElement {
     // record of me deleting it — user removal… There's no point to show that on the front."*)
     const removed = new Set(Object.keys((doc as { removed?: Record<string, unknown> })?.removed ?? {}));
     const orphans = recorded.filter(
-      (id) => !removed.has(id) && !declared.has(doc?.nodes?.[id]?.tag || id)
+      (id) =>
+        !removed.has(id) &&
+        !declared.has(doc?.nodes?.[id]?.tag || id) &&
+        this._matches(doc?.nodes?.[id]?.tag || id)
     );
 
     if (this._state === 'loading') {
@@ -1790,9 +1839,22 @@ export class FigmaLayersView extends LitElement {
    */
   private _renderCatalog(): TemplateResult {
     if (!this._catalog) {
+      /*
+       * NOT READ YET IS NOT THE SAME AS A FAILED READ (owner, 2026-10-25: "a read warning appear
+       * before the DS components load ... it is red color and it is only when loading the first
+       * time"). The block used to paint its red failure state whenever no catalogue was held —
+       * including the frames of the very first read — so every cold entry flashed an error that
+       * was gone before it could be read. With no error recorded, the read is simply still in
+       * flight and the block says so in grey; the red state is reserved for a read that failed.
+       */
+      if (!this._catalogError) {
+        return html`<div class="cat">
+          <div class="catmeta">Reading the catalogue…</div>
+        </div>`;
+      }
       return html`<div class="cat bad">
         <div class="cattitle">The catalogue above these components could not be read.</div>
-        <div class="catmeta">${this._catalogError || 'no reason recorded'}</div>
+        <div class="catmeta">${this._catalogError}</div>
       </div>`;
     }
     /*
@@ -1815,6 +1877,25 @@ export class FigmaLayersView extends LitElement {
     return html`<div class="cat">${head}</div>`;
   }
 
+  /**
+   * THE COMPONENT THAT WAS JUST MEASURED, WITH ITS CHILDREN — drawn above the catalogue.
+   *
+   * The record below is the APPROVED catalogue; a component that has only been measured is not in
+   * it, so before this the column had no row to open and no arrow to press. The root is drawn as a
+   * row (so it carries its own expander), and `_renderLayer` nests the children under it exactly
+   * as it does for a recorded node.
+   */
+  private _renderIngested(): TemplateResult {
+    const root = this.tree as Layer | undefined;
+    if (!root) return html``;
+    const names = analyseNames(root);
+    const flagged = new Set<string>();
+    return html`<div class="sect">
+      <div class="secthead">The design you just ingested, and its children</div>
+      ${this._renderLayer(root, names, flagged, 0, String((root as any).id ?? ''))}
+    </div>`;
+  }
+
   render() {
     const doc = this._doc;
     // A form reads the node it just ingested; the overlay reads everything recorded. (The fold
@@ -1834,8 +1915,16 @@ export class FigmaLayersView extends LitElement {
               content removed, not a restyle. */ ''}
 
         <div class="body">
-          ${this._renderCatalogueSet()}
+          ${/*
+            THE ORDER THE OWNER ASKED FOR (2026-10-26): the search box first, then the catalogue's
+            own block, then the catalogues it can switch to. *"the search should be above it… and
+            that should be under this image."* The chips were above the catalogue's name, where they
+            read as filters of a list that was already named below them; under the name they read as
+            what they are, the other catalogues in this repository.
+          */ ''}
+          ${this._renderSearch()}
           ${this.showHead ? this._renderCatalog() : nothing}
+          ${this._renderIngested()}
           ${this._renderDeclared()}
           ${this._renderRecord()}
         </div>
@@ -1866,7 +1955,7 @@ export class FigmaLayersView extends LitElement {
       display: flex;
       flex-direction: column;
       min-height: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     .wrap {
       position: fixed;
@@ -1950,7 +2039,7 @@ export class FigmaLayersView extends LitElement {
     }
     .empty { padding: 10px 12px; font-size: 12px; line-height: 1.5; color: #5b666e; }
     .empty.bad { color: #a3331f; }
-    .empty code { font-family: ui-monospace, Menlo, monospace; }
+    .empty code { font-family: 'IBM Plex Mono', Menlo, monospace; }
 
     /* ── A SECTION OF THE TREE, and which file it came from ─────────────── */
     .sect { margin-bottom: 10px; }
@@ -1969,7 +2058,7 @@ export class FigmaLayersView extends LitElement {
       max-width: 90ch;
     }
     .sectnote code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       background: #eef1f3;
       border-radius: 3px;
       padding: 0 3px;
@@ -2003,7 +2092,7 @@ export class FigmaLayersView extends LitElement {
     /* THE CATALOGUE'S OWN KEY — f-40001204-5752 beside the layer a designer knows it as. */
     .ltag {
       flex-shrink: 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 10px;
       color: #171717;
       background: #eef1f3;
@@ -2024,10 +2113,12 @@ export class FigmaLayersView extends LitElement {
 
     /* THE ONE OPEN IN THE PREVIEW — the only mark in this list about the PRESENT: which row the
        middle pane is showing. A bar rather than a border, so it costs the row no width and every
-       line under it keeps its alignment. */
+       line under it keeps its alignment. MADE PLAIN (owner, 2026-10-25: "I can't really see the
+       selection process. It's so light"): a visible tint and a heavier gold bar. */
     .lrow.on {
-      background: #eef4fb;
-      box-shadow: inset 3px 0 0 0 #1f5f8b;
+      background: #e6efe0;
+      box-shadow: inset 4px 0 0 0 #b07d12;
+      border-radius: 6px;
     }
     .lrow.on .lname { color: #17456b; font-weight: 700; }
     .lonmark {
@@ -2105,57 +2196,24 @@ export class FigmaLayersView extends LitElement {
     .luse.live { color: #1f5f8b; background: #e8f2fa; }
     .luse.idle { color: #8a9499; background: #f2f4f5; }
 
-    /* ── THE CATALOGUES — the level above the one being read ─────────────── */
-    .set {
-      margin: 0 6px 8px;
-      padding: 7px 9px;
-      background: #f7f9fa;
-      border: 1px solid #dfe6e9;
-      border-radius: 5px;
-    }
-    .settitle { font-size: 12.5px; font-weight: 700; color: #171717; }
-    .setmeta {
-      margin-top: 3px;
-      font-size: 10.5px;
-      line-height: 1.5;
-      color: #6b767d;
-    }
-    .setmeta code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      background: #eef1f3;
-      border-radius: 3px;
-      padding: 0 3px;
-    }
-    .setlist {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-      margin-top: 6px;
-    }
-    .setitem {
-      font-family: inherit;
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-      padding: 3px 8px;
-      background: #ffffff;
-      border: 1px solid #cbe6e3;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    .setitem:hover { background: #cbe6e3; }
-    /* The one being read: boxed as well as tinted, so it reads without relying on colour. */
-    .setitem.on {
-      background: #cbe6e3;
-      border-color: #93cfc9;
-      box-shadow: inset 2px 2px 3px rgba(0, 0, 0, 0.12);
-    }
-    .setid {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 11px;
+    /* ── THE SEARCH BOX — above the catalogue it narrows ─────────────────── */
+    .searchbar { margin: 0 6px 8px; }
+    .searchinput {
+      width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 12px;
       color: #171717;
+      padding: 5px 8px;
+      border: 1px solid #cbd8dc;
+      border-radius: 5px;
+      background: #ffffff;
     }
-    .setcount { font-size: 10px; font-weight: 700; color: #2793a3; }
+    .searchinput::placeholder { color: #8a9499; }
+    .searchinput:focus { outline: 2px solid #1facc2; outline-offset: 1px; }
+    .searchcount { margin-top: 4px; font-size: 10.5px; color: #5b666e; }
+
+    /* A READ FAILURE IN THE LIST, named rather than drawn as a shorter list. */
     .setbad { margin-top: 5px; font-size: 10.5px; color: #a3331f; }
 
     /* ── THE CATALOGUE — the level above the components ─────────────────── */
@@ -2180,7 +2238,7 @@ export class FigmaLayersView extends LitElement {
     }
     .catcount { font-weight: 700; color: #2793a3; }
     .catmeta code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 10px;
       color: #6b767d;
       word-break: break-all;
@@ -2217,7 +2275,7 @@ export class FigmaLayersView extends LitElement {
     }
     .ntag { font-size: 12px; font-weight: 700; color: #171717; }
     .nid {
-      font-family: ui-monospace, Menlo, monospace;
+      font-family: 'IBM Plex Mono', Menlo, monospace;
       font-size: 11px;
       color: #2793a3;
     }
@@ -2233,7 +2291,7 @@ export class FigmaLayersView extends LitElement {
       color: #8a5b12;
     }
     .dupn code {
-      font-family: ui-monospace, Menlo, monospace;
+      font-family: 'IBM Plex Mono', Menlo, monospace;
       background: #fff8e3;
       border-radius: 3px;
       padding: 0 3px;
@@ -2244,7 +2302,7 @@ export class FigmaLayersView extends LitElement {
       align-items: baseline;
       gap: 8px;
       padding: 1px 12px 1px calc(12px + var(--d) * 14px);
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 11.5px;
       line-height: 1.6;
       white-space: nowrap;
@@ -2264,6 +2322,11 @@ export class FigmaLayersView extends LitElement {
       min-width: 0;
       align-self: center;
     }
+    /* THE ROW'S OWN COLOR SHOWS THROUGH (owner, 2026-10-25: "There's a white fill. That's not
+       allowing you to see the color that you've added."): the tile painted its own white card,
+       and it covers the row's tint and its selected bar. In the catalogue's declared rows the
+       tile is transparent; the row carries the ground. */
+    .lrow.branch .lrow-tile { background: transparent; }
     .lrow.dup { background: #fffdf3; }
 
     /* THE DECLARED COMPONENT JUST ADDED — the same green as the record below it, so the two
@@ -2383,7 +2446,7 @@ export class FigmaLayersView extends LitElement {
       color: #27707f;
     }
     .reusen code {
-      font-family: ui-monospace, Menlo, monospace;
+      font-family: 'IBM Plex Mono', Menlo, monospace;
       background: #dceff2;
       border-radius: 3px;
       padding: 0 3px;

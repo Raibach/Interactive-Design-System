@@ -119,7 +119,7 @@ export class ChatActionBar extends LitElement {
       gap: 9px;
       padding: 10px 20px 20px;
       background: #CBE6E3;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* #40001119:6212 — the Send control and Console, 35 apart. */
     .group {

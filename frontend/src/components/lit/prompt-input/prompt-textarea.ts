@@ -91,7 +91,7 @@ export class PromptTextarea extends LitElement {
       resize: none;
       /* Grows with the text (see _resize) — never shows an inner scrollbar. */
       overflow: hidden;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 600;
       font-size: 16px;
       line-height: 25px;

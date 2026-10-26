@@ -6,6 +6,10 @@
  *   1. the container loads CLOSED and the rail's list is the room's own;
  *   2. the room's seat binds the room's OWN package (its own conversation), never another
  *      room's.
+ *
+ * THE MOUNT IS THE CONDITION (2026-10-24): <DevelopmentBox> mounts this room only while
+ * Development is selected, so neither statement waits on a tab any more. A check left behind
+ * would make the room's own first paint skip.
  */
 import { useEffect, useLayoutEffect } from 'react';
 import { assignProps } from '@/components/lit/a2ui-renderer';
@@ -23,15 +27,19 @@ import { getStoredUserId } from '@/services/authService';
  * (the seat effect; an empty bound list is the rail's "everything", which through this
  * room's rule is THIS list, never the full rail with Versions back on).
  */
-export const DEVELOPMENT_SEAT_TABS = 'chat,trace,tools,approvals,eval,states,repair,settings';
+/**
+ * THIS ROOM'S RAIL, AND ONLY THE TABS IT USES (owner, 2026-10-26: *"Remove these from
+ * development"* — Trace, Tools, States and Repairs). The seat still knows those ids; this room no
+ * longer offers them.
+ */
+export const DEVELOPMENT_SEAT_TABS = 'chat,approvals,eval,settings';
 
 export interface UseDevelopmentRoomDeps {
-  headerTab: string | null;
   developmentLayoutRef: { current: any };
   developmentSeatRef: { current: any };
 }
 
-export function useDevelopmentRoom({ headerTab, developmentLayoutRef, developmentSeatRef }: UseDevelopmentRoomDeps) {
+export function useDevelopmentRoom({ developmentLayoutRef, developmentSeatRef }: UseDevelopmentRoomDeps) {
   /**
    * THE DEVELOPMENT ROOM'S CONTAINER LOADS CLOSED — the Product pair's mirror (owner,
    * 2026-10-05), one room over and for the same reasons, stated once in Product: `isThirdOpen`
@@ -41,7 +49,6 @@ export function useDevelopmentRoom({ headerTab, developmentLayoutRef, developmen
    * paint settles the rail's list (DEVELOPMENT_SEAT_TABS).
    */
   useLayoutEffect(() => {
-    if ((headerTab || '') !== 'development') return;
     const el = developmentLayoutRef.current;
     if (el) el.isThirdOpen = false;
     /* The rail's opening state (see DEVELOPMENT_SEAT_TABS): written only while the seat
@@ -50,7 +57,7 @@ export function useDevelopmentRoom({ headerTab, developmentLayoutRef, developmen
        own answer, never overrides a loaded one. */
     const seat = developmentSeatRef.current;
     if (seat && !seat.allowedTabs) seat.allowedTabs = DEVELOPMENT_SEAT_TABS;
-  }, [headerTab, developmentLayoutRef, developmentSeatRef]);
+  }, [developmentLayoutRef, developmentSeatRef]);
 
   /**
    * THE DEVELOPMENT ROOM HAS ITS OWN CHAT NOW — ITS OWN PACKAGE, ITS OWN CONVERSATIONS
@@ -67,7 +74,6 @@ export function useDevelopmentRoom({ headerTab, developmentLayoutRef, developmen
    * agent someday) is the owner's call — not guessed here.
    */
   useEffect(() => {
-    if ((headerTab || '') !== 'development') return;
     const seat = developmentSeatRef.current;
     if (!seat) return;
     let cancelled = false;
@@ -110,5 +116,5 @@ export function useDevelopmentRoom({ headerTab, developmentLayoutRef, developmen
       }
     })();
     return () => { cancelled = true; };
-  }, [headerTab, developmentSeatRef]);
+  }, [developmentSeatRef]);
 }

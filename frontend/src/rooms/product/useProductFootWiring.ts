@@ -8,6 +8,8 @@
  *   figma /     → `postToBuilder` INTO the embedded builder, which opens ITS own modal
  *   github        / toggles ITS own visual editor — the product's functions with the product's
  *   visual-edit     own answers (its local-mode truths included)
+ *   design-system → THE BRIDGE, into the PACKAGE's own record (the foot's system menu): the next
+ *                   builder turn and the next compile read the one answer.
  *
  * AND THE APP TALKS BACK: `ids:tool-state` rides out of the frame, <builder-embed> re-announces it
  * as `builder-tool-state`, and its three facts land on the seat's own props — the foot's dots and
@@ -51,13 +53,65 @@ export function useProductFootWiring({
     layout?.addEventListener('resize-start', onGripStart);
     layout?.addEventListener('resize-end', onGripEnd);
     const onTool = (e: Event) => {
-      const tool = (e as CustomEvent<{ tool?: string }>).detail?.tool;
+      const detail = (e as CustomEvent<{ tool?: string; system?: string }>).detail || {};
+      const tool = detail.tool;
       if (!tool) return;
+      /*
+       * THE DESIGN SYSTEM IS THE PACKAGE'S OWN FACT (owner, 2026-10-25: *"make carbon an option
+       * in the footer … along with these other icons"*). The foot only says which system was
+       * pressed; this writes the package's record through the bridge, so the next builder turn
+       * and the next compile read the same answer. The choice is NOT posted into the builder:
+       * the studio hands the system over with each turn (see `builder_turn_reply`).
+       */
+      if (tool === 'design-system') {
+        const system = String(detail.system || '');
+        if (system && productRoomProjectId) {
+          void (async () => {
+            try {
+              const res = await fetch(
+                `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/design-system`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-User-ID': getStoredUserId() },
+                  body: JSON.stringify({ system }),
+                },
+              );
+              const body = await res.json().catch(() => null);
+              if (body?.ok && body.system) {
+                seat.designSystem = String(body.system);
+                if (Array.isArray(body.systems)) seat.designSystems = body.systems;
+              }
+            } catch {
+              /* the foot keeps the system it last read; the next entry reads it again */
+            }
+          })();
+        }
+        return;
+      }
       const embed = document.querySelector('builder-embed') as
         | (HTMLElement & { postToBuilder?: (message: Record<string, unknown>) => void })
         | null;
       embed?.postToBuilder?.({ type: 'ids:product-tool', tool });
     };
+
+    /* THE FOOT'S SYSTEM, READ FROM THE PACKAGE'S OWN RECORD — never guessed, never a copy. */
+    if (productRoomProjectId) {
+      void (async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/builder/projects/${encodeURIComponent(productRoomProjectId)}/design-system`,
+            { headers: { 'X-User-ID': getStoredUserId() } },
+          );
+          const body = await res.json().catch(() => null);
+          if (body?.ok) {
+            seat.designSystem = String(body.system || '');
+            if (Array.isArray(body.systems)) seat.designSystems = body.systems;
+          }
+        } catch {
+          /* the menu says it is still reading; the next entry asks again */
+        }
+      })();
+    }
     const onAttach = (e: Event) => {
       const files = (e as CustomEvent<{ files?: File[] }>).detail?.files || [];
       for (const file of files) void uploadProductAttachment(file);

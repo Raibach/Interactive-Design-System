@@ -173,6 +173,39 @@ A2UI_CATALOG_ID = (
     or "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json"
 )
 
+# THE DESIGN SYSTEM A PRODUCT PACKAGE BUILDS IN — THE PACKAGE'S OWN RECORD (owner, 2026-10-25:
+# *"I want to create a relationship with that tool in the builder and then its instance in the
+# design system tool under design"*). One answer to "which system": the package records it when
+# it is born, and every reader goes through `design_system_of`. The value below is what a
+# package born before the record existed reads.
+DEFAULT_DESIGN_SYSTEM = "carbon"
+
+# THE UNBOUND BUILDER (owner, 2026-10-25: *"we need to have one that's not binding. It can do
+# whatever it wants and returns it to a default"*). A package that CHOOSES this stores the
+# sentinel, and `design_system_of` answers "" — no system — so the builder's turn is handed no
+# reference and builds freely. It is distinct from "nothing recorded", which reads the fallback.
+NO_DESIGN_SYSTEM = "none"
+
+
+def design_system_of(package: dict | None) -> str:
+    """The system a package builds in: its own recorded choice, else the default.
+
+    The record is `prompt_sessions.metadata.design_system`, written when a product package is
+    born (`create_session(design_system=...)`). One reader, so the room, the compiler, the
+    scoped edit and the builder's turn cannot state different systems. `""` means the package
+    chose the UNBOUND builder: no system at all, and no reference is handed over.
+    """
+    metadata = (package or {}).get("metadata") or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except ValueError:
+            metadata = {}
+    chosen = str((metadata or {}).get("design_system") or "").strip()
+    if chosen == NO_DESIGN_SYSTEM:
+        return ""
+    return chosen or DEFAULT_DESIGN_SYSTEM
+
 
 def a2ui_catalog_for(surface: str | None = None, system: str | None = None) -> dict[str, Any]:
     """The catalogue that gates a payload: the PACKAGE's chosen system, else the surface's.

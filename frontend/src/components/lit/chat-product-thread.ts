@@ -569,7 +569,7 @@ export class ChatProductThread extends LitElement {
       color: #e5e7eb;
       border-radius: 8px;
       font-size: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       overflow-x: auto;
     }
     .ft code {
@@ -577,7 +577,7 @@ export class ChatProductThread extends LitElement {
       padding: 1px 4px;
       border-radius: 4px;
       font-size: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
     }
     .ft a { color: #2563eb; text-decoration: none; }
     .ft a:hover { text-decoration: underline; }

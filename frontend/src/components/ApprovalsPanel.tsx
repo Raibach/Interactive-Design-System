@@ -30,14 +30,14 @@ export function ApprovalsPanel({ items, onLoadToComposer }: ApprovalsPanelProps)
       <div className="bg-gradient-to-br from-[#f8f9fa] to-[#e9ecef] border-l-4 border-[#1c2f4e] rounded-lg p-5 shadow-md">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h2 className="font-['Inter'] font-bold text-[20px] text-[#1c2f4e] mb-1">
+            <h2 className="font-['IBM Plex Sans'] font-bold text-[20px] text-[#1c2f4e] mb-1">
               Approval Queue
             </h2>
-            <p className="font-['Inter'] text-[13px] text-[#6c757d] leading-relaxed">
+            <p className="font-['IBM Plex Sans'] text-[13px] text-[#6c757d] leading-relaxed">
               Review and approve prompts submitted by your team.
             </p>
           </div>
-          <div className="bg-[#1c2f4e] text-white px-4 py-1.5 rounded-full text-[11px] font-['Inter'] font-semibold min-w-[80px] text-center flex-shrink-0 ml-4">
+          <div className="bg-[#1c2f4e] text-white px-4 py-1.5 rounded-full text-[11px] font-['IBM Plex Sans'] font-semibold min-w-[80px] text-center flex-shrink-0 ml-4">
             {items.length} PENDING
           </div>
         </div>

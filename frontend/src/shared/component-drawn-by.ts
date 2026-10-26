@@ -146,6 +146,16 @@ export function drawnBy(name: string, index: DrawnIndex | null): DrawnBy {
   }
   const module = index.modules.get(tag) ?? null;
   if (!module) {
+    /*
+     * A DEFINED ELEMENT IS A DEFINED ELEMENT (2026-10-25): the manifest lists the modules OUR
+     * checker can see, and an installed design system's elements (Carbon's cds-*) are defined by
+     * their package, not by a file in this repository — so a tag the browser already knows is
+     * drawn, whatever the manifest says. The manifest's silence is not a verdict here; the
+     * registry is the fact.
+     */
+    if (typeof customElements !== 'undefined' && customElements.get(tag)) {
+      return { tag, kind: 'element', module: null, note: `drawn by <${tag}> (defined by the installed package)` };
+    }
     return { tag, kind: 'none', module: null, note: `nothing defines <${tag}>, so nothing draws it` };
   }
   return { tag, kind: 'element', module, note: `drawn by <${tag}> in ${module}` };

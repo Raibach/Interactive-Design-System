@@ -2038,7 +2038,7 @@ export class AgentFlow extends LitElement {
       .vue-host .vue-flow__pane,
       .vue-host .vue-flow__transformationpane,
       .vue-host .vue-flow__background { pointer-events: none; }
-      .vue-host .vue-flow__node { font-family: 'Inter', system-ui, sans-serif; }
+      .vue-host .vue-flow__node { font-family: 'IBM Plex Sans', system-ui, sans-serif; }
       .view { z-index: 6; }
       .ctl {
         width: 32px; height: 32px; padding: 0;

@@ -28,7 +28,7 @@
  * This is page-level, not persisted: a reload has no open package until one opens.
  */
 
-export type ArrivalKind = 'blank' | 'resume' | 'console' | 'governance';
+export type ArrivalKind = 'blank' | 'resume' | 'console' | 'governance' | 'evaluators';
 
 /**
  * AN ARRIVAL IS ADDRESSED TO ONE SEAT — and this is the field that was missing.

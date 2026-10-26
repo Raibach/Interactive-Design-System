@@ -50,7 +50,7 @@ export function useRestorePackageWorkspace(deps: UseRestorePackageWorkspaceDeps)
     // Older saves still carry a root; it is dropped HERE so the next save cannot re-persist it
     // (the replay reads the row's own copy and handles a stored root there).
     assembledRunColumnRef.current = Array.isArray(storedRunColumn)
-      ? (storedRunColumn as any[]).filter((c) => c?.component !== 'workspace-layout' && c?.id !== 'root')
+      ? (storedRunColumn as any[]).filter((c) => c?.component !== 'composer-workspace' && c?.id !== 'root')
       : null;
     /*
      * THE PROMPT IS ON SCREEN WHEN A PACKAGE OPENS, AND THAT DOES NOT DEPEND ON A SAVE.
@@ -58,7 +58,7 @@ export function useRestorePackageWorkspace(deps: UseRestorePackageWorkspaceDeps)
      * Above the `stored` guard on purpose: an unsaved package, or one whose workspace was never
      * recorded, still has to open with its prompt visible — and the pane may be folded from a
      * Run in the package before this one, because the layout element is reused and the dock
-     * marks it operator-owned. See workspace-layout's `openPrompt`, which opens the column and
+     * marks it operator-owned. See composer-workspace's `openPrompt`, which opens the column and
      * hands the pane's ownership back to the payload in the same act.
      *
      * What the person reported (2026-09-23): "when I open an existing prompt ... the agent
@@ -69,7 +69,7 @@ export function useRestorePackageWorkspace(deps: UseRestorePackageWorkspaceDeps)
       const el = deepFind<HTMLElement & {
         openPrompt?: () => void;
         setColumnWidths?: (w: { left?: number | null; chat?: number | null } | null) => void;
-      }>('workspace-layout');
+      }>('composer-workspace');
       if (!el?.openPrompt) return false;
       // A PACKAGE LOADS WITH ITS COLUMNS EQUAL, AND WITH THE WIDTHS IT WAS SAVED WITH.
       // `openPrompt` puts the split back to the middle and hands the pane to the payload; the
@@ -150,7 +150,7 @@ export function useRestorePackageWorkspace(deps: UseRestorePackageWorkspaceDeps)
            */
           setWorkspaceTree((prev) => {
             const comps = Array.isArray(prev.components) ? prev.components : [];
-            const isRoot = (c: any) => c?.component === 'workspace-layout' || c?.id === 'root';
+            const isRoot = (c: any) => c?.component === 'composer-workspace' || c?.id === 'root';
             const savedRoot = runColumn.find(isRoot) as any;
             const column = runColumn.filter((c) => !isRoot(c));
             const middlePointer =
@@ -183,7 +183,7 @@ export function useRestorePackageWorkspace(deps: UseRestorePackageWorkspaceDeps)
               if (++frames < 90) requestAnimationFrame(settle);
               return;
             }
-            const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('workspace-layout');
+            const layout = deepFind<HTMLElement & { leftCollapsed?: boolean }>('composer-workspace');
             if (layout) layout.leftCollapsed = true;
             // HER SEAT AND THE DRAWING'S PAN AND ZOOM — the rest of the place, put back by
             // the element that owns it (room-embed.applyWorkspaceState re-reads `stored`).

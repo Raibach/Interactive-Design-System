@@ -15,7 +15,7 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
   /* Inter Medium is the site-wide base. Every explicit weight below this
      (font-semibold, font-bold, the 600/700 in Lit static styles) still wins,
      so this raises plain text without touching any bolding treatment. */

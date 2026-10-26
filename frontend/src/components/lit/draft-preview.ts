@@ -104,7 +104,7 @@ function draftDocument(draft: DraftPreviewState): string {
     '*, *::before, *::after { box-sizing: border-box; }' +
     // A COLUMN SO THE CAPTION KEEPS THE TOP AND THE COMPONENT GETS THE REST — the component is
     // centred in what is left, so the line naming the file stays where a reader looks first.
-    'body { min-height: 100vh; padding: 16px; background: #fafafa; font-family: Inter, system-ui, sans-serif; overflow: auto; display: flex; flex-direction: column; }' +
+    'body { min-height: 100vh; padding: 16px; background: #fafafa; font-family: "IBM Plex Sans", system-ui, sans-serif; overflow: auto; display: flex; flex-direction: column; }' +
     // THE ELEMENT'S OWN BOX, MADE VISIBLE — an element with no content draws no border, no
     // background and nothing else, so a container being a container looks exactly like a preview
     // that failed. What you are seeing IS the element: its box, at its size, drawing nothing
@@ -117,8 +117,8 @@ function draftDocument(draft: DraftPreviewState): string {
     // out of reach. The size is untouched — this is still the component at the size the design
     // measured, not scaled to fit.
     'body > ' + tag + ' { margin: auto; outline: 1px dashed rgba(31,172,194,0.55); outline-offset: 4px; }' +
-    '#preview-caption { font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: #8a9499; margin-bottom: 8px; }' +
-    '#preview-status { display: none; max-width: 520px; font-size: 13px; color: #b91c1c; font-family: ui-monospace, monospace; white-space: pre-wrap; text-align: left; }' +
+    '#preview-caption { font-family: IBM Plex Mono, Menlo, monospace; font-size: 10px; color: #8a9499; margin-bottom: 8px; }' +
+    '#preview-status { display: none; max-width: 520px; font-size: 13px; color: #b91c1c; font-family: IBM Plex Mono, monospace; white-space: pre-wrap; text-align: left; }' +
     '</style>' +
     '</head>' +
     '<body>' +
@@ -139,10 +139,20 @@ function draftDocument(draft: DraftPreviewState): string {
     // NOT HIDDEN BY THAT — they are listed in the panel beside this frame (`component-preview`, from
     // the database rows), so the designer sees what the design draws AND what the component will be
     // handed, and neither is faked into the other.
-    '<' + tag + '></' + tag + '>' +
+    // ── THE STATE GOES ABOVE THE ELEMENT, WHERE THE READER IS LOOKING ───────
+    // It used to sit BELOW the component inside a document that scrolls, so a preview that failed
+    // to load and an element that drew nothing looked the same at the top of the pane — and the
+    // reason could be scrolled out of sight. Owner, 2026-10-26: *"if there's an error reading the
+    // file the report should be above it… you can't suppress errors."*
     '<div id="preview-status"></div>' +
+    '<' + tag + '></' + tag + '>' +
     '<script type="module">' +
     "const status = document.getElementById('preview-status');" +
+    "const say = (text, bad) => {" +
+    "  status.style.display = 'block';" +
+    "  status.style.color = bad ? '#b91c1c' : '#1f6f4a';" +
+    '  status.textContent = text;' +
+    '};' +
     'const load = async () => {' +
     // ── ONE ATTEMPT, AND THE FAILURE IS DRAWN ───────────────────────────────
     // The file is written before the pane can ask for it, so one attempt either loads it or says
@@ -152,10 +162,10 @@ function draftDocument(draft: DraftPreviewState): string {
     JSON.stringify(url) +
     " + '?t=' + Date.now());" +
     '  } catch (err) {' +
-    "    status.style.display = 'block';" +
-    "    status.textContent = 'Could not load ' + " +
+    '    say(' +
+    "      'I could not load ' + " +
     JSON.stringify(url) +
-    "      + ' — ' + (err && err.message ? err.message : err);" +
+    "      + ' — ' + (err && err.message ? err.message : err), true);" +
     '    return;' +
     '  }' +
     // ── IT LOADED, AND NOTHING IS DEFINED UNDER THAT TAG — SAID, NOT LEFT AS A BLANK BOX ───
@@ -166,13 +176,35 @@ function draftDocument(draft: DraftPreviewState): string {
     '  if (!customElements.get(' +
     JSON.stringify(tag) +
     ')) {' +
-    "    status.style.display = 'block';" +
-    "    status.textContent = 'Loaded ' + " +
+    '    say(' +
+    "      'I loaded ' + " +
     JSON.stringify(url) +
-    " + ' and nothing defined <' + " +
+    "      + ' and nothing defined <' + " +
     JSON.stringify(tag) +
-    " + '>, so nothing was drawn. The file that answered is not the element this pane asked for.';" +
+    "      + '>, so nothing was drawn. The file that answered is not the element this pane asked for.', true);" +
+    '    return;' +
     '  }' +
+    // ── AND WHEN IT DID DRAW, SAY SO WITH THE BOX IT OCCUPIES ───────────────
+    // A green line is not a decoration: it is the only evidence in the pane that the file the
+    // folder holds is the thing on screen. An element that loaded and drew nothing (a zero box, an
+    // empty drawing) is reported as a failure here, because a blank box is not a success.
+    '  const el = document.querySelector(' + JSON.stringify(tag) + ');' +
+    '  if (el && el.updateComplete) { try { await el.updateComplete; } catch (e) {} }' +
+    '  const box = el ? el.getBoundingClientRect() : null;' +
+    '  const drawn = el && el.shadowRoot ? el.shadowRoot.childElementCount : 0;' +
+    '  if (!box || !box.width || !box.height || !drawn) {' +
+    '    say(' +
+    "      'I loaded the file and defined <' + " +
+    JSON.stringify(tag) +
+    "      + '>, but the element drew nothing — box ' + " +
+    "      (box ? Math.round(box.width) + ' × ' + Math.round(box.height) : 'none') + " +
+    "      ', ' + drawn + ' child element(s). Nothing is being shown as a success here.', true);" +
+    '    return;' +
+    '  }' +
+    '  say(' +
+    "    'Drawn: ' + Math.round(box.width) + ' × ' + Math.round(box.height) + ' — the element from ' + " +
+    JSON.stringify(file || url) +
+    "    + '.', false);" +
     '};' +
     'load();' +
     '</script>' +

@@ -23,6 +23,11 @@ export interface UseProductEntryArgs {
   productRoomProjectId: string | null;
   openProductRoom: () => void | Promise<void>;
   checkBuilderEngine: () => void | Promise<void>;
+  /**
+   * A console card's project, waiting to be written into the room's own state. While it is
+   * present the room must not resume or birth a different project in the same commit.
+   */
+  requestedProjectId?: string | null;
 }
 
 export function useProductEntry({
@@ -30,12 +35,13 @@ export function useProductEntry({
   productRoomProjectId,
   openProductRoom,
   checkBuilderEngine,
+  requestedProjectId,
 }: UseProductEntryArgs) {
   useEffect(() => {
     if ((headerTab || '') !== 'product') return;
     if (!builderToolUrl()) return;
     void checkBuilderEngine();
-    if (!productRoomProjectId) void openProductRoom();
+    if (!productRoomProjectId && !requestedProjectId) void openProductRoom();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headerTab]);
+  }, [headerTab, requestedProjectId]);
 }

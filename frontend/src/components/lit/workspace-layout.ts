@@ -1787,7 +1787,7 @@ export class WorkspaceLayout extends LitElement {
     }
     .waiting p {
       margin: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;
       color: rgba(255, 255, 255, 0.72);

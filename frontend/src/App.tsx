@@ -6,6 +6,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SentryErrorBoundary } from "@/components/SentryErrorBoundary";
 import { isDemoMode } from "@/shared/appConfig";
+import { EmbeddedWarmup } from "@/shared/EmbeddedWarmup";
+import composerBackground from "@/assets/composer-image-bg.webp";
 import "./global.css";
 
 /*
@@ -82,7 +84,21 @@ function App() {
                 },
               }}
             />
-            <div className="h-screen bg-grace-bg overflow-hidden">
+            {/* THE SHELL OWNS THE BOOT PAINT (owner, 2026-10-23). The document declares no
+                fill and there is no door: the shell itself paints the system's one background
+                — the composer ground over its own base, stretched with the browser — from its
+                very first commit, so the person never sees a white boot. Each room then paints
+                its own ground over it, which is the room's own business. */}
+            <div
+              className="h-screen overflow-hidden"
+              style={{
+                backgroundColor: '#2b2635',
+                backgroundImage: `url(${composerBackground})`,
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'top left',
+              }}
+            >
               <SentryErrorBoundary
                 scope="app-root"
                 onError={(error, componentStack) => {
@@ -107,6 +123,7 @@ function App() {
                     standby the moment the shell paints; the rooms read the tool URLs when they mount,
                     and the dev-only routes below appear once the config answers (the state change
                     below is what re-renders this tree). */}
+                <EmbeddedWarmup />
                 <Suspense fallback={null}>
                   <Routes>
                       {/* A2UI: Single root route - AI assembles all surfaces dynamically */}

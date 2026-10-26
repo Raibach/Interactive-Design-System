@@ -318,48 +318,6 @@
         "component"
       ]
     },
-    "ai-surface-sandbox": {
-      "type": "object",
-      "allOf": [
-        {
-          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
-        },
-        {
-          "$ref": "#/$defs/CatalogComponentCommon"
-        },
-        {
-          "type": "object",
-          "description": "The bounded surface Grace assembles A2UI content into. <ai-surface-sandbox> is defined (components/lit/ai-surface-sandbox.ts) and named by the allowlist, but this schema did not list it - so any payload naming it was rejected with a 503.",
-          "properties": {
-            "component": {
-              "const": "ai-surface-sandbox"
-            },
-            "isAIAssembling": {
-              "type": "boolean",
-              "default": false,
-              "description": "True while an assembly is in flight; the sandbox shows its spinner slot."
-            },
-            "headerTab": {
-              "type": "string",
-              "enum": [
-                "console",
-                "composer",
-                "design",
-                "product",
-                "development",
-                "governance"
-              ],
-              "default": "console",
-              "description": "Which slot the sandbox exposes."
-            }
-          },
-          "required": [
-            "component"
-          ]
-        }
-      ],
-      "unevaluatedProperties": false
-    },
     "Text": {
       "draft": true,
       "type": "object",
@@ -1200,6 +1158,32 @@
         "children"
       ]
     },
+    "composer-workspace": {
+      "type": "object",
+      "description": "THE COMPOSER'S OWN FRAME \u2014 the retagged copy of workspace-layout (rooms/composer/composer-workspace.ts), so a change to the Composer's frame can never reach the Console's. Same slots, same grippers.",
+      "properties": {
+        "component": {
+          "const": "composer-workspace"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "chatLoadWidth": {
+          "type": "number",
+          "description": "The room's declared load width for the chat column, as in workspace-layout."
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "children"
+      ]
+    },
     "prompt-section-editor": {
       "type": "object",
       "description": "Lit prompt section editor (left column). Binds to /session/left_column/sections.",
@@ -1236,6 +1220,52 @@
       "required": [
         "component",
         "content"
+      ]
+    },
+    "composer-chat-panel": {
+      "type": "object",
+      "description": "The Composer's own chat seat: a whole copy of chat-panel, retagged. Binds the open package's conversation and its Conversations dropdown.",
+      "properties": {
+        "component": {
+          "const": "composer-chat-panel"
+        },
+        "conversationId": {
+          "type": "object"
+        },
+        "conversations": {
+          "type": "object",
+          "description": "The Conversations dropdown's rows \u2014 the package's own conversations (conversations.session_id), newest first, bound to /session/right_column/conversations. Each row is {id, title}."
+        },
+        "id": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "object",
+          "description": "WHO SHE IS IN THIS ROOM \u2014 a BINDING, {path: /session/grace_instructions}, to the script the surface assembled for this room, never a sentence written in the tree. The seat sends it as the context of every turn, so it decides her voice: the console's script is CONSOLE_GRACE_INSTRUCTIONS, a package's is COMPOSER_GRACE_INSTRUCTIONS, Design's is composed from the database on every assembly. Written by the assembly (routes/ai.py `_seat_grace`) on every seat it emits, so a room that states nothing cannot be answered in another room's voice."
+        },
+        "graceLiveContext": {
+          "type": "boolean",
+          "description": "Whether the seat appends its LIVE WORKSPACE to those words \u2014 the package, its prompt seats and the tool register, or the console's cards. FALSE where the room's script already carries its live facts, as Design's does. Never sent by a model: a surface that omits it is refused by the seat rather than defaulted. Written by routes/ai.py `_seat_grace`."
+        },
+        "governanceTrace": {
+          "type": "object",
+          "description": "The trace the person has selected in the governance room \u2014 written by the SHELL from its own read (lib/governance-trace-source.ts), never by a model, and only for that room's seat. When graceLiveContext is true the seat appends it to her turn context as the TRACE ON SCREEN block, so her answers are about what is on the screen. Absent = no selection \u2014 the context then says nothing about a trace."
+        },
+        "governanceObservation": {
+          "type": "object",
+          "description": "The NODE selected within that trace \u2014 same channel as governanceTrace; absent when none is selected."
+        },
+        "composerPackageId": {
+          "type": "string",
+          "description": "The trace's prompt package \u2014 resolved by the SHELL (on a Composer run the trace's Langfuse session IS the package's session id) and written only when the package answers; the action bar then offers Open in Composer. Empty = no package for this trace \u2014 no button."
+        },
+        "disabledTabs": {
+          "type": "string",
+          "description": "Comma-separated rail tab ids the room has DEACTIVATED \u2014 visible on the rail but unpushable (governance deactivates 'tools' \u2014 Preview \u2014 until a trace is selected: the defaults are what teach the relation between the tabs and the selection)."
+        }
+      },
+      "required": [
+        "component"
       ]
     },
     "chat-panel": {
@@ -1278,6 +1308,57 @@
         "disabledTabs": {
           "type": "string",
           "description": "Comma-separated rail tab ids the room has DEACTIVATED \u2014 visible on the rail but unpushable (governance deactivates 'tools' \u2014 Preview \u2014 until a trace is selected: the defaults are what teach the relation between the tabs and the selection)."
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "console-chat-panel": {
+      "type": "object",
+      "description": "The Console's own chat seat. Binds the Console's own session and conversation, and the library she organises (every prompt package) through consoleCards. Her one control over the room is <reassemble-console sort=\"...\" filter=\"...\"/>.",
+      "properties": {
+        "component": {
+          "const": "console-chat-panel"
+        },
+        "conversationId": {
+          "type": "object",
+          "description": "The Console's conversation, a binding: {path: /console/conversation_id}."
+        },
+        "sessionId": {
+          "type": "object",
+          "description": "The Console's session, a binding: {path: /console/session_id}."
+        },
+        "consoleCards": {
+          "type": "object",
+          "description": "THE LIBRARY, a binding: {path: /cards}, to the same list ConsoleCardGrid draws. This is what she searches, filters, sorts and organises."
+        },
+        "conversations": {
+          "type": "object",
+          "description": "The Conversations dropdown's rows for the Console, bound to /console/conversations. Each row is {id, title, tab}."
+        },
+        "instructions": {
+          "type": "object",
+          "description": "WHO SHE IS IN THIS ROOM, a binding: {path: /console/grace_instructions}, written by the assembly (routes/ai.py _seat_grace)."
+        },
+        "graceLiveContext": {
+          "type": "boolean",
+          "description": "Whether her turn carries the library. The Console's assembly states TRUE, with consoleCards bound."
+        },
+        "allowedTabs": {
+          "type": "string",
+          "description": "The Console's rail: \"chat,eval,tools,approvals,settings\". Approvals belongs to the Console alone."
+        },
+        "tracePrompt": {
+          "type": "boolean",
+          "description": "Whether the rail's Trace tab sends its prompt. The Console states FALSE."
+        },
+        "id": {
+          "type": "string"
+        },
+        "children": {
+          "type": "object",
+          "description": "NAMED slots. The one the Console fills is \"view\", with the repair rows: {view: \"repair-view\"}."
         }
       },
       "required": [
@@ -2340,6 +2421,122 @@
           "unevaluatedProperties": false
         }
       ]
+    },
+    "design-left-footer": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+        },
+        {
+          "$ref": "#/$defs/CatalogComponentCommon"
+        },
+        {
+          "type": "object",
+          "description": "The design room's column footer: the Composer bar's plate, empty on purpose (no Save, no RUN, no undo).",
+          "properties": {
+            "component": {
+              "const": "design-left-footer"
+            }
+          },
+          "required": [
+            "component"
+          ]
+        }
+      ]
+    },
+    "design-left-panel": {
+      "type": "object",
+      "description": "The Design room's left column: the composer's own <prompt-container> panel frame with a SLOT named \"left\" in it, and the SURFACE fills that slot \u2014 render-design names its child in this component's `children.left` and the renderer instantiates it there, so what stands in the column is the envelope's child and nothing else. Today that child is <figma-layers-view> \u2014 the ingestion rail's own component tree, reused unchanged. It exists because the panel is part of the drawing \u2014 the owner: \"it's the same panel that we have the prompt / agent prompt inputs, and it's called left column\" \u2014 while the composer's prompt sections are NOT: those are the Agent Role tile, the Functions | Tools button and the empty textarea the owner saw loading in Design, and they are removed from this surface. IT IS A SLOT AND NOT A MOUNT, which is a change worth recording: the mount (a div inside this element's shadow tree, `data-ingest-mount`) existed for the ingestion tool's React rail, and a slot left that content in its own tree where its Tailwind classes \u2014 selectors in a document stylesheet \u2014 could not match, so the rail arrived unformatted with a 153px URL field and an unscrollable component list. The tool is no longer loaded into this room at all (a React tree inside a surface is forbidden, and measured: it drew beneath the room and pushed the layout to y = \u2212129), so the mount has nothing left to hold. A catalogue element needs none: it carries its own styles inside its own shadow root, and only its box comes from this frame (`::slotted(*)` gives it the hole's height and lets it be smaller than its content). The room's container still frames it: the panel's border, its rounded corner and its format rail are the drawing's. Design only \u2014 the composer's surface never names it.",
+      "properties": {
+        "component": {
+          "const": "design-left-panel"
+        },
+        "id": {
+          "type": "string"
+        },
+        "formatLabel": {
+          "type": "string"
+        },
+        "tokensLabel": {
+          "type": "string"
+        },
+        "children": {
+          "type": "object",
+          "description": "The panel's one hole, filled BY NAME from the envelope: {\"left\": <id of the component that stands in this column>}. Today render-design names `<figma-layers-view>` there \u2014 the ingestion rail's own tree. Declared because the element renders `<slot name=\"left\">` and the surface fills it \u2014 a slot the schema does not name is a hole nobody can legally address.",
+          "properties": {
+            "left": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "design-middle-container": {
+      "type": "object",
+      "description": "The Design room's middle column: the composer's own <output-controls> header row over a MOUNT inside its shadow tree (data-ingest-mount), where the ingest's Preview is rendered. It exists because the composer's column body (<compiled-output-viewer>) owns its whole area and has no slot, so nothing can be loaded inside it (the owner's ruling: \"If you have to make a different component because you can't figure out how to load something inside of it, then build a different lit component for the design section.\"). Content is loaded INTO this element, never beside it: loose React nodes in the room container's light DOM fight lit's own child list and re-baseline the container's split. The hole is a MOUNT rather than a slot for a measured reason \u2014 a slot leaves the content in its own tree, where the tool's Tailwind classes cannot match (no document stylesheet reaches into the renderer's shadow root), so the preview would arrive unformatted; rendering the region into this element's shadow tree makes the application's own sheet, adopted here, reach it. THE COLUMN IS DRAWN ONLY WHEN THE TREE REFERENCES IT: render-design declares this component and leaves it out of the layout's children, so the third column is collapsed until the ingest reports its first draft \u2014 the composer's own contract for its middle column ('the shell moves the flow view into it at Run time'). Design only \u2014 the composer's surface never names it.",
+      "properties": {
+        "component": {
+          "const": "design-middle-container"
+        },
+        "id": {
+          "type": "string"
+        },
+        "outputType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component"
+      ]
+    },
+    "design-workspace": {
+      "type": "object",
+      "description": "THE DESIGN ROOM'S OWN FRAME \u2014 the retagged copy of workspace-layout (rooms/design/design-workspace.ts), so a change to the Design room's frame can never reach the Console's. Same slots, same grippers.",
+      "properties": {
+        "component": {
+          "const": "design-workspace"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "children"
+      ]
+    },
+    "tools-workspace": {
+      "type": "object",
+      "description": "THE TOOLS TAB'S OWN CONTAINER \u2014 the same three-column layout as the design frame, under a name only the Tools tab draws.",
+      "properties": {
+        "component": {
+          "const": "tools-workspace"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "children"
+      ]
     }
   },
   "$defs": {
@@ -2421,9 +2618,6 @@
         },
         {
           "$ref": "#/components/workspace-layout"
-        },
-        {
-          "$ref": "#/components/ai-surface-sandbox"
         },
         {
           "$ref": "#/components/Text"

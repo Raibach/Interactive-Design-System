@@ -262,7 +262,7 @@ export class ChatHeader extends LitElement {
          becomes Nunito (found in chat interfaces for Grace)... Use our fonts only - no API
          calls." The drawing's Arial Rounded is substituted by the local rounded family; the
          line's figures (tokens, calls, durations, QA) render Inter via the figures helper. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 400;
       line-height: normal;
@@ -286,7 +286,7 @@ export class ChatHeader extends LitElement {
          user-response-bubble line, #40001123:6984: Arial Rounded 400 at 13/20 in #3D515B.
          The code carried weight 500 and #171717, neither of which is in the file.
          Drawn in Nunito, per the owner's face ruling — see .status above. */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 400;
       line-height: 20px;
@@ -362,7 +362,7 @@ export class ChatHeader extends LitElement {
        he ruled NUNITO — so both chat cards draw one rounded family, and 14/600 against the
        readout's 12 is what separates them now. */
     .readout.dm {
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 600;
       font-size: 14px;
     }

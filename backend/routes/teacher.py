@@ -288,33 +288,47 @@ async def api_teacher_query(request: TeacherQueryRequest):
                 "is what will create one."
             )
         elif state.conversation_api and not conv_id and request.session_id and persistence_error is None:
-            existing = []
-            lookup_failed = False
+            # THE PACKAGE IS NOT A FREE PARAMETER (2026-10-25): the same predicate every
+            # package write uses. A turn may only file itself under a package the caller
+            # can write to — a supplied id alone used to grant the caller owner access to
+            # a package they had nothing to do with.
+            owned = None
             try:
-                existing = state.conversation_api.get_conversations_by_session(
-                    request.session_id, uid
-                )
+                owned = state.prompt_sessions_api.get_session(request.session_id, uid)
             except Exception as e:
-                lookup_failed = True
-                print(f"❌ Conversation lookup failed for session {request.session_id}: {e}")
-            if lookup_failed:
+                persistence_error = f"This package's access could not be checked, so your turn was NOT saved: {e}"
+            if owned is None and persistence_error is None:
                 persistence_error = (
-                    "This package's conversations could not be read, so your turn was NOT saved — "
-                    "creating one here would have manufactured a second thread for the package."
+                    "That package does not exist, or you have no access to it, so your turn was NOT saved."
                 )
-            elif existing:
-                conv_id = str(existing[0].get("id"))
-                print(f"✅ Reusing conversation {conv_id} for session {request.session_id}")
-            else:
+            if persistence_error is None:
+                existing = []
+                lookup_failed = False
                 try:
-                    title = request.question[:80] if request.question else "New Chat"
-                    conv_id = state.conversation_api.create_conversation(
-                        uid, request.project_id, title, session_id=request.session_id
+                    existing = state.conversation_api.get_conversations_by_session(
+                        request.session_id, uid
                     )
-                    print(f"✅ Created conversation {conv_id} for session {request.session_id}")
                 except Exception as e:
-                    persistence_error = f"The conversation for this package could not be created, so your turn was NOT saved: {e}"
-                    print(f"❌ Failed to create conversation: {e}")
+                    lookup_failed = True
+                    print(f"❌ Conversation lookup failed for session {request.session_id}: {e}")
+                if lookup_failed:
+                    persistence_error = (
+                        "This package's conversations could not be read, so your turn was NOT saved — "
+                        "creating one here would have manufactured a second thread for the package."
+                    )
+                elif existing:
+                    conv_id = str(existing[0].get("id"))
+                    print(f"✅ Reusing conversation {conv_id} for session {request.session_id}")
+                else:
+                    try:
+                        title = request.question[:80] if request.question else "New Chat"
+                        conv_id = state.conversation_api.create_conversation(
+                            uid, request.project_id, title, session_id=request.session_id
+                        )
+                        print(f"✅ Created conversation {conv_id} for session {request.session_id}")
+                    except Exception as e:
+                        persistence_error = f"The conversation for this package could not be created, so your turn was NOT saved: {e}"
+                        print(f"❌ Failed to create conversation: {e}")
         elif state.conversation_api and not conv_id:
             # NOT AN ERROR: a turn spoken in a package that does not exist yet. It is held by
             # the seat and written when the first Save creates the package's conversation

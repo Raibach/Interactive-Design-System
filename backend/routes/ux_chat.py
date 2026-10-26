@@ -2,11 +2,11 @@
 
 WHAT THIS IS. The Design room's UX tab is where the analytics application (the PostHog code we
 took over) works. The person talks to it through the room's own chat output — the seat's thread
-is the conversation surface — and this route is what that conversation calls. The answer comes
-from OUR model: `query_llm`, the same one model every mode of this application runs on, with its
-key in `.env`. It does not call the analytics application's own assistant, and it never will:
-that agent lives in the application's enterprise-licensed code (hardwired to a model we do not
-use) and is not ours to reuse.
+is the conversation surface — and this route is what that conversation calls. The turn is handed
+to the analytics application's own conversation pipeline (their endpoint, their agent workflow,
+their tools), which runs on OUR model via the env-gated factory patch (RAIBACH_IDS_CHAT_MODEL).
+Our chat input and output are the UI; their wiring — the conversation id, the thread, the agent —
+is the engine. Nothing of their UI is copied into the seat.
 
 WHERE THE THREAD LIVES (owner, 2026-10-19: *"I noticed that the conversations went away … are we
 not saving these conversations what happened to conversation ID? … make a slot in the database to
@@ -29,7 +29,7 @@ a reload never draws a question with an unexplained empty space under it.
 
 WHAT IT STILL DOES NOT DO, STATED PLAINLY: it reads no analytics data. The local application has
 no completed first-run credential to query it with; when it does, the read joins THIS route — a
-tool call in front of the same `query_llm` — not a second endpoint.
+a tool call in front of the same pipeline — not a second endpoint.
 
 NO FALLBACK, NO SUPPRESSION. A model failure is a 502 with the real reason in `error`, which the
 seat draws as the reply — never a canned sentence standing in for the answer. Nothing here
@@ -42,6 +42,7 @@ import json
 import logging
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import psycopg2
@@ -49,6 +50,7 @@ import psycopg2.extras
 import requests
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 import services as state
 from deps import get_user_id_from_header
@@ -113,18 +115,14 @@ async def posthog_login():
 # ── THE UX TAB'S OWN THREAD ───────────────────────────────────────────────────────────────────
 # ONE PACKAGE PER TAB IS THE DESIGN ROOM'S OWN ARCHITECTURE: `design_console` reads every tab as
 # a `prompt_sessions` row with `metadata.session_type = 'design_tab'` and `design_tab = <tab>`,
-# and that row owns the tab's conversation. This is the writer for the UX tab's row — the same
-# shape, nothing new. The thread's row therefore lives under the tab's package, NOT under the
-# Design container, which is why it never appears in the Design room's own conversation list.
+# and that row owns the tab's conversation. The WRITER is
+# `PromptSessionsAPI.get_or_create_design_tab` — the same helper the Tools route uses — so the
+# three conversation tabs cannot drift apart again. This module keeps only the READ below.
 _UX_TAB = "ux"
-_UX_PACKAGE_TITLE = "Design — UX"
-_UX_PACKAGE_DESCRIPTION = (
-    "The Design room's UX tab — the analytics application's conversation, saved under its own tab."
-)
 
 
 def _ux_tab_package(user_id: str) -> dict[str, Any] | None:
-    """The UX tab's package row, or None when it has never been used."""
+    """The UX tab's package row, or None when it has never been used. READ ONLY."""
     with psycopg2.connect(DATABASE_URL) as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
@@ -142,80 +140,206 @@ def _ux_tab_package(user_id: str) -> dict[str, Any] | None:
             return dict(row) if row else None
 
 
-def _create_ux_package(user_id: str) -> dict[str, Any] | None:
-    """Create the UX tab's package through the application's own session path."""
-    if not state.prompt_sessions_api:
-        return None
-    created = state.prompt_sessions_api.create_session(
-        user_id,
-        title=_UX_PACKAGE_TITLE,
-        description=_UX_PACKAGE_DESCRIPTION,
-    )
-    if not created or not created.get("id"):
-        return None
-    with psycopg2.connect(DATABASE_URL) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE prompt_sessions
-                   SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb
-                 WHERE id = %s
-                """,
-                (json.dumps({"session_type": "design_tab", "design_tab": _UX_TAB}), created["id"]),
-            )
-        conn.commit()
-    return {
-        "id": str(created["id"]),
-        "conversation_id": str(created["conversation_id"]) if created.get("conversation_id") else None,
-    }
-
-
-def _ensure_ux_thread(user_id: str, question: str) -> tuple[str, str]:
-    """(package id, conversation id) for the UX tab, created on the first turn that needs it."""
-    package = _ux_tab_package(user_id)
-    if not package:
+def _is_seeded_intro(row: dict[str, Any]) -> bool:
+    """A stored greeting from the old tab helper is not part of the conversation the welcome owns."""
+    meta = row.get("metadata")
+    if isinstance(meta, str):
         try:
-            package = _create_ux_package(user_id)
+            meta = json.loads(meta)
         except Exception:
-            # The partial unique index holds "one design_tab row per user per tab", so a second
-            # creator loses the insert — re-read the winner instead of reporting a failure.
-            package = _ux_tab_package(user_id)
-            if not package:
-                raise
-    if not package:
-        raise RuntimeError("the UX tab's package could not be created")
-    conversation_id = package.get("conversation_id") or ""
-    if not conversation_id:
-        if not state.conversation_api:
-            raise RuntimeError("the conversation store is not available")
+            meta = {}
+    return isinstance(meta, dict) and meta.get("kind") == "intro"
+
+
+def _name_thread(user_id: str, conversation_id: str, question: str) -> None:
+    """Name the thread from its first question — the same rule the teacher route uses.
+
+    THE INTRODUCTION IS ALREADY THE FIRST MESSAGE, so the old empty-thread test
+    (`message_count == 0`) can never be true for a tab with a seeded greeting. The title is
+    renamed while it is still the tab's placeholder; once the first question has named it, a
+    later turn leaves it alone.
+    """
+    if not state.conversation_api:
+        return
+    try:
+        row = state.conversation_api.get_conversation(conversation_id, user_id) or {}
+        title = str(row.get("title") or "")
+        if title in ("New Chat", "Untitled Conversation", "Design — UX") or title.endswith(" - Chat"):
+            state.conversation_api.update_conversation(conversation_id, user_id, title=question[:80])
+    except Exception:
+        # Naming is not the turn. It is logged where the app's logger reads, never swallowed.
+        logger.exception("the UX thread could not be named from its first question")
+
+
+def _ensure_ux_tab(user_id: str) -> dict[str, Any]:
+    """The UX tab's package and primary conversation, created by the one Design-tab writer."""
+    if not state.prompt_sessions_api:
+        raise RuntimeError("the session store is not available")
+    tab = state.prompt_sessions_api.get_or_create_design_tab(user_id=user_id, tab=_UX_TAB)
+    if not tab:
+        raise RuntimeError("the UX tab's package did not resolve (not created)")
+    return tab
+
+
+class UxNotebookSave(BaseModel):
+    title: str | None = None
+    content: str = ""
+
+
+# ── THE NOTEBOOK, SAVED ON THE UX CONVERSATION ────────────────────────────────────────────────
+# The PostHog notebook is a document beside the chat. Our first form keeps that relationship in
+# the UX conversation's own metadata: `ux_notebook` holds the title and the words. It is not a
+# second chat and it is not a browser-only scratchpad; the conversation row is the proper place,
+# and a reload reads the same notebook back.
+@router.get("/api/ux/chat/notebook")
+async def ux_notebook_get(x_user_id: str | None = Header(None, alias="X-User-ID")):
+    uid = get_user_id_from_header(x_user_id)
+    try:
+        tab = _ensure_ux_tab(uid)
+        conversation_id = tab["conversationId"]
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT metadata->'ux_notebook' AS notebook FROM conversations WHERE id = %s",
+                    (conversation_id,),
+                )
+                row = cur.fetchone()
+        notebook = (row or {}).get("notebook") or {}
+        if not isinstance(notebook, dict):
+            notebook = {}
+        return {
+            "title": str(notebook.get("title") or "Untitled notebook"),
+            "content": str(notebook.get("content") or ""),
+            "updated_at": str(notebook.get("updated_at") or ""),
+            "conversation_id": conversation_id,
+        }
+    except Exception as exc:  # noqa: BLE001 — the reason goes to the panel
+        logger.exception("the UX notebook could not be read")
+        return JSONResponse({"error": f"The notebook could not be read: {exc}"}, status_code=503)
+
+
+@router.put("/api/ux/chat/notebook")
+async def ux_notebook_save(
+    request: UxNotebookSave,
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
+):
+    uid = get_user_id_from_header(x_user_id)
+    try:
+        tab = _ensure_ux_tab(uid)
+        conversation_id = tab["conversationId"]
+        title = (request.title or "Untitled notebook").strip() or "Untitled notebook"
+        notebook = {
+            "title": title,
+            "content": request.content or "",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE conversations
+                       SET metadata = COALESCE(metadata, '{}'::jsonb)
+                                      || jsonb_build_object('ux_notebook', %s::jsonb),
+                           updated_at = NOW()
+                     WHERE id = %s
+                    """,
+                    (json.dumps(notebook), conversation_id),
+                )
+            conn.commit()
+        return {**notebook, "conversation_id": conversation_id}
+    except Exception as exc:  # noqa: BLE001 — the reason goes to the panel
+        logger.exception("the UX notebook could not be saved")
+        return JSONResponse({"error": f"The notebook could not be saved: {exc}"}, status_code=503)
+
+
+# ── THE DISCUSSION THREAD, UNDER THE UX PACKAGE ────────────────────────────────────────────────
+# The discussion is a conversation of its own, hanging off the SAME UX package as the chat. It is
+# not mixed into the chat thread, and it is not a browser-only panel: its messages are rows under
+# the UX package, so a reload reads them back. The existing `/api/ux/posthog-chat` door carries
+# the turns; this route only opens (or finds) the thread.
+@router.post("/api/ux/chat/discussion")
+async def ux_discussion_open(x_user_id: str | None = Header(None, alias="X-User-ID")):
+    uid = get_user_id_from_header(x_user_id)
+    if not state.conversation_api:
+        return JSONResponse(
+            {"error": "Database not available — the discussion cannot be opened."},
+            status_code=503,
+        )
+    try:
+        tab = _ensure_ux_tab(uid)
+        package_id = tab["packageId"]
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id::text AS id
+                      FROM conversations
+                     WHERE session_id = %s AND user_id = %s
+                       AND tab = 'discussion' AND (is_archived IS NOT TRUE)
+                     ORDER BY updated_at DESC
+                     LIMIT 1
+                    """,
+                    (package_id, uid),
+                )
+                row = cur.fetchone()
+        if row and row.get("id"):
+            return {
+                "package_id": package_id,
+                "conversation_id": str(row["id"]),
+                "title": "Discussion about Product analytics",
+            }
         conversation_id = state.conversation_api.create_conversation(
-            user_id,
-            session_id=package["id"],
-            title=(question[:80] or "Design — UX Chat"),
-            metadata={"kind": "ux-chat", "tab": _UX_TAB},
-            tab=_UX_TAB,
+            uid,
+            session_id=package_id,
+            title="Discussion about Product analytics",
+            metadata={"kind": "ux-discussion", "tab": "discussion"},
+            tab="discussion",
+        )
+        return {
+            "package_id": package_id,
+            "conversation_id": str(conversation_id),
+            "title": "Discussion about Product analytics",
+        }
+    except Exception as exc:  # noqa: BLE001 — the reason goes to the panel
+        logger.exception("the UX discussion could not be opened")
+        return JSONResponse({"error": f"The discussion could not be opened: {exc}"}, status_code=503)
+
+
+@router.post("/api/ux/chat/new")
+async def ux_chat_new(x_user_id: str | None = Header(None, alias="X-User-ID")):
+    """A NEW UX CONVERSATION UNDER THE SAME UX PACKAGE.
+
+    The package's primary pointer moves to the new conversation, so a reload opens the chat the
+    person just started rather than the one it replaced. The discussion is a separate thread and
+    is untouched.
+    """
+    uid = get_user_id_from_header(x_user_id)
+    if not state.conversation_api:
+        return JSONResponse({"error": "Database not available — a new chat cannot be opened."}, status_code=503)
+    try:
+        tab = _ensure_ux_tab(uid)
+        package_id = tab["packageId"]
+        conversation_id = state.conversation_api.create_conversation(
+            uid,
+            session_id=package_id,
+            title="Product analytics chat",
+            metadata={"kind": "ux-chat", "tab": "ux"},
+            tab="ux",
         )
         with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
-                    (conversation_id, package["id"]),
+                    (conversation_id, package_id),
                 )
             conn.commit()
-    return package["id"], conversation_id
-
-
-def _name_thread(user_id: str, conversation_id: str, question: str) -> None:
-    """Name the thread from its first question — the same rule the teacher route uses."""
-    if not state.conversation_api:
-        return
-    try:
-        row = state.conversation_api.get_conversation(conversation_id, user_id) or {}
-        if int(row.get("message_count") or 0) == 0:
-            state.conversation_api.update_conversation(conversation_id, user_id, title=question[:80])
-    except Exception:
-        # Naming is not the turn. It is logged where the app's logger reads, never swallowed.
-        logger.exception("the UX thread could not be named from its first question")
+        return {
+            "package_id": package_id,
+            "conversation_id": str(conversation_id),
+        }
+    except Exception as exc:  # noqa: BLE001 — the reason goes to the view
+        logger.exception("a new UX conversation could not be opened")
+        return JSONResponse({"error": f"A new chat could not be opened: {exc}"}, status_code=503)
 
 
 @router.get("/api/ux/chat/thread")
@@ -235,6 +359,11 @@ async def ux_chat_thread(
         return JSONResponse({"error": "Database not available — the UX thread cannot be read."}, status_code=503)
     picked = str(conversation_id or "").strip()
     try:
+        # THE UX PACKAGE IS THE TURN'S PACKAGE. It is resolved by the one Design-tab writer,
+        # so the thread read and the direct teacher turn name the same package. The UX tab's
+        # own conversation is the package's primary conversation when no named one is asked.
+        tab = _ensure_ux_tab(uid)
+        package_id = tab["packageId"]
         if picked:
             # A NAMED THREAD MUST BE THIS USER'S — the same predicate every read uses.
             known = state.conversation_api.get_conversation(picked, uid)
@@ -245,23 +374,24 @@ async def ux_chat_thread(
                 )
             target = picked
         else:
-            package = _ux_tab_package(uid)
-            target = str(package.get("conversation_id") or "") if package else ""
+            target = str(tab.get("conversationId") or "")
     except Exception as exc:  # noqa: BLE001 — the reason goes to the seat, never a blank thread
         logger.exception("the UX thread could not be read")
         return JSONResponse({"error": f"The UX thread could not be read: {exc}"}, status_code=503)
     if not target:
-        return {"conversation_id": None, "messages": []}
+        return {"package_id": package_id, "conversation_id": None, "messages": []}
     try:
         rows = state.conversation_api.get_messages(target, uid, limit=200)
     except Exception as exc:  # noqa: BLE001
         logger.exception("the UX thread's messages could not be read")
         return JSONResponse({"error": f"The UX thread could not be read: {exc}"}, status_code=503)
     return {
+        "package_id": package_id,
         "conversation_id": target,
         "messages": [
             {"role": str(row.get("role") or ""), "content": str(row.get("content") or "")}
             for row in (rows or [])
+            if not _is_seeded_intro(row)
         ],
     }
 
@@ -372,7 +502,12 @@ async def posthog_chat(request: Request, x_user_id: str | None = Header(None, al
             )
     else:
         try:
-            _, conversation_id = _ensure_ux_thread(uid, question)
+            if not state.prompt_sessions_api:
+                raise RuntimeError("the session store is not available")
+            ux_tab = state.prompt_sessions_api.get_or_create_design_tab(user_id=uid, tab=_UX_TAB)
+            if not ux_tab:
+                raise RuntimeError("the UX tab's package did not resolve (not created)")
+            conversation_id = ux_tab["conversationId"]
         except Exception as exc:  # noqa: BLE001
             logger.exception("the UX tab's thread could not be created")
             return JSONResponse({"error": f"The UX thread could not be created: {exc}"}, status_code=503)

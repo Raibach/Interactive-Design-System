@@ -71,7 +71,7 @@ export class ControlBar extends LitElement {
       background: #B5CCCE;
       /* Figma: rounded-br-[10px] */
       border-radius: 0px 0px 10px 0px;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       /* Figma: 656×70 outer, minus padding = 656 × (70 - 13 - 13) = 656 × 44 inner */
       height: 70px;
       box-sizing: border-box;
@@ -119,7 +119,7 @@ export class ControlBar extends LitElement {
       justify-content: center;
       gap: 6px;
       border-radius: 6px;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       cursor: pointer;
       transition: all 0.15s ease;
       white-space: nowrap;

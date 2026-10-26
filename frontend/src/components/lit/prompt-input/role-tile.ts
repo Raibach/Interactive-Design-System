@@ -52,7 +52,7 @@ export class RoleTile extends LitElement {
       box-sizing: border-box;
       display: flex;
       align-items: center;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 18px;
       font-weight: 700;
       color: #171717;

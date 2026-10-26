@@ -1,6 +1,0 @@
-[Unit]
-Description=Prune Docker build cache and dangling images (house policy: no build cache persists)
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/docker builder prune -af
-ExecStart=/usr/bin/docker image prune -f

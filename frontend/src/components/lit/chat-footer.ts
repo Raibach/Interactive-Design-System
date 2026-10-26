@@ -104,7 +104,7 @@ export class ChatFooter extends LitElement {
       background: #0E325F;
       box-shadow: -4px 0 4px 0 rgba(0, 0, 0, 0.25);
       box-sizing: border-box;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* The marks sit 35 apart (#40001119:6472). */
     .marks {

@@ -128,7 +128,7 @@ export class OutputHeader extends LitElement {
        Drawn in Nunito, per the owner's face ruling, 2026-10-07 (the drawing's Arial Rounded ->
        Nunito); the line's figures render Inter via the figures helper. */
     .line {
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 400;
       font-size: 12px;
       line-height: 20px;

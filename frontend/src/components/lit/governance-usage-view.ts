@@ -226,7 +226,7 @@ export class GovernanceUsageView extends LitElement {
     css`
       /* No backticks in this stylesheet: it is a tagged template literal. */
       :host { display: block; height: 100%; overflow: auto; background: #ffffff; }
-      .wrap { padding: 14px 16px 24px; font-family: 'Inter', system-ui, sans-serif; }
+      .wrap { padding: 14px 16px 24px; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
       .head { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 8px; }
       .calls-head { margin-top: 18px; }
       .title { font-size: 13px; font-weight: 700; color: #234354; text-transform: uppercase; letter-spacing: 0.04em; }

@@ -44,7 +44,9 @@ import type { TemplateResult } from 'lit';
 // ── The catalogues, one lazy loader each ─────────────────────────────────────
 // The keys are the paths Vite resolves at build time; the id is the directory name,
 // so a fourth catalogue appears in this element's switcher the moment it has a file.
-const MODULES = import.meta.glob('../A2UI/catalogs/*/catalog.json');
+// One catalogue, named rather than discovered: a deleted folder cannot survive in a glob that
+// does not enumerate folders. See the same note in `figma-layers-view.ts`.
+const MODULES = import.meta.glob('../A2UI/catalogs/prompt-composer/catalog.json');
 
 /** The catalogue ids, read off the glob keys rather than hardcoded. */
 const CATALOG_IDS: string[] = Object.keys(MODULES)
@@ -564,7 +566,7 @@ export class CatalogSchemaView extends LitElement {
       overflow: hidden;
       background: #ffffff;
       color: #171717;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     .wrap {
       display: flex;
@@ -593,7 +595,7 @@ export class CatalogSchemaView extends LitElement {
     }
     .grow { flex: 1; }
     .src {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 11px;
       color: #7a8790;
       white-space: nowrap;
@@ -655,7 +657,7 @@ export class CatalogSchemaView extends LitElement {
       align-items: baseline;
       gap: 10px;
       padding: 2px 16px 2px calc(16px + var(--d) * 18px);
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 12.5px;
       line-height: 1.7;
       white-space: pre-wrap;
@@ -698,7 +700,7 @@ export class CatalogSchemaView extends LitElement {
     /* ── Marks — a fact about the file, never a decoration ──────────────── */
     .mk {
       flex-shrink: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
@@ -727,7 +729,7 @@ export class CatalogSchemaView extends LitElement {
     .failT { font-size: 14px; font-weight: 700; color: #a3331f; }
     .failR {
       margin-top: 8px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 12px;
       color: #6b767d;
       max-width: 100ch;

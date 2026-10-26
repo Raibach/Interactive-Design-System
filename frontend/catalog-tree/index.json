@@ -1,123 +1,29 @@
 {
-  "generatedAt": "2026-10-06T12:13:16.112Z",
+  "generatedAt": "2026-10-26T16:01:47.457Z",
   "catalogs": [
     {
-      "id": "design-artifacts",
-      "catalogId": "https://raibach.net/a2ui/catalogs/design-artifacts/v0_9_1/catalog.json",
-      "title": "Design Artifacts",
+      "id": "carbon",
+      "catalogId": "https://raibach.net/a2ui/catalogs/carbon/v0_9_1/catalog.json",
+      "title": "Carbon",
       "counts": {
-        "declared": 63,
-        "annotated": 59,
-        "built": 63,
-        "inManifest": 63,
-        "allowlisted": 49,
-        "mapped": 26,
-        "inTheFigmaMap": 32
+        "declared": 58,
+        "annotated": 58,
+        "built": 0,
+        "inManifest": 0,
+        "allowlisted": 50,
+        "mapped": 0,
+        "inTheFigmaMap": 0
       },
       "gate": null,
       "groups": [
         {
-          "title": "right column",
-          "elements": 11,
-          "derived": true
-        },
-        {
-          "title": "middle column",
-          "elements": 14,
-          "derived": true
-        },
-        {
-          "title": "surface: both",
-          "elements": 3,
+          "title": "surface: design",
+          "elements": 50,
           "derived": true
         },
         {
           "title": "not in the allowlist",
-          "elements": 14,
-          "derived": true
-        },
-        {
-          "title": "left column",
-          "elements": 15,
-          "derived": true
-        },
-        {
-          "title": "surface: composer",
-          "elements": 6,
-          "derived": true
-        }
-      ]
-    },
-    {
-      "id": "ecommerce",
-      "catalogId": "https://raibach.net/a2ui/catalogs/ecommerce/v0_9_1/catalog.json",
-      "title": "Raibach E-Commerce Catalog",
-      "counts": {
-        "declared": 38,
-        "annotated": 34,
-        "built": 33,
-        "inManifest": 33,
-        "allowlisted": 19,
-        "mapped": 18,
-        "inTheFigmaMap": 22
-      },
-      "gate": null,
-      "groups": [
-        {
-          "title": "not in the allowlist",
-          "elements": 19,
-          "derived": true
-        },
-        {
-          "title": "surface: both",
-          "elements": 2,
-          "derived": true
-        },
-        {
-          "title": "left column",
-          "elements": 9,
-          "derived": true
-        },
-        {
-          "title": "middle column",
-          "elements": 3,
-          "derived": true
-        },
-        {
-          "title": "right column",
-          "elements": 3,
-          "derived": true
-        },
-        {
-          "title": "surface: composer",
-          "elements": 2,
-          "derived": true
-        }
-      ]
-    },
-    {
-      "id": "primitives",
-      "catalogId": "https://raibach.net/a2ui/catalogs/primitives/v0_9_1/catalog.json",
-      "title": "Raibach Primitives Catalog",
-      "counts": {
-        "declared": 7,
-        "annotated": 3,
-        "built": 7,
-        "inManifest": 7,
-        "allowlisted": 1,
-        "mapped": 1,
-        "inTheFigmaMap": 1
-      },
-      "gate": null,
-      "groups": [
-        {
-          "title": "not in the allowlist",
-          "elements": 6,
-          "derived": true
-        },
-        {
-          "title": "right column",
-          "elements": 1,
+          "elements": 8,
           "derived": true
         }
       ]
@@ -127,36 +33,31 @@
       "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
       "title": "Raibach Prompt Composer Catalog",
       "counts": {
-        "declared": 63,
-        "annotated": 59,
-        "built": 63,
-        "inManifest": 63,
-        "allowlisted": 49,
-        "mapped": 26,
-        "inTheFigmaMap": 32
+        "declared": 73,
+        "annotated": 69,
+        "built": 67,
+        "inManifest": 67,
+        "allowlisted": 59,
+        "mapped": 25,
+        "inTheFigmaMap": 31
       },
       "gate": {
         "status": "partial",
-        "generatedAt": "2026-10-06T11:45:11.919Z",
-        "findings": 19,
-        "blocking": 5,
+        "generatedAt": "2026-10-26T16:01:34.533Z",
+        "findings": 39,
+        "blocking": 1,
         "fileKey": null,
         "report": "frontend/catalog-audit/prompt-composer.json"
       },
       "groups": [
         {
           "title": "right column",
-          "elements": 11,
-          "derived": true
-        },
-        {
-          "title": "middle column",
           "elements": 16,
           "derived": true
         },
         {
-          "title": "surface: both",
-          "elements": 3,
+          "title": "middle column",
+          "elements": 17,
           "derived": true
         },
         {
@@ -165,13 +66,23 @@
           "derived": true
         },
         {
+          "title": "surface: both",
+          "elements": 2,
+          "derived": true
+        },
+        {
           "title": "left column",
-          "elements": 13,
+          "elements": 14,
           "derived": true
         },
         {
           "title": "surface: composer",
-          "elements": 6,
+          "elements": 7,
+          "derived": true
+        },
+        {
+          "title": "surface: design",
+          "elements": 3,
           "derived": true
         }
       ]

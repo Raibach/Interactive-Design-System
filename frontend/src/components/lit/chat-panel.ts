@@ -1479,7 +1479,7 @@ export class ChatPanel extends LitElement {
          fonts -> becomes Nunito (found in chat interfaces for Grace)... Use our fonts
          only - no API calls." The panel is chat; the figures its children draw render
          Inter (.num). */
-      font-family: 'Nunito', 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       color: #1c2f4e;
     }

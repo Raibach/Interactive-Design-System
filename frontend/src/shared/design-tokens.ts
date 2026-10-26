@@ -54,7 +54,7 @@ export const designTokens = css`
        in two, and Inter aligns figures perfectly well through tabular-nums, which
        is what actually made the trace's columns line up. If a value must read as
        code, say so in the copy — do not change the typeface. */
-    --ds-font: 'Inter', system-ui, sans-serif;
+    --ds-font: 'IBM Plex Sans', system-ui, sans-serif;
     --ds-weight: 500;
     /*
      * THE FLOOR IS 13. Nothing in this system is set below it, and the family is

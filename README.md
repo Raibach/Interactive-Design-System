@@ -1,31 +1,18 @@
 # Interactive Design System Manager
 
-> **One surface. Any payload. AI fills the slots.**
+> **Deterministic runtime protocols, data schemas, and governance architectures - One surface. Any payload. AI fills the slots.**
 
 **Raibach Interactive Design Studio** · John Holt  
-Version **0.9.1** · A2UI Protocol Compliant
+Version **0.9.1** · A2UI Protocol Compliant · 2026-08-01
 
-An AI-native interface system. A deterministic shell holds the frame — navigation, layout, error
-and loading states — and the AI fills the slots inside it from a trusted catalogue of components.
-It does not invent screens; it composes them, and a name outside the catalogue is refused.
+## Demo: Wireframe interactive prototype
+https://site--semantic-design-systems--mgtvxtd7xr2v.code.run
+Demo pin: 7377
 
-## See it
-
-**Request pin access.** The studio runs on a private instance; ask for the pin through
-[john.holtportfolio.com](https://john.holtportfolio.com) and the demo opens on the doors described
-below.
-
-What you are looking at is six rooms behind one navigation — **Console, Composer, Design, Product,
-Development** and **Governance** — each with its own chat, its own working area, and its own way of
-being assembled. The shell is the same in every room; only what is inside it changes.
-
-This document describes the product. It is not a developer guide: this repository is a
-demonstration of the work, not a codebase open for contribution.
-
-## The one idea
-
-The interface never changes. The AI delivers different levels of access. Everything below is a
-consequence of that sentence.
+> ### 📘 Read this first: [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md)
+> The **A2UI Protocol v0.9.1 implementation & conformance specification** — every normative requirement of the protocol mapped, file by file, to the code that implements it, with an honest built/pending status map.
+>
+> **🧭 How this repo is run:** [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — live-verification design engineering. Claims are hypotheses; only observed runtime behavior is knowledge. Includes the suppression taxonomy and the AI-session steering procedure.
 
 ---
 
@@ -38,20 +25,21 @@ This project follows the **React Shell + AI Surface** pattern — the emerging i
 
 **Non-negotiable: the user must never stare at a blank page.** The deterministic shell always renders — navigation, frame, error states, slot containers — regardless of what the AI does or doesn't do. The AI fills slots *inside* a shell that already exists. If the AI fails, the shell shows the failure. If the AI is slow, the shell shows a loading state. The shell is never absent.
 
-## Why the usual AI-governance layer is largely not needed here
+GOVERNANCE
 
-The AI-governance question is drift and grounding — is the system's behaviour shifting away from a
-baseline over time, and is the answer actually supported by what it read. Add quality and
-regression evals, plus cost, latency and trace logging. That layer exists because an open-ended
-generative system cannot enumerate its possible outputs, so you watch statistics forever.
+The AI governance question — drift and grounding
+LLM observability (or AI evaluation & monitoring). 
 
-It is largely unnecessary here. The model composes only from the human-curated catalogue, and a
-name outside it is refused loudly — so drift stops being a statistical thing to watch and becomes
-a binary violation to reject. For structure, classical drift monitoring is obsolete as a method.
-What genuinely remains — the free-text layer — is judged per run and written down as a row, not
-watched as a graph.
+Drift — watch the system's behavior/output distribution shift away from a baseline over time.
+Grounding / faithfulness — is the answer actually supported by what it read? (Hallucination detection is the inverse measure.)
+Quality & regression evals — score answers, catch version-to-version regressions.
+Plus cost/latency/trace logging.
+It exists because for open-ended generative systems you can't enumerate the possible outputs — so you watch statistics forever.
 
-> **The failure doctrine:** [`AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md`](AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md)
+Why that layer is largely not needed here — and what remains. My own ARCHITECTURE-IS-THE-GOVERNANCE.md already draws this line: the model composes only from the human-curated catalogue, and a name outside it gets a loud 503 — so "drift" stops being a statistical thing to watch and becomes a binary violation to reject. For structure, classical drift monitoring is obsolete as a method. The document itself names the pots it does not cover — and one of them is exactly what you're circling: it says the evals / model-risk pots "are different purchases."
+
+> **This section's argument, written out as doctrine:**
+> [`AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md`](AGENTS-instructions/READ-ME/THE_SELF_REPORTING_SYSTEM.md)
 > — self-reporting, not self-healing; the failure vault; the morning brief; the
 > seven-or-thirty-day window; the purge. When the code and the doctrine disagree, the
 > code is wrong.
@@ -161,10 +149,10 @@ each interaction, a session that survives the journey, a store and a view — do
 
 What remains genuinely real — and already exists in your system, measured tonight:
 
-Grounding is already judged, per run, in plain English. The `run_evaluations` table stores one judgment per run — cleared or failed — each with the judge's written sentence; rows like "it explicitly did not read them and instead restated headline-level summaries" are grounding verdicts, stored as database rows. They are written by the house's own evaluation judge and surfaced as the Eval tab's feed in the seat.
+Grounding is already judged, per run, in plain English. The run_evaluations table holds 53 judged runs right now (32 failed / 21 cleared), each with the judge's written sentence — rows like "it explicitly did not read them and instead restated headline-level summaries." That is a grounding verdict, stored as a database row. It's written by the house's own evaluation-judge and surfaced as the Eval tab's feed in the seat.
 Cost ledger: usage_metrics — per-call, priced, cache-split aware.
 Provenance: memory_provenance + vector ids into the local store (the Milvus tie-in).
-Conformance: the deterministic stand-ins for structure-drift — the catalogue gate, the fidelity gate, and the catalogue check.
+Conformance: the deterministic stand-ins for structure-drift — catalogue gate, catalog:check, fidelity gate.
 So the honest shape of an "AI governance level" for this system: structure is governed by the boundary (binary), and the free-text layer is governed by the per-run judge — which is already writing rows. Those rows are also why your queue item #1 was run_evaluations: I verified its semantics tonight (writer, routes, judge, surface) — the next step per the queue is to own / describe / test that chain inside the room, so the AI ledger is curated content, not just ingested tables.
 
 ---
@@ -177,7 +165,7 @@ Cloud providers ship MCP servers that connect corporate production workflows to 
 **The internal alternative (model-agnostic RIDS).**
 This system is built on open standards (A2UI, MCP) with no dependency on one model provider. The shell is the gatekeeper, so data stays inside the enterprise's own pipelines and models can be replaced without giving up the component tree or the production logic.
 
-This is a reference implementation with no production payloads. The governance rules, the catalogue checks and the protocol conformance are implemented and can be re-run on request; populating payloads is ingestion.
+This is a reference implementation with no production payloads. The governance rules, the catalog checks and the protocol conformance are implemented and run on every build; populating payloads is ingestion.
 
 A **prompt-package lifecycle workspace** built on the A2UI (Agent-to-User Interface) protocol. The AI assembles every pixel at runtime from a trusted component catalog — no URL routing, no static pages, no hardcoded layouts. Navigation is an AI command that returns a spec-compliant envelope through a single unified endpoint.
 
@@ -205,74 +193,154 @@ Cost here follows from the design. Assembly does not need a model that thinks; i
 
 ---
 
-## How it is built
+## Architecture at a Glance
 
-Every room draws into three seats: a working area on the left, the compiled result in the
-middle, and the conversation on the right. The AI decides what fills those seats; it never
-creates or removes them.
-
-Four rules hold the whole thing together:
-
-- **The shell is never blank.** Navigation, frame, error states and loading states always render.
-  If the AI fails, the shell shows the failure; if it is slow, the shell shows the wait.
-- **The AI fills slots; it never invents the frame.**
-- **Unknown is refused, not guessed.** A component outside the catalogue is a loud refusal with
-  the reason, never a silent fallback.
-- **The record tells the truth** — including about what has not been built yet.
-
----
-
-## The catalogue is the contract
-
-Sixty-six components stand in the Composer's catalogue, each typed and validated before anything
-is drawn, and every surface carries its own — the Composer's, the Design room's, and the
-primitives both are built from. The AI composes from a fixed set of known parts instead of
-writing screens. Adding a component is a deliberate act: it is drawn in Figma, ingested through
-the design seat, and approved before the model may use it.
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        A2UI v0.9.1 Surface                      │
+│                                                                  │
+│  POST /api/ai/assemble-surface                                   │
+│  ┌────────────┐  ┌─────────────────┐  ┌───────────────────┐     │
+│  │  Section    │  │   Compiled      │  │     Chat          │     │
+│  │  Editor     │  │   Output        │  │     Panel         │     │
+│  │  (left)     │  │   (middle)      │  │     (right)      │     │
+│  └────────────┘  └─────────────────┘  └───────────────────┘     │
+│                                                                  │
+│  Intents: render-console · render-composer · render-session:{id} │
+│  Envelope: createSurface → updateComponents → updateDataModel    │
+└──────────────────────────────────────────────────────────────────┘
+         │                    │                     │
+    PostgreSQL       LLM providers        Zilliz Cloud
+    (42 tables)      (AI assembly)       (vector memory)
+```
 
 ---
 
-## What is in this repository
+## Key Principles
 
-The core of the studio and the first three rooms — **Console, Composer and Design** — with their
-seats, their components, their assembly logic and their records.
-
-The programs the other three rooms frame (the analytics application, the development agent, the
-governance observatory) are third-party work that runs beside the studio. They are deliberately
-not in this repository.
-
-## Built with
-
-React and Lit on the front, Python (FastAPI) and PostgreSQL behind it, a component catalogue as
-the contract between them, and DeepSeek as the model that fills the slots.
+| Principle | Implementation |
+|-----------|---------------|
+| **Shell Always Visible** | The deterministic React shell renders unconditionally — nav, frame, error states, slot containers. The user never stares at a blank page. AI failure = shell shows the failure, not nothing. |
+| **AI Fills Slots** | Slots are the loading contract (left/middle/right). AI decides which prompt blocks, data, and chat populate them. It does not create or remove slots. |
+| **Zero-Trust Catalog** | Every component validated against `catalogs/<pipeline>/catalog.json`. Unknown → HTTP 503. No silent failures. |
+| **Fail Loud** | Invalid AI responses → 503 with diagnostics. Database down → 503. Empty Figma spec → 503 with exact reason. Never silently degrade. |
+| **No Executable Code** | `eval()` eliminated. `innerHTML` blocked. Buttons dispatch declarative `a2ui:action` events only. |
+| **Package-First** | A composer creates the draft package row on mount. Chat is scoped from keystroke one. |
+| **Honest Code** | Comments tell the truth about what the code does. If something is hardcoded, the comment says so. No "AI is the Architect" over fixed layouts. |
 
 ---
 
-## What is already real, and what is not
+## Component Catalog
 
-**Built and measured.** Grounding is judged per run in plain English — one row per run, cleared or
-failed, with the judge's written sentence. Cost is recorded per call and priced. Assembly is
-constrained by the catalogue, so structure is checked by the boundary rather than watched over
-time.
+67 trusted components — 17 A2UI Basic Catalog primitives + 50 project-specific Lit elements — typed with `ChildList` / `DynamicString` per validator rules. This number is measured from `catalogs/prompt-composer/catalog.json`; `npm run catalog:check` compares the docs against the catalog and reports a count that has drifted as a `doc-claim-drift` finding (`blocking` is that finding's severity — which row to read first — not a veto: the check reports and never gates, and exits 0 whatever it finds). That check is run on request and is NOT part of `npm run build` — the build is `tsc -b && vite build`. The live count is printed at backend startup (`✅ A2UI Catalog loaded — 67 trusted components`). Specified in [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) §4.3.
 
-**Designed, not shipped.** The compliance gate — design, product and one developer verdict before
-anything reaches a front end. The customer-side measurement — a served-at timestamp, a component
-identity on every interaction, a session that survives the journey. Both are written down as
-doctrine; neither is built.
+```
+A2UI Basic:     Column · Row · Text · Image · Button · Card · ActionGroup
+                SectionEditor · DecisionDialog · ConsoleCardGrid
+                CompiledOutput · ChatPanel · TraceFeed · AgentFlow
+                RoomEmbed · OutputControls · CanvasFooter
+Workspace:      workspace-layout · prompt-section-editor · compiled-output-viewer
+                chat-panel · chat-header · trace-feed · agent-flow · room-embed · output-controls · canvas-footer · chat-repair-actions
+                version-trace · token-cost-readout · status-readout
+                output-panel · search-bar
+                filter-pill · footer-bar · chat-navigation-bar · agent-card
+                prompt-section · control-bar · add-section-button
+                ai-surface-sandbox · error-banner · prompt-container
+                prompt-input-section · gripper-prompt-input · role-dropdown
+                role-tile · status-bar-prompt-input · prompt-textarea
+                model-selector-button · user-response-bubble
+Design room:    design-left-panel · design-middle-container · component-preview · draft-preview
+                figma-ingest-form · figma-layers-view
+```
 
-That distinction is deliberate. A demonstration that claims more than it does is worth nothing.
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18 + Lit 3.x (hybrid) · Vite · npm · Tailwind · TypeScript |
+| **Backend** | FastAPI · PostgreSQL 15 · Zilliz Cloud (Milvus) · LLM providers (Z.ai GLM primary, DeepSeek) |
+| **Components** | Lit Web Components (Shadow DOM) · Figma API spec-driven |
+| **Deploy** | Docker · Northflank (us-central) · Cloudflare Tunnel |
+
+---
+
+## Repository Layout
+
+```
+backend/
+├── main.py              # App setup, startup, router includes
+├── deps.py              # A2UI catalog loader, shared helpers
+├── services.py          # Database service startup
+├── figma_service.py     # Figma API → Lit spec extractor
+├── grace_gui.py         # AI system prompts & assembly logic
+└── routes/              # 11 topic routers
+    ├── ai.py                # Manifest, assemble-surface, save, audit
+    ├── conversations.py    # Conversation + message CRUD
+    ├── prompt_sessions.py  # Packages, versions, permissions
+    ├── projects.py         # Project CRUD
+    ├── memory.py           # Memory storage (dictation)
+    ├── figma.py            # Figma API proxy
+    ├── milvus.py           # Zilliz/Milvus vectors
+    ├── agent_rpc.py        # JSON-RPC 2.0 agent integration
+    ├── teacher.py          # Teacher query, model ensure
+    ├── misc.py             # Health, news, PDF, reasoning
+    └── files.py            # Documentation file I/O
+
+frontend/
+├── src/
+│   ├── App.tsx              # Root app with routes
+│   ├── components/
+│   │   ├── A2UI/            # A2UI surface container
+│   │   └── lit/             # Lit web components (agent-card, workspace-layout, …)
+│   ├── pages/               # WritingAreaIndex (main surface)
+│   ├── hooks/               # React hooks
+│   └── shared/              # Surface contract, tag registry
+└── scripts/                  # Manifest generator, Figma sync
+```
+
+---
+
+## Quick Start
+
+```bash
+# Frontend build (required for local dev)
+cd frontend && npm install && npm run build
+
+# Start backend + serve UI
+bash RESTART-LOCAL.sh
+
+# Open
+open http://localhost:5001
+```
+
+- **Health:** `GET /api/health` → `{"database":"connected","milvus":"connected"}`
+- **Dev PIN:** `7377`
+- **Dev mode:** global no-cache middleware — no stale bytes
+
+---
+
+## Deployment
+
+Docker on **Northflank** (`prompt-composer-console`, us-central). Production deploys via git push to `main` (CI/CD) or the local `DEPLOY-NORTHFLANK.sh` runbook. The image is a **multi-stage build**: the frontend compiles inside a Node stage (including manifest generation), so no build artifacts live in the repository.
 
 ---
 
 ## Documentation
 
-- [`AGENTS-instructions/THE_METHOD.md`](AGENTS-instructions/THE_METHOD.md) — Live-verification design engineering: the working doctrine
-- [`AGENTS-instructions/READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](AGENTS-instructions/READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
+- [`IMPLEMENTATION_CONFORMANCE.md`](READ-ME/IMPLEMENTATION_CONFORMANCE.md) — A2UI Protocol v0.9.1 implementation & conformance specification (requirements → code, verified status map)
+- [`READ-ME/THE_METHOD.md`](READ-ME/THE_METHOD.md) — Live-verification design engineering: the working doctrine
+- [`READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md`](READ-ME/A2UI_TRUE_VS_FAKE_AUDIT.md) — Live-verified compliance ledger
 - [`CHANGELOG.md`](CHANGELOG.md) — Release history (includes the DeepSeek restoration battle)
-- [`SECURITY-AND-COMPLIANCE.md`](SECURITY-AND-COMPLIANCE.md) — The compliance gate and its limits
-- [`USER-FLOW.md`](USER-FLOW.md) — The journey the gate governs
+- [`FIGMA/CONSOLE_CONTRACTS.md`](FIGMA/CONSOLE_CONTRACTS.md) — Console surface data contract
 
-> The documents above are the ones that exist in this repository.
+---
+
+## Roadmap
+
+- **Phase 3:** Generic adjacency-list renderer + JSON Pointer data binding
+- **Phase 4:** Remaining docs cleanup, advanced contributor workflows
 
 ---
 

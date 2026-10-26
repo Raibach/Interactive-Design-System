@@ -239,7 +239,7 @@ export class OutputFooterArea extends LitElement {
       display: flex;
       flex-direction: column;
       justify-content: center;
-      font-family: 'Nunito', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 400;
       font-size: 12px;
       color: #3d515b;
@@ -257,7 +257,7 @@ export class OutputFooterArea extends LitElement {
       flex-direction: column;
       justify-content: flex-end;
       width: 100%;
-      font-family: 'Nunito', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 400;
       font-size: 9px;
       color: #3d515b;

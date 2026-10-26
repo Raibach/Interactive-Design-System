@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T12:13:16.567Z",
+  "generatedAt": "2026-10-26T16:01:47.878Z",
   "system": {
     "id": "prompt-composer",
     "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
@@ -12,13 +12,13 @@
     "owner": null,
     "ownerNote": "The catalogue declares no owner field. Nothing in the repository says who owns a catalogue.",
     "counts": {
-      "declared": 63,
-      "annotated": 59,
-      "built": 63,
-      "inManifest": 63,
-      "allowlisted": 49,
-      "mapped": 26,
-      "inTheFigmaMap": 32
+      "declared": 73,
+      "annotated": 69,
+      "built": 67,
+      "inManifest": 67,
+      "allowlisted": 59,
+      "mapped": 25,
+      "inTheFigmaMap": 31
     },
     "tokens": null,
     "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
@@ -26,14 +26,14 @@
     "figmaLayersNote": "Figma layers are not drawn: they need the design file and an API token. The Figma node each element came from is shown instead (registry.json), and the ingest ledger for it.",
     "gate": {
       "status": "partial",
-      "generatedAt": "2026-10-06T11:45:11.919Z",
-      "findings": 19,
-      "blocking": 5,
+      "generatedAt": "2026-10-26T16:01:34.533Z",
+      "findings": 39,
+      "blocking": 1,
       "fileKey": null,
       "report": "frontend/catalog-audit/prompt-composer.json"
     },
     "gateNote": null,
-    "removalNote": "35 removal record(s) in backend/logs/figma-ingest.jsonl, and not one names a node or a tag. The ledger says a removal happened and what the audit counted afterwards; it does not say what was removed. The counts in those verdicts are the only trace (58 components before 01:10:49Z, 57 after 01:11:58Z).",
+    "removalNote": "40 removal record(s) in backend/logs/figma-ingest.jsonl, and not one names a node or a tag. The ledger says a removal happened and what the audit counted afterwards; it does not say what was removed. The counts in those verdicts are the only trace (58 components before 01:10:49Z, 57 after 01:11:58Z).",
     "duplicateTags": [
       {
         "tag": "trace-feed",
@@ -123,9 +123,9 @@
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 11,
-        "annotated": 11,
-        "findings": 2
+        "elements": 16,
+        "annotated": 16,
+        "findings": 3
       },
       "elements": [
         {
@@ -581,6 +581,240 @@
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
         {
+          "name": "trace-context-header",
+          "tag": "trace-context-header",
+          "tagNote": null,
+          "className": "TraceContextHeader",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/trace-context-header.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id"
+            ],
+            "inManifest": [
+              "trace",
+              "observation",
+              "metrics",
+              "_menuOpen",
+              "_copied",
+              "_copiedTimer",
+              "_docDown",
+              "_docKey",
+              "_download",
+              "_toggleMenu",
+              "_closeMenu"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "trace-download"
+            ],
+            "dispatched": [
+              "trace-download"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "trace-download"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "trace-tree",
+          "tag": "trace-tree",
+          "tagNote": null,
+          "className": "TraceTree",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/trace-tree.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id"
+            ],
+            "inManifest": [
+              "trace",
+              "observations",
+              "selectedId",
+              "scores",
+              "commentCounts",
+              "_collapsed",
+              "_query",
+              "_mode",
+              "_settingsOpen",
+              "_prefs",
+              "_minLevel",
+              "_gx",
+              "_gy",
+              "_gk",
+              "_gdrag"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "trace-node-selected",
+              "trace-prefs"
+            ],
+            "dispatched": [
+              "trace-node-selected",
+              "trace-prefs"
+            ],
+            "dispatchedNotListed": [],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "trace-node-selected",
+              "trace-prefs"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "trace-detail",
+          "tag": "trace-detail",
+          "tagNote": null,
+          "className": "TraceDetail",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/trace-detail.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id",
+              "observations",
+              "scores"
+            ],
+            "inManifest": [
+              "trace",
+              "observation",
+              "io",
+              "collapseSystemPrompt",
+              "scores",
+              "observations",
+              "_mode",
+              "_openedFolds"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
           "name": "ChatPanel",
           "tag": "chat-panel",
           "tagNote": null,
@@ -608,6 +842,14 @@
             "inManifest": [
               "conversationId",
               "messages",
+              "productTools",
+              "productRoom",
+              "productFigmaConnected",
+              "productGithubConnected",
+              "productVisualEditActive",
+              "productRunning",
+              "productRunStartedAt",
+              "productExpectedMinutes",
               "_inspectionReports",
               "_approvalsOpen",
               "_traceOpen",
@@ -653,6 +895,11 @@
               "activeTab",
               "collapsed",
               "allowedTabs",
+              "tabLabels",
+              "disabledTabs",
+              "governanceTrace",
+              "governanceObservation",
+              "composerPackageId",
               "tracePrompt",
               "graceLiveContext",
               "instructions",
@@ -692,15 +939,17 @@
               "_barHeight",
               "_footerHeight",
               "_outputWindows",
-              "_trayPlaced",
               "_thread",
               "_hasResultTurns",
               "_showsThread",
               "_hasStatusLine",
+              "_statusContentSlotted",
+              "_onStatusSlotChange",
               "_statusLine",
               "_onComposerOpened",
               "_onGraceStatus",
               "_onComposerKey",
+              "_onProductPaste",
               "_toggleConversations",
               "_onConversationsKey",
               "_onConversationRemove"
@@ -735,10 +984,13 @@
               "insert-tool",
               "merge-seat",
               "move-tool",
+              "product-attach",
+              "product-tool",
               "remove-prompt-role",
               "set-left-column-text",
               "set-package-description",
-              "set-prompt-title"
+              "set-prompt-title",
+              "tab-change"
             ],
             "dispatchedNotListed": [
               "a2ui:build-wireframe",
@@ -763,10 +1015,13 @@
               "insert-tool",
               "merge-seat",
               "move-tool",
+              "product-attach",
+              "product-tool",
               "remove-prompt-role",
               "set-left-column-text",
               "set-package-description",
-              "set-prompt-title"
+              "set-prompt-title",
+              "tab-change"
             ],
             "note": null
           },
@@ -774,6 +1029,7 @@
             "declared": [],
             "rendered": [
               "content-header",
+              "status-content",
               "view"
             ],
             "declaredNotRendered": [],
@@ -782,12 +1038,17 @@
           "children": {
             "slot": [
               "content-header",
+              "status-content",
               "view"
             ],
             "composed": [
               "chat-fold",
               "chat-header",
+              "chat-messages",
               "chat-navigation-bar",
+              "chat-plugin-tray",
+              "chat-product-thread",
+              "chat-product-tools",
               "error-banner",
               "output-header",
               "small-dropdown"
@@ -820,10 +1081,13 @@
               "insert-tool",
               "merge-seat",
               "move-tool",
+              "product-attach",
+              "product-tool",
               "remove-prompt-role",
               "set-left-column-text",
               "set-package-description",
-              "set-prompt-title"
+              "set-prompt-title",
+              "tab-change"
             ],
             "binding": null,
             "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
@@ -837,16 +1101,170 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
             "chat-panel"
           ]
+        },
+        {
+          "name": "composer-chat-panel",
+          "tag": "composer-chat-panel",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "⚠",
+            "●"
+          ],
+          "findings": [
+            {
+              "id": "props:composer-chat-panel:allowedTabs",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"allowedTabs\" on composer-chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"allowedTabs\" on composer-chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:composer-chat-panel:sessionId",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"sessionId\" on composer-chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"sessionId\" on composer-chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:composer-chat-panel:packageTitle",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"packageTitle\" on composer-chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"packageTitle\" on composer-chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:composer-chat-panel:packageDescription",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"packageDescription\" on composer-chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"packageDescription\" on composer-chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:composer-chat-panel:leftColumnContent",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"leftColumnContent\" on composer-chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"leftColumnContent\" on composer-chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:composer-chat-panel:compiledOutput",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"compiledOutput\" on composer-chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"compiledOutput\" on composer-chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:composer-chat-panel:children",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"children\" on composer-chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"children\" on composer-chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "events:composer-chat-panel",
+              "check": "events",
+              "level": "advisory",
+              "owner": "pipeline",
+              "what": "<composer-chat-panel> dispatches \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"composer:ensure-package\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"product-attach\", \"product-tool\", \"tab-change\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" and the tag registry does not list it. The registry's `events` is read as EMITS by some callers and as a LISTENS-FOR list by others, which is why an unlisted dispatch is a gap and not an error.",
+              "fix": "List \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"composer:ensure-package\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"product-attach\", \"product-tool\", \"tab-change\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" on composer-chat-panel in the registry — and say which direction the list means."
+            }
+          ],
+          "props": {
+            "declared": [
+              "component",
+              "composerPackageId",
+              "conversationId",
+              "conversations",
+              "disabledTabs",
+              "governanceObservation",
+              "governanceTrace",
+              "graceLiveContext",
+              "id",
+              "instructions"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "message-sent",
+              "command-received"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "message-sent",
+              "command-received"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
         {
           "name": "chat-panel",
@@ -894,59 +1312,23 @@
               "fix": "Declare \"sessionId\" on chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
             },
             {
-              "id": "props:chat-panel:children",
-              "check": "props",
-              "level": "advisory",
-              "owner": "designer",
-              "what": "The app sends \"children\" on chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
-              "fix": "Declare \"children\" on chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
-            },
-            {
-              "id": "props:chat-panel:packageTitle",
-              "check": "props",
-              "level": "advisory",
-              "owner": "designer",
-              "what": "The app sends \"packageTitle\" on chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
-              "fix": "Declare \"packageTitle\" on chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
-            },
-            {
-              "id": "props:chat-panel:packageDescription",
-              "check": "props",
-              "level": "advisory",
-              "owner": "designer",
-              "what": "The app sends \"packageDescription\" on chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
-              "fix": "Declare \"packageDescription\" on chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
-            },
-            {
-              "id": "props:chat-panel:leftColumnContent",
-              "check": "props",
-              "level": "advisory",
-              "owner": "designer",
-              "what": "The app sends \"leftColumnContent\" on chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
-              "fix": "Declare \"leftColumnContent\" on chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
-            },
-            {
-              "id": "props:chat-panel:compiledOutput",
-              "check": "props",
-              "level": "advisory",
-              "owner": "designer",
-              "what": "The app sends \"compiledOutput\" on chat-panel and the catalog does not declare it, so the declaration under-describes what the surface is given.",
-              "fix": "Declare \"compiledOutput\" on chat-panel in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
-            },
-            {
               "id": "events:chat-panel",
               "check": "events",
               "level": "advisory",
               "owner": "pipeline",
-              "what": "<chat-panel> dispatches \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" and the tag registry does not list it. The registry's `events` is read as EMITS by some callers and as a LISTENS-FOR list by others, which is why an unlisted dispatch is a gap and not an error.",
-              "fix": "List \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" on chat-panel in the registry — and say which direction the list means."
+              "what": "<chat-panel> dispatches \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"product-attach\", \"product-tool\", \"tab-change\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" and the tag registry does not list it. The registry's `events` is read as EMITS by some callers and as a LISTENS-FOR list by others, which is why an unlisted dispatch is a gap and not an error.",
+              "fix": "List \"a2ui:write-seat\", \"insert-tool\", \"set-package-description\", \"merge-seat\", \"move-tool\", \"set-left-column-text\", \"a2ui:fix-all\", \"a2ui:run-approved\", \"a2ui:build-wireframe\", \"a2ui:edit-node\", \"set-prompt-title\", \"remove-prompt-role\", \"add-prompt-role\", \"clear-left-column\", \"ai-eval-grounding\", \"ai-show-version\", \"a2ui:console-command\", \"a2ui:system-message\", \"conversation-change\", \"a2ui:person-turn\", \"a2ui:usage\", \"a2ui:run-blocked\", \"product-attach\", \"product-tool\", \"tab-change\", \"input-resize-move\", \"input-resize-end\", \"input-resize-start\", \"conversation-select\" on chat-panel in the registry — and say which direction the list means."
             }
           ],
           "props": {
             "declared": [
               "component",
+              "composerPackageId",
               "conversationId",
               "conversations",
+              "disabledTabs",
+              "governanceObservation",
+              "governanceTrace",
               "graceLiveContext",
               "id",
               "instructions"
@@ -954,6 +1336,14 @@
             "inManifest": [
               "conversationId",
               "messages",
+              "productTools",
+              "productRoom",
+              "productFigmaConnected",
+              "productGithubConnected",
+              "productVisualEditActive",
+              "productRunning",
+              "productRunStartedAt",
+              "productExpectedMinutes",
               "_inspectionReports",
               "_approvalsOpen",
               "_traceOpen",
@@ -999,6 +1389,11 @@
               "activeTab",
               "collapsed",
               "allowedTabs",
+              "tabLabels",
+              "disabledTabs",
+              "governanceTrace",
+              "governanceObservation",
+              "composerPackageId",
               "tracePrompt",
               "graceLiveContext",
               "instructions",
@@ -1038,15 +1433,17 @@
               "_barHeight",
               "_footerHeight",
               "_outputWindows",
-              "_trayPlaced",
               "_thread",
               "_hasResultTurns",
               "_showsThread",
               "_hasStatusLine",
+              "_statusContentSlotted",
+              "_onStatusSlotChange",
               "_statusLine",
               "_onComposerOpened",
               "_onGraceStatus",
               "_onComposerKey",
+              "_onProductPaste",
               "_toggleConversations",
               "_onConversationsKey",
               "_onConversationRemove"
@@ -1081,10 +1478,13 @@
               "insert-tool",
               "merge-seat",
               "move-tool",
+              "product-attach",
+              "product-tool",
               "remove-prompt-role",
               "set-left-column-text",
               "set-package-description",
-              "set-prompt-title"
+              "set-prompt-title",
+              "tab-change"
             ],
             "dispatchedNotListed": [
               "a2ui:build-wireframe",
@@ -1109,10 +1509,13 @@
               "insert-tool",
               "merge-seat",
               "move-tool",
+              "product-attach",
+              "product-tool",
               "remove-prompt-role",
               "set-left-column-text",
               "set-package-description",
-              "set-prompt-title"
+              "set-prompt-title",
+              "tab-change"
             ],
             "note": null
           },
@@ -1120,6 +1523,7 @@
             "declared": [],
             "rendered": [
               "content-header",
+              "status-content",
               "view"
             ],
             "declaredNotRendered": [],
@@ -1128,12 +1532,17 @@
           "children": {
             "slot": [
               "content-header",
+              "status-content",
               "view"
             ],
             "composed": [
               "chat-fold",
               "chat-header",
+              "chat-messages",
               "chat-navigation-bar",
+              "chat-plugin-tray",
+              "chat-product-thread",
+              "chat-product-tools",
               "error-banner",
               "output-header",
               "small-dropdown"
@@ -1166,10 +1575,13 @@
               "insert-tool",
               "merge-seat",
               "move-tool",
+              "product-attach",
+              "product-tool",
               "remove-prompt-role",
               "set-left-column-text",
               "set-package-description",
-              "set-prompt-title"
+              "set-prompt-title",
+              "tab-change"
             ],
             "binding": null,
             "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
@@ -1183,16 +1595,117 @@
           },
           "provenanceNote": null,
           "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "ChatPanel"
+          ]
+        },
+        {
+          "name": "console-chat-panel",
+          "tag": "console-chat-panel",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "allowedTabs",
+              "component",
+              "consoleCards",
+              "conversationId",
+              "conversations",
+              "graceLiveContext",
+              "id",
+              "instructions",
+              "sessionId",
+              "tracePrompt"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "message-sent",
+              "command-received",
+              "conversation-change",
+              "conversation-select",
+              "tab-change",
+              "a2ui:console-command",
+              "a2ui:system-message",
+              "a2ui:person-turn",
+              "a2ui:usage",
+              "input-resize-start",
+              "input-resize-move",
+              "input-resize-end"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "message-sent",
+              "command-received",
+              "conversation-change",
+              "conversation-select",
+              "tab-change",
+              "a2ui:console-command",
+              "a2ui:system-message",
+              "a2ui:person-turn",
+              "a2ui:usage",
+              "input-resize-start",
+              "input-resize-move",
+              "input-resize-end"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
             "records": 0,
             "timeline": [],
             "lastAt": null
           },
           "ledgerNote": "the ledger holds no record naming this component",
           "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
-          "duplicateOf": [
-            "ChatPanel"
-          ]
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
         {
           "name": "chat-header",
@@ -1334,6 +1847,7 @@
               "attributed",
               "tokens",
               "calls",
+              "readoutFilled",
               "SAMPLE",
               "_line"
             ],
@@ -1347,12 +1861,16 @@
           },
           "slots": {
             "declared": [],
-            "rendered": [],
+            "rendered": [
+              "readout-content"
+            ],
             "declaredNotRendered": [],
             "bareSlot": false
           },
           "children": {
-            "slot": [],
+            "slot": [
+              "readout-content"
+            ],
             "composed": [],
             "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
           },
@@ -1456,9 +1974,9 @@
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 16,
-        "annotated": 16,
-        "findings": 0
+        "elements": 17,
+        "annotated": 17,
+        "findings": 1
       },
       "elements": [
         {
@@ -1741,10 +2259,20 @@
             "mapped": false
           },
           "marks": [
+            "⚠",
             "●",
             "⇄"
           ],
-          "findings": [],
+          "findings": [
+            {
+              "id": "slots:RoomEmbed:seat",
+              "check": "slots",
+              "level": "blocking",
+              "owner": "designer",
+              "what": "The catalog declares a \"seat\" slot on RoomEmbed and the element renders no slot by that name (it has a default slot, which the envelope never fills by name). A payload written to this catalog therefore draws that child nowhere.",
+              "fix": "Change the catalog's children to the slots the element renders (header, flow, footer), or render a \"seat\" slot."
+            }
+          ],
           "props": {
             "declared": [
               "collapsed",
@@ -2640,7 +3168,8 @@
               "preview",
               "busy",
               "message",
-              "_confirmingRemove"
+              "_confirmingRemove",
+              "_confirmingApprove"
             ],
             "inManifestNote": null
           },
@@ -2905,205 +3434,13 @@
           "duplicateOf": [
             "CanvasFooter"
           ]
-        }
-      ]
-    },
-    {
-      "title": "surface: both",
-      "derived": true,
-      "declared": null,
-      "counts": {
-        "elements": 3,
-        "annotated": 3,
-        "findings": 0
-      },
-      "elements": [
-        {
-          "name": "ai-surface-sandbox",
-          "tag": "ai-surface-sandbox",
-          "tagNote": null,
-          "className": "AISurfaceSandbox",
-          "file": "frontend/src/components/lit/ai-surface-sandbox.ts",
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": true,
-            "rendererOwned": false,
-            "built": true,
-            "mapped": true
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "component",
-              "headerTab",
-              "isAIAssembling"
-            ],
-            "inManifest": [
-              "isAIAssembling",
-              "headerTab",
-              "consoleVideoSrc",
-              "_committedSlot",
-              "_committedTab",
-              "_fadePhase",
-              "_fadeTimer",
-              "_fadeClass",
-              "_activeSlot",
-              "_onSlotError",
-              "_hasRuntimeError",
-              "_errorMessage",
-              "_errorStack"
-            ],
-            "inManifestNote": null
-          },
-          "events": {
-            "allowlisted": [],
-            "dispatched": [
-              "surface-error-reset"
-            ],
-            "dispatchedNotListed": [
-              "surface-error-reset"
-            ],
-            "note": null
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [],
-            "declaredNotRendered": [],
-            "bareSlot": false
-          },
-          "children": {
-            "slot": [],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "surface-error-reset"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": {
-            "figmaName": "ai-surface-sandbox",
-            "figmaNodeId": null,
-            "status": "built",
-            "annotation": null,
-            "annotationSource": null
-          },
-          "provenanceNote": null,
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
         {
-          "name": "chat-navigation-bar",
-          "tag": "chat-navigation-bar",
+          "name": "design-middle-container",
+          "tag": "design-middle-container",
           "tagNote": null,
-          "className": "ChatNavigationBar",
-          "file": "frontend/src/components/lit/chat-navigation-bar.ts",
-          "registration": {
-            "declared": true,
-            "annotated": true,
-            "allowlisted": true,
-            "inManifest": true,
-            "rendererOwned": false,
-            "built": true,
-            "mapped": true
-          },
-          "marks": [
-            "●"
-          ],
-          "findings": [],
-          "props": {
-            "declared": [
-              "activeTab",
-              "allowedTabs",
-              "collapsed",
-              "component",
-              "healthCount",
-              "healthState"
-            ],
-            "inManifest": [
-              "activeTab",
-              "collapsed",
-              "unread",
-              "healthCount",
-              "healthState",
-              "allowedTabs",
-              "_previousTab"
-            ],
-            "inManifestNote": null
-          },
-          "events": {
-            "allowlisted": [
-              "tab-change",
-              "collapse-toggle"
-            ],
-            "dispatched": [
-              "navigate-console"
-            ],
-            "dispatchedNotListed": [
-              "navigate-console"
-            ],
-            "note": null
-          },
-          "slots": {
-            "declared": [],
-            "rendered": [
-              "logo"
-            ],
-            "declaredNotRendered": [],
-            "bareSlot": false
-          },
-          "children": {
-            "slot": [
-              "logo"
-            ],
-            "composed": [],
-            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
-          },
-          "actions": {
-            "events": [
-              "tab-change",
-              "collapse-toggle",
-              "navigate-console"
-            ],
-            "binding": null,
-            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
-          },
-          "provenance": {
-            "figmaName": "tools-button (Settings)",
-            "figmaNodeId": "40001119:6593",
-            "status": "built",
-            "annotation": null,
-            "annotationSource": null
-          },
-          "provenanceNote": null,
-          "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
-          },
-          "ledgerNote": "the ledger holds no record naming this component",
-          "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
-        },
-        {
-          "name": "error-banner",
-          "tag": "error-banner",
-          "tagNote": null,
-          "className": "ErrorBanner",
-          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/error-banner.ts",
+          "className": "DesignMiddleContainer",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/design-middle-container.ts",
           "registration": {
             "declared": true,
             "annotated": true,
@@ -3119,43 +3456,38 @@
           "findings": [],
           "props": {
             "declared": [
-              "code",
               "component",
-              "message",
-              "retry"
+              "id",
+              "outputType"
             ],
-            "inManifest": [
-              "message",
-              "code",
-              "retry"
-            ],
+            "inManifest": [],
             "inManifestNote": null
           },
           "events": {
-            "allowlisted": [
-              "error-dismiss",
-              "error-retry"
-            ],
+            "allowlisted": [],
             "dispatched": [],
             "dispatchedNotListed": [],
             "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
           },
           "slots": {
             "declared": [],
-            "rendered": [],
+            "rendered": [
+              "middle"
+            ],
             "declaredNotRendered": [],
-            "bareSlot": false
+            "bareSlot": true
           },
           "children": {
-            "slot": [],
-            "composed": [],
+            "slot": [
+              "middle"
+            ],
+            "composed": [
+              "left-column-header"
+            ],
             "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
           },
           "actions": {
-            "events": [
-              "error-dismiss",
-              "error-retry"
-            ],
+            "events": [],
             "binding": null,
             "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
           },
@@ -3298,11 +3630,18 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T20:15:10Z",
+                "last": "2026-10-25T20:15:10Z"
+              }
+            ],
+            "lastAt": "2026-10-25T20:15:10Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
@@ -3597,6 +3936,7 @@
               "categoryTitleColor",
               "categoryTextColor",
               "headerLabel",
+              "nodelete",
               "_deleteArmed",
               "_deleteTimer",
               "LEAVING_MS",
@@ -4078,13 +4418,193 @@
       ]
     },
     {
+      "title": "surface: both",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 2,
+        "annotated": 2,
+        "findings": 0
+      },
+      "elements": [
+        {
+          "name": "chat-navigation-bar",
+          "tag": "chat-navigation-bar",
+          "tagNote": null,
+          "className": "ChatNavigationBar",
+          "file": "frontend/src/components/lit/chat-navigation-bar.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": true
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "activeTab",
+              "allowedTabs",
+              "collapsed",
+              "component",
+              "healthCount",
+              "healthState"
+            ],
+            "inManifest": [
+              "activeTab",
+              "collapsed",
+              "unread",
+              "healthCount",
+              "healthState",
+              "allowedTabs",
+              "tabLabels",
+              "disabledTabs",
+              "_previousTab"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "tab-change",
+              "collapse-toggle"
+            ],
+            "dispatched": [
+              "navigate-console"
+            ],
+            "dispatchedNotListed": [
+              "navigate-console"
+            ],
+            "note": null
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [
+              "logo"
+            ],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [
+              "logo"
+            ],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "tab-change",
+              "collapse-toggle",
+              "navigate-console"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": {
+            "figmaName": "tools-button (Settings)",
+            "figmaNodeId": "40001119:6593",
+            "status": "built",
+            "annotation": null,
+            "annotationSource": null
+          },
+          "provenanceNote": null,
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "error-banner",
+          "tag": "error-banner",
+          "tagNote": null,
+          "className": "ErrorBanner",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/error-banner.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "code",
+              "component",
+              "message",
+              "retry"
+            ],
+            "inManifest": [
+              "message",
+              "code",
+              "retry",
+              "dismissable"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [
+              "error-dismiss",
+              "error-retry"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "error-dismiss",
+              "error-retry"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
+    },
+    {
       "title": "left column",
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 13,
-        "annotated": 13,
-        "findings": 2
+        "elements": 14,
+        "annotated": 14,
+        "findings": 3
       },
       "elements": [
         {
@@ -4409,7 +4929,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 6,
+            "records": 9,
             "timeline": [
               {
                 "kind": "(untyped)",
@@ -4419,12 +4939,12 @@
               },
               {
                 "kind": "ingested",
-                "n": 5,
+                "n": 8,
                 "first": "2026-09-27T22:58:27Z",
-                "last": "2026-09-29T00:01:43Z"
+                "last": "2026-10-18T23:10:41Z"
               }
             ],
-            "lastAt": "2026-09-29T00:01:43Z"
+            "lastAt": "2026-10-18T23:10:41Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -4523,7 +5043,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 7,
+            "records": 15,
             "timeline": [
               {
                 "kind": "(untyped)",
@@ -4545,12 +5065,24 @@
               },
               {
                 "kind": "ingested",
-                "n": 2,
+                "n": 5,
                 "first": "2026-09-28T23:56:05Z",
-                "last": "2026-09-29T00:01:43Z"
+                "last": "2026-10-08T21:01:31Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-08T21:13:25Z",
+                "last": "2026-10-08T21:13:25Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 4,
+                "first": "2026-10-08T21:13:47Z",
+                "last": "2026-10-26T11:48:50Z"
               }
             ],
-            "lastAt": "2026-09-29T00:01:43Z"
+            "lastAt": "2026-10-26T11:48:50Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -4861,7 +5393,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 7,
+            "records": 25,
             "timeline": [
               {
                 "kind": "(untyped)",
@@ -4880,9 +5412,87 @@
                 "n": 1,
                 "first": "2026-10-05T16:27:26Z",
                 "last": "2026-10-05T16:27:26Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-10-15T10:42:07Z",
+                "last": "2026-10-19T02:22:39Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-19T02:22:55Z",
+                "last": "2026-10-19T02:22:55Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 2,
+                "first": "2026-10-19T02:23:16Z",
+                "last": "2026-10-19T02:24:25Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-19T02:25:55Z",
+                "last": "2026-10-19T02:25:55Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-19T02:27:29Z",
+                "last": "2026-10-19T02:27:29Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-19T02:27:46Z",
+                "last": "2026-10-19T02:27:46Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-19T02:29:37Z",
+                "last": "2026-10-19T02:29:37Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-19T02:29:51Z",
+                "last": "2026-10-19T02:29:51Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 3,
+                "first": "2026-10-19T02:31:18Z",
+                "last": "2026-10-19T02:31:44Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-19T02:31:59Z",
+                "last": "2026-10-19T02:31:59Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-19T02:32:00Z",
+                "last": "2026-10-19T02:32:00Z"
+              },
+              {
+                "kind": "approved",
+                "n": 1,
+                "first": "2026-10-19T02:32:13Z",
+                "last": "2026-10-19T02:32:13Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-19T02:33:21Z",
+                "last": "2026-10-19T02:33:21Z"
               }
             ],
-            "lastAt": "2026-10-05T16:27:26Z"
+            "lastAt": "2026-10-19T02:33:21Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -4995,12 +5605,20 @@
           ],
           "findings": [
             {
-              "id": "props:figma-layers-view:busy",
+              "id": "props:figma-layers-view:version",
               "check": "props",
               "level": "advisory",
               "owner": "designer",
-              "what": "The app sends \"busy\" on figma-layers-view and the catalog does not declare it, so the declaration under-describes what the surface is given.",
-              "fix": "Declare \"busy\" on figma-layers-view in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+              "what": "The app sends \"version\" on figma-layers-view and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"version\" on figma-layers-view in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:figma-layers-view:updateDataModel",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"updateDataModel\" on figma-layers-view and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"updateDataModel\" on figma-layers-view in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
             }
           ],
           "props": {
@@ -5018,6 +5636,7 @@
             "inManifest": [
               "pipeline",
               "nodeId",
+              "tree",
               "inline",
               "refresh",
               "busy",
@@ -5037,7 +5656,6 @@
               "_figmaNodeIds",
               "_componentsByNode",
               "_usage",
-              "_usageError",
               "_findings",
               "_mapFrom",
               "_figmaNamesError",
@@ -5065,7 +5683,6 @@
             ],
             "dispatched": [
               "catalog-accept",
-              "catalog-change",
               "open-component",
               "open-function",
               "open-layer"
@@ -5101,16 +5718,16 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
-            "records": 1,
+            "records": 3,
             "timeline": [
               {
                 "kind": "removal-refused",
-                "n": 1,
+                "n": 3,
                 "first": "2026-10-01T01:56:49Z",
-                "last": "2026-10-01T01:56:49Z"
+                "last": "2026-10-26T15:33:28Z"
               }
             ],
-            "lastAt": "2026-10-01T01:56:49Z"
+            "lastAt": "2026-10-26T15:33:28Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -5206,10 +5823,164 @@
             "mapped": false
           },
           "marks": [
+            "⚠",
             "●",
             "⇄"
           ],
-          "findings": [],
+          "findings": [
+            {
+              "id": "props:left-column-header:1 inch wide",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"1 inch wide\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"1 inch wide\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:pass",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"pass\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"pass\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:[{",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"[{\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"[{\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:):\n        from routes.misc import _read_catalog_audit\n\n        catalog = intent.split(",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"):\n        from routes.misc import _read_catalog_audit\n\n        catalog = intent.split(\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"):\n        from routes.misc import _read_catalog_audit\n\n        catalog = intent.split(\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:, 1)[1] if ",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \", 1)[1] if \" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \", 1)[1] if \" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:chat",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"chat\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"chat\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:usage-view",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"usage-view\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"usage-view\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:governance-chat",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"governance-chat\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"governance-chat\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:root",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"root\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"root\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:design-middle",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"design-middle\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"design-middle\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:chat-panel",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"chat-panel\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"chat-panel\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:design-checks",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"design-checks\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"design-checks\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:design-left",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"design-left\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"design-left\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:composer-workspace",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"composer-workspace\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"composer-workspace\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:composer-chat-panel",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"composer-chat-panel\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"composer-chat-panel\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:\n            if ",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"\n            if \" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"\n            if \" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header: in intent:\n                named = intent.split(",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \" in intent:\n                named = intent.split(\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \" in intent:\n                named = intent.split(\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:count",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"count\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"count\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            },
+            {
+              "id": "props:left-column-header:catalogId",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"catalogId\" on left-column-header and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"catalogId\" on left-column-header in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            }
+          ],
           "props": {
             "declared": [
               "component",
@@ -5261,11 +6032,18 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
           "duplicateOf": [
@@ -5340,16 +6118,96 @@
           "provenance": null,
           "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
           "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
+          "duplicateOf": [
+            "left-column-header"
+          ]
+        },
+        {
+          "name": "design-left-panel",
+          "tag": "design-left-panel",
+          "tagNote": null,
+          "className": "DesignLeftPanel",
+          "file": "/Users/raibach/Documents/Raibach_IDS/frontend/src/components/lit/design-left-panel.ts",
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": true,
+            "rendererOwned": false,
+            "built": true,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "formatLabel",
+              "id",
+              "tokensLabel"
+            ],
+            "inManifest": [
+              "formatLabel",
+              "tokensLabel"
+            ],
+            "inManifestNote": null
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [
+              "left"
+            ],
+            "rendered": [
+              "left"
+            ],
+            "declaredNotRendered": [],
+            "bareSlot": false
+          },
+          "children": {
+            "slot": [
+              "left"
+            ],
+            "composed": [
+              "prompt-container"
+            ],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
             "records": 0,
             "timeline": [],
             "lastAt": null
           },
           "ledgerNote": "the ledger holds no record naming this component",
           "tokens": null,
-          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were.",
-          "duplicateOf": [
-            "left-column-header"
-          ]
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         }
       ]
     },
@@ -5358,9 +6216,9 @@
       "derived": true,
       "declared": null,
       "counts": {
-        "elements": 6,
-        "annotated": 6,
-        "findings": 1
+        "elements": 7,
+        "annotated": 7,
+        "findings": 2
       },
       "elements": [
         {
@@ -5384,14 +6242,6 @@
           ],
           "findings": [
             {
-              "id": "props:workspace-layout:title",
-              "check": "props",
-              "level": "advisory",
-              "owner": "designer",
-              "what": "The app sends \"title\" on workspace-layout and the catalog does not declare it, so the declaration under-describes what the surface is given.",
-              "fix": "Declare \"title\" on workspace-layout in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
-            },
-            {
               "id": "props:workspace-layout:isThirdOpen",
               "check": "props",
               "level": "advisory",
@@ -5408,6 +6258,7 @@
             ],
             "inManifest": [
               "chatLoadWidth",
+              "chatOverlaysContent",
               "_leftCollapsed",
               "_leftOwnedByOperator",
               "leftCollapsed",
@@ -5434,6 +6285,10 @@
               "_groundObserver",
               "_groundElement",
               "_dragging",
+              "_gripOffset",
+              "_gripMoved",
+              "_sizeObserver",
+              "_observedWidth",
               "_onMiddleSlotChange",
               "_onWindowResize",
               "_onPointerBoundary",
@@ -5451,9 +6306,13 @@
               "_onRunHeld",
               "_dockNow",
               "_runInFlight",
+              "_waitingLabel",
               "_onFlowViewReady",
+              "_onIngestStarted",
+              "_onIngestSettled",
               "_onDesignRun",
               "_rightOverDrawing",
+              "_rightOverApp",
               "CONSOLE_CHAT_MAX_PX",
               "_onGripDown",
               "_onMouseMove",
@@ -5520,11 +6379,106 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 0,
-            "timeline": [],
-            "lastAt": null
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
           },
-          "ledgerNote": "the ledger holds no record naming this component",
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "composer-workspace",
+          "tag": "composer-workspace",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "⚠",
+            "●"
+          ],
+          "findings": [
+            {
+              "id": "props:composer-workspace:isThirdOpen",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"isThirdOpen\" on composer-workspace and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"isThirdOpen\" on composer-workspace in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            }
+          ],
+          "props": {
+            "declared": [
+              "chatLoadWidth",
+              "component",
+              "id"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
+          },
+          "ledgerNote": null,
           "tokens": null,
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         },
@@ -5681,7 +6635,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 32,
+            "records": 45,
             "timeline": [
               {
                 "kind": "ingested",
@@ -5844,9 +6798,21 @@
                 "n": 1,
                 "first": "2026-09-29T16:42:52Z",
                 "last": "2026-09-29T16:42:52Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 12,
+                "first": "2026-10-08T19:48:36Z",
+                "last": "2026-10-26T15:35:42Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-26T15:35:50Z",
+                "last": "2026-10-26T15:35:50Z"
               }
             ],
-            "lastAt": "2026-09-29T16:42:52Z"
+            "lastAt": "2026-10-26T15:35:50Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -5913,7 +6879,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 181,
+            "records": 190,
             "timeline": [
               {
                 "kind": "ingested",
@@ -6706,9 +7672,33 @@
                 "n": 1,
                 "first": "2026-10-01T02:08:46Z",
                 "last": "2026-10-01T02:08:46Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 1,
+                "first": "2026-10-08T10:11:41Z",
+                "last": "2026-10-08T10:11:41Z"
+              },
+              {
+                "kind": "discarded",
+                "n": 1,
+                "first": "2026-10-08T10:11:54Z",
+                "last": "2026-10-08T10:11:54Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 5,
+                "first": "2026-10-26T11:57:43Z",
+                "last": "2026-10-26T12:01:41Z"
+              },
+              {
+                "kind": "removal-refused",
+                "n": 2,
+                "first": "2026-10-26T15:28:19Z",
+                "last": "2026-10-26T15:33:28Z"
               }
             ],
-            "lastAt": "2026-10-01T02:08:46Z"
+            "lastAt": "2026-10-26T15:33:28Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -6783,7 +7773,7 @@
           },
           "provenanceNote": null,
           "ledger": {
-            "records": 70,
+            "records": 76,
             "timeline": [
               {
                 "kind": "ingested",
@@ -7018,9 +8008,15 @@
                 "n": 1,
                 "first": "2026-10-01T01:41:40Z",
                 "last": "2026-10-01T01:41:40Z"
+              },
+              {
+                "kind": "ingested",
+                "n": 6,
+                "first": "2026-10-26T12:18:12Z",
+                "last": "2026-10-26T12:50:23Z"
               }
             ],
-            "lastAt": "2026-10-01T01:41:40Z"
+            "lastAt": "2026-10-26T12:50:23Z"
           },
           "ledgerNote": null,
           "tokens": null,
@@ -7120,6 +8116,241 @@
           "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
         }
       ]
+    },
+    {
+      "title": "surface: design",
+      "derived": true,
+      "declared": null,
+      "counts": {
+        "elements": 3,
+        "annotated": 3,
+        "findings": 1
+      },
+      "elements": [
+        {
+          "name": "design-left-footer",
+          "tag": "design-left-footer",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 0,
+            "timeline": [],
+            "lastAt": null
+          },
+          "ledgerNote": "the ledger holds no record naming this component",
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "design-workspace",
+          "tag": "design-workspace",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "⚠",
+            "●"
+          ],
+          "findings": [
+            {
+              "id": "props:design-workspace:title",
+              "check": "props",
+              "level": "advisory",
+              "owner": "designer",
+              "what": "The app sends \"title\" on design-workspace and the catalog does not declare it, so the declaration under-describes what the surface is given.",
+              "fix": "Declare \"title\" on design-workspace in frontend/src/components/A2UI/catalogs/prompt-composer/catalog.json (with its type and meaning), or stop sending it."
+            }
+          ],
+          "props": {
+            "declared": [
+              "component",
+              "id"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        },
+        {
+          "name": "tools-workspace",
+          "tag": "tools-workspace",
+          "tagNote": null,
+          "className": null,
+          "file": null,
+          "registration": {
+            "declared": true,
+            "annotated": true,
+            "allowlisted": true,
+            "inManifest": false,
+            "rendererOwned": false,
+            "built": false,
+            "mapped": false
+          },
+          "marks": [
+            "●"
+          ],
+          "findings": [],
+          "props": {
+            "declared": [
+              "component",
+              "id"
+            ],
+            "inManifest": null,
+            "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
+          },
+          "events": {
+            "allowlisted": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "dispatched": [],
+            "dispatchedNotListed": [],
+            "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
+          },
+          "slots": {
+            "declared": [],
+            "rendered": [],
+            "declaredNotRendered": [],
+            "bareSlot": null
+          },
+          "children": {
+            "slot": [],
+            "composed": [],
+            "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
+          },
+          "actions": {
+            "events": [
+              "resize-start",
+              "resize",
+              "resize-end",
+              "third-column-toggle"
+            ],
+            "binding": null,
+            "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
+          },
+          "provenance": null,
+          "provenanceNote": "no Figma node is mapped to this component (registry.json) — it was declared, not drawn",
+          "ledger": {
+            "records": 1,
+            "timeline": [
+              {
+                "kind": "removal-refused",
+                "n": 1,
+                "first": "2026-10-25T21:35:32Z",
+                "last": "2026-10-25T21:35:32Z"
+              }
+            ],
+            "lastAt": "2026-10-25T21:35:32Z"
+          },
+          "ledgerNote": null,
+          "tokens": null,
+          "tokensNote": "No token count exists anywhere: the catalogue, the manifest and the ledger carry none per element or per catalogue. The only token-ish numbers in the repository are session totals (tokenEstimate on two ledger records), which are not per-element and must not be shown as if they were."
+        }
+      ]
     }
   ],
   "undeclared": [
@@ -7132,11 +8363,6 @@
       "tag": "builder-embed",
       "className": "BuilderEmbed",
       "file": "src/components/lit/builder-embed.ts"
-    },
-    {
-      "tag": "catalog-ingest-form",
-      "className": "CatalogIngestForm",
-      "file": "src/components/lit/catalog-ingest-form.ts"
     },
     {
       "tag": "catalog-schema-view",
@@ -7174,19 +8400,49 @@
       "file": "src/components/lit/chat-plugin-tray.ts"
     },
     {
-      "tag": "design-left-panel",
-      "className": "DesignLeftPanel",
-      "file": "src/components/lit/design-left-panel.ts"
+      "tag": "chat-product-thread",
+      "className": "ChatProductThread",
+      "file": "src/components/lit/chat-product-thread.ts"
     },
     {
-      "tag": "design-middle-container",
-      "className": "DesignMiddleContainer",
-      "file": "src/components/lit/design-middle-container.ts"
+      "tag": "chat-product-tools",
+      "className": "ChatProductTools",
+      "file": "src/components/lit/chat-product-tools.ts"
+    },
+    {
+      "tag": "evals-chat-panel",
+      "className": "EvalsChatPanel",
+      "file": "src/components/lit/evals-chat-panel.ts"
+    },
+    {
+      "tag": "evals-column",
+      "className": "EvalsColumn",
+      "file": "src/components/lit/evals-column.ts"
+    },
+    {
+      "tag": "evals-experience",
+      "className": "EvalsExperience",
+      "file": "src/components/lit/evals-experience.ts"
+    },
+    {
+      "tag": "evals-index",
+      "className": "EvalsIndex",
+      "file": "src/components/lit/evals-index.ts"
+    },
+    {
+      "tag": "f-40001177-2476",
+      "className": "PromptTextareaContainerSystem",
+      "file": "src/components/lit/f-40001177-2476.ts"
     },
     {
       "tag": "f-40001206-3423",
       "className": "CatalogNode",
       "file": "src/components/lit/f-40001206-3423.ts"
+    },
+    {
+      "tag": "sessions-feed",
+      "className": "SessionsFeed",
+      "file": "src/components/lit/sessions-feed.ts"
     },
     {
       "tag": "small-dropdown",
@@ -7202,39 +8458,225 @@
       "tag": "prompt-input-section-system-role",
       "className": "PromptInputSectionSystemRole",
       "file": "src/components/lit/prompt-input/prompt-input-section-system-role.ts"
-    },
-    {
-      "tag": "kor-button",
-      "className": "korButton",
-      "file": "src/components/lit/kor/components/button/kor-button.ts"
-    },
-    {
-      "tag": "kor-card",
-      "className": "korCard",
-      "file": "src/components/lit/kor/components/card/kor-card.ts"
-    },
-    {
-      "tag": "kor-icon",
-      "className": "korIcon",
-      "file": "src/components/lit/kor/components/icon/kor-icon.ts"
-    },
-    {
-      "tag": "kor-input",
-      "className": "korInput",
-      "file": "src/components/lit/kor/components/input/kor-input.ts"
-    },
-    {
-      "tag": "kor-text",
-      "className": "korText",
-      "file": "src/components/lit/kor/components/text/kor-text.ts"
-    },
-    {
-      "tag": "ag-select",
-      "className": "Select",
-      "file": "src/components/lit/agnosticui/components/Select/core/_Select.ts"
     }
   ],
   "ledgerOnly": [
+    {
+      "nodeId": "40001421:5467",
+      "nodeName": "figma-results-controlBar",
+      "records": 93,
+      "history": "ingested×77 · discarded×14 · approved×2",
+      "firstAt": "2026-10-26T12:46:58Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 20,
+          "first": "2026-10-26T12:46:58Z",
+          "last": "2026-10-26T13:51:12Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T13:51:18Z",
+          "last": "2026-10-26T13:51:18Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T13:52:03Z",
+          "last": "2026-10-26T13:52:03Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T13:53:42Z",
+          "last": "2026-10-26T13:53:42Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-10-26T13:54:42Z",
+          "last": "2026-10-26T13:57:03Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T13:59:52Z",
+          "last": "2026-10-26T13:59:52Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T13:59:59Z",
+          "last": "2026-10-26T13:59:59Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:00:10Z",
+          "last": "2026-10-26T14:00:10Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T14:00:53Z",
+          "last": "2026-10-26T14:00:53Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:01:44Z",
+          "last": "2026-10-26T14:01:44Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 20,
+          "first": "2026-10-26T14:01:56Z",
+          "last": "2026-10-26T14:10:03Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:10:03Z",
+          "last": "2026-10-26T14:10:03Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 5,
+          "first": "2026-10-26T14:12:34Z",
+          "last": "2026-10-26T14:14:31Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:14:31Z",
+          "last": "2026-10-26T14:14:31Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T14:14:32Z",
+          "last": "2026-10-26T14:14:32Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:14:32Z",
+          "last": "2026-10-26T14:14:32Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T14:14:33Z",
+          "last": "2026-10-26T14:14:33Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:14:33Z",
+          "last": "2026-10-26T14:14:33Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T14:16:29Z",
+          "last": "2026-10-26T14:16:29Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:17:11Z",
+          "last": "2026-10-26T14:17:11Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-10-26T14:20:03Z",
+          "last": "2026-10-26T14:20:51Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:21:34Z",
+          "last": "2026-10-26T14:21:34Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 4,
+          "first": "2026-10-26T14:22:42Z",
+          "last": "2026-10-26T14:24:12Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:24:15Z",
+          "last": "2026-10-26T14:24:15Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T14:24:18Z",
+          "last": "2026-10-26T14:24:18Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T14:24:24Z",
+          "last": "2026-10-26T14:24:24Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 6,
+          "first": "2026-10-26T14:25:28Z",
+          "last": "2026-10-26T14:28:02Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-10-26T14:28:12Z",
+          "last": "2026-10-26T14:28:12Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 6,
+          "first": "2026-10-26T14:28:41Z",
+          "last": "2026-10-26T14:52:52Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-10-26T14:54:02Z",
+          "last": "2026-10-26T14:54:02Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 4,
+          "first": "2026-10-26T14:58:36Z",
+          "last": "2026-10-26T15:36:42Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-26T15:36:45Z",
+          "last": "2026-10-26T15:36:45Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-26T15:37:15Z",
+          "last": "2026-10-26T15:37:15Z"
+        }
+      ],
+      "tags": [
+        "f-40001421-5467",
+        "f-40001421-5469",
+        "f-40001421-5471",
+        "f-40001421-5500"
+      ],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-10-26T15:37:15Z",
+      "lastVerdict": "catalog-check: 69 components, 46 finding(s), 5 blocking. Report: catalog-audit/prompt-composer.json — reported, not enforced."
+    },
     {
       "nodeId": "40001185:2176",
       "nodeName": "Frame 886987",
@@ -7517,6 +8959,25 @@
       "lastVerdict": null
     },
     {
+      "nodeId": "40001421:5466",
+      "nodeName": "Left-column-ControlBar",
+      "records": 9,
+      "history": "ingested×9",
+      "firstAt": "2026-10-26T12:05:29Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 9,
+          "first": "2026-10-26T12:05:29Z",
+          "last": "2026-10-26T12:44:28Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-10-26T12:44:28Z",
+      "lastVerdict": null
+    },
+    {
       "nodeId": "40001207:3555",
       "nodeName": "chevron-blue-closed",
       "records": 6,
@@ -7579,6 +9040,37 @@
       "lastVerdict": null
     },
     {
+      "nodeId": "40001175:2148",
+      "nodeName": "prompt-input-section-sytem-user-seat-one",
+      "records": 5,
+      "history": "ingested×4 · discarded×1",
+      "firstAt": "2026-09-28T16:55:19Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-09-28T16:55:19Z",
+          "last": "2026-10-08T21:01:31Z"
+        },
+        {
+          "kind": "discarded",
+          "n": 1,
+          "first": "2026-10-08T21:13:25Z",
+          "last": "2026-10-08T21:13:25Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 2,
+          "first": "2026-10-08T21:13:47Z",
+          "last": "2026-10-08T21:14:52Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-10-08T21:14:52Z",
+      "lastVerdict": null
+    },
+    {
       "nodeId": "40001191:6680",
       "nodeName": "left-column-panel-container",
       "records": 4,
@@ -7610,6 +9102,45 @@
       "lastVerdict": null
     },
     {
+      "nodeId": "40001177-2476",
+      "nodeName": "prompt-textarea-container-system",
+      "records": 4,
+      "history": "ingested×2 · approved×2",
+      "firstAt": "2026-10-19T02:31:44Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-19T02:31:44Z",
+          "last": "2026-10-19T02:31:44Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-10-19T02:31:59Z",
+          "last": "2026-10-19T02:31:59Z"
+        },
+        {
+          "kind": "ingested",
+          "n": 1,
+          "first": "2026-10-19T02:32:00Z",
+          "last": "2026-10-19T02:32:00Z"
+        },
+        {
+          "kind": "approved",
+          "n": 1,
+          "first": "2026-10-19T02:32:13Z",
+          "last": "2026-10-19T02:32:13Z"
+        }
+      ],
+      "tags": [
+        "f-40001177-2476"
+      ],
+      "inAnyCatalogue": true,
+      "lastAt": "2026-10-19T02:32:13Z",
+      "lastVerdict": "catalog-check: 67 components, 19 finding(s), 3 blocking. Report: catalog-audit/prompt-composer.json — reported, not enforced."
+    },
+    {
       "nodeId": "40001191:8696",
       "nodeName": "Frame 887023",
       "records": 3,
@@ -7626,6 +9157,25 @@
       "tags": [],
       "inAnyCatalogue": false,
       "lastAt": "2026-09-28T00:41:06Z",
+      "lastVerdict": null
+    },
+    {
+      "nodeId": "40001177:2459",
+      "nodeName": "responsive-prompt-container",
+      "records": 3,
+      "history": "ingested×3",
+      "firstAt": "2026-10-18T23:09:00Z",
+      "timeline": [
+        {
+          "kind": "ingested",
+          "n": 3,
+          "first": "2026-10-18T23:09:00Z",
+          "last": "2026-10-18T23:10:41Z"
+        }
+      ],
+      "tags": [],
+      "inAnyCatalogue": false,
+      "lastAt": "2026-10-18T23:10:41Z",
       "lastVerdict": null
     },
     {
@@ -7725,36 +9275,30 @@
       "lastVerdict": null
     },
     {
-      "nodeId": "40001177:2476",
-      "nodeName": "prompt-textarea-container-system",
+      "nodeId": "40001283:2827",
+      "nodeName": "output-footer-product",
       "records": 2,
-      "history": "ingested×1 · discarded×1",
-      "firstAt": "2026-10-05T16:27:12Z",
+      "history": "ingested×2",
+      "firstAt": "2026-10-08T19:48:53Z",
       "timeline": [
         {
           "kind": "ingested",
-          "n": 1,
-          "first": "2026-10-05T16:27:12Z",
-          "last": "2026-10-05T16:27:12Z"
-        },
-        {
-          "kind": "discarded",
-          "n": 1,
-          "first": "2026-10-05T16:27:26Z",
-          "last": "2026-10-05T16:27:26Z"
+          "n": 2,
+          "first": "2026-10-08T19:48:53Z",
+          "last": "2026-10-08T20:57:42Z"
         }
       ],
       "tags": [],
       "inAnyCatalogue": false,
-      "lastAt": "2026-10-05T16:27:26Z",
+      "lastAt": "2026-10-08T20:57:42Z",
       "lastVerdict": null
     }
   ],
   "ledgerNote": {
-    "records": 427,
+    "records": 608,
     "unreadable": 0,
     "sessionRecords": 5,
-    "removalRecords": 35,
+    "removalRecords": 40,
     "path": "backend/logs/figma-ingest.jsonl"
   }
 }

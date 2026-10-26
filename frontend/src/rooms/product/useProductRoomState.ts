@@ -7,8 +7,7 @@
  * exists, and they belong beside it, not in the shell.
  */
 import { useRef, useState } from 'react';
-import type { ChatPanel } from '@/components/lit/chat-panel';
-import type { WorkspaceLayout } from '@/components/lit/workspace-layout';
+import type { ProductChatPanel } from '@/rooms/product/product-chat-panel';
 
 export function useProductRoomState() {
   /*
@@ -32,18 +31,8 @@ export function useProductRoomState() {
    * null — the dashboard is the room's home.
    */
   const [productRoomProjectId, setProductRoomProjectId] = useState<string | null>(null);
-  /*
-   * THE OPENING'S THIRD HAND — THE SEAT (owner, 2026-10-06: *"I had a fade in for product and
-   * development … It was like an assembly process … Right now product and development are
-   * popping in — actually product loads in, the chat doesn't even show up for a delayed few
-   * seconds and then it pops in … put back the assembly illusion … it creates a nice fade into
-   * the application and there's no popping and snapping of components."*). The seat is the last
-   * thing the room draws and it binds on its own clock (the two seat effects below); with the
-   * cover over the left column only, the chat arrived BESIDE a workspace that had already
-   * revealed — the pop. Settled means BOUND OR FAILED: a failed binding leaves the seat on its
-   * honest blank face, and a cover must not go on standing over a chat that will never arrive.
-   */
-  const productSeatSettledRef = useRef(false);
+  /* THE GATE'S SEAT HAND IS GONE (2026-10-23): the room has no cover to settle. The seat binds
+     on its own clock and draws nothing until it does. */
   /*
    * THE STAGE'S REFRESH KEY (2026-10-06 — the chat absorption). `a2ui:person-turn` fires only
    * after the server answered, which for this room means the ENGINE'S BUILD LANDED; bumping
@@ -82,13 +71,11 @@ export function useProductRoomState() {
   /* AND THE PRODUCT ROOM'S RENDERER — the same one-ref-per-renderer rule, one room further
      (2026-10-03). */
   const productRendererRef = useRef<any>(null);
-  /* THE PRODUCT ROOM'S TWO COLUMNS (2026-10-05): the container's handle — so the room can
-     settle it closed on entry (its `isThirdOpen` is set as a PROPERTY, never as a JSX
-     attribute: Lit's boolean converter reads any present attribute, "false" included, as
-     true) — and the seat's, so the Composer's loaded chat can be handed to it. Plain refs:
-     neither value is state and nothing re-renders on their account. */
-  const productLayoutRef = useRef<WorkspaceLayout | null>(null);
-  const productSeatRef = useRef<ChatPanel | null>(null);
+  /* THE PRODUCT ROOM'S TWO COLUMNS (2026-10-05): the room's own workspace handle — the
+     frame the chat's gripper and rail address — and the seat's. Plain refs: neither value
+     is state and nothing re-renders on their account. */
+  const productLayoutRef = useRef<HTMLDivElement | null>(null);
+  const productSeatRef = useRef<ProductChatPanel | null>(null);
   /*
    * THE PAGE ON THE STAGE (2026-10-03, late — the artifact era). `productArtifactRef` mirrors
    * `session.artifact` in the tree, exactly as the draft ref above mirrors `session.draft`: the
@@ -103,7 +90,6 @@ export function useProductRoomState() {
     productTree, setProductTree,
     currentProductSession, setCurrentProductSession,
     productRoomProjectId, setProductRoomProjectId,
-    productSeatSettledRef,
     productStageKey, setProductStageKey,
     productGripActive, setProductGripActive,
     currentProductSessionRef,

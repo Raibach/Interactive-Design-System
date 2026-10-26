@@ -62,7 +62,7 @@ export class ModelSelectorButton extends LitElement {
       border: none;
       padding: 0;
       cursor: pointer;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     .model-label {
       /* node I40000973:24208;40000973:24203 — Inter Bold 16px, #8B8B8B, centered */

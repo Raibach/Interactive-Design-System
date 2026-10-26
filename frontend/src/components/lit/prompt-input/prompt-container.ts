@@ -86,7 +86,7 @@ export class PromptContainer extends LitElement {
     .rail-gripper .rot { transform: rotate(-90deg); display: flex; }
     .vertical-label {
       writing-mode: vertical-rl;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 16px;
       font-weight: 500;
       line-height: 19.364px;
@@ -95,7 +95,7 @@ export class PromptContainer extends LitElement {
     }
     .vertical-tokens {
       writing-mode: vertical-rl;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       /* 12px SEMI BOLD, per the same node — it was 13px, which is this app's floor and not the
          design's number. The readout is the one text on this rail that is NOT body text. */
       font-size: 12px;

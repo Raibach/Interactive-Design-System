@@ -17,6 +17,7 @@
  * (the convention in this folder).
  */
 import { LitElement, html, css, nothing } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 
 // ── shared ──────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ class A2UIText extends LitElement {
 
   static styles = css`
     :host { display: block; }
-    .t { font-family: 'Inter', system-ui, sans-serif; color: #1c2f4e; margin: 0; }
+    .t { font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1c2f4e; margin: 0; }
     .greeting { font-size: 20px; font-weight: 700; }
     .h1 { font-size: 28px; font-weight: 700; }
     .h2 { font-size: 22px; font-weight: 700; }
@@ -188,7 +189,7 @@ class A2UIButton extends LitElement {
   static styles = css`
     :host { display: inline-block; }
     button {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 600;
       padding: 6px 14px;
@@ -555,7 +556,7 @@ class A2UIConsoleCardGrid extends LitElement {
     //
     // `id` is set deliberately: <agent-card-element> dispatches `card-delete` with
     // `this.id`, so a card rendered without one deletes nothing.
-    return html`${cards.map((item: any) => {
+    return html`${repeat(cards, (item: any) => String(item?.id ?? ''), (item: any) => {
       const sessionId = item?.id ?? '';
       return html`<agent-card-element
         id=${sessionId}
@@ -656,7 +657,7 @@ class A2UIStatusReadout extends LitElement {
   static styles = css`
     :host {
       display: inline-block;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       color: #6c757d;
     }
@@ -690,7 +691,7 @@ class A2UITokenCostReadout extends LitElement {
   static styles = css`
     :host {
       display: inline-block;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       color: #6c757d;
       font-variant-numeric: tabular-nums;
@@ -721,7 +722,7 @@ class A2UIAddSectionButton extends LitElement {
   static styles = css`
     :host { display: inline-block; }
     button {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 13px;
       font-weight: 600;
       background: none;

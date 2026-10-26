@@ -32,7 +32,7 @@ export function ToolsPanel({ tools, variables }: ToolsPanelProps) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-[12px] font-['Inter'] font-semibold text-[#1c2f4e] mb-2">
+        <h3 className="text-[12px] font-['IBM Plex Sans'] font-semibold text-[#1c2f4e] mb-2">
           Detected Tools
         </h3>
         {tools.length > 0 ? (
@@ -40,7 +40,7 @@ export function ToolsPanel({ tools, variables }: ToolsPanelProps) {
             {tools.map((tool, i) => (
               <div
                 key={`${tool.name}-${i}`}
-                className="bg-white border border-gray-200 rounded-lg p-3 text-[12px] font-['Inter']"
+                className="bg-white border border-gray-200 rounded-lg p-3 text-[12px] font-['IBM Plex Sans']"
               >
                 <div className="font-semibold text-[#1c2f4e]">{tool.name}</div>
                 <pre className="mt-1 text-[11px] text-gray-600 whitespace-pre-wrap font-mono">
@@ -56,14 +56,14 @@ export function ToolsPanel({ tools, variables }: ToolsPanelProps) {
         )}
       </div>
       <div>
-        <h3 className="text-[12px] font-['Inter'] font-semibold text-[#1c2f4e] mb-2">
+        <h3 className="text-[12px] font-['IBM Plex Sans'] font-semibold text-[#1c2f4e] mb-2">
           Detected Variables
         </h3>
         {variables.length > 0 ? (
           variables.map((v, i) => (
             <div
               key={i}
-              className="bg-white border border-gray-200 rounded-lg p-3 text-[12px] font-['Inter']"
+              className="bg-white border border-gray-200 rounded-lg p-3 text-[12px] font-['IBM Plex Sans']"
             >
               <span className="font-mono text-[#507274] font-semibold">{'{{'}{v.name}{'}}'}</span>
               <span className="ml-2 text-gray-400">from {v.section}</span>

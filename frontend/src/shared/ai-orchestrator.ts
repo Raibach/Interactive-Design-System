@@ -140,7 +140,7 @@ export function useAiOrchestrator({ sessionId, chatContainer }: OrchestratorOpti
   useEffect(() => {
     if (!sessionId) return;
 
-    const container = chatContainer || document.querySelector('[data-tag="chat-panel"]');
+    const container = chatContainer || document.querySelector('[data-tag="composer-chat-panel"]') || document.querySelector('[data-tag="chat-panel"]');
     if (!container) return;
 
     // Observe DOM mutations in the chat panel for new AI messages

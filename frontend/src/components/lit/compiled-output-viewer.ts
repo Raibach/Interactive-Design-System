@@ -315,7 +315,7 @@ export class CompiledOutputViewer extends LitElement {
     .output-type {
       flex: 1 0 0;                  /* 40001034:1189 flex-[1_0_0] */
       min-width: 1px;               /* 40001034:1189 min-w-px */
-      font-family: 'Inter', system-ui, sans-serif;  /* 40001034:1190 Inter:Bold */
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;  /* 40001034:1190 Inter:Bold */
       font-size: 18px;              /* 40001034:1190 text-[18px] */
       font-weight: 700;             /* 40001034:1190 font-bold */
       line-height: normal;          /* 40001034:1190 leading-[normal] */
@@ -360,7 +360,7 @@ export class CompiledOutputViewer extends LitElement {
       min-height: 0;
       width: 100%;
       overflow: auto;
-      font-family: 'Inter', system-ui, sans-serif;  /* 40000909:4168 Inter:Medium */
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;  /* 40000909:4168 Inter:Medium */
       font-size: 14px;              /* 40000909:4168 text-[14px] */
       font-weight: 500;             /* 40000909:4168 font-medium */
       line-height: normal;          /* 40000909:4168 leading-[normal] */
@@ -420,7 +420,7 @@ export class CompiledOutputViewer extends LitElement {
       background: #0f172a;
       color: #e2e8f0;
       border-radius: 6px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 13px;
       line-height: 1.5;
       white-space: pre-wrap;
@@ -492,7 +492,7 @@ export class CompiledOutputViewer extends LitElement {
       color: #dc2626;
     }
     .failed-text {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 700;
       color: #991b1b;
@@ -505,7 +505,7 @@ export class CompiledOutputViewer extends LitElement {
       background: #fef2f2;
       border: 1px solid #fecaca;
       border-radius: 6px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
       font-size: 13px;
       line-height: 1.5;
       color: #7f1d1d;
@@ -562,7 +562,7 @@ export class CompiledOutputViewer extends LitElement {
     }
     .md details.fold summary:hover { background: #f3f4f6; }
     .md details.fold summary:focus-visible { outline: 2px solid #1B898D; outline-offset: 1px; }
-    .md details.fold .fold-title { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .md details.fold .fold-title { font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, Monaco, Consolas, monospace; }
     .md details.fold pre { margin: 6px 0 0; }
     .md a { color: #1B898D; }
   `;

@@ -230,7 +230,7 @@ export class TraceDetail extends LitElement {
         border: 1px solid var(--chat-rule, var(--ds-rule));
         border-radius: var(--ds-radius-sm);
         background: rgba(0, 0, 0, 0.14);
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
         font-size: var(--ds-fs-meta);
         line-height: 1.5;
         white-space: pre-wrap;
@@ -257,7 +257,7 @@ export class TraceDetail extends LitElement {
         display: flex;
         align-items: baseline;
         gap: 10px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
         font-size: var(--ds-fs-meta);
       }
       .log-time {

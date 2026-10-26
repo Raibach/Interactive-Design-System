@@ -16,7 +16,9 @@
  *   THE ROOM'S OWN CHAT CONTROLS (the owner's own note on it: *"we have this space at the
  *   bottom for chat controls related to post hog … that's what that space is reserved for
  *   customization"*). An empty card is what an unclaimed reservation looks like; nothing
- *   stands in it until a room fills it.
+ *   stands in it until a room fills it. The card carries a default slot for that room: the
+ *   UX tab places its one chat-tools icon there (2026-10-24), and every other seat leaves
+ *   it empty.
  *
  * THE FIVE MARKS RETIRED — 2026-10-14, on the owner's word: *"take away these inactive
  * icons at the bottom of the chat for every section… filler icons that are inactive or
@@ -102,7 +104,7 @@ export class ChatPluginTray extends LitElement {
       padding: 10px 20px 20px;
       background: #CBE6E3;
       box-sizing: border-box;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* The gripper #40001123:6692 — 500×7, padding 0 10px, itemSpacing 10, primary CENTER
        (the file's own coordinates: the row's centre -8588.00 is the band's centre), and
@@ -146,6 +148,20 @@ export class ChatPluginTray extends LitElement {
       background: rgba(117, 142, 135, 0.35);
       border: 1px solid rgba(117, 142, 135, 0.5);
       box-sizing: border-box;
+      /* THE ROOM'S CONTROLS SIT IN THE MIDDLE OF THE CARD, not at its top edge. */
+      justify-content: center;
+      /* THE ROOM'S CONTROLS POP ABOVE THIS CARD, so the card is their anchor. */
+      position: relative;
+    }
+    .card ::slotted(*) { min-width: 0; }
+    /* THE ROOM'S TOOLS SIT IN ONE ROW: the product chip at the left, the room's icon at the
+       right. The wrapper is the slot's row so a room can add more than one child. */
+    .card-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
     }
     /* THE READOUTS, KEPT — the footer's own line on the tray's ground. One line,
        ellipsised rather than wrapped so the card keeps its 53px floor and the row's
@@ -170,7 +186,9 @@ export class ChatPluginTray extends LitElement {
             <span class="dot" data-node-id="40001123:6694"></span><span class="dot" data-node-id="40001123:6695"></span><span class="dot" data-node-id="40001123:6696"></span><span class="dot" data-node-id="40001123:6697"></span>
           </div>
         </div>
-        <div class="card" data-node-id="40001123:6690"></div>
+        <div class="card" data-node-id="40001123:6690">
+          <div class="card-controls"><slot></slot></div>
+        </div>
       </div>
     `;
   }

@@ -32,14 +32,18 @@
  * (main.tsx, not awaited — the gate does not depend on it, so the round-trip rides beside the
  * entry's parse instead of blocking the first render) and returned to App, which awaits the same
  * promise before drawing the authenticated tree — by pin time it has long resolved. On any
- * failure — offline, old server, malformed body — the demo flag stays false and the tool
- * address stays local, which is the full-power local default: a missed hide is cosmetic, and
- * the server still refuses the action.
+ * failure — offline, old server, malformed body — the demo flag stays false, and the tool
+ * addresses follow the same loopback law as a success: local on loopback, empty on any
+ * deployed origin (2026-10-24 — a failed read used to leave this machine's addresses standing
+ * on the tunnel, which pointed the rooms at the visitor's own computer).
  */
 let demoMode = false;
 
 const LOCAL_DEVELOPMENT_TOOL = "http://localhost:8090/";
-const LOCAL_BUILDER_TOOL = "http://localhost:3223";
+// The builder serves its own routes under the /builder door — the bare 3223 root answers 404
+// (2026-10-25, its Next.js base path moved there) — so the local default is the same relative
+// door the server configures, never the bare port.
+const LOCAL_BUILDER_TOOL = "/builder";
 // 2026-10-08: Langfuse (self-hosted in governance/langfuse-main) through the frame proxy.
 // 2026-10-09 (owner): the address carries the PROJECT PATH — the app's bare root shows the
 // project chooser whenever the browser has no remembered project, so the room always opens
@@ -89,6 +93,10 @@ let started: Promise<void> | null = null;
 /** Ask the server which build this is — once. Never rejects; callers may await or ignore. */
 export function appConfigReady(): Promise<void> {
   started ??= (async () => {
+    // THE LOOPBACK TEST IS TAKEN ONCE, HERE (2026-10-24): the success path and the failure
+    // path must answer the same question, and a failure may never hand a deployed page this
+    // machine's addresses (see the catch below).
+    const onLocalhost = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
     const controller = new AbortController();
     // THE OWNER'S LAW (2026-10-21): "it should fail after 10 seconds." The old 3-second abort
     // killed the read while the backend was busy assembling a surface (its model call blocks
@@ -120,16 +128,29 @@ export function appConfigReady(): Promise<void> {
       // unset value fell to `http://localhost:…` (the visitor's machine). Unset on localhost →
       // the local ports; unset on any deployed origin → "" ("not connected"; the room draws
       // nothing).
-      const onLocalhost = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
       developmentTool = development || (onLocalhost ? LOCAL_DEVELOPMENT_TOOL : "");
       builderTool = builder || (onLocalhost ? LOCAL_BUILDER_TOOL : "");
       governanceTool = governance || (onLocalhost ? LOCAL_GOVERNANCE_TOOL : "");
       posthogTool = posthog || (onLocalhost ? LOCAL_POSTHOG_TOOL : "");
     } catch (error) {
       // NO SILENT FALLBACK (owner's law, 2026-10-21): the read failed, so it says so with the
-      // real reason and announces it. The local defaults still apply, declared as what they
-      // are — a fallback after a stated failure, never a silent success.
-      console.error('[appConfig] GET /api/config failed — using local defaults:', error);
+      // real reason and announces it.
+      // THE FAILURE OBEYS THE LOOPBACK LAW TOO (2026-10-24): measured on the tunnel, a failed
+      // read left the module-level local defaults standing, so a deployed page pointed the
+      // rooms at THIS machine's ports — on this Mac the governance application appeared; on
+      // any other visitor it would hang on their own computer. A declared failure still must
+      // not cross that line. Loopback keeps the local defaults, as it always has; a deployed
+      // origin stays "not connected" (empty, and the rooms draw their own ground).
+      if (!onLocalhost) {
+        developmentTool = "";
+        builderTool = "";
+        governanceTool = "";
+        posthogTool = "";
+      }
+      console.error(
+        `[appConfig] GET /api/config failed — ${onLocalhost ? 'using local defaults' : 'rooms stay not connected'}:`,
+        error,
+      );
       window.dispatchEvent(new CustomEvent('app-config-failed', { detail: String(error) }));
     } finally {
       clearTimeout(timer);

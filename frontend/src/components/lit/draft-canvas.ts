@@ -518,7 +518,7 @@ export class DraftCanvas extends LitElement {
         border: 1px solid var(--ds-rule);
         border-radius: var(--ds-radius);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
       }
       .vue-host .draft-node.sel {
         outline: 2px solid var(--ds-teal); outline-offset: 2px;
@@ -544,7 +544,7 @@ export class DraftCanvas extends LitElement {
          under the row's start. */
       .tray { position: absolute; top: 12px; left: 12px; z-index: 4; display: flex; gap: 8px; align-items: flex-start; }
       .tray-btn {
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
         font-size: 13px; font-weight: 600;
         color: var(--ds-ink, #234354); background: var(--ds-surface);
         border: 1px solid var(--ds-rule); border-radius: var(--ds-radius);
@@ -565,8 +565,8 @@ export class DraftCanvas extends LitElement {
         background: none; border: 0; cursor: pointer;
       }
       .tray-item:hover { background: rgba(0, 0, 0, 0.05); }
-      .tray-name { font-family: 'Inter', system-ui, sans-serif; font-size: 13px; color: var(--ds-ink, #234354); }
-      .tray-desc { font-family: 'Inter', system-ui, sans-serif; font-size: 11px; color: var(--ds-muted); }
+      .tray-name { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; color: var(--ds-ink, #234354); }
+      .tray-desc { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 11px; color: var(--ds-muted); }
     `,
   ];
 }

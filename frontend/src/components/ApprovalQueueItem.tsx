@@ -60,23 +60,23 @@ export function ApprovalQueueItem({ item, index, onLoadToComposer }: ApprovalQue
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-['Inter'] font-bold text-[16px] text-[#1c2f4e]">
+            <h3 className="font-['IBM Plex Sans'] font-bold text-[16px] text-[#1c2f4e]">
               {item.promptName}
             </h3>
-            <span className="font-['Inter'] text-[12px] text-[#6c757d] font-medium">
+            <span className="font-['IBM Plex Sans'] text-[12px] text-[#6c757d] font-medium">
               v{item.version}
             </span>
           </div>
-          <p className="font-['Inter'] text-[13px] text-[#495057] leading-relaxed">
+          <p className="font-['IBM Plex Sans'] text-[13px] text-[#495057] leading-relaxed">
             {item.description}
           </p>
         </div>
         
         <div className="flex flex-col gap-2 ml-4">
-          <span className={`px-2 py-1 rounded-full text-[10px] font-['Inter'] font-bold uppercase tracking-wide ${statusColors[item.status]}`}>
+          <span className={`px-2 py-1 rounded-full text-[10px] font-['IBM Plex Sans'] font-bold uppercase tracking-wide ${statusColors[item.status]}`}>
             {item.status.replace('-', ' ')}
           </span>
-          <span className={`px-2 py-1 rounded-full text-[10px] font-['Inter'] font-bold uppercase tracking-wide ${riskColors[item.riskLevel]}`}>
+          <span className={`px-2 py-1 rounded-full text-[10px] font-['IBM Plex Sans'] font-bold uppercase tracking-wide ${riskColors[item.riskLevel]}`}>
             {item.riskLevel} Risk
           </span>
         </div>
@@ -84,26 +84,26 @@ export function ApprovalQueueItem({ item, index, onLoadToComposer }: ApprovalQue
 
       <div className="grid grid-cols-4 gap-3 mt-3 pt-3 border-t border-gray-300">
         <div>
-          <div className="text-[10px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-0.5">Submitted By</div>
-          <div className="text-[12px] font-['Inter'] font-semibold text-[#1c2f4e]">{item.submittedBy}</div>
+          <div className="text-[10px] font-['IBM Plex Sans'] text-[#6c757d] uppercase tracking-wide mb-0.5">Submitted By</div>
+          <div className="text-[12px] font-['IBM Plex Sans'] font-semibold text-[#1c2f4e]">{item.submittedBy}</div>
         </div>
         <div>
-          <div className="text-[10px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-0.5">Time</div>
-          <div className="text-[12px] font-['Inter'] font-semibold text-[#1c2f4e]">{item.submittedAt}</div>
+          <div className="text-[10px] font-['IBM Plex Sans'] text-[#6c757d] uppercase tracking-wide mb-0.5">Time</div>
+          <div className="text-[12px] font-['IBM Plex Sans'] font-semibold text-[#1c2f4e]">{item.submittedAt}</div>
         </div>
         <div>
-          <div className="text-[10px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-0.5">Category</div>
-          <div className="text-[12px] font-['Inter'] font-semibold text-[#1c2f4e]">{item.category}</div>
+          <div className="text-[10px] font-['IBM Plex Sans'] text-[#6c757d] uppercase tracking-wide mb-0.5">Category</div>
+          <div className="text-[12px] font-['IBM Plex Sans'] font-semibold text-[#1c2f4e]">{item.category}</div>
         </div>
         <div>
-          <div className="text-[10px] font-['Inter'] text-[#6c757d] uppercase tracking-wide mb-0.5">Est. Cost</div>
-          <div className="text-[12px] font-['Inter'] font-semibold text-[#1c2f4e]">{item.estimatedCost}</div>
+          <div className="text-[10px] font-['IBM Plex Sans'] text-[#6c757d] uppercase tracking-wide mb-0.5">Est. Cost</div>
+          <div className="text-[12px] font-['IBM Plex Sans'] font-semibold text-[#1c2f4e]">{item.estimatedCost}</div>
         </div>
       </div>
 
       <div className="mt-3 flex items-center justify-end">
         <motion.div 
-          className="flex items-center gap-1 text-[#507274] font-['Inter'] font-semibold text-[12px]"
+          className="flex items-center gap-1 text-[#507274] font-['IBM Plex Sans'] font-semibold text-[12px]"
           whileHover={{ x: 3 }}
           transition={{ duration: 0.2 }}
         >

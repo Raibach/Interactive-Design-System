@@ -64,6 +64,10 @@ import "@/components/lit/artifact-canvas";
 // would draw an empty box and say nothing.
 import "@/components/lit/builder-embed";
 import "@/components/lit/workspace-layout";
+// CARBON'S ELEMENTS (owner, 2026-10-25): the installed package's cds-* components, defined so
+// the ingest's catalogue rows can be drawn in the Design tool's preview — a tag the browser
+// does not know draws nothing, which is exactly what that preview was reporting.
+import "@/components/lit/carbon-elements";
 // The prompt's own bar — title, version label and package id, above the sections in the
 // left column. It used to be row 2 of the React `LeftColumnHeader`, which meant the TITLE
 // had no data path at all: it could only be changed through a callback the shell handed
@@ -86,24 +90,20 @@ import "@/components/lit/trace-feed";
 // the room can mount it when the Evals tab is selected; nothing global reaches into any seat,
 // and the index it draws is imported by that file itself.
 import "@/components/lit/evals-chat-panel";
-// THE DESIGN ROOM'S OWN SEAT — a whole duplicate of <chat-panel>, retagged <design-chat-panel>,
-// living in the design folder with the rest of the seat's pieces (owner, 2026-10-18: isolate the
-// seat; only the Lit components and the styling are shared). An element that is never imported is
-// never defined, so this line is what makes the tag real.
-import "@/design/design-chat-panel";
 // AND DESIGN'S OWN RENDERER AND CHAT — the room's element for drawing a surface
 // (<design-renderer>) and the room's chat that a tab binds to its engine and prompting system
 // (<design-chat>). Both are Design's files, not the composer's; registered here for the same
 // reason as every element above.
-import "@/design/design-renderer";
-import "@/design/design-chat";
+import "@/rooms/design/design-renderer";
+import "@/rooms/design/chat/design-chat";
 // THE TOOLS TAB'S OWN PIECES ARE NOT REGISTERED HERE ANY MORE (2026-10-21). `tools-tab` imports
 // `figma-layers-view` and `figma-ingest-form`, and this file rides the boot chunk — so 55 kB of
 // Figma tree (measured 1.08 s through the tunnel) was downloaded before the console could paint,
 // for a panel nobody had opened. The Design room owns them now (`design/DesignRoom.tsx`), and
 // that room is lazy: it arrives when the Design button is pressed, which is the only moment the
-// tools rail can exist.
-import "@/tools/GraceToolsChat";
+// tools rail can exist. Grace's Tools conversation followed the same rule (2026-10-24):
+// `rooms/design/DesignSeatShell.tsx` imports `rooms/design/tools/GraceToolsChat` and mounts it
+// as the Tools tab's view, so the element is defined before that room needs it and not at boot.
 // The judged runs of one package, for the rail's Evals view. Same registration rule as the two
 // above: an element that is never imported is never defined, and the surface would emit the name
 // into an empty slot, silently.
@@ -130,7 +130,6 @@ import "@/components/lit/trace-detail";
 // THE UX TAB'S VIEW — the running observability application, framed. It is small (one iframe,
 // no data of its own) and it is registered here for the same reason as the three above: the
 // Design room appends the tag, and a tag nothing defines draws an empty column in silence.
-import "@/components/lit/ux-app-frame";
 /*
  * <agent-flow> AND <room-embed> ARE NOT IMPORTED HERE, ON PURPOSE — and this is the one
  * place above that breaks the rule the comments state. They were imported here, and it cost
@@ -158,7 +157,6 @@ import "@/components/lit/canvas-footer";
 // ── Lit web component registry — side-effect imports auto-register custom elements ──
 import "@/components/lit/agent-card-element";
 import "@/components/lit/chat-navigation-bar";
-import "@/components/lit/ai-surface-sandbox";
 import "@/components/lit/control-bar";
 // The error channel. Its tag was in the allowlist, granted to every role, and the
 // backend's own prompt tells the model to report failures through it — with no
