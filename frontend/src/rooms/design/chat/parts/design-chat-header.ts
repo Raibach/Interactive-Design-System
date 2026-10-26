@@ -1,0 +1,500 @@
+/**
+ * <design-chat-header> — the output area's bar, and the same shell as its response card.
+ *
+ * v.4b source (file 20UPR2KQMsbAxlo5NJb1se, the drawing this column follows now):
+ *
+ *   the BAR   "chat-output-header" #40001119:6309 (:6318, :6579 are the same frame
+ *             drawn again with different copy — the wireframe shows the bar three
+ *             times): padding 7px 10px, radius 8, fill rgba(117,142,135,0.35), a 1px
+ *             stroke rgba(117,142,135,0.5), shadows inset 0 -2px 5px
+ *             rgba(0,0,0,0.15) and inset 0 2px 4px rgba(0,0,0,0.25), text #3D515B
+ *             Arial Rounded MT Bold 400 / 13px / 20px.
+ *   the SLOT  the container "output-output-results-area-container" #40001130:5059 —
+ *             padding 6px 20px 4px, gap 7, fill #CBE6E3 (the block's own ground), holding
+ *             the card "chat-output-area-results" #40001130:5060 (renamed in Figma
+ *             2026-09-24 from "chat-output-header" #40001119:6327): the same shell as the
+ *             bars, padding 10px, radius 8, column, gap 10, holding the response itself.
+ *             TWO FRAMES, TWO FILLS: the container is green and the card is the light
+ *             one — #F7F8F2 in the file (read live 2026-09-24) and the owner's results
+ *             colour; the owner's solid #ADC7C3 stands in between runs, where the file
+ *             has no state to draw. See registry.json (values.container / values.card)
+ *             and AGENTS-instructions/OUTPUT-STYLING.md R4.
+ *
+ * Each shape sits in its own "output-header-area" — a #CBE6E3 ground, padding
+ * 10px 20px 2px, column, gap 7 (#40001119:6308; the card's block is :6326 with 4px
+ * under instead of 2px) — and a BAR block carries a Meatballs row under it: the
+ * four-dot grip #40001119:6385 (dots 2.16×2.05, stroke rgba(147,58,69,0.5) at 2px,
+ * 4px apart), which is the handle a person will use to take the block away. This
+ * element draws it; it is not wired to anything yet — the drawing has no annotation
+ * for it, and the row is what remains to be made interactive.
+ *
+ * THE STATUS LINE IS FOUR SLOTS, not one string. The frame's sample:
+ *
+ *   "Analyzing: Session 222 | supportCustomerSession — Duration: 28.495s | Closed QA: 89.38%"
+ *
+ * maps to status / sessionLabel / sessionName / duration / qaScore, joined with
+ * the frame's own separators (pipes, em-dash before Duration). `statusText`
+ * remains as the flat fallback for hosts that format the line themselves — which
+ * is also how the other two bars in the drawing are drawn ("23 Conversations",
+ * "23 Ready for approval" are the same bar with copy the host supplies).
+ *
+ * Part of the <chat-panel> composition. Not a catalog entry on its own.
+ */
+import { LitElement, html, css, nothing } from 'lit';
+// The readout's model mark — the drawing's "ml-model--reference 1" #40001123:6751,
+// 26x26 in #507274, at the card's trailing edge.
+import modelMark from '@/assets/figma-readout-model-mark.svg';
+import { figureStyles, figures } from '@/shared/figures';
+
+export class ChatHeader extends LitElement {
+  static properties = {
+    /** Flat fallback line. Set this OR the slots below, not both. */
+    statusText: { type: String, attribute: 'status-text' },
+    /** Slot 1: the state word, e.g. "Analyzing". */
+    status: { type: String, attribute: 'status' },
+    /** Slot 1: the session identifier, e.g. "Session 222". */
+    sessionLabel: { type: String, attribute: 'session-label' },
+    /** Slot 2: the session name, e.g. "supportCustomerSession". */
+    sessionName: { type: String, attribute: 'session-name' },
+    /** Slot 3: the duration readout, e.g. "28.495s". */
+    duration: { type: String, attribute: 'duration' },
+    /** Slot 4: the QA readout, e.g. "89.38%". */
+    qaScore: { type: String, attribute: 'qa-score' },
+    /**
+     * The CARD shape — #40001119:6327 — instead of the bar: same shell, more
+     * padding, and a slot for what the block holds. The grip row belongs to the
+     * bars only; the drawing's card block has none.
+     */
+    card: { type: Boolean },
+    /**
+     * TRUE WHILE THE THREAD THIS CARD HOLDS CARRIES RUN RESULTS — set by the host
+     * (chat-panel), which reads the same thread the messages element draws. The
+     * card's shell then wears the results colour instead of the default: the
+     * owner's 2026-09-24 rule — default solid #ADC7C3, results #F7F8F2 (see
+     * AGENTS-instructions/OUTPUT-STYLING.md R4).
+     */
+    hasResults: { type: Boolean, attribute: 'has-results', reflect: true },
+    /* THE USAGE FIGURES — declared, or the renderer DROPS them. assignProps skips an
+       undeclared property with a console warning only, so a bound value would arrive at
+       nothing and the readout would show a zero nobody sent (prop-undeclared). */
+    /* THE MARK THE CARD CARRIES AT ITS TRAILING EDGE. The readout card draws the model
+       mark; the conversations card draws the history artwork; each window draws what the
+       drawing draws in that window's card. The host hands the artwork in, so this element
+       holds no catalogue of its own. */
+    icon: { type: String },
+    iconNode: { type: String, attribute: 'icon-node' },
+    /* THE GRIP BELONGS TO THE BAR THIS INSTANCE DRAWS. The drawing repeats the bar in
+       every window and each copy carries its OWN node ids (the readout's gripper is
+       40001123:6773; the conversations bar's is 40001126:2014) — so the ids are handed
+       in, exactly as the icon's are, and an instance that hands in none keeps the
+       readout bar's own. */
+    /* THE BAR'S OWN THREE LAYERS, per instance: the block it sits in, the bar itself and
+       the line it writes. The drawing repeats this bar in every window and each copy
+       carries its own ids (readout 40001119:6308/6309/40001123:6750; conversations
+       40001119:6317/6318/40001123:6744; approvals 40001123:6978/6979) — handed in, as the
+       icon and the grip are, so a deleted layer can never leave the app pointing at it. */
+    blockNode: { type: String, attribute: 'block-node' },
+    /* THE WINDOW'S OWN SHAPE. The drawing draws the approvals window taller than the bars
+       above it: its block takes gap 7 and 4 under, and its bar pads 10px 2px 10px 10px
+       where the bars pad 7px 10px (40001123:6978 / :6979 against 40001119:6308 / :6309).
+       One instance passes `variant="tall"`; nothing else changes. */
+    variant: { type: String },
+    barNode: { type: String, attribute: 'bar-node' },
+    textNode: { type: String, attribute: 'text-node' },
+    gripNode: { type: String, attribute: 'grip-node' },
+    gripRowNode: { type: String, attribute: 'grip-row-node' },
+    gripDots: { type: String, attribute: 'grip-dots' },
+    /* THE MARK'S SIZE IS THE CARD'S OWN. The readout card draws 26; the conversations
+       card draws 22. One size for every card was my guess and the drawing does not have
+       one size — read per card, never assumed. */
+    iconSize: { type: Number, attribute: 'icon-size' },
+    /* THE CARD'S VOICE. In the drawing the readout card's line is Arial Rounded and the
+       conversations card's line is DM Sans 600 — two cards, two families. The owner's face
+       ruling (2026-10-07) draws both in Nunito, so this flag now separates the treatments by
+       size/weight alone (14/600 against 12/400); it stays a flag because which card this is
+       remains a fact of the composition, not of the face. */
+    dmSans: { type: Boolean, attribute: 'dm-sans' },
+    tokens: { type: Number },
+    inTokens: { type: Number, attribute: 'in-tokens' },
+    outTokens: { type: Number, attribute: 'out-tokens' },
+    calls: { type: Number },
+    lastCall: { type: String, attribute: 'last-call' },
+    unattributed: { type: Boolean },
+  };
+
+  declare statusText: string;
+  declare status: string;
+  declare sessionLabel: string;
+  declare sessionName: string;
+  declare duration: string;
+  declare qaScore: string;
+  declare card: boolean;
+  declare hasResults: boolean;
+
+  constructor() {
+    super();
+    this.statusText = '';
+    this.status = '';
+    this.sessionLabel = '';
+    this.sessionName = '';
+    this.duration = '';
+    this.qaScore = '';
+    this.card = false;
+    this.hasResults = false;
+  }
+
+  declare tokens: number;
+  declare inTokens: number;
+  declare outTokens: number;
+  declare calls: number;
+  declare lastCall: string;
+  declare unattributed: boolean;
+  declare icon: string;
+  declare iconNode: string;
+  declare blockNode: string;
+  declare variant: string;
+  declare barNode: string;
+  declare textNode: string;
+  declare gripNode: string;
+  declare gripRowNode: string;
+  declare gripDots: string;
+  declare iconSize: number;
+  declare dmSans: boolean;
+  static styles = [figureStyles, css`
+    :host { display: block; }
+    /* THE BLOCK'S GROUND — "output-header-area" #40001119:6308: #CBE6E3, padding
+       10px 20px 2px, column, gap 7. This is new in v.4b; the older node this
+       element was drawn from (40001085:1553) was a white strip with a #999 rule,
+       and it was drawn transparent so the column showed through. The v.4b drawing
+       paints the block, so the block is painted — the value is the node's. */
+    .output-area {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      /* Figma "output-header-area": gap 5, padding 20/20/6/0 — and every block under the
+         leading one takes 6 at the top against the leader's 20. */
+      gap: 5px;
+      padding: 6px 20px 0;
+      /* THE LEADING BLOCK IS DEEPER AT THE TOP. The drawing's FIRST block is
+         "output-header-area" #40001119:6308 — padding 20px 20px 2px — while every later one
+         carries the template's 10px 20px 2px (EL-ea5b699e). The panel marks whichever block is
+         actually first (chat-panel's first-child rule), so the 20 lands on the top
+         block even when the status bar is not drawn and the one below it leads instead — the
+         owner, 2026-09-19: "the top one, the top padding is off… it's very tight and close to
+         the top." */
+      padding-top: 6px;
+      background: #CBE6E3;
+    }
+    /* THE CARD'S BLOCK — the container the card sits in, and the drawing names it:
+       "output-output-results-area-container" #40001130:5059 — the block's own ground,
+       padding 6px 20px 4px (the block's 6px 20px 0 plus these 4px under it).
+       IT IS ALWAYS #CBE6E3, IN BOTH STATES. The results state repaints the CARD and
+       nothing else; the container holding it stays the block's green, which is what
+       leaves a light slot standing inside a green container, as the file draws it. */
+    .output-area.card-block { padding-bottom: 4px; }
+    /* THE CARD FILLS ITS BLOCK, AND THE BLOCK FILLS THE ELEMENT.
+       The panel hands this element the region's leftover height (chat-panel's
+       chat-header[card] rule: flex 1 0 auto), and until this rule the element was that
+       tall while the ground and the card inside it stayed the height of their CONTENT —
+       the region drew a small green card at the top of a white void instead of a card
+       that fills it (owner, 2026-09-19: "they're not flexing vertically… seems to be
+       hugging, should be expanding"). The percentage resolves because a flex item's
+       height is definite; the BARS are untouched by it, since their host is
+       content-sized and 100% of an auto height is auto. */
+    .output-area.card-block {
+      height: 100%;
+      box-sizing: border-box;
+    }
+    /* The shell both shapes share. Only the padding, the flow direction and the
+       content differ between them, so the fill, the stroke, the radii and the two
+       inset shadows are written once, here. */
+    .shell {
+      /* THE 1px EDGE IS INSIDE THE HEIGHT. Without border-box the stroke adds 2px to a card
+         that the drawing measures at 36, and the whole block grows with it (38 against 36,
+         61 against 54, measured in the browser). */
+      box-sizing: border-box;
+      /* THE FILL, 100% OPAQUE — the owner's fix, 2026-09-24: the drawing's shell was
+         rgba(117,142,135,0.35), and 35% over the block's #CBE6E3 composited to a green
+         that drifted with whatever sat behind it. The owner named the solid colour:
+         #ADC7C3 — the very tone the blend rendered — so the shell now paints it
+         directly and nothing bleeds through. One value, one place: here, the registry
+         (values.card.fill) and the file's frame fill must all agree.
+         ⭐ AND THE OWNER MOVED IT AGAIN, 2026-10-04: *"you changed the wrong thing. You
+         changed the frame around it. What you needed to change was the interior area of
+         grace. Just this one slot. And you'll want to change back the frame to the green"*
+         — his swatch: #F7F8F3. So it is THIS line, and only this line: the card whose slot
+         her words stand in goes to the off-white, the frame around it stays the drawing's
+         #CBE6E3, and the results state keeps its own #F7F8F2 above. Anything else that
+         painted this card's colour on the container is the 2026-09-24 defect again. */
+      background: #F7F8F3;
+      /* The drawing strokes all four edges at 1px (#40001119:6318 stroke rgba(117,142,135,0.5)
+         w=1); the code drew the bottom edge alone. */
+      border: 1px solid rgba(117, 142, 135, 0.5);
+      border-radius: 8px;
+      box-shadow:
+        inset 0 -2px 5px 0 rgba(0, 0, 0, 0.15),
+        inset 0 2px 4px 0 rgba(0, 0, 0, 0.25);
+    }
+    /* THE RESULTS STATE IS THE CARD'S, AND ONLY THE CARD'S.
+       When the thread this card holds carries a run's results (the host's has-results
+       flag) the CARD wears the results colour #F7F8F2 instead of the default #ADC7C3
+       (the owner's 2026-09-24 rule; see AGENTS-instructions/OUTPUT-STYLING.md R4).
+
+       THE CONTAINER AROUND IT DOES NOT FOLLOW, and it used to: a second rule painted
+       .output-area.card-block the same light colour "so the whole slot reads as one
+       light surface." That is the defect the owner caught at the screen — "when I go to
+       the chat output the entire container now is a light color. It should've only been
+       the inside." The container and the inside are two frames in the file and they have
+       two fills: "output-output-results-area-container" #40001130:5059 is the block's own
+       #CBE6E3, and "chat-output-area-results" #40001130:5060 — the card this rule paints —
+       is the light one. Painting the outer frame light erases the very edge the drawing
+       is made of. One rule, one region: the shell, never the ground it stands in.
+       No backticks in this comment, deliberately: this is a Lit css literal. */
+    :host([has-results]) .shell { background: #F7F8F2; }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      /* #40001123:6750 — Arial Rounded 400 at 14px in #3D515B. The code carried 13px at
+         weight 500 in #485954.
+         THE FACE IS NUNITO — the owner's ruling, 2026-10-07: "Arial or rounded fonts ->
+         becomes Nunito (found in chat interfaces for Grace)... Use our fonts only - no API
+         calls." The drawing's Arial Rounded is substituted by the local rounded family; the
+         line's figures (tokens, calls, durations, QA) render Inter via the figures helper. */
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: normal;
+      color: #3D515B;
+    }
+    .card {
+      display: flex;
+      flex-direction: column;
+      /* It fills the ground it sits in (see .output-area.card-block above) so the card
+         reaches the bottom of the region instead of stopping at its last line. */
+      flex: 1 1 auto;
+      min-height: 0;
+      gap: 10px;
+      padding: 10px;
+      /* THE CARD IS THE SCROLLBAR'S HOME. The panel slots the drawn rail in here beside
+         the scroller, as an absolutely positioned child: this box is what it measures
+         itself against, so the thumb holds the card's right edge while the conversation
+         travels under it. Out-of-flow, so it never becomes a column item. */
+      position: relative;
+      /* The card's body takes the drawing's own treatment for the text it holds — the
+         user-response-bubble line, #40001123:6984: Arial Rounded 400 at 13/20 in #3D515B.
+         The code carried weight 500 and #171717, neither of which is in the file.
+         Drawn in Nunito, per the owner's face ruling — see .status above. */
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 20px;
+      color: #3D515B;
+    }
+    /* The grip row — #40001123:6773, the readout band's own gripper: 500x7, padding
+       10px 0 10px 0, itemSpacing 10, primary CENTER, counter CENTER, holding the
+       480-wide Meatballs row #40001123:6774 (padding 1px 2px, itemSpacing 4, primary
+       CENTER, counter CENTER, FILL + grow 1 → flex 1 1 auto).
+       READ FROM THE FILE, NOT FROM THE OLD COMMENT: the dots are CENTRED — the file's
+       own coordinates put the row at x=-8828 (width 480, centre -8588) and the five
+       ellipses centred on that same -8588. The previous drawing said "at the start";
+       the value check said flex-start against the file's CENTER, so the alignment and
+       the dot spacing below are the file's, and the artwork is the tray's own spans
+       (2.16x2.05, 2px stroke, gap 4) instead of an SVG whose ellipses sat 4 apart
+       CENTRE TO CENTRE — which is not a gap of 4 between 2.16-wide dots. */
+    .grip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      height: 7px;
+      padding: 0 10px;
+    }
+    /* The dot row is 480 wide in the drawing (#40001123:6774, padding 1px 2px) with the
+       dots centred in it and 4 between them. */
+    .grip .row {
+      flex: 1 1 auto;
+      padding: 1px 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      box-sizing: border-box;
+    }
+    .dot {
+      display: block;
+      width: 2.16px;
+      height: 2.05px;
+      border: 2px solid rgba(147, 58, 69, 0.5);
+      border-radius: 50%;
+      box-sizing: border-box;
+    }
+    /* THE CARD IS A ROW: the readout grows and takes the room, the model mark keeps its
+       26 and sits at the trailing edge (#40001123:6751). */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    /* #40001119:6308 — THE LEADING BLOCK IS DEEPER AT THE TOP: 16 in the drawing where
+       every later block takes 6. Read from the file's own node, on the instance that leads
+       (the panel marks it variant="lead"), so the value is compared rather than sitting in
+       a custom property the reader cannot resolve. */
+    .output-area.lead { padding-top: 16px; }
+    /* #40001123:6978 / :6979 — THE APPROVALS WINDOW'S OWN NUMBERS, READ FROM THE FILE.
+       The designer moved both heights: the block is 142 where it was 150, and the bar it
+       holds is 118 where it was 126. Declared here rather than left to follow from content,
+       so the two values are COMPARED on every run instead of sitting undeclared — the same
+       move as .output-area.lead's 16px top padding, and it is what "carry them into the
+       source" asks for. The block is border-box so its 142 is the frame the drawing
+       measures, not 142 plus its own padding. */
+    .output-area.tall { gap: 7px; padding-bottom: 4px; height: 142px; box-sizing: border-box; }
+    .status.tall { padding: 10px 10px 10px 2px; height: 118px; }
+    /* #40001123:6750 — THE READOUT LINE IS 12px. The designer took it down from 14 and the
+       declaration had kept the bar's 14, so the readout drew a size the frame does not have.
+       Stated on the readout's own element rather than on .status, because the conversations
+       line shares .status and keeps 14. */
+    .readout { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+    /* #40001123:6744 — the conversations line is DM Sans 600 at 14/22 in the drawing. Its 14
+       is declared here so the readout's 12 does not take it.
+       THE OWNER MOVED THE FACE TOO, 2026-10-07: asked which local family replaces DM Sans,
+       he ruled NUNITO — so both chat cards draw one rounded family, and 14/600 against the
+       readout's 12 is what separates them now. */
+    .readout.dm {
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .model-mark {
+      display: block;
+      width: 26px;
+      height: 26px;
+      flex: 0 0 auto;
+    }
+  `,
+  ];
+
+  /** The frame's slot line — #40001123:6750: "Analyzing: Session 222 | supportCustomerSession
+   *  Duration: 28.495s | Closed QA: 89.38%". Pipes between the readouts; the state leads. */
+  private get _statusLine(): string {
+    /*
+     * THE READOUT IS ALWAYS WRITTEN. This panel is the system talking to the user — a
+     * state, a technical issue, a usage figure — and a readout with nothing in it is a
+     * space that does not work. The owner, 2026-09-20: "put that dummy text in there and
+     * then put your token feed at the end of it... make that space work."
+     *
+     * So there is always a line. The live parts come first when the seat has them; the
+     * drawing's own copy is the sample that stands in when it does not — it is the frame's
+     * text (#40001123:6750), not an invention. The usage joins the same line under the same
+     * pipes, taken from the attributes the host already assigns, so a number that is not
+     * known reads as a figure rather than as an empty gap.
+     */
+    const SAMPLE = 'Analyzing: Session 222 | supportCustomerSession Duration: 28.495s | Closed QA: 89.38%';
+    const parts: string[] = [];
+    if (this.statusText) {
+      parts.push(this.statusText);
+    } else {
+      /* THE FRAME'S OWN LINE, BUILT FROM THE LIVE SLOTS. All five slot properties exist and
+         the panel hands every one of them in, but only the label and the name were ever
+         printed — so a seat with a live duration and QA score drew a line the frame does not
+         have, and the two figures were dropped on the floor. Built here in the frame's own
+         order and with the frame's own punctuation: the state leads, a pipe, then the name
+         and its duration, a pipe, then the QA readout. No em-dash: the frame has none. */
+      const lead = [this.status ? `${this.status}:` : '', this.sessionLabel ?? ''].join(' ').trim();
+      const named = [this.sessionName ?? '', this.duration ? `Duration: ${this.duration}` : ''].join(' ').trim();
+      if (lead) parts.push(lead);
+      if (named) parts.push(named);
+      if (this.qaScore) parts.push(`Closed QA: ${this.qaScore}`);
+      if (!parts.length) parts.push(SAMPLE);
+    }
+    // THE USAGE BELONGS TO ONE PANEL, NOT TO EVERY BAR. The host hands the figures to the
+    // readout alone (the leading panel), so their presence is what says "this is the
+    // readout" — a bar the host gave no figure to is a bar, and nothing joins its text.
+    if (this.hasAttribute('tokens')) {
+      const attr = (n: string, fallback: string) => {
+        const v = (this.getAttribute(n) ?? '').trim();
+        return v === '' ? fallback : Number(v).toLocaleString();
+      };
+      const unattributed = this.hasAttribute('unattributed');
+      parts.push(`Tokens: ${unattributed ? 'unattributed' : attr('tokens', '0')}`);
+      const calls = attr('calls', '');
+      if (calls) parts.push(`Calls: ${unattributed ? 'unattributed' : calls}`);
+    }
+    return parts.join('  |  ');
+  }
+
+  /** The dots of this instance: the ids it was handed, or the readout bar's own five. */
+  private get _dots(): string[] {
+    const handed = (this.gripDots || '').split(',').map((s) => s.trim()).filter(Boolean);
+    return handed.length ? handed : ['40001123:6775', '40001123:6776', '40001123:6777', '40001123:6778', '40001123:6779'];
+  }
+
+  render() {
+    const line = this._statusLine;
+
+    if (this.card) {
+      return html`
+        <div class="output-area card-block">
+          <div class="card shell">
+            <slot></slot>
+          </div>
+        </div>
+      `;
+    }
+
+    // THE READOUT PANEL ALWAYS DRAWS. It used to paint nothing when it had nothing to
+    // say — "no copy, no ground" — but the owner's ruling on this panel is the opposite
+    // (2026-09-20): "This is the first panel, it always loads by default. It is the
+    // readout. It is the way that the system communicates to the user... It always stays
+    // at the top, it can be removed." A panel that is always there cannot be conditional
+    // on its own content, and a drawing that is not on screen does not exist.
+
+    return html`
+      <div class="output-area ${this.variant === 'lead' ? 'lead' : ''} ${this.variant === 'tall' ? 'tall' : ''}" data-node-id=${this.blockNode || nothing}>
+        <div class="status shell ${this.variant === 'tall' ? 'tall' : ''}" data-node-id=${this.barNode || nothing} role="status">
+          <span class="readout ${this.dmSans ? 'dm' : ''}" data-node-id=${this.textNode || nothing}>${figures(line)}</span>
+          ${this.icon
+            ? html`<img class="model-mark" style=${`width: ${this.iconSize || 22}px; height: ${this.iconSize || 22}px`} data-node-id=${this.iconNode || ''} src=${this.icon} alt="" />`
+            : this.hasAttribute('tokens')
+              ? html`<img class="model-mark" style=${`width: ${this.iconSize || 22}px; height: ${this.iconSize || 22}px`} data-node-id=${this.iconNode || nothing} src=${modelMark} alt="" />`
+              : nothing}
+        </div>
+        <div class="body"><slot></slot></div>
+        <div class="grip" data-node-id=${this.gripNode || '40001123:6773'} aria-hidden="true">
+          <div class="row" data-node-id=${this.gripRowNode || '40001123:6774'}>
+            ${this._dots.map((id) => html`<span class="dot" data-node-id=${id}></span>`)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+if (!customElements.get('design-chat-header')) customElements.define('design-chat-header', ChatHeader);
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'design-chat-header': ChatHeader;
+  }
+}
+
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'design-chat-header': React.DetailedHTMLProps<
+        React.HTMLAttributes<ChatHeader> & {
+          'status-text'?: string;
+          'status'?: string;
+          'session-label'?: string;
+          'session-name'?: string;
+          'duration'?: string;
+          'qa-score'?: string;
+          card?: '' | boolean;
+          ref?: React.Ref<ChatHeader>;
+        },
+        ChatHeader
+      >;
+    }
+  }
+}

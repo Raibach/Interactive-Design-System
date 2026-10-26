@@ -1,0 +1,1268 @@
+/**
+ * <design-chat-navigation-bar> — Lit A2UI web component
+ *
+ * Right column navigation bar with three tabs (Chat, Trace, Tools) and a
+ * drag-to-resize gripper. Replaces the React SidebarNavigation + NavigationButton
+ * components. Registered as a custom element for A2UI surface assembly.
+ *
+ * Features:
+ *   - 3 tabs with inline SVG icons and labels
+ *   - Active tab: yellow highlight (#FCCD3D), 77px height, icon shifts down
+ *   - Gripper: drag handle at bottom dispatches right-column-drag-* events
+ *   - Logo slot: <slot name="logo"> for AI-assigned branding
+ *   - Collapse/expand: clicking active tab toggles collapsed state
+ *   - CustomEvents: tab-change, collapse-toggle
+ *
+ * A2UI Catalog ID: chat-navigation-bar
+ * Framework: Lit 3.x — no decorators, static properties + customElements.define()
+ */
+
+import { LitElement, html, css, nothing } from 'lit';
+
+// ── The chat button's icon ─────────────────────────────────────────────────
+// From Figma "chat-button" (node 40001010:25768), icon instance 40001012:26436
+// — an instance of component "Machine-learning-model" (40000122:3412). The design
+// ships this as VECTOR artwork now (38×38, one path, fill #1FACC2), so it is
+// carried as its own SVG and stays crisp at whatever size the rail asks for.
+//
+// This REPLACES a raster that was imported here from node 40001010:25766. That
+// node no longer exists in the file — the design was edited — so the provenance
+// pointed at nothing, and the artwork behind it (a purple CPU chip) is no longer
+// what this button draws. Re-pulled 2026-09-11; the render of 40001010:25768 is
+// the reference: yellow frame, chat glyph, label in that same teal.
+import chatButtonIcon from '@/assets/figma-chat-button-icon.svg';
+
+// The trace button's icon, from Figma component "trace-button" (node
+// 40001011:26266), icon instance 40001011:26260. Vector, not raster — it is an
+// SVG INSTANCE of "Model--foundation", so it renders as its own artwork at any
+// size. Read straight off the node's render.
+//
+// Artwork re-pulled 2026-09-11: the instance's vector is a single SOLID #1FACC2,
+// so the asset's fill was updated to match (it previously carried a #2689D6 →
+// #AC8CEC gradient — stale artwork from an earlier state of the file).
+import traceButtonIcon from '@/assets/figma-trace-button-icon.svg';
+import versionsButtonIcon from '@/assets/figma-versions-button-icon.svg';
+
+// ── The v.4b rail's new artwork ────────────────────────────────────────────
+// The drawing this rail now follows is "chat-main-menu-vert" #40001119:6047 in
+// the v.4b wireframe. Its Chat and Trace buttons place the SAME components as
+// before (40001010:25768 and 40001011:26266), so those two assets are unchanged;
+// the other four buttons are new nodes, and their artwork is pulled from the node
+// it is drawn on rather than traced by hand:
+//
+//   Approve  "ibm--engineering-workflow-mgmt 1" #40001119:6560, 32×32, fill #1FACC2
+//   Evals    "ai-governance--lifecycle 1"       #40001119:6615, 43×43, fill #1FACC2
+//   Tools    "tools-api 1"                      #40001119:6538, 38×35, fill #1FACC2
+//   Settings "settings 1"                       #40001119:6637, 32×32, fill #1FACC2
+//
+// Every one of them carries its own fill in the exported vector, the way the
+// trace button's did, so nothing here recolours artwork by hand.
+import approveButtonIcon from '@/assets/figma-approve-icon.svg';
+import evalButtonIcon from '@/assets/figma-evals-icon.svg';
+import toolsApiButtonIcon from '@/assets/figma-tools-api-icon.svg';
+import settingsButtonIcon from '@/assets/figma-settings-icon.svg';
+// THE UX TAB'S MARK — the owner's own icon (2026-10-18), copied from the repository's
+// images/ folder. The tab is the Design seat's extra item. Its view slot is EMPTY on purpose:
+// the counters view it first held was removed the same day (owner: vanity numbers with no
+// action tied to them). A view arrives here when a watch has something to act on.
+import uxAgentIcon from '@/assets/ai-agent-icon.svg';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Types — exported for React consumers (InteractiveChatInterface.tsx)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Valid tab identifiers. */
+// The design draws FOUR rail buttons — chat, trace, versions, tools
+// (#40001085:2666, :2762, :2731, :2634). `evaluation` and `metadata` were
+// placeholders whose own panels said "design pending"; they came off the rail
+// with the design, and `variables` became `versions` because that is what its
+// panel actually renders.
+// `approvals` is the CONSOLE's fourth button — Figma "approval-button"
+// #40001088:2795. The rail is surface-dependent: Chat / Trace / Versions on both,
+// Tools in the composer, Approvals on the console. The host chooses with
+// `allowed-tabs`; this list is what is drawable.
+// `executions` is the CANVAS seat's own button — added 2026-09-18, drawn rather than
+// pulled from a Figma node (no node exists for it yet, so it claims none). It switches
+// the panel to its view slot, which is where a host drops the runs of this flow and the
+// flow as it ran. A seat that does not need it simply does not allow it — which is how
+// a rail button costs nothing anywhere else.
+//
+// `settings` is the v.4b rail's bottom-pinned button — Figma "tools-button" frame
+// #40001119:6593 (the frame's layer name is stale; the node it holds draws the gear),
+// icon "settings 1" #40001119:6637. It is drawn because the design draws it and it is
+// NOT wired: the node carries no annotation, so there is no event name to emit and
+// inventing one is the thing the annotation rule exists to stop. See the click handler.
+export type TabId = 'chat'
+  | 'trace'
+  | 'sessions'
+  | 'versions'
+  | 'tools'
+  | 'approvals'
+  | 'eval'
+  | 'states'
+  | 'repair'
+  | 'ux'
+  | 'settings';
+
+/** Detail payload for the 'tab-change' CustomEvent. */
+export interface TabChangeEventDetail {
+  tab: TabId;
+}
+
+/** Detail payload for the 'collapse-toggle' CustomEvent. */
+export interface CollapseToggleEventDetail {
+  collapsed: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tab definition — icon, label, and tooltip
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface TabDef {
+  id: TabId;
+  label: string;
+  tooltip: string;
+  /**
+   * The icon as the DESIGN drew it, when that tab's Figma node ships artwork — a
+   * raster fill or an SVG instance. Takes precedence over svgPath.
+   */
+  iconSrc?: string;
+  /**
+   * The icon as a MONOCHROME mask the rail paints in its own teal, when the exported asset is
+   * black artwork rather than a coloured icon. Preferred over iconSrc. (This field was lost from
+   * the working tree on 2026-10-26 when the shared rail was restored from git; it is restored
+   * here, in the shared file and in the Design room's own copy.)
+   */
+  maskSrc?: string;
+  /**
+   * The button as the DESIGN draws it. Per tab, because the two designs do NOT
+   * share numbers yet: chat is 74 tall with a 38px icon at (18, 8); trace is still
+   * 77 tall with a 42×39 icon at (16, 8). Same frame name in Figma, different
+   * measurements — so they are read per node, never assumed to match.
+   */
+  box?: {
+    /** The button's height. */
+    h: number;
+    iconW: number;
+    iconH: number;
+    /** The icon's position inside the button, as the design places it. */
+    iconX: number;
+    iconY: number;
+    /** The label's top, inside the button. */
+    labelY: number;
+  };
+  /**
+   * Inline SVG path, for tabs with no exported artwork yet. Default viewBox is
+   * 0 0 22.75 21.8752.
+   */
+  svgPath?: string;
+  /**
+   * The label's colour, when the design draws it differently from the rail's own
+   * #1FACC2. Only Approve does: Figma text node #40001119:6558 carries #2793A3
+   * (Inter Semi Bold 600 / 13px), a darker teal than its own icon (#1FACC2, node
+   * #40001119:6560) — read off the node, not inferred from "selected looks darker".
+   */
+  labelFill?: string;
+  /**
+   * Pinned to the FOOT of the rail, below a gap, rather than stacked under the
+   * logo. The v.4b drawing puts Settings at the bottom: frame #40001119:6593 is
+   * `justify-content: flex-end` inside the 74-wide column.
+   */
+  pinned?: boolean;
+  /**
+   * Optional per-icon viewBox. The shared default (0 0 22.75 21.8752) is exactly
+   * the chat glyph's own extent, so an icon drawn on a 24x24 grid gets clipped
+   * by it. Set this when the path's coordinate space differs from the default.
+   */
+  viewBox?: string;
+  /**
+   * The Figma nodes this tab is drawn from. Carried through to the DOM as
+   * `data-node-id` on the element that renders each one — Figma node → Lit
+   * element, node for node — so a component found in a browser can be traced
+   * back to the node, and a node back to the element. Absent for tabs that have
+   * no designed counterpart yet.
+   *
+   *   nodeId      — the button itself (the Figma component node)
+   *   iconNodeId  — the icon instance inside it
+   *   labelNodeId — the text layer
+   */
+  nodeId?: string;
+  iconNodeId?: string;
+  labelNodeId?: string;
+}
+
+const TABS: TabDef[] = [
+  {
+    id: 'chat',
+    label: 'Chat',
+    tooltip: 'Chat with Grace',
+    // Figma "chat-button" 40001010:25768 — component, frame "chat-menu-item"
+    // 40001010:25749 inside it. Geometry comes from the container's constraint
+    // (the :host block in this file), not from here — see the note there for why.
+    // The artwork below supersedes the traced glyph under it, which is the same
+    // glyph drawn on its own 22.75×21.8752 grid.
+    nodeId: '40001010:25768',
+    iconNodeId: '40001012:26436',
+    labelNodeId: '40001010:25751',
+    iconSrc: chatButtonIcon,
+    // Speech bubble / branching chat icon, traced before the design shipped its
+    // artwork. Unused while iconSrc is set; kept as the drawing of record.
+    svgPath: 'M20.3125 13.2813C21.6566 13.2813 22.75 12.2299 22.75 10.9375C22.75 9.6451 21.6566 8.5937 20.3125 8.5937C19.2546 8.5937 18.3612 9.2488 18.0247 10.1563H13.3364L19.2683 4.4525C19.586 4.59898 19.9374 4.6875 20.3125 4.6875C21.6566 4.6875 22.75 3.63617 22.75 2.34375C22.75 1.05133 21.6566 0 20.3125 0C18.9684 0 17.875 1.05133 17.875 2.34375C17.875 2.70461 17.9672 3.04219 18.1192 3.34781L11.375 9.8328V4.68758C11.375 3.82625 12.1038 3.12508 13 3.12508H14.625V1.56258H13C12.0248 1.56258 11.1588 1.98641 10.5625 2.6425C9.9662 1.98641 9.1002 1.56258 8.125 1.56258H7.3125C3.28055 1.56258 0 4.71656 0 8.5938V13.2813C0 17.1586 3.28055 20.3126 7.3125 20.3126H8.125C9.1002 20.3126 9.9662 19.8887 10.5625 19.2327C11.1588 19.8887 12.0248 20.3126 13 20.3126H14.625V18.7501H13C12.1038 18.7501 11.375 18.0489 11.375 17.1876V12.0423L18.1192 18.5273C17.9672 18.8329 17.875 19.1705 17.875 19.5314C17.875 20.8238 18.9684 21.8752 20.3125 21.8752C21.6566 21.8752 22.75 20.8238 22.75 19.5314C22.75 18.239 21.6566 17.1877 20.3125 17.1877C19.9374 17.1877 19.5861 17.2762 19.2683 17.4227L13.3364 11.7189H18.0247C18.3612 12.6264 19.2546 13.2813 20.3125 13.2813Z',
+  },
+  // The TRACE tab was removed 2026-09-17: the trace view is not being built. The
+  // information it showed lived in the retired React seat
+  // (retired-files/console-seat-20260917/InteractiveChatInterface.tsx) and the
+  // decision is not to load it. A rail button whose view will never exist is a
+  // control that can only fail, so it is gone rather than left dangling.
+  {
+    id: 'trace',
+    label: 'Trace',
+    tooltip: 'Execution trace and evaluation',
+    // Figma "trace-button" 40001011:26266 — the rail's second button, restored
+    // 2026-09-17. It was deleted an hour earlier on a misreading of "the trace
+    // information is not being loaded": that is about the VIEW, not the button. A
+    // rail tab is a view switch, and the panel's view is a SLOT — the design calls
+    // it chat-output-simple-slot-area, and anything can be injected into it.
+    //
+    // RESTORED AGAIN 2026-10-18: it was taken out of the drawable list for a day on a
+    // misreading of the owner's order — he asked for the WORD "Langfuse" to be removed,
+    // not the application. The tab is back exactly as it was.
+    nodeId: '40001011:26266',
+    iconNodeId: '40001011:26260',
+    labelNodeId: '40001011:26259',
+    iconSrc: traceButtonIcon,
+  },
+  {
+    /* SESSIONS — THE SECOND BUTTON, WHERE THE TRACE BUTTON STANDS (owner, 2026-10-17:
+       *"well let's add sessions to where the trace was … make preview Sessions"*). The
+       ROOM decides which of the two it shows: the governance rail's allowedTabs list never
+       carries `trace`, so this button takes that position there, and the rooms that still
+       offer Trace keep both.
+
+       A SESSION IS A GROUPING LABEL, not a process: rows sharing a `session_id` are one
+       session. The view (<sessions-feed>) draws that grouping from the app's own store.
+
+       THE ARTWORK IS THE RAIL SLOT'S OWN — the same Figma "trace-button" asset (#40001011:
+       26266) the button beside it draws, because this button is the one that stands in
+       that slot. No new glyph is invented for it. */
+    id: 'sessions',
+    label: 'Sessions',
+    tooltip: 'Sessions recorded in the governance store',
+    nodeId: '40001011:26266',
+    iconNodeId: '40001011:26260',
+    labelNodeId: '40001011:26259',
+    iconSrc: traceButtonIcon,
+  },
+  {
+    id: 'versions',
+    label: 'Versions',
+    tooltip: 'Version history for this session',
+    iconSrc: versionsButtonIcon,
+    // Figma "versions-button" #40001085:2731 — the fourth rail button. Label is
+    // Versions, not Variables: the tab renders the session's version history.
+    svgPath: 'M9.4 22C7.6 22 6.4 21.2 5.6 19.5C5.3 18.8 5 18.2 4.5 17.7C4 17.2 3.5 16.9 2.8 16.7L2 16.4V14.4L3.2 14.7C4.3 15 5.2 15.6 5.9 16.4C6.6 17.2 7.1 18.1 7.5 19.1C7.9 19.9 8.3 20.2 9.4 20.2H10V22H9.4ZM14.6 22C12.8 22 11.6 21.2 10.8 19.5C10.5 18.8 10.2 18.2 9.7 17.7C9.2 17.2 8.7 16.9 8 16.7L7.2 16.4V14.4L8.4 14.7C9.5 15 10.4 15.6 11.1 16.4C11.8 17.2 12.3 18.1 12.7 19.1C13.1 19.9 13.5 20.2 14.6 20.2H15.2V22H14.6ZM5.5 11H18.5V9H5.5V11ZM5.5 7H18.5V5H5.5V7Z',
+  },
+  {
+    id: 'tools',
+    label: 'Tools',
+    tooltip: 'Tool registry and usage',
+    // v.4b: frame "tools-button" #40001119:6535 → chat-menu-item #40001119:6537, icon
+    // "tools-api 1" #40001119:6538 (38×35, fill #1FACC2), label "Tools" #40001119:6540.
+    // Replaces the old tools-button set (#40001085:2634) and its traced wrench.
+    nodeId: '40001119:6535',
+    iconNodeId: '40001119:6538',
+    labelNodeId: '40001119:6540',
+    iconSrc: toolsApiButtonIcon,
+  },
+  {
+    id: 'approvals',
+    label: 'Approve',
+    tooltip: 'Pending approvals',
+    // Figma "approval-button" #40001119:6549 — the v.4b rail's third button, and the
+    // button the drawing shows in its SELECTED state: the tile (#40001119:6556) carries
+    // fill #CBE6E3 with `inset 4px 4px 4px rgba(0,0,0,0.25)` (effect_670724be), which is
+    // the shape the old selected state had with a new fill. The amber #FCCD3D that used
+    // to mean selected appears nowhere in the v.4b drawing, on any button.
+    //
+    // Its own artwork, unlike the mark it replaces: the old Approvals button borrowed the
+    // TRACE glyph (the old design's fault, recorded here since 2026-09-17), and v.4b draws
+    // it its own — "ibm--engineering-workflow-mgmt 1" #40001119:6560, pulled from the node.
+    // The label is "Approve" on the node (#40001119:6558); the ID stays `approvals` because
+    // ids are the stable key and labels are presentation.
+    nodeId: '40001119:6549',
+    iconNodeId: '40001119:6560',
+    labelNodeId: '40001119:6558',
+    iconSrc: approveButtonIcon,
+    labelFill: '#2793A3',
+  },
+// Removed: runs/evaluations surface is not a standalone navigation target.
+  {
+    // EVALUATIONS — its own thing, and NOT Trace. The owner corrected this on
+    // 2026-09-18: Trace is the execution trace and stays what it is; evaluations are
+    // the checks and scores that judge a flow, and they need their own door. A
+    // placeholder until the real thing exists (AGENTIC_EDITOR/10-TODO.md).
+    id: 'eval',
+    label: 'Evals',
+    tooltip: 'Checks and scores for this flow',
+    // v.4b DRAWS IT, so it now claims a node instead of a hand-drawn glyph: the frame the
+    // design's own layer list still calls "versions-button" (#40001119:6427 — stale name,
+    // the node beside it is labelled Evals) holds chat-menu-item #40001119:6434, icon
+    // "ai-governance--lifecycle 1" #40001119:6615 (43×43, fill #1FACC2) and text
+    // #40001119:6436. The artwork is pulled from that node; the drawn check mark that used
+    // to stand in for it is gone rather than kept as an unused second drawing.
+    nodeId: '40001119:6427',
+    iconNodeId: '40001119:6615',
+    labelNodeId: '40001119:6436',
+    iconSrc: evalButtonIcon,
+  },
+  {
+    // STATES — the canvas in each of its situations, so a person can see what the
+    // drawing does before their own flow reaches that situation. The owner's call on
+    // 2026-09-18, against my advice to keep the fixtures off the rail: the view exists,
+    // and its panel says in its own words that what it shows is SAMPLE data rather than
+    // the reader's flow. That label is the condition that makes it honest.
+    //
+    // THE WORD, for the record: "States" is the weakest of the names considered
+    // (Snapshots, Previews, Samples, Demo data). It reads as statuses — running, done,
+    // failed — which is only part of what the view holds: two of its entries are edge
+    // cases of the DRAWING RULES, not states of a run at all. It is also the only rail
+    // item that is not a record of what happened, which is why its panel must say so.
+    id: 'states',
+    label: 'States',
+    tooltip: 'The canvas in each situation — sample data',
+    viewBox: '0 0 24 24',
+    svgPath: 'M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z',
+  },
+  {
+    // REPAIRS — the console's own menu item, added on the owner's instruction, 2026-09-18:
+    // "remove runs, evals, states and trace from the console chat vertical menu… add the
+    // repair dropdown and show all repairs." The view it opens already existed — the catalog
+    // checker's findings, drawn by chat-repair-actions — so it was COPIED into this menu
+    // rather than rebuilt: the rows are composed by the backend and the element draws them.
+    //
+    // WHY IT IS THE CONSOLE'S. A finding is a statement about the CATALOG, not about one
+    // package: it is the same class of thing as Approvals, which is also console-only. A
+    // package's rail keeps its own versions, tools, runs and evals and never shows findings
+    // that belong to every package.
+    //
+    // Drawn, not pulled: no Figma node exists for a Repairs mark, so it claims none, and the
+    // glyph is the list mark — three bars — which is also what the Runs button draws. The two
+    // never share a rail: Runs is not in the console's menu and Repairs is not in a package's,
+    // so no one ever sees them side by side. If the design wants its own mark for Repairs, it
+    // needs to draw one.
+    id: 'repair',
+    label: 'Repairs',
+    tooltip: 'Open the catalog findings',
+    viewBox: '0 0 24 24',
+    svgPath: 'M4 4h16v3H4zM4 10h11v3H4zM4 16h14v3H4z',
+  },
+  {
+    // UX — THE DESIGN SEAT'S OBSERVABILITY TAB (owner, 2026-10-18: *"It should be inside of
+    // design on the chat vertical navigation I gave you an icon"*). Drawable everywhere (this
+    // list is what MAY be drawn), but only a room that names it in its allowed-tabs draws it —
+    // today that is Design alone. The view is its own element in its own file; the seat's view
+    // slot draws it, and the room appends it.
+    id: 'ux',
+    label: 'UX',
+    tooltip: 'UX observability — element counts and the flows they served',
+    /* THE OWNER'S OWN MARK, PAINTED IN THE RAIL'S TEAL. It is black artwork; the mask lets the
+       rail draw it in #1FACC2 like every designed icon beside it (see `maskSrc`). */
+    maskSrc: uxAgentIcon,
+  },
+  {
+    // THE RAIL'S FOOT BUTTON, AND IT IS LAST IN THIS LIST ON PURPOSE. The drawing pins it
+    // to the bottom of the rail (`justify-content: flex-end`, frame #40001119:6593), and
+    // the element does that with `margin-top: auto` — an auto margin absorbs the free
+    // space ABOVE the button, so every entry listed after it is pushed past the gap to the
+    // very bottom. Placed among the tabs, it drew a spacer in the middle of the rail and
+    // sent the buttons below it to the foot (seen live, 2026-09-19: "the chat menu bar has
+    // got a new spacer"). The array's order IS the rail's order, so the foot button goes
+    // last here as well as on screen.
+    //
+    // v.4b: frame #40001119:6593 → #40001119:6599 (74×67) → chat-menu-item #40001119:6600,
+    // icon "settings 1" #40001119:6637 (32×32). NO LABEL on the node — it draws the gear
+    // alone, so the label is empty and no label layer is written.
+    id: 'settings',
+    label: '',
+    tooltip: 'Settings',
+    nodeId: '40001119:6593',
+    iconNodeId: '40001119:6637',
+    iconSrc: settingsButtonIcon,
+    pinned: true,
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Component
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export class ChatNavigationBar extends LitElement {
+  // ── Reactive properties (static getter — no decorators) ──────────────────
+  static properties = {
+    activeTab: { type: String, attribute: 'active-tab' },
+    collapsed: { type: Boolean },
+    allowedTabs: { type: String, attribute: 'allowed-tabs' },
+    healthCount: { type: Number, attribute: 'health-count' },
+    healthState: { type: String, attribute: 'health-state' },
+    unread: { type: Boolean, attribute: 'unread' },
+    tabLabels: { type: String, attribute: 'tab-labels' },
+    /**
+     * DEACTIVATED TABS — comma-separated ids that stay on the rail but cannot be pushed
+     * (owner, 2026-10-13: *"Preview should be deactivated until a trace is selected"*).
+     * Visible-but-dark on purpose: the relation between the tabs and the selection is
+     * exactly what the defaults teach, so the tab is not hidden — it is the wrong move
+     * made visible. See `.nb.nd` for the drawn state.
+     */
+    disabledTabs: { type: String, attribute: 'disabled-tabs' },
+  };
+
+  // ── Defaults ─────────────────────────────────────────────────────────────
+  declare activeTab: TabId;
+  declare collapsed: boolean;
+  /**
+   * SHE HAS SOMETHING TO SAY AND HER COLUMN IS FOLDED AWAY — the slow pulse on the chat icon.
+   *
+   * The owner, 2026-09-23: "the chat icon on the vertical chat navigation menu … needs to pulse
+   * slowly so that the user knows that there's a chat message waiting." The seat raises it (a
+   * new turn of hers, or a node picked while she is away) and clears it when the column opens:
+   * the person looks, or does not. Nothing opens her column by itself.
+   */
+  declare unread: boolean;
+  /**
+   * Open catalog findings. When above zero the chat tab's ICON pulses red, so
+   * the condition is visible on arrival. Set by InteractiveChatInterface from
+   * the catalog check (/api/catalog/audit). Zero means quiet.
+   */
+  declare healthCount: number;
+  /**
+   * Whether the count can be trusted.
+   *   'ok'      — the check ran; healthCount is real
+   *   'loading' — not fetched yet; say nothing
+   *   'unknown' — the check could not run. This must NEVER render the same as an
+   *               open finding: "cannot check" and "one problem" are different
+   *               claims, and collapsing them makes a broken pipeline look calm.
+   */
+  declare healthState: 'ok' | 'loading' | 'unknown';
+  /**
+   * Comma-separated list of tab IDs to show, filtered by the user's
+   * departmental role. Set by InteractiveChatInterface from the
+   * /api/ai/role-capabilities response.
+   * If unset, all tabs are shown (backwards-compatible dev default).
+   */
+  declare allowedTabs: string;
+  /**
+   * PER-ROOM LABEL OVERRIDES — how THIS room names a tab whose id does not change.
+   *
+   * Ids are the stable key; labels are presentation (the Approve precedent on the
+   * approvals tab). This is the mechanism for the day a room means something else by
+   * a shared id: a JSON map of `{ "<tabId>": { "label": "…", "tooltip": "…" } }`,
+   * each field optional, applied to the drawn button only — the id, the event, the
+   * view wiring and the node ids all stay exactly as they are. Governance renames
+   * `tools` to "Preview" because its hole shows the trace DETAIL there; the composer
+   * and console keep "Tools" untouched because their tab is still the tool registry.
+   */
+  declare tabLabels?: string;
+  /** The room's `disabled-tabs` list. See the property note. */
+  declare disabledTabs: string;
+
+  constructor() {
+    super();
+    this.activeTab = 'chat';
+    this.collapsed = false;
+    this.allowedTabs = '';
+    this.disabledTabs = '';
+    this.unread = false;
+    this.healthCount = 0;
+    this.healthState = 'loading';
+  }
+
+  // ── Drag state (not reactive — no re-render needed) ──────────────────────
+  private _previousTab: TabId | '' = '';
+
+  // ── Shadow DOM styles — pixel-identical to original compiled component ──
+  static styles = css`
+    :host {
+      /* ── THE RAIL'S CONSTRAINT ON A DESIGNED BUTTON ─────────────────────────
+         Ingestion may be inconsistent — nodes get hand-placed, sizes drift. The
+         CATALOGUE may not be. So the common constraint lives here, on the
+         container, and every designed button inside this rail inherits it by the
+         cascade rather than each one carrying its own numbers.
+
+         A button can still override any of these, but it now has to SAY SO (a
+         per-tab box override), so an override is a visible exception in a diff
+         instead of an invisible difference in a rail. That is the whole point:
+         the buttons cannot disagree by accident, only on purpose.
+
+         Values read from Figma "chat-button" (40001010:25768). The trace node
+         (40001011:26266) carries different numbers; that is drift, not intent, and
+         the geometry-drift check reports it rather than copying it. */
+      --nb-h: 74px;
+      --nb-icon-w: 38px;
+      --nb-icon-h: 38px;
+      --nb-icon-x: 18px;
+      --nb-icon-y: 8px;
+      --nb-label-y: 46px;
+      display: block;
+      height: 100%;
+      /* Figma "chat-main-menu-vert" #40001066:4301 — width 74. */
+      width: 74px;
+      flex-shrink: 0;
+    }
+
+    .sb {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      /* Figma "chat-main-menu-vert" #40001066:4301 — gap 10 between the logo and
+         each button. The code stacked them flush, so every button sat 10px high. */
+      gap: 10px;
+      height: 100%;
+      width: 74px;
+      /* Figma "chat-main-menu-vert" #40001119:6047, verbatim: radius 10px 0 0 0,
+         shadow -4px 4px 10px rgba(0,0,0,.25), gradient 180deg (#362D6A 20% → #37356F → #2F0A45). */
+      border-radius: 10px 0px 0px 0px;
+      box-shadow: -4px 4px 10px 0px rgba(0, 0, 0, 0.25);
+      background-image: linear-gradient(
+        180deg,
+        rgba(54, 45, 106, 1) 20%,
+        rgba(55, 53, 111, 1) 51%,
+        rgba(47, 10, 69, 1) 100%
+      );
+      overflow: hidden;
+    }
+
+    /* ── Logo section ─────────────────────────────────────────────────── */
+    .lo {
+      display: flex;
+      flex-direction: column;
+      height: 66px;
+      width: 100%;
+      /* Figma "logo-of-chat-model-slected" #40001085:2680 — 74×66 with px 3px,
+         so the slot is 68 wide. The slot was stretching the artwork to the full
+         74×66 with object-fit: cover; the mark box is SQUARE now (50×50, owner,
+         2026-10-06 — see the ::slotted(img) rule below). */
+      padding: 0 3px;
+      box-sizing: border-box;
+      overflow: clip;
+      flex-shrink: 0;
+      align-items: flex-start;
+      cursor: pointer;
+    }
+    .lc {
+      height: 65.984px;
+      width: 100%;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .lp {
+      position: absolute;
+      inset: 0;
+      background: rgb(55, 65, 81);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    /* THE MARK BOX IS SQUARE (owner, 2026-10-06: *"actually make 50x50"* — superseding
+       his 58×58 a minute earlier; his eye read the old 68×58 box as wider than tall — the
+       artwork itself is square). object-fit: contain fits the square canvas to the box:
+       the star paints at 50 × (156/171) ≈ 45.6px. Centred in the 74×66 slot. */
+    ::slotted(img) {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: none;
+      object-fit: contain;
+      pointer-events: none;
+      width: 50px;
+      height: 50px;
+    }
+
+    /* ── Tab button ───────────────────────────────────────────────────── */
+    .nb {
+      /* Inherit — a shadow-root <button> otherwise falls back to the UA font (Arial). */
+      font-family: inherit;
+      position: relative;
+      flex-shrink: 0;
+      width: 100%;
+      height: 67px;
+      transition: background-color 0.2s, height 0.2s;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    /*
+     * THE DESIGN ROOM'S RAIL IS ITS OWN (owner, 2026-10-26). Hover is not a colour and it is not
+     * the open tab: a pointer changes only the icon, a little, and only on tabs that are not open.
+     * The filled, bold tile is the tab the user is in.
+     */
+    .nb:hover {
+      background: none;
+    }
+    .nb.na:hover {
+      background: #CBE6E3;
+    }
+    .na {
+      background: #CBE6E3;
+      height: 77px;
+    }
+    /* A DEACTIVATED TAB — ON THE RAIL, DARK, UNPUSHABLE (owner, 2026-10-13: *"Preview
+       should be deactivated until a trace is selected"*). Not hidden: the tab says what
+       it needs to be itself, and the defaults are what teach the relation. pointer-events
+       keeps even the hover lift away, so it never pretends to be a move. */
+    .nb.nd {
+      opacity: 0.38;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* ── Icon wrapper ─────────────────────────────────────────────────── */
+    .ni {
+      position: absolute;
+      height: 47px;
+      left: 7.42px;
+      top: 10px;
+      width: 67.58px;
+      transition: top 0.2s;
+    }
+    .ns,
+    .na .ni {
+      top: 15px;
+    }
+    .iw {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      left: 17px;
+      top: 1px;
+      width: 26px;
+    }
+    .ic {
+      height: 25px;
+      overflow: clip;
+      width: 100%;
+      position: relative;
+      flex-shrink: 0;
+      transition: transform 0.16s ease;
+      transform-origin: 50% 50%;
+    }
+    .nb:not(.na):hover .ic {
+      transform: scale(1.08);
+    }
+
+    /* ── SVG layers ───────────────────────────────────────────────────── */
+    .nm {
+      position: absolute;
+      inset: 0;
+      mix-blend-mode: multiply;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .nsv {
+      position: absolute;
+      inset: 6.25%;
+      display: block;
+      width: 87.5%;
+      height: 87.5%;
+    }
+
+    /* ── Label ────────────────────────────────────────────────────────── */
+    .lw {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      height: 16px;
+      align-items: flex-start;
+      justify-content: center;
+      left: 0;
+      top: 31px;
+      width: 100%;
+      transition: top 0.2s;
+    }
+    .ls,
+    .na .lw {
+      top: 33px;
+    }
+    .lt {
+      height: 20px;
+      position: relative;
+      flex-shrink: 0;
+      width: 100%;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-weight: 700;
+      font-style: normal;
+      font-size: 13px;
+      line-height: 20px;
+      text-align: center;
+      white-space: nowrap;
+      color: rgb(78, 207, 213);
+      display: block;
+    }
+    .nb:not(.na) .lt {
+      font-weight: 500;
+    }
+
+    /* ── The designed menu item — geometry per tab, from the node ────────────
+       Every measurement arrives as a custom property set on the button, because
+       these two designs do NOT share numbers: chat is 74 tall with a 38×38 icon at
+       (18, 8) and its label at y=46; trace is 77 tall with a 42×39 icon at (16, 8)
+       and its label at y=53. Same frame name in Figma, different measurements.
+
+       The calcs subtract .ni's own origin (left 7.42, top 10), so the numbers in
+       TABS read as the numbers in Figma rather than as offsets against a nested box.
+
+       The bar's other tabs rest at 67px and grow to 77 on hover/selected, and .ni
+       slides down 5px with them. A designed button has one size and no slide, so
+       both are pinned here instead of inherited. */
+    .nb.nbc,
+    .nb.nbc:hover,
+    .nb.nbc.na {
+      height: var(--nb-h, 74px);
+    }
+    .nb.nbc .ni,
+    .nb.nbc:hover .ni,
+    .nb.nbc.na .ni {
+      top: 10px;
+    }
+    .nb.nbc .iw {
+      left: calc(var(--nb-icon-x, 18px) - 7.42px);
+      top: calc(var(--nb-icon-y, 8px) - 10px);
+      width: var(--nb-icon-w, 38px);
+    }
+    .nb.nbc .ic {
+      height: var(--nb-icon-h, 38px);
+    }
+    .nb.nbc .lw,
+    .nb.nbc .ls,
+    .nb.nbc:hover .lw,
+    .nb.nbc.na .lw {
+      top: calc(var(--nb-label-y, 46px) - 10px);
+    }
+    /* THE LABEL IS CENTRED ON THE BUTTON, NOT ON .ni. The label wrapper lives INSIDE
+       .ni, which is 67.58px wide starting 7.42px in — so the wrapper's own
+       "left: 0; width: 100%" centred the word on .ni's box, 4px right of the button's
+       centre. Measured in the running rail (2026-09-19): button centre 2144, label box
+       centre 2148, with the owner's own reading — "the text underneath the chat icon…
+       seems to be a little bit to the right". Pulling the box back by .ni's own left and
+       giving it the button's width centres the word under the glyph it names. Only
+       designed buttons are corrected; the mask-based tabs keep the drawing of record. */
+    .nb.nbc .lw {
+      left: -7.42px;
+      width: var(--nb-w, 74px);
+    }
+    /* Sized from the same properties as its wrapper, so the artwork and the box
+       can never disagree. object-fit is contain, not fill: the two icons are
+       different artwork at different aspect ratios (chat's 38×38 glyph, trace's
+       42×39), and forcing them into one box without it would stretch one of
+       them. */
+    .nci {
+      display: block;
+      width: var(--nb-icon-w, 38px);
+      height: var(--nb-icon-h, 38px);
+      object-fit: contain;
+      pointer-events: none;
+    }
+    /* PAINTED FROM A MASK — the rail's own teal, whatever the artwork's own fill was. */
+    .nci.ncm {
+      background-color: #1FACC2;
+      -webkit-mask-image: var(--ncm-src);
+      mask-image: var(--ncm-src);
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      mask-position: center;
+      -webkit-mask-size: contain;
+      mask-size: contain;
+      border: 0;
+    }
+    /* The label's colour, straight off the node: #1FACC2 — the same value the
+       icon's vector carries, so the glyph and its word read as one mark.
+
+       This corrects #3D8DDE, which the source claimed was "the design's label
+       blue". It appears nowhere in the file, on this node or any other — an
+       invention wearing the designer's authority, which is the exact thing the
+       provenance rule exists to stop. Figma 40001010:25768, text node
+       40001010:25751: fill #1FACC2, Inter Bold 700 / 13px / 20px. */
+    .nb.nbc .lt {
+      color: var(--nb-label-fill, #1FACC2);
+    }
+    /* Figma "chat-button" state=Selected #40001085:2663 — the inset the registry
+       has carried as "not yet in CSS": inset 0 4px 4px rgba(0,0,0,0.25), now read
+       off the v.4b drawing's selected tile instead. That tile is Approve
+       (#40001119:6556): fill #CBE6E3 with effect_670724be, an inset of
+       4px 4px 4px rgba(0,0,0,0.25) — the offset moved from the top edge to the
+       top-left with the new fill, and this is the node's own value, not the old one
+       re-used. ONLY selected carries it. Hover is the same fill with no inset. */
+    .nb.nbc.na {
+      box-shadow: inset 4px 4px 4px 0 rgba(0, 0, 0, 0.25);
+    }
+    /* The pinned foot button — v.4b frame #40001119:6599 is 74×67, shorter than the
+       buttons above it, and frame #40001119:6593 pins it to the bottom of the rail
+       (justify-content: flex-end) whatever the rail's height. The height rides the
+       same --nb-h the rest of the rail uses, so the .nbc rules below still win. */
+    .nb.pinned {
+      --nb-h: 67px;
+      margin-top: auto;
+    }
+
+    /* ── Selected vs closed — from the annotation, verbatim ──────────────────
+       "Chat button selected: it's yellow when it's selected and it's transparent
+       when the chat is closed and it's not selected."
+
+       The WORDS are the old design's and the FILL is v.4b's: the drawing's selected
+       tile is #CBE6E3, and no button in v.4b draws the amber the annotation names.
+       So the rule stands and the value moved — selected is the filled tile, closed
+       and unselected is transparent, which is still state=Default. NOTHING MOVES.
+       This used to pulse the whole button; that pulse was never in the design (it
+       was marked "inferred" in registry.json), and drawing the states settled it: a
+       resting state that moves reads as an alert, and the design spends motion on
+       state=Alert. */
+    /* CLOSING THE PANEL KEEPS THE TAB SELECTED (owner, 2026-10-26: *"when it's closed, it should
+       stay selected… that's the only way the user knows which tab they're in."*). The selected
+       class draws the tile; a closed panel changes nothing about it. */
+
+    .nb.nbc.nb-closed:hover {
+      background: none;
+    }
+
+    /* ── Tooltip ──────────────────────────────────────────────────────── */
+    .tt {
+      position: absolute;
+      left: 100%;
+      margin-left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgb(188, 203, 206);
+      color: #000;
+      padding: 8px 12px;
+      border-radius: 4px;
+      box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.25);
+      white-space: nowrap;
+      font-size: 10pt;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-weight: 500;
+      z-index: 50;
+    }
+    .ta {
+      position: absolute;
+      right: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-right: 4px solid rgb(188, 203, 206);
+    }
+
+    /* Catalog health marker — visible on arrival, silent when the count is 0.
+       There is no separate dot laid over the icon any more: the ICON itself
+       pulses, so the signal rides the thing the person is already looking at. */
+    /* The DESIGNED alert — Figma "chat-button" state=Alert #40001085:2662, whose
+       Builder block is the spec: fade to blank and back, 400ms, infinite, until
+       the findings clear. The BUTTON fades, not just its glyph, so "blank" means
+       the whole control goes — which is what makes it findable in a 74px rail. */
+    .nb.hb-on {
+      animation: chat-alert-pulse 400ms ease-in-out infinite;
+    }
+    @keyframes chat-alert-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    /* AND A SLOWER, GENTLER STATE FOR "SHE HAS ANSWERED" — the owner, 2026-09-23: "I want the
+       chat icon to flash slowly when there is a message that Grace has and then the user can
+       choose to open it and read it or ignore it."
+       IT IS NOT THE ALERT: that one fades to blank in 400ms because an open finding is urgent;
+       a waiting message is not, so this breathes — 2.6s, and only to 0.35, so the icon never
+       leaves. Three pulse speeds now, and their meanings are distinct: 400ms to blank (findings
+       open), 1.1s partial on the glyph (the check could not run), 2.6s partial on the button
+       (a message is waiting). */
+    .nb.nb-news {
+      animation: chat-news-pulse 2600ms ease-in-out infinite;
+    }
+    @keyframes chat-news-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      /* The signal, kept when the motion cannot be: the glyph takes the tone the alert uses,
+         so "there is something here" is still visible and still distinct from silence. */
+      .nb.nb-news { animation: none; }
+      .nb.nb-news .nsv path,
+      .nb.nb-news .nci { filter: drop-shadow(0 0 3px #4ECFD5); }
+    }
+    /* "The check could not run" is a DIFFERENT claim from "one problem", and the
+       design has no state for it. It keeps the older, slower, partial fade and
+       rides the GLYPH alone, so the two can never be read as each other. */
+    .nb.hb-x .nsv {
+      animation: hb-pulse 1.1s ease-in-out infinite;
+    }
+    /* No red. The colour follows the BACKGROUND, not the state: on the yellow
+       active tab the icon goes dark blue, so it stays legible instead of
+       washing out; off the yellow it keeps the lime it already uses.
+       The PULSE is the signal — the colour is only there to stay readable on
+       whatever the tab happens to be sitting on. */
+    .nb.hb-on .nsv path,
+    .nb.hb-x .nsv path { fill: #4ECFD5; }
+
+    .nb.na.hb-on .nsv path,
+    .nb.na.hb-x .nsv path { fill: #1c2f4e; }
+    @keyframes hb-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      /* The Alert note, verbatim: with the motion off, hold a visible alert look
+         rather than a blank — the glyph tint below IS the signal when the fade
+         cannot be. */
+      .nb.hb-on,
+      .nb.hb-x .nsv { animation: none; }
+    }
+    /* The marker is a signal, not decoration — so it is still announced even
+       though it is no longer shown. Visually hidden, screen-reader audible. */
+    .hb-sr {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+
+  `;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Lifecycle
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Tab click handler
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** The mark navigates back to the console, like the Console header tab. */
+  private _onLogoClick(): void {
+    window.dispatchEvent(new CustomEvent('navigate-console'));
+  }
+
+  /** Is this tab on the room's `disabled-tabs` list? See the `disabledTabs` property. */
+  private _isTabDisabled(tabId: TabId): boolean {
+    if (!this.disabledTabs) return false;
+    return this.disabledTabs
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .includes(tabId);
+  }
+
+  private _handleTabClick(tabId: TabId) {
+    // A DEACTIVATED TAB ANSWERS NOTHING — see the `disabledTabs` property. The button is
+    // also `disabled` in the DOM; this guard is for the paths that call with an id.
+    if (this._isTabDisabled(tabId)) return;
+    // TODO(behavior): action undefined in Figma — node 40001119:6600 (the settings
+    // button). The v.4b drawing draws the gear and annotates nothing, so there is no
+    // event name to emit, and inventing one is the thing the annotation rule exists to
+    // stop: an invented event cannot be told from a decision someone actually made.
+    // Until that master carries an `On click:`, the button is a drawing — it takes the
+    // rail's hover and does nothing else.
+    if (tabId === 'settings') return;
+
+    // If clicking the already-active tab: toggle collapse
+    if (tabId === this.activeTab && !this.collapsed) {
+      this.collapsed = true;
+      this._previousTab = this.activeTab;
+      // THE DESIGN ROOM KEEPS ITS TAB WHILE THE PANEL IS CLOSED (owner, 2026-10-26). The empty
+      // tab-change still tells the seat to collapse; it no longer means "nothing is selected".
+      this.dispatchEvent(
+        new CustomEvent<CollapseToggleEventDetail>('collapse-toggle', {
+          detail: { collapsed: true },
+          bubbles: true,
+          composed: true,
+        })
+      );
+      this.dispatchEvent(
+        new CustomEvent<TabChangeEventDetail>('tab-change', {
+          detail: { tab: '' as TabId },
+          bubbles: true,
+          composed: true,
+        })
+      );
+      return;
+    }
+
+    // If collapsed: expand to the clicked tab — AND TELL THE CONTAINER.
+    //
+    // The container that owns the WIDTH is not this element, so an expansion that is not
+    // announced is only half a gesture. This used to announce it solely when the previous tab
+    // was EMPTY — which is true only after the column was collapsed by clicking its own active
+    // tab (that path clears activeTab). A seat that LOADED collapsed — the console always does,
+    // isThirdOpen false — has a real active tab, so the first click on Chat moved the rail and
+    // left the column at its rail floor (owner, 2026-09-18: "the user should be able to click on
+    // the chat icon whenever the chat component is collapsed and expand it… yes, by disabling
+    // chat click-and-expand you took care of the other problems, but I don't think you meant to
+    // sacrifice the click-and-expand").
+    //
+    // ONLY WHEN IT WAS COLLAPSED. An already-open column that gets another rail click must not
+    // be resized by it — that was the other half of his report ("we would click on trace and it
+    // would expand it an additional 650 pixels").
+    const wasCollapsed = this.collapsed;
+    if (wasCollapsed) this.collapsed = false;
+
+    // Set the active tab
+    this.activeTab = tabId;
+
+    // Dispatch events
+    this.dispatchEvent(
+      new CustomEvent<TabChangeEventDetail>('tab-change', {
+        detail: { tab: tabId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+
+    if (wasCollapsed) {
+      this.dispatchEvent(
+        new CustomEvent<CollapseToggleEventDetail>('collapse-toggle', {
+          detail: { collapsed: false },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Health marker
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * The chat tab's health marker. Three conditions, three different renderings —
+   * the point is that a person can tell them apart at a glance:
+   *
+   *   findings open            → the icon pulses red
+   *   the check could not run  → the icon pulses amber
+   *   clean, or still loading  → nothing
+   *
+   * These used to share one "!" because the caller passed 1 as a sentinel for
+   * "not ok". So a checker that never ran looked like a single open finding, and
+   * the label asserted a count that was not true.
+   *
+   * The marker now rides the icon instead of a dot laid over it — no second
+   * element to keep in register with the first, and the signal sits on the thing
+   * the person is already looking at.
+   */
+  private _healthClass(): '' | 'hb-on' | 'hb-x' {
+    if (this.healthState === 'unknown') return 'hb-x';
+    if (this.healthState === 'ok' && this.healthCount > 0) return 'hb-on';
+    return '';
+  }
+
+  /**
+   * The same three states, spoken. The marker is a signal, not decoration, so
+   * hiding it visually must not silence it — a screen reader still hears the
+   * fact, and the count with it.
+   */
+  private _healthStatus() {
+    if (this.healthState === 'unknown') {
+      return html`<span class="hb-sr" role="status">The catalog check did not run. This is not a clean result.</span>`;
+    }
+    if (this.healthState === 'ok' && this.healthCount > 0) {
+      return html`<span class="hb-sr" role="status">${this.healthCount} open catalog findings</span>`;
+    }
+    return '';
+  }
+
+  /**
+   * AND THE SAME FOR A WAITING MESSAGE. The pulse is a signal, so it is also SPOKEN — a person
+   * who cannot see the icon breathe still has to be told there is something to read, or the
+   * choice the owner asked for ("open it and read it or ignore it") is not theirs to make.
+   */
+  private _newsStatus() {
+    if (!this.unread || !this.collapsed) return '';
+    return html`<span class="hb-sr" role="status">Grace has a message waiting</span>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Render
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * A tab's own style properties, or nothing when the rail's shared constraint
+   * already describes it. Two things can differ per tab: the box (`box`, for a button
+   * whose frame is not the chat button's) and the label's colour (`labelFill`, which
+   * only Approve carries in v.4b). Both ride custom properties so the CSS keeps one
+   * home for each rule — nothing here is a second definition of a value.
+   */
+  private _tabStyle(tab: TabDef): string {
+    const parts: string[] = [];
+    if (tab.box) {
+      parts.push(
+        `--nb-h: ${tab.box.h}px`,
+        `--nb-icon-w: ${tab.box.iconW}px`,
+        `--nb-icon-h: ${tab.box.iconH}px`,
+        `--nb-icon-x: ${tab.box.iconX}px`,
+        `--nb-icon-y: ${tab.box.iconY}px`,
+        `--nb-label-y: ${tab.box.labelY}px`,
+      );
+    }
+    if (tab.labelFill) parts.push(`--nb-label-fill: ${tab.labelFill}`);
+    return parts.join('; ');
+  }
+
+  /**
+   * The room's label overrides, parsed. A malformed string is ignored whole rather
+   * than half-applied: a rail that renamed one tab and dropped another from a typo
+   * is harder to see than one that renamed nothing.
+   */
+  private _labelOverrides(): Record<string, { label?: string; tooltip?: string }> {
+    if (!this.tabLabels) return {};
+    try {
+      const raw = JSON.parse(this.tabLabels) as Record<string, { label?: string; tooltip?: string }>;
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+      return {};
+    }
+  }
+
+  render() {
+    const currentTab = this.activeTab;
+
+    // Filter tabs by role — if allowedTabs is set, only show those.
+    // If unset (dev mode / no role), show all (backwards-compatible).
+    // A set that matches no known tab would render an empty bar, and an empty bar
+    // reads as "the nav bar is broken", not "this role has no tabs" — fail open.
+    const allowed = this.allowedTabs
+      ? this.allowedTabs.split(',').map((id) => id.trim()).filter(Boolean)
+      : [];
+    const filtered = allowed.length
+      ? TABS.filter((tab) => allowed.includes(tab.id))
+      : TABS;
+    /* The room's own words for its buttons, when it stated any — applied to the
+       DRAWN label and tooltip only. See `tabLabels`. */
+    const overrides = this._labelOverrides();
+    const visibleTabs = (filtered.length ? filtered : TABS).map((tab) => {
+      const o = overrides[tab.id];
+      return o ? { ...tab, label: o.label ?? tab.label, tooltip: o.tooltip ?? tab.tooltip } : tab;
+    });
+
+    return html`
+      <div class="sb">
+        <!-- Logo -->
+        <div class="lo" @click=${this._onLogoClick} role="button" tabindex="0" title="Back to console" aria-label="Back to console">
+          <div class="lc">
+            <slot name="logo">
+              <div class="lp">LOGO</div>
+            </slot>
+          </div>
+        </div>
+
+        <!-- Tab buttons (role-filtered) -->
+        ${visibleTabs.map(
+          (tab) => html`
+            <button
+              type="button"
+              data-node-id=${tab.nodeId ?? nothing}
+              ?disabled=${this._isTabDisabled(tab.id)}
+              class="nb ${tab.iconSrc || tab.maskSrc ? 'nbc' : ''} ${tab.pinned ? 'pinned' : ''} ${currentTab === tab.id ? 'na' : ''} ${this._isTabDisabled(tab.id) ? 'nd' : ''} ${tab.id === 'chat' ? this._healthClass() : ''} ${tab.id === 'chat' && this.collapsed ? 'nb-closed' : ''} ${tab.id === 'chat' && this.unread && this.collapsed ? 'nb-news' : ''}"
+              style=${this._tabStyle(tab)}
+              @click=${() => this._handleTabClick(tab.id)}
+              title="${tab.tooltip}"
+              aria-label=${tab.label ? nothing : tab.tooltip}
+            >
+              ${tab.id === 'chat' ? this._healthStatus() : ''}${tab.id === 'chat' ? this._newsStatus() : ''}
+              <div class="ni ${currentTab === tab.id ? 'ns' : ''}">
+                <div class="iw">
+                  <div class="ic">
+                    <!-- A tab with exported artwork renders the design's own icon;
+                         the rest keep the mask + glyph pair. A tab whose artwork is
+                         MONOCHROME names it as maskSrc and the rail paints it in
+                         its own teal instead of drawing the black asset.
+                         (No backticks in this comment: this is an html template and
+                         one would end it.) -->
+                    ${tab.maskSrc
+                      ? html`<span class="nci ncm" style=${`--ncm-src: url("${tab.maskSrc}")`} aria-hidden="true"></span>`
+                      : tab.iconSrc
+                        ? html`<img class="nci" src=${tab.iconSrc} alt="" data-node-id=${tab.iconNodeId ?? nothing} />`
+                        : html`
+                        <!-- Monochrome mask layer -->
+                        <svg class="nm" fill="none" viewBox="0 0 26 25">
+                          <path d="M26 0H0V25H26V0Z" fill="white" fill-opacity="0.01" />
+                        </svg>
+                        <!-- Colored icon -->
+                        <svg class="nsv" fill="none" viewBox="${tab.viewBox ?? '0 0 22.75 21.8752'}">
+                          <path fill="#4ECFD5" d="${tab.svgPath}" />
+                        </svg>
+                      `}
+                  </div>
+                </div>
+                <div class="lw ${currentTab === tab.id ? 'ls' : ''}">
+                  <!-- A TAB WITH NO LABEL DRAWS NO LABEL LAYER. The v.4b foot button
+                       (#40001119:6600) has no text layer at all — it is the gear alone —
+                       so an empty .lt is not written rather than written blank. Its name
+                       is still spoken: see the button's aria-label above. -->
+                  ${tab.label
+                    ? html`<span class="lt" data-node-id=${tab.labelNodeId ?? nothing}>${tab.label}</span>`
+                    : nothing}
+                </div>
+              </div>
+            </button>
+          `
+        )}
+
+        <!-- No resize grip here. The design draws it as "chat-left-spacer"
+             #40001085:1406 — a 20px strip on the chat column's left edge — and
+             <workspace-layout> renders it. The rail's own dot-grid grip went with
+             it, along with the right-column-drag-* events it was the only emitter
+             of; nothing ever listened for those. -->
+      </div>
+    `;
+  }
+}
+
+// ── Register custom element ──────────────────────────────────────────────────
+if (!customElements.get('design-chat-navigation-bar')) customElements.define('design-chat-navigation-bar', ChatNavigationBar);
+
+// ── JSX type declaration for React/TypeScript consumers ─────────────────────
+declare global {
+  interface HTMLElementTagNameMap {
+    'design-chat-navigation-bar': ChatNavigationBar;
+  }
+}
+
+// Extend JSX intrinsic elements so <design-chat-navigation-bar> is recognized in TSX
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'design-chat-navigation-bar': React.DetailedHTMLProps<
+        React.HTMLAttributes<ChatNavigationBar> & {
+          'active-tab'?: TabId | '';
+          /**
+           * Lit declares this as `{ type: Boolean }`. React 19 sets the
+           * matching *property* on the element, so a real boolean is correct
+           * here — never the string "false", which Lit's boolean converter
+           * would read as true (any non-null attribute value is truthy).
+           * `'' | boolean` matches the convention used by the sibling Lit
+           * components (prompt-section-editor, workspace-layout, ...).
+           */
+          collapsed?: '' | boolean;
+          'allowed-tabs'?: string;
+          'tab-labels'?: string;
+          'health-count'?: number | string;
+          'health-state'?: 'ok' | 'loading' | 'unknown';
+          ref?: React.Ref<ChatNavigationBar>;
+        },
+        ChatNavigationBar
+      >;
+    }
+  }
+}
