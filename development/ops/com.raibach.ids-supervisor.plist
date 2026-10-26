@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ═══ AUTO-START AT LOGIN — DRAFT, DOES NOT RUN YET (2026-10-20) ═══════════════════════════
+     com.raibach.ids-supervisor — RunAtLoad + KeepAlive → supervise-all.sh, so the whole
+     stack (and the ngrok tunnel) comes back on its own after a reboot/login.
+
+     BLOCKED: macOS refuses to execute scripts under ~/Documents for launchd jobs
+     (/bin/bash: .../supervise-all.sh: Operation not permitted; launchd exit 126).
+     Same wall already measured for com.raibach.stack (2026-10-15). A launchd job can
+     only reach ~/Documents with a system-level consent — Full Disk Access — granted to
+     its executor, which the owner has declined. Until then the manual start is the only
+     form:
+       nohup bash development/ops/supervise-all.sh < /dev/null >> ~/Library/Logs/raibach/supervisor.log 2>&1 &
+
+     WHEN FDA IS GRANTED:
+       cp development/ops/com.raibach.ids-supervisor.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.raibach.ids-supervisor.plist
+     STOP:
+       launchctl bootout gui/$(id -u)/com.raibach.ids-supervisor -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.raibach.ids-supervisor</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/raibach/Documents/Raibach_IDS/development/ops/supervise-all.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/raibach/Documents/Raibach_IDS</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/raibach/Library/Logs/raibach/supervisor.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/raibach/Library/Logs/raibach/supervisor.log</string>
+</dict>
+</plist>

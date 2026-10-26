@@ -1,0 +1,98 @@
+{
+ "id": "langfuse-worker",
+ "appId": "/raibachs-team/semantic-design-system/langfuse-worker",
+ "serviceType": "deployment",
+ "name": "langfuse-worker",
+ "description": "Langfuse hosted (governance) async worker - ingestion and cost enrichment.",
+ "projectId": "semantic-design-system",
+ "infrastructure": {
+  "architecture": "x86"
+ },
+ "billing": {
+  "deploymentPlan": "nf-compute-50"
+ },
+ "deployment": {
+  "type": "deployment",
+  "instances": 1,
+  "storage": {
+   "ephemeralStorage": {
+    "storageSize": 1024
+   },
+   "shmSize": 64
+  },
+  "external": {
+   "imagePath": "langfuse/langfuse-worker:4.55.0"
+  },
+  "metadata": {
+   "labels": {},
+   "annotations": {}
+  },
+  "imageUrl": "docker.io/langfuse/langfuse-worker:4.55.0"
+ },
+ "ports": [
+  {
+   "name": "worker",
+   "internalPort": 3030,
+   "protocol": "HTTP",
+   "security": {
+    "credentials": [],
+    "policies": [],
+    "sso": {}
+   },
+   "domains": [],
+   "disableNfDomain": false,
+   "public": false,
+   "vpcAccessible": false,
+   "dns": "worker--langfuse-worker--mgtvxtd7xr2v.code.run"
+  }
+ ],
+ "runtimeEnvironment": {
+  "NEXTAUTH_URL": "https://ui--langfuse-web--mgtvxtd7xr2v.code.run",
+  "DATABASE_URL": "postgresql://_f763f7b900e4c7f3:_c57590f6af843e8237cd8fd46991ce@primary.langfuse-postgres--mgtvxtd7xr2v.addon.code.run:5432/_a8d16e67cd26",
+  "SALT": "d26ed80e798c23efb02528dc434484cde05ddac5de9cacceec99d21c0273f96d",
+  "ENCRYPTION_KEY": "3a119148de1be5c8b89cfc3e751add0437de0efe2c5513a3dd187c4d2cfa102a",
+  "TELEMETRY_ENABLED": "false",
+  "CLICKHOUSE_URL": "http://langfuse-clickhouse:8123",
+  "CLICKHOUSE_MIGRATION_URL": "clickhouse://langfuse-clickhouse:9000",
+  "CLICKHOUSE_USER": "clickhouse",
+  "CLICKHOUSE_PASSWORD": "6f63c784695fa14045a89eae7e08006c",
+  "CLICKHOUSE_CLUSTER_ENABLED": "false",
+  "REDIS_HOST": "langfuse-redis",
+  "REDIS_PORT": "6379",
+  "REDIS_AUTH": "33859a9ceee49d1ac62ebfa38f6a4d45",
+  "REDIS_TLS_ENABLED": "false",
+  "LANGFUSE_S3_EVENT_UPLOAD_BUCKET": "langfuse",
+  "LANGFUSE_S3_EVENT_UPLOAD_REGION": "auto",
+  "LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID": "langfuse",
+  "LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY": "f7a5ef2a6bf5082178035762314beb13",
+  "LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT": "http://langfuse-minio:9000",
+  "LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE": "true",
+  "LANGFUSE_S3_EVENT_UPLOAD_PREFIX": "events/",
+  "LANGFUSE_S3_MEDIA_UPLOAD_BUCKET": "langfuse",
+  "LANGFUSE_S3_MEDIA_UPLOAD_REGION": "auto",
+  "LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID": "langfuse",
+  "LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY": "f7a5ef2a6bf5082178035762314beb13",
+  "LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT": "http://langfuse-minio:9000",
+  "LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT": "http://langfuse-minio:9000",
+  "LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE": "true",
+  "LANGFUSE_S3_MEDIA_UPLOAD_PREFIX": "media/"
+ },
+ "status": {
+  "deployment": {
+   "status": "COMPLETED",
+   "reason": "DEPLOYING",
+   "lastTransitionTime": "2026-10-09T18:49:59.339Z"
+  }
+ },
+ "createdAt": "2026-10-09T17:49:42.716Z",
+ "updatedAt": "2026-10-09T18:49:47.730Z",
+ "cluster": {
+  "id": "nf-europe-west",
+  "name": "nf-europe-west",
+  "namespace": "ns-mgtvxtd7xr2v",
+  "loadBalancers": [
+   "lb.649c046f7793c53a50fe4bcf.northflank.com"
+  ]
+ },
+ "uid": "6ac92935510363740fbe138c"
+}

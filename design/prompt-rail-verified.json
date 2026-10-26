@@ -1,0 +1,20 @@
+{
+  "capture": "prompt-rail",
+  "nodeId": "40000880:270",
+  "sealedAt": "2026-09-20",
+  "compared": 2,
+  "values": {
+    "40000881:399.padding": {
+      "file": "null",
+      "source": "prompt-input/prompt-container.ts"
+    },
+    "40000881:399.width": {
+      "file": 39,
+      "source": "prompt-input/prompt-container.ts"
+    },
+    "40000881:399.height": {
+      "file": 37,
+      "source": "prompt-input/prompt-container.ts"
+    }
+  }
+}

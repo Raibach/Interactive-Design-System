@@ -1,0 +1,1136 @@
+{
+  "capture": "chat-column",
+  "nodeId": "40001119:6026",
+  "sealedAt": "2026-09-20",
+  "compared": 264,
+  "values": {
+    "40001119:6308.fill": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6308.itemSpacing": {
+      "file": 5,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6308.padding": {
+      "file": "{\"paddingLeft\":20,\"paddingRight\":20,\"paddingTop\":16,\"paddingBottom\":0}",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6308.layoutMode": {
+      "file": "VERTICAL",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6308.width": {
+      "file": 540,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6308.height": {
+      "file": 86,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6308.color": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.fill": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.stroke": {
+      "file": "rgba(117,142,135,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.strokeWeight": {
+      "file": 1,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.cornerRadius": {
+      "file": 8,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.itemSpacing": {
+      "file": 10,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.padding": {
+      "file": "{\"paddingLeft\":10,\"paddingRight\":10,\"paddingTop\":7,\"paddingBottom\":7}",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.width": {
+      "file": 500,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.height": {
+      "file": 58,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6309.color": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.fill": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.width": {
+      "file": 480,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.height": {
+      "file": 44,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.fontFamily": {
+      "file": "Arial Rounded MT Bold",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.fontSize": {
+      "file": 14,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.lineHeight": {
+      "file": "AUTO",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6750.color": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001124:7096.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001124:7096.width": {
+      "file": 20,
+      "source": "chat-panel.ts"
+    },
+    "40001124:7096.height": {
+      "file": 20,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6773.itemSpacing": {
+      "file": 10,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6773.padding": {
+      "file": "{\"paddingLeft\":10,\"paddingRight\":10,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6773.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6773.width": {
+      "file": 500,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6773.height": {
+      "file": 7,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6774.itemSpacing": {
+      "file": 4,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6774.padding": {
+      "file": "{\"paddingLeft\":2,\"paddingRight\":2,\"paddingTop\":1,\"paddingBottom\":1}",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6774.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6774.width": {
+      "file": 480,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6774.height": {
+      "file": 4.05,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6775.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6775.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6775.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6775.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6775.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6776.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6776.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6776.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6776.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6776.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6777.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6777.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6777.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6777.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6777.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6778.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6778.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6778.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6778.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6778.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6779.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6779.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6779.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6779.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6779.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6317.fill": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6317.itemSpacing": {
+      "file": 5,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6317.padding": {
+      "file": "{\"paddingLeft\":20,\"paddingRight\":20,\"paddingTop\":6,\"paddingBottom\":0}",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6317.layoutMode": {
+      "file": "VERTICAL",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6317.width": {
+      "file": 540,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6317.height": {
+      "file": 54,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6317.color": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.fill": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.stroke": {
+      "file": "rgba(117,142,135,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.strokeWeight": {
+      "file": 1,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.cornerRadius": {
+      "file": 8,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.itemSpacing": {
+      "file": 10,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.padding": {
+      "file": "{\"paddingLeft\":10,\"paddingRight\":10,\"paddingTop\":7,\"paddingBottom\":7}",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.width": {
+      "file": 500,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.height": {
+      "file": 36,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6318.color": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.fill": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.width": {
+      "file": 448,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.height": {
+      "file": 22,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.fontFamily": {
+      "file": "DM Sans",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.fontSize": {
+      "file": 14,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.lineHeight": {
+      "file": "AUTO",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6744.color": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6745.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6745.width": {
+      "file": 22,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6745.height": {
+      "file": 22,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2014.itemSpacing": {
+      "file": 10,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2014.padding": {
+      "file": "{\"paddingLeft\":10,\"paddingRight\":10,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2014.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2014.width": {
+      "file": 500,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2014.height": {
+      "file": 7,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2015.itemSpacing": {
+      "file": 4,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2015.padding": {
+      "file": "{\"paddingLeft\":2,\"paddingRight\":2,\"paddingTop\":1,\"paddingBottom\":1}",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2015.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2015.width": {
+      "file": 480,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2015.height": {
+      "file": 4.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2016.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2016.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2016.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2016.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2016.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2017.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2017.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2017.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2017.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2017.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2018.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2018.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2018.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2018.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2018.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2019.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2019.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2019.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2019.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2019.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2020.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2020.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2020.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2020.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2020.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6978.fill": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6978.itemSpacing": {
+      "file": 7,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6978.padding": {
+      "file": "{\"paddingLeft\":20,\"paddingRight\":20,\"paddingTop\":6,\"paddingBottom\":4}",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6978.layoutMode": {
+      "file": "VERTICAL",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6978.width": {
+      "file": 540,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6978.height": {
+      "file": 150,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6978.color": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.fill": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.stroke": {
+      "file": "rgba(117,142,135,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.strokeWeight": {
+      "file": 1,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.cornerRadius": {
+      "file": 8,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.itemSpacing": {
+      "file": 10,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.padding": {
+      "file": "{\"paddingLeft\":2,\"paddingRight\":10,\"paddingTop\":10,\"paddingBottom\":10}",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.layoutMode": {
+      "file": "VERTICAL",
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.width": {
+      "file": 500,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.height": {
+      "file": 126,
+      "source": "chat-panel.ts"
+    },
+    "40001123:6979.color": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2022.itemSpacing": {
+      "file": 10,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2022.padding": {
+      "file": "{\"paddingLeft\":10,\"paddingRight\":10,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2022.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2022.width": {
+      "file": 500,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2022.height": {
+      "file": 7,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2023.itemSpacing": {
+      "file": 4,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2023.padding": {
+      "file": "{\"paddingLeft\":2,\"paddingRight\":2,\"paddingTop\":1,\"paddingBottom\":1}",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2023.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2023.width": {
+      "file": 480,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2023.height": {
+      "file": 4.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2024.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2024.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2024.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2024.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2024.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2025.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2025.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2025.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2025.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2025.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2026.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2026.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2026.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2026.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2026.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2027.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2027.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2027.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2027.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2027.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2028.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2028.strokeWeight": {
+      "file": 2,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2028.padding": {
+      "file": "null",
+      "source": "chat-panel.ts"
+    },
+    "40001126:2028.width": {
+      "file": 2.16,
+      "source": "chat-panel.ts"
+    },
+    "40001126:2028.height": {
+      "file": 2.05,
+      "source": "chat-panel.ts"
+    },
+    "40001119:6370.fill": {
+      "file": "rgba(255,255,255,0.5)",
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6370.cornerRadius": {
+      "file": 6,
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6370.itemSpacing": {
+      "file": 5,
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6370.padding": {
+      "file": "{\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6370.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6370.width": {
+      "file": 127,
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6370.height": {
+      "file": 36,
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6370.color": {
+      "file": "rgba(255,255,255,0.5)",
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6380.fill": {
+      "file": "rgba(100,97,127,1)",
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6380.padding": {
+      "file": "null",
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6380.width": {
+      "file": 23.97,
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6380.height": {
+      "file": 24,
+      "source": "chat-action-bar.ts"
+    },
+    "40001119:6380.color": {
+      "file": "rgba(100,97,127,1)",
+      "source": "chat-action-bar.ts"
+    },
+    "40001120:6641.fill": {
+      "file": "rgba(255,255,255,0.5)",
+      "source": "chat-action-bar.ts"
+    },
+    "40001120:6641.cornerRadius": {
+      "file": 6,
+      "source": "chat-action-bar.ts"
+    },
+    "40001120:6641.padding": {
+      "file": "null",
+      "source": "chat-action-bar.ts"
+    },
+    "40001120:6641.width": {
+      "file": 126,
+      "source": "chat-action-bar.ts"
+    },
+    "40001120:6641.height": {
+      "file": 35,
+      "source": "chat-action-bar.ts"
+    },
+    "40001120:6641.color": {
+      "file": "rgba(255,255,255,0.5)",
+      "source": "chat-action-bar.ts"
+    },
+    "40001123:6689.fill": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6689.itemSpacing": {
+      "file": 7,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6689.padding": {
+      "file": "{\"paddingLeft\":20,\"paddingRight\":20,\"paddingTop\":10,\"paddingBottom\":20}",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6689.layoutMode": {
+      "file": "VERTICAL",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6689.width": {
+      "file": 540,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6689.height": {
+      "file": 97,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6689.color": {
+      "file": "rgba(203,230,227,1)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6692.itemSpacing": {
+      "file": 10,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6692.padding": {
+      "file": "{\"paddingLeft\":10,\"paddingRight\":10,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6692.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6692.width": {
+      "file": 500,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6692.height": {
+      "file": 7,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6693.itemSpacing": {
+      "file": 4,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6693.padding": {
+      "file": "{\"paddingLeft\":2,\"paddingRight\":2,\"paddingTop\":1,\"paddingBottom\":1}",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6693.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6693.width": {
+      "file": 24.65,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6693.height": {
+      "file": 4.05,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6694.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6694.strokeWeight": {
+      "file": 2,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6694.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6694.width": {
+      "file": 2.16,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6694.height": {
+      "file": 2.05,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6695.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6695.strokeWeight": {
+      "file": 2,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6695.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6695.width": {
+      "file": 2.16,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6695.height": {
+      "file": 2.05,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6696.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6696.strokeWeight": {
+      "file": 2,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6696.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6696.width": {
+      "file": 2.16,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6696.height": {
+      "file": 2.05,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6697.stroke": {
+      "file": "rgba(147,58,69,0.5)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6697.strokeWeight": {
+      "file": 2,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6697.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6697.width": {
+      "file": 2.16,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6697.height": {
+      "file": 2.05,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.fill": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.stroke": {
+      "file": "rgba(117,142,135,0.5)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.strokeWeight": {
+      "file": 1,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.cornerRadius": {
+      "file": 8,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.itemSpacing": {
+      "file": 10,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.padding": {
+      "file": "{\"paddingLeft\":14,\"paddingRight\":14,\"paddingTop\":7,\"paddingBottom\":7}",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.layoutMode": {
+      "file": "VERTICAL",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.width": {
+      "file": 500,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.height": {
+      "file": 53,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6690.color": {
+      "file": "rgba(117,142,135,0.35)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6722.itemSpacing": {
+      "file": 9,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6722.padding": {
+      "file": "{\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6722.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6722.width": {
+      "file": 472,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6722.height": {
+      "file": 35,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6723.itemSpacing": {
+      "file": 20,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6723.padding": {
+      "file": "{\"paddingLeft\":0,\"paddingRight\":0,\"paddingTop\":0,\"paddingBottom\":0}",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6723.layoutMode": {
+      "file": "HORIZONTAL",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6723.width": {
+      "file": 307,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6723.height": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.fill": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.width": {
+      "file": 58,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.height": {
+      "file": 28,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.fontFamily": {
+      "file": "Arial Rounded MT Bold",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.fontSize": {
+      "file": 12,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.lineHeight": {
+      "file": "AUTO",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6832.color": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001124:7035.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001124:7035.width": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001124:7035.height": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6728.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6728.width": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6728.height": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6732.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6732.width": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6732.height": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6724.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6724.width": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6724.height": {
+      "file": 32,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.fill": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.padding": {
+      "file": "null",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.width": {
+      "file": 163,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.height": {
+      "file": 35,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.fontFamily": {
+      "file": "Inter",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.fontSize": {
+      "file": 9,
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.lineHeight": {
+      "file": "AUTO",
+      "source": "chat-plugin-tray.ts"
+    },
+    "40001123:6740.color": {
+      "file": "rgba(61,81,91,1)",
+      "source": "chat-plugin-tray.ts"
+    }
+  }
+}

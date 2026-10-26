@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ═══ INSTALLED 2026-10-10 — active (launchctl: com.raibach.stack). ══════════════════════════
+     com.raibach.stack — brings the local studio up at login (and after a reboot).
+
+     HOME: ~/Library/LaunchAgents/com.raibach.stack.plist (installed 2026-10-10)
+     COMPANION:      development/ops/start-all-local.sh (installed, chmod +x)
+
+     TO LOAD (done — recorded for reference):
+         launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.raibach.stack.plist
+
+     TO UNLOAD:
+         launchctl bootout gui/$UID/com.raibach.stack
+
+     BEHAVIOUR: RunAtLoad only — it runs the script once at login and exits. This is
+     deliberately NOT KeepAlive: the script itself skip-starts anything already running,
+     and per-service supervision (auto-restart on crash) is a later refinement, not this
+     draft. Its output lands in raibach-stack-boot.log for the first-boot verification.
+
+     MEASURED STATE, 2026-10-15: the agent is loaded but has never once run — macOS
+     refuses to execute scripts under ~/Documents for launchd jobs (/bin/bash:
+     .../development/ops/start-all-local.sh: Operation not permitted; launchd shows
+     exit 126). Hand-run start-all-local.sh from a terminal; the agent can only work
+     with a system-level consent (Full Disk Access) granted to its executor. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.raibach.stack</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/raibach/Documents/Raibach_IDS/development/ops/start-all-local.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/raibach/Library/Logs/raibach-stack-boot.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/raibach/Library/Logs/raibach-stack-boot.log</string>
+</dict>
+</plist>

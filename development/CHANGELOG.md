@@ -1,0 +1,932 @@
+# The Development zone — record
+
+> **Current Development room plans, 2026-10-24.** Steps 1–3 of the room cut are executed and
+> verified; the measured record is `frontend/src/rooms/development/CHANGELOG.md`, and the moves are
+> in `PLAN-sovereign-development.md`. The remaining work is
+> `frontend/src/rooms/development/PLAN-remaining-development.md`: the rest of the chat copy's
+> removal, then the tool's health door, the Development→Console bridge and the automation version
+> alignment. The NEXT PROMPT blocks below are tool and bridge notes; the shell is 4,097 lines
+> today.
+
+## 2026-10-24 — THE ROOM BECOMES ITS OWN: THE LAYOUT, THE CHAT, AND THE SHELL CUT
+
+The person sees the same Development room — the paper tile, the OpenHands Agent Canvas, Grace's
+chat closed on the right — but the room now owns its frame and its chat, and the page that hosts
+every tab no longer carries a line of Development state. The tool is untouched: its source, its
+theme, its telemetry cut and its start scripts are exactly as they were.
+
+- **THE BOX OWNS THE GROUND.** `rooms/development/DevelopmentBox.tsx` carries the room box and
+  paints the lab tile itself: the tile at natural size, repeated, from the top left, over
+  `#2b2635`. The pane's left slot no longer paints a second one. `DevelopmentRoomContainer.tsx`
+  owns the two references and calls the room's behaviour.
+- **THE SHELL NO LONGER HOLDS THE ROOM.** `WritingAreaIndex.tsx` lost the Development ground
+  import, the room and behaviour imports, the two element types, the Development flag, the four
+  ground branches, both references, the behaviour call and the sandbox arm. It kept one
+  `<DevelopmentBox key="development-box" />`. The page went from 4,154 lines to **4,104**. The
+  audit for `DevelopmentRoom`, `useDevelopmentRoom`, `developmentLayoutRef`, `developmentSeatRef`,
+  `developmentLabBackground`, `isDevelopmentView`, `openhands-room` and `DEVELOPMENT_GATE_MIN_MS`
+  returns nothing.
+- **THE SANDBOX GOT SMALLER.** Development is excluded from the sandbox, and the private list of
+  rooms the spinner must not cover was deleted with its comments. The Composer is the only surface
+  left inside it, so its spinner speaks for itself. This room removed an arm; it added no rule.
+- **THE ROOM'S OWN LAYOUT.** `development-workspace.ts` is a whole copy of
+  `components/lit/workspace-layout.ts`, retagged `development-workspace` and self-registering. The
+  room imports it and mounts it. Measured on 5001: one `development-workspace`, zero shared
+  `workspace-layout`, the column closed on entry, the room 1,280 wide, the tool's own heading drawn.
+- **THE ROOM'S OWN CHAT.** `development-chat-panel.ts` is a whole copy of
+  `components/lit/chat-panel.ts`, retagged `development-chat-panel` and self-registering. The room
+  imports it before rendering and mounts it in the right slot with the same references and the same
+  bindings. Measured: one room seat, zero shared `chat-panel`, bound to session `86f49051…` and
+  conversation `562ffdcb…`, title `Development`, the rail
+  `chat,trace,tools,approvals,eval,states,repair,settings` (no Versions), `graceLiveContext:false`,
+  `tracePrompt:false`. Opening the Chat rail raised the column to 640 and drew the shared messages,
+  input and tray inside it.
+- **TWO PLACES NAME THE SEAT, NOT FOUR.** The file defines its tag and the room imports it. There
+  is no catalog entry, no shared name registry entry and no server emit, because no assembled
+  surface names this seat — the room renders it. The Console needed all four because the model
+  assembles the Console's surface. If a model-assembled Development surface is ever built, the
+  other two come with it. No `render-development` intent was added.
+- **THE CHAT COPY IS BEING CLEANED IN STAGES.** Removed so far: the Product room's two properties
+  and their declares, its build-wireframe action, its attach and tool forwarding, its clipboard
+  paste, its blank-seat return, and its thread and foot. The thread is the shared
+  `<chat-messages>` and the foot is the shared `<chat-plugin-tray>` again. From the Console: the
+  prompt library, the reassemble command, the composer-package action and the trailing-button
+  switch. Still in the copy and doing nothing in this room: the Console's seat-type read and its
+  hello, the Governance room's trace facts and hello, and the Composer's hello. They are the next
+  stage.
+- **THE WRAPPER'S COPY STAYS VERBATIM FOR NOW.** Its Composer dock, Design ingest and Console width
+  ceiling are unreachable here, and the Composer's own cut retires the shared file they came from.
+  Removing them twice would be wasted motion; the deferral is recorded in the room plan rather than
+  silently skipped.
+- **THE REST OF THE WORK IS PLANNED.** `rooms/development/PLAN-remaining-development.md` carries the
+  remaining room stages and the tool track, with pointers at the top of this file and of
+  `ops/WRITING-AREA-EXTRACTION-PLAN.md`. Its three decisions, taken by the owner today: the commit
+  that puts a task on the Console is a **Publish button in the room**; the agent's sandbox is
+  **decided at deployment**; the spending ceiling is **deferred**, with its insertion point
+  recorded.
+- **THE NEXT PROJECT IS THE COMPOSER.** The owner's direction, recorded here so it is not inferred:
+  the Composer becomes sovereign next, the A2UI sandbox and its file are deleted, every remaining
+  tab gate goes with it, and the shell keeps shrinking. The shared layout and seat stay intact for
+  the Composer to take.
+
+### Current truth — the notes in this file that no longer point at anything
+
+The dated entries below are the record and are not rewritten. These are the corrections a reader
+needs today:
+
+- `development/dev-tool/` is gone. The tool runs from `development/OpenHands-main`, started by
+  `RESTART-LOCAL.sh` §8c and by `ops/start-all-local.sh`.
+- There is no patch script. The house styling lives in
+  `development/OpenHands-main/src/themes/color-theme/definitions/openhands-house.ts`, and the
+  telemetry cut is in the launchers' environment.
+- The gate anchors named in the older entries — `DEVELOPMENT_GATE_MIN_MS`, and the search for
+  `openhands-room` in the shell — are gone. The room lives in `rooms/development/`.
+- The shell is **4,097** lines today — 4,104 after the room cut, then seven dead lines removed in
+  a sweep of the same file. Phase 5's 3,600 target in the extraction plan is
+  historical; the room's plans measure their own cuts.
+- The automation backend is not on 1.49.6. `development/vendor/automation/pyproject.toml` pins
+  `openhands-sdk==1.50.1` and `openhands-workspace==1.50.1`, with agent-server 1.19.1 resolved
+  through the lock; the agent runs the vendored 1.51.0. Aligning them is planned work, not a
+  recorded state.
+- The two NEXT PROMPT blocks, item by item: the agent's model configuration is built (the `default`
+  profile carries `deepseek/deepseek-v4-flash`, seeded in the settings bundle); the lifecycle and
+  health banner, the bridge and the version alignment are open; the sandbox and the spending cap
+  are deferred by the owner's decision today.
+
+## 2026-10-10 — THE HYDRATION BREAK FOUND AND DELETED; THE LAST LOGOS CUT; THE CONTENT BUMP
+
+**The #418 on every load was OURS — the fonts pass's `<link>` repoint.** The stripped vendor
+sheet was also served under `house-root-<sha>.css` and the `<link>` repointed at it (item 9,
+2026-10-07). Measured today by controlled removal in a live tab (the served html's link
+swapped per load, cache disabled, `pageerror` counted): house-root link present → React #418
+on EVERY load; link back on the vendor's own filename → zero errors. The app's hydration
+re-renders the stylesheet its manifest names; the DOM carried a different href; and the
+regenerated tree is exactly the "pop → black → house ground" the owner kept catching — the
+flash was the #418 regeneration itself, not a cascade fight (all four combinations — ground
+script on/off × sheet as-is/wrapped — recorded clean once the link was back).
+
+**Fixed in `openhands-patch.sh`:** item 12 (1b now strips in place, deletes any leftover
+`house-root-*.css`, and normalizes the `<link>` to the vendor name); item 13 — THE CONTENT
+BUMP — renames every file under `build/assets` (except `house-*`, which already carry their
+bytes' hash in their names) to `<name>-hb-<token>` and rewrites every textual reference
+(index.html included; two-phase sentinel pass so no replacement can cascade). Token = short
+hash of the script's own bytes; state in `build/.house-bump`; an unchanged re-run no-ops.
+Item 1c extended: the last three live logo urls (Ordinal favicon + two jsdelivr icons) cut —
+**18 urls in 16 files**, the whole `@openhands` scope made inert (`data:,`). Everything else
+external in the catalog is a docs link or an integration endpoint that fires only when used
+(the Ordinal `/api/mcp` endpoint deliberately stays — dormant, reported).
+
+**Run receipts (live system):** 270 assets renamed (token `df361e9f1c`), 250 reference files
+rewritten; old `vendor~module-DyG7x7JT.js` → **404**, new → 200; served html carries zero
+`house-root`; fresh cache-disabled load: **zero page errors, zero failed requests, zero
+old-name requests; the recorder shows the ground clean from the first sample — no black
+frame.** A second unchanged run: bump no-ops, urls untouched (this is what RESTART-LOCAL.sh
+does on every start).
+
+**Two honest notes.** (1) The cascade-layer wrap first proposed for the flash was NOT added —
+the measurements above show the sheet as-is records clean once the link is fixed; adding it
+would have been motion, not a repair. (2) Any tab left open through the rename will miss
+lazily-imported old names until it is reloaded once — that reload is the honest repair, and
+it is the last one this class of problem needs, because the old addresses are gone.
+
+**Consequence to say plainly:** every browser loads once more (owner's tabs reload); after
+that no cache can serve pre-patch bytes again — burned caches have no address left.
+
+**Owner's ruling on the tab-title leftover (same day): NOT CHASED.** Loaded the sanctioned way —
+inside the room's React shell — the frame's title never reaches the browser tab: the tab carries
+the shell's own title ("Raibach — Interactive Design"). "OpenHands" shows only when the tool is
+opened standalone, which is a testing path, not a door. Recorded so no future session chases it.
+
+**The same day, later — items 14a/14b: every build asset ships compressed.** Cold loads were
+pulling 5.25 MB uncompressed over the tunnel — that was the first-load delay the owner measured.
+Now: `scripts/static-server.mjs` gets `gzip: true, brotli: true` (sirv serves `<file>.gz` /
+`<file>.br` by `Accept-Encoding`), and item 14b writes those siblings with node's zlib (gzip
+level 9, brotli quality 5) for every text asset (js/mjs/cjs/css/json/svg/html/txt) —
+mtime-guarded, orphan-cleaned, idempotent, 271 gzip + 271 brotli files this run. Receipts: the
+largest chunk `vendor~module-…js` 188,782 B → **58,695 B brotli** at the door and through the
+tunnel (`content-encoding: br`); a cold load of the canvas conversation measured **229
+resources, 2.10 MB transferred** (decoded 5.58 MB). Raw files are still served to clients that
+don't negotiate compression; nothing lossy, nothing re-encoded. Because the script's own bytes
+changed, the content bump re-tokenized the build to **`-hb-0485b194c2`** — no cache anywhere can
+pair old CSS with new JS; one reload per tab remains the honest repair, then this class is done.
+
+**The empty-stage splash's logo — fixed engine-side.** The splash ("My new product idea") and the
+room tile live in the engine's asset desk at the server ROOT (`/assets/<file>`); served through
+the builder's preview path (`/builder/api/preview/<id>/assets/<file>`) the engine's `servePreview`
+only looked at project files → 404 every time (the owner's broken R; the console showed the 404s
+for the logo and the two lab grounds). Fix in `local-vcaas/server.mjs` `servePreview`: an
+`assets/<file>` request serves from the engine's own asset dir when the file exists there;
+project files keep precedence; anything unresolved answers the loud 404 unchanged. Verified: door
+logo 200, door tile 200, and the card renders with the R drawn (browser receipt through the
+door). **And one incident found on the way:** the whole door returned 500 because the builder's
+dev server was DOWN (no process on :3223 — the vite proxy had nothing to talk to). Restarted with
+`wireframe-lab/ai-app-builder-open/run-dev-local.sh` (the repo's own node; one launcher now owns
+both the Next server and the engine — the separate manual engine instance was stopped first so
+exactly one engine runs). Door chain green afterward: builder root 308→200, preview root 200,
+logo 200, tile 200, engine `{ok:true, key:true}`.
+
+**The DeepSeek account is gone; every stored key now points at the new one.** The owner's old
+emails are unreachable → the old account cannot be recovered; the old key (balance exhausted) is
+dead everywhere. The new key (held in `backend/.env`; not printed in this record) is now in:
+repo-root `.env`, `backend/.env`, `wireframe-lab/ai-app-builder-open/local-vcaas/.env`, and the
+canvas agent's stored settings via its own API (`PATCH /api/settings`, encrypted at rest,
+read-back `llm_api_key_is_set: True`) — proven with a real one-token completion (HTTP 200)
+before any of this was written down. Northflank: no fleet (`northflank list services` → 404 for
+the token's scope) — nothing to update. **The backup server (Hetzner `raibach-cloud-2`) is
+UNREACHABLE as of this entry** (HTTPS 000, ports 22/443 dead, ssh times out; it answered earlier
+the same day), so its two env files (`/opt/raibach/.env`, `/opt/raibach/studio.env`) still carry
+the dead key; the update is one ssh line away and lands the moment the box answers. Nothing
+pretends otherwise. **Later the same day the owner began closing the Hetzner account itself —
+services removed, the stored card removed through the bank-transfer path, deletion gated by
+Hetzner until the next invoice (Oct 12) is paid. The box's darkness was his decommissioning,
+not a failure; the key update there is void, recorded so no future session attempts it.
+Runtime and public address from here on = this machine plus the tunnel, as agreed.**
+
+**Same day, the hardening window — three items landed, one blocked by macOS, one real bug caught.**
+At the owner's word the queued runtime items were executed. **Container rebinds:** the three
+LAN-exposed ports (langfuse-web 3000, frame-proxy 3100, minio 9090) are now `127.0.0.1`-only;
+receipts — the LAN address refuses (`000`), loopback answers, the governance room gives final 200
+through `/governance`. **Colima narrowed:** `colima.yaml` `mounts: []` → the repo-only mount list
+(backup `colima.yaml.bak-2026-10-10`); after the restart the VM sees exactly ONE `/Users` mount —
+the repository; stack back 8/8 healthy. **Boot chain installed:** `development/ops/start-all-local.sh`
+(idempotent; skips running services; logs under `~/Library/Logs/raibach/`) + `~/Library/LaunchAgents/com.raibach.stack.plist` —
+**blocked on its first run: `Operation not permitted` (exit 126)** — macOS forbids login agents from
+running scripts inside `~/Documents` without an explicit grant (the tunnel/awake agents are unaffected;
+their binaries live outside Documents). Unblocking is the owner's one-time System Settings decision
+(Full Disk Access to `/bin/bash`, broad; or to a dedicated launcher binary, narrow — built on his
+pick); until then the boot script runs by hand after a reboot — one command that brings the whole
+chain up. **Failure tests, each app stopped and restored on purpose:** builder down → door 500 on
+`/builder/` and the preview; canvas down → `/dev/` 500; frame-proxy down → `/governance` 500 — all
+honest refusals, all restored green. The tests caught a real bug in the boot script: its restricted
+PATH missed `uv` (`~/.local/bin`), so the canvas step died at start — fixed in the script and
+re-verified from its own run. **One open puzzle on the way out:** `k0v` (and `glp`) are absent from
+the engine's project store; the five remaining empties and built 078 all serve, and the splash +
+desk logo verified intact across them; the store folder's last change was ≈09:55 — before this
+window; nothing in the hardening touches that store; it matches the previously flagged idea-vanishing
+pattern (1yb/41p/tpq/8a5) — whether the owner discarded those ideas is his answer to give; nothing
+was recreated. **Agreed next phase: security exploration** — the seed list is already measured:
+native listeners still on the LAN (studio 5001, backend 8000, builder 3223, engine 4000, canvas
+8090/3001), Apple's ControlCenter on 5000/7000, and the pending TCC decision.
+
+## 2026-10-07 — the tool's Google Fonts go; nothing is fetched to draw it
+
+The owner's font ruling — *"Arial or rounded fonts -> becomes Nunito … Inter -> everywhere else. Numbers -> Inter. Use our fonts only - no API calls."* — lands in this room as a pure subtraction: the vendor sheet opened with two `@import` lines pulling **Outfit** and **IBM Plex Mono** from `fonts.googleapis.com`, and nothing in the build references either family (every stack resolves through the system vars `--font-sans` / `--font-mono`), so the imports were two calls out of the machine per cold load that drew nothing.
+
+- `openhands-patch.sh` item 9 strips them, copies the stripped sheet to a content-hashed house url (`house-root-<sha>.css`) and repoints the `<link>` — the vendor file is served `immutable, max-age=1yr` on :8090 (measured), so an in-place edit alone never reaches a browser that has already loaded it. The manifest's own reference keeps the vendor filename; that file is stripped in place, so any fetch of it is clean too. Idempotent: a re-run after an update re-strips, re-hashes, re-points.
+- Verified after applying: the served root sheet carries zero `fonts.googleapis` mentions and zero `@import`; the repointed stylesheet answers 200 (~429 KB) with zero mentions; the page's link resolves to the house name. The tool's faces are unchanged — they were always the system stacks.
+
+**The same day — the rest of the lockdown lands in this tool** (owner: *"no API call to any external anything … This is a secure lockdown enterprise repo"*). Full register: `READ-ME/NETWORK-LOCKDOWN.md`.
+
+- **Item 10 — the icon CDN is deadened.** The integrations catalog's 186 `cdn.simpleicons.org` URLs (loaded by the browser whenever those surfaces draw) are rewritten to a closed loopback port across the whole `@openhands` build scope — sibling packages included, sourcemaps too, so an update cannot leave a live URL behind. Bundled marks still draw; remote-only icons fail to draw — cosmetic and deliberate. The catalog component's comment records the substitution.
+- **Item 11 — telemetry has nothing to say.** The baked PostHog key is blanked in `config/defaults.json` and the source clone's `telemetry.ts` defaults now point at `http://127.0.0.1:9` with the lockdown stated in the module docstring; the built tree is rewritten the same way; the three `dev-*.test.ts` script tests expect the blank/dead pair. What remains inside the installed `posthog-js` library is inert: no key, consent denied at launch, disable flag set.
+- **Both Python halves stop loading docs from a CDN.** `docs_url=None, redoc_url=None` in the agent server and the automation app — travels to the hosted image.
+- **The msw analytics handlers stay, as blockers.** They intercept the real endpoints so mock-mode builds cannot send; an interceptor never fetches.
+- **The patch now applies itself.** `RESTART-LOCAL.sh` §8c runs `openhands-patch.sh` against the built canvas after every start — installs, updates, and restarts all land on the cut build without a manual step.
+
+## 2026-10-06 — the Development room's tool was removed from the project, in full
+
+At the owner's direction (*"Remove OpenHands entirely from this codebase. We are NOT using it
+anymore."*), the tool the Development room embedded — OpenHands' Agent Canvas — was removed:
+
+- the vendored tool source and its two Python trees — deleted from the repository;
+- the hosted-build definition and the machine-installation steps — deleted from the repository;
+- the room's embed wiring (the frontend room code and its `/api/config` entry) — removed;
+- the restart script's launch and seed blocks — removed;
+- the machine-level install (global npm package, uv cache entries, launcher shims) — uninstalled;
+- the machine data home (`~/.openhands`), and every document, plan, and log that carried
+  references — archived OUTSIDE the repository at
+  `~/Documents/Raibach_IDS-openhands-retired/2026-10-06/` (moved, not destroyed — the archive
+  is recoverable; say the word to delete it too).
+
+The Development room stands without its tool. The Product room (the app builder) is untouched.
+The tool's full history in this repository, before this change, lives in git history.
+
+## 2026-10-06, the same day, later — the workspace RETURNS, with its reporting channel cut at the source
+
+Owner, after the posthog finding: *"you can still load it via iframe — I just don't want it
+calling or sending anything or connecting to any external companies in order to function. We can
+connect to companies through plug-ins or anything that we control, but I don't want any backend
+telemetry that is circumventing my awareness."*
+
+So the Development room's workspace is restored as a component WE control end to end:
+
+- **Installed into the repo and run from the repo**: the tool lives at `development/dev-tool/`
+  (one-time npm install), the Python halves at `development/vendor/` (restored from the local
+  `demo-mode` branch — no network), and `RESTART-LOCAL.sh` §8c starts it from there.
+- **The reporting channel is cut at the source**, not asked politely:
+  the baked PostHog key and host are blanked in every file that carried them (config defaults,
+  both module formats, the UI bundle); the sourcemaps that still carried the old key were
+  removed; the posthog package is **no longer installed into the agent server** — all four
+  `--with posthog>=6,<7` code paths in the launcher are gone; and the server boots with
+  `OH_TELEMETRY_CONSENT=deny`. Boot log, verbatim:
+  `Telemetry initialised: exporter=posthog enabled=False (legacy_settings)`.
+- **Verified at runtime**: zero external connections from the tool's processes at idle;
+  its UI was loaded in a watched browser session and every request it made was recorded
+  (see the session report — nothing left this machine).
+- **The room embeds it plainly again**: `<builder-embed key="dev-workspace"
+  src="http://localhost:8090/">` in the Development room's branch (no gate, no delay).
+
+The tool's one remaining external call is the model endpoint the app already keeps (DeepSeek) —
+deliberate, visible, and the same link every other room uses. No analytics. No phoning home.
+
+---
+
+## 2026-10-06, later — the second key found and cut; the workspace loads again
+
+**What a watched browser session caught** (after the cut above): the UI bundle still carried a
+SECOND baked PostHog key (`phc_Bgzfx…`, distinct from the one blanked above). Its client
+telemetry initialized regardless of consent and fetched `https://z.openhands.dev` — its config,
+its surveys script, and its surveys API — recorded live from this machine.
+
+**The cut, completed — in this repo's copy only** (the look patch is untouched): the second key
+is blanked (`""`) in every file that carried it — the UI chunk `active-backend-context-*.js`,
+`dist/services/telemetry.js` and `.cjs`, and `config/defaults.json`; every `z.openhands.dev` /
+`us.posthog.com` endpoint in those files now points at a dead local address
+(`http://127.0.0.1:9`), belt-and-suspenders behind the empty key; the two sourcemaps that
+carried the host were removed; the type declaration's note says so. The surviving
+`us.i.posthog.com` strings are the posthog-js library's own defaults — inert, because nothing
+ever initializes without a key.
+
+**The room embeds it again** (owner, 2026-10-06: *"show the modified open hands application
+that we just made sovereign"*): the Development room's left column loads `<builder-embed
+key="dev-workspace" src="http://localhost:8090/">` under the staged opening — three seconds,
+the frame's own load handshake, 700ms ease — with the honest panel for a stopped workspace.
+`RESTART-LOCAL.sh` starts it from the repo. (The parked-bench placeholder of the same day's
+earlier restore is retired to that fallback panel.)
+
+**Verified live** — watched browser session, cache disabled: the workspace loads in the room,
+and **zero requests to any OpenHands or PostHog host — not even an attempt**; the dead
+address is never tried either. Disclosed, still fetching and NOT OpenHands: the tool's own
+Google Fonts CSS and icon CDN, and this app's IBM Plex fonts (Carbon) — each cuttable the
+same way on the owner's word.
+
+**The staged opening.** The Development gate is deliberately staged, not measured: the owner's
+graph-paper tile (`frontend/src/assets/canvas-development-lab-bkg.png`) as the ground, the
+assembly gate's amber ring, one neutral line, a **held 5 seconds** (`DEVELOPMENT_GATE_MIN_MS` in
+`frontend/src/pages/WritingAreaIndex.tsx`; it was 10, cut by the owner the same night), and a
+700 ms cross-fade into the window — the same feel as composer and design. The gate covers the
+frame from the first paint, so the white splash is gone by construction.
+
+**The installed build is patched — and the patch is scripted.** The running app is the built
+package, not the source clone, so its chrome is patched where it lives, by
+**`development/openhands-patch.sh`** (idempotent; run it again after any
+`npm install -g @openhands/agent-canvas` update). Applied tonight, all three verified live in the
+browser:
+
+| # | patch | where it landed |
+|---|---|---|
+| 1 | **The logo is hidden** — the sidebar's OpenHands mark sat right under this app's own logo | the built CSS (an `[aria-label="OpenHands Logo"]{display:none}` rule) |
+| 2 | **The palette takes the pin gate's darks** — `--oh-color-base #110E1F`, `--oh-color-base-secondary #231f2e`, so the chooser screens and every base surface read navy like the gate | the built CSS, on `[data-agent-server-ui]` |
+| 3 | **"Join the OpenHands Slack" → "local sovereign model"** in the sidebar checklist — a placeholder name for the model story, wiring later (owner's word). ⚠️ MY CHOICE OF TARGET, flagged: the app has no literal "sign-up tab"; this outbound link was the only sign-up-shaped item. If a different tab was meant, it is one string. | `build/locales/en/openhands.json`, key `SIDEBAR$ONBOARDING_CHECKLIST_JOIN_SLACK` |
+
+Originals are kept in `development/openhands-patch-backup/` (first run only). The patch is NOT in
+git in the usual sense — the installed package lives outside both repos, which is exactly why the
+script exists; the script itself IS committed.
+
+**Decisions recorded (owner, same night):** the **branding stays** — showing that this harness
+absorbs other real applications whole is the point, and it is MIT. The **onboarding needs
+nothing**: it is remembered per browser (the `openhands-onboarded` localStorage key), so every
+new visitor gets it fresh; `?previewOnboardingStep=0` is its own non-persisting replay if a demo
+ever needs one. *(Both recorded in `wireframe-lab/DEVELOPMENT-ROOM.md`.)*
+
+**Still open, in order** (the room's plan carries the detail):
+
+1. **The agent's model.** It has no LLM configured yet ("Your LLM isn't set up yet" is on
+   screen). Its settings speak OpenAI-compatible providers, so the house's hosted DeepSeek fits.
+   Preseeding its config (so nobody types a key) is the natural follow-up — and it is what the
+   "local sovereign model" label is placeholder-ing for.
+2. **The sandbox decision.** The agent currently runs in LOCAL mode with full filesystem access
+   (OpenHands' own warning). Contained = Docker sandboxes, which needs Docker Desktop installed.
+   Until then, the room is the owner's workbench alone.
+3. **Lifecycle + the health banner.** A `dev:local`-style start script for `agent-canvas -p 8090`,
+   and the Product room's health-door pattern so a stopped server says so instead of an empty
+   frame.
+4. **The bridge (parity with Product).** Conversations/tasks → console cards under their own
+   category, reference not copy, publish as the commit — the same questions the Product bridge
+   answered with the owner's words.
+5. **Styling.** The gate is ours; the app inside is its own origin with its own theme (the
+   patches above are the exception, not the rule). Prefer its theme knobs over rewriting its
+   components.
+
+---
+
+**THE FIRST-RUN FLOW, DISABLED — ONE DOOR, THEN THE WORKSPACE (owner, watching the hosted
+room: *"we should disable the onboarding setup process … the getting started process. I
+think we should disable. I don't know how hard that is."*).** Answer, after measuring the
+tool instead of guessing: the wizard's LATER steps can go freely — but its FIRST step cannot
+be skipped, because in `--public` mode "Add a backend" IS the session-key entry (read in the
+code — *"onboarding is responsible for collecting backend connection details"* — then seen
+live: a fresh browser with the flow suppressed and no backend renders a WHITE PAGE). So
+`openhands-patch.sh` grew a `--hosted` mode — the service's Dockerfile passes it, the Mac
+does not, so the owner's workbench keeps its wizard exactly as it was:
+
+- **the key door stays** — the one step a reviewer must walk (the session key, handed out
+  with the pin, typed once per browser);
+- **every step after it auto-skips** via the wizard's own "Skip for now" (the ground
+  script's rule: a backend exists, the modal is open, the heading is not "Add a backend";
+  a `?previewOnboardingStep=` design preview is left alone), and the skip marks the flow
+  completed — nobody meets it twice;
+- **the Getting-started checklist defaults off** (dismissed-if-absent, so the Settings
+  toggle can bring it back);
+- **the telemetry prompt is answered in the seed** (declined; the dialog shows only while
+  the preference is NULL — read in the code), so it never appears and the demo opts into
+  nothing.
+
+The patch script was validated before the push: bash `-n`, every Python heredoc compiled,
+the emitted ground script through `node --check`, and its HTML edit dry-run against a fake
+build. The drift repair (above) stays as the belt to this suspender: with the wizard's LLM
+step unreachable, the seed can still be trampled from Settings, and the loop puts it back.
+
+**NO VISITOR IS ASKED FOR ANYTHING — AND THE ONBOARDING IS PARKED, NOT LOST (the same night,
+the owner watching a fresh state twice).** First: *"every single person that views this
+will be seeing it for the first time … just add the back in so that it's not asking the
+user or the visitor."* So the hosted copy stopped running the tool in `--public` mode: the
+session key (still a service secret) is injected into the served page at startup, and the
+tool's own first-load code adds its "Local" backend from it — the same mechanism the Mac
+uses, which is why the Mac never asks the owner for a key either. The house patch (hosted
+mode) adds the client half: the first-run flow is preset completed. The "Add a backend"
+step is untouched in the tool and never appears; MEASURED after the deploy, fresh state:
+the served page carries the injected key, the tool registers its own backend, no modal
+opens, and the room — reached through the demo's own shell, the only way it is ever
+presented — lands directly on the workspace with its navigation and the seeded profile.
+The raw API still answers **401 without the key** (the server has not changed). THE TRADE,
+recorded where the door was: anyone with the workspace's URL can drive the agent from a
+browser — the URL is unlisted, not secret; the ceilings are now `max_iterations` and the
+DeepSeek account's limits; **the session key is retired from the hand-out with the pin.**
+
+Second, and this is the part a future session must not break: *"we'll have to re-introduce
+that onboarding later but I don't wanna lose it."* NOTHING WAS LOST — the onboarding code
+in the tool was never touched, modified, or deleted; only two switches govern whether it
+appears, and both live in this repo:
+1. `development/agent-canvas/entrypoint.sh` — the launch line drops `--public`; putting
+   `--public` back restores the wizard's "Add a backend" step as the key door (and the key
+   then needs re-issuing to whoever should carry it).
+2. `development/openhands-patch.sh` — `preseedFirstRun` presets `openhands-onboarded` and
+   the checklist dismissal (hosted mode only); removing the `openhands-onboarded` line
+   brings the wizard back for first-time visitors, and the auto-skip stays dormant because
+   it never fires on the wizard's first step.
+Push to `demo-mode` and the service rebuilds with whichever flow is wanted.
+
+## NEXT PROMPT — copy this into a fresh chat
+
+> We are working on the **Development room** of this application — the tab in the top nav that
+> embeds **OpenHands' Agent Canvas**. Read `wireframe-lab/DEVELOPMENT-ROOM.md` (the room's record
+> and plan) and `development/CHANGELOG.md` (this file) first; the room's gate and embed live in
+> `frontend/src/pages/WritingAreaIndex.tsx` (search for `openhands-room` /
+> `DEVELOPMENT_GATE_MIN_MS`), the engine-free tool runs from the globally installed
+> `@openhands/agent-canvas` on port 8090, and the chrome patches we apply to that installed build
+> are scripted in `development/openhands-patch.sh`.
+>
+> Tonight, in order: (1) get the agent's model configured — it speaks OpenAI-compatible providers,
+> use our hosted DeepSeek, and preseed the config if you can so nobody types a key; (2) bring up
+> the room's lifecycle — a start script for `agent-canvas -p 8090` plus the Product room's health
+> banner pattern; (3) decide the sandbox (local mode currently has full filesystem access; Docker
+> sandboxes need Docker Desktop); (4) sketch the bridge that would put the room's conversations on
+> the console as cards under the same publish rule the Product room uses. Do not restyle
+> OpenHands' insides — the gate is ours, the app is its own; extend the patch script only for the
+> chrome the owner names. Follow the repo's laws: one writer per fact, drive it, and record
+> corrections where they land.
+
+**Patch amendments, same night (owner's second look):** the panel colour is now HIS value,
+exactly — *"this is my preferred colour for all the panels that are currently gray … you can just
+leave the hovers."* So patch #2's secondary is **#22202D** (it was my #231f2e guess, one bit off
+his swatch — the app's own cache had also been showing him the pre-patch greys until a hard
+refresh). The ground keeps the gate's navy #110E1F, and hovers are deliberately untouched. Both
+the live build and `openhands-patch.sh` carry the new value; verified by the COMPUTED style on
+the running element (`--oh-color-base: #110E1F`, `--oh-color-base-secondary: #22202D`), not by
+reading the file.
+
+**The correction that closed the night — "you must've built it somewhere else":** the owner's
+incognito kept showing the OLD colours after the panel patch, and the bytes said otherwise
+because they were right and I had missed WHERE the staleness lived. The app's own assets are
+served **`public, max-age=31536000, immutable`** — a rule appended to `assets/root-*.css` reaches
+nobody who has ever loaded the page, because the URL never changes and the cache never
+revalidates; the owner's incognito session had fetched the file BEFORE the patch and kept those
+bytes for a year. (The HTML, by contrast, is `no-store` — always fresh.) THE FIX IS A NEW URL:
+the patch now lives in **`assets/house-patch.css`**, a file with no cache history, linked from
+the always-fresh HTML — so the very next ORDINARY reload carries it, in any session, incognito
+included, no hard refresh and no cache to clear. Verified exactly that way: an ordinary reload,
+`linked: true`, computed `--oh-color-base: #110E1F` and `--oh-color-base-secondary: #22202D`,
+logo hidden. `openhands-patch.sh` carries the new mechanism, and the appended block was removed
+from the hashed stylesheet so the patch has ONE home.
+
+**The paper comes through, and the landing rises (same night, owner):** *"Add the background
+that we're using at assembly for development behind the splash page … just make the background
+behind [the] contents transparent. And move the contents up … like 100 pixels."* Done, and
+verified on the live element, not by reading files: the ROOM's wrapper now carries the
+graph-paper tile (`WritingAreaIndex.tsx`, behind the iframe), the app's own ground is
+transparent (html/body/shell — measured `rgba(0,0,0,0)`), and the landing's hero container pads
+`max(4rem, calc(28vh - 100px))` instead of `max(4rem,28vh)` — measured 201.6px → **101.6px**,
+exactly the hundred back. Panels stay the owner's purple (`rgb(34,32,45)` ✓) and hovers are
+untouched. TWO MECHANICAL LESSONS, both recorded because both cost time tonight: (1) the app's
+LAYERED stylesheet beats an unlayered `!important` override — the transparent ground is also
+forced by a three-line inline-important script in index.html, and that script is part of the
+patch, not a hack around it; (2) `house-patch.css` is now linked as `?v=2` — an in-place edit of
+a fixed URL is cached by the same one-year policy this very patch exists to escape, so the patch
+script bumps the number with any content change.
+
+**The closing correction — "even if I open a new tab" (the bad news first, then the whole
+truth):** the `?v=2` mechanism above was itself already burned. The link went into the HTML at
+22:27:27 and the stylesheet's content was AMENDED one minute later, at 22:28:50, under the same
+`?v=2` URL — and the app serves assets `immutable, max-age=1yr`, so any session that loaded the
+page inside that minute keeps the earlier bytes for a year, and a new TAB in the same incognito
+window shares that cache. That alone could hold the owner on old colours. But probing a
+fresh-profile state (the `openhands-color-theme` key deleted — exactly an incognito tab, since
+the app's default is `openhands-neutral`) showed the deeper truth: **the panels were never
+swapped at all.** The neutral theme paints its grays through a whole FAMILY of variables, and
+patch #2 had replaced only two of them — measured on the live shell: base #181818,
+base-secondary #202020, surface #202020, surface-raised #282828, surface-deep #101010, bg-dark
+#181818, bg-light #282828, bg-input #313131, bg-workspace #202020, tertiary #313131. The cards,
+the banner, the composer, the sidebar's New Chat row and the editor chrome all read from the
+ones left alone, so "the old colours are still there" was simply true, cache or no cache. And
+the cascade had one more twist: the active theme re-declares its variables from a runtime
+`<style>` under TWO selectors — the shell `[data-agent-server-ui][data-agent-server-ui]` and an
+inner scope `[data-agent-server-ui] [data-theme][data-theme]` — both DOUBLED to win ties.
+
+**THE FIX, three layers deep and name-stable this time:** (1) `openhands-patch.sh` now installs
+the stylesheet under a CONTENT-HASHED name — `house-patch-<sha>.css` — so changing any byte
+changes the URL with it, and there is no version number left to burn; the `?v=2` file is deleted
+from the build and the script strips any older link form before inserting the new one (idempotent,
+self-upgrading). (2) The stylesheet swaps the WHOLE family on BOTH scopes with a TRIPLED selector
++ `!important` — base/base-secondary → #110E1F/#22202D, surface/raised/light/input/workspace/
+editor-sidebar/editor-active/tertiary → #22202D, surface-deep/bg-dark → #110E1F — and gives
+`div.dark.min-h-screen` (the wrapper that paints its own #181818 ground from OUTSIDE the shell)
+the transparency rule by name. (3) The index.html ground script pins the same variables
+INLINE-IMPORTANT on the shell and every `[data-theme]` scope — inline important beats every
+stylesheet there is, layered or not, so the late-arriving theme <style> can re-inject all it
+likes.
+
+**Verified the way the owner will meet it** — fresh-profile state, ORDINARY reload, nothing
+cleared: remaining neutral grays above 3000px²: ZERO; purple surfaces on the landing: 21; the
+only translucent left is the house purple itself at 50% (`bg-base-secondary/50` on a row state).
+Logo hidden, checklist reading "local sovereign model", and the same page reached through the
+app's own Development tab (screenshot on file: navy frame, purple panels inside the room). The
+law this night earned: **a patch URL is a promise about bytes — if the bytes can change, the
+URL must change with them; never amend what a cache has already learned by heart.**
+
+**The ground follows the tool itself — and AN IFRAME CANNOT SHOW YOU THE PARENT, full stop
+(owner: "How hard is it to make that background in the middle area transparent to show our boxes
+…" then "Yeah, I didn't go transparent").** The honest answer to the owner's question: the
+transparent-middle idea itself is the hard part, and it turned out to be the impossible part.
+Measured, layer by layer: the tool's document genuinely goes transparent (its own tab shows the
+page behind through every non-panel pixel), the room's wrapper genuinely carries the assembly
+tile (it has since the gate pass — MY EARLIER CLAIM THAT IT WAS FLAT WAS WRONG, corrected here
+the same night), and still the middle stayed a featureless dark — verified by painting the
+room's wrapper SOLID RED behind a fully transparent embed: not one red pixel reached the eye,
+and a 3× magnified screenshot showed not one grid line. The reason is architectural: a framed
+document paints its own canvas, and what the parent painted behind the frame is never part of
+that canvas. No amount of `background: transparent`, color-scheme changes or cascades changes
+that. THE FIX, therefore, paints the ground INTO the tool: `openhands-patch.sh` now copies the
+room's tile (`frontend/src/assets/canvas-development-lab-bkg.png`) beside its stylesheet as
+`house-patch-tile-<sha>.png` — its own content hash, same discipline as the stylesheet — and the
+tool's canvas carries it (`html{ background: url(house-patch-tile-<sha>.png) repeat !important }`),
+body and shell stay transparent above it, the sidebar keeps its navy, the panels their purple.
+Verified in the owner's exact path (fresh reload → app → Development): the boxed graph paper now
+runs through the middle, behind the hero, the composer and the cards — the assembly look, made
+unremovable by any compositing rule of any browser.
+
+**A NOTE TO OURSELVES — WHY THE STYLING WAS REWORKED SO MANY TIMES TONIGHT (the owner asked for
+this note: "there's a lot of reworking of the styling … make a note about that in our folder").**
+Five passes on one surface in one night is the symptom; these were the causes, kept here so the
+next styling night is shorter:
+1. **The theming stack was unknown.** The tool paints its grays through a family of ~12
+   variables, set at RUNTIME by a theme script using doubled selectors, re-declared on two
+   scopes — while an older pass of mine appended a rule into a hash-named stylesheet that no
+   cache would ever refetch. Each pass discovered one more layer of that stack instead of the
+   whole stack being mapped first (the map now exists — the stylesheet's own comments carry
+   every measured value it replaces).
+2. **The cache was twice the author of a "fix".** `?v=2` was amended one minute after it went
+   live (a burned URL), and the first patch lived inside an immutable file for a year by
+   contract. Both lessons are now structural: the patch's NAME carries its bytes' hash.
+3. **Verification looked at the wrong instrument** in the middle passes: reading files and
+   computed variables instead of the thing the owner sees. What settled every open question
+   tonight was the same move — reproduce the owner's EXACT path (fresh profile → app → room),
+   then either read the computed value ON the rendered element or look at real pixels
+   (screenshots; magnify; paint a layer loud red to see what reaches the eye). The painting-into-
+   the-tool fix was only possible because the red-paint test finally named the layer that
+   paints.
+4. **Two of my own interim claims were wrong and each cost a pass**: "the panels were swapped"
+   (2 of 12 variables had been) and "the room's wrapper is flat" (it carried the tile all
+   along). The rule this re-earns: claim only what the last measurement showed, and correct the
+   record where it landed.
+THE STANDING RULES FROM TONIGHT, for the next styling touch on any room: patch bytes live at
+content-hashed URLs; a visual change is "done" only when seen through the owner's own door; when
+a surface refuses to change, probe the paint chain in order (parent → frame → document) with
+loud test values instead of guessing which layer is guilty.
+
+**The Setup panel stands on the same ground — and names the model (owner, same night: *"it has
+to also be there when the Setup panel opens up … it's just a black dark background"* and *"this
+particular panel … should just say sovereign, local model, and the description should say
+defaults to local model agent … best for general purpose work"*).** The first-run wizard was
+measured before it was touched: the black surround was TWO layers — the wizard's own opaque navy
+takeover (`main.min-h-screen.bg-base`) under a 60%-black veil — while its card was already the
+house purple from the palette rules. Both layers now go transparent (the veil rule covers any
+other modal that uses the same scrim combo; future ones get measured when met). The wizard's
+default row: the description is a locale string and now reads "Defaults to the local model
+agent. Best for general purpose work."; the TITLE is not a string in the build at all — the
+wizard renders each row's name from the BACKEND's agent metadata (`display_name`) — so the row
+title is relabeled in-page by the ground script (exact text match, inside the wizard container
+only, with a MutationObserver so a late mount is caught): it now reads "Sovereign local model".
+The other rows (Claude Code, Codex, Gemini CLI) and the "Skip for now" control are deliberately
+untouched — the owner's earlier decision stands that the onboarding stays skippable and is
+remembered per browser. Verified live: wizard open, first row relabeled with the new
+description, grid running behind the whole panel, other rows byte-identical.
+
+**The demo stops reaching for machines that aren't there — and the hosting plan is written
+(owner, same night).** The work went remote (`demo-mode` pushed to `2220adb`; Northflank built
+and deployed it), and the owner met the two symptoms the deployed build produced, in their
+words: Chrome's *"…is asking you to access other apps and services on this device"* box over
+the Development room, and the Product room's *"The builder's engine isn't running. Start it
+with: npm run dev:local"* banner. The diagnosis in one line: the rooms embedded `localhost` —
+which means the VISITOR's computer — so the deployed Development room asked every visitor's
+browser for local-network access, and the Product banner's copy is developer text that reads to
+a visitor as a verdict ("this program cannot run"). INTERIM, shipped the same night: on the demo
+(`isDemoMode()` — the server's own flag, read at boot) both rooms render an honest panel instead
+— each on the room's own tile ground, one plain line — the engine banner never shows on the
+demo, and the demo's Product room no longer births a project against an engine that isn't there.
+Local runs never take those branches; the Mac keeps the full experience. THE REAL FIX IS PLANNED,
+NOT IMPROVISED: `wireframe-lab/HOST-THE-TOOLS.md` — host OpenHands and the builder engine as
+their own Northflank services (the house patch riding the tool's image build), move both room
+addresses into runtime config (`/api/config`), point the bridge's `BUILDER_ENGINE_URL` at the
+hosted engine — carrying the three OWNER decisions the hosting must ask before anything
+public-facing gets a key (who may drive the agent, whether visitors may run the builder, whether
+to copy the Mac's projects). The file ends with a NEXT PROMPT block for the next chat window.
+
+---
+
+## 2026-10-04 — THE TOOLS GO HOSTED: both rooms run on the remote site (HOST-THE-TOOLS executed)
+
+**The night the plan was written, it was executed — end to end, and verified on the deployed
+site.** `wireframe-lab/HOST-THE-TOOLS.md` is no longer a plan: both tools run as their own
+Northflank services in the same project and cluster (`nf-europe-west`), both rooms show them
+to a signed-out visitor, and the interim panels are now what a MISSING tool says, not what the
+demo says. First, the three decisions the plan refused to make alone (owner, the same night):
+
+| # | decision | answer |
+|---|---|---|
+| 1 | who may drive the hosted development agent | **pin-holders** — the workspace runs in `--public` mode; its session key is a service secret, handed out with the demo pin, typed once per browser |
+| 2 | may demo visitors run the builder | **yes, with caps** — per-visitor and global run budgets inside the engine (env-tunable) |
+| 3 | the Mac's 10 builder projects | **start fresh** — the hosted store begins empty; the Mac's store stays untouched |
+
+**THE FOUR SERVICES, BY NAME.** The app service is unchanged but for its environment
+(`DEVELOPMENT_TOOL_URL`, `BUILDER_TOOL_URL`, `BUILDER_ENGINE_URL`) and the pushes; three new
+combined services carry the tools:
+
+- **`dev-workspace`** — `canvas--dev-workspace--mgtvxtd7xr2v.code.run` — OpenHands Agent
+  Canvas, built from THIS repo (`development/agent-canvas/Dockerfile`, branch `demo-mode`):
+  node:24 (the package's engines field requires >=24 — the plan said node:20 before the
+  package was read), the pinned `@openhands/agent-canvas@1.24.0`, **the house patch applied
+  inside the image build** (`openhands-patch.sh` — the same act as on the Mac, single home
+  kept), uv pre-warmed at build so a cold container boots without a minute of downloads.
+- **`builder`** — `builder--builder--mgtvxtd7xr2v.code.run` — the Next app, root Dockerfile
+  (`next build` → `next start -p 3223`; the same port the Mac uses, so the room's address
+  shape is identical in both worlds).
+- **`builder-engine`** — `engine--builder-engine--mgtvxtd7xr2v.code.run` — `local-vcaas`
+  server.mjs as its own process, with a **volume** (`builder-engine-store`, 6144 MB — the
+  nvme class's minimum, learned from a 409) mounted over `data/` so a redeploy does not
+  throw the projects away.
+
+**THE REPO QUESTION, ANSWERED THE WAY IT HAD TO BE.** The builder + engine live in
+`wireframe-lab/ai-app-builder-open`'s own git repo, whose upstream
+(`totalumlabs/ai-app-builder-open`) is **pull-only** — the room's wiring commit (`9b1c77d`)
+had never had a remote. So the repo is now **forked** (`Raibach/ai-app-builder-open`,
+public, MIT) and Northflank builds both services from it; upstream stays pullable and our
+main rides on top. The engine's two hosting changes ride that fork: with `PUBLIC_BASE_URL`
+set, every URL the UI is handed is `<base>/preview/<id>/` (one hostname, the path form the
+engine always served — verified live: the detail's preview URL and a 200 at it), the banner
+names its own origin instead of localhost, and **the run budget is armed exactly and only
+where the demo's address is** — 4 runs/hour/visitor, 60/hour globally, "N/seconds" env
+specs, consumed before the two token-spending endpoints — while a local engine (no
+`PUBLIC_BASE_URL`) is never throttled (verified in an isolated run, both directions, and a
+refused launch leaves NO project behind). The builder forwards the visitor's address
+(`x-visitor-ip`, read off the first XFF hop at its catch-all proxy) so the fairness bucket
+bills the right person; the global bucket does not care who asks — the documented XFF
+limits, same as `demo_policy.py`.
+
+**THE APP HALF — small, and now the architecture.** `GET /api/config` grew
+`development_tool_url` / `builder_tool_url` (env-driven); `shared/demoMode.ts` became
+`shared/appConfig.ts`, the shell's one read-once module, which OWNS the localhost defaults
+for a local run and returns the empty string on the demo when the server names nothing —
+so the rooms never branch on demo-ness for their address, they render the tool or the
+fallback panel. The Development room's gate gained a ceiling (`DEVELOPMENT_GATE_MAX_MS`,
+25 s): a frame that never arrives gets the honest panel over a still-mounted embed, and a
+late arrival still wins. The Product room checks and births against the HOSTED engine on
+the demo too (`/api/builder/new` through the bridge — the old "no engine on the demo"
+guard is gone, per decision 2), and `demo_policy.py` admits the bridge's four mutations
+(`new`, `sync`, `publish`, `discard` — templates checked against the router's registered
+paths), still behind the per-visitor mutation bucket.
+
+**TWO FAILURES ONLY A LIVE ROOM COULD FIND — both fixed where they lived.** (1) **Every run
+died**: `AttributeError: 'PromptTokensDetailsWrapper' object has no attribute
+'cache_creation_tokens'` — the OpenHands SDK at 1.49.6 reads DeepSeek's usage block
+unguarded, and DeepSeek's OpenAI-compatible responses do not carry it. The fix is a version,
+not a hack: the launcher pins sdk/tools/workspace to the same number as the agent server, so
+`OH_AGENT_SERVER_VERSION=1.51.0` (in the image and the entrypoint) carries the guarded read —
+verified by diffing the two `telemetry.py` copies in the uv cache, then live
+(`/server_info` now says 1.51.0 across all four packages). (2) **The wizard trampled the
+seed**: the first-run "Set up your LLM" step ALWAYS proposes its own default model, so its
+Next is always a dirty save — measured: it overwrote the seeded profile with
+`openai/gpt-5.6-sol` and a cleared key, and the composer said "Your LLM isn't set up yet".
+The entrypoint now seeds the whole chain the tool actually reads — the LLM PROFILE (key
+included, from the service secret; in no image, no repository), its activation, the AGENT
+profile conversations launch from (the launch request carries `agent_profile_id`, and a
+brand-new container has NO active pointer — measured, so the seed sets it), and
+`max_iterations: 150` as the steps ceiling — and a quiet 45-second drift check re-seeds
+whenever a save tramples it. **Said plainly, because the record should say it: this SDK has
+NO dollar-budget setting** (a `max_budget_per_task` field exists in the frontend's types and
+the server silently drops it — measured). The ceilings that exist are max_iterations, the
+key gate, and the DeepSeek account's own limits; a global daily cap would need a proxy in
+front of the model, and that is a decision, not a line.
+
+**VERIFIED THE WAY THE OWNER WILL MEET IT.** Signed out, on the deployed demo: `/api/config`
+returns both addresses; the canvas answers 200 with `house-patch-<sha>.css` linked and every
+house colour in it (`#110E1F` / `#22202D` — the content-hash discipline riding the image),
+the tile asset 200 beside it; the workspace's key screen answers 401 without the session key
+and the seeded settings with it; the wizard's default row reads "Sovereign local model" and
+its list shows the seeded profile in the composer; the Product room's frame is
+`https://builder--builder--mgtvxtd7xr2v.code.run/project/product-idea?embedded=console` —
+born through the bridge against the HOSTED engine (`"engine":"http://builder-engine:4000"`
+in the response — internal DNS confirmed from inside the cluster: `builder-engine:4000`
+resolves, `builder-engine.semantic-design-system` does NOT), a real build ran through the
+hosted builder (3 files in 4 s, preview 200), publish created the Product Team card, discard
+removed the project, sync removed the row, and the room's own exit guard discarded its blank
+project (store back to zero — decision 3 honored); **the browser's resource hosts contain NO
+localhost** — the app, the canvas, the builder, the engine, and fonts, nothing else — so
+Chrome's local-network prompt has nothing left to fire at; and the hosted agent, asked to
+reply, answered on `deepseek-v4-pro` (`status finished`, "hello from the hosted agent",
+cost accrued on the real key). Local runs: the engine's unchanged behavior is verified in an
+isolated run of the new code with `PUBLIC_BASE_URL` unset (identical URLs, no budget), and
+the frontend's local defaults are the module's own constants — the Mac's running processes
+pick the new code up on their next start.
+
+**What remains open, in order:** the Development room's bridge (conversations → console
+cards — the Product room's shape, not yet built); the automation backend inside the
+workspace still runs its own pinned SDK (1.49.6) — its DeepSeek paths were not exercised
+and are an unknown, not a claim; a global spending cap (above); and the standing cost note:
+three deployment plans at list (`nf-compute-50` / `100-1` / `100-2` ≈ $54/mo) plus build
+plans mirroring the app's — the Northflank dashboard is the truth. **The demo's sentence for
+reviewers:** the workspace's session key goes out WITH the pin; the room asks for it once.
+
+## NEXT PROMPT — copy this into a fresh chat
+
+> The tools are hosted (see the entry above and `wireframe-lab/HOST-THE-TOOLS.md`): the
+> Development room shows `dev-workspace` (OpenHands Agent Canvas, house-patched at image
+> build), the Product room shows `builder` on `builder-engine`, both addresses arrive via
+> `GET /api/config` (`shared/appConfig.ts`). Tonight, in order: (1) the Development room's
+> bridge — the room's conversations onto the console as cards, the Product room's bridge as
+> the proven shape (reference, not copy; publish = the commit) — starting by reading
+> OpenHands' own API (`/api/automation/docs`); (2) decide whether the automation backend's
+> pinned SDK (1.49.6, unexercised with DeepSeek) needs the same version treatment the agent
+> server got; (3) if the owner wants a hard global spending cap, design the proxy in front
+> of the model — it is the one ceiling the tool cannot hold itself. Follow the repo's laws:
+> one writer per fact, drive it, and record corrections where they land.
+
+## 2026-10-04 (later) — the sovereign image's first cloud build, read and repaired
+
+Northflank built the untethering commit (`ee99a1d`, build `wanted-silver-6569`) and it
+**FAILED** — the outcome said in advance, because the rewritten
+`development/agent-canvas/Dockerfile` had never been built (no Docker on the Mac). The npm
+half of the image built fine (`npm ci` → `npm run build` → global install, step #10, 33 s);
+the Python half gave the trap, and reading it gave the second one:
+
+1. **THE LOCK CARRIED THIS MAC'S PATH.** `agent-server.lock` opened with two
+   `-e file:///Users/raibach/…` lines — `uv pip compile` emits them for the workspace's own
+   editable packages (`openhands-sdk`, `openhands-tools`) — and `uv pip install
+   --require-hashes` refuses an unhashed requirement: *"all requirements must have a hash,
+   but none were provided for: file:///Users/raibach/…/openhands-sdk"*, exit 2. The lines are
+   gone; those two packages were never this lock's job (the launcher builds them at RUNTIME
+   from `/opt/vendor` via `uvx --with-editable`, its own documented override), and the
+   lock's header now says so, with the reason — a regeneration that re-adds them is a known
+   edit, not a mystery for the next session.
+2. **THE VENV PICKED PYTHON 3.11 — read from the same log before it could bite.** `uv venv`
+   chose Debian bookworm's `/usr/bin/python3` (3.11.2), while both vendored trees' own
+   pyprojects require **>=3.12** and the locks were resolved against a 3.12 (the Mac's
+   uv-managed CPython 3.12.13 is what `uv pip compile` used — the system python is 3.9, so
+   3.12 is the only candidate that satisfies the pyprojects). The image now installs a
+   managed 3.12 (`uv python install 3.12`) and pins `ENV UV_PYTHON=3.12`, so the build-time
+   venv AND the runtime's `uvx` / `uv run --project` builds all land on the interpreter the
+   locks were resolved on. The runtime builds the four SDK packages FROM SOURCE, so their
+   build backends are part of the offline cache too: `setuptools>=83.0.0`, `wheel`, and
+   `hatchling` (automation's backend) are now fetched into uv's cache at build time — under
+   `UV_OFFLINE=1` a missing tool is a loud boot error, and the point is that none is missing.
+
+**Verified:** the edited lock resolves clean under the image's own flags —
+`uv pip install --dry-run --require-hashes -r agent-server.lock` (and `automation.lock`) on
+a 3.12 venv, no errors, the full wheel set listed. **Not verified:** the image build and the
+first boot — still Docker-free on the Mac; the next Northflank build is that test, and the
+deploy's runtime logs (the entrypoint's own sentences) are where the offline cache proves
+complete or names its missing piece.
+
+**THEN THE SECOND BUILD NAMED THE THIRD TRAP — THE LOCKS WERE MAC-ONLY (`37723dc` →
+`purring-steel-5748`, FAILURE).** One step past where the first died:
+*"error: In `--require-hashes` mode, all requirements must be pinned upfront with `==`, but
+found: `secretstorage`"*. `secretstorage` is keyring's Linux-only backend — and it was not in
+either lock because `uv pip compile` WITHOUT `--universal` resolves only for the machine that
+runs it (the Mac), so every `sys_platform == "linux"`/Windows dependency was silently absent;
+the Linux builder then met an unpinned requirement the file never carried. (The handoff's
+"one lockfile covers every platform" was the intent, not what the command did — a dry-run can
+only ever test its own platform unless told otherwise, which is why the Mac-side check passed
+and the Linux build didn't.) Both locks are regenerated **universally** — `agent-server.lock`
+192 → 357 entries, `automation.lock` 167 → 172 — and `agent-server.lock`'s compile command now
+also carries `--no-emit-package openhands-sdk --no-emit-package openhands-tools`, so the
+`-e file://…` lines cannot come back at all; each lock's header records the exact command and
+both traps, so a hand regeneration cannot quietly re-introduce either.
+
+**Verified this time the honest way:** both locks pass `uv pip install --dry-run
+--require-hashes --python-platform x86_64-unknown-linux-gnu` on a 3.12 venv — the Linux
+resolution, hashes and all, which is the platform that failed. **Still not verified:** the
+image build and the first boot; the third Northflank build is that test.
+
+**AND THE FIRST BOOT NAMED THE FOURTH AND FIFTH TRAPS — BOTH VERSION SKEWS (`steady-chess-6922`
+built green; the boot it deployed failed BOTH Python halves).** The container came up and the
+Canvas itself served from our build (`[static] Static dir: /opt/agent-canvas/build`, the
+ingress on 8090), but both backends refused the offline cache in the same minute, one message
+each:
+- **agent server**: *"No solution found when resolving tool dependencies … you require
+  posthog>=6,<7"* — the launcher's own cap (dev-safe.mjs, `AGENT_SERVER_POSTHOG_CONSTRAINT`)
+  against a cache holding **posthog 7.62.1**, what the fresh universal compile had chosen;
+- **automation**: *"Failed to download `botocore==1.42.93`"* — the tree's OWN `uv.lock`, which
+  `uv run --project` honors, pins 1.42.93; the compile had pinned **1.43.108**.
+One lesson for both: **a compile of a pyproject is not what the runtime resolves.** `uv pip
+compile` resolves today's newest; the launcher resolves against its own constraint, and
+automation resolves against the lock that travelled in its tree. So step 3 of the Dockerfile
+no longer installs compiles at all — it warms the cache **by running the runtime's own
+commands**, once, with the network still on: the exact uvx the launcher runs (the same
+`--with-editable` set and `--with "posthog>=6,<7"` — the tool environment the boot then finds
+cached and reuses) and `uv run --project /opt/vendor/automation true` (the project's own
+environment, materialized so the boot has nothing left to resolve). The two lockfiles stay in
+the repository as the FINGERPRINTS of those graphs; they are not the install mechanism,
+because they were never the runtime's writer. `/opt/python-env` is gone with them — nothing
+ever read it.
+
+**Verified by running the very commands** (Mac, the same vendored trees, same flags): both
+warms exit 0 — the uvx built the agent server from our source, resolved posthog under the cap
+and answered `--help`; `uv run --project` rebuilt `openhands-automation @
+file:///…/vendor/automation` and exited. **Still not verified:** the cloud boot itself — the
+fourth build and its first minute of logs are that test.
+
+**AND THE FIRST *PUBLIC* MINUTE NAMED THE SIXTH TRAP — THE INGRESS BOUND LOOPBACK
+(`furtive-spark-8954` built, deployed, every process inside healthy — and the public URL a
+503 for ten minutes).** Read from inside the running pod, not guessed:
+`curl -v http://10.124.72.248:8090/` (the pod's own IP) → *"Connection refused"*, while
+`curl 127.0.0.1:8090/` → **200 OK**. The launcher binds 127.0.0.1 by default (bind-host.mjs:
+*"Binding `::` / `0.0.0.0` exposes the UI …"*) — right for a laptop, invisible for a pod: the
+platform's edge reaches the pod IP, so every request 503'd while the agent server answered the
+seed's calls on loopback and the drift loop ticked. And moving the bind alone was not enough:
+the launcher's policy strips the session key off-loopback (*"Off-loopback binds (and public
+mode) use the API key entry screen instead"*) — the one thing the owner has ruled out
+(*"it's not asking the user or the visitor"*). The fix, both halves:
+- `entrypoint.sh` exports `OH_BIND_HOST=0.0.0.0` (ingress and static move to every interface;
+  the agent server and automation stay on loopback behind the proxy) and
+  `AGENT_CANVAS_ALLOW_LAN_SESSION_KEY=true`;
+- `scripts/dev-with-automation.mjs` (our source) now honors that variable in its session-key
+  policy — the upstream's OWN docker entrypoint names it for exactly this decision (*"set to
+  true only when … you accept embedding the session key in the served HTML"*); the launcher
+  had never wired it. The trade is the one the entrypoint's header already records: the URL is
+  unlisted, not secret; raw API callers still get 401 without the key.
+
+**Verified in-process before pushing:** the policy function now returns
+`{sessionApiKey, authRequired: false}` off-loopback with the opt-in, and
+`{sessionApiKey: null, authRequired: true}` without it — printed, not assumed; both edited
+files pass `bash -n` / `node --check`; and the served page's markers are known
+(`window.__AGENT_CANVAS_SESSION_API_KEY__` present, `__AGENT_CANVAS_AUTH_REQUIRED__` absent)
+for the post-deploy check. **Still the cloud's to prove:** the fifth build, the public URL,
+and a first conversation through the room.
+
+**AND THEN THE SERVED PAGE ITSELF WAS READ — THE STATIC SERVER RUNS THE POLICY A *SECOND*
+TIME (`goofy-hydrant-3642` deployed, URL 200, `/api/settings` 401 — and the page carrying
+`window.__AGENT_CANVAS_AUTH_REQUIRED__=true` with NO key marker: every visitor would have met
+the key-entry screen).** The launcher's decision was right now; the static server simply
+never heard it — `static-server.mjs` re-applies `applySessionKeyPolicy` over its own flags
+(`--session-api-key` / `--auth-required` / `--allow-lan-session-key`), and the launcher pushed
+only the first two, so the second policy pass stripped the key the first pass had kept.
+Reproduced at home the same hour, one process at a time: `static-server --host 0.0.0.0
+--session-api-key …` → the page shows `AUTH_REQUIRED=true` and no key; add
+`--allow-lan-session-key` → the page shows the injected key. The launcher now pushes that
+third flag whenever the opt-in is set, so the two policy passes cannot disagree. One decision,
+stated to both halves.
+
+## 2026-10-04 (last) — THE SUPPRESSIONS COME OUT: the owner caught them from the outside
+
+Two of the day's conveniences were named for what they were, and both are gone.
+
+**1. THE CACHED SIGN-IN (commit 52673fd).** The owner, testing: *"I'm just trying to see an
+honest version of the local site … I'm just seeing shortcuts … You've removed the dev@local
+login, the registration links … It's like it's cached."* It WAS cached: the sign-in flags
+lived in localStorage (a returning browser skipped the gate on every load), and
+`authService` even carried `initializeDevAuth` — *"FORCE AUTHENTICATION FOR DEVELOPMENT —
+login screen bypassed"* — with `getAuthState` returning `isAuthenticated: true`
+unconditionally. The sign-in now belongs to the BROWSING SESSION
+(`frontend/src/shared/session.ts`): sessionStorage keeps the gate's own reload (and every
+reload of the tab) working and dies with the tab — a new visit, new tab or new window lands
+on the gate as if for the first time. The legacy localStorage copies are DELETED, not
+ignored: index.html does it at parse (before any bundle), main.tsx again at boot.
+`initializeDevAuth` is deleted; `getAuthState` reports the session's flag as it is.
+Verified in the browser: a fresh tab lands on the gate with dev@local, Sign in and the
+"Register for beta testing" link; the pin still signs in (sessionFlag 'true', door 'dev',
+localStorage untouched); a brand-new tab meets the gate again.
+
+**2. THE HOSTED WORKSPACE'S FIRST-RUN SUPPRESSION (the patch script's third cut).** The
+owner, watching the hosted workspace: *"we worked very hard on creating the onboarding screen
+… then skip the third step to avoid showing the parameters screen for APIs. We did a lot of
+work to suppress an error. Skip this process makes me suspicious that it's not working
+correct."* And: *"That's error suppression … It has to fail hard. You can't skip things for
+convenience. This is a zero-trust application."* Deleted from `openhands-patch.sh`, exactly
+the switches the records had named for re-introduction: the flow preset completed
+(`preseedFirstRun`), the auto-clicker for the wizard's "Skip for now" (`skipSetupSteps`), and
+the whole beta-notice machinery — the tile interception, the modal, the LLM/parameters
+slide's pass-through, and the profile-restore that repaired the save the pass-through made.
+The wizard now stands everywhere exactly as the tool ships it: every step visible, every save
+kept; skipping a step is the visitor's own choice through the vendor's own control. KEPT, and
+said plainly as PROVISIONING rather than suppression: the entrypoint's injected session key
+(no visitor has a key to type — the key is retired from hand-out) and the seeded provided
+model (what makes the workspace usable once the walk ends). Validated by running the patch
+against a copy of the build: the emitted index.html carries the ground script in canonical
+form, and the only mentions of the deleted functions are the deletion note itself.
+
+**AND THE BETA MODEL POP-UP CAME BACK — WITHOUT THE SKIP (same hour).** The cut above took
+the pop-up out with the machinery; the owner, walking the beta: *"Whenever somebody selects a
+model whether it's local or whether it's in the cloud, it's supposed to show a little pop-up
+[that] says there is no model to select in beta mode."* Right on both counts: the pop-up was
+never the problem; the SKIP was. Restored, hosted-only, stripped to exactly its one honest
+act — a tile click on "Choose your agent" opens the notice (capture-phase, so nothing selects:
+no per-visitor choice reaches the shared configuration) and BOTH controls simply close it.
+No advance, no pinning, no profile repair; the wizard stays where the visitor left it and the
+LLM parameters screen is theirs to walk. Verified in the emitted page (build-copy run):
+the modal is present, `run(betaNotice)` is wired, and no pass-through function exists.
+
+**2026-10-07 (night) — THE FIRST-RUN CHECKLIST AND THE OPEN MENU ARE OUT FOR EVERY BROWSER (the vendor renamed its keys).**
+The owner, meeting a cleared browser (Chrome, cache emptied): *"See how the left navigation now opens and it's got Getting started section. How does that even come back? … I want to know how that happens."* — then: *"We gotta take that memory feature out."*
+THE MECHANISM, measured in the tool's own modules (2026-10-07): the 10-06 tool update renamed the first-run keys. The checklist dismissal now lives at `openhands-sidebar-onboarding-checklist-dismissed` (the literal string `"true"`), and the menu state at the vendor's `openhands-sidebar` store, whose migration key `openhands-sidebar-collapsed` it reads once and consumes when that store is absent (the vendor's own code). The house patch — rebuilt on the 6th — wrote ONLY the wizard flag; the older checklist/sidebar seeds named keys the new build never reads. So every browser without a hand-dismissal met first-run defaults (checklist visible, menu open) while browsers that had dismissed it by hand looked clean — same app, per-browser memory.
+THE FIX (`development/openhands-patch.sh` only — the `house-patch-firstrun` block in the head's trailing zone, before any app script can read): it now also writes the CURRENT keys — checklist dismissed (`"true"`, forced when not already true) and menu collapsed through the vendor's own migration key (written only when no stored choice exists; a person's later toggle still wins). Re-applied to the build; the served page carries all three writes.
+VERIFIED THROUGH THE REAL PATH (the owner's same-night law: testing the tool load-ed raw, outside the React shell, *"is cheating … a shortcut … a way of suppressing errors"* — these tests are in-frame): inside the shell's Development room, twice — in the working browser, and in a brand-new browser taken through the sign-in gate into the room. Both frames: the embedded URL (`?embedded=console&house_door=dev`), checklist absent, `openhands-sidebar` = `{"state":{"collapsed":true},"version":0}`, dismissal `"true"`.
+LEFT ALONE, SAID PLAINLY: the vendor's "New Version Available" notice still ships from the bundle (flagged to the owner, not cut).
+
+**2026-10-10 (night) — THE TWO BOXES, DEAD FOR EVERY VISITOR — AND WHERE THIS WORKSPACE'S REAL SETTINGS LIVE (the map, recorded because they buried it deep).**
+The owner, with the public demo in front of strangers: *"Every single person other than me has seen this"* (the preference box) · *"why is it saying I don't have an LLM"* · *"Just delete it … delete it and they'll never come back again"* · *"no selecting no is not an option because it will not be selected the next time somebody in a different IP opens it up."* Both notices were per-visitor ask-loops; both are now dead **server-side, once, for every visitor**:
+- **THE CONSENT BOX's gate** (`telemetry-consent-banner.tsx`): `settings?.user_consents_to_analytics === null` → ask. The value lives NESTED at **`misc_settings.app_preferences.user_consents_to_analytics`** in `~/.openhands/settings.json` — NOT `telemetry.consent` (a router comment mislabels it; the frontend map `settings-service.api.ts` is authoritative). Written `false` → the box can never render again, for anyone.
+- **THE LLM BANNER's gate** (`use-llm-configured.ts`): locally `hasUsableLlm = hasActiveProfileApiKey` — **the ACTIVE LLM PROFILE's `api_key_set`**, never the plain agent-settings key. The profile list was EMPTY (`{"profiles":[],"active_profile":null}`) — the reason every earlier "set up the LLM" attempt never stuck. Profile `default` created (`deepseek-v4-flash` + the key from `backend/.env`, `include_secrets:true`) and activated; read-back `api_key_set:true`, `active_profile:"default"`.
+- **EXACT CALLS** (both to the local agent-server — `127.0.0.1:8090/dev/api/…`, auth = the page's injected `X-Session-API-Key`, which **rotates each workspace boot**; stale tabs get 401 walls until reload — A/B receipt: current key 200 · previous key 401): settings writes are **DIFF-shaped** (`{"misc_settings_diff":{"app_preferences":{"user_consents_to_analytics":false}}}`; flat fields → 400 "At least one of … must be provided"); profiles via `POST /api/profiles/default` then `POST /api/profiles/default/activate`. Stores on disk: `~/.openhands/` (settings.json + encrypted profile store) — they survive restarts.
+- **VERIFIED as a stranger through `https://raibach-ids.ngrok.dev/dev`** (fresh load): `hasConsentBox:false` · `hasLlmBanner:false` · `externalHosts:[]`.
+- **THE LAW, OWNER-STATED (same night): NO self-healing, NO auto-repair, ever.** *"there's no fucking such thing as self healing start up disable that"* — the proposed re-apply-at-startup step was WITHDRAWN before anything was built; nothing exists to disable. If the state is ever wiped, the boxes must come back **LOUD** and the fix is re-applied on purpose.
+- **WHY THEY KEPT COMING BACK** (asked directly by the owner): a deletion that isn't in the re-application path is replaced wholesale when the package refreshes; an "answer" kept in per-visitor state resets whenever state is recreated. The durable form is the single server-side value — which is what was written.
+- Separate layer, already standing: telemetry hard-off via `AGENT_CANVAS_DISABLE_TELEMETRY=1` (both launchers; `window.__AGENT_CANVAS_DO_NOT_TRACK__=true` injected; SDK never initializes).
+
+**2026-10-11 (night) — THE ROOM'S TOOL LEAVES THE MAC: THE CANVAS DEPLOYS TO THE BOX, AND THE LLM BLOCK'S TWO REAL LAYERS COME OUT (both predate the box).**
+The Development room's canvas now runs on raibach-cloud-3 as its own container (`ids-canvas-1` — the four services in one image: agent-server, automation, static frontend, ingress — behind the door's `/dev* → canvas:8090`; the honest 503 placeholder is retired). The image builds from THIS folder's sources: `development/canvas/` (Dockerfile, entrypoint.sh, log.sh, `requirements-agent.txt` + `requirements-automation.txt` — the sets frozen from the live local venvs, pyobjc pinned darwin-only). Deploy record: `wireframe-lab/raibach-cloud-3/` (canvas service in the ids compose; `canvas-deploy.sh` — idempotent, brace-counted Caddy edit, in-network + through-the-door verification).
+What the containerization measured, kept because each cost a rebuild: `python:3.12-slim` has no node (the frontend/ingress are `.mjs` — the node binary travels from the node stage); the scripts import `sirv` + `httpxy` (both ship; the whole node_modules tree); the agent binary is `agent-server`, not `openhands-agent-server`; the automation venv needs the vendored `openhands-workspace` editable; **`OH_WEB_URL` (path `/dev`) is what makes the agent-server answer under `/dev/*` at all** (api.py `_get_root_path`); `AUTOMATION_DB_URL=sqlite+aiosqlite://` or automation seeks a postgres that doesn't exist; the session key still injects into the served HTML off-loopback via the scripts' own container opt-in (`--allow-lan-session-key`) — no visitor is ever asked for a key.
+THE DOOR INCIDENT, said plainly: the first `/dev` door swap used a regex that ran past the old block's indented closing brace and swallowed the Caddy catch-all — for ~11 minutes `/` and every `/api/*` answered empty 200s while the section routes stayed green. Found and fixed the same evening; the deploy script now replaces the block by brace-counting and refuses to write unless the studio catch-all and every other route survive. The lesson is written inline where the edit lives: status codes are not verification — check bodies and sizes.
+THE LLM BLOCK — TWO LAYERS, NEITHER OF THEM "THE BOX":
+1. The send stayed disabled because the box's canvas volume lacked the profile files — `use-llm-configured.ts` found an empty profile list. Fixed by carrying the Mac's own `profiles/default.json` + `agent-profiles/default.json`.
+2. The run then hit `litellm.BadRequestError: LLM Provider NOT provided … model=deepseek-v4-flash`. LiteLLM cannot resolve the bare name; the provider prefix is required — **`deepseek/deepseek-v4-flash`** — proven in-container both ways (bare fails; prefixed answers, served as `deepseek-flash`). The bare name was set on 2026-10-10 when the profile was created — and the Mac's only-ever conversation (Oct 10, 17:47, "make a button") failed with the identical error: this configuration had never sent a message successfully on ANY machine until tonight.
+Fixed on both machines (the model string in `profiles/default.json` + `settings.json`; box state under `/opt/raibach/ids/data/canvas/`, Mac under `~/.openhands/`). VERIFIED end-to-end in the room: new conversation → "Thinking: The user wants me to reply with exactly 'hello from the box'." → agent reply "hello from the box", no error, context meter live. Nothing vendor was reinstalled anywhere — every fix tonight was two state files and one string.
+
+**2026-10-15 — THE SUPERVISOR AND THE LAUNCHERS, TRUTHFULLY WIRED — AND WHY THE BUILDER "WASN'T LOADING".**
+The owner, finding the builder down: *"Now tell me why builders is not loading."* Measured, in order: (1) nothing was listening on 3223/4000 — the dev pair from the last session had ended; (2) nothing would have restarted it — the login agent `com.raibach.stack` has never once run: macOS refuses to execute scripts under ~/Documents for launchd jobs (`/bin/bash: …/development/ops/start-all-local.sh: Operation not permitted`; launchd exit 126), a wall the owner confirmed: *"you're not going to be able to use the documents folder as a source for anything"*; (3) even granted, the script carried two dead paths from the `wireframe-lab/` → `product/` rename — section 5 pointed at `wireframe-lab/ai-app-builder-open/run-dev-local.sh` (gone), section 6 at `development/dev-tool` (gone). Repaired and verified: builder section → `product/ai-app-builder-open/run-dev-local.sh`; workspace section → `development/OpenHands-main/bin/agent-canvas.mjs` (the entry the live room actually runs — checked against its process environment, all seven variables matching); the launchd reality recorded in the script's header and the agent's plist companion. Hand-run of the whole script verified (colima ✓ · langfuse ✓ · sections 3–6 skip-start ✓ · probe 200).
+ALSO — THE REPO'S NODE RETIRED (owner's direction, completing the 2026-10-10 copy): `RESTART-LOCAL.sh` and `product/ai-app-builder-open/run-dev-local.sh` no longer push `runtime/node/bin` onto PATH; everything starts on the standard PATH (Homebrew node 24.9.0 — the same version the copy held). Nothing reads runtime/; the `.gitignore` entry stays only as a guard. AND — instant backend edits: the API now runs with `uvicorn --reload` (watchfiles 1.3.0 is in the venv) in both launchers, and RESTART-LOCAL's port-freeing step stops the reloader pair by command line first (the port-holder alone would let the supervisor respawn alive). Proven: `WatchFiles detected changes in 'main.py'. Reloading...` → health 200. AND — NGROK RETIRED (owner, same day): the four `.ngrok*` hosts removed from the site's allowedHosts and the two ngrok origins removed from the builder's `allowedDevOrigins` (account deleted; nothing live depends on it — vendor locale strings and this log's own history keep their dated mentions).
+
+**2026-10-15 (later) — THE FLOOR FOR THE A2UI WORK: TWO GRINDERS KILLED, ONE FAKE FAILURE KILLED, AND A SEATS TABLE THAT TELLS THE TRUTH.**
+The owner, setting the order of work: *"We can't even begin to work on this complex design AI to UI interface … It is literally the a2UI process. We can't do that until we have a properly operating system."* Closed the same hour: (1) THE LOCAL CLICKHOUSE — the same telemetry grind the box had on 10-14, larger here: 428,752 metric_log rows in 20h, trace_log 831 MB, text_log 278 MB, part_log 94 MB, asynchronous_metric_log 50 MB — merge loops burning 56% of a core continuously inside colima. Fix = the SAME shared file, one source for both sides: `product/raibach-cloud-3/ids/clickhouse-config/telemetry-limits.xml` (now extended — every chatty self-log capped at 100k rows; metric_log stays removed) is mounted by the local compose too (`governance/langfuse-main/docker-compose.yml`, cross-tree relative mount). All self-logs truncated first (pure diagnostics — Langfuse data untouched). AFTER: VM CPU 56%→11.6% · ClickHouse 1.58 GB→513 MB · VM 5.26 GB→4.28 GB. The box keeps its already-deployed copy; its next deploy picks up the extended file. (2) THE BACKEND'S FAKE FAILURE — every stop (and every save, now that --reload is on) logged `Traceback … asyncio.exceptions.CancelledError` + "Application shutdown failed": `CancelledError` is a BaseException since Python 3.8, so the `except Exception` guard could never catch it, and `wait_for(shield(task))` re-raised the cancelled inspection task's own cancellation. Fix in `backend/main.py` shutdown_event: `await asyncio.wait({task}, timeout=5)` — waits without re-raising; PROVEN on two reload cycles: `Shutting down` → `Finished server process` with nothing between. (3) THE SEATS TABLE — `development/ops/start-all-local.sh` now ends by probing EVERY seat through the site's door (studio · backend · builder engine · builder door · workspace door · governance door); hand-run receipt: six × 200. (4) THE BUILDER RE-HOMED DETACHED earlier the same hour (own process group, captured log — never a terminal child): its exits are logged now, proven live (`[dev:local] stop requested (SIGTERM) — shutting both down.` sits in the captured log), and the npm-log forensics corrected the crash record: the Oct 13 19:47 line was a start (that run lived overnight, clean exit 10-14 ~11:31); THE silent death was the 11:55:34 run — no completion ever written, no crash report, no kernel memory kill: killed from outside, with its owning session.
+
+**2026-10-15 (night) — THE SELF-LOGS COME OUT ENTIRELY — "COMPLETELY DISABLE SOMETHING"; THE 100k CAPS HAD NOT HELD.**
+The owner, watching the box slow day over day: *"Something is pulling on our side and slowing it down and it gets slower and slower every day … I think we need to completely disable something remember this is a demo. But I do want it reading and I do want it doing governance."* … *"imagine 50 people on it."* Measured before touching anything: (1) THE CAPS DID NOT BOUND THE TABLES — the box's trace_log had reached **288,180,287 rows / 4.67 GiB** (spanning all four days) with the 100k-row cap loaded since 10-14 02:01; text_log 6.9M rows; asynchronous_metric_log 80M rows; local trace_log was back to 1.8M rows within hours of its truncation. Whatever the cap setting controls, it is not retention — tried twice, measured growing past both times. (2) THE PULL, ATTRIBUTED (system.part_log, last 24h): ~19k merges + ~70k part removals — **~13 GiB merged and ~13 GiB removed per day, ALL on the self-log tables** (asynchronous_metric_log 5.2 GiB/day · part_log 2.9 · trace_log 2.7 · text_log 1.2); ClickHouse peaking ~25% of a core (9.3% lifetime average); the box's swap average climbing 989 MB (10-11) → 2.3–2.9 GB (10-12 → 10-15), and the 10-14 01:02 OOM that killed the canvas's agent-server + minio sits on that same curve. (3) THE FIX = REMOVAL, NOT CAPS (the owner's word: completely disable; governance kept by his word): `product/raibach-cloud-3/ids/clickhouse-config/telemetry-limits.xml` now carries `remove="1"` for metric_log + trace/text/part/asynchronous_metric/processors_profile/opentelemetry_span; KEPT: error_log + query_log. Langfuse's own data (traces/observations/scores) untouched. Applied: file shipped to the box (hash 7c200ffd…), BOTH ClickHouse containers restarted (config.d is read at startup — a mounted file alone does nothing until restart), leftover tables truncated. AFTER, measured: box system schema = error_log (875 KiB) + query_log (3.3 MiB) + three tiny logs; 0 active merges; ClickHouse ~6% CPU; box data dir 5.3 GiB → 34 MiB (disk 106 → 101 GB). Local: ~3% CPU, tables empty. Governance health after: `{"status":"OK","version":"4.55.0"}`; `/dev` room 200. THE LESSON, KEPT: if a log is noise, remove it; do not cap it. The header of the shared file carries the full record and the revert.

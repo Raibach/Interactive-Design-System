@@ -1,0 +1,32 @@
+# ═══ APPLIED 2026-10-10 — active (verified: VM sees only the repo; revert at the bottom). ═══
+# What this is: the ONE edit that narrows colima's docker VM to the repository only.
+#
+# WHERE IT GOES: /Users/raibach/.colima/default/colima.yaml — replace the single line
+#
+#     mounts: []
+#
+# (line 262, under the comment "Colima default behaviour: $HOME is mounted as writable.")
+# with the block at the bottom of this file.
+#
+# WHY: `mounts: []` means colima mounts ALL of $HOME read-write into the linux VM. Every
+# container in that VM can see everything under /Users/raibach — which makes the careful
+# per-volume scoping inside compose moot. With the list below, the VM sees ONLY the repo:
+#   · the compose bind mount (governance/langfuse-main/nginx-frame-proxy.conf) still works
+#   · every future docker buildx build from this repo still works
+#   · nothing else on this Mac is visible to any container
+# (OrbStack's default is the same home mount — switching runtimes would NOT change this.)
+#
+# TO APPLY (a short window — the docker stack goes down for ~1 minute):
+#     colima stop
+#     colima start
+#
+# VERIFY AFTER:
+#     colima ssh -- mount | grep /Users
+#       → expect exactly ONE line: the Raibach_IDS mount (no /Users/raibach line)
+#     cd /Users/raibach/Documents/Raibach_IDS/governance/langfuse-main && docker compose up -d
+#       → expect the stack to come back up
+#
+# REVERT: put `mounts: []` back, colima stop && colima start.
+mounts:
+  - location: /Users/raibach/Documents/Raibach_IDS
+    writable: true
