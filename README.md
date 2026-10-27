@@ -1,4 +1,4 @@
-# Interactive Design System Manager
+# Interactive Design System
 
 > **Deterministic runtime protocols, data schemas, and governance architectures - One surface. Any payload. AI fills the slots.**
 
