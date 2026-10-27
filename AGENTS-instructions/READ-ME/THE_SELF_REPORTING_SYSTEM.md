@@ -17,16 +17,10 @@ volatile, unpredictable mind, and the only safety is a surveillance layer — tr
 sessions, percentiles, a table of seven hundred successful calls and seventy filters to sift
 them.
 
-This system rejects that picture, and the rejection is architectural, not philosophical.
-
-The model here is not an agent and not an oracle. It is a **utility**: a function that takes a
-structured input and returns a structured output inside a contract the code already wrote.
-It has no keys to the kingdom. It cannot alter the catalog, invent a component, touch the
+ It is a **utility**: a function that takes a structured input and returns a structured output inside a contract the code already wrote.
+It cannot alter the catalog, invent a component, touch the
 registry, or take an action. It can only answer. When the answer does not fit the contract,
 the wall does the talking.
-
-A machine shaped like that does not need to be watched. It needs to be **heard when it
-screams**.
 
 ## Reasoning is off, and that is the design
 
