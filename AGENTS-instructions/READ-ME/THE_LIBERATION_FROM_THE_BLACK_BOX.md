@@ -15,15 +15,9 @@ afterwards. That pattern needs an observability stack — traces, spans, prompt 
 percentile dashboards, filter tables — because the range of what the model may do is wide
 enough that its behaviour has to be watched statistically.
 
-Cloud providers price that pattern accordingly: reasoning tokens and deep-reasoning models
-carry a premium, and the telemetry that watches them runs on metered infrastructure.
-
-None of that is a criticism of the pattern; it is a description of its cost shape. This
-repository chooses a different shape.
-
 ## What this system does instead
 
-- **Reasoning is off, at the provider level.** Not reduced, not budgeted — off. The payload
+- **Reasoning is off, at the provider level.** The payload
   carries `reasoning_effort: "none"` on every mode, and a caller asking for reasoning is
   overruled in one place. No chain-of-thought, no hidden planning pass.
 - **The output is a transformation, not a conversation about what to do.** Every mode asks
