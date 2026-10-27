@@ -29,11 +29,6 @@ enough that its behaviour has to be watched statistically.
   statistics you watch when the machine can wander. Here it cannot. A violation is not a
   trend to monitor; it is a value the contract rejects.
 
-Two consequences follow. The first is vendor independence: if reasoning is not a capability
-we consume, a price discussion about reasoning does not reach our architecture. The second is
-what the bill looks like — measured, not estimated: a 600-token call costs **$0.00004**.
-We rent a transformer, and we pay for the transformation.
-
 ## Built on the A2UI specification, used differently
 
 A2UI was specified to solve a structural and security problem: an agent must not be able to
@@ -43,11 +38,10 @@ the rest possible.
 Because the interface is deterministic and the catalog is closed, a different set of choices
 becomes available to the builder:
 
-1. **Reasoning can be off entirely.** The tokens a reasoning model would spend are tokens
-   this system never requests.
-2. **Observation can be minimal.** A deterministic pipeline does not need a live heart
+
+ **Observation can be minimal.** A deterministic pipeline does not need a live heart
    monitor. It needs a receipt per call and a confession per wall.
-3. **The conversation can be caged.** Whatever looseness remains lives in the chat, and the
+ **The conversation can be caged.** Whatever looseness remains lives in the chat, and the
    chat holds no keys: it cannot reach the registry, cannot author a component, cannot take
    an action. Its answer must fit the catalog or it fails at the boundary; the interface —
    not the model — decides what is allowed to exist.
@@ -58,7 +52,7 @@ deliberately, and says so here so the choice is visible rather than implied.
 
 ## What replaces the telemetry stack
 
-Not "nothing" — a short, honest loop:
+a short, honest loop:
 
 1. **The wall.** The machine halts at the contract boundary. It does not improvise.
 2. **The confession.** One row for the failure: when, which component, what kind of break,
