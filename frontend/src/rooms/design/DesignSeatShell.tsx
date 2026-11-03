@@ -29,7 +29,13 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import designSectionBackground from "@/assets/design-section2-bkg.webp";
 import "@/rooms/design/ux/ux-chat";
-import "@/rooms/design/tools/GraceToolsChat";
+/* THE TOOLS TAB'S OWN SEAT — imported here and by nothing else. */
+import "@/rooms/design/tools/tools-chat";
+/* THE TOOLS TAB'S OWN SEAT (owner, 2026-10-31). Imported HERE, by the room's shell, and by
+   nothing else — never in `components/lit/register.ts`, which would make it available to every
+   page and defeat the split. */
+/* THE REVIEWER'S SURFACE (owner, 2026-11-02): the sessions sent for review, in the right column. */
+import "@/rooms/design/review/design-review-view";
 
 import type { DesignChat } from "@/rooms/design/chat/design-chat";
 import { takeChat, type Tree } from "@/rooms/design/inject";
@@ -47,6 +53,39 @@ export const DESIGN_ROOM_TABS = "chat,tools,executions,ux,settings";
 
 /** The tab that owns the controls. Owner, 2026-10-25: *"a footer for tools"*. */
 const TOOLS_TAB = "tools";
+
+/**
+ * THE TAB THAT ASKS, AND ANSWERS, A REVIEW (owner, 2026-11-02).
+ *
+ * The right column carries one surface for approvals: the sessions this person can send, the ones
+ * sent to them, the queue and the two answers a reviewer gives. It reads on its own when it is
+ * attached; a PRESS of the tab is the fact that says "read again", so a session sent or answered
+ * elsewhere never leaves the list stale behind a tab the person already has open.
+ */
+const APPROVALS_TAB = "approvals";
+
+/**
+ * THE QUESTION ABOUT A SESSION THE PERSON IS LEAVING, ASKED AS A REAL QUESTION.
+ *
+ * It used to be `window.confirm`, which offers two answers worded by the browser. A session has
+ * three outcomes and the person chooses between them — Save makes it a card, Accept keeps it here,
+ * Discard throws it away — so the room draws a dialog with those three words and answers through
+ * the promise this returns.
+ *
+ * `handled` is set by the listener that draws the dialog. If no dialog took the question (a room
+ * without the seat), the answer is Accept: the session is kept rather than silently destroyed.
+ */
+function askLeaveQuestion(message: string): Promise<"save" | "accept" | "discard"> {
+  return new Promise((resolve) => {
+    const detail: {
+      message: string;
+      handled: boolean;
+      resolve: (action: "save" | "accept" | "discard") => void;
+    } = { message, handled: false, resolve };
+    window.dispatchEvent(new CustomEvent("design-leave-question", { detail }));
+    if (!detail.handled) resolve("accept");
+  });
+}
 
 /** A tab's own chat build, as the shell places it (a view inside the seat's view slot). */
 type SeatView = HTMLElement & {
@@ -106,14 +145,134 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
   /* THE RAIL IS THE NAVIGATION. It selects the container that stands; it never selects a page. */
   const onTabRef = useRef(onTab);
   onTabRef.current = onTab;
-  const onTabChange = useCallback((event: Event) => {
-    const tab = String((event as CustomEvent<{ tab?: string }>).detail?.tab || "");
+  /* WHICH TAB STANDS, readable inside the press handler — state lags the press by a render. */
+  const railTabRef = useRef(railTab);
+  /* The tab that stood on the previous draw, so a press is told apart from a redraw. */
+  const standingTabRef = useRef("");
+  useEffect(() => {
+    railTabRef.current = railTab;
+  }, [railTab]);
+  const onTabChange = useCallback(async (event: Event) => {
+    const tab = String((event as CustomEvent<{ tab?: string }>)?.detail?.tab || "");
     if (!tab) return;
+
+    /*
+     * LEAVING A TAB ENDS ITS SESSION, AND THE PERSON DECIDES WHAT HAPPENS TO IT.
+     *
+     * The owner, 2026-11-02: *”there is no navigation … every single tab you're creating a
+     * session.”* So a tab press is not a page change. The tab that is standing holds a session
+     * with its conversations in it; leaving it either keeps that session as a card, keeps it here
+     * for the next visit, or throws it away.
+     *
+     * THE THREE ANSWERS, and the difference between them:
+     *
+     *   Save     — the same act as the foot of the column: the session becomes a card.
+     *   Accept   — the session stays exactly as it is, and the next visit comes back to it.
+     *   Discard  — its conversations and its row are removed, and the next press is a new session.
+     *
+     * NOTHING CHANGED IS NOTHING TO SAVE — AND NOTHING TO THROW AWAY (owner, 2026-11-02).
+     *
+     * This used to throw the visit away without a word whenever nothing had changed: *"if nothing
+     * changes and nothing is added nothing is saved."* Nothing saved is right; DESTROYING is not.
+     * The Tools tab's own session holds its conversations, so leaving Tools after only looking at
+     * the chat deleted the session, its conversations and the row the tab loads them from — the
+     * person came back to an empty tab, every time, and the last conversation they had was gone.
+     * That is the "it starts over" they reported: measured, `discardDesignSession` removes every
+     * conversation of the session and the session itself.
+     *
+     * SO: a visit with no work is ACCEPTED silently — the session and its conversations stand, and
+     * the next press of the tab comes back to them. A new session begins on the person's own act:
+     * Save (which makes the card and starts the next visit fresh) or Discard in the question below.
+     */
+    if (railTabRef.current === TOOLS_TAB && tab !== TOOLS_TAB) {
+      const ask: { work?: boolean; kept?: boolean; title?: string } = {};
+      window.dispatchEvent(new CustomEvent("design-save-ask", { detail: ask }));
+      /* A TURN THE PERSON TYPED IS WORK, even when no field was touched: the chat is part of the
+         session, and it is the thing the session is for. */
+      if (!ask.work) {
+        const standing = seatsRef.current.get(railTabRef.current);
+        const chat = standing?.chat as unknown as {
+          hasPersonTurn?: () => boolean;
+          hasScreenChange?: () => boolean;
+        } | undefined;
+        if (chat?.hasPersonTurn?.()) ask.work = true;
+        /* A FILTER AND A BOX SIZE ARE CHANGES TOO (2026-11-02). They were not counted, so leaving
+           after only filtering discarded the session instead of asking about it. */
+        if (!ask.work && chat?.hasScreenChange?.()) ask.work = true;
+      }
+      if (!ask.kept && ask.work) {
+        const name = ask.title ? `"${ask.title}"` : "This session";
+        const answer = await askLeaveQuestion(
+          `${name} has work in it that is not on a card yet. ` +
+            `Save keeps it as a card on the Design console. ` +
+            `Accept keeps the session here, so your next visit comes back to it. ` +
+            `Discard throws it away.`,
+        );
+        if (answer === "save") window.dispatchEvent(new CustomEvent("design-left-save"));
+        else if (answer === "discard") window.dispatchEvent(new CustomEvent("design-save-discard"));
+      }
+    }
+
+    railTabRef.current = tab;
     setRailTab(tab);
     onTabRef.current?.(tab);
   }, []);
   const onTabChangeRef = useRef(onTabChange);
   onTabChangeRef.current = onTabChange;
+
+  /* THE CONSOLE'S CARDS, read inside the press handler — the frame lags by a render. */
+  const frameRef = useRef<any>(frame);
+  frameRef.current = frame;
+
+  /*
+   * A SESSION CARD TAKES THE PERSON BACK TO WORK (owner, 2026-11-01: the saved card "doesn't
+   * reopen the state of where I was").
+   *
+   * `ConsoleCardGrid` announces a press with the card's id. Three kinds of card stand here: an
+   * element (its key names a catalogue tag — the Tools seat answers that one), a design system
+   * (its key starts `system:` and it opens nothing yet), and a KEPT SESSION, whose key is empty
+   * and whose id is a session row. The last one is this handler's: it asks the room for the Tools
+   * tab carrying that id, and the assembly then builds the tab in that very session — its
+   * conversation, its title, its address, its notes.
+   */
+  useEffect(() => {
+    const onCardOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ id?: string; sessionId?: string }>).detail ?? {};
+      const id = String(detail.sessionId ?? detail.id ?? "");
+      if (!id) return;
+      const cards = (((frameRef.current as any)?.dataModel as Record<string, any>)?.cards ?? []) as any[];
+      const card = cards.find((c) => String(c?.id) === id);
+      if (!card) return;
+      const key = String(card?.element_key ?? "");
+
+      /*
+       * A DESIGN SYSTEM'S CARD OPENS THE TOOL IN THAT SYSTEM (owner, 2026-11-02): *"the card
+       * should just open the tool with the loaded DS, which this one is the default."*
+       *
+       * The card's key is `system:<id>` — the catalogue's own name, the same one the design
+       * assembly resolves. The system travels to the room and then to the seat, where it becomes
+       * the catalogue the tab is built in. Nothing is switched and no new control exists: pressing
+       * the card IS the choice, and the tab opens in it.
+       */
+      if (key.startsWith("system:")) {
+        const system = key.slice("system:".length);
+        window.dispatchEvent(
+          new CustomEvent("design-tools-open", { detail: { openSystem: system } }),
+        );
+        railTabRef.current = TOOLS_TAB;
+        setRailTab(TOOLS_TAB);
+        onTabRef.current?.(TOOLS_TAB);
+        return;
+      }
+      if (key) return;
+      window.dispatchEvent(new CustomEvent("design-tools-open", { detail: { openSession: id } }));
+      railTabRef.current = TOOLS_TAB;
+      setRailTab(TOOLS_TAB);
+      onTabRef.current?.(TOOLS_TAB);
+    };
+    window.addEventListener("card-open", onCardOpen);
+    return () => window.removeEventListener("card-open", onCardOpen);
+  }, []);
 
   /* ── A TAB'S CONTAINER ──────────────────────────────────────────────────────────────────── */
   const openSeat = useCallback((stage: HTMLElement, tab: string): Seat => {
@@ -127,7 +286,12 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
     host.appendChild(renderer);
     stage.appendChild(host);
 
-    const chat = document.createElement("design-chat") as DesignChat;
+    /* THE TOOLS TAB DRAWS ITS OWN SEAT. Every other tab keeps the room's seat; the Figma tool's
+       column is `tools-chat`, its own file, so nothing built into it can appear in Chat, UX,
+       Executions or Settings. */
+    const chat = document.createElement(
+      tab === TOOLS_TAB ? "tools-chat" : "design-chat",
+    ) as DesignChat;
     chat.setAttribute("data-design-chat", tab);
     /* THE ROOM OWNS THE RAIL. A press moves the room to the container that belongs to the pressed
        tab; it never switches this seat's tab, its conversation or its thread. */
@@ -136,8 +300,12 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
     /* THE TAB'S OWN CHAT BUILD. Same face, different job: UX draws the analytics conversation,
        Tools draws the ingest conversation, the other tabs draw the seat's own view for that tab. */
     let view: SeatView | null = null;
-    if (tab === TOOLS_TAB) {
-      view = document.createElement("grace-tools-chat") as SeatView;
+    /* THE TOOLS TAB HAS NO SECOND VIEW (owner, 2026-11-02). It used to slot `grace-tools-chat` in
+       front of the seat — the old Tools conversation. That element drew an empty card, and the
+       seat behind it decided a foreign view was standing and hid its own thread: her greeting was
+       in the seat and the person saw nothing. The seat IS the Tools chat; nothing is slotted. */
+    if (tab === "approvals") {
+      view = document.createElement("design-review-view") as SeatView;
       view.setAttribute("slot", "view");
       view.setAttribute("view-tab", tab);
       chat.appendChild(view);
@@ -175,11 +343,34 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
     if (!stage || !frame) return;
 
     const standing = toolsStanding ? TOOLS_TAB : railTab;
+    /* A CONTAINER BUILT ON THIS DRAW IS NEW, and its view reads on attach — asking it to read
+       again in the same breath would be two reads of one list. */
+    const existed = seatsRef.current.has(standing);
     const seat = seatsRef.current.get(standing) ?? openSeat(stage, standing);
 
     /* ONE CONTAINER STANDS. The others are kept exactly as they were, chats and all. */
     for (const s of seatsRef.current.values()) {
       s.host.style.display = s.tab === standing ? "block" : "none";
+    }
+
+    /*
+     * A PRESS OF THE TAB OPENS ITS LAST MODIFIED CONVERSATION (owner, 2026-11-02).
+     *
+     * The seat is kept across presses, so it used to hold whatever thread it was showing when the
+     * person walked away. The press is the fact that says "open the default one", and the seat
+     * reads the package's own list to find it. It is announced only when the standing tab CHANGES,
+     * so a redraw for other reasons never moves the person out of a thread they are reading.
+     */
+    if (standing !== standingTabRef.current) {
+      standingTabRef.current = standing;
+      if (standing === TOOLS_TAB) {
+        const chat = seat.chat as unknown as { loadDefaultConversation?: () => void };
+        chat.loadDefaultConversation?.();
+      } else if (standing === APPROVALS_TAB && existed) {
+        /* THE REVIEW LIST IS READ AGAIN ON A PRESS — a session sent from another tab, or answered
+           by another person, must not wait for a reload of the room to appear. */
+        (seat.view as unknown as { reload?: () => void })?.reload?.();
+      }
     }
 
     const { tree: hostTree, chat: baseChat } = takeChat(frame);
@@ -198,7 +389,12 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
       : seat.tab === "ux"
         ? String(packages.ux?.conversationId || "")
         : seat.tab === "chat"
-          ? String(packages.chat?.conversationId || "")
+          /* THE CONSOLE IS ITS OWN TAB AND ITS OWN PACKAGE (owner, 2026-11-02). The default view
+             was reading the Chat tab's package while its session was the console's — one seat
+             answering from one row and speaking over another's thread. The console's package is
+             the one the payload resolves for it, and its thread is the last modified. `chat` is
+             the fallback only for a payload that predates the console package. */
+          ? String(packages.console?.conversationId || packages.chat?.conversationId || "")
           : "";
 
     /* THE TOOLS VIEW'S OWN FACTS — the package the turn is filed under, the conversation it
@@ -214,6 +410,19 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
           : typeof injectedChat.graceInstructions === "string"
             ? injectedChat.graceInstructions
             : "";
+      /*
+       * THE PACKAGE'S CONVERSATIONS ARE NOT HANDED HERE YET, AND THIS IS WHY.
+       *
+       * The assembly for this intent returns the design system's own list — read from the server:
+       * one conversation, titled "Raibach Prompt Composer". But both sources reachable from this
+       * shell resolve to the CONSOLE's list, not the Tools tab's: the room's frame carries the
+       * console's data model, and the headless engine's report carried the console's thread too.
+       * A first attempt bound that and the seat drew ANOTHER PACKAGE'S conversation — measured:
+       * `conversations: [{ id: ef4f91ec, title: "Design · Console" }]` under the prompt-composer
+       * session. That is worse than an empty list, so the assignment is out until the Tools tab's
+       * own tree is the source. Next step: read `buildContent`'s chat object at run time and take
+       * the list the tools assembly actually resolved.
+       */
       if (nextSessionId && seat.view.sessionId !== nextSessionId) seat.view.sessionId = nextSessionId;
       if (conversationId && seat.view.conversationId !== conversationId) {
         seat.view.conversationId = conversationId;
@@ -235,7 +444,19 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
         return { ...c, children, isThirdOpen: true };
       }),
       ...(isTools ? (injected?.middleComponents ?? []) : []),
-      ...(isTools ? [{ id: "left-footer", component: "design-left-footer" }] : []),
+      /* THE FOOTER IS NAMED HERE, AND ITS TWO VALUES ARE BOUND TO THE SESSION — the same data the
+         Tools seat writes for the ingest form. A prop patched onto the component would be a write
+         nothing reads: the renderer re-applies props when the DATA MODEL changes. */
+      ...(isTools
+        ? [
+            {
+              id: "left-footer",
+              component: "design-left-footer",
+              busy: { path: "/session/saving" },
+              result: { path: "/session/save_result" },
+            },
+          ]
+        : []),
     ];
     /* THE TOOLS DATA, UNDER THE SAME ROOT — the middle column's components bind their paths
        against it. The console's own keys are kept; the tool's session wins where both speak. */
@@ -298,16 +519,72 @@ export default function DesignSeatShell({ injected, toolsStanding, onTab }: Desi
       if (seat.chat.parentElement !== layout) layout.appendChild(seat.chat);
       const chatInfo: Record<string, unknown> = { ...baseChat };
       if (isTools) {
-        if (typeof injectedChat.sessionId === "string" && injectedChat.sessionId) {
-          chatInfo.sessionId = injectedChat.sessionId;
-        }
+        /* A TOOL'S CONVERSATIONS ARE ITS OWN (owner, 2026-11-02). The surface's list and id are
+           the CONSOLE's; the Tools seat reads its own package instead, so neither is handed on —
+           one seat showing another package's threads is the defect this column kept producing. */
+        delete chatInfo.conversationId;
+        delete chatInfo.conversations;
+        delete chatInfo.sessionId;
+        /*
+         * WHICH PACKAGE THE TOOLS CHAT BELONGS TO — THE TOOL'S OWN, NOT THE ROOM'S.
+         *
+         * The design surface binds its seat to `/session/id`, which is the DESIGN CONTAINER: the
+         * permanent row the room files activity against. The Tools tab's own session — the row Save
+         * keeps and whose conversations the seat lists — is `/session/design_session_id`. Taking
+         * the first made the seat ask the container for the tool's conversations, find none, and
+         * clear its thread whenever the surface re-loaded: measured on the running tab, the chat
+         * thought and then emptied itself as the component tree arrived.
+         */
+        const injectedDesignSession = String(
+          (injected?.dataModel as Record<string, any>)?.session?.design_session_id ?? "",
+        );
+        const toolsSession =
+          injectedDesignSession ||
+          packages.tools?.packageId ||
+          (typeof injectedChat.sessionId === "string" && injectedChat.sessionId) ||
+          "";
+        if (toolsSession) chatInfo.sessionId = toolsSession;
         if (typeof injectedChat.instructions === "string" && injectedChat.instructions) {
           chatInfo.instructions = injectedChat.instructions;
         }
+        /* THE SEAT MAY SPEAK ONLY WHEN THE ROOM SAID WHETHER ITS LIVE FACTS FOLLOW THE WORDS.
+           `_gracePrompt` refuses a turn whose `graceLiveContext` is undefined, and this column
+           never handed the Tools seat that flag — so every greeting it sent was answered with the
+           refusal instead of words. The design surface states `false`, and that is what travels. */
+        if (typeof injectedChat.graceLiveContext === "boolean") {
+          chatInfo.graceLiveContext = injectedChat.graceLiveContext;
+        }
+        /* THE TABLE THE CHAT MAY SPEAK ABOUT — the same rows the left column draws. */
+        const tableRows = (injected?.dataModel as Record<string, any>)?.session?.elements;
+        if (Array.isArray(tableRows)) {
+          chatInfo.tableRows = tableRows.map((row: any) => ({
+            id: row?.id,
+            key: row?.key,
+            name: row?.name,
+          }));
+        }
       }
-      if (conversationId) chatInfo.conversationId = conversationId;
+      if (!isTools && conversationId) chatInfo.conversationId = conversationId;
+      if (!isTools) {
+        /*
+         * EACH TAB READS ITS OWN PACKAGE, AND THE CONSOLE READS THEM ALL (owner, 2026-11-02:
+         * *"tools will load a different set of conversations than UX. All conversations should be
+         * reachable from the design console seat."*). Before this the seat inherited the console
+         * package's id on every tab, so UX listed the console's threads.
+         */
+        const ownPackage =
+          seat.tab === "ux" ? packages.ux?.packageId : packages.console?.packageId;
+        if (ownPackage) chatInfo.sessionId = ownPackage;
+        (seat.chat as unknown as { conversationScope?: "package" | "all" }).conversationScope =
+          seat.tab === "chat" ? "all" : "package";
+      }
       for (const [key, value] of Object.entries(chatInfo)) {
         if (value === undefined || key === "collapsed") continue;
+        /* THE TOOLS SEAT OWNS ITS CONVERSATION (owner, 2026-11-02). It reads the package's own
+           list and opens the last modified thread, on a tab press and on a first bind. An id
+           handed from an assembly is a snapshot, and assigning it here would overwrite the newer
+           one the seat had just read — which is how a press showed an older conversation. */
+        if (isTools && key === "conversationId") continue;
         if ((seat.chat as unknown as Record<string, unknown>)[key] === value) continue;
         (seat.chat as unknown as Record<string, unknown>)[key] = value;
       }

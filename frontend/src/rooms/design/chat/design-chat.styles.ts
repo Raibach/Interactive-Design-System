@@ -202,7 +202,15 @@ export const designChatStyles = css`
        output area beside them). The Evals view is <evals-index> claiming view-tab="eval"
        in the slot below, drawn by the seat's own per-tab rule. This seat is the box copy
        from Hetzner, unchanged. */
-    design-chat-header { flex-shrink: 0; }
+    /* WHICH BOXES MAY GIVE — the only per-box rule the drag reads. The Chat output is the one
+       that shrinks; the Header and the Conversation container hold their size. Each box's own
+       number lives on its card. */
+    /* ── HEADER ── */
+    .chat-output-wrapper > output-header { flex-shrink: 0; }
+    /* ── CONVERSATIONS ── */
+    .chat-output-wrapper > [data-slot="conversations"] { flex-shrink: 0; }
+    /* ── OUTPUT ── */
+    .chat-output-wrapper > [data-slot="session"] { flex-shrink: 1; }
     /* THE LEADING BLOCK'S TOP IS THE DRAWING'S OWN — #40001119:6308 says 16 (it said 20
        before the file moved, 2026-09-20), and every later block takes 6. It is marked on the
        instance that leads (the readout passes variant="lead") rather than left in a custom
@@ -462,7 +470,12 @@ export const designChatStyles = css`
     .view-slot ::slotted(eval-feed) { display: none; }
     .view-slot ::slotted(chat-repair-actions) { display: none; }
     .view-slot.tab-eval ::slotted(eval-feed) { display: block; }
-    .view-slot.tab-approvals ::slotted(chat-repair-actions) { display: block; }
+    /* THE REPAIR ROWS ARE NOT THIS ROOM'S. They are the catalog checker's findings, bound to
+       /findings by the primary console's assembly; this room's console binds no such path, so the
+       element draws its own "Waiting for the surface to bind /findings" fold — a box that waits
+       forever beside whatever the tab is really for. THE APPROVALS TAB IS THIS ROOM'S OWN VIEW
+       (see the pair below), so the rows stay hidden there; the primary console keeps its own rule,
+       in its own sheet. */
     .view-slot.tab-repair ::slotted(chat-repair-actions) { display: block; }
     /* A ROOM'S OWN VIEW, PER TAB — the same one-slot-one-view discipline as the tag
        rules above, made generic so the seat needs no room's names: the view declares its
@@ -493,6 +506,19 @@ export const designChatStyles = css`
        it"*). The rule stays because the tab stays: when the UX tab has a view of its own, this
        is the one line that draws it. */
     .view-slot.tab-ux ::slotted([view-tab="ux"]) { display: block; }
+    /* THE DESIGN ROOM'S OWN APPROVALS SURFACE (owner, 2026-11-02: the review "loads into the
+       console's right column, in the same slot the tabs already swap"). The reviewer's list, the
+       session it opens and the two answers a reviewer gives are ONE element, and it declares
+       view-tab="approvals". Until this pair stood, that element was assigned and INVISIBLE: the
+       generic rule above hides every claimant, and the .chat-top strip admits only the repair
+       rows, so the Approvals tab drew a chat thread with nothing in the column that a person
+       pressed the tab for. The view FILLS the hole — it is the tab's content, not a strip above
+       another tab's content. */
+    .view-slot.tab-approvals ::slotted([view-tab="approvals"]) {
+      display: block;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
     /* THE EVALS VIEW PAINTS NO GROUND — the owner asked for it transparent (2026-09-24), so
        the drawing's ground reads through the column. Scoped to the eval tab: the chat and the
        other views keep the design's own sheet. */

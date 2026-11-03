@@ -11,6 +11,28 @@ learn them.
 
 ---
 
+## 2026-10-26 — the date range returns to the Home dashboard
+
+- **The defect and its cause.** The vendor app draws a date range control on the Home dashboard;
+  our room's Home did not. The source carried a `/governance` branch that replaced the picker with
+  an empty spacer (`ProjectHomePage.tsx`), and the running image was built with that branch, so
+  the control was absent in the room. Measured in the old build: the Home page's own chunk set
+  contained the spacer class `h-7` and no date-picker module.
+- **The repair.** The branch is deleted; the Home header draws the vendor's `TimeRangePicker`
+  right of Filters, the same control the dashboard page already drew. The image was rebuilt with
+  the standing recipe (`NEXT_PUBLIC_BASE_PATH=/governance`) and the web container recreated. The
+  previous image is kept as `langfuse-web:gov-embed-before-daterange`.
+- **Verified in 5001:** the Home header reads `7d Past 7 days`; pressing it lists the vendor
+  presets (`Past 5 min` through `Past 1 year`, plus `Select from calendar`); choosing
+  `Past 30 days` changed the header to `30d Past 30 days` and moved the chart axis to
+  Sep 26 – Oct 26 with the thirty-day totals; the range was returned to `Past 7 days` and the
+  seven-day totals came back.
+- **Verified on the tunnel:** the tunnel's Governance room opens the same installed copy through
+  its own `/governance` address, so no separate studio build carries this control. Measured on
+  the public tunnel address: the Governance documents of the tunnel and of the local server carry
+  the same build id (`gPXTCQwDfSvt74q0nOQed`), and the tunnel's Home header shows the same
+  `7d Past 7 days` control with the seven-day dashboard.
+
 ## 2026-10-24 (later still) — the room owns its box, container and navigation
 
 - `GovernanceBox` owns the wave (cover, centre, over #2b2635); `GovernanceRoomContainer` owns the

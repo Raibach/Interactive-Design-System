@@ -18,6 +18,24 @@
  */
 import { LitElement, html, css, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+// THE SEATS' MARKS (owner, 2026-10-27): every console card wears the mark of the area it came
+// from. The files are the same ones the seats' own chat rails draw; a seat with no file yet
+// (Product) keeps the card's default mark.
+import consoleMark from './assets/chat-logo-watsonx.svg';
+import governanceMark from './assets/chat-logo-watsonx-governance.svg';
+import composerMark from './assets/chat-logo-watsonx-orchestrate.svg';
+import developmentMark from './assets/chat-logo-watsonx-engineering-insights.svg';
+import designMark from './assets/chat-logo-carbon.svg';
+import productMark from './assets/chat-logo-watsonx-code-assistant.svg';
+
+const MARK_BY_SEAT: Record<string, string> = {
+  console: consoleMark,
+  governance: governanceMark,
+  composer: composerMark,
+  development: developmentMark,
+  design: designMark,
+  product: productMark,
+};
 
 // ── shared ──────────────────────────────────────────────────────────────────
 
@@ -563,6 +581,7 @@ class A2UIConsoleCardGrid extends LitElement {
         data-a2ui-id=${sessionId}
         title=${item?.title ?? ''}
         category=${item?.category ?? ''}
+        mark-src=${MARK_BY_SEAT[item?.seat ?? ''] ?? ''}
         header-label=${item?.room_domain === 'product' ? (item?.category ?? '') : ''}
         ?nodelete=${item?.room_domain === 'design'}
         function=${item?.function ?? 'Function like Repair'}

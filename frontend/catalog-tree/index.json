@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-26T16:01:47.457Z",
+  "generatedAt": "2026-10-31T20:33:56.583Z",
   "catalogs": [
     {
       "id": "carbon",
@@ -43,9 +43,9 @@
       },
       "gate": {
         "status": "partial",
-        "generatedAt": "2026-10-26T16:01:34.533Z",
-        "findings": 39,
-        "blocking": 1,
+        "generatedAt": "2026-10-31T20:22:38.512Z",
+        "findings": 40,
+        "blocking": 2,
         "fileKey": null,
         "report": "frontend/catalog-audit/prompt-composer.json"
       },

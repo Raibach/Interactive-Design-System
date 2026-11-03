@@ -45,6 +45,11 @@ from langfuse import get_client
 # SECOND row and double-count the cost — one client, one receipt.
 from openai import OpenAI
 
+# IBM watsonx.ai — the model the owner asked for (2026-10-27). It answers only when its own
+# probe has carried a real call: a key without a project is a provider that would take every
+# room down, so `active()` is a measurement, not a setting. See watsonx_provider.
+import watsonx_provider
+
 # ── THEEnvLoad: override=True so uvicorn --reload picks up .env updates immediately.
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
@@ -487,6 +492,41 @@ def record_pending_usage(user_id: str | None, package_context: dict[str, Any] | 
         )
 
 
+def _has_words(text: str) -> bool:
+    """Whether an answer says anything a person can read.
+
+    A reply that is only machine instructions — the `<a2ui_surface>` tags the panels consume —
+    leaves the chat bubble empty: measured on 2026-10-27, IBM answered the console's "organize
+    the cards" with a single directive and no sentence, and the panel had nothing to print.
+    """
+    import re
+
+    spoken = re.sub(r"<[^>]*>", " ", text or "")
+    return bool(spoken.strip())
+
+
+def _surface_is_in_the_catalogue(text: str) -> bool:
+    """Whether an assembled surface names only components the trusted catalogue holds.
+
+    THE GATE IS THE SAME ONE THE ROUTER USES — imported at call time so this module keeps no
+    import cycle with routes/ai, which imports this one. Any reason to refuse counts: a fence,
+    a missing key, a name the catalogue does not hold.
+    """
+    try:
+        from routes.ai import _extract_json_payload, validate_a2ui_components
+
+        body = text.strip()
+        if "```json" in body:
+            body = body.split("```json")[1].split("```")[0].strip()
+        elif "```" in body:
+            body = body.split("```")[1].split("```")[0].strip()
+        validate_a2ui_components(_extract_json_payload(body)["components"])
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[IBM watsonx.ai] contract check failed: {type(exc).__name__}: {str(exc)[:160]}")
+        return False
+
+
 def query_llm(
     context: str = "",
     question: str = "",
@@ -645,6 +685,50 @@ def query_llm(
         "max_tokens": max_tokens,
         "stream": False,
     }
+
+    # ── IBM WATSONX.AI FIRST, THE PREVIOUS MODEL AS THE FALLBACK ─────
+    #
+    # The owner, 2026-10-27: *"I want to use the API from IBM to assemble the system … you can
+    # leave DeepSeek as a fallback."* So IBM answers first, and the rest of this function — the
+    # provider that was here before — is the fallback when IBM's answer cannot be used:
+    #
+    #   * a transport failure, an empty answer, or a refusal;
+    #   * for the assembly modes, a surface whose components are not in the trusted catalogue.
+    #     That is the failure measured on 2026-10-27: Granite answered, named a component the
+    #     catalogue does not hold, and the gate refused the whole surface. A fallback that only
+    #     covered transport failures would have let that through as a broken room.
+    #
+    # No response_format is sent: the strict system prompt already carries the JSON contract.
+    #
+    # THE FALLBACK IS A SWITCH (owner, 2026-10-27: *"You're gonna have to disable the fall
+    # back. I can't test this if it's falling back I have to have it fail."*). With
+    # WATSONX_FALLBACK=off, IBM's answer is the answer — a directive with no words shows as an
+    # empty bubble, and a surface outside the catalogue is refused by the router's own gate.
+    # Nothing is substituted, so what IBM does is what you see.
+    ibm_fallback = os.getenv("WATSONX_FALLBACK", "on").strip().lower() not in ("off", "0", "false", "no")
+    if watsonx_provider.active():
+        print(f"[IBM watsonx.ai] {os.getenv('WATSONX_MODEL', 'ibm/granite-4-h-small')} — mode={mode}")
+        ibm_answer = watsonx_provider.chat(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=request_temp,
+        )
+        if not ibm_fallback:
+            print("[IBM watsonx.ai] the fallback is off — its answer is the answer")
+            return ibm_answer
+        if ibm_answer and not ibm_answer.startswith("Error:"):
+            if mode in ("console_assembly", "surface_assembly", "figma_ingest"):
+                if _surface_is_in_the_catalogue(ibm_answer):
+                    return ibm_answer
+                print("[IBM watsonx.ai] its surface is not in the catalogue — falling back")
+            elif _has_words(ibm_answer):
+                return ibm_answer
+            else:
+                # A DIRECTIVE WITH NO SENTENCE LEAVES THE BUBBLE EMPTY (measured 2026-10-27).
+                # The fallback asks the model that writes prose for a reply a person can read.
+                print("[IBM watsonx.ai] the answer carried no words — falling back")
+        else:
+            print(f"[IBM watsonx.ai] no usable answer — falling back: {ibm_answer[:120]}")
 
     # response_format IS THE PROVIDER'S TO CHOOSE, NOT THIS MODE'S, and it is added per
     # attempt below. It used to be set here for both surface modes, which is correct for

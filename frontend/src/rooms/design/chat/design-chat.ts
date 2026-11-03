@@ -1,8 +1,16 @@
-/* THE DESIGN ROOM'S OWN SEAT — a WHOLE duplicate of `chat-panel.ts`, retagged
-   `design-chat-panel` and renamed to the room that owns it (owner, 2026-10-18: a tab's seat is
-   its own file; the only things shared are the lit components and the styling). Duplicated
-   whole and renamed — nothing else differs. Never import the shared `chat-panel` into the
-   design console's surface: that is the borrowed seat this copy exists to replace. */
+/* THE DESIGN ROOM'S OWN SEAT — the console's conversation, and the seat the other room tabs draw.
+
+   WHERE EACH THING LIVES:
+     the frame         rooms/design/frame/chat-frame.ts — the five boxes, the bands, the pull, the
+                       stop and the view slots. One copy for the whole Design section.
+     the conversation  rooms/design/chat/conversation.ts — the list, the thread, the ownership
+                       check, the move, selecting, removing, creating. THIS SEAT'S OWN COPY.
+     the look          rooms/design/chat/design-chat.styles.ts
+     this file         what only this seat says: its greetings, its words, its scroll record.
+
+   ITS LIST IS THE WHOLE PERSON'S: `conversationScope = 'all'` for the console, so a conversation
+   started in Tools is openable here. A tab's seat reads its own package. */
+
 /**
  * <design-chat-panel> — GRACE'S SEAT, DRAWN BY THE SURFACE.
  *
@@ -45,6 +53,8 @@ import { LitElement, html, nothing } from 'lit';
 // so <chat-panel> stays self-contained: composing these elements requires them to
 // be defined before render, the same rule that forced the main.tsx import above. 
 import { designChatStyles } from './design-chat.styles';
+import * as frame from '../frame/chat-frame';
+import * as conversation from './conversation';
 import './parts/design-chat-fold';
 import './parts/design-chat-header';
 import './parts/design-chat-messages';
@@ -64,7 +74,7 @@ import './parts/design-error-banner';
 import './parts/design-chat-navigation-bar';
 import './parts/design-sessions-feed';
 import './parts/design-prompt-textarea';
-import logoAsset from '@/components/lit/assets/chat-logo-gemini.png';
+import logoAsset from '@/components/lit/assets/chat-logo-carbon.svg';
 // The app's own logger. A turn warning from the server is written here as well as drawn in
 // the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
 // owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).
@@ -102,6 +112,7 @@ import { getStoredUserId } from '@/services/authService';
 // THE SEAT'S OWN OBSERVABILITY — the application tags itself. The door records element facts
 // against catalogue tags and surface facts in their own table; nothing here reads a message.
 import { uxCapture, uxCaptureSurfaceOpen } from '@/shared/uxCapture';
+import { create, listForPackage, pointPackageAt, remove, type ConversationRow } from '@/shared/conversations';
 
 interface SeatMessage {
   role?: string;
@@ -623,6 +634,12 @@ export class DesignChat extends LitElement {
   declare inputHeight: number;
   /** The rail's active view. */
   declare activeTab: string;
+  /**
+   * WHOSE CONVERSATIONS THIS SEAT LISTS (owner, 2026-11-02: *"All conversations should be
+   * reachable from the design console seat"*). The console reads every conversation the person
+   * has; a tab reads its own package's only. Absent reads as `package`.
+   */
+  conversationScope: 'package' | 'all' = 'package';
   /** The room owns the rail: a press is navigation for the room, never a switch inside this seat. */
   declare railOwnedByHost: boolean;
   /** True when the chat column is collapsed to its rail. */
@@ -1133,6 +1150,8 @@ export class DesignChat extends LitElement {
     // below — an early return there must not cost the surface fact.
     uxCaptureSurfaceOpen('chat-seat');
     this._syncScrollThumb();
+    /* THE FIVE BOXES' DOT BANDS ARE HANDLES HERE. */
+    this._wireGrips();
     if (typeof ResizeObserver === 'undefined') return;
     const wrap = this._scrollerEl();
     if (!wrap) return;
@@ -1614,6 +1633,13 @@ export class DesignChat extends LitElement {
   // handleMouseDown/handleMouseMove): min 100, max min(600, panel - 190).
   private _dragStartY = 0;
   private _dragStartHeight = 0;
+  // THE HAND'S HOLD ON THE EDGE, taken at drag start. The grip strip sits ABOVE the input
+  // area's top edge, so placing the edge AT the pointer made the whole input jump away from
+  // the hand on the first move (owner, 2026-10-26: *"the buttons and design in the chat, they
+  // don't follow the mouse"*). The offset below is (pointer − edge) at the grab; the edge keeps
+  // it, so the edge moves exactly as far as the hand does.
+  private _dragEdgeBottom = 0;
+  private _dragGrabOffset = 0;
   // The bar and footer heights, measured ONCE at drag start. Reading
   // getBoundingClientRect on every mousemove forces synchronous layout per
   // frame — the classic resize-lag pattern. They don't change mid-drag.
@@ -1643,43 +1669,68 @@ export class DesignChat extends LitElement {
   private _onResizeStart(e: Event) {
     const d = (e as CustomEvent).detail || {};
     this._dragStartY = typeof d.startY === 'number' ? d.startY : 0;
-    this._dragStartHeight = this.inputHeight || 100;
-    const bar = this.renderRoot?.querySelector('chat-action-bar') as HTMLElement | null;
-    // THE TRAY (or the product room's tools row), not <design-chat-footer>: the drawing's foot
-    // replaces it, so the bar the input height must reserve is the foot's block — the
-    // design's own 97px (#40001123:6689), which is what the fallback carries if the
-    // element is not up yet.
-    const footer = this.renderRoot?.querySelector(
-      'chat-plugin-tray, chat-product-tools',
-    ) as HTMLElement | null;
-    this._barHeight = bar?.getBoundingClientRect().height || 82;
-    this._footerHeight = footer?.getBoundingClientRect().height || 97;
+    const input = this.renderRoot?.querySelector('design-chat-input') as HTMLElement | null;
+    this._dragStartHeight = input ? input.getBoundingClientRect().height : (this.inputHeight || 0);
+  }
+
+  /* ── THE FRAME LIVES IN `rooms/design/frame/chat-frame.ts` ───────────────────────────────────
+   *
+   * The five boxes, the bands, the pull and its stop are the Design section's own, once for every
+   * tab. Each delegate below keeps the name the template already binds; the body is the frame's,
+   * and the frame's interface states what it may reach on this seat.
+   */
+  private get frameSlotTags(): Record<string, string> {
+    return {
+      HEADER: 'output-header',
+      CONVERSATIONS: 'design-chat-header',
+      OUTPUT: 'design-chat-header',
+      INPUT: 'design-chat-action-bar',
+      FOOTER: 'design-chat-plugin-tray',
+    };
+  }
+
+  /** The seat as the frame's host. One cast, in one place; the interface states the contract. */
+  private _frame(): frame.ChatFrameHost {
+    return this as unknown as frame.ChatFrameHost;
   }
 
   private _onResizeMove(e: Event) {
-    const d = (e as CustomEvent).detail || {};
-    if (typeof d.clientY !== 'number') return;
-    // THE HEIGHT THE HAND IS ASKING FOR — read from the POINTER, never from how far it has
-    // travelled. This is the owner's rule for every gripper here (TO-DO.md item 1: "I have to
-    // use the cursor"), and the same rule `workspace-layout._rightPxFromPointer` already
-    // follows for the width. A height computed as `start + travel` drifts from the hand the
-    // moment anything reflows — the cap below clamps, the pane resizes, the footer
-    // re-measures — and the edge ends up somewhere the cursor is not, for the rest of the drag.
-    //
-    // The input area sits above the footer and below this bar, so its floor is the host's
-    // bottom edge less the footer. The pointer IS the top edge.
-    //
-    // The cap must RESERVE the bar, the footer, and the output floor, so a big drag shrinks
-    // the output region instead of stretching the panel and dragging the footer along.
-    const dynamicMax = this.clientHeight > 0
-      ? Math.max(100, this.clientHeight - this._barHeight - this._footerHeight - 120)
-      : 600;
-    const floor = this.getBoundingClientRect().bottom - this._footerHeight;
-    const wanted = floor - d.clientY;
-    this.inputHeight = Math.max(
-      100,
-      Math.min(Math.min(600, dynamicMax), wanted),
-    );
+    frame.onResizeMove.call(this._frame(), e);
+  }
+
+  /* ── THE FIVE BOXES' BANDS ─────────────────────────────────────────────────────────────────
+   *
+   * The same rule as the Tools seat, because it is the same column: the labels, the Pull with its
+   * cap, the Header's press, and the Footer's ceiling at the Chat input's height. The bar's own
+   * band already raises input-resize-start/move, so this wiring leaves it alone.
+   */
+  private _gripWired = new WeakSet<Element>();
+
+  private _wireGrips(attempt = 0): void {
+    frame.wireGrips.call(this._frame(), attempt);
+  }
+
+  /** Hold the dots, move, the box's height changes by the distance travelled, up to its room. */
+  private _onSlotGripDown(e: PointerEvent, band: HTMLElement, host: HTMLElement): void {
+    frame.onSlotGripDown.call(this._frame(), e, band, host);
+  }
+
+  /**
+   * THE ROOM THE OTHER BOXES CAN GIVE, ABOVE THEIR OWN DEFAULTS. A box inside the output takes the
+   * spare room of the boxes beside it; the Footer reaches the Chat input's height and no further.
+   */
+  private _roomToGrow(host: HTMLElement): number {
+    return frame.roomToGrow.call(this._frame(), host);
+  }
+
+  /** A box's Default: the number its card declares, plus the block's own chrome around the card. */
+  private _defaultOf(host: HTMLElement): number {
+    return frame.defaultOf.call(this._frame(), host);
+  }
+
+  /** One box back to its Default: the size a pull wrote is cleared. */
+  private _resetBox(host: HTMLElement): void {
+    frame.resetBox.call(this._frame(), host);
   }
 
   static styles = designChatStyles;
@@ -1760,29 +1811,16 @@ export class DesignChat extends LitElement {
    * neither reader has to know that.
    */
   private _slot(name?: string): HTMLSlotElement | null {
-    const selector = name ? 'slot[name="' + name + '"]' : 'slot';
-    const found = this.renderRoot?.querySelector(selector) as HTMLSlotElement | null;
-    return found ?? null;
+    return frame.slot.call(this._frame(), name);
   }
 
   /** Is a seat supplied by the host? Read at render time — the light DOM is the truth. */
   private _seatSlotted(): boolean {
-    const assigned = this._slot()?.assignedNodes?.({ flatten: true }) ?? [];
-    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE)) return true;
-    // The light DOM covers the case slotting does not report: jsdom's slotting is thin, and a host
-    // may append a seat after this element's first render.
-    //
-    // A child that NAMES another slot is not a seat. The surface puts the Trace view in this
-    // element's "view" slot, so a bare count of children read that as "the host handed me a seat",
-    // rendered the seat slot in place of the panel body, and took the entire rail off the screen
-    // — the collapsed right column measured 82px with nothing in it. Measured 2026-09-17.
-    return Array.from(this.children).some((el) => !el.getAttribute('slot'));
+    return frame.seatSlotted.call(this._frame());
   }
 
   private _onSlotChange(): void {
-    // A seat or a view arrived or left. Nothing is cached: the next render reads the
-    // light DOM again.
-    this.requestUpdate();
+    frame.onSlotChange.call(this._frame());
   }
 
   /**
@@ -1803,18 +1841,7 @@ export class DesignChat extends LitElement {
    * is empty, and it fills when the surface puts something in it.
    */
   private _emptyViewLine(): unknown {
-    const lines: Record<string, string> = {
-      versions: 'No versions yet. A version is written when this package is saved.',
-      tools: 'No tools yet. A Tool Call seat in the prompt is what names one.',
-      executions: 'No runs yet. Press ▶ Play the run and this flow\'s run lands here.',
-      eval: 'Nothing has been judged yet. Press Run and each run\'s verdict lands here, one row per run.',
-      trace: 'Nothing traced yet. The canvas\'s own events appear here as they happen.',
-      states: 'Sample drawings only. Run the flow to draw the real one.',
-      repair: 'Nothing to repair. The catalog checker found no open findings.',
-    };
-    const line = lines[this.activeTab]
-      ?? `Nothing in this view yet — the surface fills it when this place has something to show.`;
-    return html`<span class="view-empty">${line}</span>`;
+    return frame.emptyViewLine.call(this._frame());
   }
 
   /**
@@ -1833,10 +1860,7 @@ export class DesignChat extends LitElement {
    * to hang off it draws under Approvals, where the findings always belonged.
    */
   private _findingsSeat(): boolean {
-    return this.allowedTabs
-      .split(',')
-      .map((tab) => tab.trim())
-      .includes('approvals');
+    return frame.findingsSeat.call(this._frame());
   }
 
   /**
@@ -1849,37 +1873,11 @@ export class DesignChat extends LitElement {
    * drop-down"). The fold path stays untouched for every seat without a claimant.
    */
   private _tabClaimant(tab: string): boolean {
-    const claims = (el: Element): boolean =>
-      el.tagName.toLowerCase() !== 'slot' && el.getAttribute('view-tab') === tab;
-    const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
-    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE && claims(n as Element))) return true;
-    return Array.from(this.children).some(
-      (el) => el.getAttribute('slot') === 'view' && claims(el),
-    );
+    return frame.tabClaimant.call(this._frame(), tab);
   }
 
   private _viewSlotted(): boolean {
-    const wanted = this._wantedViewTag();
-    const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
-    /* TWO WAYS A VIEW BELONGS TO THIS TAB — its TAG is one this tab wants (the seat's
-       own views: trace-feed, eval-feed, chat-repair-actions), or the ROOM declared the
-       tab on the element itself (`view-tab="<rail tab id>"` — the door that lets a
-       room's own furniture fill this hole without the seat learning room names).
-       Either way its waiting line must not draw: the view is coming, or here. */
-    const cameFor = (el: Element): boolean =>
-      (!!wanted && el.tagName.toLowerCase() === wanted)
-      || (!!this.activeTab && el.getAttribute('view-tab') === this.activeTab);
-    if (assigned.some((n) => n.nodeType === Node.ELEMENT_NODE && cameFor(n as Element))) return true;
-    // The light DOM covers what slotting does not report: jsdom's slotting is thin,
-    // and the surface's child may be appended after this element's first render.
-    // A SLOT ELEMENT IS NOT A VIEW. When a host sits between this panel and the
-    // surface — <room-embed> re-projects the surface's children into these slots —
-    // the children seen here are `slot` elements, which PROJECT content rather than
-    // being it. Counting them claimed a view was slotted when the host had none, and
-    // the waiting line was suppressed for a view that was never coming.
-    return Array.from(this.children).some(
-      (el) => el.getAttribute('slot') === 'view' && el.tagName.toLowerCase() !== 'slot' && cameFor(el),
-    );
+    return frame.viewSlotted.call(this._frame());
   }
 
   /**
@@ -1899,25 +1897,7 @@ export class DesignChat extends LitElement {
    * `_viewSlotted`'s own.
    */
   private _anyForeignViewAssigned(): boolean {
-    const known = new Set(['trace-feed', 'eval-feed', 'chat-repair-actions']);
-    /* A TAB VIEW IS NOT FURNITURE. A room's rail-tab view declares `view-tab` on itself
-       and draws in the hole under its own tab (the `view-tab` rules in the styles); this
-       door feeds the chat-top strip ABOVE the thread and must not see those — admitting
-       one drew an empty chat-top band on every Chat tab, because that strip's own styles
-       allow only the repair rows. Foreign here means: a tag this seat does not own AND
-       no tab claimed — the Product strip was that, and the next such strip joins by
-       nothing but this check. */
-    const isFurniture = (el: Element): boolean =>
-      el.tagName.toLowerCase() !== 'slot'
-      && !known.has(el.tagName.toLowerCase())
-      && !el.hasAttribute('view-tab');
-    const assigned = this._slot('view')?.assignedNodes?.({ flatten: true }) ?? [];
-    for (const n of assigned) {
-      if (n.nodeType === Node.ELEMENT_NODE && isFurniture(n as Element)) return true;
-    }
-    return Array.from(this.children).some(
-      (el) => el.getAttribute('slot') === 'view' && isFurniture(el),
-    );
+    return frame.anyForeignViewAssigned.call(this._frame());
   }
 
   /**
@@ -1927,8 +1907,7 @@ export class DesignChat extends LitElement {
    * the same "never opens on a blank chat" the console's rows answer).
    */
   private _chatTopView(): boolean {
-    return (this.activeTab === 'approvals' && this._findingsSeat())
-      || (this.activeTab === 'chat' && this._anyForeignViewAssigned());
+    return frame.chatTopView.call(this._frame());
   }
 
   /**
@@ -1938,13 +1917,7 @@ export class DesignChat extends LitElement {
    * their own tag, so the trace feed never stands in for Evals and vice versa.
    */
   private _wantedViewTag(): string | null {
-    switch (this.activeTab) {
-      case 'trace': return 'trace-feed';
-      case 'eval': return 'eval-feed';
-      case 'repair':
-      case 'approvals': return 'chat-repair-actions';
-      default: return null;
-    }
+    return frame.wantedViewTag.call(this._frame());
   }
 
   /**
@@ -1963,7 +1936,7 @@ export class DesignChat extends LitElement {
    * still never renders another element: this is the seat drawing its own thread.
    */
   private get _showsThread(): boolean {
-    return this.activeTab === 'chat' || this.activeTab === 'approvals' || this._evalsDrawsThread();
+    return frame.showsThread.call(this._frame());
   }
 
   /**
@@ -1985,10 +1958,7 @@ export class DesignChat extends LitElement {
    * stands aside from her thread, exactly as the Trace tab does.
    */
   private _evalsDrawsThread(): boolean {
-    return this.activeTab === 'eval'
-      && this.evalsTalk
-      && !this._tabClaimant('eval')
-      && !this._viewSlotted();
+    return frame.evalsDrawsThread.call(this._frame());
   }
 
   /**
@@ -2248,65 +2218,7 @@ export class DesignChat extends LitElement {
    * NOT NULL), so the element asks the package's conversation for its own history.
    */
   private async _loadHistory(): Promise<void> {
-    if (this.messages?.length || !this.conversationId) { this._historyChecked = true; return; }
-    if (!this._conversationBelongsToPackage(this.conversationId)) { this._historyChecked = true; return; }
-    try {
-      const resp = await fetch(`/api/conversations/${this.conversationId}/messages?limit=200`, {
-        headers: { 'X-User-ID': this._userId() },
-      });
-      if (!resp.ok) {
-        // A DENIAL IS LOUD (THE_PACKAGE_CONTRACT §7, invariant 12 — the database and the
-        // API both answer a refusal with 403, deliberately). This used to `return` here, so
-        // "you may not read this conversation" drew as "nothing was ever said here" — the
-        // same pixels as an empty thread, and the same for a 404 and a 500.
-        this._historyError = `This conversation could not be read (HTTP ${resp.status}).`;
-        console.error(`[chat-panel] history read refused for ${String(this.conversationId).slice(0, 8)}…: HTTP ${resp.status}`);
-        this._historyChecked = true;
-        this.requestUpdate();
-        return;
-      }
-      const data = await resp.json().catch(() => ({}));
-      const rows: SeatMessage[] = Array.isArray(data?.messages) ? data.messages : [];
-      this._historyError = '';
-      this._historyChecked = true;
-      if (!rows.length) { this.requestUpdate(); return; }
-      // A GOVERNANCE INSPECTION IS A REPORT, NOT A CHAT TURN. The inspector files its verdict in
-      // the console's own conversation (metadata kind='inspection'); the owner, 2026-09-19: "this
-      // should be under approvals… not under chat". The reports are taken OUT of the thread here —
-      // they render under the Approvals tab — and the running history still sits in the trace
-      // (lib/trace-source subscribes to the app logger).
-      const reports: SeatMessage[] = [];
-      for (const row of rows) {
-        const meta = (row as { metadata?: { kind?: string; verdict?: string; at?: string } }).metadata;
-        if (meta?.kind === 'inspection') {
-          logger.info(`[inspection] ${meta.verdict ?? 'not done'} · ${meta.at ?? ''}`, {
-            verdict: meta.verdict ?? null,
-            at: meta.at ?? null,
-          });
-          reports.push({ role: row.role, content: row.content });
-        }
-      }
-      this._inspectionReports = reports;
-      this.messages = rows
-        .filter((row) => (row as { metadata?: { kind?: string } }).metadata?.kind !== 'inspection')
-        .map((m) => {
-          const meta = (m as { metadata?: { kind?: string } }).metadata;
-          // A RUN'S RESULTS KEEP THEIR MARK ACROSS A RELOAD: the conversation the run
-          // filed them in carries kind 'tool-answer' / 'run-result' on its messages, and
-          // the thread draws those as results (rich text, 14px) — so a conversation
-          // opened next week still reads as the output it is.
-          return {
-            role: m.role,
-            content: m.content,
-            result: meta?.kind === 'tool-answer' || meta?.kind === 'run-result',
-          };
-        });
-    } catch (err) {
-      this._historyError = 'This conversation could not be read — the server did not answer.';
-      this._historyChecked = true;
-      console.error('[chat-panel] could not read the package\'s history:', err);
-      this.requestUpdate();
-    }
+    return conversation.loadHistory.call(this._conv());
   }
 
   /**
@@ -2559,30 +2471,9 @@ export class DesignChat extends LitElement {
      * the package is empty in both senses, which is the case this rule was written for.
      */
     const nothingToRead = kind === 'resume'
-      && (!this.conversationId || !this._packageHasSomething());
-
-    /*
-     * THE CONSOLE GETS ITS OWN HELLO, AND NEVER A PACKAGE'S.
-     *
-     * The console is the library: cards, a search, and no prompt of its own. She used to greet it
-     * exactly as she greets a package — reading whatever work was to hand and reporting on it —
-     * so a person landing on their library was told about one of their own prompts, unasked. The
-     * owner, 2026-09-23: "we have got to get this off of the homepage console chat … every time
-     * the console loads she checks the Weaver prompt. She just needs to say the same thing she
-     * says on consul or composer, except for console she needs to talk about 'let me help you sort
-     * your prompts, is there anything you'd like to search for' — give her a message explaining
-     * what the console is and let her decide what to say."
-     *
-     * So the console is told what it is, and decides its own words. No buttons, because a library
-     * is not a form to fill: the ask is an offer to help, and a person can type.
-     */
-    /*
-     * AND IT IS DECIDED BY THE ONE FACT THAT CANNOT BE MISREAD. `consoleCards` is an EMPTY ARRAY
-     * on a package, not undefined — and an empty array is truthy, so a first version of this
-     * condition would have handed the console's hello to every blank composer. The seat's scope
-     * is read from the server (`_readSeatScope`, the same answer the trailing button uses), and
-     * until it has been read the greeting simply waits: an unanswered question is not a no.
-     */
+      && (!this.conversationId || !this._packageHasSomething()
+          || (this.conversationId && this._historyChecked && !this._historyError
+              && !(this.messages?.length)));
     /*
      * AND IT WAITS FOR THE ANSWER WHEN THERE IS ONE COMING. A panel with a session may be the
      * console's or a package's, and that is a server fact (`_readSeatScope`); greeting before it
@@ -2601,7 +2492,13 @@ export class DesignChat extends LitElement {
      * Measured 2026-09-24: the owner opened a package and she never appeared — "even on a new
      * composer she doesn't even pop up" — and then she did, on another open. A WAIT IS NOT AN
      * ANSWER, so the arrival is only spent once there is nothing left to wait for.
+     *
+     * AND THE THREAD IS PART OF WHAT IT WAITS FOR (owner, 2026-11-02). A conversation that has
+     * not been READ yet cannot be judged empty, so a seat holding an id it has not read waits one
+     * more frame instead of spending the arrival on a guess — which is how the Tools tab came up
+     * with no thinking and no words.
      */
+    if (this.sessionId && this.conversationId && !this._historyChecked) return;
     this._greeted = true;
     /*
      * THE EVALS BUTTON IS THE TRIGGER — AND SHE TALKS THE SAME WAY ON BOTH ICONS (owner,
@@ -2845,21 +2742,13 @@ export class DesignChat extends LitElement {
    * belongs to a package; a seat told otherwise is being lied to, and silence is how it
    * happened.
    */
+  /** The seat as the conversation's host. One cast, in one place. */
+  private _conv(): conversation.ChatConversationHost {
+    return this as unknown as conversation.ChatConversationHost;
+  }
+
   private _conversationBelongsToPackage(id: string): boolean {
-    if (String(this._adoptedByHost) === String(id)) return true;
-    const list = this.conversations ?? [];
-    // The surface's list carries ACTIVE rows only; this seat's own server read carries the
-    // archived ones too, and a conversation archived from here is still this package's and
-    // must stay openable (owner, 2026-09-19: "it should expand so that I can see the message
-    // that you just archived").
-    if ((this._conversationRows ?? []).some((r) => String(r.id) === String(id))) return true;
-    if (!list.length) return true;
-    if (list.some((c) => String(c?.id ?? '') === String(id))) return true;
-    console.error(
-      `[chat-panel] refused conversation ${String(id).slice(0, 8)}…: it is not in package ` +
-      `${String(this.sessionId ?? '(none)').slice(0, 8)}'s own list of conversations.`,
-    );
-    return false;
+    return conversation.belongsToPackage.call(this._conv(), id);
   }
 
   /**
@@ -4071,30 +3960,7 @@ export class DesignChat extends LitElement {
    * row yet, so it keeps whatever is showing.
    */
   private _moveSeatTo(id: string, opts: { tab?: string } = {}): void {
-    // Moving anywhere that is not the adopted id ends the trust: it covered the one
-    // handover, not the rest of the seat's life (see _adoptedByHost).
-    if (id !== this._adoptedByHost) this._adoptedByHost = '';
-    this.messages = [];
-    this._local = [];
-    this._inspectionReports = [];
-    this.conversationId = id;
-    this._historyError = '';
-    if (opts.tab) {
-      /* A QUERY RECORD OPENS ON ITS OWN TAB (owner, 2026-10-18). A conversation filed with
-         `tab = "sessions"` is a stored lane query, not a thread — opening it moves to Sessions
-         and REPLAYS the recorded filter. Chat and approvals behave as they always have. */
-      this.activeTab =
-        opts.tab === 'approvals' ? 'approvals' : opts.tab === 'sessions' ? 'sessions' : 'chat';
-    }
-    if (opts.tab === 'sessions') void this._replayLaneQuery(id);
-    this.dispatchEvent(
-      new CustomEvent('conversation-change', {
-        bubbles: true,
-        composed: true,
-        detail: { conversationId: id },
-      }),
-    );
-    this.requestUpdate();
+    conversation.moveSeatTo.call(this._conv(), id, opts);
   }
 
   /**
@@ -4173,37 +4039,13 @@ export class DesignChat extends LitElement {
       : null;
     if (!id) return;
     // A person chose a conversation from the bar: an action against the seat, named by its act.
-    // The seat's session is the flow — the package whose conversation they picked.
     uxCapture(
       'action',
       'chat-panel',
       { action: 'conversation-select' },
       this.sessionId ? { flow: this.sessionId } : {},
     );
-    /*
-     * THE ROW KNOWS ITS OWN TAB, AND BOTH LISTS ARE ASKED. The surface's array and the server's
-     * read are different sources, and the row a person clicked may only be in the second one —
-     * searching just the first resolved `tab` to undefined and opened a stored query as a chat.
-     */
-    const picked =
-      (this.conversations ?? []).find((c) => String(c.id) === id) ??
-      (this._conversationRows ?? []).find((r) => String(r.id) === id);
-    const tab = String((picked as { tab?: string } | undefined)?.tab || 'chat');
-    /*
-     * A QUERY RECORD IS A DOOR EVEN WHEN YOU ARE ALREADY IN IT (owner, 2026-10-18: *"if I
-     * selected the most expensive session, it would automatically go to sessions and load
-     * that"*). The early return used to make the row dead in exactly that case — the seat was
-     * bound to the record, so the click was a no-op and nothing moved. A query record RE-OPENS
-     * its recorded filter; a chat that is already open has nothing to re-do.
-     */
-    if (id === this.conversationId) {
-      if (tab === 'sessions') {
-        if (this.activeTab !== 'sessions') this.activeTab = 'sessions';
-        void this._replayLaneQuery(id);
-      }
-      return;
-    }
-    this._moveSeatTo(id, { tab });
+    conversation.selectConversation.call(this._conv(), id);
   }
 
   /**
@@ -4290,25 +4132,12 @@ export class DesignChat extends LitElement {
     if (scope === 'package') {
       this._historyError = '';
       try {
-        const created = await this._conversationWrite(
-          '/api/conversations',
-          'POST',
-          { session_id: this.sessionId ?? undefined, title: this._successorTitle() ?? 'New Chat' },
-          userId,
+        /* THE MECHANICS ARE THE SHARED MODULE'S. It creates, points the package, moves the seat
+           and reads the list BEFORE returning, so a greeting fired after it can never be refused
+           by the seat's own ownership guard. */
+        await conversation.createPackageConversation.call(
+          this._conv(), userId, this._successorTitle() ?? 'New Chat',
         );
-        const next = typeof created?.id === 'string' ? created.id : '';
-        if (!next) throw new Error('the new conversation came back without an id');
-        if (this.sessionId) {
-          await this._conversationWrite(
-            `/api/prompt-sessions/${this.sessionId}`,
-            'PUT',
-            { conversation_id: next },
-            userId,
-          );
-        }
-        this._moveSeatTo(next);
-        void this._readPackageConversations(userId);
-        this.requestUpdate();
       } catch (err) {
         this._historyError =
           `A new conversation could not be started: ${String((err as Error)?.message ?? err)}`;
@@ -4427,84 +4256,24 @@ export class DesignChat extends LitElement {
    * make — see the gate in _greetIfArriving that requires a real empty array.
    */
   private async _readPackageConversations(userId: string): Promise<void> {
-    if (!this.sessionId) return;
-    try {
-      const res = await fetch(
-        `/api/conversations?session_id=${encodeURIComponent(this.sessionId)}&include_archived=true`,
-        { headers: { 'X-User-ID': userId } },
-      );
-      if (!res.ok) { this._conversationsRead = true; return; }
-      const body = (await res.json()) as {
-        conversations?: Array<{
-          id?: unknown; title?: unknown; tab?: unknown; is_archived?: unknown; updated_at?: unknown;
-        }>;
-      };
-      if (!Array.isArray(body?.conversations)) { this._conversationsRead = true; return; }
-      const rows = body.conversations.map((c) => ({
-        id: String(c?.id ?? ''),
-        title: String(c?.title || '(untitled)'),
-        tab: String(c?.tab || 'chat'),
-        archived: c?.is_archived === true,
-        // WHEN IT WAS LAST SAVED, as the server wrote it. The read already carries it (the
-        // server orders the list by it), so the row's time and the list's order are the same
-        // fact — the newest thread is the top row and the top row is the newest time.
-        savedAt: String(c?.updated_at ?? ''),
-      })).filter((r) => r.id);
-      const rowsChanged = !(rows.length === this._conversationRows?.length
-          && rows.every((r, i) => r.id === this._conversationRows?.[i]?.id
-            && r.title === this._conversationRows?.[i]?.title
-            // A thread that was just written to is the same row with a NEW time: without this
-            // the early return would keep a stale timestamp on screen after a save.
-            && r.savedAt === this._conversationRows?.[i]?.savedAt));
-      this._conversationRows = rows;
-      this._conversationsRead = true;
-
-      /*
-       * IF THERE IS A CONVERSATION, LOAD THE LAST ONE.
-       *
-       * A seat can come up with nothing bound and still have threads behind it: a person
-       * deletes the conversation they were in and what is left of the package is its history,
-       * not a blank screen. The owner, 2026-09-24: "if there is a conversation then you should
-       * just load that conversation, the last one, but if it's empty … Grace needs to just treat
-       * the prompt like it's brand new." (The empty half is `nothingToRead` in _greetIfArriving.)
-       *
-       * THE LIST IS ALREADY IN THAT ORDER. The server answers `ORDER BY updated_at DESC`, so
-       * the first row is the thread last written to — "the last one" as a person means it — and
-       * this is the same choice the server makes for the first turn of a package with nothing
-       * bound (routes/teacher.py reuses `existing[0]`), taken here so the person SEES that
-       * thread on opening instead of an empty card that fills in only once they type.
-       *
-       * `_moveSeatTo` is the app's one way to move this seat: it clears the thread, sets the id,
-       * tells the host (so the package's own pointer follows), and setting the id is what makes
-       * `_loadHistory` read it. Nothing new is invented here.
-       */
-      if (!this.conversationId && rows.length) {
-        /* A LANE RECORD IS OPENED AS WHAT IT IS (owner, 2026-10-18). Adopting it with no tab
-           made the seat sit in a stored query AS A CHAT: the thread showed the query line as if
-           it were something said, the tab stayed on chat, and clicking the row afterwards was a
-           no-op because the seat was "already there". The row's own tab travels with the move. */
-        this._moveSeatTo(rows[0].id, { tab: rows[0].tab });
-        return;
-      }
-      if (!rowsChanged) return;
-      this.requestUpdate();
-    } catch {
-      // Unreachable server: keep the number that was already true (see the header note). The wait
-      // is still released — the attempt is over, and a seat that waits on a server that never
-      // answers never speaks (see the header note).
-      this._conversationsRead = true;
-    }
+    return conversation.readPackageConversations.call(this._conv(), userId);
   }
 
   /** The bar's own click: open or close its list. */
   private _toggleConversations = (): void => {
     this._conversationsOpen = !this._conversationsOpen;
-    /* A NOTE BELONGS TO THE OPEN IT HAPPENED IN. "Removed." sat above a freshly opened list and
-       read as a state of the list rather than as a thing that just happened. Opening or closing
-       starts a new look, so the note starts empty. */
+    /* A PRESS SETS THE CARD'S TWO SIZES, AND THE LIST STAYS INSIDE BOTH: open is the card's Default
+       — its bar and one row; closed is the bar alone. */
+    const host = this.renderRoot?.querySelector('[data-slot="conversations"]') as HTMLElement | null;
+    const card = host?.shadowRoot?.querySelector('.shell') as HTMLElement | null;
+    if (card) {
+      card.style.flex = '0 0 auto';
+      card.style.height = this._conversationsOpen ? '68px' : '38px';
+    }
+    /* A NOTE BELONGS TO THE OPEN IT HAPPENED IN. Opening or closing starts a new look, so the note
+       starts empty. */
     this._listNote = '';
-    // Opening re-reads, so a conversation created or archived a moment ago is in the list
-    // rather than missing until the next assembly.
+    // Opening re-reads, so a conversation created or archived a moment ago is in the list.
     if (this._conversationsOpen) void this._readPackageConversations(this._userId());
     this.requestUpdate();
   };
@@ -4624,64 +4393,7 @@ export class DesignChat extends LitElement {
    * now follows.
    */
   private async _removeConversation(id: string, userId: string): Promise<void> {
-    const wasTheOneOnScreen = String(id) === String(this.conversationId ?? '');
-    try {
-      const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: { 'X-User-ID': userId },
-      });
-      if (!res.ok) {
-        this._listNote = `That conversation could not be removed — HTTP ${res.status}.`;
-        this.requestUpdate();
-        return;
-      }
-      this._listNote = '';
-      await this._readPackageConversations(userId);
-      if (!wasTheOneOnScreen) {
-        // The live thread is untouched, so it is NOT re-drawn: only the list above it changed.
-        this._listNote = 'Removed.';
-        this.requestUpdate();
-        return;
-      }
-      const live = (this._conversationRows ?? [])
-        .filter((r) => !r.archived && String(r.id) !== String(id));
-      const next = live.length ? String(live[0].id) : '';
-      if (next) {
-        this._moveSeatTo(next);
-        this._listNote = 'Removed. This chat moved to your other conversation.';
-      } else {
-        // NO CONVERSATION IS NOT A BROKEN STATE. The thread is emptied of what was read from the
-        // row that is gone; what the person says next will not reach either (the local turns are
-        // kept — they are what the seat is showing).
-        //
-        // AND THE SURFACE IS TOLD, with an EMPTY id. That is the fact the model needs, because the
-        // model is what a Save reads: leaving the deleted id in it made every save write a dead
-        // foreign key and fail with a 500 (measured 2026-09-23 — "AI save failed: 500"). An empty
-        // id is not "nothing to say"; it is "this place has no conversation", which is true and
-        // writable into a nullable column.
-        this._moveSeatTo('');
-        this._listNote = 'Removed. Nothing has been said here yet.';
-        /*
-         * AND A PACKAGE WITH NO CONVERSATION IS A NEW PROMPT, so the removal is treated as an
-         * arrival and the seat starts the package over the same way an open does: a default
-         * conversation is made for it and she says hello (`nothingToRead` in _greetIfArriving).
-         *
-         * The owner, 2026-09-24: "if the user removes all conversations and there's zero and
-         * there's nothing to load you have to engage the model … she needs to create a default
-         * conversation, say hello, because that's considered a PRE-RUN state." Measured the same
-         * evening, before this: deleting the last row left the seat with no conversation, her
-         * greeting was answered by the server and NOT written down ("this place has no
-         * conversation yet — it is answered and NOT written down"), and the person was left on a
-         * card with a thread in it that no row would ever hold — the audit trail the owner wants
-         * had a hole in it where the deletion was.
-         */
-        this._takeArrival('resume');
-      }
-      this.requestUpdate();
-    } catch (err) {
-      this._listNote = `That conversation could not be removed: ${String((err as Error)?.message ?? err)}`;
-      this.requestUpdate();
-    }
+    return conversation.removeConversation.call(this._conv(), id, userId);
   }
 
   /**
@@ -4820,78 +4532,7 @@ export class DesignChat extends LitElement {
    * just left after letting go.
    */
   private _onGripDown(e: PointerEvent): void {
-    // A PRESS DURING A LIVE GESTURE REPLACES IT rather than stacking a second set of listeners
-    // on the first — the rule the sibling grip already states ("a press during a live gesture
-    // REPLACES it rather than stacking", chat-action-bar `_startDrag`), and the other way this
-    // gesture ends up unable to let go. Without it the old listeners are unreachable (the fields
-    // that named them are overwritten) and no release can ever remove them.
-    this._releaseGrip();
-    /*
-     * THE STRIP KEEPS THE HAND — POINTER CAPTURE, NOT LISTENERS ON THE DOCUMENT.
-     *
-     * This gesture followed the hand through `mousemove` on the document, and that is what made
-     * the gripper unusable beside a framed application: her left neighbour is often an iframe
-     * (the Design room's left column frames PostHog), and while the pointer is over a frame the
-     * parent document receives NO mouse events at all — not the moves, not the release. Measured
-     * 2026-10-19: press the collapsed column's strip, drag left, and the width stopped at the
-     * floor while the layout stayed `dragging` with the button up, so every later hover moved a
-     * column nobody was holding. The owner: *"the gripper is fighting the user… it's forcing it to
-     * the right, I'm not able to expand and collapse."*
-     *
-     * Pointer capture is the platform's own answer: the strip captures the pointer on
-     * pointerdown, and from then until the release EVERY pointermove/pointerup is delivered to
-     * the strip — whatever element, or frame, is under the cursor.
-     */
-    const strip = e.currentTarget as HTMLElement | null;
-    if (!strip) return;
-    const pointerId = e.pointerId;
-    this._gripEl = strip;
-    this._gripPointerId = pointerId;
-    this._gripMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return;
-      /*
-       * THE MOVE THAT SAYS THE HAND IS EMPTY IS THE RELEASE. Pointer capture already ends the
-       * gesture on pointerup/pointercancel; this is the same fact read from the event that
-       * carries it — `buttons` is the state of the mouse RIGHT NOW — so a release lost to a
-       * focused frame or a dropped event cannot outlive the hand.
-       */
-      if (ev.buttons === 0) {
-        this._gripUp?.(ev);
-        return;
-      }
-      this.dispatchEvent(
-        new CustomEvent('input-resize-move', {
-          bubbles: true,
-          composed: true,
-          detail: { clientX: ev.clientX, clientY: ev.clientY },
-        }),
-      );
-    };
-    this._gripUp = () => {
-      this.dispatchEvent(new CustomEvent('input-resize-end', { bubbles: true, composed: true }));
-      this._releaseGrip();
-    };
-    strip.addEventListener('pointermove', this._gripMove);
-    strip.addEventListener('pointerup', this._gripUp);
-    strip.addEventListener('pointercancel', this._gripUp);
-    /* THE CAPTURE IS THE GESTURE. It is taken on the strip itself, so every event in flight —
-       over the panel, over the left column, over the frame inside it — is routed here. */
-    try {
-      strip.setPointerCapture(pointerId);
-    } catch (err) {
-      /* A capture that cannot be taken is said out loud, because the gesture would otherwise
-         read as a dead gripper: the pointer would leave this element and the moves would stop. */
-      console.error('[design-chat] the column gripper could not capture the pointer:', err);
-    }
-
-    this.dispatchEvent(
-      new CustomEvent('input-resize-start', {
-        bubbles: true,
-        composed: true,
-        detail: { clientX: e.clientX, clientY: e.clientY },
-      }),
-    );
-    e.preventDefault();
+    frame.onGripDown.call(this._frame(), e);
   }
 
   /**
@@ -4907,28 +4548,12 @@ export class DesignChat extends LitElement {
    * button down, and nothing could release it because the listeners behind it were gone.
    */
   private _releaseGrip(): void {
-    const el = this._gripEl;
-    this._gripEl = null;
-    if (el) {
-      if (this._gripMove) el.removeEventListener('pointermove', this._gripMove);
-      if (this._gripUp) {
-        el.removeEventListener('pointerup', this._gripUp);
-        el.removeEventListener('pointercancel', this._gripUp);
-      }
-      // The capture belongs to the strip, so it goes with it. `hasPointerCapture` guards the
-      // release: releasing an id nobody holds throws, and a throw here would strand the gesture.
-      if (this._gripPointerId !== null && el.hasPointerCapture?.(this._gripPointerId)) {
-        el.releasePointerCapture(this._gripPointerId);
-      }
-    }
-    this._gripMove = null;
-    this._gripUp = null;
-    this._gripPointerId = null;
+    frame.releaseGrip.call(this._frame());
   }
 
   /** The rail's `collapse-toggle` — chat-button state=Selected, clicked again. */
   private _onCollapseToggle(e: Event): void {
-    this.collapsed = Boolean((e as CustomEvent).detail?.collapsed);
+    frame.onCollapseToggle.call(this._frame(), e);
   }
 
   /**
@@ -5041,6 +4666,7 @@ export class DesignChat extends LitElement {
         : html`
             <design-chat-navigation-bar
               active-tab=${this.activeTab}
+              ?rail-owned-by-host=${this.railOwnedByHost}
               allowed-tabs=${this.allowedTabs}
               tab-labels=${this.tabLabels}
               disabled-tabs=${this.disabledTabs}
@@ -5124,6 +4750,7 @@ export class DesignChat extends LitElement {
                      other tab and every other room: unchanged. -->
                 ${this._outputWindows.includes('conversations')
                   ? html`<design-chat-header
+                  data-slot="conversations"
                   status-text=${(() => {
                     const n = this._conversationRows?.length ?? (this.conversations ?? []).length;
                     // The drawing's copy is "23 Conversations"; one of them is one conversation.
@@ -5145,13 +4772,14 @@ export class DesignChat extends LitElement {
                   dm-sans
                   @click=${this._toggleConversations}
                   @keydown=${this._onConversationsKey}
-                ></design-chat-header>`
-                  : nothing}
-                ${this._conversationsOpen
-                  ? html`<div class="output-slot">
-                      <ul class="conversation-list">${this._conversationRowsForList()}</ul>
-                      ${this._listNote ? html`<p class="conv-note" role="status">${this._listNote}</p>` : nothing}
-                    </div>`
+                >
+                  <!-- THE LIST IS ALWAYS INSIDE THE CARD (owner, 2026-10-31: *"you can't hide the
+                       conversations when I expand it, they have to expand with the drag"*). A press
+                       on the bar and a pull on the dots both resize the card; neither takes the
+                       rows away. -->
+                  <ul class="conversation-list">${this._conversationRowsForList()}</ul>
+                  ${this._listNote ? html`<p class="conv-note" role="status">${this._listNote}</p>` : nothing}
+                </design-chat-header>`
                   : nothing}
                 <!-- THE DROPDOWN IS OUT OF THE TOP; ITS CAPABILITY IS NOT. See the
                      _conversationsTopSlot field above: v.4b draws no selector here, and the
@@ -5205,7 +4833,7 @@ export class DesignChat extends LitElement {
                      the response inside it. The scroller and every view that was in the
                      output area before are inside it, unchanged: the thread, the trace
                      fold, the view slot, the content-header slot. -->
-                <design-chat-header card .hasResults=${this._hasResultTurns}>
+                <design-chat-header card data-slot="session" .hasResults=${this._hasResultTurns}>
                   <div class="content-scroll" @scroll=${this._onOutputScroll}>
                     <div class="content-header"><slot name="content-header"></slot></div>
                   ${this._showsThread

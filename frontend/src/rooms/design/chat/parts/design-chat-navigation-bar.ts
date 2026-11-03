@@ -414,6 +414,17 @@ export class ChatNavigationBar extends LitElement {
      * made visible. See `.nb.nd` for the drawn state.
      */
     disabledTabs: { type: String, attribute: 'disabled-tabs' },
+    /**
+     * THE ROOM OWNS THE RAIL — the seat says so with `rail-owned-by-host`. This bar then never
+     * lights a tab it was pushed on: each container's rail shows the tab that container belongs
+     * to, and the room reveals the container the press asked for.
+     *
+     * Owner, 2026-10-26: *"I try to select chat it'll select tools but load the chat."* Measured:
+     * each seat's bar kept its OWN last press, so the rail of the container the room returned to
+     * still showed the tab pressed before — the tile and the loaded chat disagreed, and pressing
+     * the shown tile collapsed instead of navigating.
+     */
+    railOwnedByHost: { type: Boolean, attribute: 'rail-owned-by-host' },
   };
 
   // ── Defaults ─────────────────────────────────────────────────────────────
@@ -464,6 +475,8 @@ export class ChatNavigationBar extends LitElement {
   declare tabLabels?: string;
   /** The room's `disabled-tabs` list. See the property note. */
   declare disabledTabs: string;
+  /** The room owns the rail; the bar draws ITS seat's tab and never lights a press. */
+  declare railOwnedByHost: boolean;
 
   constructor() {
     super();
@@ -471,6 +484,7 @@ export class ChatNavigationBar extends LitElement {
     this.collapsed = false;
     this.allowedTabs = '';
     this.disabledTabs = '';
+    this.railOwnedByHost = false;
     this.unread = false;
     this.healthCount = 0;
     this.healthState = 'loading';
@@ -564,12 +578,15 @@ export class ChatNavigationBar extends LitElement {
       color: #fff;
       font-size: 13px;
       font-weight: 700;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* THE MARK BOX IS SQUARE (owner, 2026-10-06: *"actually make 50x50"* — superseding
        his 58×58 a minute earlier; his eye read the old 68×58 box as wider than tall — the
        artwork itself is square). object-fit: contain fits the square canvas to the box:
        the star paints at 50 × (156/171) ≈ 45.6px. Centred in the 74×66 slot. */
+    /* THE DESIGN ROOM'S OWN COPY OF THE RAIL also owns its mark box. It is the tab icons'
+       size (owner, 2026-10-27): a 38 × 38 box, centred in the 74 × 66 row, growing 1.08 under
+       the pointer exactly like the icons. */
     ::slotted(img) {
       position: absolute;
       top: 50%;
@@ -578,8 +595,13 @@ export class ChatNavigationBar extends LitElement {
       max-width: none;
       object-fit: contain;
       pointer-events: none;
-      width: 50px;
-      height: 50px;
+      width: 38px;
+      height: 38px;
+      transition: transform 0.16s ease;
+    }
+    .lo:hover ::slotted(img),
+    .lo:focus-visible ::slotted(img) {
+      transform: translate(-50%, -50%) scale(1.08);
     }
 
     /* ── Tab button ───────────────────────────────────────────────────── */
@@ -695,7 +717,7 @@ export class ChatNavigationBar extends LitElement {
       position: relative;
       flex-shrink: 0;
       width: 100%;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 700;
       font-style: normal;
       font-size: 13px;
@@ -846,7 +868,7 @@ export class ChatNavigationBar extends LitElement {
       box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.25);
       white-space: nowrap;
       font-size: 10pt;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 500;
       z-index: 50;
     }
@@ -1019,7 +1041,11 @@ export class ChatNavigationBar extends LitElement {
     if (wasCollapsed) this.collapsed = false;
 
     // Set the active tab
-    this.activeTab = tabId;
+    // THE ROOM'S RAIL DOES NOT LIGHT ITS OWN PRESS (owner's report, 2026-10-26): with
+    // `rail-owned-by-host`, the tile belongs to the container that stands, so this bar keeps
+    // the tab its own seat carries. A local set here is what left the tile and the loaded chat
+    // disagreeing when the room returned to this seat.
+    if (!this.railOwnedByHost) this.activeTab = tabId;
 
     // Dispatch events
     this.dispatchEvent(

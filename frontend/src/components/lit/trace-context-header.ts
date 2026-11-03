@@ -173,9 +173,18 @@ export class TraceContextHeader extends LitElement {
   static styles = [
     designTokens,
     css`
+      /* A STRIP WITH NOTHING TO SAY TAKES NO ROOM (owner, 2026-10-27). The room slots two of
+         these into one bar; the silent one used to hold half of it, which is the empty space
+         beside the Model usage block. See render(). */
+      :host([empty]) { display: none; }
       :host {
         display: block;
+        /* THE FACTS FILL THE BAR AND START AT ITS LEFT EDGE (owner, 2026-10-27: *"it should not
+           have a large space to the left of it. It should fit that area"*). The strip was drawn
+           as a centred block, so a landing readout sat in the middle of the bar with empty space
+           beside it. The bar's own padding is the only inset it gets. */
         width: 100%;
+        text-align: left;
         font-family: var(--ds-font);
         font-size: var(--ds-fs-sm);
         color: var(--chat-text, var(--ds-text));
@@ -186,6 +195,8 @@ export class TraceContextHeader extends LitElement {
       .hd {
         display: flex;
         align-items: center;
+        justify-content: flex-start;
+        width: 100%;
         gap: 6px 12px;
         flex-wrap: wrap;
         min-height: 26px;
@@ -420,10 +431,21 @@ export class TraceContextHeader extends LitElement {
   }
 
   render() {
-    if (!this.trace) return this.metrics ? this._metricsRow(this.metrics) : nothing;
-    return this.observation
-      ? this._detailRow(this.observation, this.trace)
-      : this._traceRow(this.trace);
+    /*
+     * AN EMPTY STRIP TAKES NO ROOM IN THE BAR (owner, 2026-10-27: *"there is clearly a huge margin
+     * on the left … it should fit that area"*). The room slots TWO strips into the same readout —
+     * its trace facts and the Evals figures — and the one with nothing to say still occupied its
+     * share of the row, pushing the strip that had words into the middle of the bar. Measured:
+     * two strips at 222px each in a 506px bar, the left one drawing nothing.
+     *
+     * The attribute is what the host's own CSS can see, so an empty strip is display:none and the
+     * one with content takes the whole row.
+     */
+    const drawing = !this.trace
+      ? (this.metrics ? this._metricsRow(this.metrics) : nothing)
+      : (this.observation ? this._detailRow(this.observation, this.trace) : this._traceRow(this.trace));
+    this.toggleAttribute('empty', drawing === nothing);
+    return drawing;
   }
 }
 

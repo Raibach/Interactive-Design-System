@@ -8,6 +8,7 @@ import math
 import os
 import re
 import shutil
+import socket
 import subprocess
 import time
 import urllib.request
@@ -37,6 +38,7 @@ from design_renderer import unrendered_keys as unrendered_spec_keys
 # and it imports THIS module only inside functions, which is what keeps the two from cycling.
 from figma_fidelity import fidelity_gate, fidelity_report
 import figma_facts
+import figma_twopass
 from figma_service import (
     get_cached_spec,
     get_component,
@@ -1844,7 +1846,7 @@ def _run_cem_analyze() -> None:
         print(f"⚠️ cem analyze error: {e}")
 
 
-def _fetch_figma_nodes(file_key: str, node_id: str) -> dict[str, Any]:
+def _fetch_figma_nodes(file_key: str, node_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """Fetch nodes from Figma REST API: GET /v1/files/:key/nodes?ids=&geometry=paths.
 
     `geometry=paths` IS NOT OPTIONAL, and it is the difference between drawing a design and
@@ -1854,7 +1856,23 @@ def _fetch_figma_nodes(file_key: str, node_id: str) -> dict[str, Any]:
     the shape itself: the one thing that can be drawn exactly. (Owner, 2026-09-29: *"it needs to
     pick up vector images from inside components. I cannot post individual images to satisfy the
     program. The program needs to satisfy me."*)
+
+    IT ASKS TWICE WHEN THE FIRST ASK WENT UNANSWERED, and it returns the record of both asks.
+    Owner, 2026-11-01, after two runs were lost to a stalled connection: *"We can either do a
+    retry or rerun on failure automatically… I think… one line of the answer… what would keep the
+    failure visible instead of hiding it."* So the second attempt is automatic and it is never
+    silent: `attempts` says how long each ask took and which one answered, and the answer prints
+    that line.
+
+    ONLY A NO-ANSWER IS RETRIED. A timeout or a dropped connection is the network; a refusal from
+    Figma is an answer, and asking a second time would add thirty seconds to a sentence that is
+    already true. `HTTPError` is a subclass of `URLError`, so it is re-raised first and never
+    retried.
+
+    Returns (the response, the record of the asks).
     """
+    import time
+    import urllib.error
     import urllib.request
 
     token = os.getenv("FIGMA_TOKEN")
@@ -1862,19 +1880,96 @@ def _fetch_figma_nodes(file_key: str, node_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="FIGMA_TOKEN not configured")
 
     url = f"https://api.figma.com/v1/files/{file_key}/nodes?ids={node_id}&geometry=paths"
-    req = urllib.request.Request(
-        url,
-        headers={"X-Figma-Token": token},
-        method="GET",
+    read_timeout = 30.0
+    attempts: list[dict[str, Any]] = []
+    no_answer: Exception | None = None
+
+    for number in (1, 2):
+        req = urllib.request.Request(
+            url,
+            headers={"X-Figma-Token": token},
+            method="GET",
+        )
+        started = time.monotonic()
+        try:
+            with urllib.request.urlopen(req, timeout=read_timeout) as res:
+                body = res.read()
+            attempts.append({
+                "attempt": number,
+                "seconds": round(time.monotonic() - started, 2),
+                "outcome": "answered",
+            })
+            data = json.loads(body.decode("utf-8"))
+            if data.get("err"):
+                raise HTTPException(status_code=502, detail=f"Figma API error: {data['err']}")
+            return data, _read_record(attempts, read_timeout)
+        except urllib.error.HTTPError:
+            # FIGMA ANSWERED, so there is nothing to try again. Its own refusal is the answer.
+            attempts.append({
+                "attempt": number,
+                "seconds": round(time.monotonic() - started, 2),
+                "outcome": "refused",
+            })
+            raise
+        except (socket.timeout, TimeoutError, urllib.error.URLError, ConnectionError) as error:
+            no_answer = error
+            attempts.append({
+                "attempt": number,
+                "seconds": round(time.monotonic() - started, 2),
+                # IN THE WORDS A DESIGNER CAN USE. The class name was in here first
+                # ("no answer (TimeoutError)") and it read as machinery in the middle of a
+                # sentence meant for a person.
+                "outcome": _no_answer_reason(error),
+            })
+
+    raise HTTPException(
+        status_code=504,
+        detail=_read_record(attempts, read_timeout)["summary"],
     )
-    
-    with urllib.request.urlopen(req, timeout=30) as res:
-        data = json.loads(res.read().decode("utf-8"))
-    
-    if data.get("err"):
-        raise HTTPException(status_code=502, detail=f"Figma API error: {data['err']}")
-    
-    return data
+
+
+def _no_answer_reason(error: Exception) -> str:
+    """Why the ask went unanswered, in words a person can act on rather than a class name."""
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return "it timed out"
+    if isinstance(error, ConnectionError):
+        return "the connection dropped"
+    return "the connection failed"
+
+
+def _read_record(attempts: list[dict[str, Any]], read_timeout: float) -> dict[str, Any]:
+    """The record of the asks, and the one sentence the answer prints.
+
+    ONE FUNCTION, BOTH READERS. The answer and the run's own record take this same value, so the
+    sentence a designer reads and the sentence in the history cannot describe the run differently.
+    """
+    answered = next((item for item in attempts if item["outcome"] == "answered"), None)
+    if answered is None:
+        summary = (
+            "The read did not answer in "
+            f"{_num_seconds(read_timeout)} seconds, twice. Nothing was written."
+        )
+    elif answered["attempt"] == 1:
+        # NOTHING TO REPORT. The first ask answered, and a line saying so on every run is noise.
+        summary = ""
+    else:
+        first = next(item for item in attempts if item["attempt"] == 1)
+        summary = (
+            f"The first read did not answer within {_num_seconds(read_timeout)} seconds "
+            f"({first['outcome']}); the second answered in {answered['seconds']} seconds. "
+            "The design was read."
+        )
+    return {
+        "attempts": attempts,
+        "answeredBy": None if answered is None else answered["attempt"],
+        "timeoutSeconds": read_timeout,
+        "summary": summary,
+    }
+
+
+def _num_seconds(value: float) -> str:
+    """A whole number of seconds as a person writes it: 30, not 30.0."""
+    return str(int(value)) if float(value).is_integer() else str(value)
 
 
 # ============================================
@@ -3116,7 +3211,11 @@ def _figma_spec_for_model(node: dict[str, Any], depth: int | None = None) -> dic
     fill = next((_figma_paint(f) for f in node.get("fills", []) if f.get("visible", True)), None)
     if fill:
         spec["fill"] = fill
-    stroke = next((_figma_color(s) for s in node.get("strokes", []) if s.get("visible", True) and s.get("type") == "SOLID"), None)
+    # THE PAINT'S OWN OPACITY IS PART OF THE COLOUR. Figma carries a stroke's transparency on the
+    # paint (`opacity`), and this call used to drop it: a 50% stroke was written as an opaque hex,
+    # so a border the design states half-transparent was drawn solid. Measured 2026-11-01 on the
+    # eleven findings ("strokes = rgba(147, 58, 69, 0.5) and the component carries #933a45").
+    stroke = next((_figma_color(s, s.get("opacity")) for s in node.get("strokes", []) if s.get("visible", True) and s.get("type") == "SOLID"), None)
     if stroke:
         spec["stroke"] = {"color": stroke, "weight": node.get("strokeWeight")}
     # A DRAWN SHAPE'S OUTLINE IS ITS PATH, and nothing else in this spec is the shape. It comes from
@@ -4199,7 +4298,7 @@ def _svg_for_vector(node: dict[str, Any], root: dict[str, Any] | None = None) ->
         return None
     fill = next((_figma_paint(f) for f in node.get("fills", []) if f.get("visible", True)), None)
     stroke = next(
-        (_figma_color(s) for s in node.get("strokes", []) if s.get("visible", True) and s.get("type") == "SOLID"),
+        (_figma_color(s, s.get("opacity")) for s in node.get("strokes", []) if s.get("visible", True) and s.get("type") == "SOLID"),
         None,
     )
     winding = next((g.get("windingRule") for g in geometry if g.get("windingRule")), None) or "NONZERO"
@@ -4892,9 +4991,13 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     
     # ── Step 1: Fetch from REST API (primary, always available) ──
     try:
-        rest_response = await asyncio.to_thread(_fetch_figma_nodes, file_key, node_id)
+        rest_response, read_record = await asyncio.to_thread(_fetch_figma_nodes, file_key, node_id)
         if job:
             job.rest_status = "success"
+        # THE ASKS, IN THE RUN'S OWN STEP LIST, so a run that needed a second ask says so while it
+        # is happening and not only in the answer afterwards.
+        if read_record.get("summary"):
+            _step(job_id, read_record["summary"])
     except Exception as e:
         if job:
             job.rest_status = f"error: {e}"
@@ -4939,6 +5042,41 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
     # ancestors — and the ancestors are only reachable by id. Indexing here, once, is what lets
     # _svg_for_vector() compose that chain instead of drawing the path sideways.
     _remember_raw_nodes(nodes)
+
+    # ── Step 3a: THE SECOND READING, RECONCILED FACT BY FACT ───────────────────────────────────
+    # THE LARGEST OPEN REQUIREMENT, and the reason it comes before any drawing change: every later
+    # finding is measured against the read, and a single-channel read measures the pipeline against
+    # itself. The same node is asked of Figma's desktop MCP in its metadata form — the channel that
+    # carries NUMBERS, not generated code — and the two readings are compared layer by layer.
+    #
+    # Nothing is merged here and nothing is preferred. `figma_twopass` writes one row per fact with
+    # both values and, where they differ, the cause. When the MCP is not answering the answer says
+    # so in the same field, because a second reading that did not happen is not agreement.
+    if mcp_context:
+        mcp_layers, metadata_error = await asyncio.to_thread(
+            figma_twopass.read_metadata, node_id, file_key
+        )
+    else:
+        mcp_layers, metadata_error = [], (
+            mcp_failure or "The Figma desktop MCP did not answer, so the node was read once."
+        )
+    two_pass = figma_twopass.reconcile(
+        target_node,
+        mcp_layers,
+        mcp_error=metadata_error,
+        # THE SAME CHANNEL'S OTHER ANSWER. The layer list and the artwork are asked of one channel
+        # through two tools: metadata enumerates layers and returns no vectors, the design-context
+        # answer returns the vector artwork without enumerating layers. Without this the report
+        # said the second channel could not see the marks, which was wrong.
+        mcp_assets=((mcp_context or {}).get("parsed") or {}).get("assets") or [],
+    )
+    # AND THE CHOICE IS APPLIED TO THE DOCUMENT THE RENDERER READS. The comparison is not a report
+    # that sits beside the drawing; a fact the second channel alone carried is written here, so the
+    # component is assembled from what was read on either channel and never from an assumption.
+    # Measured on every node so far: no fact is second-channel-only, so this writes nothing and the
+    # count says so. The path exists so that the day one is, the drawing follows it.
+    two_pass["applied"] = figma_twopass.apply(target_node, two_pass)["applied"]
+    _step(job_id, two_pass["summary"])
 
 
     # Also get components from the response (Figma includes referenced components)
@@ -5348,6 +5486,9 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         "model": None,
         "error": None,
         "note": assembly_note,
+        # HOW THE DESIGN WAS READ — the same record the answer carries, not a second count of it.
+        # A run that needed a second ask keeps that fact in the history, with both durations.
+        "read": read_record,
         "rejected": rejected,
         "compliance": compliance,
         # The same vector check, in the record: a draft that shipped with a wrong icon keeps the
@@ -5389,6 +5530,11 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         # otherwise, and an answer of "overwrite" rebuilds that child from this design's version.
         "childMatches": child_matches,
         "channels": _channel_report(merged, mcp_context, component_descriptions),
+        # ── HOW THE DESIGN WAS READ, ASK BY ASK ────────────────────────────────────────────────
+        # The attempt count, what each ask took and which one answered. `summary` is empty when
+        # the first ask answered, because a line saying so on every run is noise; it is a sentence
+        # when the run needed a second ask, and it is the reason when neither was answered.
+        "read": read_record,
         "drafts": {tag: {"chars": len(code), "compiles": validation.get(tag, {}).get("ok")} for tag, code in drafts.items()},
         "rawReply": assembled.get("rawReply", ""),
     }, to_db=False)
@@ -5435,6 +5581,11 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
             # THE FACES THE DESIGN NAMED THAT THE SYSTEM DOES NOT SHIP, and the face it will draw.
             # A warning, not a gap: the system's one face replaces it, and the designer is told.
             "fonts": gate["fonts"],
+            # ── THE FACES THIS SYSTEM DOES NOT SHIP (plan 1.3) ────────────────────────────────
+            # A statement, by name, with the layers that use them: this system is IBM Plex, these
+            # layers state others, and the drawing carries them as the file says. Null when every
+            # face the design uses is one the system declares, or when the sheet could not be read.
+            "fontNotice": gate.get("fontNotice"),
             # EVERY ANNOTATION THE FILE CARRIES, in the designer's own words, with the layer.
             "annotations": gate["annotations"],
             # ── EVERY FACT READ, AS A LIST ──────────────────────────────────────────────────────
@@ -5495,6 +5646,16 @@ async def _process_ingest_job(job_id: str, file_key: str, node_id: str, session_
         # What the model was actually given. The preview exists to show that both
         # channels were read — REST always, MCP when Figma Desktop has the file open.
         "channels": _channel_report(merged, mcp_context, component_descriptions),
+        # ── THE SECOND READING, WITH ITS TABLE ──────────────────────────────────────────────────
+        # The same node measured over REST and over the desktop MCP, every fact carrying both
+        # values, an outcome (`agree`, `differ`, `rest-only`, `mcp-only`) and — where they differ
+        # — the cause. `summary` is the one sentence the form prints; `rows` is the whole table.
+        "twoPass": two_pass,
+        # ── HOW THE DESIGN WAS READ, ASK BY ASK ────────────────────────────────────────────────
+        # The attempt count, what each ask took and which one answered. `summary` is empty when
+        # the first ask answered — a line saying so on every run is noise — and it is a sentence
+        # when the run needed a second ask.
+        "read": read_record,
         # WHAT THE ELEMENT DRAWS against what the design measured — vectors for now.
         "vectorFindings": vector_findings,
         # What the renderer does not place, and what Figma stated that the spec did

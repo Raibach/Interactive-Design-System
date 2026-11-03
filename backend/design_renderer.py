@@ -107,7 +107,18 @@ SHAPE_TYPES = frozenset({
     "VECTOR", "BOOLEAN_OPERATION", "STAR", "ELLIPSE", "POLYGON", "LINE", "REGULAR_POLYGON",
 })
 
-ACCEPTED_UNRENDERED = {    "constraints": "Figma resizing constraints govern how a layer behaves when its frame is "
+ACCEPTED_UNRENDERED = {
+    # ── THE TWO FIGMA KEYS THE PIPELINE DELIBERATELY DOES NOT CARRY (2026-11-02) ──────────────
+    # Both were reported as unexamined losses. Neither is a loss: each asks for nothing of its own,
+    # and the reason is recorded here so an examination exists instead of a silence.
+    "arcData": "the ellipse's arc. The renderer draws the layer's measured box and a full circle; "
+               "a PARTIAL arc (start and end angles other than 0 and 2π) is not carried, and the "
+               "row says so rather than pretending the circle is the arc. A full ellipse states "
+               "0 → 2π, which is exactly what a circle is.",
+    "styles": "Figma's named style references. The effect a reference names is resolved onto the "
+              "node and drawn from `effects`; the reference itself is a name for a value that is "
+              "already measured, and asks for no declaration of its own.",
+    "constraints": "Figma resizing constraints govern how a layer behaves when its frame is "
                    "resized; an element fixed at its measured size has nothing to obey them.",
     "strokeCap": "applies to an open path's ends; a border has no ends.",
     "strokeJoin": "applies to a path's corners; a border's corners are covered by radius.",
@@ -381,23 +392,73 @@ def _on_click_events(spec: dict[str, Any]) -> list[str]:
     return found
 
 
-# ── THE SYSTEM'S ONE FACE ─────────────────────────────────────────────────────────────────────
-# THE APPLICATION SHIPS ONE TYPEFACE, IBM Plex Sans, SELF-HOSTED (owner, 2026-10-25: Carbon's type
-# "becomes the one face the whole application speaks"; restated 2026-10-26: *"We should be using
-# IBM's font. I added it as a ubiquitous font that replaces font everywhere in the system"*).
+# ── THE FAMILY THE DESIGN STATES, AND NOTHING ELSE ────────────────────────────────────────────
+# THIS USED TO SUBSTITUTE THE SYSTEM'S FACE. The owner removed that on 2026-11-01: *"it interprets
+# the specs exactly down to a pixel, and it builds it exactly based on the specs. If it breaks,
+# that is the only way a designer will know the design needs fixing. Build it wrong because it is
+# built wrong in Figma. That is the only way."*
 #
-# SO A DESIGN'S FAMILY NAME IS MEASURED AND RECORDED, AND THE DRAWING USES THE SYSTEM'S FACE. That
-# is not a hidden translation: the fact table keeps `Inter` as the value Figma stated, and the
-# proof reports the family as a RECORDED SUBSTITUTION with the reason — it does not count it as an
-# exact match, and it does not call the design wrong. A component that asked for a family this
-# repository does not ship would otherwise fall back to whatever the machine happens to have, which
-# is what made the tool look like Times.
+# So a family is read from the design and written into the stylesheet as stated. The constant stays
+# for the application's own chrome (`--ds-font`), which is not this file's subject; what it may not
+# do any more is answer for a design.
 _SYSTEM_FACE = "IBM Plex Sans"
 
 
 def _local_face(family: str) -> str:
-    """The family as emitted: the system's one face. The stated family stays in the facts."""
-    return _SYSTEM_FACE
+    """The family as the design states it — read and applied, never replaced."""
+    return str(family or "")
+
+
+def _css_colour(value: Any) -> str:
+    """A colour as CSS, read from the measurement and applied exactly.
+
+    THE MEASUREMENT CARRIES TWO FACTS — the colour and its alpha (`_figma_color` returns `hex`,
+    `alpha`, `r`, `g`, `b`). Both are written: a 50% stroke drawn opaque is not the design, and a
+    colour object interpolated into a declaration is not CSS at all. A value that is already a CSS
+    string is passed through unchanged, and nothing is defaulted: a colour the design does not
+    state returns nothing.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        alpha = value.get("alpha", 1)
+        try:
+            a = float(alpha)
+        except (TypeError, ValueError):
+            a = 1.0
+        r, g, b = value.get("r"), value.get("g"), value.get("b")
+        if isinstance(r, int) and isinstance(g, int) and isinstance(b, int):
+            return f"rgba({r}, {g}, {b}, {round(a, 3)})" if a < 0.999 else f"#{r:02x}{g:02x}{b:02x}"
+        hexv = str(value.get("hex") or "").strip()
+        if hexv:
+            return hexv
+    return ""
+
+
+def _css_paint(paint: Any) -> str:
+    """One paint as CSS — the colour it states, multiplied by the paint's own opacity.
+
+    A paint the stylesheet cannot state returns nothing rather than a colour the design never
+    named. Absence is applied as absence.
+    """
+    if isinstance(paint, str):
+        return paint
+    if not isinstance(paint, dict):
+        return ""
+    colour = paint.get("color")
+    css = _css_colour(colour) if isinstance(colour, dict) else (colour if isinstance(colour, str) else "")
+    if not css:
+        return ""
+    opacity = paint.get("opacity", 1)
+    try:
+        op = float(opacity)
+    except (TypeError, ValueError):
+        op = 1.0
+    if css.startswith("rgba(") and op < 1:
+        parts = [part.strip() for part in css[5:-1].split(",")]
+        if len(parts) == 4:
+            return f"rgba({parts[0]}, {parts[1]}, {parts[2]}, {round(float(parts[3]) * op, 3)})"
+    return css
 
 
 def _text_html(node: dict[str, Any]) -> str:
@@ -510,7 +571,17 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
         # placed by its own matrix, not by the flow (its transform states where it belongs), and an
         # absolutely positioned child anchors to the nearest positioned ancestor — without this it
         # would anchor to the page and the mirror would move it outside the component.
-        out.append("position: relative")
+        #
+        # AND THE BOX'S OWN PLACEMENT IS THE DESIGN'S, EVEN WHEN IT ARRANGES ITS CHILDREN. This
+        # branch wrote `position: relative` for every auto-layout frame, so a frame that has its own
+        # layout AND is placed by a parent without one lost its offset: measured 2026-11-01 on the
+        # owner's file — "Meatballs (FRAME)" and "Frame 886979 (FRAME)" reported as "the component
+        # carries left —, top —". A box the design placed is absolute at that offset; a box the
+        # design did not place is the flow's.
+        out.append("position: absolute" if place is not None else "position: relative")
+        if place is not None:
+            out.append(f"left: {_px(place['left'])}")
+            out.append(f"top: {_px(place['top'])}")
         out.append("display: flex")
         out.append(f"flex-direction: {'row' if layout['layoutMode'] == 'HORIZONTAL' else 'column'}")
         for key, css in _LAYOUT_PROPERTIES.items():
@@ -570,35 +641,46 @@ def _declarations(node: dict[str, Any], place: dict[str, float] | None = None) -
         # to the stack, so testing `fill` first made this branch unreachable: every fill under the
         # first was invisible. `fills` is read first now, and `fill` is the single-paint case.
         stack = node.get("fills") or ([node["fill"]] if node.get("fill") else [])
-        if stack:
-            out.append(f"background: {', '.join(stack)}")
+        paints = [css for css in (_css_paint(p) for p in stack) if css]
+        if paints:
+            out.append(f"background: {', '.join(paints)}")
     if node.get("radius") is not None:
         out.append(f"border-radius: {_px(node['radius'])}")
     elif node.get("radii"):
         corners = " ".join(_px(v) for v in node["radii"])
         out.append(f"border-radius: {corners}")
 
+    # ── THE STROKE, READ AND APPLIED ────────────────────────────────────────────────────────────
+    # NO DEFAULT WIDTH, NO DEFAULT COLOUR, NO DEFAULT OF ANY KIND (owner, 2026-11-01: *"get rid of
+    # those writers … build it exactly based on the specs. If it breaks, that is the only way a
+    # designer will know that it needs to fix the design"*). A side whose width the design does not
+    # state is not drawn at all; a colour is carried with its alpha. Writing 1px, or 0px where none
+    # was stated, is the program answering for the design.
     stroke = node.get("stroke") or {}
-    if stroke.get("color"):
+    colour = _css_colour(stroke.get("color"))
+    if colour:
         weight = stroke.get("weight")
         weights = node.get("strokeWeights") or {}
-        if weights:
-            parts = " ".join(_px(weights.get(side, weight or 1)) for side in ("top", "right", "bottom", "left"))
-            out.append(f"border-width: {parts}")
-            out.append("border-style: solid")
-            out.append(f"border-color: {stroke['color']}")
-        elif node.get("strokeAlign") == "OUTSIDE":
+        widths: list[str] = []
+        for side in ("top", "right", "bottom", "left"):
+            stated = weights.get(side, weight)
+            if stated is None:
+                widths = []
+                break
+            widths.append(_px(stated))
+        if widths:
+            if len(set(widths)) == 1:
+                out.append(f"border: {widths[0]} solid {colour}")
+            else:
+                out.append(f"border-width: {' '.join(widths)}")
+                out.append("border-style: solid")
+                out.append(f"border-color: {colour}")
+        elif node.get("strokeAlign") == "OUTSIDE" and weight is not None:
             # A stroke drawn OUTSIDE the box is not a border: a border lives inside the box and
             # would change the layout. An outline draws outside and costs no layout, which is what
             # Figma's OUTSIDE alignment means.
-            out.append(f"outline: {_px(weight) if weight is not None else '1px'} solid {stroke['color']}")
+            out.append(f"outline: {_px(weight)} solid {colour}")
             out.append("outline-offset: 0")
-        else:
-            out.append(
-                f"border: {_px(weight) if weight is not None else '1px'} solid {stroke['color']}"
-                if weight is not None
-                else f"border: 1px solid {stroke['color']}"
-            )
 
     # WHAT THE LAYER DOES TO THE SPACE IT SITS IN, and to what it draws.
     if node.get("opacity") is not None:
@@ -755,12 +837,18 @@ def _shadow(effect: dict[str, Any]) -> str | None:
     kind = str(effect.get("type") or "").upper()
     if kind not in ("DROP_SHADOW", "INNER_SHADOW"):
         return None
-    dx = _px(effect.get("x") or 0)
-    dy = _px(effect.get("y") or 0)
-    blur = _px(effect.get("radius") or 0)
+    # EVERY PART OF THE SHADOW IS READ, AND A PART THE DESIGN DOES NOT STATE ENDS IT. The colour
+    # used to be filled in with a black 25% when none was stated, and each distance with zero —
+    # two values the design never named (owner, 2026-11-01: no writer may answer for a design).
+    colour = _css_colour(effect.get("color"))
+    x, y, radius = effect.get("x"), effect.get("y"), effect.get("radius")
+    if not colour or x is None or y is None or radius is None:
+        return None
+    parts = [_px(x), _px(y), _px(radius)]
     spread = effect.get("spread")
-    colour = effect.get("color") or "rgba(0, 0, 0, 0.25)"
-    parts = [dx, dy, blur] + ([_px(spread)] if spread is not None else []) + [colour]
+    if spread is not None:
+        parts.append(_px(spread))
+    parts.append(colour)
     return ("inset " if kind == "INNER_SHADOW" else "") + " ".join(parts)
 
 

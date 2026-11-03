@@ -65,10 +65,22 @@ export function withContent(host: Tree, content: Content): Tree {
   };
 }
 
-/** Remove the donor engine's chat entry and hand back the props it declared. */
+/**
+ * THE CHAT SEATS A SURFACE MAY NAME. The Design console's own frame names its seat `chat-panel`
+ * (`backend/routes/design_console.py`), the room's frame names `design-chat`, and the Composer's
+ * names `composer-chat-panel`. A surface's chat is not part of the layout the room draws: the
+ * shell places the standing TAB's own seat in the right column, and a chat left in the tree draws
+ * a second one — the console's — over it. That is what put the Tools conversation inside the
+ * console's shell.
+ */
+const CHAT_COMPONENTS = new Set(["design-chat", "chat-panel", "console-chat-panel", "composer-chat-panel"]);
+
+/** Remove every chat entry a surface names, and hand back the props the room's own seat declared. */
 export function takeChat(tree: Tree): { tree: Tree; chat: Record<string, unknown> } {
-  const chats = tree.components.filter((c) => c?.component === "design-chat");
+  const chats = tree.components.filter((c) => CHAT_COMPONENTS.has(String(c?.component ?? "")));
   const ids = new Set(chats.map((c) => c.id));
+  /* The props come from the first seat the surface names, whichever of the names it uses: the
+     room reads its session, its conversation and its words from the surface that declared them. */
   const chat = chats[0] ? (componentProps(chats[0], tree.dataModel) as Record<string, unknown>) : {};
   if (!ids.size) return { tree, chat };
 

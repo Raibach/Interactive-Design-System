@@ -1,12 +1,23 @@
 /**
- * <design-left-footer> — THE DESIGN ROOM'S COLUMN FOOTER, WITH ITS ONE ACTION (owner, 2026-10-25).
+ * <design-left-footer> — THE DESIGN ROOM'S COLUMN FOOTER, AND ITS ONE ACTION: SAVE.
  *
  * The Composer bar's plate — the same height, fill, rounded corner and inner shadow, read from
- * `control-bar.ts` — and the one control this column owns: Apply Carbon. The floating button
- * that stood over the room moves here, where the Composer keeps its actions.
+ * `control-bar.ts` — carrying ONE control in the Composer's RUN treatment (`control-bar.ts`,
+ * `.btn-run`, node 40000761:267): the same gradient, the same black bold label at 18, the same
+ * 43-pixel height, 142-pixel width and drop shadow. This room has no run, so the act at the bottom
+ * of this column is saving the package (owner, 2026-10-31).
+ *
+ * APPLY CARBON STOOD HERE AND IS GONE (owner, 2026-10-31). A designer does not finish naming and
+ * reading one design by applying a whole system to the room. The plate stays exactly as it is:
+ * same height, fill, corner, inner shadow and position — only the control on it changes.
+ *
+ * IT DRAWS AND DISPATCHES, AND NOTHING ELSE. A press raises `design-left-save`; the seat that holds
+ * the session answers it, because only it knows the title, the address, the notes and the package
+ * that are being saved. The footer never fetches and never decides what saving means. `busy` and
+ * `result` belong to the HOST: the seat sets them while the save is in flight and when it answers,
+ * and the footer's own line under the fields is that answer, in the host's words.
  */
 import { LitElement, css, html, nothing } from 'lit';
-import { getStoredUserId } from '@/services/authService';
 
 export class DesignLeftFooter extends LitElement {
   static styles = css`
@@ -33,22 +44,49 @@ export class DesignLeftFooter extends LitElement {
       box-shadow: inset 3px -4px 10px 0px rgba(0, 0, 0, 0.15),
                   inset 0px 4px 4px 0px rgba(0, 0, 0, 0.1);
     }
-    .apply {
+    /* THE COMPOSER'S RUN TREATMENT (control-bar.ts, node 40000761:267), unchanged: the gradient
+       runs to the left, the label is black at 18 and bold, the box is 43 by 142 with the same
+       two-part drop shadow. The room's own control keeps the room's words. */
+    .save {
       position: relative;
       z-index: 1;
-      padding: 8px 16px;
-      border: 1px solid rgba(240, 179, 35, 0.55);
-      border-radius: 8px;
-      background: #231f2e;
-      color: #f5f0e8;
-      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 43px;
+      width: 142px;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: linear-gradient(to left, #f0b424 0%, #fed141 100%);
+      color: #000;
       font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 18px;
+      font-weight: 700;
       cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      box-shadow: -4px -4px 10px 0px rgba(0, 0, 0, 0.15),
+                   4px 4px 4px 0px rgba(0, 0, 0, 0.25);
     }
-    .apply:disabled {
-      opacity: 0.7;
-      cursor: default;
+    .save:hover { filter: brightness(1.08); }
+    .save:disabled { opacity: 0.7; cursor: not-allowed; }
+    .save.saving {
+      background: linear-gradient(to left, #d4991f 0%, #e0b830 100%);
+      cursor: wait;
     }
+    /* Runtime state, not in the design — the Composer's own spinner. */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(0, 0, 0, 0.15);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .result {
       position: relative;
       z-index: 1;
@@ -60,7 +98,9 @@ export class DesignLeftFooter extends LitElement {
   `;
 
   static properties = {
+    /** The host's answer after a save — one line beside the control. */
     result: { type: String },
+    /** Set by the host while the save is in flight; locks the control and reads "Saving...". */
     busy: { type: Boolean },
   };
   declare result: string;
@@ -72,29 +112,24 @@ export class DesignLeftFooter extends LitElement {
     this.busy = false;
   }
 
-  private async applyCarbon(): Promise<void> {
-    this.busy = true;
-    this.result = 'Applying Carbon…';
-    try {
-      const res = await fetch('/api/design/apply-carbon', {
-        method: 'POST',
-        headers: { 'X-User-ID': getStoredUserId() },
-      });
-      const body = (await res.json().catch(() => null)) as { ok?: boolean; detail?: string } | null;
-      if (!res.ok) throw new Error(body?.detail || `the server answered ${res.status}`);
-      this.result = 'Carbon applied.';
-    } catch (e) {
-      this.result = e instanceof Error ? e.message : String(e);
-    } finally {
-      this.busy = false;
-    }
+  private _onSave() {
+    if (this.busy) return;
+    this.dispatchEvent(new CustomEvent('design-left-save', { bubbles: true, composed: true }));
   }
 
   render() {
     return html`
       ${this.result ? html`<span class="result">${this.result}</span>` : nothing}
-      <button class="apply" type="button" ?disabled=${this.busy} @click=${() => void this.applyCarbon()}>
-        Apply Carbon
+      <button
+        class="save ${this.busy ? 'saving' : ''}"
+        type="button"
+        ?disabled=${this.busy}
+        title="Save"
+        @click=${this._onSave}
+      >
+        ${this.busy
+          ? html`<span class="spinner"></span> <span>Saving...</span>`
+          : 'SAVE'}
       </button>
     `;
   }

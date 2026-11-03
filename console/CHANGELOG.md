@@ -167,3 +167,28 @@ backend pass, recorded in the plan §6.
 - `WritingAreaIndex.tsx`: **8,346 → 8,173 lines** (from 12,055 at the start; −3,882).
 - Verified: typecheck clean, build 4.37 s. Browser re-test of this effect: not yet run — recorded as
   unproven, and the next pass should exercise a Design-tab preview.
+
+## 2026-10-31 — the approval flow's plan is filed here; nothing is built
+
+- `console/approvals/APPROVAL-PIPELINE-2026-10-31.md` — the plan for the Design room's Figma
+  ingest to pass through three gates: the designer validates the ephemeral preview, one named
+  reviewer decides, and the designer's final approval commits the component to the Lit catalogue.
+  Nothing in it is implemented.
+- The six measured obstacles, each with the line that proves it: the preview is the only copy and
+  is deliberately only ever one (`routes/figma.py:770`, `:772`, `:1092`); the Approve button is
+  the catalogue write (`IngestModal.tsx:1012` → `routes/figma.py:7605`); no package has ever been
+  anything but `status = 'Active'` (339 of 339); another person cannot see a card
+  (`prompt_sessions_api.py:821-823`); there is no activity to narrate (`prompt_history` 0,
+  `audit_logs` only chat queries); and `GET /api/auth/users` is open to every caller while
+  `ADMIN_ROLES` is unset (`deps.py:298-302`).
+- Recommendation on record: two tables, `design_drafts` and `draft_reviews`; the draft is stored
+  because it must reach another person on another sign-in and survive a restart; the preview stays
+  ephemeral, unchanged.
+- **Revised the same day, on two owner corrections.** The right-hand column is an output surface
+  and not a conversation (`design/ONE-CHAT-PER-TAB.md`), so the review loads into that surface and
+  there is no approval dashboard: the card's existing status tag carries the stage, the buttons are
+  added, and a modal appears only for a signature. And the supplied application is a reference
+  point, not a model — its route is not adopted. The build order now begins with the seat split,
+  because one seat file serves five Design tabs (`rooms/design/chat/design-chat.ts`, 295 KB) and an
+  approval surface written there would appear in all of them. The trail is the truth: the draft's
+  state is written only by the transaction that appends the decision.

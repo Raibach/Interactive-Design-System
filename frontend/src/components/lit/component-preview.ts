@@ -51,6 +51,20 @@ export interface PreviewState {
   facts?: Array<{ label: string; value: string }>;
   /** One line about what this is, from the row or the ingest. */
   note?: string;
+  /**
+   * THE SAME NOTE, LINE BY LINE (owner, 2026-11-01: *"format this text … so that the user can read it
+   * easier. Right now it's just one huge block."*). Each entry draws on its own line; `note` is the
+   * fallback for a host that still sends one string, so nothing that speaks the old shape is lost.
+   */
+  noteLines?: string[];
+  /**
+   * WHAT COULD NOT BE READ OR DRAWN, one sentence each, drawn as a list under the note. A COUNT IS
+   * NOT ENOUGH: each entry names the layer, the fact and the value found, so a person can go and
+   * check it. This is the same list the backend produced; the element only lays it out.
+   */
+  unread?: string[];
+  /** How many stated facts the run read — the denominator the list is missing from. */
+  factsRead?: number;
   /** True while the discard request is in flight — the button says so and turns. */
   discarding?: boolean;
   /** True while the approval is in flight — the button says so and turns. */
@@ -499,6 +513,33 @@ export class ComponentPreview extends LitElement {
       .note {
         margin: 0 0 10px;
         font-size: var(--ds-fs-sm);
+        color: var(--ds-text);
+      }
+      /* ── WHAT COULD NOT BE READ OR DRAWN, ONE LINE EACH ──────────────────────────────────────
+         Owner, 2026-11-01: *"format this text … so that the user can read it easier. Right now it's
+         just one huge block."* The sentences are the backend's own and none is dropped; the list
+         gives each one its own line, its own air, and a heading that states the count. */
+      .unread {
+        margin: 6px 0 14px;
+        padding-top: 10px;
+        border-top: 1px solid var(--ds-rule);
+      }
+      .unread-head {
+        margin: 0 0 8px;
+        font-size: var(--ds-fs-sm);
+        font-weight: var(--ds-weight);
+        color: var(--ds-text-strong);
+      }
+      .unread-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 0;
+        padding-left: 18px;
+      }
+      .unread-list li {
+        font-size: var(--ds-fs-sm);
+        line-height: 1.5;
         color: var(--ds-text);
       }
       /* ACCORDIONS: each result collapses on its own, so the panel is long only when a reader asks
@@ -1207,7 +1248,21 @@ export class ComponentPreview extends LitElement {
       </div>
       ${this._binding(p)}
       <div class="body">
-        ${p.note ? html`<p class="note">${p.note}</p>` : nothing}
+        ${(p.noteLines && p.noteLines.length ? p.noteLines : p.note ? [p.note] : []).map(
+          (line) => html`<p class="note">${line}</p>`,
+        )}
+        ${p.unread && p.unread.length
+          ? html`<div class="unread">
+              <p class="unread-head">
+                ${p.factsRead
+                  ? `${p.unread.length} of ${p.factsRead} stated facts did not survive`
+                  : `Did not survive — ${p.unread.length} ${p.unread.length === 1 ? "fact" : "facts"}`}
+              </p>
+              <ul class="unread-list">
+                ${p.unread.map((line) => html`<li>${line}</li>`)}
+              </ul>
+            </div>`
+          : nothing}
         ${p.progress ? html`<p class="progress" role="status">${p.progress}</p>` : nothing}
         ${this._writes(p)}
         ${this._confirmingRemove && p.alreadyInCatalogue

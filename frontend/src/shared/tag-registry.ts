@@ -1739,7 +1739,7 @@ export const TAG_REGISTRY = {
     ],
   },
   /**
-   * THE INGEST RAIL'S TOP HALF — the Figma URL field, the Notes field and Submit.
+   * THE INGEST RAIL'S TOP HALF — the Title field, the Figma URL field, the Notes field and Submit.
    *
    * THE HALF THAT WAS MISSING, and the owner asked for it twice before it existed: *"where is the
    * Figma input? … why would you leave out the most important part the input field for the link and
@@ -1747,14 +1747,16 @@ export const TAG_REGISTRY = {
    * had NO element that draws a text field of this kind — `prompt-textarea` is the composer's own
    * section field, and `role-dropdown` and `model-selector-button` take no text — so the input could
    * not be named by any surface until something drew it. This is that element, and it is a
-   * TRANSLATION of the ingest form's own fields rather than a second design: the same two fields
-   * with the same words.
+   * TRANSLATION of the ingest form's own fields rather than a second design: the same fields with
+   * the same words. The Title field is this room's addition (owner, 2026-10-31): the work is named
+   * before the design is read, so the package already carries the name the person gave it when it
+   * is saved.
    *
    * IT DRAWS AND DISPATCHES, AND NOTHING ELSE. It fetches nothing and ingests nothing: the parsing
    * (`@/utils/figmaUrl`) and the endpoint (`POST /api/figma/ingest`) already exist, and a view that
    * fetched would be a second implementation of the ingest. On Submit it dispatches `ingest-submit`
-   * with `{url, notes}` VERBATIM, because deciding whether a typed string is a Figma URL, a node tag
-   * (`f-1234-5678`) or a layer's name is `handleIngest`'s logic and not the element's.
+   * with `{title, url, notes}` VERBATIM, because deciding whether a typed string is a Figma URL, a
+   * node tag (`f-1234-5678`) or a layer's name is `handleIngest`'s logic and not the element's.
    *
    * `busy` AND `message` ARE THE HOST'S. Only the caller that made the call knows when it finished,
    * and only it knows why Submit is blocked — so the element decides neither.
@@ -1763,8 +1765,10 @@ export const TAG_REGISTRY = {
     tag: 'figma-ingest-form',
     surface: 'design',
     column: 'left',
-    description: 'The ingest rail\'s top half: the Figma URL field, the Notes field and Submit, translated from the ingestion form. Draws and dispatches only — on Submit it emits `ingest-submit` with `{url, notes}` verbatim, and the shell runs `POST /api/figma/ingest`, the same call the modal makes.',
+    description: 'The ingest rail\'s top half: the Title field, the Figma URL field, the Notes field and Submit, translated from the ingestion form. Draws and dispatches only — on Submit it emits `ingest-submit` with `{title, url, notes}` verbatim, and the shell runs `POST /api/figma/ingest`, the same call the modal makes.',
     props: {
+      /** Prefilled title — the name the person gives the work before the design is read. */
+      title: { type: 'string', optional: true },
       /** Prefilled URL. The field stays editable either way. */
       url: { type: 'string', optional: true },
       /** Prefilled notes — optional in the form and optional in the ingest. */
@@ -1774,12 +1778,13 @@ export const TAG_REGISTRY = {
       /** A line under the fields — a refusal, or why Submit is blocked. The host's words. */
       message: { type: 'string', optional: true },
     },
-    events: ['ingest-submit'],
+    events: ['ingest-submit', 'ingest-field-change'],
     constraints: [
       'IT DRAWS AND DISPATCHES ONLY: it never fetches, never parses the typed string, and never calls the ingest — the parsing and the endpoint already exist and are not reimplemented in an element',
-      '`ingest-submit` carries the RAW TEXT ({url, notes}) because what a typed string MEANS — a Figma URL, a node tag (f-1234-5678), or a layer\'s name — is `IngestModal.handleIngest`\'s logic, and one place decides it',
+      '`ingest-submit` carries the RAW TEXT ({title, url, notes}) because what a typed string MEANS — a Figma URL, a node tag (f-1234-5678), or a layer\'s name — is `IngestModal.handleIngest`\'s logic, and one place decides it',
+      '`ingest-field-change` carries the same three values on every keystroke, so SAVE at the foot of the column sees the title before anything is submitted',
       '`busy` and `message` are the HOST\'S to set: only the caller that made the call knows when it finished, and only it knows why Submit is blocked',
-      'the fields are the ingest form\'s own two, with the ingest\'s own words — a TRANSLATION of that form, not a second design and not a restyle',
+      'the Title, URL and Notes fields are the ingest form\'s own, with the ingest\'s own words — a TRANSLATION of that form, not a second design and not a restyle; the Title is the Design room\'s addition and stands over the URL',
       'it is the TOP of the left column and the tree is the bottom: the slot takes both, in that order',
     ],
   },
@@ -1883,9 +1888,19 @@ export const TAG_REGISTRY = {
   'design-left-footer': {
     tag: 'design-left-footer',
     surface: 'design',
-    description: "THE DESIGN ROOM'S COLUMN FOOTER, EMPTY ON PURPOSE (owner, 2026-10-25): the Composer bar's plate — same height, fill, corner and inner shadow — with no Save, no RUN and no undo.",
-    props: {},
-    events: [],
+    description: "THE DESIGN ROOM'S COLUMN FOOTER, AND ITS ONE ACTION: SAVE (owner, 2026-10-31). The Composer bar's plate — same height, fill, corner and inner shadow — carrying one control in the Composer's RUN treatment (`control-bar.ts`, `.btn-run`, node 40000761:267): the same gradient, black bold label at 18, 43 by 142 with the same drop shadow. Apply Carbon stood here and is gone: a designer does not finish naming and reading one design by applying a whole system to the room.",
+    props: {
+      /** The host's answer after a save — one line beside the control, in the host's words. */
+      result: { type: 'string', optional: true },
+      /** Set by the HOST while the save is in flight; locks the control and reads "Saving...". */
+      busy: { type: 'boolean', optional: true },
+    },
+    events: ['design-left-save'],
+    constraints: [
+      'IT DRAWS AND DISPATCHES ONLY: a press raises `design-left-save` and the seat that holds the session answers it — the footer never fetches, and only the seat knows the title, the address, the notes and the package being saved',
+      '`busy` and `result` are the HOST\'S to set: the footer never decides that a save is running or what it answered',
+      'the plate is the Composer bar\'s own and does not change — same height, fill, corner, inner shadow and position; only the control on it is this room\'s',
+    ],
   },
   'design-workspace': {
     tag: 'design-workspace',

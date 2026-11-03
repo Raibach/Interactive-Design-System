@@ -53,6 +53,10 @@ export class AgentCardElement extends LitElement {
      * for something that is not a package. The grid sets this for `room_domain: 'design'`.
      */
     nodelete: { type: Boolean },
+    /** THE MARK OF THE AREA THE CARD CAME FROM (owner, 2026-10-27): *"update the logos on
+     *  the cards now to match the area they come from"*. The grid sets one of the seat marks;
+     *  a card with no mark keeps the chat's own mark. */
+    markSrc: { type: String, attribute: 'mark-src' },
     // Owner-instructed control (not in the Figma pull): arm → confirm.
     _deleteArmed: { state: true },
   };
@@ -70,6 +74,7 @@ export class AgentCardElement extends LitElement {
   declare categoryTextColor: string;
   declare headerLabel: string;
   declare nodelete: boolean;
+  declare markSrc: string;
   /** First confirmation step: trash clicked once, waiting for the second click. */
   declare _deleteArmed: boolean;
   /** Auto-disarm timer so an armed trash never stays armed. */
@@ -89,6 +94,7 @@ export class AgentCardElement extends LitElement {
     this.categoryTitleColor = '';
     this.categoryTextColor = '';
     this.headerLabel = '';
+    this.markSrc = '';
     this._deleteArmed = false;
   }
 
@@ -157,12 +163,22 @@ export class AgentCardElement extends LitElement {
          logo's own centre — with the category hanging beneath both. */
       align-items: center;
       gap: 10px;
-      padding: 3px 0;
+      /* THE MARK'S INSET IS EVEN ON BOTH SIDES (owner, 2026-10-27: *"The padding doesn't
+         seem even above the logo and onto the left of the logo"*). The card's own side
+         padding is 10 and the logo sits 11 from the left edge (10 + the 1px border), so the
+         row carried 10 above the mark — 11 with the border — instead of the designed 3.
+         Then reduced by three (owner, 2026-10-27) to give the card's content its room back:
+         7 above the mark, 8 with the border. */
+      padding: 7px 0 3px;
     }
     .card-logo {
-      flex: 0 0 39px;
-      width: 39px;
-      height: 39px;
+      /* A FIFTH SMALLER THAN THE DESIGNED BOX, THEN ANOTHER 15% (owner, 2026-10-27):
+         39 → 31 → 26, so the mark sits quieter beside the title. Its own fill is 20% less
+         than solid, so the mark recedes without touching the card behind it. */
+      flex: 0 0 26px;
+      width: 26px;
+      height: 26px;
+      opacity: 0.8;
       display: block;
       /* THE BOX IS SQUARE BECAUSE THE MARK IS (owner, 2026-10-06: *"It's square, make the
          card box square."*). It was 39x35 — the old mark's slightly-wide ratio — and the
@@ -531,7 +547,7 @@ export class AgentCardElement extends LitElement {
 
         <!-- card-header -->
         <div class="card-header">
-          <img class="card-logo" src=${chatMenuIcon} alt="" aria-hidden="true" />
+          <img class="card-logo" src=${this.markSrc || chatMenuIcon} alt="" aria-hidden="true" />
           <div class="header-labels">
             <!-- THE INDICATOR, NOT A VALUE — the owner, 2026-09-19: "'Agent Function | Category'
                  is just an indicator. Don't insert category there. The category's own value

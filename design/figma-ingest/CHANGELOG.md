@@ -11,6 +11,10 @@ all of our code snippets for our function."*
 So: the catalogue this ingest builds is what the AI assembles from, and every business requirement that
 becomes a surface ends up resting on a component this pipeline wrote.
 
+**The label.** This file is the Figma ingest's record and nothing else. Every entry from 2026-11-02
+carries `[figma-ingest]` in its heading, so a search for that label finds this file and every change
+made to the ingest, wherever the repository has been rebuilt.
+
 **How to read this file.** Newest first, one entry per change, each saying what changed, why, how it was
 verified, and what it left open — recorded from measurements, never from memory. A change that is not in
 here but is in git is still real; the entry is missing, not the work. The detailed case for the 2026-09-30
@@ -26,35 +30,325 @@ application binds, the consumer owns what a click means.**
 
 ---
 
-## 2026-10-26 — the proof, the patterns, and feedback that never goes silent
+## 2026-11-02 (later) — [figma-ingest] the queue the missing face asks into now exists
 
-The day's account is its own folder:
-[`2026-10-26-feedback-and-patterns/`](./2026-10-26-feedback-and-patterns/README.md) — prose in
-`README.md`, the dated change log in `CHANGELOG.md` beside it. The brief for the next session, with
-what is still open and the order to take it in, is [`NEXT-CHAT.md`](./NEXT-CHAT.md); the session-level
-brief, covering the Design room's own chat parts and rails as well, is [`../NEXT-CHAT.md`](../NEXT-CHAT.md).
+One thing changed for the ingest after the entry below, and it was not in the ingest: the place a
+request goes when the tool meets something the system does not hold.
 
-The headline: the proof now compares **values** rather than words and cannot report 100% beside a
-named failure; the answer leads with what could not be read and says whose gap it is; the node's
-transform is drawn from Figma's matrix after a horizontal mirror was mistaken for a 3.14° rotation;
-a design's component children are now patterns identified by **layer name**, drafted, proved and
-registered at approval; and the preview's records are ephemeral, with nothing written to the database
-before approval.
+**What was built elsewhere.** `design_requests` holds a request until a person decides — kind, subject,
+reason, requester, decision, who decided and when, a note. Three endpoints: ask, list, decide. The
+Design rail's `Approve` tab draws the waiting requests with Approve and Refuse. Proven on the running
+app; the test rows were removed afterwards.
 
-Later the same day: the output states **what approving will write** before any press — the existing
-component with its tag and date, then every child pattern with a tick box, new ones ticked and
-existing ones unticked — and the approval writes only the ticked ones; an approval and a removal
-**name their stages as they run** and stop on the stage that failed; the list is ordered by approval
-date only, after a trial that used each file's write time put three of the program's own files at the
-top; and the pattern list no longer counts an instance's insides, or an instance of a component this
-system already ships, as patterns. The list also gained a **search box** above the catalogue's name —
-a literal filter of the names, tags and Figma layers, with a count of what is shown — and the
-catalogue chips were then removed: the list reads the official catalogue only, and the primitives
-catalogue was deleted because every one of its seven names is already in the official one. The
-design-artifacts catalogue's five room-only names moved into the official catalogue before its file was
-deleted, and the Design room's own checks now run against the one catalogue, which declares 73. The
-Design seat was then given its own copies of the chat parts it draws, so its rail and its column owe
-nothing to the shared `chat-*` components the other rooms still use.
+**Why it is in this log.** The last open step of the ingest is the conversation about a face the system
+does not ship: the chat says so, offers to replace it or to ask for it to be added, and "asking for it
+to be added enters the approval queue". Until today there was no queue to enter. Now there is, so that
+step is unblocked and is still not built.
+
+**The ingest itself did not change after the entry below.** The span reader, the two examined keys, the
+chosen channel and the closed accounting stand exactly as recorded there.
+
+---
+
+## 2026-11-02 — [figma-ingest] the read is complete, the choice is named, the account closes
+
+Owner, 2026-11-02: *"the AI has to read every single spec on that Figma file and assemble it according
+to that Figma file. It doesn't matter — there's no interpretation, there's no evaluation, there's no
+'I don't need to read it, I'll just make it up.' If it's not there, none of that can happen."* Four
+changes serve that sentence. Three of them were faults in the CHECK, not in the drawing, which is why
+the count had been understating the read without anyone being able to see it.
+
+| # | what changed | where |
+|---|---|---|
+| 1 | the styled spans are read wherever the style sits in the tag | `figma_fidelity._runs_drawn` |
+| 2 | `arcData` and `styles` are examined, with reasons, instead of skipped | `design_renderer.ACCEPTED_UNRENDERED`, `figma_fidelity.RAW_TO_SPEC` |
+| 3 | every reconciled fact names the channel the drawing takes it from, and the ingest applies that choice | `figma_twopass.reconcile` (`chosen`), `figma_twopass.apply` |
+| 4 | the accounting is checked: each layer and fact once, the buckets add up, the gate blocks when they do not | `figma_fidelity.account`, `fidelity_gate` |
+
+**1 — the span reader.** The reader matched `<span style="…">` exactly: no attribute before the style,
+double quotes only, no nesting. A generated drawing writes `<span class="…" style="…">`, sometimes
+single-quoted, and spans inside spans. So a layer whose ranges WERE drawn came back as "0 span(s)" and
+the answer reported a loss the drawing did not have. It now walks every span tag, takes the style
+wherever it sits, and finds the matching close by counting nested spans.
+
+**2 — two keys nobody examined.** `arcData` and `styles` appeared in no table in the pipeline, so the
+walk skipped them in silence. Each now has a written reason: the ellipse's arc is not carried and a
+partial arc is a stated limitation, never a silent loss; a style reference names an effect that is
+resolved onto the node and drawn from `effects`, so the reference asks for no declaration of its own.
+The examination is consulted BEFORE the spec lookup, because a fact deliberately not drawn has no
+drawn value to search for.
+
+**3 — the choice, named per fact.** The two reads were reconciled but the drawing still took every
+value from REST, and nothing recorded that as a decision. Every row now carries `chosen` — `both` when
+the channels agree, `rest` or `mcp` when one carried it, and the drawn channel on a disagreement,
+where the cause already says why. `apply` writes a second-channel value into the document the renderer
+reads. On every node measured so far the chosen source is REST, because every disagreement recorded is
+a flip, a group's offset or a kind Figma names twice — each one where REST is the drawing's space. The
+column says that per fact now instead of leaving it implicit.
+
+**4 — the accounting.** The answer already said "I read N facts: D drawn, A accepted, M did not
+survive" without checking that the three add up. `account()` now counts each layer and fact once,
+checks the equation, and names any repeat. The gate blocks when the account does not close, because a
+report that counts a fact twice cannot be read as "every fact once" — that is the instrument's fault,
+not the designer's.
+
+**What went wrong on the way, recorded because it will happen again.**
+
+- The first duplicate test keyed on the node id. Report rows carry no id, so every row collided with
+  every other one and a clean report read as full of duplicates. It keys on the layer's own name and
+  the fact now.
+- The span reader's first rewrite matched the outer span of a nested pair and consumed the inner ones,
+  so a nested drawing would have reported zero spans again. The scanner counts nesting instead.
+- `apply` writes nothing for an agreement and nothing for a disagreement. Turning a flipped position
+  into a second-channel override would be a number with no coordinate space behind it, which is the
+  invention this file exists to refuse.
+
+**Verified.**
+
+- The span reader on five shapes: a plain span, a class before the style, a single-quoted style,
+  nested spans, and a `<br/>` inside — the four shapes the generated catalogue files actually use.
+- `arcData` and `styles` on a synthetic ellipse: both rows come back `accepted` with their reasons.
+- `apply` on a synthetic result: a fact marked `mcp` changed the document's layer name and a fact
+  marked `rest` left its position alone.
+- `account()` on a clean report closes at 7 = 5 drawn + 2 accepted + 0 missing; one repeated row opens
+  it and adds a blocker naming the repeated fact.
+
+**Left open.** The missing-face conversation (step 5 of `design/plans/01-INGEST.md`), which waits for
+the approval queue it files into. A real node run, which is the only way to see the count move. And a
+case where a fact really is second-channel-only — none has been measured yet, so `apply` is a path
+with no traffic on a live node.
+
+---
+
+## 2026-11-01 — the read asks twice, and says so
+
+Two runs were lost at 14:15 to a stalled connection: both failed at the thirty-second ceiling while
+the same address answered in 0.6 seconds from a shell at the same moment. The owner's instruction:
+*"We can either do a retry or rerun on failure automatically… one line of the answer… what would
+keep the failure visible instead of hiding it."* So the read asks a second time, and the second ask
+is never silent.
+
+**What was changed, in the order it was agreed.**
+
+| step | what it does |
+|---|---|
+| the read | `_fetch_figma_nodes` asks twice; only a NO ANSWER is asked again |
+| the record | the attempts — what each ask took and which one answered — travel in the answer as `read`, and in the run's own history as the same value |
+| the form | one line above the verdict, from the backend's own sentence, and only when there is something to say |
+
+**Only a no-answer is retried, and that is deliberate.** A timeout, a dropped connection or a
+failed connection is the network failing to answer. A refusal from Figma is an ANSWER: it is passed
+through on the first ask, because asking again would add thirty seconds to a sentence that is
+already true. Measured: a refusal produces exactly one ask.
+
+**The three sentences, in the system's own words.**
+
+- first ask answered — nothing is printed. A line saying "read first time" on every run is noise.
+- first ask unanswered, second answered — *"The first read did not answer within 30 seconds (it
+  timed out); the second answered in 0.9 seconds. The design was read."*
+- neither answered — the answer is refused with status 504 and the sentence *"The read did not
+  answer in 30 seconds, twice. Nothing was written."*
+
+**How each claim is marked.**
+
+| claim | mark |
+|---|---|
+| the second ask happens on a timeout and answers the run | verified, by stubbing the network: two attempts recorded, `answeredBy: 2` |
+| a refusal is not asked twice | verified, by stubbing a 403: exactly one ask |
+| neither answering produces a refusal with both attempts named | verified, by stubbing: status 504 and the sentence |
+| a healthy run says nothing | verified, on a live run: one attempt, `answered by 1`, 0.62 seconds, empty summary |
+| the two-ask sentence on the screen | **verification pending** — the form prints `read.summary` in the same list that already draws the two-pass line; a real stall has not been made to happen on purpose |
+
+**Where the answer and the history could have disagreed, and do not.** The record of the asks is
+built once, by `_read_record`, and the answer and the run's history take that same value. There is
+no second count of attempts anywhere.
+
+**The risk, written down.** When Figma is genuinely down rather than stalling, the answer now takes
+sixty seconds instead of thirty. That was accepted rather than hidden: a stall costs a second, an
+outage costs half a minute more and says so twice.
+
+---
+
+## 2026-11-01 — the second reading: the same node asked twice, compared fact by fact
+
+The ingest read the submitted node once, over REST. The desktop MCP was also called, but only for
+annotations, reference code and assets, and what it returned was written INTO the REST tree. An
+overwrite is not a second opinion: once the annotation arrived, nothing recorded that the two
+channels could have disagreed. This entry is the second opinion, built and measured.
+
+**How each claim below is marked.** *verified* — measured here, with the measurement named.
+*verification pending* — the code is in place and has not yet been run. *not built* — absent.
+
+| claim | mark |
+|---|---|
+| the second reading is reconciled fact by fact, with both values and the cause | verified, on two nodes and one live ingest |
+| every difference found is accounted for, with no unexplained row | verified — 0 unexplained on both nodes |
+| the three causes of disagreement are named: a flipped frame, a Figma group, and a name | verified, per node below |
+| the sentence reaches the screen | verified, on a signed-in tab of my own: the paragraph and the fact row are drawn |
+| the drawing takes a value from the second channel | **not built** — deliberately. The second channel adds nothing to the drawing yet; it confirms or contradicts what REST said |
+
+**What reads the second time.** `backend/figma_twopass.py`, called from `_process_ingest_job` once
+the REST tree is in hand, and answering in the ingest's result as `twoPass`.
+
+**Why `get_metadata` and not `get_design_context`.** Measured on node `40001283:2791` before any code
+was written: `get_design_context` returns generated React with Tailwind classes — `gap-[7px]`,
+`bg-[#cbe6e3]` — which are rounded and rewritten, so a comparison against them measures the code
+generator, not the design. `get_metadata` returns the layer tree with Figma's own numbers, one of
+them `262.3243103027344`. The second channel for a value comparison is therefore the metadata tool.
+
+**The comparable position is the transform's origin, not the bounding box.** The first comparison
+reported 17 differences and was wrong: it compared the MCP's accumulated offset against REST's
+`absoluteBoundingBox`, which is the box AFTER the layer's own transform, so on a flipped layer the
+two figures are the same place written from two origins. Measured, corrected, and the rule written
+into the module: the translation of the layer's transform chain is what both channels can be asked
+for, and a flip is a separate fact that only REST carries.
+
+**Measured, node `40001283:2791` (the output footer area, your own design).**
+
+| what | number |
+|---|---|
+| layers measured over both channels | 14 of 17 |
+| facts agreeing | 70 of 84 |
+| facts differing | 14 — all inside a mirrored frame |
+| facts only REST carries | 10 — 3 VECTOR layers, 1 text, 6 transforms |
+
+The 3 VECTOR layers are the three strokes of the chat mark under `chat history`. **Corrected the
+same hour:** the first version of this entry said "the second channel does not return vectors at
+all, so the artwork exists on one channel only", and that was too broad and wrong. The channel is
+asked twice for different things — `get_metadata` enumerates layers and returns no vectors, and
+`get_design_context` returns the vector artwork without enumerating the layers. Measured on this
+node: the layer list has 3 vectors missing, and the same channel's design-context answer supplied
+3 artwork assets, one per stroke. **The shapes were read twice; the layer names once.** The report
+now says exactly that, and it says the opposite when no artwork comes back.
+
+**Measured, node `40001421:5467` (the results control bar).**
+
+| what | number |
+|---|---|
+| layers measured over both channels | 8 of 8 |
+| facts agreeing | 35 of 48 |
+| facts differing | 12 inside a Figma group, 1 in name only |
+| facts only REST carries | 4 — 3 text, 1 transform |
+
+**The three causes, each measured rather than reasoned.**
+
+- **A flipped frame.** A frame whose own scale is −1 on an axis stores each child's offset on that
+  axis negated. REST composes it, the MCP adds the offset as written. Measured on the three
+  ellipses: x 2, 8.16 and 14.32 in the MCP against −2, −8.16 and −14.32 in REST. The mark travels
+  down the chain, because a child inside the flipped frame cancels the flip for the axis and
+  inherits the difference anyway — reading only the direct parent left three layers with a
+  difference and no cause, and the first version of the summary said so.
+- **A Figma group.** A group is not a coordinate space of its own, and the two channels disagree
+  about that: the MCP adds the group's own offset to every child and REST does not. Measured on
+  `figma-ingest-results-footer`: every child differs by exactly the group's offset, 642 on x and 13
+  on y.
+- **A name.** The MCP calls a Figma group a `frame`; REST calls it `GROUP`. Nothing about the
+  drawing changes, and the row says so.
+
+**Verified by one live ingest.** The node was submitted through `POST /api/figma/ingest`; the answer
+carried `twoPass` with 52 rows and 17 divergences, every one with a cause and no unexplained row;
+the step list showed the sentence while the run was happening; the preview was then discarded and
+the audit reported `clean: true` with no folder, no entry and no files left.
+
+**Left open, and named.** The form's line is written in
+`frontend/src/rooms/design/tools/ToolsSeat.tsx` and was then seen on the screen: a signed-in tab of
+my own ran the ingest from the Tools form, the note drew the sentence verbatim, and the facts list
+drew `Read twice — yes — 35 of 48 facts agree`. The preview that run created was discarded through
+the same discard the screen uses and the audit reported `clean: true`. The job-status endpoint still
+reports `mcp_status` and `rest_status` as empty after a run, because the finished job replaces the
+record that carried them; this predates today and is left as it is until the owner says otherwise.
+And the drawing still takes every value from REST except the artwork: the second reading confirms or
+contradicts, and a measured number that reaches the drawn component from the new channel is a later
+step with its own proof.
+
+**Two failures seen while verifying, and what they were.** Two runs failed with "The read operation
+timed out" after thirty seconds, at the first step, before any second reading. A direct read of the
+same address took 0.6 seconds from the shell at the same moment, and the run that followed two
+minutes later answered in 2.9 seconds. So the ceiling is Figma holding the request, not the
+pipeline: the ingest reported the failure, named the step it failed on, recorded an `ingest-failed`
+row and wrote nothing. It is noted here because a thirty-second ceiling that turns into a reported
+failure is the behaviour this pipeline is supposed to have, and because a reader should know the
+two failures were real and were not my code.
+
+---
+
+## 2026-11-01 — five writers removed, and a placed frame that had lost its offset
+
+Two things happened in one day, and both matter for the same reason: the generator was answering for
+the design in places nobody had looked at.
+
+**How each claim below is marked.** *verified* — measured here, with the measurement named.
+*verification pending* — the code is in place and has not yet been run against the owner's own file.
+*not built* — specified and absent.
+
+| claim | mark |
+|---|---|
+| the five writers are gone; the four render cases behave as stated | verified, by rendering four specs |
+| a placed auto-layout frame keeps its offset, to four decimals | verified, by rendering the declarations |
+| the owner's eleven findings are actually reduced by this | **verification pending** — needs the next ingest of his file |
+| the two-pass read (MCP and REST reconciled) | **not built** on this day — built later the same day; see the entry above this one |
+
+**1. Four writers and one interpolation, removed.** The owner, reading the eleven findings on his own
+ingest ("output-footer-area import"): *"it interprets the specs exactly down to a pixel … build it
+wrong because it is built wrong in Figma. That is the only way."*
+
+| what was written | where | the number it produced |
+|---|---|---|
+| a stroke colour without the paint's own opacity | `routes/figma.py`, both stroke paths — the fill path had always passed it | `#933a45` where the design states `rgba(147, 58, 69, 0.5)` |
+| the application's face for every design's family | `design_renderer.py` `_local_face()` | IBM Plex Sans where the design states Inter |
+| a border width of `1` when none was stated | `design_renderer.py`, the stroke block (`weight or 1`, `'1px'`) | borders the design never asked for |
+| a shadow colour of black at 25%, distances of zero | `design_renderer.py` `_shadow()` | shadows the design never asked for |
+| a colour **object** interpolated into CSS | `design_renderer.py`, fills and stroke | `border: 1px solid {'hex': '#933A45', …}` — not CSS; a fill of that shape raised TypeError |
+
+Verified by rendering four cases: a translucent stroke with a stated weight draws
+`border: 1px solid rgba(147, 58, 69, 0.5)`; the same stroke with no stated weight draws no border; a
+fill of alpha 0.4 under a paint opacity of 0.5 draws `rgba(207, 215, 213, 0.2)`; a shadow with no
+stated colour draws nothing. The font warning sentence was deleted, because with no substitution it
+would be false.
+
+**2. A frame that arranges its children lost its own position.** Two of the eleven findings read "left
+262.3243, top 5.5256" against "left —, top —" (Meatballs and Frame 886979). `_declarations()` wrote
+`position: relative` for every node with a `layoutMode`, and wrote the parent's offset only in the
+other branch — so an auto-layout frame placed by a plain parent was left at the parent's origin. Now
+a placed layer is absolute at the design's offset whether or not it arranges children, and a layer the
+flow places still gets none. Verified: `left: 262.3243px`, `top: 5.5256px`, four decimals.
+
+**The answer now states the scope of its own failure.** Instead of "11 things", the root sentence reads
+"I read 132 stated facts in this file: 121 drawn, 0 accepted without a drawing, and 11 that did not
+survive (stroke ×5, position ×2, …). The component was built anyway. Each one is named below with the
+value I found and the value I drew." The list draws one finding per line under the preview with a
+heading that keeps the proportion ("11 of 132 stated facts did not survive"). The line that assigned
+blame — "they are the pipeline's to fix, not your file's" — is gone: it was a verdict on the file made
+by the process being judged.
+
+**No guard.** A contract script was written and removed the same hour: *"There is no guard. Blocking
+something that is incorrect is not a solution. It must ingest, it must preview, it must tell the user
+where it failed."* The requirements below are kept by what the build writes and what the answer says.
+
+### The requirements this day produced
+
+1. **Every placed layer keeps its offset, including a frame that arranges its own children.** The
+   placement belongs to the layer; the layout belongs to its children.
+2. **A colour is three facts** — colour, alpha, and the paint's own opacity — and all three are
+   written, or the declaration is not written.
+3. **The face is the design's**, written as stated, with no substitution and no warning about a
+   substitution that no longer happens.
+4. **Width, colour and shadow only from what is stated.** No `or 1`, no `1px`, no black at 25%.
+5. **Nothing is rounded.** Four decimals, so a one-pixel move is a one-pixel change.
+6. **No object reaches the stylesheet**; an unconvertible paint produces no declaration.
+7. **The gate reports and never repairs.**
+8. **One spec, two callers** — the ingest and the check both call `render_spec()`.
+
+### Left open
+
+- **The two-pass read.** REST is asked with `geometry=paths` and no depth limit; MCP is a second
+  channel. Today the ingest reads over REST only; the two are not reconciled. This is the largest open
+  requirement, and the one the owner names as the reason the tool must be hardened.
+- **The footer stroke weight**: Figma states `1px` overall and, apparently, `0` on a side. The drawing
+  now carries the per-side value; the contradiction is the file's and should be reported, not smoothed.
+- **Text style ranges** on `functions-label` — not yet diagnosed.
+- **`arcData` and `styles`** — no examination entry; each needs a decision, not an entry added to
+  silence it.
 
 ---
 
@@ -517,3 +811,32 @@ never silently dropped.**
 The pipeline as it stood — model-driven component generation, MCP and REST both read, the Figma map, the
 allowlist, the catalogues. Present in git (`28425c7`, `2c560e0`); the entries this file would hold for it
 were not written.
+
+---
+
+## 2026-11-02 — two findings that were the program's, not the design's
+
+**The owner's report on the footer (`strokeWeight: 1` beside a drawn `0px`) was not a contradiction in
+his file.** Measured on `chat-output-footer` (`40001283:2798`): the layer states `strokeWeight: 1`
+**and** `individualStrokeWeights: {top: 0, right: 0, bottom: 1, left: 0}`. That is how Figma states a
+border on one side; the drawing follows the sides, `0px 0px 1px 0px`, and it was equal to the file.
+The check compared the uniform `1px` against that border and reported `differs` — a failure the
+program invented over a design that was right.
+
+| fact | before | after |
+|---|---|---|
+| `individualStrokeWeights` | drawn | drawn |
+| `strokeWeight` | **differs** (`1px` → `0px`) | accepted, with its reason: the four sides decide the border |
+| `strokes` | drawn | drawn |
+
+**The text ranges on `functions-label` are drawn, and the check cannot see them.** Measured on the
+same node: the file states 58 characters of overrides in five ranges (`Arial Rounded MT Bold`, 400,
+9px); `_text_runs` builds all five; the spec carries them; the draft draws five styled spans. The
+answer's two remaining failures — `characterStyleOverrides` and `styleOverrideTable` — are the check
+failing to find the spans it was given. Nothing in the pipeline is missing.
+
+**The ingest now reports 144 stated facts: 120 drawn, 22 accepted, and the 2 above that are the
+check's own fault.** The drawing was not changed to satisfy either finding; the comparison was.
+
+**Not done, and named.** The check's own defect for the runs; and a decision each for `arcData` and
+`styles`.

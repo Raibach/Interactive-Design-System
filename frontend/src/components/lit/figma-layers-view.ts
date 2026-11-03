@@ -54,7 +54,18 @@ import carbonMeta from '@/components/lit/carbon-meta.json';
  * there is one catalogue, its path is written here, and a deleted folder cannot appear in a list
  * that does not enumerate folders.
  */
-const CATALOG_MODULES = import.meta.glob('../A2UI/catalogs/prompt-composer/catalog.json');
+/*
+ * THE BUNDLED COPIES, NAMED ONE FILE AT A TIME — never a folder glob. The next-chat brief's rule:
+ * "Do not enumerate the catalogues folder in a module list; name the one file, or a deleted folder
+ * will survive in the browser as 'Failed to fetch dynamically imported module'." Carbon was added
+ * here on 2026-11-02, when a card opened the tool in Carbon and the first read missed: the live
+ * file was not yet available, the bundled fallback knew only the official catalogue, and the view
+ * said "no catalogue named carbon" a moment before it loaded correctly.
+ */
+const CATALOG_MODULES = import.meta.glob([
+  '../A2UI/catalogs/prompt-composer/catalog.json',
+  '../A2UI/catalogs/carbon/catalog.json',
+]);
 
 // ── The Figma layer name behind a generated component ────────────────────────
 // A component the ingest built is NAMED after its node — `f-<node id>` — so its catalogue key
@@ -282,6 +293,11 @@ export class FigmaLayersView extends LitElement {
     reset: { type: Number },
     /** The catalogue name of the component the host has open in the preview. */
     selected: { type: String },
+    /**
+     * THE FILTER, AS A SETTING (owner, 2026-11-02). The search box writes the same field, so a
+     * person typing and an assistant naming a component drive one filter, not two lists.
+     */
+    query: { type: String },
     open: { type: Boolean },
     /**
      * Whether the CATALOGUE HEAD (its name, its component count and its catalogId) is drawn above
@@ -305,6 +321,7 @@ export class FigmaLayersView extends LitElement {
   declare busy: boolean;
   declare reset: number;
   declare selected: string;
+  declare query: string;
   declare open: boolean;
   declare showHead: boolean;
 
@@ -545,6 +562,11 @@ export class FigmaLayersView extends LitElement {
     // WHICH ROW IS OPEN IS THE ONE FACT THIS LIST SHOULD FOLLOW, and a mark in a list longer
     // than its pane is only useful if the list brings it where it can be seen.
     if (changed.has('selected')) this._revealSelected();
+    /* THE HOST'S FILTER LANDS IN THE ONE THE BOX ALREADY WRITES. */
+    if (changed.has('query')) {
+      this._query = String(this.query ?? '');
+      this.requestUpdate();
+    }
     // A WRITE REGENERATES THE MANIFEST — every approve and every removal re-runs the element
     // analyser — so the cached index is stale exactly when the host says something landed.
     if (changed.has('refresh')) void this._loadDrawn(true);
@@ -559,17 +581,30 @@ export class FigmaLayersView extends LitElement {
    * A failure here is REPORTED, never omitted: dropping the top level silently would say
    * "there is no catalogue above these", which is a different claim from "it could not be
    * read", and the whole point of this view is that those two are never the same picture.
+   *
+   * AND A READ THAT ANOTHER READ REPLACED IS NOT A FAILURE (owner, 2026-11-02, opening the tool in
+   * Carbon: *"we get that error message and then it seems to load… that error message popped up for
+   * some reason"*). Opening the tab runs this read, and the seat's own rebuild runs it again; the
+   * two race, the older one can fail after the newer one has already answered, and its failure used
+   * to land last — painting the red block over a catalogue that had loaded. Now only the newest
+   * read may write the block's state, and a superseded read returns without a word.
    */
+  private _catalogToken = 0;
+
   private async _loadCatalog(): Promise<void> {
+    const token = ++this._catalogToken;
     try {
       const doc = await this._readCatalog(this.pipeline);
+      if (token !== this._catalogToken) return; // a newer read owns this block
       if (!doc) throw new Error(`no catalogue named "${this.pipeline}"`);
       this._catalog = headFrom(this.pipeline, doc);
       this._catalogError = '';
     } catch (error) {
+      if (token !== this._catalogToken) return; // a superseded read never reports
       this._catalog = null;
       this._catalogError = error instanceof Error ? error.message : String(error);
     }
+    this.requestUpdate();
   }
 
   /**
@@ -585,19 +620,30 @@ export class FigmaLayersView extends LitElement {
    * sound there because a build's bundle is the catalogue as of that build, not a stale cache.
    */
   private async _readCatalog(id: string): Promise<any | null> {
-    try {
-      const res = await fetch(
-        `/src/components/A2UI/catalogs/${encodeURIComponent(id)}/catalog.json`,
-        { cache: 'no-store' }
-      );
-      const type = res.headers.get('content-type') ?? '';
-      if (res.ok && type.includes('json')) {
-        this._catalogFrom = 'the live file';
-        return await res.json();
+    /*
+     * ASK TWICE BEFORE SAYING IT COULD NOT BE READ. The owner, 2026-11-02, on seeing "The catalogue
+     * above these components could not be read — no catalogue named carbon" a moment before the
+     * list filled: *"we just need to load the design system, right? that error message popped up
+     * for some reason."* A first ask can miss while the file is being served (the dev server
+     * answers something that is not JSON for an instant); the second ask is the same URL and costs
+     * nothing. A catalogue that is genuinely absent still fails BOTH asks and is still reported —
+     * the message is not removed, it stops being raised for a first miss.
+     */
+    for (const attempt of [1, 2]) {
+      try {
+        const res = await fetch(
+          `/src/components/A2UI/catalogs/${encodeURIComponent(id)}/catalog.json`,
+          { cache: 'no-store' }
+        );
+        const type = res.headers.get('content-type') ?? '';
+        if (res.ok && type.includes('json')) {
+          this._catalogFrom = attempt === 1 ? 'the live file' : 'the live file (the second ask)';
+          return await res.json();
+        }
+      } catch {
+        // Not fatal, and not silent either: the bundled copy below is the answer, and the caller
+        // is told which one it got through `_catalogFrom`.
       }
-    } catch {
-      // Not fatal, and not silent either: the bundled copy below is the answer, and the caller
-      // is told which one it got through `_catalogFrom`.
     }
     const key = Object.keys(CATALOG_MODULES).find((p) => p.split('/').slice(-2)[0] === id);
     if (!key) return null;
@@ -723,6 +769,14 @@ export class FigmaLayersView extends LitElement {
         @input=${(event: Event) => {
           this._query = (event.target as HTMLInputElement).value;
           this.requestUpdate();
+          /* THE FILTER IS STATE, SO IT IS ANNOUNCED (2026-11-02). The host remembers it with the
+             conversation, so a session reopens showing the rows the person was looking at. A value
+             written BY THE HOST does not fire this: an input event is a person's act. */
+          this.dispatchEvent(new CustomEvent('layers-query', {
+            bubbles: true,
+            composed: true,
+            detail: { query: this._query },
+          }));
         }}
       />
       ${query
@@ -1165,7 +1219,6 @@ export class FigmaLayersView extends LitElement {
             >`
           : nothing}
         ${isReuse ? html`<span class="lreuse">one of ${use!.count}</span>` : nothing}
-        <span class="lid" title=${this._nodeTitle(String(id))}>${id}</span>
         ${layer?.text ? html`<span class="ltext">"${layer.text}"</span>` : nothing}
       </div>
       ${/* A LAYER THAT IS ONE OF OURS CARRIES ITS FUNCTIONS, one level down: this is where a
@@ -1631,35 +1684,15 @@ export class FigmaLayersView extends LitElement {
               : health.tone;
         const dotTitle = usage ? `${health.title} · ${usage.title}` : health.title;
         /*
-         * ── THE ROW'S CODE, WHICH IS NOT ITS NAME ───────────────────────────────────────────────
+         * ── THE LAYER NAME, AND NOTHING ELSE IN THE ROW'S SECOND LINE ──────────────────────────
          *
-         * The tile has three slots, and filling the second one with `comp.name` made the row say the
-         * same words twice: 56 of the 60 declared components have a catalogue KEY that is the same
-         * string as the name the row shows (measured 2026-09-30 — `TraceFeed`, `trace-feed`,
-         * `EvalFeed`…), so the row read *"TraceFeed … TraceFeed"*. The owner, looking at it:
-         * *"you've got trace feed and then you've got a chevron and then you've got trace feed again
-         * and then you have a description. Why that's not right."*
-         *
-         * WHAT BELONGS THERE IS THE ADDRESS, and the design says which one: its own code line reads
-         * "FigmaNode: 40001185-2176" — the node the component was drawn from — and that is the fact
-         * the old row carried too (the chip that sat right after the name). The Figma map holds one
-         * for 24 of the 60. Where it holds none, the ELEMENT TAG is the address that is left — for
-         * `TraceFeed` that is `trace-feed`, the tag the catalogue and the renderer both use — and it
-         * is shown only when it says something the name does not. Where neither differs (`trace-feed`
-         * beside `trace-feed`, one entry per name), the line is left to the description rather than
-         * repeating the name back at the reader.
-         *
-         * MEASURED AFTER THE FIRST ATTEMPT (2026-09-30): the catalogue's KEY was used as that
-         * fallback and it resolved nothing — the key IS the name for 56 of the 60 rows, and 41 rows
-         * ended up with no second line at all. The tag is the address; the key was just the name
-         * again.
+         * Owner, 2026-11-02: *"remove the figma node id from the list name. We only need the layer
+         * name in the component data trees."* The line read the node the component was drawn from,
+         * then the element's own tag, which is generated from that node id and reads the same way.
+         * Both are addresses. The row names the layer; the address lives in the record and in the
+         * preview, where a reader who wants it can find it.
          */
-        const elementTag = tagFor(comp.name);
-        const codeLine = origin
-          ? `FigmaNode: ${origin.text}`
-          : elementTag !== this._label(comp.name)
-            ? elementTag
-            : '';
+        const codeLine = '';
         /*
          * AND A DESCRIPTION THE CATALOGUE DOES NOT CARRY IS SAID, NOT LEFT BLANK. Four entries
          * declare none — the A2UI primitives (`Text`, `Image`, `Card`, `Button`) — and their rows
@@ -1763,14 +1796,6 @@ export class FigmaLayersView extends LitElement {
    * The two halves are different facts and the row shows them as one string, so the title is
    * where the split is stated: the component part is what this layer IS, and the occurrence is
    * only the location the instance sits in. A reader who takes the whole string for the
-   * component's name is how a second instance came to look like a second component.
-   */
-  private _nodeTitle(id: string): string {
-    const { identity, location } = describeNodeId(id);
-    if (!location) return `${id} — this node IS the component (no occurrence: it is not an instance)`;
-    return `${id} — component ${identity}, instance at ${location} (a location, not the component)`;
-  }
-
   /**
    * THE MEASURED LAYERS — the designs actually approved into this catalogue.
    *
@@ -2302,7 +2327,15 @@ export class FigmaLayersView extends LitElement {
       align-items: baseline;
       gap: 8px;
       padding: 1px 12px 1px calc(12px + var(--d) * 14px);
-      font-family: 'IBM Plex Mono', 'IBM Plex Mono', Menlo, monospace;
+      /*
+       * THE DEFAULT FACE, NOT THE CODE FACE (owner, 2026-11-02: *"Apply the default font to the
+       * component lists for the design systems."*). The row was set in IBM Plex Mono, so every
+       * component's name and description in the list read as code. Inherit takes the face this
+       * view's host declares — IBM Plex Sans — so the list follows the application's default and
+       * changes with it if that default ever changes. The small key pill beside a name keeps its
+       * own monospace: that one IS an identifier.
+       */
+      font-family: inherit;
       font-size: 11.5px;
       line-height: 1.6;
       white-space: nowrap;
@@ -2321,6 +2354,24 @@ export class FigmaLayersView extends LitElement {
       flex: 1 1 auto;
       min-width: 0;
       align-self: center;
+      /*
+       * THE ROW'S WORDS IN THE APPLICATION'S FACE (owner, 2026-11-02: *"Apply the default font to
+       * the component lists for the design systems."*). The tile is the design's own row and its
+       * type is the design's — Inter — which the component keeps as its default. This list is an
+       * application surface, not the design, so it names the face it wants and the tile uses it;
+       * the design's face is still what every other reader of that tile gets.
+       */
+      --catalog-row-font: 'IBM Plex Sans', system-ui, sans-serif;
+    }
+    /*
+     * AND THE CATALOGUE'S OWN NAME, IN THE SAME FACE. The head is a second design element
+     * (f-40001207-3559) with its own inline Inter on the name, so the row's rule could not reach
+     * it — reported on the screen after the rows had changed ("so the font did not apply to the
+     * name of the DS"). The property is inherited into that element's shadow tree, and the head's
+     * companion assigns it to its spans.
+     */
+    f-40001207-3559 {
+      --catalog-row-font: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* THE ROW'S OWN COLOR SHOWS THROUGH (owner, 2026-10-25: "There's a white fill. That's not
        allowing you to see the color that you've added."): the tile painted its own white card,
@@ -2433,7 +2484,6 @@ export class FigmaLayersView extends LitElement {
       padding: 0 4px;
       white-space: nowrap;
     }
-    .lid { color: #46535b; margin-left: auto; padding-left: 10px; }
     .ltext { color: #2793a3; }
 
     .reusen {

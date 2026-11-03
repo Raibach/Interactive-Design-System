@@ -1804,10 +1804,14 @@
         },
         {
           "type": "object",
-          "description": "THE INGEST RAIL\u2019S TOP HALF \u2014 the Figma URL field, the Notes field and Submit, as a catalogue element (src/components/lit/figma-ingest-form.ts). The ingestion application is the template and its left column is this form over the catalogue tree; the tree half is `figma-layers-view`, reused, and this is the half the catalogue had no element for. It is a TRANSLATION, not a second design: the same two fields with the same words, and on Submit the same `POST /api/figma/ingest` the modal runs \u2014 the parsing (`@/utils/figmaUrl`) and the endpoint already exist and neither is reimplemented in the element. IT DRAWS AND DISPATCHES ONLY: it fetches nothing, ingests nothing, and decides nothing about what a typed string means. `ingest-submit` carries `{url, notes}` verbatim and the SHELL runs the ingest.",
+          "description": "THE INGEST RAIL\u2019S TOP HALF \u2014 the Title field, the Figma URL field, the Notes field and Submit, as a catalogue element (src/components/lit/figma-ingest-form.ts). The ingestion application is the template and its left column is this form over the catalogue tree; the tree half is `figma-layers-view`, reused, and this is the half the catalogue had no element for. It is a TRANSLATION, not a second design: the same fields with the same words, and on Submit the same `POST /api/figma/ingest` the modal runs \u2014 the parsing (`@/utils/figmaUrl`) and the endpoint already exist and neither is reimplemented in the element. IT DRAWS AND DISPATCHES ONLY: it fetches nothing, ingests nothing, and decides nothing about what a typed string means. `ingest-submit` carries `{title, url, notes}` verbatim and the SHELL runs the ingest. THE TITLE IS THE DESIGN ROOM\u2019S ADDITION (owner, 2026-10-31): the work is named before the design is read, so the package already carries the name the person gave it when it is saved.",
           "properties": {
             "component": {
               "const": "figma-ingest-form"
+            },
+            "title": {
+              "type": "string",
+              "description": "Prefilled title \u2014 the name the person gives the work before the design is read. It travels back on `ingest-submit`."
             },
             "url": {
               "type": "string",
@@ -2433,10 +2437,18 @@
         },
         {
           "type": "object",
-          "description": "The design room's column footer: the Composer bar's plate, empty on purpose (no Save, no RUN, no undo).",
+          "description": "The design room's column footer, and its one action: Save. The Composer bar's plate — same height, fill, corner and inner shadow — carrying one control in the Composer's RUN treatment (control-bar.ts, `.btn-run`, node 40000761:267): the same gradient, black bold label at 18, 43 by 142 with the same drop shadow. Apply Carbon stood here and is gone (owner, 2026-10-31). IT DRAWS AND DISPATCHES ONLY: a press raises `design-left-save` and the seat that holds the session answers it. `busy` and `result` are the host's.",
           "properties": {
             "component": {
               "const": "design-left-footer"
+            },
+            "result": {
+              "type": "string",
+              "description": "The host's answer after a save \u2014 one line beside the control, in the host's words. Never the element's."
+            },
+            "busy": {
+              "type": "boolean",
+              "description": "True while a save is in flight. SET BY THE HOST: the control locks and reads 'Saving...', and only the caller that made the call knows when it finished."
             }
           },
           "required": [

@@ -81,8 +81,7 @@ interface Bound {
 const BOUND = new WeakMap<HTMLElement, Bound>();
 
 /** True when a click's path passes through the chevron the design drew. */
-function clickedTheChevron(event: Event): boolean {
-  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+function clickedTheChevron(event: Event): boolean {  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
   for (const node of path) {
     if (!(node instanceof Element)) continue;
     for (const name of Array.from(node.classList)) {
@@ -104,6 +103,30 @@ export const properties: PropertyDeclarations = {
   /** Whether the row is expanded. The companion holds it, flips it on the chevron, reports it. */
   open: { type: Boolean },
 };
+
+/**
+ * THE FACE THE LISTING CHOOSES, when it chooses one.
+ *
+ * Owner, 2026-11-02: *"Apply the default font to the component lists for the design systems."*
+ * The row's words are the design's, and the design states its own face INLINE on the run spans —
+ * so a rule in this element's stylesheet cannot reach them, and the list outside the shadow root
+ * cannot reach them at all. A custom property crosses that boundary, and this is the one place
+ * that reads it: when the listing sets `--catalog-row-font`, the row's spans take that face; when
+ * nothing sets it, the design's own inline face stands and this function does nothing.
+ *
+ * It lives in the HAND-WRITTEN companion, not in the generated element, so a re-ingest of the node
+ * cannot take it away.
+ */
+function applyRowFont(el: LitElement): void {
+  const face = getComputedStyle(el).getPropertyValue('--catalog-row-font').trim();
+  if (!face || !el.shadowRoot) return;
+  const spans = el.shadowRoot.querySelectorAll<HTMLElement>(
+    `.${NAME_BOX_CLASS} span, .${DESCRIPTION_BOX_CLASS} span`,
+  );
+  spans.forEach((span) => {
+    span.style.fontFamily = face;
+  });
+}
 
 /**
  * Attach the row's behaviour.
@@ -149,6 +172,7 @@ export function attach(el: LitElement): void {
     writeSpans(el, NAME_BOX_CLASS, [row.name, row.code]);
     writeText(el, DESCRIPTION_BOX_CLASS, row.description);
     ensureSlot(el, STATUS_WELL_CLASS, 'status');
+    applyRowFont(el);
   });
   BOUND.set(el, { onClick, unhook });
 }

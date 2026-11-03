@@ -264,7 +264,7 @@ const LogoutIcon = () => (
     /*
      * "INGEST DESIGN" AND "UPLOAD DOCUMENT" ARE GONE (owner, 2026-10-01: *"You should remove it
      * completely"*, then *"remove upload document"*). Ingest's home is the Design room's own rail
-     * — the Figma URL field, Notes and Submit, drawn by `figma-ingest-form` — and this item was a
+     * — the Title, the Figma URL, the Notes and Submit, drawn by `figma-ingest-form` — and this item was a
      * second entry point to the same modal. Nothing is left greyed here: a menu that keeps a
      * deactivated control is a menu that has to explain itself.
      */
@@ -605,6 +605,14 @@ const LogoutIcon = () => (
                   key={tab.id}
                   onClick={() => {
                     setMobileMenuOpen(false);
+                    /*
+                     * THE NAVIGATION DOES NOT MOVE YOU AWAY FROM ANYTHING (owner, 2026-11-02).
+                     * This row briefly travelled through `navigate-tab`; the owner's rule is the
+                     * opposite one — an icon in the navigation opens the navigation, and a room is
+                     * entered through its own tab. So the behaviour that stood before is restored
+                     * exactly, and the one change here is that Console and Composer no longer do
+                     * nothing while Design and the three rooms below did something different.
+                     */
                     if (tab.id === "design") {
                       window.dispatchEvent(new CustomEvent("open-ingest"));
                     } else if (tab.id === "product" || tab.id === "development" || tab.id === "governance") {

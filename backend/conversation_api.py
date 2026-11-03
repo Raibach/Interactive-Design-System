@@ -546,6 +546,49 @@ class ConversationAPI:
     # MESSAGES
     # ============================================
 
+    def holds_person_turn(self, conversation_ids: list[str], user_id: str) -> bool:
+        """Does any of these conversations hold a turn the PERSON wrote?
+
+        THE GREETING IS AN ASSISTANT TURN. A seat greets into an empty thread when it opens,
+        so `message_count > 0` is also true of a thread nobody has spoken in. The Tools tab's
+        resume (`routes/ai.py`) must not read the app's own greeting as a live visit, or the
+        first press of the tab would freeze it on an empty thread forever. The role is the
+        distinguishing fact, and this read asks exactly that question.
+        """
+        ids = [str(c) for c in (conversation_ids or []) if c]
+        if not ids or not user_id:
+            return False
+        conn = self.get_db()
+        cursor = conn.cursor()
+        self.set_user_context(cursor, user_id)
+        try:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                      FROM conversation_messages m
+                      JOIN conversations c ON c.id = m.conversation_id
+                     WHERE m.conversation_id = ANY(%s::uuid[])
+                       AND m.role = 'user'
+                       AND (
+                            c.user_id = %s
+                         OR c.session_id IN (
+                                SELECT session_id FROM session_permissions
+                                WHERE user_id = %s
+                            )
+                       )
+                )
+                """,
+                (ids, user_id, user_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
+            return bool(row.get("exists") if isinstance(row, dict) else row[0])
+        finally:
+            cursor.close()
+            conn.close()
+
     def get_messages(
         self,
         conversation_id: str,

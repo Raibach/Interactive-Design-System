@@ -1,4 +1,5 @@
 /**
+ * HEADER — its Default is the readout card's 55px, set below.
  * output-header — THE READOUT BLOCK, ABOVE THE CONVERSATIONS BAR.
  *
  * Figma: `40001119-6308`, re-imported 2026-09-20 from the design.
@@ -79,10 +80,16 @@ export class OutputHeader extends LitElement {
     .readout-area {
       display: flex;
       flex-direction: row;
-      align-items: center;
+      /* THE TEXT SITS AT THE TOP (owner, 2026-10-31). One line at rest, taller once dragged —
+         centring put that line in the middle of an open box. */
+      align-items: flex-start;
       gap: 10px;
       align-self: stretch;
       height: 55px;
+      /* THE FLOOR IS THE DRAWING'S OWN HEIGHT (owner, 2026-10-31: a drag on this bar "just drags
+         all the way" instead of stopping, and the text is cut). 55 is the box's drawn height, so
+         the drag cannot close it past what the drawing gives it. */
+      min-height: 55px;
       padding: 7px 10px;
       background-color: rgba(117, 142, 135, 0.35);
       border: 1px solid rgba(117, 142, 135, 0.5);
@@ -95,7 +102,7 @@ export class OutputHeader extends LitElement {
     .textarea {
       display: flex;
       flex-direction: row;
-      align-items: center;
+      align-items: flex-start;
       gap: 10px;
       flex: 1 1 auto;
       min-width: 0;
@@ -118,9 +125,18 @@ export class OutputHeader extends LitElement {
       height: auto;
       min-height: 55px;
     }
+    /* THE HOST'S STRIP FILLS THE BAR AND STARTS AT ITS LEFT EDGE (owner, 2026-10-27: *"it's got a
+       margin on the left-hand side. It's not laying out properly in that header"*). The slotted
+       strip was shrink-wrapping and sitting in the middle of the bar, so a landing readout drew a
+       narrow column in the centre with empty space beside it. It now takes the whole area between
+       the bar's own padding and its trailing mark, and its text starts at the left. */
     .readout-area ::slotted(*) {
       flex: 1 1 auto;
       min-width: 0;
+      text-align: left;
+    }
+    .readout-area {
+      justify-content: flex-start;
     }
 
     /* 40001123:6750 — the line: Arial Rounded MT Bold 400 at 12, 20px leading, #3D515B, in its

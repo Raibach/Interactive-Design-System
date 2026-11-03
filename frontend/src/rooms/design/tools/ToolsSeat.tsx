@@ -21,6 +21,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/shared/apiHelper";
 import { apiFetch } from "@/shared/apiFetch";
+import { getStoredUserId } from "@/services/authService";
+import { listForPackage, remove } from "@/shared/conversations";
 import { readA2UIEnvelope, envelopeRefusalError } from "@/shared/a2ui-envelope";
 import { markArrival } from "@/shared/arrival";
 import { componentProps, resolveTag } from "@/components/lit/a2ui-renderer";
@@ -59,6 +61,18 @@ export type ToolsSeatProps = {
    */
   openTag?: string | null;
   /**
+   * A kept session to reopen — a session card clicked on the design console (owner, 2026-11-01).
+   * The room hands the id over; the assembly then builds this tab IN that session, so its
+   * conversation, its title, its address and its notes are the ones on screen.
+   */
+  openSession?: string | null;
+  /**
+   * THE DESIGN SYSTEM A CARD ASKED FOR (owner, 2026-11-02). A system card's key is `system:<id>`
+   * and the id is the catalogue's own name; the tab is then built in THAT catalogue through the
+   * assembly's own door (`render-design:<system>`). Null means the tab's default catalogue.
+   */
+  openSystem?: string | null;
+  /**
    * HEADLESS — THE ENGINE PROVIDES CONTENT, IT DOES NOT DRAW A SURFACE (owner, 2026-10-18). The
    * room owns ONE interface (rail + chat + columns); this engine's job is its own assembly, its
    * own ingest/preview actions, and reporting the content to inject into that interface.
@@ -74,7 +88,37 @@ export type ToolsSeatProps = {
   onContent?: (content: Content) => void;
 };
 
-export default function ToolsSeat({ onAssemblingChange, openTag, headless, active, onContent }: ToolsSeatProps) {
+/**
+ * THE SAME THREE VALUES? — compared as a person means them, so surrounding space is not an edit.
+ *
+ * Owner, 2026-11-02, on the question asked when leaving Tools: *"there is no need to [ask] if
+ * nothing has changed after opening."* A reopened session already carries its title, its address
+ * and its notes, and asking whether to keep them when not one of them was touched is a question
+ * about a decision already made.
+ */
+function sameFields(
+  a: { title: string; url: string; notes: string },
+  b: { title: string; url: string; notes: string },
+): boolean {
+  return a.title.trim() === b.title.trim()
+    && a.url.trim() === b.url.trim()
+    && a.notes.trim() === b.notes.trim();
+}
+
+export default function ToolsSeat({ onAssemblingChange, openTag, openSession, openSystem, headless, active, onContent }: ToolsSeatProps) {
+  /**
+   * THE CATALOGUE A VISIT DEFAULTS TO — the official one, and the design console's own card for it
+   * (`system:prompt-composer`) names this same id, so pressing that card asks for what already
+   * stands instead of asking for a different build.
+   */
+  const DEFAULT_CATALOGUE_SYSTEM = "prompt-composer";
+  /**
+   * THE SYSTEM THIS VISIT IS IN, readable inside effects that must not re-run when it changes.
+   * The catalogue write below runs with the tree's other wiring, so it reads this rather than
+   * taking `openSystem` as a dependency and rebuilding the whole section on a card press.
+   */
+  const loadedSystemRef = useRef(DEFAULT_CATALOGUE_SYSTEM);
+  loadedSystemRef.current = String(openSystem ?? "").trim() || DEFAULT_CATALOGUE_SYSTEM;
   /* Read by every action listener: a stale closure would answer for the wrong tab. */
   const activeRef = useRef(Boolean(active));
   activeRef.current = Boolean(active);
@@ -139,10 +183,28 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
    * `currentPromptSession` is not in this body, so no path from this seat can write the
    * Composer's state — blindness by construction rather than by a guard somebody has to remember.
    */
-  const assembleDesignSurface = useCallback(async () => {
+  const assembleDesignSurface = useCallback(async (reopenSessionId?: string | null, system?: string | null) => {
+    /*
+     * WHICH CATALOGUE THE TAB IS BUILT IN. The assembly's own door already carries it: an intent of
+     * `render-design:<system>` resolves THAT design system's container and its catalogue, and plain
+     * `render-design` is the default. A card that names a system asks through this door; a visit
+     * that names none asks exactly as it always has.
+     */
+    const wanted = String(system ?? "").trim();
+    // A CARD NAMES ITS SYSTEM, INCLUDING THE DEFAULT ONE. The default card carries the same
+    // catalogue the plain tab reads, and it also owns the chat: *"These chats are not global. They
+    // are specific to the card."* A visit that names no system at all still asks plainly.
+    const intent = wanted ? `render-design:${wanted}` : "render-design";
     const response = await apiFetch(`${API_BASE}/ai/assemble-surface`, {
       method: "POST",
-      body: JSON.stringify({ intent: "render-design" }),
+      // A KEPT SESSION'S ID TRAVELS WITH THE ASK (owner, 2026-11-01). Without it the server builds
+      // the tab in its own working row; with it, the tab is built in THAT session — its
+      // conversation, its title, its address and its notes. The server decides whether the id is
+      // this person's own kept session; an id it will not adopt opens the working row instead.
+      body: JSON.stringify({
+        intent,
+        ...(reopenSessionId ? { session_id: reopenSessionId } : {}),
+      }),
     });
     const rawData = await response.json();
     const read = readA2UIEnvelope(rawData);
@@ -158,9 +220,29 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
       components: (reading.components as any[]).map((c) =>
         c?.component === "chat-panel" ? { ...c, component: "design-chat" } : c,
       ),
-      dataModel: reading.dataModel as Record<string, any>,
+      dataModel: (() => {
+        const model = reading.dataModel as Record<string, any>;
+        if (restoredQueryRef.current === null) return model;
+        return {
+          ...model,
+          session: { ...(model?.session ?? {}), design_query: restoredQueryRef.current },
+        };
+      })(),
     });
     setCurrentDesignSession((reading.dataModel as Record<string, any>)?.session ?? null);
+    /*
+     * THE FORM'S THREE VALUES COME FROM THE SAME ANSWER. On a reopened session they are the ones
+     * it was kept with; on a fresh visit they are empty. Seeded HERE, once per assembly, and not
+     * from a watcher: a watcher would rewrite the fields while the person was typing in them.
+     */
+    const assembled = (reading.dataModel as Record<string, any>)?.session?.form ?? {};
+    formFieldsRef.current = {
+      title: String(assembled.title ?? ""),
+      url: String(assembled.url ?? ""),
+      notes: String(assembled.notes ?? ""),
+    };
+    // AND WHERE THE VISIT STARTED. A reopened session's own values are not work to save.
+    formBaselineRef.current = { ...formFieldsRef.current };
   }, []);
 
   /*
@@ -177,7 +259,11 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
     let cancelled = false;
     void (async () => {
       try {
-        await assembleDesignSurface();
+        // A CARD'S KEPT SESSION IS THE ASK, WHEN THERE IS ONE (2026-11-01). The id changes when a
+        // session card is pressed, so this effect re-runs and the tab is rebuilt in that session.
+        // A DESIGN SYSTEM'S CARD IS THE OTHER ASK (2026-11-02): the system rebuilds the tab in that
+        // catalogue, and either ask alone leaves the other at its default.
+        await assembleDesignSurface(openSession ?? null, openSystem ?? null);
       } catch (err) {
         // The refusal is reported, never swallowed: the room drew nothing because the door said
         // no, and the reason is the server's own words.
@@ -196,7 +282,7 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
     return () => {
       cancelled = true;
     };
-  }, [assembleDesignSurface, openTag]);
+  }, [assembleDesignSurface, openTag, openSession, openSystem]);
 
   /*
    * ── ASSEMBLY, THEN RENDER, THEN THE INJECTION — IN THAT ORDER ────────────────────────────
@@ -271,8 +357,13 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
       if (cancelled) return;
       setDesignLeftSeat(panelEl);
       /* THE SELECTOR ARRIVES ON THE ICON THAT WAS PRESSED: this engine is standing for Tools, so
-         its rail shows Tools. The conversation is the engine's own, carried by the surface. */
-      const seat = (roomEl?.querySelector("design-chat") as
+         its rail shows Tools. The conversation is the engine's own, carried by the surface.
+
+         FOUND BY ITS MARK, NOT ITS TAG (2026-10-31). The Tools tab draws `tools-chat` now, its own
+         element, so a lookup by the room's tag would find nothing. The shell writes
+         `data-design-chat` on every container it opens, and that mark finds the seat whatever its
+         tag is. */
+      const seat = (roomEl?.querySelector("[data-design-chat]") as
         | (HTMLElement & { allowedTabs?: string; activeTab?: string })
         | null) ?? null;
       if (seat) {
@@ -490,18 +581,13 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
         /* THE FONT WARNING, SAID TO THE DESIGNER: the design names a face this system does not
            ship, and the application will draw its one face instead. Not a defect of the design and
            not a hidden match — a warning, at the top, with the layers. */
+        /* NO FONT LINE, BECAUSE NOTHING IS REPLACED (owner, 2026-11-01). The draft now carries the
+           family the design states; the line that stood here claimed the application would draw its
+           own face instead, which is no longer true. The faces are in the fact list, per layer. */
         const fonts = Array.isArray((result as any)?.fidelity?.fonts)
           ? ((result as any).fidelity.fonts as Array<Record<string, any>>)
           : [];
-        const fontLine = fonts.length
-          ? `FONT WARNING — ${fonts.length} layer(s) use ${[
-              ...new Set(fonts.map((f) => String(f.stated || "")))
-            ].join(", ")}, which this system does not ship. The application will draw ${String(
-              fonts[0]?.drawn || "IBM Plex Sans"
-            )} in place of it: ${fonts
-              .map((f) => String(f.layer || ""))
-              .join(", ")}.`
-          : "";
+        const fontLine = "";
         /* WHAT THE FILE ITSELF SAYS, in the designer's own words. A note is quoted verbatim; a
            property mark is named with the properties it exposes. Nothing is summarised. */
         const annotations = Array.isArray((result as any)?.fidelity?.annotations)
@@ -540,6 +626,22 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
                 .join(" · ")}`
             : `No value changed since the last ingest (${changes.jobId}) — the same design measured twice.`
           : "";
+        /* THE SECOND READING. The same node was measured over REST and over Figma's desktop MCP,
+           and the backend's own sentence says how many facts the two channels agree on and what
+           each disagreement is. It leads the answer because it says how much of the answer has a
+           second opinion behind it — an unread second channel is not agreement. */
+        const twoPass = (result as any)?.twoPass as
+          | { summary?: string; mcpError?: string | null; counts?: Record<string, number> }
+          | undefined;
+        const twoPassLine = String(twoPass?.summary || "");
+        /* HOW THE DESIGN WAS READ — one line, and only when there is something to say. It stands
+           above the verdict because it is a statement about the READING, not about the design: an
+           answer that needed a second ask says so, and an answer that answered first time says
+           nothing rather than a line nobody needs. */
+        const readRecord = (result as any)?.read as
+          | { summary?: string; attempts?: Array<Record<string, any>>; answeredBy?: number }
+          | undefined;
+        const readLine = String(readRecord?.summary || "");
         setDesignPreview({
           source: "ingest",
           tag: builtTag,
@@ -595,9 +697,38 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
           // reading and what's being used to build the component in the preview."*). The lists below
           // carry the detail; this line carries every sentence the backend produced, in order, and
           // no array is sliced.
-          note: [
+          noteLines: [
+            readLine,
             verdict,
-            unreadLines.join(" "),
+            twoPassLine,
+            coverageLine,
+            designLine,
+            fontLine,
+            replacedPreview ? "The preview you had open was replaced by this one — nothing needed discarding first." : "",
+            changeLine,
+            compileLine,
+            exactLine,
+            hasAddress ? "" : `Nothing to render — no draft address came back (job ${jobId}).`,
+          ].filter(Boolean),
+          /*
+           * THE NAMED GAPS, ONE SENTENCE EACH, AND NO LONGER JOINED INTO THE NOTE (owner,
+           * 2026-11-01: the refusal read as "one huge block"). The list is drawn under the note,
+           * each line its own, so a designer can check them against Figma one at a time. Nothing is
+           * summarised and nothing is dropped: these are the backend's own sentences.
+           */
+          unread: unreadLines,
+          /*
+           * HOW MANY FACTS THE RUN READ, so the heading can state the scope: "11 of 132 facts did
+           * not survive" is a different claim from "11 things" (owner, 2026-11-01: *"show the full
+           * scope of your failure. The error is the point."*).
+           */
+          factsRead: Number((result as any)?.fidelity?.factsRead ?? 0) || undefined,
+          // ONE STATEMENT FOR A HOST THAT READS THE OLD SHAPE: the same lines, joined. The element
+          // prefers `noteLines`; this keeps anyone still reading `note` from seeing less.
+          note: [
+            readLine,
+            verdict,
+            twoPassLine,
             coverageLine,
             designLine,
             fontLine,
@@ -622,6 +753,18 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
             {
               label: "Exact, of the facts compared",
               value: exactness ? `${exactness.exact ?? 0} / ${exactness.compared ?? 0}` : "not measured",
+            },
+            // WHETHER THE ANSWER HAS A SECOND OPINION BEHIND IT. A row that read "not measured"
+            // and a row that read "0" would look the same without this one.
+            {
+              label: "Read twice",
+              value: twoPass?.mcpError
+                ? "no — one channel only"
+                : twoPass
+                  ? `yes — ${twoPass?.counts?.agree ?? 0} of ${
+                      (twoPass?.counts?.agree ?? 0) + (twoPass?.counts?.differ ?? 0)
+                    } facts agree`
+                  : "not measured",
             },
             { label: "Changed", value: changes ? String(changedRows.length) : "first ingest" },
             { label: "Figma node", value: String(details.target_node_id ?? nodeId) },
@@ -659,6 +802,437 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
   }, [designIngestBusy, setDesignIngest, currentDesignSession]);
 
   /*
+   * ══ THE FIELDS AS THEY ARE TYPED, AND THE PREVIEW AS IT LANDED ═══════════════════════════════
+   *
+   * SAVE AT THE FOOT OF THE COLUMN reads three things: the title, the Figma address and the notes
+   * AS TYPED, not as submitted, because a person names the work and presses SAVE without running
+   * an ingest first. The form announces them on every keystroke (`ingest-field-change`) and the
+   * seat keeps the latest. The preview is kept the same way, for the one line that stands for the
+   * middle column's drawing in the session's saved output.
+   *
+   * THIS SEAT'S OWN VALUES, still: neither ref is read by the Composer or the console.
+   */
+  const formFieldsRef = useRef<{ title: string; url: string; notes: string }>({
+    title: "",
+    url: "",
+    notes: "",
+  });
+  /**
+   * WHAT THIS VISIT OPENED WITH. The question asked on leaving Tools is worth asking only when
+   * something changed since the visit began, and this is the only value that can say so: a
+   * reopened session starts with its own title, address and notes already filled in, and without
+   * this they read as unsaved work the person never typed. It is set where the form is seeded and
+   * again after a successful save, because what was just kept is the new starting point.
+   */
+  const formBaselineRef = useRef<{ title: string; url: string; notes: string }>({
+    title: "",
+    url: "",
+    notes: "",
+  });
+  const previewRef = useRef<Record<string, any> | null>(null);
+  /**
+   * THE PREVIEW'S OWN TWO ACTIONS, reachable from the save question (2026-11-01). They are defined
+   * inside the effect that wires the pane's buttons; the question is asked elsewhere, so the pair
+   * is kept here and called with the same event shape those handlers read — nothing is duplicated
+   * and no second approve exists.
+   */
+  const previewActionsRef = useRef<{
+    approve?: (preview: Record<string, any>) => Promise<void>;
+    discard?: (preview: Record<string, any>) => Promise<void>;
+  }>({});
+  const designTreeRef = useRef(designTree);
+  designTreeRef.current = designTree;
+  /*
+   * THE CHAT'S LIVE CONVERSATION, NOT THE ONE THE ASSEMBLY STARTED WITH. The seat writes every
+   * move to the package's own column; this ref carries the same id to SAVE, because the data model
+   * below is a snapshot taken at assembly. Writing it into the tree instead would change the
+   * content the room re-injects, and the shell would rebind the seat to the package's older id.
+   */
+  const liveConversationRef = useRef<string | null>(null);
+  /**
+   * THE FILTER THE CONVERSATION REMEMBERS, HELD ACROSS A TREE REPLACEMENT. The seat can read the
+   * stored value before this room's assembly answers, and the assembly's own data model does not
+   * carry it — so a write onto the old tree is erased by the new one. This ref is re-applied to
+   * every assembled tree, which is what makes the restore survive the order they arrive in.
+   */
+  const restoredQueryRef = useRef<string | null>(null);
+  /* A DISCARDED VISIT BUILDS FRESH ON THE NEXT PRESS, and no row is made in between. */
+  const needsAssemblyRef = useRef(false);
+  const saveBusyRef = useRef(false);
+
+  useEffect(() => {
+    const onFieldChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ title?: string; url?: string; notes?: string }>).detail ?? {};
+      formFieldsRef.current = {
+        title: String(detail.title ?? ""),
+        url: String(detail.url ?? ""),
+        notes: String(detail.notes ?? ""),
+      };
+    };
+    window.addEventListener("ingest-field-change", onFieldChange);
+    return () => window.removeEventListener("ingest-field-change", onFieldChange);
+  }, []);
+
+  /*
+   * THE TABLE'S FILTER IS PART OF THE CONVERSATION'S STATE (owner, 2026-11-02: reopen "in the exact
+   * state they were left in"). The tree writes the filter, the seat records it with the scroll, and
+   * the stored value is handed back here when the conversation opens.
+   */
+  useEffect(() => {
+    const remember = (query: string) => {
+      window.dispatchEvent(new CustomEvent("table-query-changed", { detail: { query } }));
+    };
+    const onQuery = (event: Event) => {
+      const query = String((event as CustomEvent<{ query?: string }>).detail?.query ?? "");
+      restoredQueryRef.current = query;
+      setDesignTree((prev) => {
+        const session = (prev.dataModel as Record<string, any>)?.session ?? {};
+        if (String(session.design_query ?? "") === query) return prev;
+        return { ...prev, dataModel: { ...prev.dataModel, session: { ...session, design_query: query } } };
+      });
+      remember(query);
+    };
+    const onRestore = (event: Event) => {
+      const query = String((event as CustomEvent<{ query?: string }>).detail?.query ?? "");
+      restoredQueryRef.current = query;
+      setDesignTree((prev) => {
+        const session = (prev.dataModel as Record<string, any>)?.session ?? {};
+        if (String(session.design_query ?? "") === query) return prev;
+        return { ...prev, dataModel: { ...prev.dataModel, session: { ...session, design_query: query } } };
+      });
+    };
+    window.addEventListener("layers-query", onQuery);
+    window.addEventListener("conversation-table-query", onRestore);
+    /* ASK FOR THE STORED FILTER WHEN THIS TAB STANDS (2026-11-02). The seat may have read it before
+       this listener existed, and an event nobody heard is a value lost; the room asks each time it
+       can hear — on mount and on every press of the tab. */
+    if (activeRef.current) window.dispatchEvent(new CustomEvent("table-query-request"));
+    return () => {
+      window.removeEventListener("layers-query", onQuery);
+      window.removeEventListener("conversation-table-query", onRestore);
+    };
+  }, [active]);
+
+  /*
+   * THE CHAT'S CONVERSATION IS THE SESSION PACKAGE'S CONVERSATION — THE SAME TIE THE GLOBAL
+   * CONSOLE KEEPS (owner, 2026-11-02: *"it has to be tied to the package … based on the user …
+   * it's already built in the global console"*).
+   *
+   * The Tools seat writes every move to the package's own column. The data model this pane saves
+   * from is a snapshot taken at assembly, so without this line a SAVE taken after the person moved
+   * to another chat — pressed +, picked a row, or deleted one — wrote the conversation the tab
+   * opened with, or a deleted one. The card then reopened on the wrong thread.
+   */
+  useEffect(() => {
+    const onConversationChange = (event: Event) => {
+      if (!activeRef.current) return;
+      const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
+      /* AN EMPTY ID IS A FACT TOO: removing the last chat leaves the seat on none, and a save
+         taken then must write none rather than the row that was just deleted. */
+      if (!detail || typeof detail.conversationId !== "string") return;
+      liveConversationRef.current = detail.conversationId;
+    };
+    window.addEventListener("conversation-change", onConversationChange);
+    return () => window.removeEventListener("conversation-change", onConversationChange);
+  }, []);
+
+  /** The footer's two values — the same kind of write the ingest form's own state is given. */
+  const setDesignSave = useCallback((patch: { saving?: boolean; result?: string }) => {
+    setDesignTree((prev) => {
+      const session = (prev.dataModel as Record<string, any>)?.session ?? {};
+      const next: Record<string, any> = { ...session };
+      if ("saving" in patch) next.saving = Boolean(patch.saving);
+      if ("result" in patch) next.save_result = String(patch.result ?? "");
+      return { ...prev, dataModel: { ...prev.dataModel, session: next } };
+    });
+  }, []);
+
+  /*
+   * ══ SAVE KEEPS THE VISIT AS A SESSION ════════════════════════════════════════════════════════
+   *
+   * The act at the foot of this column saves THE TOOLS TAB'S OWN SESSION ROW — the id the assembly
+   * hands over as `design_session_id`, not the room's container. It goes through the Composer's own
+   * door, `POST /api/ai/save-surface`, with the three columns the Composer writes: the left column
+   * (the title, the address and the notes, as sections), the middle column (what the drawing is,
+   * said in words) and the right column (this session's conversation).
+   *
+   * KEEPING IT IS WHAT MAKES THE NEXT ENTRY A NEW SESSION. The server relabels the row
+   * `design_session`, which frees the tab's one-per-tab slot, so the next assembly creates a fresh
+   * untitled row and its own conversation. Nothing is cleared here: the person stays in the session
+   * they just kept until they leave the tab.
+   */
+  const saveDesignSession = useCallback(async (options: { force?: boolean; output?: string } = {}) => {
+    if (saveBusyRef.current) return;
+    const sessionValue = ((designTreeRef.current.dataModel as Record<string, any>)?.session ??
+      {}) as Record<string, any>;
+    const sessionId = String(sessionValue.design_session_id ?? "");
+    const conversationId = liveConversationRef.current
+      ?? String(sessionValue.right_column?.conversation_id ?? "");
+    const fields = formFieldsRef.current;
+    const title = fields.title.trim();
+    const url = fields.url.trim();
+    const notes = fields.notes.trim();
+    const standing = previewRef.current;
+    // A PREVIEW IS NOT WORK (owner, 2026-11-01). The temporary folder dies with it, so a save taken
+    // while one stands would be a card describing a drawing nobody can open. The seat refuses, and
+    // asks: approve it, discard it, or go back. Only a real ingest result is a preview here — a row
+    // opened from the catalogue is already approved and needs no question.
+    const isEphemeralPreview = !!standing && standing.source === "ingest" && !!standing.jobId;
+    if (isEphemeralPreview && !options.force) {
+      /*
+       * THE WARNING IS A WARNING, NOT A REFUSAL (owner, 2026-11-01: *"I think you're actually fine.
+       * Just maybe we should just add an additional save button just so they know that they're not
+       * going to see it. They'll have to run the ingestion process again because the preview will
+       * disappear."*)
+       *
+       * So the save is still there — as its own button, in the question, saying what it does to the
+       * preview. Approve is offered beside it for the person who wants the component kept, and
+       * Cancel leaves everything exactly as it is.
+       */
+      window.dispatchEvent(
+        new CustomEvent("design-save-decision", {
+          detail: {
+            message:
+              "The drawing in the middle is a preview — nothing has been added to the catalogue. Saving keeps this session but the preview goes with it, and you will have to run the ingest again. Approve keeps the component instead.",
+            actions: [
+              { id: "save", label: "Save anyway", variant: "primary" },
+              { id: "approve", label: "Approve", variant: "plain" },
+              { id: "cancel", label: "Cancel", variant: "plain" },
+            ],
+          },
+        }),
+      );
+      return;
+    }
+
+    if (!title && !url && !notes) {
+      setDesignSave({ result: "There is nothing to save yet — name the work, or paste its Figma address." });
+      return;
+    }
+    if (!sessionId) {
+      setDesignSave({ result: "This tab has no session yet — the room has not answered with one." });
+      return;
+    }
+
+    saveBusyRef.current = true;
+    setDesignSave({ saving: true, result: "" });
+    try {
+      const preview = previewRef.current;
+      // THE MIDDLE COLUMN, SAID IN WORDS. The session stores the text of what the column shows —
+      // the tag, the component's name and how many values were measured — because a kept session
+      // is read by people who did not watch the ingest happen.
+      const measured = Array.isArray(preview?.values) ? preview.values.length : 0;
+      const output =
+        options.output ??
+        (preview
+          ? [preview.tag, preview.name, measured ? `${measured} measured values` : ""]
+              .filter(Boolean)
+              .join(" · ")
+          : "");
+      const sections = [
+        { section: "Title", content: title },
+        { section: "Figma URL", content: url },
+        { section: "Notes", content: notes },
+      ].filter((s) => s.content);
+
+      const response = await apiFetch(`${API_BASE}/ai/save-surface`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          title: title || "Untitled",
+          left_column: { sections },
+          middle_column: { compiled_output: output },
+          right_column: { conversation_id: conversationId || null },
+        }),
+      });
+      const answer = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(answer?.detail || `the server answered ${response.status}`);
+      keptThisVisitRef.current = true;
+      // WHAT WAS JUST KEPT IS THE NEW STARTING POINT, so leaving again without a change is silent.
+      formBaselineRef.current = { ...formFieldsRef.current };
+      /* A KEPT SESSION IS A CARD NOW. The visit that made it is finished, so the next press of the
+         tab is a new session — the card is how that work comes back, not the tab. */
+      needsAssemblyRef.current = true;
+      setDesignSave({ saving: false, result: "Kept. Its card stands on the Design console." });
+    } catch (e) {
+      setDesignSave({ saving: false, result: e instanceof Error ? e.message : String(e) });
+    } finally {
+      saveBusyRef.current = false;
+    }
+  }, [setDesignSave]);
+
+  /*
+   * THROWING THE VISIT AWAY IS AN ACT, AND IT REMOVES THE SESSION (owner, 2026-11-02: pressing Tools
+   * creates a session; *"if nothing changes and nothing is added nothing is saved"*, and on leaving
+   * the person may *"go discard"*).
+   *
+   * Discard used to do nothing at all: the tab's working row stayed in the database, so the next
+   * press of Tools came back to the same row and the session was never new. This removes what the
+   * visit made — its conversations and its session row, for this person — and then asks the
+   * assembly for a fresh tab, so the next entry is the new session the model says it is.
+   */
+  const discardDesignSession = useCallback(async () => {    const sessionValue = (designTreeRef.current.dataModel as Record<string, any>)?.session ?? {};
+    const sessionId = String(sessionValue.design_session_id ?? "");
+    if (!sessionId) return;
+    const userId = getStoredUserId();
+    try {
+      const rows = await listForPackage({ sessionId, userId });
+      for (const row of rows) {
+        /* ONE FAILURE DOES NOT STOP THE THROW-AWAY: the session row's own delete below is what
+           makes the visit gone, and a conversation that refuses is named in its own write. */
+        await remove({ sessionId, userId }, row.id).catch(() => undefined);
+      }
+      const removed = await apiFetch(
+        `${API_BASE}/prompt-sessions/${encodeURIComponent(sessionId)}?permanent=true`,
+        { method: "DELETE" },
+      );
+      if (!removed.ok) throw new Error(`the server answered ${removed.status}`);
+      liveConversationRef.current = null;
+      keptThisVisitRef.current = false;
+      previewRef.current = null;
+      formFieldsRef.current = { title: "", url: "", notes: "" };
+      formBaselineRef.current = { title: "", url: "", notes: "" };
+      /* NOTHING IS MADE HERE. A fresh assembly would create the next session's row at the moment
+         of leaving, which is the opposite of the rule that nothing is recorded until the person
+         enters and there is something to record. The next press of Tools builds it. */
+      needsAssemblyRef.current = true;
+    } catch (e) {
+      setDesignSave({
+        saving: false,
+        result: `That session could not be thrown away: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }, [assembleDesignSurface, setDesignSave]);
+
+  /*
+   * SHE NAMED A COMPONENT IN THE TABLE (owner, 2026-11-02). The chat sends the key it read from the
+   * table's own context; this answers with the table's three facts at once — the filter, the mark,
+   * and the open component in the third column. A key the table does not hold moves nothing and
+   * says so, which is the rule the rest of this room runs on.
+   */
+  useEffect(() => {
+    const onFind = (event: Event) => {
+      const tag = String((event as CustomEvent<{ tag?: string }>).detail?.tag ?? "").trim();
+      if (!tag) return;
+      const rows = (((designTreeRef.current.dataModel as Record<string, any>)?.session?.elements ?? []) as any[]);
+      const row = rows.find((r) => String(r?.key ?? r?.id ?? "") === tag)
+        ?? rows.find((r) => String(r?.id ?? "") === tag);
+      if (!row) {
+        setDesignSave({ saving: false, result: `The table does not hold “${tag}”, so nothing moved.` });
+        return;
+      }
+      setDesignSave({ saving: false, result: "" });
+      const name = String(row?.name ?? "");
+      window.dispatchEvent(new CustomEvent("table-query-changed", { detail: { query: name } }));
+      setDesignTree((prev) => {
+        const session = (prev.dataModel as Record<string, any>)?.session ?? {};
+        return {
+          ...prev,
+          dataModel: { ...prev.dataModel, session: { ...session, design_query: name, design_selected: tag } },
+        };
+      });
+      window.dispatchEvent(new CustomEvent("open-component", { detail: { tag } }));
+    };
+    window.addEventListener("find-component", onFind);
+    return () => window.removeEventListener("find-component", onFind);
+  }, [setDesignSave]);
+
+  useEffect(() => {
+    const onDiscard = () => { void discardDesignSession(); };
+    window.addEventListener("design-save-discard", onDiscard);
+    return () => window.removeEventListener("design-save-discard", onDiscard);
+  }, [discardDesignSession]);
+
+  /* THE NEXT PRESS OF THE TAB IS THE NEXT SESSION — unless a card asked for a particular one, in
+     which case that card's own assembly below is the answer and this stands aside. */
+  useEffect(() => {
+    if (!needsAssemblyRef.current) return;
+    if (openSession) {
+      needsAssemblyRef.current = false;
+      return;
+    }
+    if (!active) return;
+    needsAssemblyRef.current = false;
+    const system = loadedSystemRef.current;
+    void assembleDesignSurface(null, system === DEFAULT_CATALOGUE_SYSTEM ? null : system)
+      .catch((err) => {
+        setDesignSave({
+          saving: false,
+          result: `This session could not be started: ${String((err as Error)?.message ?? err)}`,
+        });
+      });
+  }, [active, openSession, assembleDesignSurface, setDesignSave]);
+
+  useEffect(() => {
+    const onSave = () => {
+      void saveDesignSession();
+    };
+    window.addEventListener("design-left-save", onSave);
+    return () => window.removeEventListener("design-left-save", onSave);
+  }, [saveDesignSession]);
+
+  /*
+   * ══ THE ANSWER TO THE SAVE QUESTION ═════════════════════════════════════════════════════════
+   *
+   * The room draws the question (the seat is headless and draws nothing), and answers by action:
+   *
+   *   approve — the pane's own approve runs; the session is then kept with the approved component.
+   *   save    — the pane's own discard runs, so the temporary folder is not left held, and the
+   *             session is kept with a line saying the preview was not kept. This is the button the
+   *             owner asked for: the save is still possible, and it says what it costs.
+   *   cancel  — nothing. The preview stays on screen and nothing is written.
+   */
+  useEffect(() => {
+    const onAnswer = async (event: Event) => {
+      const action = String((event as CustomEvent<{ action?: string }>).detail?.action ?? "");
+      if (!action || action === "cancel") return;
+      const standing = previewRef.current;
+      const tag = String(standing?.tag ?? "");
+      if (action === "approve") {
+        if (standing) await previewActionsRef.current.approve?.(standing);
+        await saveDesignSession({ force: true, output: tag ? `approved: ${tag}` : "approved" });
+        return;
+      }
+      if (action === "save") {
+        if (standing) await previewActionsRef.current.discard?.(standing);
+        await saveDesignSession({ force: true, output: tag ? `preview not kept: ${tag}` : "" });
+      }
+    };
+    window.addEventListener("design-save-decision-answer", onAnswer);
+    return () => window.removeEventListener("design-save-decision-answer", onAnswer);
+  }, [saveDesignSession]);
+
+  /*
+   * ══ THE QUESTION THE ROOM ASKS WHEN THE PERSON LEAVES TOOLS ═════════════════════════════════
+   *
+   * The room owns the rail and is the only place that knows a tab press happened, so it asks the
+   * standing seat a question before it moves: this listener fills that answer in, synchronously,
+   * in the caller's own object. The seat is the only thing that knows whether the visit holds
+   * anything unsaved — the title, the address and the notes as typed, and whether this visit has
+   * already been kept. Nothing is stored on the element and no second copy of these values exists.
+   */
+  const keptThisVisitRef = useRef(false);
+  useEffect(() => {
+    const onAsk = (event: Event) => {
+      const answer = (event as CustomEvent<{ work?: boolean; kept?: boolean; title?: string }>).detail;
+      if (!answer) return;
+      const fields = formFieldsRef.current;
+      /* THE QUESTION IS ABOUT A CHANGE, NOT ABOUT A NON-EMPTY FIELD. Owner, 2026-11-02: *"there is
+         no need to [ask] if nothing has changed after opening."* A reopened session already carries
+         its title, address and notes, so their being filled in says nothing about unsaved work.
+         A preview standing IS work: it was made in this visit and it dies on discard. */
+      const changed = !sameFields(fields, formBaselineRef.current);
+      const holdsWork = Boolean(previewRef.current) || changed;
+      answer.work = holdsWork;
+      answer.kept = keptThisVisitRef.current;
+      answer.title = fields.title.trim();
+    };
+    window.addEventListener("design-save-ask", onAsk);
+    return () => window.removeEventListener("design-save-ask", onAsk);
+  }, []);
+
+  /*
    * ══ THE TWO RUN TRIGGERS, AND THE COLUMN THEY LAUNCH ═════════════════════════════════════════
    *
    * On the Composer, RUN moves a view into the middle column and `workspace-layout` draws it.
@@ -675,6 +1249,9 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
    * component — the defect this column was fixed to remove.
    */
   const setDesignPreview = useCallback((preview: Record<string, any> | null) => {
+    // WHAT THE MIDDLE COLUMN HOLDS, kept where SAVE can read it: a save happens in this seat, not
+    // in the drawing, and the drawing is a shadow-root element no save handler can query.
+    previewRef.current = preview;
     setDesignTree((prev) => {
       const session = (prev.dataModel as Record<string, any>)?.session ?? {};
       const tag = preview?.tag ? String(preview.tag) : "";
@@ -1311,6 +1888,18 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
     const gDiscard = onlyWhenStanding(onPreviewDiscard);
     const gRemove = onlyWhenStanding(onPreviewRemove);
     const gCollision = onlyWhenStanding(onCollisionAnswer);
+    /*
+     * THE PANE'S TWO ACTIONS, HANDED TO THE SAVE QUESTION (2026-11-01). The question is answered
+     * outside this effect, and the person's answer must run the SAME approve and discard the pane's
+     * own buttons run. Wrapped in the event shape those handlers already read, so there is one
+     * approve and one discard in the seat and no second copy of either.
+     */
+    previewActionsRef.current = {
+      approve: (preview) =>
+        onPreviewApprove(new CustomEvent("preview-approve", { detail: { preview } })),
+      discard: (preview) =>
+        onPreviewDiscard(new CustomEvent("preview-discard", { detail: { preview } })),
+    };
     window.addEventListener("open-component", gOpen);
     window.addEventListener("card-open", gCard);
     window.addEventListener("preview-approve", gApprove);
@@ -1318,19 +1907,22 @@ export default function ToolsSeat({ onAssemblingChange, openTag, headless, activ
     window.addEventListener("preview-remove", gRemove);
     window.addEventListener("preview-collision-answer", gCollision);
 
-    // ── ONE CATALOGUE, WRITTEN TO THE MODEL ────────────────────────────────────────────────
-    // Owner, 2026-10-26: *"We only need the official one."* The rail no longer offers a choice, so
-    // the model's fact is the official catalogue and nothing else. This also corrects a stored
-    // choice from an earlier session: the binding reads `/session/design_catalogue`, and a name
-    // left there would point the list at a catalogue that is no longer offered.
+    // ── THE CATALOGUE THE TAB IS IN, WRITTEN TO THE MODEL ──────────────────────────────────
+    // Owner, 2026-10-26: *"We only need the official one."* The rail offers no choice, so the
+    // default is the official catalogue and nothing else — and this corrects a stored choice left
+    // by an earlier session.
+    // OWNER, 2026-11-02, AMENDS THE DEFAULT AND NOT THE RULE: *"the card should just open the tool
+    // with the loaded DS, which this one is the default."* A design system's card names a catalogue,
+    // and that name is what the tab is in; a visit that names none is still the official one.
     setDesignTree((prev: any) => {
       const session = (prev.dataModel as Record<string, any>)?.session ?? {};
-      if (session.design_catalogue === "prompt-composer") return prev;
+      const wanted = loadedSystemRef.current;
+      if (session.design_catalogue === wanted) return prev;
       return {
         ...prev,
         dataModel: {
           ...prev.dataModel,
-          session: { ...session, design_catalogue: "prompt-composer" },
+          session: { ...session, design_catalogue: wanted },
         },
       };
     });

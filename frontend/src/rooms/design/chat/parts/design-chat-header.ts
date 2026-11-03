@@ -1,4 +1,7 @@
 /**
+ * CONVERSATIONS — its Default is the conversations card's 38px. OUTPUT — its Default is the
+ * session card's 75px. Both numbers are declared below, one per box.
+ *
  * <design-chat-header> — the output area's bar, and the same shell as its response card.
  *
  * v.4b source (file 20UPR2KQMsbAxlo5NJb1se, the drawing this column follows now):
@@ -160,6 +163,19 @@ export class ChatHeader extends LitElement {
   declare gripDots: string;
   declare iconSize: number;
   declare dmSans: boolean;
+  /*
+   * THE FOUR PARTS OF EVERY SLOT — the vocabulary is design/slots/SLOT-PLAN.md, and it applies to
+   * every card in every room's output surface:
+   *
+   *   CARD    .shell    the rounded frame with the inset shadow — IT owns the height
+   *   BAR     .status   the row inside the frame at its top: the label and its controls
+   *   INSIDE  .body     the card's internal space below the Bar — what opens, and what scrolls
+   *   GRIP    .grip     the dot band under the frame — dragged
+   *
+   * THE BAR AND THE INSIDE ARE CHILDREN OF THE CARD. That is the whole contract. It used to be
+   * broken: the Inside was the Card's SIBLING, so content could only ever land outside the frame,
+   * and a height set on the slot grew a padded area rather than the card's inside.
+   */
   static styles = [figureStyles, css`
     :host { display: block; }
     /* THE BLOCK'S GROUND — "output-header-area" #40001119:6308: #CBE6E3, padding
@@ -234,6 +250,41 @@ export class ChatHeader extends LitElement {
       box-shadow:
         inset 0 -2px 5px 0 rgba(0, 0, 0, 0.15),
         inset 0 2px 4px 0 rgba(0, 0, 0, 0.25);
+      /* THE FRAME IS A CONTAINER: its bar is the first row, its content area below it is the
+         inside that opens. The height a host sets on this element is spent on the content area,
+         so a taller card shows more of what it holds — never more empty padding. */
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      /* THE GAP THE BODY USED TO CONTRIBUTE. The block is shell + gap + grip; while the body was
+         a sibling it also stood between the card and the grip, and its 0 height still took a gap,
+         so the block measured 61. Moving the body inside the card removed that gap and the block
+         fell to 56. This puts the drawing's 61 back, and it is the drawn distance between the card
+         and its own grip. */
+      margin-bottom: 5px;
+    }
+    /* THE SESSION CARD'S FLOOR IS 75, ON THE BOX (owner, 2026-10-31: *"the chat output will reduce
+       and reduce down to a minimum of 75 pixels high"*). One number, on the card, so the drag's Stop
+       reads it here and the seat carries no second number for this box. */
+    :host([data-slot="session"]) .shell { min-height: 75px; }
+    /* THE CONVERSATION BOX CANNOT CLOSE PAST ITS OWN BAR (owner, 2026-10-31: the drag "covers the
+       conversation text and expands the padding below the grip … padding is never changing"). Its
+       resting height is 38, so 38 is the floor: the label is never cut and the ground around it is
+       fixed. */
+    :host([data-slot="conversations"]) .shell { min-height: 38px; height: 38px; }
+    /* THE INSIDE. It takes whatever height the bar leaves and scrolls in it; empty, it is 0 and
+       the card is exactly its bar. */
+    .body {
+      flex: 1 1 auto;
+      min-height: 0;
+      /* THE CHAT OUTPUT'S FLOOR, AS CSS (owner, 2026-10-31: *"why can't you just make the chat
+         output a minimum height of 150 pixels"*). The session card's inside IS the chat output, so
+         it cannot be squeezed below 150 by any slot above it. A rule, not a clamp. */
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
     }
     /* THE RESULTS STATE IS THE CARD'S, AND ONLY THE CARD'S.
        When the thread this card holds carries a run's results (the host's has-results
@@ -452,15 +503,27 @@ export class ChatHeader extends LitElement {
 
     return html`
       <div class="output-area ${this.variant === 'lead' ? 'lead' : ''} ${this.variant === 'tall' ? 'tall' : ''}" data-node-id=${this.blockNode || nothing}>
-        <div class="status shell ${this.variant === 'tall' ? 'tall' : ''}" data-node-id=${this.barNode || nothing} role="status">
-          <span class="readout ${this.dmSans ? 'dm' : ''}" data-node-id=${this.textNode || nothing}>${figures(line)}</span>
-          ${this.icon
-            ? html`<img class="model-mark" style=${`width: ${this.iconSize || 22}px; height: ${this.iconSize || 22}px`} data-node-id=${this.iconNode || ''} src=${this.icon} alt="" />`
-            : this.hasAttribute('tokens')
-              ? html`<img class="model-mark" style=${`width: ${this.iconSize || 22}px; height: ${this.iconSize || 22}px`} data-node-id=${this.iconNode || nothing} src=${modelMark} alt="" />`
-              : nothing}
+        <!-- THE CARD IS THE CONTAINER (owner, 2026-10-31: *"do you not see the drop shadow of the
+             inner shadow and then the text '1 Conversation' — that is called a container, that is
+             the internal space that we are dragging open … you are putting things inside of a
+             padding area — that is wrong, padding is supposed to be empty"*). So the framed box
+             HOLDS the bar and the content: the bar is the first row INSIDE it, the content area
+             below it is the inside that opens. The content used to sit outside the frame, which is
+             why nothing could ever appear inside the card. -->
+        <div class="shell">
+          <div class="status ${this.variant === 'tall' ? 'tall' : ''}" data-node-id=${this.barNode || nothing} role="status">
+            <span class="readout ${this.dmSans ? 'dm' : ''}" data-node-id=${this.textNode || nothing}>${figures(line)}</span>
+            <!-- THE HOST'S OWN CONTROLS FOR THIS BAR, beside the mark (owner, 2026-10-31: a new
+                 conversation belongs "next to the icon"). Empty unless a seat fills it. -->
+            <slot name="bar-actions"></slot>
+            ${this.icon
+              ? html`<img class="model-mark" style=${`width: ${this.iconSize || 22}px; height: ${this.iconSize || 22}px`} data-node-id=${this.iconNode || ''} src=${this.icon} alt="" />`
+              : this.hasAttribute('tokens')
+                ? html`<img class="model-mark" style=${`width: ${this.iconSize || 22}px; height: ${this.iconSize || 22}px`} data-node-id=${this.iconNode || nothing} src=${modelMark} alt="" />`
+                : nothing}
+          </div>
+          <div class="body"><slot></slot></div>
         </div>
-        <div class="body"><slot></slot></div>
         <div class="grip" data-node-id=${this.gripNode || '40001123:6773'} aria-hidden="true">
           <div class="row" data-node-id=${this.gripRowNode || '40001123:6774'}>
             ${this._dots.map((id) => html`<span class="dot" data-node-id=${id}></span>`)}

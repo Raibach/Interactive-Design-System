@@ -5484,6 +5484,7 @@ export class EvalsChatPanel extends LitElement {
         ? nothing
         : html`
             <chat-navigation-bar
+              seat-label="Evals"
               active-tab=${this.collapsed ? '' : this.activeTab}
               allowed-tabs=${this.allowedTabs}
               tab-labels=${this.tabLabels}

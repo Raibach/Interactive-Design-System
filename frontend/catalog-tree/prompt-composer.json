@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-26T16:01:47.878Z",
+  "generatedAt": "2026-10-31T20:33:57.220Z",
   "system": {
     "id": "prompt-composer",
     "catalogId": "https://raibach.net/a2ui/catalogs/prompt-composer/v0_9_1/catalog.json",
@@ -26,9 +26,9 @@
     "figmaLayersNote": "Figma layers are not drawn: they need the design file and an API token. The Figma node each element came from is shown instead (registry.json), and the ingest ledger for it.",
     "gate": {
       "status": "partial",
-      "generatedAt": "2026-10-26T16:01:34.533Z",
-      "findings": 39,
-      "blocking": 1,
+      "generatedAt": "2026-10-31T20:22:38.512Z",
+      "findings": 40,
+      "blocking": 2,
       "fileKey": null,
       "report": "frontend/catalog-audit/prompt-composer.json"
     },
@@ -5758,6 +5758,7 @@
               "component",
               "message",
               "notes",
+              "title",
               "url"
             ],
             "inManifest": [
@@ -5770,9 +5771,11 @@
           },
           "events": {
             "allowlisted": [
-              "ingest-submit"
+              "ingest-submit",
+              "ingest-field-change"
             ],
             "dispatched": [
+              "ingest-field-change",
               "ingest-submit"
             ],
             "dispatchedNotListed": [],
@@ -5791,7 +5794,8 @@
           },
           "actions": {
             "events": [
-              "ingest-submit"
+              "ingest-submit",
+              "ingest-field-change"
             ],
             "binding": null,
             "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
@@ -8148,13 +8152,17 @@
           "findings": [],
           "props": {
             "declared": [
-              "component"
+              "busy",
+              "component",
+              "result"
             ],
             "inManifest": null,
             "inManifestNote": "the manifest declares no tag by this name — props read from the catalogue only"
           },
           "events": {
-            "allowlisted": [],
+            "allowlisted": [
+              "design-left-save"
+            ],
             "dispatched": [],
             "dispatchedNotListed": [],
             "note": "no source was read for this element, so its dispatched events are unknown — not \"none\""
@@ -8171,7 +8179,9 @@
             "note": "slot = the sanctioned channel; composed = tags found in the element's own templates, which the protocol docs call the wrong model for nesting"
           },
           "actions": {
-            "events": [],
+            "events": [
+              "design-left-save"
+            ],
             "binding": null,
             "bindingNote": "No structure in the repository maps an action to a data source, so no database binding is shown. Actions are rendered as fields on the element (the events it dispatches and the events the allowlist lists)."
           },

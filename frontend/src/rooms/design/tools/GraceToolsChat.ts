@@ -81,7 +81,11 @@ export class GraceToolsChat extends LitElement {
      * join is the events the seat already raises — no property is added to the seat and no line of
      * it is edited. Capture on the seat host is what keeps the seat's own `_send` from running.
      */
-    const seat = this.closest('design-chat') as unknown as SeatHost | null;
+    /* ITS OWN SEAT, BY ITS OWN MARK (2026-10-31). The Tools tab now draws `tools-chat`, its own
+       element, so a lookup by the room's tag would find nothing and the turn could never be read.
+       The shell writes `data-design-chat` on every container it opens, so that mark identifies a
+       seat whatever its tag is. */
+    const seat = this.closest('[data-design-chat]') as unknown as SeatHost | null;
     if (!seat) {
       console.error(
         '[grace-tools-chat] mounted outside a design seat — the bottom input cannot be wired, and no Tools turn can be sent.',
@@ -206,7 +210,13 @@ export class GraceToolsChat extends LitElement {
   }
 
   private _seatField(): SeatField | null {
-    const found = this._seat?.renderRoot?.querySelector('prompt-textarea');
+    /* THE REAL TAG (found 2026-10-31). The seat composes `<design-prompt-textarea>`; this asked
+       for `prompt-textarea`, which is a different element defined in components/lit/prompt-input
+       and sits nowhere in the seat. So the lookup always came back empty and a Tools turn could
+       not be read at all. The seat's own three copies of the same mistake are the same age and are
+       NOT changed here: they read and clear `_draft` instead, so they send, and each belongs to
+       its own tab's pass. */
+    const found = this._seat?.renderRoot?.querySelector('design-prompt-textarea');
     return (found as SeatField | null) ?? null;
   }
 
@@ -234,7 +244,7 @@ export class GraceToolsChat extends LitElement {
     if (this.busy) return;
     const field = this._seatField();
     if (!field) {
-      console.error('[grace-tools-chat] the seat has no prompt-textarea — the Tools turn could not be read.');
+      console.error('[grace-tools-chat] the seat has no design-prompt-textarea — the Tools turn could not be read.');
       return;
     }
     const typed = String(field.value ?? '').trim();
@@ -350,14 +360,23 @@ export class GraceToolsChat extends LitElement {
      * THE OUTPUT AREA'S GROUND IS THE SEAT'S (white), so the type here is the design room's dark
      * ink and the person's turns use the palette's purple. The view draws only the thread; the
      * input above it is the seat's own bottom field.
+     *
+     * THE TYPE AND THE TURN'S BOX ARE THE SEAT'S OWN NUMBERS (measured 2026-10-31, owner: *"the
+     * styling is different for the chat text from the chat tab … it seems like it has an extra
+     * padding on it"*). They were written independently before and had drifted: this face drew
+     * 400 weight, 1.45, #1c2f4e and a 9/12 box where the seat's thread draws 500, 1.5, #171717 and
+     * 10/14. Whichever face changes, these four must stay equal to the seat's own thread in
+     * rooms/design/chat/parts/design-chat-messages.ts — a chat that reads differently in one tab
+     * is a second face, not a second surface.
      */
     :host {
       display: block;
       height: 100%;
       min-height: 0;
       width: 100%;
-      color: #1c2f4e;
-      font: 14px/1.45 'IBM Plex Sans', system-ui, sans-serif;
+      color: #171717;
+      font: 14px/1.5 'IBM Plex Sans', system-ui, sans-serif;
+      font-weight: 500;
     }
     .wrap {
       display: flex;
@@ -371,23 +390,34 @@ export class GraceToolsChat extends LitElement {
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      padding: 4px 0;
+      gap: 6px;
+      padding: 0 0 10px;
     }
     .turn {
-      max-width: 92%;
-      padding: 9px 12px;
-      border-radius: 10px;
+      align-self: stretch;
+      padding: 10px 14px;
+      border-radius: 6px;
       white-space: pre-wrap;
       word-break: break-word;
     }
     .turn.person {
       align-self: flex-end;
+      /* The bubble is the only turn with a fill, so it is the only one that needs to hug. */
+      max-width: 92%;
       background: rgba(126, 114, 227, 0.16);
     }
     .turn.app {
-      align-self: flex-start;
-      background: rgba(28, 47, 78, 0.06);
+      /* HER TURNS PAINT NOTHING (owner, 2026-10-27: *"She should not be in a gray box"*). This
+         face drew a pale rounded card around every reply, which made the Tools tab a different
+         chat from the seat beside it. The thread is the surface here too: a turn is words, and
+         the card is the column.
+
+         THE SIDE INSET IS CARRIED HERE, ONCE. It used to be 12px on the turn PLUS the view slot's
+         own 20px, so the text began 32px in while the Chat tab's begins at 14. The Tools seat now
+         zeroes the slot's side padding (tools-chat.ts) and every turn carries the seat's own 14px,
+         so both tabs start at the same place. Measured cause of *"it has an extra padding on it"*.
+         */
+      background: transparent;
     }
     .turn.failed {
       background: rgba(180, 83, 9, 0.12);

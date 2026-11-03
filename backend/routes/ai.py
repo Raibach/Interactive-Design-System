@@ -28,6 +28,7 @@ from grace_gui import (
     query_llm,
 )
 from role_caps import get_filtered_manifest, get_role_capabilities, get_user_role
+from prompt_sessions_api import DESIGN_SYSTEM_DESCRIPTION
 from tools import ToolError, categories, get_tool, list_tools, render_tools_block
 
 router = APIRouter()
@@ -598,8 +599,10 @@ def _design_surface_components() -> list[dict[str, Any]]:
             "isThirdOpen": True,
             # THE PANES ARE NAMED SLOTS, so children is an OBJECT keyed by slot name — the array
             # form carries no slot and fills nothing. THE FOOTER IS THE COMPOSER BAR'S PLATE,
-            # EMPTY (owner, 2026-10-25: "we do not need the CTAs save or run or undo. just blank
-            # for now"): the column ends on the same bar the Composer's does, holding nothing.
+            # CARRYING SAVE (owner, 2026-10-31: Apply Carbon came out of the foot and Save took its
+            # place, in the Composer's own Run treatment). Its two runtime values are BOUND, not
+            # patched into the component: `saving` and `save_result` are written where every other
+            # changing value in this room is written — `/session` — so one write re-hands both.
             "children": {"left-header": "left-header", "middle": "design-middle", "left-footer": "left-footer"},
         },
         {
@@ -615,6 +618,10 @@ def _design_surface_components() -> list[dict[str, Any]]:
         {
             "id": "left-footer",
             "component": "design-left-footer",
+            # Two values belong to the host: whether a save is in flight, and what it answered.
+            # Both are written by the seat that runs the save, never by the element.
+            "busy": {"path": "/session/saving"},
+            "result": {"path": "/session/save_result"},
         },
         {
             "id": "design-middle",
@@ -1292,6 +1299,22 @@ def ai_assemble_surface(
             session_meta = session.get("metadata") or {}
             builder_project_id = session_meta.get("builder_project_id")
 
+            # ── THE CARD'S AREA (owner, 2026-10-27): each card wears the mark of the seat it
+            # came from. `room_domain` is the marker the Product room and the bridge write; the
+            # older rows carry `session_type` instead (design_*, governance, console), and the
+            # Composer's rows carry `created_via: 'render-composer'`. Read in that order. A
+            # package with NO marker is the Composer's by default (owner, 2026-10-27: *"replace
+            # the Gemini logo for composer cards"*): the Composer is the seat that makes prompt
+            # packages, and the rows written before `created_via` existed carry nothing else.
+            room_domain = session_meta.get("room_domain") or ""
+            session_type = session_meta.get("session_type") or ""
+            seat = room_domain or (
+                "design" if session_type.startswith("design")
+                else "governance" if session_type == "governance"
+                else "console" if session_type == "console"
+                else "composer"
+            )
+
             cards.append({
                 "id": str(session.get("id")),
                 "title": title,
@@ -1301,6 +1324,8 @@ def ai_assemble_surface(
                 # every other card the Composer. Absent stays absent: a legacy card
                 # routes exactly where it always has.
                 "room_domain": (session_meta.get("room_domain") or ""),
+                # The seat whose mark the card wears — see the note above.
+                "seat": seat,
                 # ⭐ THE BRIDGED PROJECT (2026-10-04): a card for a project in the Product
                 # room's tool carries which project it stands for, so its click opens the
                 # room ON that project (the room is the builder now). A faithful read of the
@@ -1332,149 +1357,49 @@ def ai_assemble_surface(
             })
 
         # ── TRUE A2UI: Model is the architect for the console surface ──
-        # DB only supplies raw data. The model MUST return the components.
-        # Hard-fail (503) if the model cannot assemble it. No DB skip, no fallbacks.
-        # ── THE MODEL SEES A SAMPLE; THE GRID GETS EVERYTHING ──────────────────────
+        # ── THE CONSOLE'S TREE IS WRITTEN HERE, NOT ASKED FOR (owner, 2026-10-27) ──────────
         #
-        # The cards were dumped into the prompt whole, which meant the number of packages a
-        # person could SEE was decided by what the model could be asked to read: the request's
-        # limit, and the limit defaulted to TEN. The owner, looking at a console with 265
-        # packages in it: "I don't see the pagination… you have a max count of 10 still in
-        # place and I know there's more cards than 10."
-        #
-        # The model does not need every row — it needs to know the list exists, how big it is,
-        # and what a card looks like, because it binds ConsoleCardGrid to /cards and the DATA
-        # MODEL carries the list. So the prompt takes a sample and the count; the data model
-        # takes everything the request asked for.
-        SAMPLE = 12
-        cards_for_prompt = json.dumps(cards[:SAMPLE])
-        llm_prompt = f"""You are Grace, the A2UI surface assembler for the console.
-{render_tools_block()}
-
-The user opened the Console. There are {len(cards)} prompt packages. The first
-{min(SAMPLE, len(cards))} are shown below as examples of the card shape; bind the grid to the
-whole list at the path below, NOT to these samples.
-
-Card data (bind ConsoleCardGrid to this):
-{cards_for_prompt}
-
-Assemble the FULL console surface using A2UI v0.9.1.
-
-{_catalog_component_vocabulary()}
-
-REQUIREMENTS:
-1. id "root", component "workspace-layout" — the composer's own container. Its
-   panes are NAMED slots, so "children" is an OBJECT keyed by slot name; the
-   array form fills nothing.
-2. "card-grid": ConsoleCardGrid in slot "left", items bound to {{"path": "/cards"}}
-3. "console-chat": "console-chat-panel" in slot "right" — THE CONSOLE'S OWN SEAT, not
-   the shared "chat-panel" (the Composer, a package and the Governance room use that
-   one). Bind it to the console's own conversation AND to the library she organises:
-   conversationId {{"path": "/console/conversation_id"}},
-   sessionId {{"path": "/console/session_id"}},
-   consoleCards {{"path": "/cards"}} — the same list the grid draws, so every question
-   about the index is answered from the index itself. There is no middle slot.
-4. "isThirdOpen": false — the chat column loads CLOSED. This is the container's
-   own state and it owns the column's width, so it is the only flag needed: at
-   false the right pane sits at its designed 60px collapsed floor with the rail
-   showing, and the container tells the panel it is collapsed so the rail's Chat
-   button OPENS it on the first click. Do NOT send "collapsed" or "rightWidth" on
-   the panel or the container — a payload flag is re-asserted on every assembly
-   and would snap the column shut again after the operator opened it, and a pinned
-   width jumped the column from 75px to half the screen. Open or closed belongs to
-   the element that owns the width.
-5. "console-chat" carries ONE child in its "view" slot: "repair-view". The panel's
-   "view" slot is the design's ONE content hole ("chat-output-simple-slot-area"
-   #40001085:2373, annotated "holds plain text output and inserted functions") and
-   this seat fills it with the one view the console has.
-   "repair-view" is "chat-repair-actions" bound to /findings. The repair rows are
-   composed by the BACKEND from the report the catalog checker already wrote, and
-   written into the data model there — the same reason: a list of what is wrong in
-   the catalog is not something to be paraphrased by a model.
-   It arrives COLLAPSED — the element's own default, and the owner's rule for the demo he is
-   building: "I don't want blank chat to open up, so add it to the chat as well… just make
-   sure it's collapsed by default." The panel draws this one view above her THREAD on the
-   Chat tab as well as in the hole the rail's tabs use, so the console never opens on a blank
-   chat; collapsed it is a header with a count on it, and opening it is one click.
-   There is no "trace-view" in this assembly any more: Trace left this menu on the same
-   instruction, and a view with no rail button would be a hole nothing can reach.
-6. "console-chat" carries "allowedTabs": "chat,eval,tools,approvals,settings".
-   THE MENU IS THE PLACE: the console is the ONE global seat, so it is the only one that
-   offers APPROVALS — the issues that span every package — and the only one that offers
-   REPAIRS, the findings of the catalog check. A package's seat omits both: a package can
-   only approve, and only repair, what belongs to it. Emit the list exactly as written;
-   an omitted allowedTabs shows every button the rail has.
-7. Short friendly ai_message
-
-Emit nothing else — no greeting, no header, no Text above them.
-
-Output ONLY this exact JSON (no markdown, no extra text):
-{{
-  "components": [
-    {{"id": "root", "component": "workspace-layout", "isThirdOpen": false, "children": {{"left": "card-grid", "right": "console-chat"}}}},
-    {{"id": "card-grid", "component": "ConsoleCardGrid", "items": {{"path": "/cards"}}}},
-    {{"id": "console-chat", "component": "console-chat-panel", "tracePrompt": false, "allowedTabs": "chat,eval,tools,approvals,settings", "conversationId": {{"path": "/console/conversation_id"}}, "conversations": {{"path": "/console/conversations"}}, "sessionId": {{"path": "/console/session_id"}}, "consoleCards": {{"path": "/cards"}}, "children": {{"view": "repair-view"}}}},
-    {{"id": "repair-view", "component": "chat-repair-actions", "findings": {{"path": "/findings"}}, "stages": {{"path": "/repairs/stages"}}}}
-  ],
-  "ai_message": "Your message"
-}}
-"""
-
+        # Every console load used to call the model to decide an arrangement that never
+        # changes: the card grid in the left slot, the console's seat in the right. Measured,
+        # that call was 2,000 ms of a 3,200 ms paint, while the database read before it takes
+        # 9 ms. The owner's ruling: *"it doesn't need to figure out the layout, that should be
+        # deterministic."* This is the exact tree the prompt used to demand, written here.
+        # Nothing in this surface is the model's to choose: the cards are data, the seat is the
+        # console's own, and the repair rows are the checker's own findings.
+        components = [
+            {
+                "id": "root",
+                "component": "workspace-layout",
+                "isThirdOpen": False,
+                "children": {"left": "card-grid", "right": "console-chat"},
+            },
+            {"id": "card-grid", "component": "ConsoleCardGrid", "items": {"path": "/cards"}},
+            {
+                "id": "console-chat",
+                "component": "console-chat-panel",
+                "tracePrompt": False,
+                "allowedTabs": "chat,eval,tools,approvals,settings",
+                "conversationId": {"path": "/console/conversation_id"},
+                "conversations": {"path": "/console/conversations"},
+                "sessionId": {"path": "/console/session_id"},
+                "consoleCards": {"path": "/cards"},
+                "children": {"view": "repair-view"},
+            },
+            {
+                "id": "repair-view",
+                "component": "chat-repair-actions",
+                "findings": {"path": "/findings"},
+                "stages": {"path": "/repairs/stages"},
+            },
+        ]
+        # The console is the ONE global seat: the only one that offers approvals.
+        _seat_tabs(components, CONSOLE_TABS)
+        # AND HER WORDS, WHICH ARE THIS ROOM'S. The console is where she advises on the
+        # packages in the index — see `CONSOLE_GRACE_INSTRUCTIONS`.
+        _seat_grace(components, "/console", True)
+        ai_message = f"{len(cards)} packages ready."
         ms_b = 0.0
         ms_c = 0.0
-        t_b_start = time.perf_counter()
-        llm_response = query_llm(
-            question=llm_prompt,
-            mode="console_assembly",
-            temperature=0.0,
-            prompt_id="surface-assembly-console"
-            # model intentionally omitted — use the enabled provider's default
-        )
-        ms_b = (time.perf_counter() - t_b_start) * 1000
-
-        if not llm_response or not llm_response.strip():
-            raise HTTPException(
-                status_code=503,
-                detail="A2UI FAILURE: AI did not respond. The AI must be active to render this surface."
-            )
-        if llm_response.strip().startswith("Error:"):
-            raise HTTPException(status_code=503, detail=f"A2UI FAILURE: {llm_response.strip()}")
-
-        t_c_start = time.perf_counter()
-        response_text = llm_response.strip()
-        if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0].strip()
-
-        try:
-            parsed = _extract_json_payload(response_text)
-            components = parsed["components"]
-            # The console is the ONE global seat: the only one that offers approvals.
-            _seat_tabs(components, CONSOLE_TABS)
-            # AND HER WORDS, WHICH ARE THIS ROOM'S. The console is where she advises on the packages
-            # in the index — see `CONSOLE_GRACE_INSTRUCTIONS`, and the console's cards below, which
-            # the seat appends as her live context.
-            _seat_grace(components, "/console", True)
-            # The console is the ONE global seat, so it is the one that offers approvals.
-            ai_message = parsed.get("ai_message", f"{len(cards)} packages ready.")
-            if not isinstance(components, list) or len(components) == 0:
-                raise ValueError("components must be non-empty array")
-            ms_c = (time.perf_counter() - t_c_start) * 1000
-        except (json.JSONDecodeError, ValueError, KeyError, TypeError) as e:
-            print(
-                f"[A2UI Console] AI RESPONSE PARSE FAILED:\n"
-                f"  error_type: {type(e).__name__}\n"
-                f"  error_message: {e}\n"
-                f"  llm_response_length: {len(response_text)}\n"
-                f"  llm_response_first_500: {response_text[:500]}\n"
-                f"  timestamp: {time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n"
-                f"  FIX: The LLM returned something that isn't valid A2UI JSON. Check the prompt or the model."
-            )
-            raise HTTPException(
-                status_code=503, 
-                detail=f"A2UI FAILURE: AI returned invalid JSON for render-console — {type(e).__name__}: {e!s}. Raw (first 300 chars): {response_text[:300]}"
-            )
 
         elapsed_ms = int((time.time() - start_time) * 1000)
         print(f"\n{'='*60}")
@@ -1543,8 +1468,10 @@ Output ONLY this exact JSON (no markdown, no extra text):
                             ],
                         },
                         "assembly_time_ms": elapsed_ms,
-                        "llm_used": True,
-                        "usage": dict(LAST_USAGE),  # measured, straight from the provider
+                        # FALSE: this surface's tree is written in code (2026-10-27). The flag
+                        # says what happened, not what the route is capable of.
+                        "llm_used": False,
+                        "usage": {},  # no provider answered this surface
                         "ai_message": ai_message,
                         # Anything this assembly could not read, said out loud — the frontend
                         # writes these into the trace (see _warn at the top of this file).
@@ -2880,8 +2807,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # is how the ingest form stacks them in its own left column.
             components.append({
                 "id": "left-form",
-                "component": "figma-ingest-form",
-                # ── THE HOST'S TWO VALUES TRAVEL IN THE DATA MODEL, NOT IN THE COMPONENTS ──
+                "component": "figma-ingest-form",                # ── THE HOST'S TWO VALUES TRAVEL IN THE DATA MODEL, NOT IN THE COMPONENTS ──
                 #
                 # THIS IS NOT DECORATION AND IT IS NOT A STYLE CHOICE — it is the only channel that
                 # reaches an element that already exists. The renderer re-applies props on a
@@ -2894,6 +2820,16 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # rule anyway — structure in the components, content in the data model.
                 "busy": {"path": "/session/ingest/busy"},
                 "message": {"path": "/session/ingest/message"},
+                # ── AND THE THREE VALUES THE SAVED WORK HOLDS (2026-11-01) ─────────────────────
+                #
+                # A KEPT SESSION REOPENED FROM ITS CARD OPENS THE FORM WHERE IT WAS LEFT: the title
+                # it was kept under, the Figma address it was read from, and the notes beside it.
+                # Bound, for the same reason the two above are — the data model is the channel the
+                # renderer re-applies, and a value patched onto the component is a write nothing
+                # reads. Empty on a fresh visit, which is what an untitled session holds.
+                "title": {"path": "/session/form/title"},
+                "url": {"path": "/session/form/url"},
+                "notes": {"path": "/session/form/notes"},
             })
             # (THE RAIL'S SECOND FORM WAS HERE — ADD A DESIGN SYSTEM, emitted beside the Figma form
             # from 2026-10-02 and removed 2026-10-04 at the owner's word: no catalogue is installed
@@ -2926,6 +2862,11 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # THE ROW THE PERSON IS LOOKING AT IS MARKED (owner, 2026-10-25): the list
                 # highlights the open component; the tool writes this on every selection.
                 "selected": {"path": "/session/design_selected"},
+                # THE FILTER THE CHAT MAY SET (owner, 2026-11-02: *"I should be able to ask the chat
+                # to find a component in the data table and it should be able to bring that to the
+                # top"*). The element's own search box writes the same field, so the person and the
+                # assistant drive one filter and there is never a second list.
+                "query": {"path": "/session/design_query"},
                 # The head above the rows IS the ingested element — drawn by this element's own
                 # template, so `showHead` keeps its default (true) and the order is tabs, head, rows.
 
@@ -2982,18 +2923,150 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 title="Design",
                 description="The Design experience's own session — a division, not a prompt package.",
             )
+            # ── A KEPT SESSION REOPENED FROM ITS CARD (2026-11-01) ──────────────────────────────
+            #
+            # A card on the Design console is a session that was kept. Pressing it asks for this
+            # surface with that session's id, and the Tools tab works in THAT row: its conversation,
+            # its saved title, address and notes, its output. This is the road back; the card was
+            # the road out (Save relabels the tab's own row `design_session`).
+            #
+            # ONLY THIS PERSON'S OWN KEPT SESSION IS ADOPTED, and only one of this tab's. Anything
+            # else — a stranger's id, an element, a removed row — falls through to the tab's own
+            # working row, because a bad id must open nothing rather than open something else.
+            opened_session = None
+            if request.session_id:
+                try:
+                    _row = state.prompt_sessions_api.get_session(
+                        session_id=str(request.session_id), user_id=uid
+                    )
+                except Exception as e:
+                    _row = None
+                    _warn(f"the session a card asked to open could not be read: {e}")
+                if _row:
+                    _meta = _row.get("metadata") or {}
+                    if isinstance(_meta, str):
+                        try:
+                            _meta = json.loads(_meta)
+                        except (json.JSONDecodeError, ValueError):
+                            _meta = {}
+                    if isinstance(_meta, dict) and str(_meta.get("session_type") or "") == "design_session":
+                        opened_session = _row
+
+            # ── THE DESIGN SYSTEM'S OWN PACKAGE AND CONVERSATION (owner, 2026-11-02) ────────────
+            #
+            # *"each design system should have a card it has its own package. It has its own chat
+            # conversation… These chats are not global. They are specific to the card."* and *"It
+            # should be loading a conversation associated with that design system from the database
+            # just like we do with composer packages. That's the only way to build."*
+            #
+            # So a card that NAMES a system resolves THAT system's own row — the `design_catalogue`
+            # row every other read already uses — and the chat hangs off it the one way this
+            # codebase reads conversations (`conversations.session_id`, ordered by `updated_at`).
+            # The thread that opens is the LAST MODIFIED one, which is the list's own first entry;
+            # a row with no thread gets one, because a chat with nowhere to write is not a chat.
+            # Nothing here is a stored second copy and nothing is hard-coded: the same row, the same
+            # read, the same order a composer package uses.
+            named_system = intent.split(":", 1)[1].strip() if ":" in intent else ""
+            system_package: dict[str, str] | None = None
+            if opened_session is None and named_system:
+                _system_row = state.prompt_sessions_api.get_or_create_design_container(
+                    user_id=uid,
+                    kind="design_catalogue",
+                    title=named_system.replace("-", " ").title(),
+                    description=DESIGN_SYSTEM_DESCRIPTION,
+                    keys={"design_system": named_system},
+                )
+                if _system_row:
+                    _threads = []
+                    if state.conversation_api:
+                        try:
+                            _threads = state.conversation_api.get_conversations_by_session(
+                                str(_system_row["id"]), uid
+                            )
+                        except Exception as e:
+                            _warn(f"the design system's conversations could not be read: {e}")
+                    _thread_id = str((_threads[0] or {}).get("id") or "") if _threads else ""
+                    if not _thread_id and state.conversation_api:
+                        try:
+                            _thread_id = str(
+                                state.conversation_api.create_conversation(
+                                    user_id=uid,
+                                    title=str(_system_row.get("title") or named_system),
+                                    session_id=str(_system_row["id"]),
+                                    tab="design",
+                                )
+                                or ""
+                            )
+                        except Exception as e:
+                            _warn(f"the design system's conversation could not be created: {e}")
+                    system_package = {
+                        "packageId": str(_system_row["id"]),
+                        "conversationId": _thread_id,
+                    }
+
             # THE FIGMA SECTION'S OWN CONVERSATION PACKAGE. One tab, one package, one
             # conversation — the shape the UX route already uses and the console reads. The
             # package's conversation is the Figma section's own, so the console's Chat room can
             # never share its messages.
-            design_tools_tab = state.prompt_sessions_api.get_or_create_design_tab(
-                user_id=uid, tab="tools"
-            )
+            if opened_session is not None:
+                design_tools_tab = {
+                    "packageId": str(opened_session["id"]),
+                    "conversationId": str(opened_session.get("conversation_id") or ""),
+                }
+            elif system_package is not None:
+                # A CARD'S SYSTEM OWNS THE CHAT. See above: its row, its thread, its history.
+                design_tools_tab = system_package
+            else:
+                design_tools_tab = state.prompt_sessions_api.get_or_create_design_tab(
+                    user_id=uid, tab="tools"
+                )
             if not design_tools_tab:
                 raise HTTPException(
                     status_code=503,
                     detail="DESIGN FAILURE: the Tools tab's package did not resolve (not created).",
                 )
+
+            # ── THE TAB REMEMBERS ITS LAST CONVERSATION (2026-11-02) ─────────────────────────────
+            #
+            # A Save relabels this tab's row `design_session`, which is what frees the one-per-tab
+            # slot and lets the next press resolve a fresh, empty row. The consequence was visible
+            # and wrong: the person pressed Tools and found an empty chat, while the conversation
+            # they had just kept stood on its card. *"Why can you not make the last conversation
+            # load inside of tools?"*
+            #
+            # So a tab whose own package holds no person's turn resumes the newest kept session of
+            # this tab. The three conditions keep the other roads intact:
+            #   · a card that names a session already set `opened_session` — it wins;
+            #   · a system card names its own package — it wins;
+            #   · a package where the PERSON has spoken is a live visit — it is not replaced.
+            # A greeting does not make a live visit: the seat writes one into an empty thread when
+            # it opens, and reading that as work froze the first press on an empty thread (measured
+            # 2026-11-02: the greeting was written at 19:52:59 and every later assembly stood aside).
+            # Only an empty tab reaches the resume, and what it opens is a real row with its own
+            # conversation, title, address and notes — the same road a card takes.
+            #
+            # A FAILED READ IS NOT AN EMPTY TAB. The list is read and only a successful read that
+            # holds no person's turn may resume anything; a refusal leaves the assembly on the
+            # tab's own row.
+            if opened_session is None and system_package is None and state.conversation_api:
+                _tab_threads: list[dict[str, Any]] | None = None
+                try:
+                    _tab_threads = state.conversation_api.get_conversations_by_session(
+                        design_tools_tab["packageId"], uid
+                    )
+                except Exception as e:  # noqa: BLE001 — the tab's own list failing is said, not guessed
+                    _warn(f"the Tools tab's own conversations could not be read: {e}")
+                if _tab_threads is not None:
+                    _tab_ids = [str((_thread or {}).get("id") or "") for _thread in _tab_threads]
+                    _tab_holds_a_turn = state.conversation_api.holds_person_turn(_tab_ids, uid)
+                    if not _tab_holds_a_turn:
+                        _kept = state.prompt_sessions_api.get_latest_design_session(uid, "tools")
+                        if _kept:
+                            opened_session = _kept
+                            design_tools_tab = {
+                                "packageId": str(_kept["id"]),
+                                "conversationId": str(_kept.get("conversation_id") or ""),
+                            }
             design_conversation = design_tools_tab["conversationId"]
 
             # ── THE CONVERSATIONS THAT HANG OFF THE TOOLS PACKAGE, READ ON ASSEMBLY ──────
@@ -3009,6 +3082,28 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                     )
                 except Exception as e:
                     _warn(f"the Tools tab's conversation list could not be read: {e}")
+
+            # ── WHAT THE FORM OPENS HOLDING (2026-11-01) ────────────────────────────────────────
+            #
+            # A reopened session's own three values, read from the same left column the save wrote
+            # — the sections named Title, Figma URL and Notes. A fresh visit holds empty strings,
+            # which is the truth about it rather than a missing key the drawing has to interpret.
+            design_form_values = {"title": "", "url": "", "notes": ""}
+            if opened_session is not None:
+                _raw_left = opened_session.get("left_column_content") or ""
+                try:
+                    _left = json.loads(_raw_left) if isinstance(_raw_left, str) else (_raw_left or {})
+                except (json.JSONDecodeError, ValueError):
+                    _left = {}
+                for _section in (_left or {}).get("sections") or []:
+                    _name = str(_section.get("section") or "").strip().lower()
+                    _content = str(_section.get("content") or "")
+                    if _name == "title":
+                        design_form_values["title"] = _content
+                    elif _name in ("figma url", "url"):
+                        design_form_values["url"] = _content
+                    elif _name == "notes":
+                        design_form_values["notes"] = _content
 
             # THE TOOLS VIEW'S OWN SESSION IS THE PACKAGE, NOT THE DESIGN CONTAINER. The
             # assembly binds every chat seat to that package here, so the Tools view can send its
@@ -3037,19 +3132,16 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # designer's question about it directly, in a few sentences, and say plainly what to
             # change when something is wrong."* That is who she is in this room; the component, its
             # source, the measured design and the failed checks arrive with the question.
+            # THE DICTATED GREETING IS GONE (owner, 2026-10-31: *"Don't create hardcoded
+            # messages don't tell the AI what to say"*). This block used to name one sentence she
+            # had to say, word for word, and it ended in a question; she said it because a prompt
+            # told her to, not because she had anything to say. Her opening is hers to write from
+            # the situation the turn carries.
             design_grace_instructions = (
                 "You are the design system's assistant, and you are with the designer. You built the "
                 "Lit components of this design system from Figma. The left column "
                 "holds the catalogue — what has been measured, what was written, and the checks "
                 "that did not pass. The middle column shows the component being reviewed. "
-                "WHEN YOU GREET, OR WHEN YOU ARE ASKED SOMETHING YOU HAVE NO MATERIAL FOR, SAY "
-                "THIS AND NOTHING ELSE: \"I'm your design system assistant — I built these Lit "
-                "components from Figma, and I'm here to help you review and shape them. What would "
-                "you like to work on?\" "
-                "SAY IT ONCE AND STOP. Do not summarise the catalogue, count its components, list "
-                "open findings, or offer a menu of things you could do next — no \"I could …\" "
-                "lists and no \"which one would you like\". She has already been answered "
-                "\"no thanks\" once, and a second offer is the same offer. "
                 "Answer the designer's question directly, in a few sentences, and say plainly what "
                 "to change when something is wrong."
             )
@@ -3095,6 +3187,20 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
             # The room is told WHICH catalogue it is in, by id and by system name, so anything
             # that wants to show the same thing the component tree shows reads it from here
             # rather than knowing the default.
+            # THE FILE EACH SYSTEM'S COMPONENTS COME FROM, named where the two ids differ.
+            # `raibach-ids` is the room's own system and its components are the official
+            # catalogue's; `carbon` has a catalogue under its own name. Without this map the head
+            # said "Raibach Prompt Composer Catalog" while the tab was in Carbon — a label that
+            # contradicts the list beneath it (found 2026-11-02, opening Carbon from its card).
+            _CATALOGUE_BY_SYSTEM = {
+                "raibach-ids": "prompt-composer",
+                "prompt-composer": "prompt-composer",
+                "carbon": "carbon",
+            }
+            _catalogue_for_tab = a2ui_catalog_for(
+                _CATALOGUE_BY_SYSTEM.get(design_system, "prompt-composer")
+            ) or {}
+
             design_catalogue_facts = {
                 "system": design_system,
                 "id": str(design_catalogue["id"]) if design_catalogue else None,
@@ -3106,7 +3212,7 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # (the design SYSTEM), and the label he wants is the catalogue's own `title` field,
                 # read from the file that declares it — "Raibach Prompt Composer Catalog" — which is
                 # the same string the tree block below draws at its head. One source, two readers.
-                "name": (a2ui_catalog_for("prompt-composer") or {}).get("title") or "Catalog",
+                "name": _catalogue_for_tab.get("title") or "Catalog",
                 # ── AND THE TWO NUMBERS THE HEAD'S OWN DRAWING HAS PLACES FOR ──────────────
                 #
                 # The head element (f-40001207-3559, measured from Figma node 40001207:3559)
@@ -3115,8 +3221,8 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # components the catalogue declares, and the catalogId it is published at. Read from
                 # the catalogue document itself — the same source the tree below reads — so the
                 # number on screen and the number in the file cannot disagree.
-                "count": f"{len((a2ui_catalog_for('prompt-composer') or {}).get('components') or {})} components",
-                "catalogId": (a2ui_catalog_for("prompt-composer") or {}).get("catalogId") or "",
+                "count": f"{len(_catalogue_for_tab.get('components') or {})} components",
+                "catalogId": _catalogue_for_tab.get("catalogId") or "",
             }
 
             # ── THE COMPONENTS, READ ON ASSEMBLY AND DELIVERED IN THE TREE ───────────────
@@ -3343,6 +3449,23 @@ Output ONLY this exact JSON shape — no markdown, no envelope wrapper, no array
                 # change does not re-apply props, so patching the component is a write nothing
                 # reads). `refresh` is the tree's re-read trigger, bumped after an ingest lands.
                 "ingest": {"busy": False, "message": "", "refresh": 0},
+                # ── THE FOOTER'S TWO VALUES, AND THE ROW SAVE WRITES ────────────────────────
+                #
+                # `saving` and `save_result` are the footer's own, bound above and written here
+                # the same way the ingest form's are: one data-model write re-hands the element.
+                #
+                # `design_session_id` IS THE TOOLS TAB'S OWN SESSION ROW — the one Save keeps
+                # (owner, 2026-10-31: a visit to Tools is a session, and keeping it puts its card
+                # on the Design console). It is NOT `id` above, which is the room's container and
+                # is what the ingest files its activity against. Saving the container would file
+                # every visit's work in one permanent row; saving this row is what makes a visit
+                # a session.
+                "saving": False,
+                "save_result": "",
+                "design_session_id": str(design_tools_tab["packageId"]),
+                # The form's own three values — empty on a fresh visit, the kept session's on a
+                # reopen. Bound to the element above; one write here re-hands all three.
+                "form": design_form_values,
                 "right_column": {"conversation_id": design_conversation,
                                  "conversations": design_conversations_list},
             }
@@ -5072,6 +5195,34 @@ Output ONLY valid JSON:
             (previous_state or {}).get("description") if request.session_id else ""
         ) or ""
 
+        # ── A VISIT TO TOOLS IS A SESSION, AND A SAVE IS WHAT KEEPS IT ──────────────────────
+        #
+        # The Tools tab works in a `design_tab` row — one per person per tab, which is what a
+        # visit reuses while it is unsaved. Keeping it RELABELS that row `design_session`, and
+        # that relabel is the whole mechanism: the partial unique index in `init_db.py` permits
+        # one `design_tab` row per person per tab, so the moment this row stops being one, the
+        # next entry to Tools makes a fresh untitled row and its own conversation. Nothing is
+        # deleted and nothing is copied: the kept row keeps its title, its columns, its
+        # conversation and its versions, and the console lists it as a card.
+        #
+        # A Composer save is untouched: it carries neither kind and takes neither branch.
+        _design_meta: dict = {}
+        if previous_state:
+            _raw_meta = previous_state.get("metadata") or {}
+            if isinstance(_raw_meta, str):
+                try:
+                    _raw_meta = json.loads(_raw_meta)
+                except (json.JSONDecodeError, ValueError):
+                    _raw_meta = {}
+            if isinstance(_raw_meta, dict):
+                _design_meta = _raw_meta
+        _design_kind = str(_design_meta.get("session_type") or "")
+        # ANY TAB'S WORKING ROW, NOT A NAMED TAB'S. Keying this to "tools" would put the tab's name
+        # in two places — the resolver and the save path — and the two would eventually disagree;
+        # the row's own kind is enough, and the tab it came from stays in `metadata.design_tab`
+        # because the merge keeps it.
+        is_design_session_save = _design_kind in ("design_tab", "design_session")
+
         # Build metadata including AI compilation info + column widths
         save_metadata = {
             "savedBy": "ai_save_surface",
@@ -5083,6 +5234,10 @@ Output ONLY valid JSON:
             # merges (see there), so the save must say it itself or drafts never surface.
             "draft": None,
         }
+        if is_design_session_save:
+            save_metadata["session_type"] = "design_session"
+            save_metadata["kept_at"] = datetime.now().isoformat()
+            save_metadata["kept_by"] = uid
         if ai_description:
             save_metadata["ai_description"] = ai_description
 
@@ -5103,6 +5258,9 @@ Output ONLY valid JSON:
                 compiled_output=compiled_output,
                 conversation_id=conversation_id,
                 metadata=save_metadata,
+                # A KEPT DESIGN VISIT IS FILED UNDER THE DESIGN CATEGORY, which is the room the
+                # console reads its cards for. Every other save leaves the category alone.
+                category="design" if is_design_session_save else None,
             )
             action = "updated"
         else:

@@ -3443,6 +3443,7 @@ export class ConsoleChatPanel extends LitElement {
         ? nothing
         : html`
             <chat-navigation-bar
+              seat-label="Console"
               active-tab=${this.collapsed ? '' : this.activeTab}
               allowed-tabs=${this.allowedTabs}
               tab-labels=${this.tabLabels}

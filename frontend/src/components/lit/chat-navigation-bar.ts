@@ -414,6 +414,11 @@ export class ChatNavigationBar extends LitElement {
      * made visible. See `.nb.nd` for the drawn state.
      */
     disabledTabs: { type: String, attribute: 'disabled-tabs' },
+    /** THE SEAT'S OWN NAME (owner, 2026-10-27): the fly-out that opens under the mark
+     *  names the section the person is in. Passed by the room that draws this rail. */
+    seatLabel: { type: String, attribute: 'seat-label' },
+    /** The fly-out is open. Local to the rail; nothing else reads it. */
+    seatMenu: { state: true },
   };
 
   // ── Defaults ─────────────────────────────────────────────────────────────
@@ -464,6 +469,10 @@ export class ChatNavigationBar extends LitElement {
   declare tabLabels?: string;
   /** The room's `disabled-tabs` list. See the property note. */
   declare disabledTabs: string;
+  /** The seat's name, written by the room that draws this rail. See the property note. */
+  declare seatLabel: string;
+  /** Whether the mark's fly-out is open. */
+  declare seatMenu: boolean;
 
   constructor() {
     super();
@@ -474,6 +483,8 @@ export class ChatNavigationBar extends LitElement {
     this.unread = false;
     this.healthCount = 0;
     this.healthState = 'loading';
+    this.seatLabel = '';
+    this.seatMenu = false;
   }
 
   // ── Drag state (not reactive — no re-render needed) ──────────────────────
@@ -503,6 +514,9 @@ export class ChatNavigationBar extends LitElement {
       --nb-icon-y: 8px;
       --nb-label-y: 46px;
       display: block;
+      /* The mark's fly-out opens to the RIGHT of the rail, outside its 74px column, so
+         this element establishes the position it is laid out against. */
+      position: relative;
       height: 100%;
       /* Figma "chat-main-menu-vert" #40001066:4301 — width 74. */
       width: 74px;
@@ -564,12 +578,16 @@ export class ChatNavigationBar extends LitElement {
       color: #fff;
       font-size: 13px;
       font-weight: 700;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
     }
     /* THE MARK BOX IS SQUARE (owner, 2026-10-06: *"actually make 50x50"* — superseding
        his 58×58 a minute earlier; his eye read the old 68×58 box as wider than tall — the
        artwork itself is square). object-fit: contain fits the square canvas to the box:
        the star paints at 50 × (156/171) ≈ 45.6px. Centred in the 74×66 slot. */
+    /* THE MARK IS THE ICONS' SIZE (owner, 2026-10-27: *"the logos feel smaller … same
+       treatment"*). The tab icons are a 38 × 38 box at x 18 (--nb-icon-w/h above); the mark
+       uses the same 38 × 38 box, centred in the 74 × 66 row, so the rail's marks and its icons
+       are one measure. It grows 1.08 under the pointer, exactly like the icons. */
     ::slotted(img) {
       position: absolute;
       top: 50%;
@@ -578,8 +596,56 @@ export class ChatNavigationBar extends LitElement {
       max-width: none;
       object-fit: contain;
       pointer-events: none;
-      width: 50px;
-      height: 50px;
+      width: 38px;
+      height: 38px;
+      transition: transform 0.16s ease;
+    }
+    .lo:hover ::slotted(img),
+    .lo:focus-visible ::slotted(img) {
+      transform: translate(-50%, -50%) scale(1.08);
+    }
+
+    /* ── The mark's fly-out ─────────────────────────────────────────────
+       Opens on a press of the mark (owner, 2026-10-27: *"make click show a fly out menu for
+       the section name"*). It sits OUTSIDE the rail's own column — the rail clips its
+       contents, so the menu is a sibling of the rail and is positioned against this host.
+       The first line names the section; the Console row keeps the door the mark had. */
+    .seat-menu {
+      position: absolute;
+      /* THE RAIL STANDS ON THE WINDOW'S RIGHT EDGE, so the fly-out opens to its LEFT —
+         anchored on its right side, it grows back over the chat column instead of off-screen. */
+      right: 74px;
+      top: 12px;
+      z-index: 40;
+      min-width: 160px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    }
+    .seat-menu-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #2a2440;
+      padding: 2px 6px 8px;
+      white-space: nowrap;
+    }
+    .seat-menu-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      font-size: 13px;
+      color: #3d3d4e;
+      background: none;
+      border: none;
+      padding: 6px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .seat-menu-item:hover {
+      background: #f0edf6;
     }
 
     /* ── Tab button ───────────────────────────────────────────────────── */
@@ -700,7 +766,7 @@ export class ChatNavigationBar extends LitElement {
       position: relative;
       flex-shrink: 0;
       width: 100%;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 700;
       font-style: normal;
       font-size: 13px;
@@ -850,7 +916,7 @@ export class ChatNavigationBar extends LitElement {
       box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.25);
       white-space: nowrap;
       font-size: 10pt;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
       font-weight: 500;
       z-index: 50;
     }
@@ -954,10 +1020,18 @@ export class ChatNavigationBar extends LitElement {
   // Tab click handler
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /** The mark navigates back to the console, like the Console header tab. */
+  /** The mark opens the section's fly-out (owner, 2026-10-27). The Console door lives in
+   *  the fly-out's own row now, so the press still has a way back. */
   private _onLogoClick(): void {
-    window.dispatchEvent(new CustomEvent('navigate-console'));
+    this.seatMenu = !this.seatMenu;
   }
+
+  /** The fly-out's Console row — the door the mark used to be. */
+  private _goConsole = (event: Event): void => {
+    event.stopPropagation();
+    this.seatMenu = false;
+    window.dispatchEvent(new CustomEvent('navigate-console'));
+  };
 
   /** Is this tab on the room's `disabled-tabs` list? See the `disabledTabs` property. */
   private _isTabDisabled(tabId: TabId): boolean {
@@ -1228,6 +1302,14 @@ export class ChatNavigationBar extends LitElement {
              it, along with the right-column-drag-* events it was the only emitter
              of; nothing ever listened for those. -->
       </div>
+      ${this.seatMenu
+        ? html`
+            <div class="seat-menu" role="menu" aria-label=${this.seatLabel || 'Section'}>
+              <div class="seat-menu-name">${this.seatLabel || 'Section'}</div>
+              <button type="button" class="seat-menu-item" @click=${this._goConsole}>Console</button>
+            </div>
+          `
+        : nothing}
     `;
   }
 }

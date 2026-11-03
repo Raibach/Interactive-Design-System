@@ -12,9 +12,14 @@ from database_pool import DatabasePoolManager
 
 # ── THE DESIGN ROOM'S CONVERSATION TABS ────────────────────────────────────────────────────────
 # One package per conversation tab, and one conversation under that package. The titles are the
-# tab's own name; the introductions are the first assistant message, written once when the
-# conversation is created. The owner supplies the final copy; these carry the facts each tab must
-# state. Executions and Settings have no conversation, so they have no entry here.
+# tab's own name. Executions and Settings have no conversation, so they have no entry here.
+#
+# NOTHING IS WRITTEN INTO A TAB'S CONVERSATION BY THE APP (owner, 2026-10-31: *"Don't create
+# hardcoded messages don't tell the AI what to say"*). This block used to hold two first-person
+# introductions, and `get_or_create_design_tab` wrote one as the conversation's first assistant
+# message. Those were the application speaking in her voice: copy written by a person, stored as if
+# she had said it. They are gone, and nothing replaces them. A tab's conversation begins empty; the
+# first turn is the person's, and whatever she says is hers.
 DESIGN_TAB_PACKAGE_TITLES = {
     "chat": "Design — Chat",
     "tools": "Design — Tools",
@@ -25,24 +30,13 @@ DESIGN_TAB_PACKAGE_DESCRIPTIONS = {
     "tools": "The Design room's Tools tab — the Figma ingestion conversation, saved under its tab.",
     "ux": "The Design room's UX tab — the analytics application's conversation, saved under its tab.",
 }
-DESIGN_TAB_INTROS = {
-    "chat": (
-        "I am Grace, your design system assistant. This is the design console: the "
-        "catalogue's components, what was measured, and the checks that did not pass. Ask me "
-        "about a component, a check, or what to work on next. I will not change the catalogue "
-        "without your instruction."
-    ),
-    "tools": (
-        "I am Grace, your design system assistant. This is the Figma ingestion tool: "
-        "you load a Figma file, read its layers, submit a node, review the draft, and "
-        "approve it into the catalogue. Ask me about a layer, an ingest that failed, what "
-        "an element is missing, or what to change before you approve it. I will not approve "
-        "or edit the design for you."
-    ),
-    # THE UX TAB HAS NO SEEDED INTRODUCTION. Its welcome is the PostHog screen the room draws
-    # before the first person turn (rooms/design/ux/posthog-prechat.ts). A second stored greeting
-    # would introduce the tab twice, so this helper deliberately leaves the UX conversation empty.
-}
+
+#: WHAT A DESIGN SYSTEM IS, said once. The console writes it on the system's card row and the
+#: assembly writes it on first use, so the card and the row cannot say different things.
+DESIGN_SYSTEM_DESCRIPTION = (
+    "This design system manages the applications themselves. All components and primitives "
+    "featured are either in use or pending approval."
+)
 
 
 class PromptSessionsAPI:
@@ -479,7 +473,7 @@ class PromptSessionsAPI:
                 )
                 cursor.execute(
                     """
-                    SELECT ps.id, ps.user_id, ps.title, ps.metadata, ps.created_at,
+                    SELECT ps.id, ps.user_id, ps.title, ps.description, ps.metadata, ps.created_at,
                            c.id AS conversation_id
                     FROM prompt_sessions ps
                     -- THE POINTER IS CHECKED, exactly as `get_session` and the console's own read
@@ -499,6 +493,30 @@ class PromptSessionsAPI:
                     return None
                 conn.commit()
                 return dict(row)
+            except Exception:
+                conn.rollback()
+                raise
+
+    def set_session_description(self, session_id: str, description: str) -> bool:
+        """Rewrite one row's description, and say whether it changed anything.
+
+        A DESIGN SYSTEM'S CARD STATES WHAT THE SYSTEM IS, and that sentence belongs to the row —
+        one record, read by the console. Rows created before the sentence existed kept their own,
+        so the card drew nothing and the reader had no way to tell "no description" from "not
+        asked for". Called only when the stored text differs, so a console load writes nothing.
+        """
+        if not session_id or not description:
+            return False
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    "UPDATE prompt_sessions SET description = %s WHERE id = %s",
+                    (description, session_id),
+                )
+                changed = cursor.rowcount > 0
+                conn.commit()
+                return changed
             except Exception:
                 conn.rollback()
                 raise
@@ -559,15 +577,50 @@ class PromptSessionsAPI:
             conn.commit()
             return str(conversation_id)
 
+    def get_latest_design_session(self, user_id: str, tab: str) -> dict[str, Any] | None:
+        """The newest KEPT session of one Design tab — the last conversation that tab had.
+
+        A Save relabels the tab's working row `design_session` (see `routes/ai.py`), which frees
+        the one-per-tab slot the next visit resolves into a fresh, empty row. The work the person
+        just kept was therefore reachable only through its card, while pressing the tab showed an
+        empty chat. This read lets the assembly open the last kept visit instead, when the tab's
+        own package holds no turn of its own.
+
+        ORDER IS `updated_at DESC`: the list's own order, so the first row is the last one written
+        to. Archived rows are not candidates — a card put away is not "last".
+        """
+        if not user_id or not tab:
+            return None
+        with self.get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SET app.current_user_id = %s", (user_id,))
+            cursor.execute(
+                """
+                SELECT id::text AS id
+                  FROM prompt_sessions
+                 WHERE user_id = %s
+                   AND metadata->>'session_type' = 'design_session'
+                   AND metadata->>'design_tab' = %s
+                   AND is_archived IS NOT TRUE
+                 ORDER BY updated_at DESC
+                 LIMIT 1
+                """,
+                (user_id, tab),
+            )
+            row = cursor.fetchone()
+        if not row:
+            return None
+        session_id = row["id"] if isinstance(row, dict) else row[0]
+        return self.get_session(session_id=str(session_id), user_id=user_id)
+
     def get_or_create_design_tab(
         self,
         user_id: str,
         tab: str,
         title: str | None = None,
         description: str | None = None,
-        introduction: str | None = None,
     ) -> dict[str, Any] | None:
-        """The Design room's tab package, its conversation, and its first message.
+        """The Design room's tab package and its conversation.
 
         ONE WRITER FOR ONE SHAPE. The row is `prompt_sessions` with
         `metadata.session_type = 'design_tab'` and `metadata.design_tab = <tab>`; its
@@ -575,9 +628,10 @@ class PromptSessionsAPI:
         the same tab name. The console reads exactly this shape, so the database and the tabs on
         screen cannot drift.
 
-        THE INTRODUCTION IS SEEDED ONCE. It is the conversation's first assistant message, not a
-        greeting that runs on every entry and not a model call. An existing thread keeps every
-        turn it has; the seed writes only when the conversation is empty.
+        THE CONVERSATION STARTS EMPTY, AND THIS METHOD NEVER SPEAKS. It used to seed a first
+        assistant message from a table of written introductions; the owner removed them
+        (2026-10-31: *"Don't create hardcoded messages don't tell the AI what to say"*). An
+        existing thread keeps every turn it has, and a new one has none.
 
         A LOSING INSERT RE-READS THE WINNER. The partial unique index (`init_db.py`) permits one
         `design_tab` row per person per tab, so a second caller that arrives at the same moment
@@ -592,7 +646,6 @@ class PromptSessionsAPI:
         description = description or DESIGN_TAB_PACKAGE_DESCRIPTIONS.get(
             tab, f"The Design room's {tab} tab, saved under its own package."
         )
-        intro = introduction if introduction is not None else DESIGN_TAB_INTROS.get(tab)
 
         def read_package() -> dict[str, Any] | None:
             with self.get_db() as conn:
@@ -723,29 +776,6 @@ class PromptSessionsAPI:
                     "UPDATE prompt_sessions SET conversation_id = %s WHERE id = %s",
                     (conversation_id, package_id),
                 )
-            if intro:
-                cursor.execute(
-                    "SELECT COUNT(*) AS count FROM conversation_messages WHERE conversation_id = %s",
-                    (conversation_id,),
-                )
-                if int(cursor.fetchone()["count"] or 0) == 0:
-                    cursor.execute(
-                        """
-                        INSERT INTO conversation_messages
-                            (conversation_id, user_id, role, content, metadata)
-                        VALUES (%s, %s, 'assistant', %s, %s::jsonb)
-                        """,
-                        (
-                            conversation_id,
-                            user_id,
-                            intro,
-                            json.dumps({"kind": "intro", "save_to_memory": False}),
-                        ),
-                    )
-                    cursor.execute(
-                        "UPDATE conversations SET message_count = 1, updated_at = NOW() WHERE id = %s",
-                        (conversation_id,),
-                    )
 
             cursor.execute(
                 """
@@ -833,7 +863,14 @@ class PromptSessionsAPI:
                           -- 2026-09-30, the owner: *"you're loading cards inside of the console.
                           -- The console should remain untouched."* The rows were there and the
                           -- list had no reason to exclude them; this is that reason.
-                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
+                          -- AND A KEPT DESIGN SESSION IS A CARD (owner, 2026-11-02: the saved
+                          -- session's card "should also add that same card to the main console").
+                          -- The design levels above it are containers; a `design_session` is the
+                          -- package a person kept, and it is listed here like any other package.
+                          AND (
+                            COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
+                            OR COALESCE(ps.metadata->>'session_type', 'prompt_engineering') = 'design_session'
+                          )
                           -- AND THE GOVERNANCE ROOM'S CONTAINER (2026-10-03), same rule: the room's
                           -- row exists so its seat has a session; it is not a card.
                           AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'governance%%'
@@ -872,7 +909,14 @@ class PromptSessionsAPI:
                           -- And the same for the DESIGN levels — the room's container, its
                           -- catalogues, its masters and its children are containers for their
                           -- conversations, never cards in the console.
-                          AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
+                          -- AND A KEPT DESIGN SESSION IS A CARD (owner, 2026-11-02: the saved
+                          -- session's card "should also add that same card to the main console").
+                          -- The design levels above it are containers; a `design_session` is the
+                          -- package a person kept, and it is listed here like any other package.
+                          AND (
+                            COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'design%%'
+                            OR COALESCE(ps.metadata->>'session_type', 'prompt_engineering') = 'design_session'
+                          )
                           -- And the GOVERNANCE room's container (2026-10-03) — same rule.
                           AND COALESCE(ps.metadata->>'session_type', 'prompt_engineering') NOT LIKE 'governance%%'
                     """

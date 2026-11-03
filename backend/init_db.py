@@ -872,6 +872,25 @@ TABLE_DEFINITIONS = {
             at TIMESTAMPTZ NOT NULL
         )
     """,
+    # THE HOLDING CONTAINER FOR A REQUEST THAT NEEDS A DECISION (owner, 2026-11-02). A font the
+    # system does not ship is the first caller; a component that is not in the catalogue can use
+    # the same row. It is a request and a decision, not an event: it has a state ('pending') that
+    # changes once, and the person who asked and the person who decided are both named.
+    'design_requests': """
+        CREATE TABLE IF NOT EXISTS design_requests (
+            id BIGSERIAL PRIMARY KEY,
+            session_id VARCHAR(128) DEFAULT '',
+            kind VARCHAR(32) NOT NULL,
+            subject VARCHAR(200) NOT NULL,
+            reason TEXT DEFAULT '',
+            requested_by UUID,
+            decision VARCHAR(32) NOT NULL DEFAULT 'pending',
+            decided_by UUID,
+            decided_at TIMESTAMPTZ,
+            note TEXT DEFAULT '',
+            at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """,
 }
 
 # Safe column migrations - adds column if missing, never drops
@@ -1097,9 +1116,17 @@ INDEX_DEFINITIONS = [
     # the same `session_type` marker the console uses:
     #
     #   'design'            the experience's own container — one per user
+    #   'design_tab'        the tab's working row — one per user per tab, reused by a visit until
+    #                       it is kept
+    #   'design_session'    a visit that was kept — many per tab, and the console's session cards
     #   'design_catalogue'  one per design system (ours, Carbon, Lion, …) — one per user each
     #   'design_master'     one per element of a catalogue
     #   'design_child'      one per element inside a master
+    #
+    # THE FIRST THREE ARE ONE LIFE, NOT THREE KINDS. A visit works in the tab's own row; keeping it
+    # relabels that row 'design_session', which frees the one-per-tab slot so the next entry to the
+    # tab makes a fresh working row. There is no index for 'design_session' because there is
+    # deliberately no limit on how many kept visits a person has.
     #
     # CONTAINERS AND COLOURS GET NO ROW AT ALL. They live in the catalogue file and the registry
     # (`frontend/src/components/A2UI/catalogs/<id>/catalog.json`, `components/registry.json`) and

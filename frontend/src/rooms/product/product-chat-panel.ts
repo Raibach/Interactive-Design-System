@@ -66,7 +66,7 @@ import '@/rooms/product/chat/product-chat-product-thread';
 import '@/rooms/product/chat/product-chat-error-banner';
 import '@/rooms/product/chat/product-chat-navigation-bar';
 import '@/rooms/product/chat/product-chat-prompt-textarea';
-import logoAsset from '@/components/lit/assets/chat-logo-gemini.png';
+import logoAsset from '@/components/lit/assets/chat-logo-watsonx-code-assistant.svg';
 // The app's own logger. A turn warning from the server is written here as well as drawn in
 // the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
 // owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).

@@ -1,4 +1,6 @@
 /**
+ * FOOTER — its Default is the card's 53px, below.
+ *
  * <design-chat-plugin-tray> — the tray at the foot of the chat column.
  *
  * v.4b source (file 20UPR2KQMsbAxlo5NJb1se): "output-header-area" #40001123:6689 —

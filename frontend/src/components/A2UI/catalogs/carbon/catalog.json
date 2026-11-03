@@ -1,0 +1,1355 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://raibach.net/a2ui/catalogs/carbon/v0_9_1/catalog.json",
+ "title": "Carbon",
+ "whatThisFileIs": "CARBON, IBM'S DESIGN SYSTEM, AS A DEDICATED CATALOGUE (owner, 2026-10-25). The entries are the Carbon Web Components the package already ships; the designer selects this system in the ingest and the tool applies Carbon’s type — IBM Plex — when it stands.",
+ "description": "IBM Carbon Design System catalogue for the ingest: the cds-* web components of @carbon/web-components v2.",
+ "catalogId": "https://raibach.net/a2ui/catalogs/carbon/v0_9_1/catalog.json",
+ "components": {
+  "cds-accordion": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-accordion"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-accordion> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-action-set": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-action-set"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-action-set> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-ai-label": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-ai-label"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-ai-label> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-ai-skeleton": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-ai-skeleton"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-ai-skeleton> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-badge-indicator": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-badge-indicator"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-badge-indicator> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-big-number": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-big-number"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-big-number> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-breadcrumb": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-breadcrumb"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-breadcrumb> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-button": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-button"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-button> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-card": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-card"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-card> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-chat-button": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-chat-button"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-chat-button> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-checkbox": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-checkbox"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-checkbox> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-coachmark": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-coachmark"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-coachmark> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-code-snippet": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-code-snippet"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-code-snippet> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-combo-box": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-combo-box"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-combo-box> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-combo-button": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-combo-button"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-combo-button> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-contained-list": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-contained-list"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-contained-list> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-content-switcher": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-content-switcher"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-content-switcher> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-copy": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-copy"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-copy> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-copy-button": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-copy-button"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-copy-button> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-data-table": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-data-table"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-data-table> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-date-picker": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-date-picker"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-date-picker> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-dialog": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-dialog"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-dialog> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-dropdown": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-dropdown"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-dropdown> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-edit-in-place": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-edit-in-place"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-edit-in-place> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-file-uploader": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-file-uploader"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-file-uploader> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-form": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-form"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-form> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-link": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-link"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-link> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-list": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-list"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-list> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-loading": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-loading"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-loading> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-modal": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-modal"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-modal> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-multi-select": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-multi-select"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-multi-select> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-notification": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-notification"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-notification> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-number-input": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-number-input"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-number-input> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-overflow-menu": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-overflow-menu"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-overflow-menu> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-password-input": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-password-input"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-password-input> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-popover": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-popover"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-popover> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-progress-bar": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-progress-bar"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-progress-bar> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-progress-indicator": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-progress-indicator"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-progress-indicator> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-radio-button": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-radio-button"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-radio-button> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-search": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-search"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-search> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-select": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-select"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-select> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-skeleton": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-skeleton"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-skeleton> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-skip-to-content": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-skip-to-content"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-skip-to-content> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-slider": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-slider"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-slider> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-structured-list": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-structured-list"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-structured-list> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-switch": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-switch"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-switch> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-tabs": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-tabs"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-tabs> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-tag": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-tag"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-tag> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-textarea": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-textarea"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-textarea> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-text-input": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-text-input"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-text-input> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-tile": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-tile"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-tile> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-time-picker": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-time-picker"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-time-picker> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-toast": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-toast"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-toast> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-toggle": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-toggle"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-toggle> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-tooltip": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-tooltip"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-tooltip> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-tree-view": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-tree-view"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-tree-view> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-truncate": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-truncate"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-truncate> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  },
+  "cds-ui-shell": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    },
+    {
+     "$ref": "#/$defs/CatalogComponentCommon"
+    },
+    {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "cds-ui-shell"
+      }
+     },
+     "description": "IBM Carbon Design System's <cds-ui-shell> web component (Carbon v2, the installed @carbon/web-components package), declared here so the Carbon system can be named by the ingest and its assemblies."
+    }
+   ],
+   "required": [
+    "component"
+   ]
+  }
+ },
+ "$defs": {
+  "CatalogComponentCommon": {
+   "type": "object",
+   "properties": {
+    "weight": {
+     "type": "number",
+     "description": "The relative weight of this component within a Row or Column (CSS flex-grow). Only valid for direct children of Row or Column."
+    }
+   }
+  }
+ }
+}

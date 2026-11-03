@@ -81,6 +81,11 @@ INERT_DECLARATIONS: dict[str, dict[str, str]] = {
 # visible instead of silent.
 RAW_TO_SPEC: dict[str, tuple[str, ...]] = {
     "absoluteBoundingBox": ("size", "position"),
+    # TWO KEYS THE PIPELINE EXAMINES AND DOES NOT CARRY. They are named here so the walk reaches
+    # them instead of skipping them as unknown; the reason each is accepted is in
+    # design_renderer.ACCEPTED_UNRENDERED, beside every other examined fact.
+    "arcData": ("arcData",),
+    "styles": ("styles",),
     "layoutMode": ("layout.layoutMode",),
     "itemSpacing": ("layout.itemSpacing",),
     "paddingLeft": ("layout.paddingLeft",),
@@ -599,18 +604,58 @@ def _clip(text: Any, limit: int = 58) -> str:
 
 
 def _runs_drawn(markup: str) -> list[dict[str, str]]:
-    """Every span the drawing emitted for this layer, with its text and its colour."""
+    """Every STYLED span the drawing emitted for this layer, with its text and its colour.
+
+    THE SPAN IS READ BY ITS STYLE ATTRIBUTE, WHEREVER IT SITS IN THE TAG. The first version matched
+    `<span style="…">` exactly: no other attribute before the style, double quotes only, and no
+    nesting. A generated drawing writes `<span class="…" style="…">`, single-quoted styles, and
+    spans inside spans, so a layer whose ranges WERE drawn came back as "0 span(s)" and the check
+    reported a loss the drawing did not have. This walks every span tag, takes its style wherever
+    it is, and finds the matching close by counting nested spans.
+    """
     import re
 
+    tag = re.compile(r"<span\b([^>]*)>")
+    style_attr = re.compile(r"""style\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.S)
     out: list[dict[str, str]] = []
-    for match in re.finditer(r'<span style="([^"]*)">(.*?)</span>', markup, re.S):
-        declarations = [d.strip() for d in match.group(1).split(";") if d.strip()]
+    pos = 0
+    while True:
+        match = tag.search(markup, pos)
+        if not match:
+            break
+        style = style_attr.search(match.group(1))
+        if not style:
+            pos = match.end()
+            continue
+        depth = 1
+        cursor = match.end()
+        body_start = cursor
+        end = None
+        while depth and cursor < len(markup):
+            next_open = markup.find("<span", cursor)
+            next_close = markup.find("</span>", cursor)
+            if next_close == -1:
+                break
+            if next_open != -1 and next_open < next_close:
+                depth += 1
+                cursor = next_open + 5
+            else:
+                depth -= 1
+                if depth == 0:
+                    end = next_close
+                cursor = next_close + 7
+        if end is None:
+            pos = match.end()
+            continue
+        raw_style = style.group(1) if style.group(1) is not None else style.group(2)
+        declarations = [d.strip() for d in raw_style.split(";") if d.strip()]
         out.append({
-            "text": _own_text(match.group(2)),
+            "text": _own_text(markup[body_start:end]),
             "color": _decl(declarations, "color") or "",
             "fontFamily": _unquote_family(_decl(declarations, "font-family")),
             "fontSize": _decl(declarations, "font-size") or "",
         })
+        pos = end + 7
     return out
 
 
@@ -788,6 +833,25 @@ def _compare_fact(
             return None
         if fact == "strokeWeight" and raw_node.get("strokeWeight") is None:
             return None
+        # THE UNIFORM WEIGHT IS NOT A DRAWING INSTRUCTION WHEN THE SIDES SPEAK.
+        #
+        # Measured 2026-11-02 on `chat-output-footer` (40001283:2798): the layer states
+        # `strokeWeight: 1` AND `individualStrokeWeights: {top: 0, right: 0, bottom: 1, left: 0}`.
+        # That is not the file contradicting itself — a uniform weight with per-side overrides is
+        # exactly how Figma states one border on one side. The drawing follows the sides
+        # (`0px 0px 1px 0px`, verified equal), and this check then compared the uniform `1px`
+        # against that border and reported "differs" — a failure the program invented, over a
+        # design that was right. The fact is accepted with its reason instead: it asks for no
+        # drawing of its own, because the sides above it decide the border.
+        if fact == "strokeWeight" and weights:
+            return row(
+                f"{_n(float(raw_node.get('strokeWeight')))}px",
+                " ".join(f"{_n(float(weights.get(side, raw_node.get('strokeWeight') or 0)))}px"
+                         for side in ("top", "right", "bottom", "left")),
+                "the four sides state their own weights, so this uniform weight draws nothing of "
+                "its own — the per-side weights above it decide the border",
+                "accepted",
+            )
         got = _stroke_drawn(spec_node, decls)
         if fact == "strokeWeight":
             wanted = float(raw_node.get("strokeWeight"))
@@ -1458,6 +1522,27 @@ def annotation_report(raw_document: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _system_faces() -> set[str]:
+    """The families this application actually ships — read from the one sheet that declares them.
+
+    THE ONE PLACE THE FACES ARE DECLARED is `frontend/public/fonts/fonts.css`; reading it here
+    means the answer and the page cannot disagree about what the system has. A sheet that cannot be
+    read returns an empty set, and the caller treats that as "not known" rather than as "the system
+    ships nothing" — a face must never be called missing on a failed read.
+    """
+    import os
+    import re
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    sheet = os.path.join(os.path.dirname(here), "frontend", "public", "fonts", "fonts.css")
+    try:
+        with open(sheet, encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError:
+        return set()
+    return {m.lower() for m in re.findall(r"font-family:\s*['\"]([^'\"]+)['\"]", text)}
+
+
 def design_findings(raw_document: dict[str, Any]) -> list[dict[str, Any]]:
     """FACTS IN THE FILE THAT CANNOT BE DRAWN AS THE FILE STATES THEM — the designer's to fix.
 
@@ -1647,40 +1732,90 @@ def confession(report: dict[str, Any]) -> dict[str, Any]:
     # user needs to be warned about. I'm going to replace this font, you did not use the system
     # font."* So every layer whose stated family is not the system's face is collected here and
     # said in the verdict — not buried in the table, and not treated as a defect of the design.
+    # NO FONT WARNING, BECAUSE NOTHING IS SUBSTITUTED (owner, 2026-11-01). This block used to say
+    # the application would draw its own face in place of the design's; the renderer now writes the
+    # family the design states, so that sentence would be false. The faces are still collected, as a
+    # fact — the answer names them where they are read, and the drawing carries them unchanged.
     fonts: list[dict[str, str]] = []
-    for row in report["rows"]:
-        if row.get("fact") != "style.fontFamily":
-            continue
-        stated = str(row.get("source") or "").strip()
-        if stated and stated != _SYSTEM_FACE:
+    declared_faces = _system_faces()
+    # THE FACES COME FROM THE WALK, NOT FROM ONE ROW PER LAYER: a family styled inside a text
+    # layer's runs is stated by the file just as much as its primary style, and reading only
+    # `style.fontFamily` asked about the family the drawing might never use.
+    for entry in report.get("faces") or []:
+        stated = str(entry.get("family") or "").strip()
+        if stated:
             fonts.append({
-                "layer": str(row.get("layer") or ""),
-                "path": str(row.get("path") or ""),
+                "layer": ", ".join(entry.get("layers") or [])[:200],
+                "path": "",
                 "stated": stated,
-                "drawn": _SYSTEM_FACE,
+                "drawn": stated,
+                # WHICH OF THE TWO THE FACE IS, said per row so the answer can ask a question
+                # instead of printing a warning: a face the system declares is simply carried, and
+                # a face it does not is the one thing the person is being asked about.
+                "declared": stated.lower() in declared_faces,
             })
-    if fonts:
-        stated_faces = ", ".join(sorted({entry["stated"] for entry in fonts}))
-        warning = (
-            f" FONT WARNING: {len(fonts)} layer(s) use {stated_faces}, which this system does not "
-            f"ship. The application will draw {_SYSTEM_FACE}, its one face, in place of it. Each "
-            "layer is named in this answer."
-        )
-    else:
-        warning = ""
+    # ── THE FACES THIS SYSTEM DOES NOT SHIP, STATED — AND THE DRAWING LEFT ALONE (plan 1.3) ───
+    # Owner, 2026-11-02: *"all fonts are supposed to be the IBM font… we're moving everything to
+    # IBM"*, and on what a drawn component does when a design states another family: *"Draw as the
+    # file states."* So this is a STATEMENT, not a question and not a warning: the system's face is
+    # IBM Plex, these layers state others, and the component draws them exactly as the file says.
+    # Nothing is substituted and there is nothing to press — a system that quietly replaced a face
+    # would draw a design nobody measured.
+    font_notice: dict[str, Any] | None = None
+    if declared_faces:
+        missing_faces: dict[str, list[str]] = {}
+        for entry in fonts:
+            if not entry["declared"]:
+                missing_faces.setdefault(entry["stated"], []).append(entry["layer"])
+        if missing_faces:
+            families = sorted(missing_faces)
+            font_notice = {
+                "faces": [
+                    {"family": family, "layers": sorted(set(missing_faces[family]))}
+                    for family in families
+                ],
+                "statement": (
+                    f"This design uses {', '.join(families)}. This system is IBM Plex and does not "
+                    "ship these faces; the drawing carries them exactly as your file states them."
+                ),
+            }
+    warning = ""
 
     drawn_count = report["counts"].get("drawn", 0)
+    # THE FULL SCOPE, NOT A TIDY COUNT (owner, 2026-11-01: *"you're still trying to protect the
+    # design output — you need to show the full scope of your failure. The error is the point."*).
+    # So the sentence states how many facts the file holds, how many were drawn, how many were
+    # accepted without a drawing, and how many did not survive — with the kinds, so the shape of the
+    # failure is visible before a single row is read.
+    _counts = {str(k): int(v) for k, v in (report.get("counts") or {}).items() if isinstance(v, (int, float))}
+    _total = sum(_counts.values())
+    _drawn_total = _counts.get("drawn", 0)
+    _accepted_total = _counts.get("accepted", 0)
+    _kinds: dict[str, int] = {}
+    for _row in missing:
+        _fact = str(_row.get("fact") or "")
+        _kind = _fact.split(".")[1] if _fact.startswith("style.") and "." in _fact else _fact
+        _kinds[_kind] = _kinds.get(_kind, 0) + 1
+    _kind_text = ", ".join(
+        f"{name} ×{count}" for name, count in sorted(_kinds.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
     if missing:
         things = "1 thing" if len(missing) == 1 else f"{len(missing)} things"
-        mine = ("It is the pipeline's to fix, not your file's." if len(missing) == 1
-                else "They are the pipeline's to fix, not your file's.")
+        # A CONFESSION, NOT A VERDICT ON THE FILE (owner, 2026-11-01). This used to end "they are the
+        # pipeline's to fix, not your file's" — a statement about blame, made by the process being
+        # judged, and addressed to a person whose file may well be the thing that is wrong. The
+        # block's purpose during development is to tell the owner, in the system's own voice, what it
+        # failed to read or draw. So it says only what happened, and names the values.
         about_file = (
-            f" {len(design)} observation(s) about the file itself are listed separately, with the numbers."
+            f" {len(design)} further observation(s) about the file itself are listed separately, with the numbers."
             if design else ""
         )
         sentence = (
-            f"I could not read or draw {things} in this design, and I built the component anyway. "
-            f"{mine}{about_file} Each one is named with the value I found.{warning}"
+            f"I read {_total} stated facts in this file: {_drawn_total} drawn, "
+            f"{_accepted_total} accepted without a drawing, and {len(missing)} that did not survive"
+            + (f" ({_kind_text})" if _kind_text else "")
+            + f".{about_file} The component was built anyway. Each one is named below with the value "
+            "I found and the value I drew."
         )
     else:
         sentence = (
@@ -1693,7 +1828,41 @@ def confession(report: dict[str, Any]) -> dict[str, Any]:
             + warning
         )
     return {"missing": missing, "count": len(missing), "accepted": accepted, "design": design,
-            "fonts": fonts, "sentence": sentence}
+            "fonts": fonts, "fontNotice": font_notice, "sentence": sentence,
+            "account": account(report)}
+
+
+def account(report: dict[str, Any]) -> dict[str, Any]:
+    """THE ACCOUNTING, CLOSED — every fact counted once, and the equation checked.
+
+    Owner, 2026-11-02: *"the AI has to read every single spec on that Figma file and assemble it
+    according to that Figma file … no interpretation, no evaluation."* A total is not a proof of
+    that. Three things make it one: every row falls in exactly one bucket, no (layer, fact) pair is
+    counted twice, and the three buckets add up to the rows that were read. The third follows from
+    the first two only if the buckets are exhaustive, so this checks all three and says when the
+    report itself cannot be trusted — which is a defect of the instrument, not of the design.
+    """
+    rows = report.get("rows") or []
+    seen: dict[tuple[str, str], int] = {}
+    for row in rows:
+        # THE LAYER'S NAME AND ITS FACT, not its node id: a row may carry no id, and then every
+        # node in the report would collide with every other one and a clean report would be read
+        # as full of duplicates. The layer label is what the row prints, so it is what identifies
+        # it for the count.
+        key = (str(row.get("layer") or ""), str(row.get("fact") or ""))
+        seen[key] = seen.get(key, 0) + 1
+    duplicates = [f"{key[0]} · {key[1]} (×{count})" for key, count in seen.items() if count > 1]
+    drawn = sum(1 for row in rows if row.get("verdict") == "drawn")
+    accepted = sum(1 for row in rows if row.get("verdict") == "accepted")
+    missing = sum(1 for row in rows if row.get("verdict") not in ("drawn", "accepted"))
+    return {
+        "total": len(rows),
+        "drawn": drawn,
+        "accepted": accepted,
+        "missing": missing,
+        "duplicates": duplicates,
+        "closed": not duplicates and len(rows) == drawn + accepted + missing,
+    }
 
 
 def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
@@ -1729,6 +1898,19 @@ def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
     """
     blocking: list[str] = []
     reported: list[str] = []
+
+    # AN ACCOUNTING THAT DOES NOT CLOSE IS THE INSTRUMENT'S OWN FAULT, and it blocks. A repeated
+    # fact means the answer cannot be read as "every fact once", so nothing downstream of it may
+    # be trusted; the rows below it are still printed, so the fault is diagnosable.
+    ledger = account(report)
+    if not ledger["closed"]:
+        blocking.append(
+            "the report's own accounting does not close: "
+            f"{ledger['total']} rows, {ledger['drawn']} drawn, {ledger['accepted']} accepted, "
+            f"{ledger['missing']} missing"
+            + (f"; counted twice: {', '.join(ledger['duplicates'][:5])}" if ledger["duplicates"] else "")
+            + " — a defect in this check, not in your file"
+        )
 
     for key in report["key_coverage"]["omissions"]:
         blocking.append(
@@ -1780,6 +1962,8 @@ def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
         "design": spoken["design"],
         # THE FACES THE DESIGN NAMED THAT THE SYSTEM DOES NOT SHIP, with the face it will draw.
         "fonts": spoken["fonts"],
+        # THE QUESTION ABOUT A FACE THE SYSTEM DOES NOT DECLARE — asked, not warned (plan 1.3).
+        "fontNotice": spoken.get("fontNotice"),
         # EVERY ANNOTATION IN THE FILE, verbatim, per layer.
         "annotations": report.get("annotations") or [],
         # EVERY FACT WHOSE TWO VALUES DISAGREE, with both values and the difference. This is what a
@@ -1787,6 +1971,9 @@ def fidelity_gate(report: dict[str, Any]) -> dict[str, Any]:
         "mismatches": mismatches,
         "reported": reported,
         "counts": report["counts"],
+        # THE SCOPE OF THE RUN, so the preview's heading can say "11 of 132" rather than "11 things".
+        "factsRead": sum(int(v) for v in (report.get("counts") or {}).values() if isinstance(v, (int, float))),
+        "factsDrawn": int((report.get("counts") or {}).get("drawn", 0) or 0),
         "exactness": report.get("exactness", {}),
         "missing_ellipses": ellipses,
         # One sentence for the root of the ingest's own answer, so the gap is visible without a
@@ -1828,6 +2015,10 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
 
     rows: list[dict[str, Any]] = []
     used: dict[str, int] = {}
+    # EVERY FACE THE FILE STATES, from the layer's primary style AND from the styles inside its
+    # runs. A layer whose visible words are styled in ranges states its family inside the runs,
+    # and reading only the primary style asked about a face the drawing may never use.
+    faces_by_family: dict[str, set[str]] = {}
 
     def walk(raw_node: dict[str, Any], spec_node: dict[str, Any], is_root: bool,
              parent_spec: dict[str, Any] | None = None, path: str = "") -> None:
@@ -1835,6 +2026,13 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
         decls = host if is_root else rules.get(class_name, [])
         markup = _markup_for_class(source, class_name)
         layer = f"{raw_node.get('name')} ({raw_node.get('type')})"
+        # the layer's own family, then every family inside its styled ranges
+        for family in [ (raw_node.get("style") or {}).get("fontFamily") ] + [
+            (run.get("style") or {}).get("fontFamily") for run in (spec_node.get("runs") or [])
+        ]:
+            family = str(family or "").strip()
+            if family:
+                faces_by_family.setdefault(family, set()).add(layer)
         # THE LAYER'S NAME PATH — the identity that survives a re-drawn Figma file. Node ids change
         # when a designer replaces a design; the layer names are what stay the same, so a comparison
         # between two ingests is keyed on THIS and never on the id alone.
@@ -1892,6 +2090,14 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
                                      "prose — no instruction to draw, correctly absent",
                                      " | ".join(labels), "nothing to draw"))
                 continue
+            if key in ACCEPTED_UNRENDERED:
+                # DELIBERATE, AND SAID SO. The renderer names these as measured facts it will not
+                # draw, each with its reason written down — the opposite of a silent loss, and a
+                # different verdict from one. Checked BEFORE the spec lookup, because a fact that
+                # is deliberately not declared has no drawn value to compare against and no spec
+                # path to search for.
+                rows.append(_row(layer, raw_node, key, class_name, "accepted", ACCEPTED_UNRENDERED[key]))
+                continue
             spec_paths = RAW_TO_SPEC[key]
             landed = next((p for p in spec_paths if _spec_value(spec_node, p) is not None), None)
             if landed is None:
@@ -1906,13 +2112,6 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
                 continue
             if key == "textTruncation":
                 rows.append(_truncation_row(layer, raw_node, spec_node, class_name))
-                continue
-            if key in ACCEPTED_UNRENDERED:
-                # DELIBERATE, AND SAID SO. The renderer names these as measured facts it will not
-                # draw, each with its reason written down — the opposite of a silent loss, and a
-                # different verdict from one. Checked BEFORE the value comparison, because a fact
-                # that is deliberately not declared has no drawn value to compare against.
-                rows.append(_row(layer, raw_node, key, class_name, "accepted", ACCEPTED_UNRENDERED[key]))
                 continue
             if key == "componentId" and (raw_node.get("type") or "").upper() == "INSTANCE":
                 # AN INSTANCE IS NOT "MISSING" HERE — THE PREVIEW IS BLIND ON PURPOSE. The owner
@@ -2024,6 +2223,11 @@ def fidelity_report(raw_document: dict[str, Any], tag: str | None = None,
         "node": raw_document.get("id"),
         "layers": sum(1 for _ in _walk_nodes(raw_document)),
         "rows": rows,
+        # the faces the file states, for the question the answer asks about one it does not have
+        "faces": sorted(
+            ({"family": family, "layers": sorted(layers)} for family, layers in faces_by_family.items()),
+            key=lambda entry: entry["family"],
+        ),
         "counts": counts,
         # THE ONE NUMBER THE DESIGNER READS FIRST: how many facts were compared value for value,
         # and how many of them the drawing carries exactly. A design is 100% when this says 100,

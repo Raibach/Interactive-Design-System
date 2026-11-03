@@ -93,7 +93,7 @@ export class CatalogComponentNodeRaibachIds extends LitElement {
       box-sizing: border-box;
       flex-grow: 1;
       align-self: stretch;
-      font-family: "Inter", sans-serif;
+      font-family: var(--catalog-row-font, "Inter", sans-serif);
       font-weight: 500;
       font-size: 14px;
       line-height: 16px;
@@ -168,7 +168,7 @@ export class CatalogComponentNodeRaibachIds extends LitElement {
       box-sizing: border-box;
       flex-grow: 1;
       align-self: stretch;
-      font-family: "Inter", sans-serif;
+      font-family: var(--catalog-row-font, "Inter", sans-serif);
       font-weight: 500;
       font-size: 12px;
       line-height: 14.5227px;

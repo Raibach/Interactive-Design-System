@@ -1,4 +1,6 @@
 /**
+ * INPUT — its Default is the height it rests at; it never closes to nothing.
+ *
  * <design-chat-input> — the frame's "chat-input-area" (node 40001066:4330).
  *
  * Figma source: a region — column, stretch, padding 20px, gap 10px, fill #E5E1DD,

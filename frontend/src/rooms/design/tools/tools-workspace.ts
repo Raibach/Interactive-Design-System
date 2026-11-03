@@ -2,7 +2,7 @@
  * <tools-workspace> — THE TOOLS TAB'S OWN CONTAINER (owner, 2026-10-25: "make one exactly
  * like the chat but it is for tools only"). The same three-column layout as the chat's frame,
  * byte-for-byte — the grippers, the folding, the overlay rule, the widths — under a name only
- * the Tools tab draws. The column's footer (the Apply Carbon bar) is referenced here and
+ * the Tools tab draws. The column's footer (the Save bar) is referenced here and
  * nowhere else.
  *
  * Lit resizable 3-column workspace (A2UI v0.9.1)

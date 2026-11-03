@@ -95,6 +95,19 @@ export function useNotificationGate(options?: NotificationGateOptions): Notifica
       // A2UI: Just update internal state - AI assembly handles surface changes
       if (tabId !== headerTab) {
         setHeaderTab(tabId);
+        return;
+      }
+      /*
+       * A REPEATED PRESS MEANS "TAKE ME HOME" (owner, 2026-11-02): *"if I click on the tab again,
+       * while in the design seat, it should reload the console or homepage of design."*
+       *
+       * The header's own note says the host decides what a repeat means; this handler used to
+       * swallow it, so a second press on Design did nothing at all. Design is the one room with a
+       * landing above its seats, so a repeat on it closes the seat that is standing and draws the
+       * console again — the same door the room's own Back to console uses.
+       */
+      if (tabId === "design") {
+        window.dispatchEvent(new CustomEvent("design-console-open"));
       }
     },
     [headerTab],

@@ -355,7 +355,18 @@ export class ChatHeader extends LitElement {
        declaration had kept the bar's 14, so the readout drew a size the frame does not have.
        Stated on the readout's own element rather than on .status, because the conversations
        line shares .status and keeps 14. */
-    .readout { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+    /* THE LINE ENDS IN AN ELLIPSIS, IT DOES NOT FOLD (owner, 2026-10-27: *"this text in the
+       header needs to use ellipses instead of folding up like this"*). One line, cut where the
+       bar ends, with the cut marked. It used to wrap, so a long readout grew the header and
+       drew its own box over the bar beneath it. */
+    .readout {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     /* #40001123:6744 — the conversations line is DM Sans 600 at 14/22 in the drawing. Its 14
        is declared here so the readout's 12 does not take it.
        THE OWNER MOVED THE FACE TOO, 2026-10-07: asked which local family replaces DM Sans,

@@ -1,6 +1,6 @@
 /**
- * <figma-ingest-form> — the ingest rail's TOP HALF, as a catalogue element: the Figma URL field,
- * the Notes field and Submit.
+ * <figma-ingest-form> — the ingest rail's TOP HALF, as a catalogue element: the Title field, the
+ * Figma URL field, the Notes field and Submit.
  *
  * WHY THIS EXISTS, AND WHY IT IS NOT A NEW DESIGN. The ingestion application is the TEMPLATE: its
  * left column is the Figma URL and the Notes over the catalogue tree, and the room's left column
@@ -10,8 +10,10 @@
  * `model-selector-button` take no text. So the input the owner asked for twice —
  * *"where is the Figma input? … why would you leave out the most important part"* — could not be
  * named by any surface until something drew it, and this is that something. It is a TRANSLATION:
- * the same two fields, the same words, the same call, expressed as a catalogue element bound to
- * the surface instead of a React input inside a modal.
+ * the same fields, the same words, the same call, expressed as a catalogue element bound to
+ * the surface instead of a React input inside a modal. The Title field is this room's addition
+ * (owner, 2026-10-31): the work is named before the design is read, so the package already carries
+ * the name the person gave it when it is saved.
  *
  * IT DRAWS THE FORM AND NOTHING ELSE. It fetches nothing, parses nothing and ingests nothing. On
  * Submit it dispatches ONE event with what was typed, and the shell runs the ingest — the same
@@ -20,11 +22,16 @@
  * is reimplemented here. A view that fetched would be a second implementation of the ingest; a
  * form that dispatched is the first half of the one that exists.
  *
- * THE EVENT, AND WHO ANSWERS IT. `ingest-submit`, composed and bubbling, detail `{ url, notes }` —
- * the raw text, exactly as typed, because deciding what a typed string means (a node tag, a layer
- * name, a URL) is the ingest's own logic (`IngestModal.handleIngest`) and not this element's.
- * The shell listens for it and calls the endpoint. Until the shell answers, Submit is a button
- * that reports the truth on the console rather than a button that lies.
+ * AND THE FIELDS AS THEY ARE TYPED. `ingest-field-change` carries the same three values on every
+ * keystroke, because SAVE at the foot of the column must see the title before anything is
+ * submitted: a person names the work above the Figma URL and keeps the session without running an
+ * ingest. Nothing is decided by either event — both carry the raw text.
+ *
+ * THE EVENT, AND WHO ANSWERS IT. `ingest-submit`, composed and bubbling, detail
+ * `{ title, url, notes }` — the raw text, exactly as typed, because deciding what a typed string
+ * means (a node tag, a layer name, a URL) is the ingest's own logic (`IngestModal.handleIngest`)
+ * and not this element's. The shell listens for it and calls the endpoint. Until the shell answers,
+ * Submit is a button that reports the truth on the console rather than a button that lies.
  *
  * `busy` IS THE HOST'S, NOT OURS. While an ingest is in flight the host sets it: the fields lock
  * and Submit reads "Ingesting…". The element never decides that an ingest is running, because only
@@ -35,6 +42,12 @@ import { designTokens } from '@/shared/design-tokens';
 
 export class FigmaIngestForm extends LitElement {
   static properties = {
+    /*
+     * Prefilled title, when the host has one. The field stays editable either way, and the title
+     * is the name the person gives the work before the design is read, so the package is already
+     * named when it is saved.
+     */
+    title: { type: String },
     /** Prefilled URL, when the host has one. The field stays editable either way. */
     url: { type: String },
     /** Prefilled notes. */
@@ -45,6 +58,7 @@ export class FigmaIngestForm extends LitElement {
     message: { type: String },
   };
 
+  declare title: string;
   declare url: string;
   declare notes: string;
   declare busy: boolean;
@@ -52,6 +66,7 @@ export class FigmaIngestForm extends LitElement {
 
   constructor() {
     super();
+    this.title = '';
     this.url = '';
     this.notes = '';
     this.busy = false;
@@ -107,6 +122,9 @@ export class FigmaIngestForm extends LitElement {
         font: inherit;
         font-size: var(--ds-fs-sm);
       }
+      /* The Title field takes the form's whole width, the way the Notes field does, because it
+         stands over the Figma URL rather than beside it. */
+      input.title { width: 100%; }
       input::placeholder { color: var(--ds-muted); }
       /* Owner, 2026-10-01: the Notes field matches the form's width and stands twice as tall as
          the URL field (a text input's own width is its content's, and it was drawn that narrow). */
@@ -158,6 +176,23 @@ export class FigmaIngestForm extends LitElement {
     `,
   ];
 
+  /**
+   * THE FIELDS AS THEY ARE TYPED, for the seat that saves. Submit is not the only moment a value
+   * matters: a person names the work above the Figma URL and presses SAVE at the foot of the
+   * column without submitting anything, and the title they typed is the name the session is kept
+   * under. Nothing is decided here — the three values travel as typed, exactly as they do on
+   * submit.
+   */
+  private _announceFields() {
+    this.dispatchEvent(
+      new CustomEvent('ingest-field-change', {
+        bubbles: true,
+        composed: true,
+        detail: { title: this.title, url: this.url, notes: this.notes },
+      }),
+    );
+  }
+
   private _onSubmit(e: Event) {
     e.preventDefault();
     const url = this.url.trim();
@@ -171,7 +206,7 @@ export class FigmaIngestForm extends LitElement {
       new CustomEvent('ingest-submit', {
         bubbles: true,
         composed: true,
-        detail: { url, notes: this.notes.trim() },
+        detail: { title: this.title.trim(), url, notes: this.notes.trim() },
       }),
     );
   }
@@ -191,6 +226,18 @@ export class FigmaIngestForm extends LitElement {
       -->
       <form novalidate @submit=${this._onSubmit}>
         <div>
+          <label for="figma-title">Title</label>
+          <input
+            id="figma-title"
+            class="title"
+            type="text"
+            placeholder="Name this session"
+            .value=${this.title}
+            ?disabled=${this.busy}
+            @input=${(e: Event) => { this.title = (e.target as HTMLInputElement).value; this._announceFields(); }}
+          />
+        </div>
+        <div>
           <label for="figma-url">Figma URL</label>
           <div class="row">
             <input
@@ -199,7 +246,7 @@ export class FigmaIngestForm extends LitElement {
               placeholder="https://www.figma.com/file/FILE_KEY/NAME?node-id=NODE_ID"
               .value=${this.url}
               ?disabled=${this.busy}
-              @input=${(e: Event) => { this.url = (e.target as HTMLInputElement).value; }}
+              @input=${(e: Event) => { this.url = (e.target as HTMLInputElement).value; this._announceFields(); }}
             />
             <button type="submit" ?disabled=${this.busy || !this.url.trim()}>
               ${this.busy ? 'Ingesting…' : 'Submit'}
@@ -213,7 +260,7 @@ export class FigmaIngestForm extends LitElement {
             placeholder="Notes (optional)"
             .value=${this.notes}
             ?disabled=${this.busy}
-            @input=${(e: Event) => { this.notes = (e.target as HTMLInputElement).value; }}
+            @input=${(e: Event) => { this.notes = (e.target as HTMLInputElement).value; this._announceFields(); }}
           />
         </div>
         ${this.message ? html`<p class="message">${this.message}</p>` : nothing}

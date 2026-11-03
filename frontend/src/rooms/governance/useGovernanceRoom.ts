@@ -92,6 +92,15 @@ export function useGovernanceRoom(deps: UseGovernanceRoomDeps) {
        (and its drawing sample) steps aside while the strip stands. NOT a tab view: the
        bar keeps saying which trace is on the table whatever the rail shows. */
     headerEl.setAttribute('slot', 'status-content');
+    /* AND IT FILLS THE BAR IT IS HANDED TO (owner, 2026-10-27: the readout sat in a narrow
+       column with empty space beside it). The strip is the room's own light-DOM child, relayed
+       through the seat's slot into the bar's readout row; styles aimed at the relay did not
+       reach it (measured: 222px inside a 506px bar), so the element itself states its size —
+       one owner, no selector chain to lose the race. */
+    headerEl.style.flex = '1 1 auto';
+    headerEl.style.minWidth = '0';
+    headerEl.style.width = '100%';
+    headerEl.style.textAlign = 'left';
     /* THE EVALS EXPERIENCE WEARS THE SAME READOUT — its bar says "Model usage" with the
        room's real facts, never the chat drawing sample (owner, 2026-10-17). */
     const evalsHeaderEl = document.createElement('trace-context-header') as HTMLElement;

@@ -85,6 +85,48 @@ class EnsureModelRequest(BaseModel):
     model_type: str = "grace"  # "grace" (Z.ai GLM-4.7), "karen", "lm_studio", or "zai"
 
 
+def _name_conversation_if_unnamed(
+    conversation_api,
+    conversation_id: str,
+    user_id: str,
+    question: str,
+) -> None:
+    """NAME A CHAT FROM ITS FIRST SENTENCE, ONCE (owner, 2026-11-02).
+
+    *"a chat process with a automatically saved title and automatically saved conversation"* —
+    the conversation is written by this route already; its name was nobody's job. A thread opened
+    from a new-chat mark, or created with its tab's name, kept that placeholder for its whole life,
+    so every row in a list read the same. This writes the person's own first sentence, and only
+    while the title is still a placeholder, so a name a person gave is never overwritten.
+
+    ONE WRITER. The seats do not name their conversations; every chat in the application passes
+    through this route's person turn, and the naming follows the write.
+    """
+    text = " ".join(str(question or "").split())
+    if not text:
+        return
+    placeholders = {
+        "",
+        "New Chat",
+        "New chat",
+        "(untitled)",
+        "Untitled",
+        "Untitled Conversation",
+        "Design console",
+        "Design — Tools",
+        "Design · Console",
+        "Console — Chat",
+    }
+    try:
+        convo = conversation_api.get_conversation(conversation_id, user_id)
+        current = str((convo or {}).get("title") or "").strip()
+        if current not in placeholders:
+            return
+        conversation_api.update_conversation(conversation_id, user_id, title=text[:80])
+    except Exception as e:  # noqa: BLE001 — the turn is saved; only its name did not follow
+        print(f"⚠️  the conversation's name could not be written for {str(conversation_id)[:8]}…: {e}")
+
+
 def _with_tool_results(context: str, blocks: list[str], warnings: list[str]) -> str:
     """Fold executed tool results into the structured prompt config.
 
@@ -353,6 +395,9 @@ async def api_teacher_query(request: TeacherQueryRequest):
             except Exception as e:
                 persistence_error = f"Your message could not be written to this package's conversation: {e}"
                 print(f"❌ Failed to save user message: {e}")
+            else:
+                # THE ROW IS NAMED BY WHAT THE PERSON SAID, the same turn that was just written.
+                _name_conversation_if_unnamed(state.conversation_api, conv_id, uid, request.question)
         elif state.conversation_api and conv_id and persist_turn:
             print(
                 f"ℹ️  the app asked for this turn (person_turn=false): Grace is opening the "

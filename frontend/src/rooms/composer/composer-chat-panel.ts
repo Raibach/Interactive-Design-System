@@ -60,7 +60,7 @@ import '@/components/lit/chat-product-thread';
 import '@/components/lit/error-banner';
 import '@/components/lit/chat-navigation-bar';
 import '@/components/lit/prompt-input/prompt-textarea';
-import logoAsset from '@/components/lit/assets/chat-logo-gemini.png';
+import logoAsset from '@/components/lit/assets/chat-logo-watsonx-orchestrate.svg';
 // The app's own logger. A turn warning from the server is written here as well as drawn in
 // the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
 // owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).
@@ -5170,6 +5170,7 @@ export class ComposerChatPanel extends LitElement {
         ? nothing
         : html`
             <chat-navigation-bar
+              seat-label="Composer"
               active-tab=${this.collapsed ? '' : this.activeTab}
               allowed-tabs=${this.allowedTabs}
               tab-labels=${this.tabLabels}

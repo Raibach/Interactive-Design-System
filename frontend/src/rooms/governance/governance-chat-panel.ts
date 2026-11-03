@@ -40,7 +40,7 @@ import '@/components/lit/chat-product-thread';
 import '@/components/lit/error-banner';
 import '@/components/lit/chat-navigation-bar';
 import '@/components/lit/prompt-input/prompt-textarea';
-import logoAsset from '@/components/lit/assets/chat-logo-gemini.png';
+import logoAsset from '@/components/lit/assets/chat-logo-watsonx-governance.svg';
 // The app's own logger. A turn warning from the server is written here as well as drawn in
 // the thread: the Trace tab reads this logger (lib/trace-source subscribes to it), and the
 // owner asked for exactly that — "we need to report it in the console trace" (2026-09-18).
@@ -1374,6 +1374,13 @@ export class GovernanceChatPanel extends LitElement {
   // handleMouseDown/handleMouseMove): min 100, max min(600, panel - 190).
   private _dragStartY = 0;
   private _dragStartHeight = 0;
+  // THE HAND'S HOLD ON THE EDGE, taken at drag start. The grip strip sits ABOVE the input
+  // area's top edge, so placing the edge AT the pointer made the whole input jump away from
+  // the hand on the first move (owner, 2026-10-26: *"the buttons and design in the chat, they
+  // don't follow the mouse"*). The offset below is (pointer − edge) at the grab; the edge keeps
+  // it, so the edge moves exactly as far as the hand does.
+  private _dragEdgeBottom = 0;
+  private _dragGrabOffset = 0;
   // The bar and footer heights, measured ONCE at drag start. Reading
   // getBoundingClientRect on every mousemove forces synchronous layout per
   // frame — the classic resize-lag pattern. They don't change mid-drag.
@@ -1414,6 +1421,19 @@ export class GovernanceChatPanel extends LitElement {
     ) as HTMLElement | null;
     this._barHeight = bar?.getBoundingClientRect().height || 82;
     this._footerHeight = footer?.getBoundingClientRect().height || 97;
+    /* THE EDGE THE HAND IS HOLDING — the input's own box, measured once. Its bottom does not
+       move during the drag (the foot below fixes it), so the box is the stable floor: the
+       pointer plus the grab offset is the top. Measuring the box beats assuming the host's
+       bottom less the foot, which left a gap the first move had to absorb as a jump. */
+    const input = this.renderRoot?.querySelector('chat-input') as HTMLElement | null;
+    const box = input?.getBoundingClientRect();
+    if (box && box.height > 0) {
+      this._dragEdgeBottom = box.bottom;
+      this._dragGrabOffset = this._dragStartY - box.top;
+    } else {
+      this._dragEdgeBottom = 0;
+      this._dragGrabOffset = 0;
+    }
   }
 
   private _onResizeMove(e: Event) {
@@ -1426,16 +1446,20 @@ export class GovernanceChatPanel extends LitElement {
     // moment anything reflows — the cap below clamps, the pane resizes, the footer
     // re-measures — and the edge ends up somewhere the cursor is not, for the rest of the drag.
     //
-    // The input area sits above the footer and below this bar, so its floor is the host's
-    // bottom edge less the footer. The pointer IS the top edge.
+    // The input area sits above the footer and below this bar, so its top is the edge the
+    // hand holds. THE POINTER IS NOT THE EDGE: the grip strip sits above the edge, so the
+    // edge follows `pointer + grabOffset`. Reading the pointer each move keeps the edge on
+    // the hand after the cap clamps and releases; the measured bottom keeps it from jumping.
     //
     // The cap must RESERVE the bar, the footer, and the output floor, so a big drag shrinks
     // the output region instead of stretching the panel and dragging the footer along.
     const dynamicMax = this.clientHeight > 0
       ? Math.max(100, this.clientHeight - this._barHeight - this._footerHeight - 120)
       : 600;
-    const floor = this.getBoundingClientRect().bottom - this._footerHeight;
-    const wanted = floor - d.clientY;
+    const floor = this._dragEdgeBottom > 0
+      ? this._dragEdgeBottom
+      : this.getBoundingClientRect().bottom - this._footerHeight;
+    const wanted = floor - (d.clientY + this._dragGrabOffset);
     this.inputHeight = Math.max(
       100,
       Math.min(Math.min(600, dynamicMax), wanted),
@@ -1543,6 +1567,13 @@ export class GovernanceChatPanel extends LitElement {
        over it. Until the rail is the panel's sibling inside a right-column
        container, any fix from inside this element is a workaround. */
     chat-navigation-bar { flex-shrink: 0; will-change: transform; }
+    /* THE ROOM'S READOUT STRIP FILLS THE BAR (owner, 2026-10-27: *"there is clearly a huge
+       margin on the left … it should fit that area"*). The strip is the room's own light-DOM
+       child, relayed by the slot below into the bar; it is laid out as a flex item of the bar's
+       readout row, and without a flex rule it shrink-wrapped to its content (222px measured in
+       a 650px column) and sat in the middle of the bar. Matched here, on this panel, because
+       this is the element that owns the light-DOM child. */
+    ::slotted([slot='status-content']) { flex: 1 1 auto; min-width: 0; }
     /* The panel FILLS its column and snaps to the edges of the browser window.
        contain: layout paint scopes its internals so a window drag-resize
        doesn't invalidate the whole surface every frame. */
@@ -5118,6 +5149,7 @@ export class GovernanceChatPanel extends LitElement {
         ? nothing
         : html`
             <chat-navigation-bar
+              seat-label="Governance"
               active-tab=${this.collapsed ? '' : this.activeTab}
               allowed-tabs=${this.allowedTabs}
               tab-labels=${this.tabLabels}

@@ -33,6 +33,7 @@ from fastapi import APIRouter, Header, HTTPException
 import services as state
 from deps import A2UI_CATALOG_ID, a2ui_catalog_for, validate_a2ui_components
 from grace_gui import LAST_USAGE, query_llm
+from prompt_sessions_api import DESIGN_SYSTEM_DESCRIPTION
 from tools import render_tools_block
 
 router = APIRouter()
@@ -49,7 +50,7 @@ DESIGN_CONSOLE_CATEGORY = "Design System"
 # UX button go? … you stripped out the buttons that were existing … I spent all morning building
 # a UX application … and now it's gone."*). It is stated by the server for the same reason the
 # console's is: a rail button only draws when the seat's list names it.
-DESIGN_CONSOLE_TABS = "chat,tools,executions,ux,settings"
+DESIGN_CONSOLE_TABS = "chat,tools,executions,ux,approvals,settings"
 
 # WHO SHE IS IN THE CONSOLE'S CHAT TAB — and who she is NOT. The console is the console; the design
 # system is Figma's. The console lists the elements that came from Figma and advises on them; it
@@ -263,7 +264,72 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
         "packageId": design_chat_tab["packageId"],
         "conversationId": design_chat_tab["conversationId"],
     }
-    console_conversation = design_chat_tab["conversationId"]
+
+    # ── THE CONSOLE TAB IS A TAB, AND A TAB IS A PACKAGE ────────────────────────────────────────
+    #
+    # Owner, 2026-11-02: *"The console for design should have its own package just like the global
+    # console with a conversation tied to it — currently it says zero conversations and she's
+    # speaking… this is the foundational structure and architecture of the application: it's
+    # database-tied… two hollow empty containers injected with information from a database."*
+    #
+    # HE WAS RIGHT, AND THE DEFECT WAS MEASURABLE. The seat read the CHAT tab's conversation while
+    # the list read the Design CONTAINER's row — one package answering for another, and a list that
+    # could never show what the seat was showing, because the container owns no conversations.
+    # `design_tab | console` already existed and was used by nothing.
+    try:
+        design_console_tab = state.prompt_sessions_api.get_or_create_design_tab(
+            user_id=x_user_id, tab="console"
+        )
+    except Exception as e:  # noqa: BLE001 — a failure to resolve is stated with its cause
+        raise HTTPException(
+            status_code=503,
+            detail=f"DESIGN CONSOLE FAILURE: the Console tab's package could not be resolved — {e}",
+        ) from e
+    if not design_console_tab:
+        raise HTTPException(
+            status_code=503,
+            detail="DESIGN CONSOLE FAILURE: the Console tab's package did not resolve (not created).",
+        )
+    design_packages["console"] = {
+        "packageId": design_console_tab["packageId"],
+        "conversationId": design_console_tab["conversationId"],
+    }
+
+    # ── THE DESIGN SYSTEMS ARE ROWS, AND THEIR CARDS ARE READ LIKE EVERY OTHER CARD ────────────
+    #
+    # One row per design system per person: `metadata.session_type = 'design_catalogue'` with
+    # `metadata.design_system = <id>`, and the partial unique index in `init_db.py` holds the rule.
+    # They are created on first landing by the same get-or-create every other level uses, so the
+    # console and any later screen read one row and never two. The two names are the two catalogues
+    # this application actually carries (`frontend/src/components/A2UI/catalogs/`): Carbon, and the
+    # Raibach Prompt Composer catalogue, which is this room's own elements.
+    design_systems: list[tuple[str, dict[str, Any]]] = []
+    # THE CARD SAYS WHAT THE SYSTEM IS (owner, 2026-11-02): the sentence is written once, in
+    # `prompt_sessions_api.DESIGN_SYSTEM_DESCRIPTION`, and the assembly writes the same one on
+    # first use — so the card and the row cannot say different things.
+    _system_sentence = DESIGN_SYSTEM_DESCRIPTION
+    for _system_id, _system_title, _system_description in (
+        ("carbon", "Carbon", _system_sentence),
+        ("prompt-composer", "Raibach Prompt Composer", _system_sentence),
+    ):
+        _row = state.prompt_sessions_api.get_or_create_design_container(
+            user_id=x_user_id,
+            kind="design_catalogue",
+            title=_system_title,
+            description=_system_description,
+            keys={"design_system": _system_id},
+        )
+        # ONLY WHEN IT DIFFERS, so a console load writes nothing and the row stays the record.
+        if _row and str(_row.get("description") or "") != _system_description:
+            try:
+                state.prompt_sessions_api.set_session_description(
+                    str(_row.get("id") or ""), _system_description
+                )
+                _row = {**_row, "description": _system_description}
+            except Exception as e:  # noqa: BLE001 — stated, never hidden
+                print(f"[Design Console] the system card's description was not written: {e}")
+        if _row:
+            design_systems.append((_system_id, _row))
 
     try:
         with psycopg2.connect(DATABASE_URL) as conn:
@@ -280,6 +346,25 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
                 )
                 rows = cur.fetchall()
 
+                # ── THE KEPT VISITS: ONE CARD PER SAVED SESSION, NEWEST FIRST ─────────────────────
+                # A session is a visit to Tools that the person kept. It is a prompt session row and
+                # its card is read here the same way the element cards are — no second table and no
+                # second list, because a session that appeared in one console and not another would
+                # be two answers to "what am I working on".
+                cur.execute(
+                    """
+                    SELECT id::text AS id, title, description, is_archived, metadata,
+                           created_at, last_accessed_at, updated_at
+                      FROM prompt_sessions
+                     WHERE user_id = %s
+                       AND metadata->>'session_type' = 'design_session'
+                       AND is_archived IS NOT TRUE
+                     ORDER BY updated_at DESC
+                    """,
+                    (x_user_id,),
+                )
+                session_rows = cur.fetchall()
+
                 cur.execute(
                     "SELECT color, title_color, text_color FROM categories WHERE name = %s",
                     (DESIGN_CONSOLE_CATEGORY,),
@@ -293,38 +378,104 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
             detail=f"DESIGN CONSOLE FAILURE: the cards could not be read — {type(e).__name__}: {e}",
         ) from e
 
-    # ── THE CONVERSATIONS THAT HANG OFF THE DESIGN PACKAGE — the seat's dropdown ────────
-    # The console's own read, pointed at the design package: `conversations.session_id` is the
-    # one way this codebase reads a session's threads, and a failure is SAID here, not hidden.
+    # ── THE CONVERSATIONS THAT HANG OFF THE CONSOLE TAB'S OWN PACKAGE — the seat's dropdown ────
+    # Read from the CONSOLE package, which is the package the seat is bound to. `updated_at DESC`
+    # is the list's own order, so the first entry is the last modified thread — the one that opens.
+    # A package with no thread gets one here, because a console with nowhere to write is not a
+    # console, and because a seat that shows a message over a list claiming zero conversations is
+    # the contradiction the owner reported.
     design_conversations: list[dict[str, Any]] = []
     if state.conversation_api:
         try:
             design_conversations = state.conversation_api.get_conversations_by_session(
-                package["id"], x_user_id
+                design_console_tab["packageId"], x_user_id
             )
         except Exception as e:
             print(
                 f"[Design Console] the conversation list could not be read, so the seat has none "
                 f"to offer: {e}"
             )
+        if not design_conversations:
+            try:
+                state.conversation_api.create_conversation(
+                    user_id=x_user_id,
+                    title="Design console",
+                    session_id=design_console_tab["packageId"],
+                    tab="design",
+                )
+                design_conversations = state.conversation_api.get_conversations_by_session(
+                    design_console_tab["packageId"], x_user_id
+                )
+            except Exception as e:  # noqa: BLE001 — stated, never silent
+                print(f"[Design Console] the console's conversation was not created: {e}")
+
+    # ── A CONVERSATION A PERSON USED IS FINISHED; THE NEXT PRESS OPENS A NEW ONE ───────────────
+    #
+    # Owner, 2026-11-02: *"when I click on design console that's a session … it doesn't hold anything
+    # unless there's a change"*, and on a console conversation that was used: *"it gets saved as
+    # part of the Console package and now the Console has a new conversation in it until it's
+    # removed."*
+    #
+    # So the default conversation is REUSED while it holds nothing the person said — pressing Design
+    # twice with no work does not pile up empty rows — and once it holds a person's turn it stays in
+    # the list, where it can be reopened or removed, and a new empty one becomes the thread that
+    # opens. Her greeting alone does not count: the app asked for it, nobody typed.
+    if state.conversation_api and design_conversations:
+        newest_id = str(design_conversations[0].get("id") or "")
+        used = False
+        if newest_id:
+            try:
+                thread = state.conversation_api.get_messages(newest_id, x_user_id)
+                used = any(str(m.get("role") or "") == "user" for m in (thread or []))
+            except Exception as e:  # noqa: BLE001 — an unread thread is kept, not rotated
+                print(
+                    "[Design Console] the open conversation could not be read, so it is kept as "
+                    f"the one that opens: {e}"
+                )
+        if used:
+            try:
+                fresh = state.conversation_api.create_conversation(
+                    user_id=x_user_id,
+                    title="Design console",
+                    session_id=design_console_tab["packageId"],
+                    tab="design",
+                )
+                if fresh:
+                    state.prompt_sessions_api.update_session(
+                        user_id=x_user_id,
+                        session_id=design_console_tab["packageId"],
+                        conversation_id=str(fresh),
+                    )
+                design_conversations = state.conversation_api.get_conversations_by_session(
+                    design_console_tab["packageId"], x_user_id
+                )
+            except Exception as e:  # noqa: BLE001 — stated; the used thread stays open
+                print(f"[Design Console] a new console conversation could not be started: {e}")
+
+    console_conversation = str((design_conversations[0] if design_conversations else {}).get("id") or "")
 
 
-    cards: list[dict[str, Any]] = []
-    for row in rows:
-        meta = row.get("metadata") or {}
-        if isinstance(meta, str):
-            meta = json.loads(meta) if meta.strip() else {}
-        last_ingest = meta.get("last_ingest") or {}
-        cards.append({
-            "id": row.get("id"),
-            "element_key": meta.get("element_key") or "",
-            "title": (row.get("title") or "").strip(),
-            "description": (row.get("description") or "").strip(),
-            "status": (
-                "Removed" if row.get("is_archived")
-                else (last_ingest.get("verdict") or ("Ingested" if last_ingest else "Not ingested"))
-            ).lower(),
+    def _design_card(
+        *,
+        card_id: str,
+        element_key: str,
+        title: str,
+        description: str,
+        status: str,
+        created_at: Any,
+        last_used: Any,
+    ) -> dict[str, Any]:
+        """One card in this console's shape. The grid reads these fields and nothing else."""
+        return {
+            "id": card_id,
+            "element_key": element_key,
+            "title": title,
+            "description": description,
+            "status": status,
             "category": DESIGN_CONSOLE_CATEGORY,
+            # THE CARD'S AREA (owner, 2026-10-27): every card this console lists is the design
+            # seat's, so it wears the design seat's mark.
+            "seat": "design",
             "category_color": cat.get("color") or "",
             "category_title_color": cat.get("title_color") or "",
             "category_text_color": cat.get("text_color") or "",
@@ -334,10 +485,61 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
             "team_name": "",
             "avatar_url": "",
             "username": "",
-            "createdAt": row.get("created_at").isoformat() if row.get("created_at") else "",
-            "lastUsed": row.get("last_accessed_at").isoformat() if row.get("last_accessed_at") else "",
+            "createdAt": created_at.isoformat() if created_at else "",
+            "lastUsed": last_used.isoformat() if last_used else "",
             "message_count": 0,
-        })
+        }
+
+    cards: list[dict[str, Any]] = []
+
+    # ── THE DESIGN SYSTEMS FIRST, THEN THE SESSIONS, THEN THE ELEMENTS ──────────────────────────
+    #
+    # Owner, 2026-10-31: the two design systems stand as cards of their own; a session is a card
+    # once it is kept. The order is the plan's own: the systems are what the room works in, a
+    # session is what a visit produced, and the elements are the catalogue's contents.
+    for _system_id, _system_row in design_systems:
+        cards.append(
+            _design_card(
+                card_id=str(_system_row.get("id") or ""),
+                element_key=f"system:{_system_id}",
+                title=(_system_row.get("title") or _system_id).strip(),
+                description=(_system_row.get("description") or "").strip(),
+                status="catalogue",
+                created_at=_system_row.get("created_at"),
+                last_used=_system_row.get("created_at"),
+            )
+        )
+
+    for _row in session_rows:
+        _meta = _row.get("metadata") or {}
+        if isinstance(_meta, str):
+            _meta = json.loads(_meta) if _meta.strip() else {}
+        _kept = str(_meta.get("kept_at") or "")
+        cards.append(
+            _design_card(
+                card_id=str(_row.get("id") or ""),
+                element_key="",
+                # A SESSION IS NEVER WITHOUT A NAME ON SCREEN: an untitled one is drawn as
+                # Untitled, which is a true statement about it rather than a blank card.
+                title=(_row.get("title") or "").strip() or "Untitled",
+                description=(_row.get("description") or "").strip(),
+                status="saved" if _kept else "open",
+                created_at=_row.get("created_at"),
+                last_used=_row.get("updated_at") or _row.get("last_accessed_at"),
+            )
+        )
+
+    # ── NO CARD FOR A CATALOGUE ELEMENT ────────────────────────────────────────────────────────
+    # Owner, 2026-11-02: *"each of those cards represents a package with its own conversation…
+    # We can get rid of the other cards for design because they're not tied to any database
+    # structure they're just filler or stubs."*
+    #
+    # The cards above are PACKAGES: a design system's row and a kept session's row, each with its
+    # own conversation. The cards that stood here were one per catalogue ELEMENT, generated from
+    # the catalogue file by `sync_design_elements.py` — no package, no conversation, nothing a
+    # person made. They are no longer drawn. Nothing is deleted: the `design_master` rows are
+    # still in the database and the elements are still in the catalogue; they are simply not
+    # cards, because a card is a package.
 
     # ── THE MODEL IS THE ARCHITECT — the console's own process, in this room's words ─────────
     # The cards are read above and ride in the data model; the model returns the TREE (the
@@ -349,7 +551,8 @@ def design_console(x_user_id: str | None = Header(None, alias="X-User-ID")) -> l
     llm_prompt = f"""You are Grace, the A2UI surface assembler for the design console.
 {render_tools_block()}
 
-The user opened the design console. There are {len(cards)} design elements. The first
+The user opened the design console. There are {len(cards)} cards: the design systems and the
+sessions kept under them, each its own package with its own conversation. The first
 {min(SAMPLE, len(cards))} are shown below as examples of the card shape; bind the grid to the
 whole list at the path below, NOT to these samples.
 
@@ -497,10 +700,10 @@ Output ONLY this exact JSON (no markdown, no extra text):
                 "value": {
                     "cards": cards,
                     # THE DESIGN CONSOLE'S OWN SESSION AND CONVERSATION — the facts the emitted
-                    # seat binds to. One design package per user; its conversation is created
-                    # by the person's first message, not by looking at the room.
+                    # seat binds to. The session is the CONSOLE TAB'S PACKAGE, which is where its
+                    # conversation lives; the conversation is that package's last modified thread.
                     "console": {
-                        "session_id": package["id"],
+                        "session_id": design_console_tab["packageId"],
                         "conversation_id": console_conversation or "",
                         "grace_instructions": DESIGN_CONSOLE_GRACE_INSTRUCTIONS,
                         "design_packages": design_packages,
